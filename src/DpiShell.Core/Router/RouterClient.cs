@@ -203,8 +203,11 @@ public sealed class RouterClient : IDisposable
     public Task<RouterStrategies> StrategiesAsync(CancellationToken ct = default) => CallAsync<RouterStrategies>("strategies", null, ct);
     public Task<RouterSelectProgress> SelectProgressAsync(CancellationToken ct = default) => CallAsync<RouterSelectProgress>("select_progress", null, ct);
     public Task<RouterTargets> TargetsGetAsync(CancellationToken ct = default) => CallAsync<RouterTargets>("targets_get", null, ct);
+    /// <summary>name: user-general, user-exclude или exclude (стандартные исключения, только чтение).</summary>
     public Task<RouterLines> ListsGetAsync(string name, CancellationToken ct = default) =>
-        CallAsync<RouterLines>("lists_get", new JsonObject { ["name"] = CheckListName(name) }, ct);
+        CallAsync<RouterLines>("lists_get", new JsonObject { ["name"] = name == "exclude" ? name : CheckListName(name) }, ct);
+    public Task<RouterSiteCheckResult> SiteCheckResultAsync(CancellationToken ct = default) => CallAsync<RouterSiteCheckResult>("site_check_result", null, ct);
+    public Task<RouterDnsStatus> DnsStatusAsync(CancellationToken ct = default) => CallAsync<RouterDnsStatus>("dns_status", null, ct);
     public Task<RouterDiag> DiagAsync(CancellationToken ct = default) => CallAsync<RouterDiag>("diag", null, ct);
     public Task<RouterReport> ReportAsync(CancellationToken ct = default) => CallAsync<RouterReport>("report", null, ct);
 
@@ -229,12 +232,28 @@ public sealed class RouterClient : IDisposable
     public Task ApplyAsync(string id, IEnumerable<string> backups, CancellationToken ct = default) =>
         CallAsync("apply", new JsonObject { ["id"] = id, ["backups"] = new JsonArray(backups.Select(b => (JsonNode)b).ToArray()) }, ct);
 
-    public Task ScheduleSetAsync(bool enabled, double hours, CancellationToken ct = default)
+    /// <param name="autoSelect">При неудаче проверки и исчерпанных запасных роутер сам запускает быстрый подбор (§9, вопрос 7).</param>
+    public Task ScheduleSetAsync(bool enabled, double hours, bool autoSelect = false, CancellationToken ct = default)
     {
         // §9: добавлено 0.5 (раз в 30 мин).
         if (hours is not (0.5 or 1 or 3 or 6 or 12 or 24)) throw new ArgumentOutOfRangeException(nameof(hours), "Часы проверки: 0.5, 1, 3, 6, 12 или 24");
-        return CallAsync("schedule_set", new JsonObject { ["enabled"] = enabled, ["hours"] = hours }, ct);
+        return CallAsync("schedule_set", new JsonObject { ["enabled"] = enabled, ["hours"] = hours, ["auto_select"] = autoSelect }, ct);
     }
+
+    /// <summary>«Все сайты, кроме исключений» (all) / «По спискам» (lists); роутер перезапускает zapret и проверяет с контрольной группой.</summary>
+    public Task<RouterStarted> ModeSetAsync(bool allSites, CancellationToken ct = default) =>
+        CallAsync<RouterStarted>("mode_set", new JsonObject { ["mode"] = allSites ? "all" : "lists" }, ct);
+
+    /// <summary>«Сайт не открывается с обходом»: проверка с обходом и без, итог — <see cref="SiteCheckResultAsync"/>. Голое имя роутер дополнит сам.</summary>
+    public Task<RouterStarted> SiteCheckAsync(string url, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(url) || url.Length > 2048 || url.Any(char.IsWhiteSpace)) throw new ArgumentException("Адрес сайта — одной строкой без пробелов");
+        return CallAsync<RouterStarted>("site_check", new JsonObject { ["url"] = url.Trim() }, ct);
+    }
+
+    public Task<RouterStarted> DnsAnalyzeAsync(CancellationToken ct = default) => CallAsync<RouterStarted>("dns_analyze", null, ct);
+    public Task<RouterStarted> DnsEnableAsync(CancellationToken ct = default) => CallAsync<RouterStarted>("dns_enable", null, ct);
+    public Task<RouterStarted> DnsRestoreAsync(CancellationToken ct = default) => CallAsync<RouterStarted>("dns_restore", null, ct);
 
     public Task TargetsSetAsync(IReadOnlyList<RouterTarget> items, CancellationToken ct = default)
     {
@@ -257,9 +276,52 @@ public sealed class RouterClient : IDisposable
     static string CheckListName(string name) =>
         name is "user-general" or "user-exclude" ? name : throw new ArgumentException("Список роутера: user-general или user-exclude");
 
-    /// <summary>Найденная на ПК стратегия → формат роутера (§6): только роли, id с префиксом «u-».</summary>
-    public static RouterUserStrategy ToRouter(Strategy s) =>
-        new(s.Id.StartsWith("u-") ? s.Id : "u-" + s.Id, s.Title, new Dictionary<string, string>(s.Roles));
+    /// <summary>
+    /// Найденная на ПК стратегия → формат роутера (§5.2, §5.3): id по шаблону <c>^u-[a-z0-9-]{1,48}$</c>, название до 80 символов,
+    /// роли как есть — неизвестную роль роутер вернёт как invalid с field, тогда предлагаем обновить пакет.
+    /// </summary>
+    public static RouterUserStrategy ToRouter(Strategy s)
+    {
+        var body = new string(s.Id.ToLowerInvariant().Select(c => c is >= 'a' and <= 'z' or >= '0' and <= '9' or '-' ? c : '-').ToArray());
+        if (body.StartsWith("u-")) body = body[2..];
+        body = body.Trim('-');
+        if (body.Length == 0) body = "x";
+        if (body.Length > 48) body = body[..48].TrimEnd('-');
+        var title = s.Title.Length > 80 ? s.Title[..80] : s.Title;
+        return new("u-" + body, title, new Dictionary<string, string>(s.Roles));
+    }
+
+    // ---------- §2.3 поиск за вторым роутером ----------
+
+    /// <summary>
+    /// Куда стучаться за status.json: шлюз, затем до 3 частных адресов на пути наружу (как `tracert -d -h 4`:
+    /// эхо-запросы с TTL 1..4, адрес ответившего узла). Только 10/8, 172.16/12, 192.168/16.
+    /// </summary>
+    public static async Task<IReadOnlyList<string>> CandidateAddressesAsync(CancellationToken ct = default)
+    {
+        var list = new List<string>();
+        if (DefaultGateway() is { } gw) list.Add(gw);
+        using var ping = new Ping();
+        for (int ttl = 1; ttl <= 4 && list.Count < 4; ttl++)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var r = await ping.SendPingAsync(IPAddress.Parse("1.1.1.1"), TimeSpan.FromSeconds(1), new byte[8], new PingOptions(ttl, true), ct);
+                if (r.Address is { AddressFamily: AddressFamily.InterNetwork } a && IsPrivate(a) && !list.Contains(a.ToString()))
+                    list.Add(a.ToString());
+                if (r.Status == IPStatus.Success) break;   // дошли наружу — дальше частных узлов нет
+            }
+            catch (PingException) { }
+        }
+        return list;
+    }
+
+    public static bool IsPrivate(IPAddress a)
+    {
+        var b = a.GetAddressBytes();
+        return b.Length == 4 && (b[0] == 10 || b[0] == 172 && b[1] is >= 16 and <= 31 || b[0] == 192 && b[1] == 168);
+    }
 
     public void Dispose()
     {

@@ -37,6 +37,10 @@ public sealed class FakeRouter : IDisposable
     // Состояние для status: меняется enable/disable/strategy_set/check_now (по умолчанию — пример §5.1).
     public bool Enabled { get; set; } = true;
     public string Strategy { get; set; } = "alt10";
+    public string Mode { get; set; } = "all";
+    public bool NeedsTcpTimestamps { get; set; } = true;
+    public bool AutoSelect { get; set; }
+    public string SiteCheckUrl { get; set; } = "";
     public DateTime CheckedAt { get; set; } = new(2026, 10, 16, 21, 0, 0, DateTimeKind.Utc);
     public bool SelectRunningJob { get; set; }
     public bool ScheduleEnabled { get; set; } = true;
@@ -130,12 +134,12 @@ public sealed class FakeRouter : IDisposable
             "status" => $$"""
                 { "api": 1, "version": "0.1.0", "engine": "zapret1",
                   "core": { "version": "v72.13", "installed": true, "hash_ok": true },
-                  "enabled": {{(Enabled ? "true" : "false")}}, "strategy": "{{Strategy}}", "backups": ["alt9", "alt13"],
+                  "enabled": {{(Enabled ? "true" : "false")}}, "mode": "{{Mode}}", "strategy": "{{Strategy}}", "backups": ["alt9", "alt13"], "needs_tcp_timestamps": {{(NeedsTcpTimestamps ? "true" : "false")}},
                   "last_check": { "at": "{{CheckedAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture)}}", "source": "timer", "ok": true,
                                   "groups": [ { "id": "youtube", "ok": true }, { "id": "discord", "ok": true } ] },
                   "fail_streak": 0,
-                  "schedule": { "enabled": {{(ScheduleEnabled ? "true" : "false")}}, "hours": {{ScheduleHours.ToString(System.Globalization.CultureInfo.InvariantCulture)}} },
-                  "jobs": { "select": {{(SelectRunningJob ? "true" : "false")}}, "check": false, "core_install": false, "dns_analyze": false },
+                  "schedule": { "enabled": {{(ScheduleEnabled ? "true" : "false")}}, "hours": {{ScheduleHours.ToString(System.Globalization.CultureInfo.InvariantCulture)}}, "auto_select": {{(AutoSelect ? "true" : "false")}} },
+                  "jobs": { "select": {{(SelectRunningJob ? "true" : "false")}}, "check": false, "core_install": false, "dns_analyze": false, "site_check": false, "dns": false },
                   "warnings": {{WarningsJson}} }
                 """,
             "strategies" => StrategiesJson,
@@ -146,10 +150,28 @@ public sealed class FakeRouter : IDisposable
             "select_start" => Step0("""{ "started": true }"""),
             "select_cancel" => Do(() => { _cancelled = true; SelectRunningJob = false; }),
             "apply" => Do(() => Strategy = args["id"]!.GetValue<string>()),
-            "schedule_set" => Do(() => { ScheduleEnabled = args["enabled"]!.GetValue<bool>(); ScheduleHours = args["hours"]!.GetValue<double>(); }),
+            "schedule_set" => Do(() =>
+            {
+                ScheduleEnabled = args["enabled"]!.GetValue<bool>(); ScheduleHours = args["hours"]!.GetValue<double>();
+                AutoSelect = args["auto_select"]?.GetValue<bool>() ?? false;
+            }),
+            "mode_set" => Do(() => Mode = args["mode"]!.GetValue<string>(), """{ "started": true }"""),
+            "site_check" => Do(() => SiteCheckUrl = args["url"]!.GetValue<string>(), """{ "started": true }"""),
+            "site_check_result" => $$"""
+                { "running": false, "url": "{{SiteCheckUrl}}", "with_bypass": { "ok": false, "detail": "сброс после 16 КБ" },
+                  "without_bypass": { "ok": true, "detail": "" }, "suggest_exclude": true }
+                """,
+            "dns_status" => """
+                { "mode": "provider", "spoofed": true, "checked_at": "2026-10-17T10:00:00Z",
+                  "servers": [ { "name": "Google", "doh_ok": true, "ms": 38 }, { "name": "Cloudflare", "doh_ok": true, "ms": 41 } ],
+                  "fallback_active": false, "job": { "action": "dns_enable", "running": false, "ok": true, "message": "Готово", "at": "2026-10-17T10:01:00Z" } }
+                """,
+            "dns_analyze" or "dns_enable" or "dns_restore" => """{ "started": true }""",
             "select_progress" => Progress(),
             "targets_get" => """{ "items": [ { "url": "https://example.com/", "important": true } ] }""",
-            "lists_get" => """{ "lines": ["example.com"] }""",
+            "lists_get" => args["name"]?.GetValue<string>() == "exclude"
+                ? """{ "lines": ["gosuslugi.ru"], "editable": false }"""
+                : """{ "lines": ["example.com"], "editable": true }""",
             "diag" => """{ "conflicts": [ { "kind": "service", "name": "zapret2", "running": true } ], "flow_offload": false, "ipv6_wan": false, "dns": { "spoofed": true, "checked_at": "2026-10-16T21:00:00Z" }, "overlay_free_kb": 18000 }""",
             "report" => """{ "text": "отчёт роутера" }""",
             "core_install" => """{ "started": true }""",

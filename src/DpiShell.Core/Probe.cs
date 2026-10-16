@@ -9,7 +9,8 @@ namespace DpiShell.Core;
 /// <summary>Цель проверки. handshake_only — достаточно TLS и заголовков ответа (у адреса нет стабильного большого тела).</summary>
 public sealed record Target(string Url, int MinBytes = 0, bool HandshakeOnly = false, bool Required = true);
 
-public sealed record TargetGroup(string Id, string Title, List<Target> Targets);
+/// <summary>Control — «Обычные сайты»: не цель подбора, а условие «стратегия их не ломает» (06-router-spec §4.1).</summary>
+public sealed record TargetGroup(string Id, string Title, List<Target> Targets, bool Control = false);
 
 public sealed record TargetSet(List<TargetGroup> Groups)
 {

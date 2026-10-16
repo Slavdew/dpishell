@@ -29,13 +29,17 @@ public sealed record RouterCore(string? Version, bool Installed, bool HashOk);
 public sealed record RouterGroupCheck(string Id, bool Ok);
 public sealed record RouterLastCheck(DateTime? At, string? Source, bool Ok, List<RouterGroupCheck>? Groups);
 /// <summary>Таймер проверки; hours ∈ 0.5, 1, 3, 6, 12, 24 (редакция §9).</summary>
-public sealed record RouterSchedule(bool Enabled, double Hours);
-public sealed record RouterJobs(bool Select, bool Check, bool CoreInstall);
+public sealed record RouterSchedule(bool Enabled, double Hours, bool AutoSelect = false);
+/// <summary>Фоновые задания роутера; dns — любое DNS-задание (§9, 2026-10-17), dns_analyze оставлен с тем же значением.</summary>
+public sealed record RouterJobs(bool Select, bool Check, bool CoreInstall, bool DnsAnalyze = false, bool SiteCheck = false, bool Dns = false);
 public sealed record RouterWarning(string Code, string? Text);
 
 public sealed record RouterStatus(
     int Api, string? Version, string? Engine, RouterCore? Core, bool Enabled, string? Strategy, List<string>? Backups,
-    RouterLastCheck? LastCheck, int FailStreak, RouterSchedule? Schedule, RouterJobs? Jobs, List<RouterWarning>? Warnings);
+    RouterLastCheck? LastCheck, int FailStreak, RouterSchedule? Schedule, RouterJobs? Jobs, List<RouterWarning>? Warnings,
+    // mode: "all" — «Все сайты, кроме исключений» (по умолчанию на роутере), "lists" — «По спискам».
+    // needs_tcp_timestamps: стратегия роутера работает только у устройств с метками TCP — ПК включает их сам (§6).
+    string? Mode = null, bool NeedsTcpTimestamps = false);
 
 public sealed record RouterStrategyItem(string Id, string Title, string Source, int Runs, int Passed);
 public sealed record RouterStrategies(int CatalogVersion, List<RouterStrategyItem> Items);
@@ -54,7 +58,18 @@ public sealed record RouterSelectProgress(
 
 public sealed record RouterTarget(string Url, bool Important);
 public sealed record RouterTargets(List<RouterTarget> Items);
-public sealed record RouterLines(List<string> Lines);
+/// <summary>editable: false у стандартного списка исключений `exclude` (только чтение).</summary>
+public sealed record RouterLines(List<string> Lines, bool Editable = true);
+
+public sealed record RouterSiteCheckSide(bool Ok, string? Detail);
+/// <summary>«Сайт не открывается с обходом» (§5.1): suggest_exclude — открывается только без обхода, предложить в исключения.</summary>
+public sealed record RouterSiteCheckResult(bool Running, string? Url, RouterSiteCheckSide? WithBypass, RouterSiteCheckSide? WithoutBypass, bool SuggestExclude);
+
+public sealed record RouterDnsServer(string Name, bool DohOk, int? Ms);
+/// <summary>Последнее DNS-задание (dns_enable/dns_restore/dns_analyze — фоновые).</summary>
+public sealed record RouterDnsJob(string? Action, bool Running, bool? Ok, string? Message, DateTime? At = null);
+/// <summary>DNS для всей сети: mode provider|doh; fallback_active — оба DoH пропали, временно DNS провайдера.</summary>
+public sealed record RouterDnsStatus(string? Mode, bool Spoofed, DateTime? CheckedAt, List<RouterDnsServer>? Servers, bool FallbackActive, RouterDnsJob? Job);
 
 public sealed record RouterConflict(string Kind, string Name, bool Running);
 public sealed record RouterDns(bool Spoofed, DateTime? CheckedAt);

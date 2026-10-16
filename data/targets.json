@@ -19,6 +19,21 @@
         { "url": "https://cdn.discordapp.com/", "handshake_only": true, "required": true },
         { "url": "https://updates.discord.com/", "handshake_only": true, "required": false }
       ]
+    },
+    {
+      "id": "control",
+      "title": "Обычные сайты",
+      "control": true,
+      "targets": [
+        { "url": "https://www.sberbank.ru/", "required": true },
+        { "url": "https://www.tbank.ru/", "required": true },
+        { "url": "https://www.gosuslugi.ru/", "required": true },
+        { "url": "https://www.ozon.ru/", "required": true },
+        { "url": "https://www.wildberries.ru/", "required": true },
+        { "url": "https://ya.ru/", "required": true },
+        { "url": "https://ru.wikipedia.org/", "required": true },
+        { "url": "https://example.com/", "required": true }
+      ]
     }
   ]
 }

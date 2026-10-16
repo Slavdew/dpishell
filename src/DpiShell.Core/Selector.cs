@@ -21,8 +21,8 @@ public sealed record SelectionReport(
     public StrategyScore? Best => Scores.Where(s => s.Error is null && s.GroupsPassed > 0)
         .OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds).FirstOrDefault();
 
-    /// <summary>Всё открылось без обхода — подбирать нечего (нет блокировок или включён VPN).</summary>
-    public bool NothingBlocked => TestedGroups.Count == 0 && Baseline.Count > 0;
+    /// <summary>Всё открылось без обхода — подбирать нечего (нет блокировок или включён VPN). Контрольные группы — не цель подбора.</summary>
+    public bool NothingBlocked => TestedGroups.All(g => g.Control) && Baseline.Count > 0;
 }
 
 public sealed record SelectorProgress(int Index, int Total, string Message, StrategyScore? Last = null);
@@ -53,9 +53,22 @@ public sealed class Selector(AppPaths paths, HttpProbe probe)
         return results;
     }
 
+    // Контрольные группы в счёт не идут: они не цель, а условие (см. RunOneAsync).
     static int GroupsPassed(IEnumerable<TargetGroup> groups, IReadOnlyList<TargetVerdict> v) =>
-        groups.Count(g => v.Where(x => x.GroupId == g.Id && x.Target.Required).All(x => x.Ok)
+        groups.Where(g => !g.Control).Count(g => v.Where(x => x.GroupId == g.Id && x.Target.Required).All(x => x.Ok)
                        && v.Any(x => x.GroupId == g.Id && x.Ok));
+
+    /// <summary>
+    /// Что оставить в подборе по итогам проверки без обхода. Обычная группа — только то, что без обхода НЕ открылось
+    /// (как blockcheck). Контрольная («Обычные сайты», 06-router-spec §4.1) — наоборот, только то, что открылось:
+    /// стратегия не должна это сломать, а недоступное и без обхода оценить нельзя.
+    /// </summary>
+    public static IReadOnlyList<TargetGroup> KeepForSelection(IReadOnlyList<TargetGroup> groups, IReadOnlyList<TargetVerdict> baseline) =>
+        groups.Select(g => g with
+            {
+                Targets = g.Targets.Where(t => baseline.Any(b => b.Target == t && b.GroupId == g.Id && b.Ok) == g.Control).ToList(),
+            })
+            .Where(g => g.Targets.Count > 0).ToList();
 
     public async Task<SelectionReport> RunAsync(
         IReadOnlyList<Strategy> strategies, IReadOnlyList<TargetGroup> groups, bool quick,
@@ -64,11 +77,8 @@ public sealed class Selector(AppPaths paths, HttpProbe probe)
         progress?.Report(new(0, strategies.Count, "Проверка без обхода…"));
         var baseline = await CheckGroupsAsync(groups, ct);
 
-        // Оставляем только то, что без обхода не открылось.
-        var blocked = groups
-            .Select(g => g with { Targets = g.Targets.Where(t => !baseline.Any(b => b.Target == t && b.GroupId == g.Id && b.Ok)).ToList() })
-            .Where(g => g.Targets.Count > 0).ToList();
-        if (blocked.Count == 0) return new(baseline, blocked, [], false);
+        var blocked = KeepForSelection(groups, baseline);
+        if (blocked.All(g => g.Control)) return new(baseline, blocked, [], false);
 
         var scores = new List<StrategyScore>();
         for (int i = 0; i < strategies.Count; i++)
@@ -92,10 +102,23 @@ public sealed class Selector(AppPaths paths, HttpProbe probe)
         var args = WinwsArgs.Build(s, paths);
         using var w = WinwsProcess.Start(paths, args);
         if (!await w.WaitReadyAsync(Settle, ct))
-            return new(s, [], 0, groups.Count, "winws завершился: " + Tail(w.Output));
+            return new(s, [], 0, groups.Count(g => !g.Control), "winws завершился: " + Tail(w.Output));
         var verdicts = await CheckGroupsAsync(groups, ct);
-        if (!w.Alive) return new(s, verdicts, 0, groups.Count, "winws упал во время проверки: " + Tail(w.Output));
-        return new(s, verdicts, GroupsPassed(groups, verdicts), groups.Count);
+        int goals = groups.Count(g => !g.Control);
+        if (!w.Alive) return new(s, verdicts, 0, goals, "winws упал во время проверки: " + Tail(w.Output));
+        return Score(s, groups, verdicts);
+    }
+
+    /// <summary>Оценка по проверке. Сломан хоть один «обычный сайт» — ноль с причиной, как на роутере (06-router-spec §4.1).</summary>
+    public static StrategyScore Score(Strategy s, IReadOnlyList<TargetGroup> groups, IReadOnlyList<TargetVerdict> verdicts)
+    {
+        int goals = groups.Count(g => !g.Control);
+        var controlIds = groups.Where(g => g.Control).Select(g => g.Id).ToHashSet();
+        var broken = verdicts.Where(v => controlIds.Contains(v.GroupId) && !v.Ok)
+            .Select(v => Uri.TryCreate(v.Target.Url, UriKind.Absolute, out var u) ? u.Host : v.Target.Url).ToList();
+        if (broken.Count > 0)
+            return new(s, verdicts, 0, goals, "ломает обычные сайты: " + string.Join(", ", broken));
+        return new(s, verdicts, GroupsPassed(groups, verdicts), goals);
     }
 
     static string Tail(string s) => s.Length > 400 ? s[^400..] : s;
