@@ -33,17 +33,57 @@ public partial class MainWindow : Window
         _timer.Tick += (_, _) => _ = vm.TickAsync();
         _timer.Start();
 
-        // Автопроверка запасных: по таймеру и после смены сети (с паузой, пока сеть поднимается).
-        vm.Notify += _tray.Hint;
-        _watchTimer = new DispatcherTimer { Interval = WatchdogPolicy.Interval };
-        _watchTimer.Tick += (_, _) => _ = vm.WatchAsync();
-        _watchTimer.Start();
+        // Смена сети — с паузой, пока сеть поднимается.
         _netSettle = new DispatcherTimer { Interval = WatchdogPolicy.NetworkSettle };
-        _netSettle.Tick += (_, _) => { _netSettle.Stop(); _ = vm.WatchAsync(); };
+        // Сеть сменилась — и роутер ищем заново: ушли из дома — блок роутера пропадёт (07-router-api §6).
+        _netSettle.Tick += (_, _) => { _netSettle.Stop(); _ = vm.Router.RefreshAsync(); };
         NetworkChange.NetworkAddressChanged += OnNetworkChanged;
+
+        vm.Router.LoginRequested += () => Dispatcher.BeginInvoke(() =>
+        {
+            RouterSettings.BringIntoView();
+            RouterPassword.Focus();
+        }, DispatcherPriority.Loaded);
     }
 
-    readonly DispatcherTimer _watchTimer, _netSettle;
+    /// <summary>Пароль берётся из PasswordBox только в момент входа и сразу стирается из поля.</summary>
+    async void ConnectRouter_Click(object sender, RoutedEventArgs e)
+    {
+        var password = RouterPassword.Password;
+        RouterPassword.Clear();
+        try { await _vm.Router.ConnectAsync(password); }
+        catch (Exception ex) { _vm.Message = Texts.Friendly(ex); }
+    }
+
+    void RouterPassword_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Enter || !_vm.Router.CanConnect) return;
+        e.Handled = true;
+        ConnectRouter_Click(sender, e);
+    }
+
+    /// <summary>«Стратегия ▾» в блоке роутера: меню из strategies, текущая отмечена.</summary>
+    void RouterStrategy_Click(object sender, RoutedEventArgs e)
+    {
+        var button = (FrameworkElement)sender;
+        var menu = new System.Windows.Controls.ContextMenu { PlacementTarget = button, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        var router = _vm.Router;
+        foreach (var s in router.Strategies)
+        {
+            var item = new System.Windows.Controls.MenuItem
+            {
+                Header = (s.Id == router.CurrentStrategyId ? "✓ " : "    ") + s.Title,
+                InputGestureText = s.Stats,
+            };
+            var id = s.Id;
+            item.Click += (_, _) => _ = router.ChooseStrategyAsync(id);
+            menu.Items.Add(item);
+        }
+        if (menu.Items.Count == 0) menu.Items.Add(new System.Windows.Controls.MenuItem { Header = "Список стратегий роутера пуст", IsEnabled = false });
+        menu.IsOpen = true;
+    }
+
+    readonly DispatcherTimer _netSettle;
 
     /// <summary>Событие приходит из чужого потока и пачкой — перезапускаем отсчёт на потоке окна.</summary>
     void OnNetworkChanged(object? sender, EventArgs e) =>
@@ -88,7 +128,6 @@ public partial class MainWindow : Window
         if (_exiting) return;
         _exiting = true;
         _timer.Stop();
-        _watchTimer.Stop();
         _netSettle.Stop();
         NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
         // Подбор держит временный winws и остановленную службу — дать ему вернуть всё на место.
@@ -98,6 +137,7 @@ public partial class MainWindow : Window
             await _vm.WhenIdleAsync(TimeSpan.FromSeconds(20));
         }
         _tray.Dispose();
+        _vm.Router.Dispose();
         Close();
         Application.Current.Shutdown();
     }

@@ -24,10 +24,26 @@ public sealed class FakeRouter : IDisposable
     public bool UseRpcAccessDeniedError { get; set; }
     public HashSet<string> MissingMethods { get; } = [];
     public string? BusyOn { get; set; }
+    /// <summary>Метод → error.field для ответа invalid (§4).</summary>
+    public (string Method, string Field)? InvalidOn { get; set; }
 
-    // Подбор: select_progress идёт от running к best/restore_at
+    // Подбор: select_progress идёт от running к best + applied (§5.1, редакция §9)
     public int SelectSteps { get; set; } = 3;
     int _selectStep = -1;
+    /// <summary>Строки таблицы подбора (JSON-массив); по умолчанию — пример §5.1.</summary>
+    public string SelectRowsJson { get; set; } = """[ { "id": "alt", "title": "general (ALT)", "group_share": 1.0, "target_share": 0.88, "avg_s": 0.74, "error": null } ]""";
+    public string BestId { get; set; } = "alt";
+
+    // Состояние для status: меняется enable/disable/strategy_set/check_now (по умолчанию — пример §5.1).
+    public bool Enabled { get; set; } = true;
+    public string Strategy { get; set; } = "alt10";
+    public DateTime CheckedAt { get; set; } = new(2026, 10, 16, 21, 0, 0, DateTimeKind.Utc);
+    public bool SelectRunningJob { get; set; }
+    public bool ScheduleEnabled { get; set; } = true;
+    public double ScheduleHours { get; set; } = 1;
+    public string StrategiesJson { get; set; } =
+        """{ "catalog_version": 3, "items": [ { "id": "alt10", "title": "general (ALT10)", "source": "catalog", "runs": 7, "passed": 6 } ] }""";
+    public string WarningsJson { get; set; } = """[ { "code": "flow_offload", "text": "Включён flow offloading" } ]""";
 
     public List<JsonObject> Calls { get; } = [];
     public List<string> RawBodies { get; } = [];
@@ -102,51 +118,79 @@ public sealed class FakeRouter : IDisposable
             return;
         }
         if (obj != "dpishell" || MissingMethods.Contains(method)) { await Write(ctx, Result(4)); return; }
+        if (InvalidOn is { } inv && inv.Method == method)
+        {
+            await Write(ctx, Result(0, $$$"""{"error":{"code":"invalid","text":"Неверное значение","field":"{{{inv.Field}}}"}}"""));
+            return;
+        }
         if (BusyOn == method) { await Write(ctx, Result(0, """{"error":{"code":"busy","text":"Идёт подбор"}}""")); return; }
 
         await Write(ctx, Result(0, method switch
         {
-            "status" => """
+            "status" => $$"""
                 { "api": 1, "version": "0.1.0", "engine": "zapret1",
                   "core": { "version": "v72.13", "installed": true, "hash_ok": true },
-                  "enabled": true, "strategy": "alt10", "backups": ["alt9", "alt13"],
-                  "last_check": { "at": "2026-10-16T21:00:00Z", "source": "timer", "ok": true,
+                  "enabled": {{(Enabled ? "true" : "false")}}, "strategy": "{{Strategy}}", "backups": ["alt9", "alt13"],
+                  "last_check": { "at": "{{CheckedAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture)}}", "source": "timer", "ok": true,
                                   "groups": [ { "id": "youtube", "ok": true }, { "id": "discord", "ok": true } ] },
                   "fail_streak": 0,
-                  "schedule": { "enabled": true, "hours": 6 },
-                  "jobs": { "select": false, "check": false, "core_install": false },
-                  "warnings": [ { "code": "flow_offload", "text": "Включён flow offloading" } ] }
+                  "schedule": { "enabled": {{(ScheduleEnabled ? "true" : "false")}}, "hours": {{ScheduleHours.ToString(System.Globalization.CultureInfo.InvariantCulture)}} },
+                  "jobs": { "select": {{(SelectRunningJob ? "true" : "false")}}, "check": false, "core_install": false, "dns_analyze": false },
+                  "warnings": {{WarningsJson}} }
                 """,
-            "strategies" => """{ "catalog_version": 3, "items": [ { "id": "alt10", "title": "general (ALT10)", "source": "catalog", "runs": 7, "passed": 6 } ] }""",
+            "strategies" => StrategiesJson,
+            "enable" => Do(() => Enabled = true),
+            "disable" => Do(() => Enabled = false),
+            "strategy_set" => Do(() => Strategy = args["id"]!.GetValue<string>()),
+            "check_now" => Do(() => CheckedAt = CheckedAt.AddMinutes(1), """{ "started": true }"""),
             "select_start" => Step0("""{ "started": true }"""),
+            "select_cancel" => Do(() => { _cancelled = true; SelectRunningJob = false; }),
+            "apply" => Do(() => Strategy = args["id"]!.GetValue<string>()),
+            "schedule_set" => Do(() => { ScheduleEnabled = args["enabled"]!.GetValue<bool>(); ScheduleHours = args["hours"]!.GetValue<double>(); }),
             "select_progress" => Progress(),
             "targets_get" => """{ "items": [ { "url": "https://example.com/", "important": true } ] }""",
             "lists_get" => """{ "lines": ["example.com"] }""",
             "diag" => """{ "conflicts": [ { "kind": "service", "name": "zapret2", "running": true } ], "flow_offload": false, "ipv6_wan": false, "dns": { "spoofed": true, "checked_at": "2026-10-16T21:00:00Z" }, "overlay_free_kb": 18000 }""",
             "report" => """{ "text": "отчёт роутера" }""",
-            "check_now" or "core_install" => """{ "started": true }""",
+            "core_install" => """{ "started": true }""",
             _ => "{}",
         }));
     }
 
-    string Step0(string payload) { _selectStep = -1; return payload; }
+    static string Do(Action a, string payload = "{}") { a(); return payload; }
 
-    /// <summary>Первые вызовы — running: true; последний — best и restore_at (§5.1).</summary>
+    string Step0(string payload) { _selectStep = -1; _cancelled = false; return payload; }
+
+    /// <summary>Первые вызовы — running: true; последний — best, applied: true и backups (§5.1, редакция §9). После select_cancel — cancelled.</summary>
     string Progress()
     {
         var step = Interlocked.Increment(ref _selectStep);
+        if (_cancelled)
+            return $$"""
+                { "running": false, "started_by": "{{StartedBy}}", "depth": "main", "index": {{step}}, "total": 20, "eta_s": null,
+                  "message": "", "rows": {{SelectRowsJson}},
+                  "finished_at": "2026-10-16T21:05:00Z", "cancelled": true, "best": null, "applied": false, "backups": [] }
+                """;
         if (step < SelectSteps)
             return $$"""
-                { "running": true, "index": {{step + 1}}, "total": 20, "message": "alt3: YouTube",
-                  "rows": [ { "id": "alt", "group_share": 1.0, "target_share": 0.88, "avg_s": 0.74, "error": null } ],
-                  "finished_at": null, "best": null, "restore_at": null }
+                { "running": true, "started_by": "{{StartedBy}}", "depth": "main", "index": {{step + 1}}, "total": 20, "eta_s": 95,
+                  "message": "alt3: YouTube",
+                  "rows": {{SelectRowsJson}},
+                  "finished_at": null, "cancelled": false, "best": null, "applied": false, "backups": [] }
                 """;
-        return """
-            { "running": false, "index": 20, "total": 20, "message": "",
-              "rows": [ { "id": "alt", "group_share": 1.0, "target_share": 0.88, "avg_s": 0.74, "error": null } ],
-              "finished_at": "2026-10-16T21:05:00Z", "best": "alt", "restore_at": "2026-10-16T21:15:00Z" }
+        if (Applied) { Strategy = BestId; SelectRunningJob = false; }
+        return $$"""
+            { "running": false, "started_by": "{{StartedBy}}", "depth": "main", "index": 20, "total": 20, "eta_s": null,
+              "message": "", "rows": {{SelectRowsJson}},
+              "finished_at": "2026-10-16T21:05:00Z", "cancelled": false, "best": "{{BestId}}", "applied": {{(Applied ? "true" : "false")}}, "backups": {{BackupsJson}} }
             """;
     }
+
+    bool _cancelled;
+    public string StartedBy { get; set; } = "app";
+    /// <summary>Подбор сам включил лучшую (06-router-spec §3.3).</summary>
+    public bool Applied { get; set; } = true;
+    public string BackupsJson { get; set; } = """["alt9", "alt13"]""";
 
     static async Task Write(HttpListenerContext ctx, string json)
     {

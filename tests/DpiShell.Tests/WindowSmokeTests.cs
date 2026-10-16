@@ -97,7 +97,7 @@ public sealed class WindowSmokeTests
             WindowStartupLocation = WindowStartupLocation.Manual,
             Left = -20000, Top = -20000, ShowActivated = false, ShowInTaskbar = false,
         };
-        foreach (var name in new[] { "_timer", "_watchTimer", "_netSettle" })
+        foreach (var name in new[] { "_timer", "_netSettle" })
             (Field(w, name) as DispatcherTimer)?.Stop();
         w.Show();
         Pump();
@@ -242,6 +242,98 @@ public sealed class WindowSmokeTests
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
 
+    /// <summary>
+    /// Роутер подключён (FakeRouter на localhost): главная с блоком роутера, «Подбор» на роутере с итогом, «Свои адреса» роутера,
+    /// «Диагностика» с карточками роутера — без ошибок привязок, в обеих темах. Снимки: &lt;тема&gt;-router-&lt;вкладка&gt;.png.
+    /// </summary>
+    [Fact]
+    public void Router_Connected_PagesBind_AndSnap()
+    {
+        using var tmp = new TempDir();
+        using var fake = new FakeRouter
+        {
+            SelectSteps = 0,
+            SelectRowsJson = """
+                [ { "id": "alt", "group_share": 1.0, "target_share": 0.88, "avg_s": 0.74, "error": null },
+                  { "id": "alt9", "group_share": 1.0, "target_share": 0.80, "avg_s": 0.61, "error": null },
+                  { "id": "alt10", "group_share": 0.5, "target_share": 0.5, "avg_s": 0.92, "error": null },
+                  { "id": "d-17", "title": "fake + multisplit, ts — YouTube", "group_share": 0.5, "target_share": 0.62, "avg_s": 0.83, "error": null },
+                  { "id": "alt2", "group_share": 0.0, "target_share": 0.0, "avg_s": 0, "error": "не открылось ни одной группы" } ]
+                """,
+        };
+        var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
+        var errors = WithBindingErrors(() =>
+        {
+            foreach (var theme in new[] { ThemeManager.Light, ThemeManager.Dark })
+            {
+                ThemeManager.Apply(theme);
+                var shell = new Shell(new AppPaths(tmp.Sub("router-" + theme), Repo.Data));
+                shell.State.Theme = theme;
+                shell.State.UserTargets = ["example.com", "my-site.ru"];
+                var vm = new MainViewModel(shell);
+                var router = vm.Router;
+                router.AddressAuto = false;
+                router.CustomAddress = fake.Address;
+                router.PollInterval = TimeSpan.FromMilliseconds(10);
+                router.Gateway = () => null;
+                // Сеть — в фоне без контекста окна (поток окна здесь занят), потом окно строится по готовому состоянию.
+                Task.Run(async () =>
+                {
+                    if (!await router.ConnectAsync("secret")) throw new Exception("Не подключились: " + router.ConnectionText);
+                    await router.StartSelectAsync(deep: false);
+                    await router.LoadTargetsAsync();
+                    await router.RefreshDiagAsync();
+                }).GetAwaiter().GetResult();
+                router.TargetsOnRouter = true;
+                router.SelectedScore = router.Scores.First(x => x.Id == "alt9");
+                Fill(vm, shell);
+
+                var w = Open(vm);
+                foreach (var (page, name) in AllPages)
+                {
+                    SetProp(vm, "IsLoading", true);
+                    vm.Page = page;
+                    Pump();
+                    SetProp(vm, "IsLoading", false);
+                    typeof(MainViewModel).GetMethod("UpdateStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
+                    Pump();
+                    var tabs = Find<TabControl>(w)!;
+                    if (page == Pages.Home)
+                    {
+                        if (Find<TextBlock>(tabs, t => t.Text == "Обход делает роутер" && t.IsVisible) is null) throw new Exception("На главной нет блока роутера");
+                        if (Find<Button>(tabs, b => b.Content as string == "Отправить на роутер" && b.IsVisible) is null) throw new Exception("У найденной стратегии нет «Отправить на роутер»");
+                        if (Find<ComboBox>(tabs) is not null) throw new Exception("На главной появился выпадающий список");
+                    }
+                    // Роутер сам включил лучшую (редакция §9) — итог «Включена на роутере», другую можно выбрать в таблице.
+                    if (page == Pages.Select && (Find<TextBlock>(tabs, t => t.Text.StartsWith("Включена на роутере") && t.IsVisible) is null
+                                                 || Find<Button>(tabs, b => b.Content as string == "Применить выбранную" && b.IsVisible && b.IsEnabled) is null))
+                        throw new Exception("На «Подборе» нет итога роутера или «Применить выбранную»");
+                    if (page == Pages.Diag && Find<Button>(tabs, b => b.Content as string == "Остановить" && b.IsVisible) is null)
+                        throw new Exception("В диагностике роутера нет «Остановить» у конфликта");
+                    if (snapDir is null) continue;
+                    Directory.CreateDirectory(snapDir);
+                    Snap(w, Path.Combine(snapDir, $"{theme}-router-{name}.png"));
+                    if (page == Pages.Diag && Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } sv)
+                    {
+                        // Карточки роутера — в середине и в конце страницы.
+                        var card = Find<TextBlock>(tabs, t => t.Text == "Роутер")!;
+                        sv.ScrollToVerticalOffset(card.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-router-diag-card.png"));
+                        sv.ScrollToEnd();
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-router-diag-end.png"));
+                        sv.ScrollToHome();
+                    }
+                }
+                SetProp(vm, "IsLoading", true);
+                Close(w);
+                router.Dispose();
+            }
+        });
+        Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
+    }
+
     /// <summary>Главная: выпадающего списка нет, стратегии — списком с выбранной, галочка режима показывает режим ядра.</summary>
     static void AssertHome(Window w, MainViewModel vm)
     {
@@ -315,7 +407,6 @@ public sealed class WindowSmokeTests
         vm.DnsRows.Add(new("www.youtube.com", "195.208.4.1", "142.250.74.46, 142.250.74.78 …", true));
         vm.DnsRows.Add(new("discord.com", "162.159.135.232", "162.159.135.232", false));
         SetProp(vm, "DnsSummary", "DNS провайдера подменяет адреса сайтов.");
-        SetProp(vm, "WatchText", "Запасные: " + strategies[0].Title + " → " + strategies[1].Title + ". Последняя проверка: 16.10 12:30.");
         vm.Message = "Готово.";
     }
 

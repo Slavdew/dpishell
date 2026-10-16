@@ -27,6 +27,11 @@ public sealed class MainViewModel : Observable
     bool _active;   // обход работает в своём режиме: служба запущена или наш winws жив (Shell.IsActive)
 
     public Shell Shell => _shell;
+    public RouterViewModel Router { get; }
+
+    /// <summary>Вопрос «Да/Нет» (в тестах подменяется).</summary>
+    public Func<string, bool> Confirm { get; set; } = text =>
+        MessageBox.Show(text, "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     public event Action? StatusChanged;
 
     public MainViewModel(Shell shell)
@@ -55,6 +60,15 @@ public sealed class MainViewModel : Observable
         OpenResultsCmd = new RelayCommand(() => OpenFolder(_shell.Paths.Results));
         RemoveServiceCmd = RelayCommand.Async(RemoveServiceAsync, () => !Busy && !IsLoading);
 
+        // Обход на роутере (docs/07-router-api.md §6): своя логика, свои команды; сюда — только строка состояния и переходы.
+        Router = new RouterViewModel(shell)
+        {
+            Say = s => Message = s,
+            Navigate = p => Page = p,
+            SelectOptions = RouterSelectOptions,
+        };
+        Router.Changed += UpdateStatus;
+
         var chosen = _shell.State.Groups.ToHashSet();
         foreach (var g in _shell.DefaultTargets.Groups) Groups.Add(new(g.Id, g.Title, chosen.Contains(g.Id)));
         Groups.Add(new("user", "Свои адреса", chosen.Contains("user")));
@@ -62,7 +76,6 @@ public sealed class MainViewModel : Observable
         IReadOnlyList<string> targets = _shell.State.UserTargets.Count > 0 ? _shell.State.UserTargets : _shell.Data.ReadUserDomains();
         _targetsText = string.Join(Environment.NewLine, targets);
         UpdateStatus();
-        RefreshWatchText();
     }
 
     // ---------- общее ----------
@@ -71,7 +84,12 @@ public sealed class MainViewModel : Observable
     public int Page
     {
         get => _page;
-        set { if (Set(ref _page, value) && value == Pages.Diag && !IsLoading) _ = RefreshDiagAsync(); }
+        set
+        {
+            if (!Set(ref _page, value) || value != Pages.Diag || IsLoading) return;
+            _ = RefreshDiagAsync();
+            if (Router.Connected) _ = Router.RefreshDiagAsync();
+        }
     }
 
     bool _busy;
@@ -143,6 +161,8 @@ public sealed class MainViewModel : Observable
             var check = await Task.Run(() => _shell.PrepareAsync(log));
             _coreProblem = CoreProblem(check);
             IsLoading = false;
+            // Роутер ищем сразу и параллельно: его нет — блок просто не появится.
+            _ = Router.RefreshAsync();
             // Без службы обход живёт, пока открыта программа: был включён — вернуть.
             try { await Task.Run(_shell.ResumeIfNeeded); }
             catch (Exception e) { _error = Texts.Friendly(e); Message = _error; }
@@ -214,7 +234,8 @@ public sealed class MainViewModel : Observable
         else
         {
             Kind = StatusKind.Off; StatusTitle = "Выключено";
-            StatusDetail = _shell.State.StrategyId is { } id ? "Выбрана стратегия: " + StrategyTitle(id) : "Стратегия не выбрана: выберите в списке или нажмите «Подобрать»";
+            StatusDetail = Router.Found && Router.RouterEnabled ? "Обход делает роутер — на этом ПК включать не нужно"
+                : _shell.State.StrategyId is { } id ? "Выбрана стратегия: " + StrategyTitle(id) : "Стратегия не выбрана: выберите в списке или нажмите «Подобрать»";
         }
         StatusBrush = BrushOf(Kind);
         Raise(nameof(IsRunning));
@@ -276,7 +297,6 @@ public sealed class MainViewModel : Observable
                 _shell.State.StrategyId = value;
                 WatchdogPolicy.Applied(_shell.State, value);
                 _shell.SaveState();
-                RefreshWatchText();
                 UpdateStatus();
             }
         }
@@ -335,7 +355,12 @@ public sealed class MainViewModel : Observable
     }
 
     /// <summary>Тихое обновление по таймеру — только когда ничего не идёт.</summary>
-    public Task TickAsync() => Busy || IsLoading ? Task.CompletedTask : RefreshStatusAsync();
+    public Task TickAsync()
+    {
+        if (IsLoading) return Task.CompletedTask;
+        _ = Router.TickAsync();
+        return Busy ? Task.CompletedTask : RefreshStatusAsync();
+    }
 
     static string? CoreProblem(CoreCheck c) => c.State switch
     {
@@ -346,6 +371,11 @@ public sealed class MainViewModel : Observable
 
     public Task EnableAsync()
     {
+        // Роутер уже обходит для всего дома — двойная обработка ломает сайты: включать здесь только осознанно.
+        if (!IsRunning && Router.Found && Router.RouterEnabled && !Confirm(
+                "Обход уже делает роутер — для всех устройств дома, и для этого ПК тоже. Если включить и здесь, " +
+                "трафик будет обрабатываться дважды, и сайты могут перестать открываться.\n\nВсё равно включить на этом ПК?"))
+            return Task.CompletedTask;
         // Стратегия не выбрана — не отправляем человека разбираться. Подборы уже были: берём лучшую по ним
         // (первая в списке, порядок по статистике). Не было: подбираем и включаем сами (автоприменение).
         if (_shell.State.StrategyId is null)
@@ -368,10 +398,9 @@ public sealed class MainViewModel : Observable
     Task<bool> ApplyAsync(string id) => Guard("Включаю…", async () =>
     {
         await Task.Run(() => _shell.Enable(id));
-        // Выбранная руками — первая в запасных, автопроверка начинает с неё.
+        // Выбранная руками — первая в запасных (запасные хранятся после подбора, в окне не показываются).
         WatchdogPolicy.Applied(_shell.State, id);
         _shell.SaveState();
-        RefreshWatchText();
         await RefreshStatusAsync();
         Page = Pages.Home;
     });
@@ -480,6 +509,16 @@ public sealed class MainViewModel : Observable
         _shell.State.Groups = ids;
         try { _shell.SaveState(); } catch (Exception e) { Message = Texts.Friendly(e); }
         return _shell.SelectedGroups(ids);
+    }
+
+    /// <summary>Группы и режим для подбора на роутере. «Свои адреса» — роутерные, поэтому список ПК не проверяем.</summary>
+    (IReadOnlyList<string> Groups, bool Full)? RouterSelectOptions()
+    {
+        var ids = Groups.Where(g => g.IsChecked).Select(g => g.Id).ToList();
+        if (ids.Count == 0) { Message = "Отметьте, что проверять."; return null; }
+        _shell.State.Groups = ids;
+        try { _shell.SaveState(); } catch (Exception e) { Message = Texts.Friendly(e); }
+        return (ids, Full);
     }
 
     void ResetResults()
@@ -681,7 +720,6 @@ public sealed class MainViewModel : Observable
         // Рабочие по рейтингу — запасные для автопереключения.
         WatchdogPolicy.Remember(_shell.State, r);
         try { _shell.SaveState(); } catch (Exception e) { Message = Texts.Friendly(e); }
-        RefreshWatchText();
 
         if (r.NothingBlocked)
         {
@@ -802,7 +840,6 @@ public sealed class MainViewModel : Observable
             (_svc, _active) = run;
             _coreProblem = CoreProblem(core);
             UpdateStatus();
-            RefreshWatchText();
             if (DnsRows.Count == 0) _ = CheckDnsAsync();
             DiagUpdated = $"обновлено в {DateTime.Now:HH:mm:ss}";
         }
@@ -850,57 +887,6 @@ public sealed class MainViewModel : Observable
     public string CloseHint => _shell.ServiceMode
         ? "Обход работает и без окна: его выключает только кнопка «Выключить»."
         : "Без режима службы закрытие программы выключает и обход.";
-
-    // ---------- автопроверка и запасные (ТЗ §9 п. 15) ----------
-
-    /// <summary>Уведомление в трей (окно может быть скрыто).</summary>
-    public event Action<string>? Notify;
-
-    string _watchText = "";
-    public string WatchText { get => _watchText; private set => Set(ref _watchText, value); }
-
-    void RefreshWatchText()
-    {
-        var s = _shell.State;
-        var list = s.Fallbacks.Count == 0 ? "нет — появятся после подбора" : string.Join(" → ", s.Fallbacks.Select(StrategyTitle));
-        var last = s.WatchCheckedAt is { } at ? $"{at:dd.MM HH:mm}" : "ещё не было";
-        WatchText = $"Запасные: {list}. Последняя проверка: {last}.";
-    }
-
-    bool _watching;
-
-    /// <summary>Раз в 30 мин и после смены сети: лёгкая проверка; две неудачи подряд — следующая запасная.</summary>
-    public async Task WatchAsync()
-    {
-        if (_watching || IsLoading) return;
-        _watching = true;
-        try
-        {
-            var active = await Task.Run(() => _shell.IsActive);
-            if (!WatchdogPolicy.ShouldCheck(_shell.State, active, Busy || Selecting)) return;
-
-            var id = _shell.State.StrategyId;
-            var groups = _shell.SelectedGroups();
-            var outcome = await Task.Run(() => WatchdogProbe.CheckAsync(groups, _shell.Paths));
-            // За время проверки пользователь что-то сделал (подбор, выключение, другая стратегия) — итог не в счёт.
-            if (Busy || Selecting || !_shell.State.Enabled || _shell.State.StrategyId != id) return;
-
-            var d = WatchdogPolicy.Decide(_shell.State, outcome, DateTime.Now, x => _shell.FindStrategy(x) is not null);
-            _shell.SaveState();
-            RefreshWatchText();
-
-            if (d is { Action: WatchAction.Switch, NextId: { } next })
-            {
-                if (await Guard("Переключаю стратегию…", () => Task.Run(() => _shell.Enable(next))))
-                    Notify?.Invoke($"Обход перестал работать — включена запасная стратегия: {StrategyTitle(next)}.");
-                await RefreshStatusAsync();
-            }
-            else if (d.Action == WatchAction.GiveUp)
-                Notify?.Invoke("Обход перестал работать, запасные стратегии тоже. Подберите стратегию заново.");
-        }
-        catch (Exception) { /* автопроверка не должна мешать: следующая попытка по таймеру */ }
-        finally { _watching = false; }
-    }
 
     Task RepairCoreAsync() => Guard("Восстанавливаю ядро…", async () =>
     {

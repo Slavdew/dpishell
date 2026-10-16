@@ -138,7 +138,7 @@ public sealed class RouterClientTests
         Assert.Equal("timer", s.LastCheck!.Source);
         Assert.Equal(new DateTime(2026, 10, 16, 21, 0, 0, DateTimeKind.Utc), s.LastCheck.At!.Value.ToUniversalTime());
         Assert.Equal(2, s.LastCheck.Groups!.Count);
-        Assert.Equal(6, s.Schedule!.Hours);
+        Assert.Equal(1, s.Schedule!.Hours);
         Assert.False(s.Jobs!.CoreInstall);
         Assert.Equal("flow_offload", s.Warnings![0].Code);
         var p = r.Calls[^1]["params"]!.AsArray();
@@ -185,7 +185,7 @@ public sealed class RouterClientTests
     }
 
     [Fact]
-    public async Task Select_FromRunningToBestAndRestoreAt_ThenApply()
+    public async Task Select_FromRunningToBestApplied_ThenApplyOther()
     {
         using var r = new FakeRouter { SelectSteps = 3 };
         using var c = await LoggedIn(r);
@@ -199,7 +199,10 @@ public sealed class RouterClientTests
         do { p = await c.SelectProgressAsync(); polls++; } while (p.Running && polls < 10);
         Assert.Equal(4, polls);
         Assert.Equal("alt", p.Best);
-        Assert.NotNull(p.RestoreAt);
+        Assert.True(p.Applied);
+        Assert.False(p.Cancelled);
+        Assert.Equal("app", p.StartedBy);
+        Assert.Equal(["alt9", "alt13"], p.Backups);
         Assert.Equal(0.88, p.Rows![0].TargetShare);
 
         await c.ApplyAsync(p.Best!, ["alt9"]);

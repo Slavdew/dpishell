@@ -225,12 +225,14 @@ public sealed class RouterClient : IDisposable
 
     public Task SelectCancelAsync(CancellationToken ct = default) => CallAsync("select_cancel", null, ct);
 
+    /// <summary>`apply` (редакция §9): выбрать другую стратегию из итога подбора вместо автоматически включённой.</summary>
     public Task ApplyAsync(string id, IEnumerable<string> backups, CancellationToken ct = default) =>
         CallAsync("apply", new JsonObject { ["id"] = id, ["backups"] = new JsonArray(backups.Select(b => (JsonNode)b).ToArray()) }, ct);
 
-    public Task ScheduleSetAsync(bool enabled, int hours, CancellationToken ct = default)
+    public Task ScheduleSetAsync(bool enabled, double hours, CancellationToken ct = default)
     {
-        if (hours is not (1 or 3 or 6 or 12 or 24)) throw new ArgumentOutOfRangeException(nameof(hours), "Часы проверки: 1, 3, 6, 12 или 24");
+        // §9: добавлено 0.5 (раз в 30 мин).
+        if (hours is not (0.5 or 1 or 3 or 6 or 12 or 24)) throw new ArgumentOutOfRangeException(nameof(hours), "Часы проверки: 0.5, 1, 3, 6, 12 или 24");
         return CallAsync("schedule_set", new JsonObject { ["enabled"] = enabled, ["hours"] = hours }, ct);
     }
 

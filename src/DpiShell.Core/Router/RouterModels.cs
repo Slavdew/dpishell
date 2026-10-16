@@ -28,7 +28,8 @@ public sealed record RouterDetection(string Address, RouterFound Found, RouterPu
 public sealed record RouterCore(string? Version, bool Installed, bool HashOk);
 public sealed record RouterGroupCheck(string Id, bool Ok);
 public sealed record RouterLastCheck(DateTime? At, string? Source, bool Ok, List<RouterGroupCheck>? Groups);
-public sealed record RouterSchedule(bool Enabled, int Hours);
+/// <summary>Таймер проверки; hours ∈ 0.5, 1, 3, 6, 12, 24 (редакция §9).</summary>
+public sealed record RouterSchedule(bool Enabled, double Hours);
 public sealed record RouterJobs(bool Select, bool Check, bool CoreInstall);
 public sealed record RouterWarning(string Code, string? Text);
 
@@ -39,10 +40,17 @@ public sealed record RouterStatus(
 public sealed record RouterStrategyItem(string Id, string Title, string Source, int Runs, int Passed);
 public sealed record RouterStrategies(int CatalogVersion, List<RouterStrategyItem> Items);
 
-public sealed record RouterSelectRow(string Id, double GroupShare, double TargetShare, double AvgS, string? Error);
+/// <summary>Строка хода подбора; title — название из каталога или описание кандидата глубокого поиска (редакция §9, 2026-10-17).</summary>
+public sealed record RouterSelectRow(string Id, double GroupShare, double TargetShare, double AvgS, string? Error, string? Title = null);
+/// <summary>
+/// Ход подбора (§5.1, редакция §9 от 2026-10-16): по завершении роутер сам включает лучшую — `applied`, `backups`;
+/// остановленный — `cancelled`. `started_by`: page | app | auto. `eta_s` — оценка оставшегося, null — неизвестна.
+/// </summary>
 public sealed record RouterSelectProgress(
     bool Running, int Index, int Total, string? Message, List<RouterSelectRow>? Rows,
-    DateTime? FinishedAt, string? Best, DateTime? RestoreAt);
+    DateTime? FinishedAt, string? Best,
+    string? StartedBy = null, string? Depth = null, int? EtaS = null,
+    bool Cancelled = false, bool Applied = false, List<string>? Backups = null);
 
 public sealed record RouterTarget(string Url, bool Important);
 public sealed record RouterTargets(List<RouterTarget> Items);
