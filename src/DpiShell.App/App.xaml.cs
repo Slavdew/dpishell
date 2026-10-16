@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using DpiShell.Core;
+using DpiShell.Core.Helper;
 
 namespace DpiShell.App;
 
@@ -18,17 +19,28 @@ public partial class App : Application
         TaskScheduler.UnobservedTaskException += (_, a) => a.SetObserved();
         AppDomain.CurrentDomain.UnhandledException += (_, a) => TryLog(a.ExceptionObject as Exception);
 
-        if (!Shell.IsAdmin())
+        // Тот же DpiShell.exe — и помощник (11-helper-spec §2): служба и её установка/удаление окна не открывают.
+        if (HelperMode(e.Args) is { } code)
         {
-            MessageBox.Show("DpiShell нужны права администратора: без них нельзя управлять обходом.\nЗапустите программу через «Запуск от имени администратора».",
-                "DpiShell", MessageBoxButton.OK, MessageBoxImage.Warning);
-            Shutdown(1);
+            Shutdown(code);
             return;
         }
 
         // Одна копия: повторный запуск показывает окно уже работающей (она могла быть свёрнута в трей) и выходит.
-        _single = new Mutex(true, @"Global\DpiShell.App", out bool first);
-        _showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Global\DpiShell.App.Show");
+        bool first;
+        try
+        {
+            _single = new Mutex(true, @"Global\DpiShell.App", out first);
+            _showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Global\DpiShell.App.Show");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Мьютекс создала копия, запущенная с правами (прежняя версия), — окно без прав к нему не допущено: копия уже есть.
+            MessageBox.Show("DpiShell уже запущен с правами администратора. Закройте его (значок в трее → «Выход») и откройте снова.",
+                "DpiShell", MessageBoxButton.OK, MessageBoxImage.Information);
+            Shutdown(0);
+            return;
+        }
         if (!first)
         {
             _showSignal.Set();
@@ -52,10 +64,13 @@ public partial class App : Application
             return;
         }
 
-        ThemeManager.Apply(shell.State.Theme);
+        // Настройки окна — свои, в %LocalAppData% (первый раз — перенос из прежнего state.json, если он читается).
+        var settings = WindowSettings.Load(legacy: shell.Paths);
+        ThemeManager.Apply(settings.Theme);
         ThemeManager.Listen();
 
-        var vm = new MainViewModel(shell);
+        var helper = new HelperLink { Post = a => Dispatcher.BeginInvoke(a) };
+        var vm = new MainViewModel(shell, helper, settings);
         RelayCommand.OnError = ex => { TryLog(ex); vm.Message = Texts.Friendly(ex); };
         try
         {
@@ -67,12 +82,30 @@ public partial class App : Application
         {
             // Окно не открылось — сказать и выйти, а не висеть в фоне без окна.
             TryLog(ex);
-            MessageBox.Show($"Не удалось открыть окно DpiShell. Подробности — в {Path.Combine(new AppPaths().Logs, "app-errors.log")}.\n\n" + Texts.Friendly(ex),
+            MessageBox.Show($"Не удалось открыть окно DpiShell. Подробности — в {ErrorLog}.\n\n" + Texts.Friendly(ex),
                 "DpiShell", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
             return;
         }
         _ = vm.InitializeAsync();
+    }
+
+    /// <summary>
+    /// --helper (служба, вызывает SCM), --install-helper [SID] и --uninstall-helper (окно запускает их с runas).
+    /// Null — обычный запуск окна. Ход установки — в журнал помощника (logs\helper.log), окно показывает код выхода.
+    /// </summary>
+    static int? HelperMode(string[] args)
+    {
+        if (args.Length == 0) return null;
+        // Синхронно: Progress<T> отправлял бы строки в очередь окна, а она здесь не крутится.
+        var log = new LogProgress(new HelperLog(new AppPaths()).Write);
+        return args[0] switch
+        {
+            "--helper" => HelperEntry.RunService(args),
+            "--install-helper" => HelperEntry.Install(args.Length > 1 ? args[1] : null, log),
+            "--uninstall-helper" => HelperEntry.Uninstall(log),
+            _ => null,
+        };
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -94,14 +127,21 @@ public partial class App : Application
         }
     }
 
+    sealed class LogProgress(Action<string> write) : IProgress<string>
+    {
+        public void Report(string value) => write(value);
+    }
+
+    /// <summary>Журнал окна — в %LocalAppData%\DpiShell\logs: папка программы окну без прав закрыта.</summary>
+    static string ErrorLog => Path.Combine(WindowSettings.DefaultDir, "logs", "app-errors.log");
+
     static void TryLog(Exception? ex)
     {
         if (ex is null) return;
         try
         {
-            var p = new AppPaths();
-            Directory.CreateDirectory(p.Logs);
-            File.AppendAllText(Path.Combine(p.Logs, "app-errors.log"), $"{DateTime.Now:s} {ex}{Environment.NewLine}");
+            Directory.CreateDirectory(Path.GetDirectoryName(ErrorLog)!);
+            File.AppendAllText(ErrorLog, $"{DateTime.Now:s} {ex}{Environment.NewLine}");
         }
         catch { /* лог не важнее работы */ }
     }

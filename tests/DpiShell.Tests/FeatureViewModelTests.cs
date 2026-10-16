@@ -1,22 +1,33 @@
 using System.Net;
 using DpiShell.App;
 using DpiShell.Core;
+using DpiShell.Core.Helper;
 
 namespace DpiShell.Tests;
 
 /// <summary>
-/// Логика экранов «Игры и IP-списки» и «Починить адреса» без окна. Обход выключен — служба не трогается;
-/// hosts — только копия во временной папке, сети нет (подставные проверки).
+/// Логика экранов «Игры и IP-списки» и «Починить адреса» без окна. Окно без прав: всё — через помощника по каналу
+/// (настоящий <see cref="ShellHelperBackend"/> над временной папкой, sc и WMI подменены).
+/// Обход выключен — служба не трогается; hosts — только копия во временной папке, сети нет (подставные проверки).
 /// </summary>
 public sealed class FeatureViewModelTests
 {
+    /// <summary>Помощник над этим Shell и подключённая к нему связь окна.</summary>
+    static async Task<(HelperFixture, HelperLink)> Helper(Shell shell)
+    {
+        var f = new HelperFixture(backend: PcHelper.Over(shell));
+        return (f, await f.LinkAsync());
+    }
+
     [Fact]
     public async Task Game_On_TurnsIpListOnItself_AndSaysSo()
     {
         using var t = new TempDir();
         var shell = new Shell(Make.Paths(t));
+        var (f, link) = await Helper(shell);
+        await using var _ = f;
         var said = new List<string>();
-        var net = new NetViewModel(shell) { Say = said.Add };
+        var net = new NetViewModel(link) { Say = said.Add };
         Assert.False(net.GameOn);
         Assert.True(net.IpsetOff);
         Assert.Equal("Выключен", net.GameStatus);
@@ -40,9 +51,12 @@ public sealed class FeatureViewModelTests
     {
         using var t = new TempDir();
         var shell = new Shell(Make.Paths(t));
-        var net = new NetViewModel(shell);
+        var (f, link) = await Helper(shell);
+        await using var _ = f;
+        var net = new NetViewModel(link);
         await net.SetModeAsync(IpsetMode.List);
-        shell.StartAllAddresses();
+        await link.Client!.StartAllAddressesAsync();
+        await link.FetchAsync(full: false);
         net.Refresh();
         Assert.True(net.AnyActive);
         Assert.False(net.GameCanToggle);   // игры при «Все адреса» не включить
@@ -64,7 +78,9 @@ public sealed class FeatureViewModelTests
     {
         using var t = new TempDir();
         var shell = new Shell(Make.Paths(t));
-        var net = new NetViewModel(shell) { UserText = "203.0.113.0/24\nне адрес\n10.0.0.0/8\n198.51.100.7" };
+        var (f, link) = await Helper(shell);
+        await using var _ = f;
+        var net = new NetViewModel(link) { UserText = "203.0.113.0/24\nне адрес\n10.0.0.0/8\n198.51.100.7" };
         await net.SaveUserAsync();
 
         var saved = shell.IpLists.Read(IpLists.UserFile);
@@ -72,6 +88,32 @@ public sealed class FeatureViewModelTests
         Assert.Contains("203.0.113.0/24", saved);
         Assert.Contains("Не приняты (2)", net.UserMessage);
         Assert.Contains("частная сеть", net.UserMessage);
+        // На экране — сохранённое так, как его записал помощник.
+        Assert.Equal(saved, net.UserText.Split(Environment.NewLine));
+    }
+
+    /// <summary>Помощника нет: действия зовут установку (здесь — отказ), ничего не меняется и не падает.</summary>
+    [Fact]
+    public async Task WithoutHelper_ActionsOfferInstall_AndChangeNothing()
+    {
+        var link = new HelperLink
+        {
+            Connector = _ => throw new HelperUnavailableException(HelperUnavailableReason.NotInstalled),
+            Setup = new NoSetup(),
+        };
+        await link.ConnectAsync();
+        Assert.Equal(HelperState.NotInstalled, link.State);
+        int asked = 0;
+        Task<HelperClient?> Need() { asked++; return Task.FromResult(link.Client); }
+        var net = new NetViewModel(link) { Need = Need };
+        var hosts = new HostsViewModel(link) { Need = Need, Confirm = _ => true };
+
+        await net.SetGameAsync(true);
+        Assert.False(net.GameOn);
+        hosts.Enabled = true;   // включить можно и без помощника: это черновик окна
+        await hosts.CheckAsync();
+        Assert.Empty(hosts.Rows);
+        Assert.Equal(2, asked);
     }
 
     sealed class Probe(params string[] ok) : IEndpointProbe
@@ -90,27 +132,32 @@ public sealed class FeatureViewModelTests
         public Task<RdapOwner?> LookupAsync(IPAddress ip, CancellationToken ct = default) => Task.FromResult<RdapOwner?>(null);
     }
 
-    static (Shell, HostsViewModel, string Hosts, List<string> Questions) Hosts(TempDir t, params string[] ok)
+    /// <summary>hosts — копия во временной папке; пишет её помощник (Shell.Hosts), окно только командует.</summary>
+    static async Task<(Shell, HostsViewModel, string Hosts, List<string> Questions, HelperFixture)> Hosts(TempDir t, params string[] ok)
     {
         var paths = Make.Paths(t);
         var shell = new Shell(paths);
         var hosts = t.Sub("hosts");
         File.WriteAllText(hosts, "127.0.0.1 localhost\r\n");
         var cands = new List<HostsCandidate> { new("github.com", ["140.82.121.3", "140.82.121.4"], ["GITHU"], "r", "s", "s") };
-        var m = new HostsManager(paths, hosts, new Probe(ok), new Dns("185.199.108.133"), new NoRdap(), () => cands);
+        shell.Hosts = new HostsManager(paths, hosts, new Probe(ok), new Dns("185.199.108.133"), new NoRdap(), () => cands);
+        var (f, link) = await Helper(shell);
         var questions = new List<string>();
-        var vm = new HostsViewModel(shell) { Manager = m, Confirm = q => { questions.Add(q); return true; } };
-        return (shell, vm, hosts, questions);
+        var vm = new HostsViewModel(link) { Confirm = q => { questions.Add(q); return true; } };
+        vm.RefreshNow();
+        return (shell, vm, hosts, questions, f);
     }
 
     [Fact]
     public async Task Hosts_OffByDefault_CheckPreviewApplyRevert()
     {
         using var t = new TempDir();
-        var (shell, vm, hosts, questions) = Hosts(t, "github.com@140.82.121.3");
+        var (shell, vm, hosts, questions, f) = await Hosts(t, "github.com@140.82.121.3");
+        await using var _ = f;
         Assert.False(vm.Enabled);
         vm.Enabled = true;
-        Assert.True(shell.State.HostsFix);
+        Assert.True(vm.Enabled);
+        Assert.False(shell.State.HostsFix);   // у помощника включится с первой записью
 
         await vm.CheckAsync();
         Assert.Equal(2, vm.Rows.Count);
@@ -127,6 +174,8 @@ public sealed class FeatureViewModelTests
         Assert.True(vm.BlockPresent);
         Assert.StartsWith("Записано адресов: 1", vm.StatusText);
         Assert.NotNull(shell.State.HostsCheckedAt);
+        Assert.True(shell.State.HostsFix);
+        Assert.True(vm.Enabled);
 
         // Блок сняли не мы (Защитник) — понятное предупреждение.
         File.WriteAllText(hosts, "127.0.0.1 localhost\r\n");
@@ -138,6 +187,8 @@ public sealed class FeatureViewModelTests
         await vm.RevertAsync();
         Assert.Equal("127.0.0.1 localhost\r\n", File.ReadAllText(hosts));
         Assert.False(vm.BlockPresent);
+        Assert.False(shell.State.HostsFix);
+        Assert.False(vm.Enabled);
     }
 
     [Fact]
@@ -145,7 +196,8 @@ public sealed class FeatureViewModelTests
     {
         using var t = new TempDir();
         // DNS-адрес тоже открывается — запись не нужна.
-        var (_, vm, hosts, _) = Hosts(t, "github.com@140.82.121.3", "github.com@185.199.108.133");
+        var (_, vm, hosts, _, f) = await Hosts(t, "github.com@140.82.121.3", "github.com@185.199.108.133");
+        await using var _f = f;
         vm.Enabled = true;
         await vm.CheckAsync();
         Assert.Equal("Нечего чинить: всё открывается и так.", vm.Summary);
@@ -154,11 +206,25 @@ public sealed class FeatureViewModelTests
         Assert.Equal("127.0.0.1 localhost\r\n", File.ReadAllText(hosts));
     }
 
+    /// <summary>Помощник пишет только то, что сам проверил: запись без проверки — отказ, hosts не тронут.</summary>
+    [Fact]
+    public async Task Hosts_ApplyWithoutCheck_IsRefusedByHelper()
+    {
+        using var t = new TempDir();
+        var (_, _, hosts, _, f) = await Hosts(t, "github.com@140.82.121.3");
+        await using var _f = f;
+        await using var c = await f.ConnectAsync();
+        var e = await Assert.ThrowsAsync<HelperException>(() => c.HostsApplyAsync());
+        Assert.Contains("проверьте", e.Message);
+        Assert.Equal("127.0.0.1 localhost\r\n", File.ReadAllText(hosts));
+    }
+
     [Fact]
     public async Task Hosts_Recheck_OnlyWhenOnAndDue()
     {
         using var t = new TempDir();
-        var (shell, vm, hosts, _) = Hosts(t, "github.com@140.82.121.3");
+        var (shell, vm, hosts, _, f) = await Hosts(t, "github.com@140.82.121.3");
+        await using var _f = f;
         await vm.RecheckIfDueAsync();             // выключено — ничего
         Assert.Null(shell.State.HostsCheckedAt);
 
@@ -166,12 +232,12 @@ public sealed class FeatureViewModelTests
         await vm.CheckAsync();
         await vm.ApplyAsync();
         shell.State.HostsCheckedAt = DateTime.Now.AddDays(-2);
+        await vm.RefreshAsync();
         string? notice = null;
         vm.Notify += s => notice = s;
         // Адрес перестал отвечать — перепроверка снимает его и говорит об этом.
-        var m = new HostsManager(shell.Paths, hosts, new Probe(), new Dns("185.199.108.133"), new NoRdap(),
+        shell.Hosts = new HostsManager(shell.Paths, hosts, new Probe(), new Dns("185.199.108.133"), new NoRdap(),
             () => [new("github.com", ["140.82.121.3"], ["GITHU"], "r", "s", "s")]);
-        vm.Manager = m;
         await vm.RecheckIfDueAsync();
         Assert.True(shell.State.HostsCheckedAt > DateTime.Now.AddMinutes(-1));
         Assert.Contains("github.com устарел", notice);

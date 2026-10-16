@@ -78,15 +78,17 @@ public static class RouterTexts
 public sealed class RouterViewModel : Observable, IDisposable
 {
     readonly Shell _shell;
+    readonly WindowSettings _settings;
     readonly SemaphoreSlim _gate = new(1, 1);
     RouterClient? _client;
     readonly Dictionary<string, string> _titles = [];
 
-    public RouterViewModel(Shell shell)
+    public RouterViewModel(Shell shell, WindowSettings settings)
     {
         _shell = shell;
-        _auto = string.IsNullOrWhiteSpace(shell.State.RouterAddress);
-        _custom = shell.State.RouterAddress ?? "";
+        _settings = settings;
+        _auto = string.IsNullOrWhiteSpace(settings.RouterAddress);
+        _custom = settings.RouterAddress ?? "";
 
         LoginCmd = new RelayCommand(() => { Navigate(Pages.Diag); LoginRequested?.Invoke(); });
         ToggleCmd = RelayCommand.Async(ToggleAsync, () => CanAct);
@@ -112,6 +114,10 @@ public sealed class RouterViewModel : Observable, IDisposable
 
     /// <summary>Строка состояния окна.</summary>
     public Action<string> Say { get; set; } = _ => { };
+    /// <summary>Стратегии, найденные глубоким поиском на ПК (их хранит помощник).</summary>
+    public Func<IReadOnlyList<Strategy>> FoundStrategies { get; set; } = () => [];
+    /// <summary>Свои адреса этого ПК (сохранены у помощника).</summary>
+    public Func<IReadOnlyList<string>> PcUserTargets { get; set; } = () => [];
     public Func<string, bool> Confirm { get; set; } = text =>
         MessageBox.Show(text, "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
     public Func<string?> AskReportPath { get; set; } = () =>
@@ -214,8 +220,8 @@ public sealed class RouterViewModel : Observable, IDisposable
         Say("Ищу роутер…");
         try
         {
-            _shell.State.RouterAddress = AddressAuto ? null : CustomAddress.Trim();
-            try { _shell.SaveState(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say(Texts.Friendly(e)); }
+            _settings.RouterAddress = AddressAuto ? null : CustomAddress.Trim();
+            try { _settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say(Texts.Friendly(e)); }
             if (!await DetectAsync()) return false;
             if (_detection!.Found != RouterFound.Ok) return false;
             var typed = string.IsNullOrEmpty(password) ? null : password;
@@ -233,7 +239,7 @@ public sealed class RouterViewModel : Observable, IDisposable
         }
     }
 
-    bool HasSavedPassword => RouterSecrets.Unprotect(_shell.State.RouterPassword) is not null;
+    bool HasSavedPassword => RouterSecrets.Unprotect(_settings.RouterPassword) is not null;
 
     /// <summary>status.json без входа. false — роутера нет (блок на главной пропадает).</summary>
     async Task<bool> DetectAsync()
@@ -270,7 +276,7 @@ public sealed class RouterViewModel : Observable, IDisposable
     {
         string? plain = typed;
         // Для повторного входа при истёкшей сессии: после успеха — уже из зашифрованного.
-        Func<string> pw = () => plain ?? RouterSecrets.Unprotect(_shell.State.RouterPassword) ?? "";
+        Func<string> pw = () => plain ?? RouterSecrets.Unprotect(_settings.RouterPassword) ?? "";
         try
         {
             await Call(c => c.LoginAsync(pw));
@@ -279,9 +285,9 @@ public sealed class RouterViewModel : Observable, IDisposable
         {
             plain = null;
             Connected = false;
-            if (typed is null && _shell.State.RouterPassword is not null)
+            if (typed is null && _settings.RouterPassword is not null)
             {
-                _shell.State.RouterPassword = null;
+                _settings.RouterPassword = null;
                 TrySave();
             }
             SetConnection("Неверный пароль");
@@ -296,7 +302,7 @@ public sealed class RouterViewModel : Observable, IDisposable
         }
         if (typed is not null)
         {
-            _shell.State.RouterPassword = RouterSecrets.Protect(typed);
+            _settings.RouterPassword = RouterSecrets.Protect(typed);
             TrySave();
         }
         plain = null;
@@ -314,7 +320,7 @@ public sealed class RouterViewModel : Observable, IDisposable
 
     void TrySave()
     {
-        try { _shell.SaveState(); }
+        try { _settings.Save(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say(Texts.Friendly(e)); }
     }
 
@@ -603,7 +609,7 @@ public sealed class RouterViewModel : Observable, IDisposable
     /// </summary>
     public async Task SendStrategyAsync(string id)
     {
-        var found = _shell.AllStrategies.Where(s => s.Source == "search").ToList();
+        var found = FoundStrategies().ToList();
         if (found.FirstOrDefault(s => s.Id == id) is not { } strategy)
         {
             Say("Эта стратегия не найдена среди найденных поиском");
@@ -887,7 +893,7 @@ public sealed class RouterViewModel : Observable, IDisposable
     {
         var have = Targets.Select(t => t.Url.Trim().TrimEnd('/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
         int added = 0, skipped = 0;
-        foreach (var d in _shell.State.UserTargets)
+        foreach (var d in PcUserTargets())
         {
             var url = RouterTexts.ToUrl(d);
             if (!have.Add(url.TrimEnd('/'))) continue;
@@ -895,7 +901,7 @@ public sealed class RouterViewModel : Observable, IDisposable
             Targets.Add(new(url, false));
             added++;
         }
-        TargetsMessage = _shell.State.UserTargets.Count == 0 ? "На этом ПК своих адресов нет."
+        TargetsMessage = PcUserTargets().Count == 0 ? "На этом ПК своих адресов нет."
             : $"Добавлено с ПК: {added}" + (skipped > 0 ? $", не поместилось: {skipped}" : "") + ". Нажмите «Сохранить на роутере».";
     }
 

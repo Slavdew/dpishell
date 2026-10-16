@@ -12,11 +12,18 @@ public sealed class RouterViewModelTests : IDisposable
 
     public void Dispose() => _tmp.Dispose();
 
+    /// <summary>Настройки окна последнего <see cref="Make"/> (%LocalAppData% — здесь во временной папке).</summary>
+    WindowSettings Settings = new();
+
     (RouterViewModel Vm, Shell Shell) Make(FakeRouter r, Shell? shell = null)
     {
-        shell ??= new Shell(new AppPaths(_tmp.Sub("root"), Repo.Data));
-        var vm = new RouterViewModel(shell)
+        var pc = shell ?? new Shell(new AppPaths(_tmp.Sub("root"), Repo.Data));
+        Settings = WindowSettings.Load(Path.Combine(_tmp.Sub("window"), "window.json"));
+        // Как в окне: найденные стратегии и свои адреса ПК отдаёт помощник — здесь прямо из временной папки.
+        var vm = new RouterViewModel(pc, Settings)
         {
+            FoundStrategies = () => UserStrategies.Load(pc.Paths),
+            PcUserTargets = () => pc.State.UserTargets,
             AddressAuto = false,
             CustomAddress = r.Address,
             PollInterval = TimeSpan.FromMilliseconds(10),
@@ -24,7 +31,7 @@ public sealed class RouterViewModelTests : IDisposable
             Gateway = () => throw new InvalidOperationException("в тестах — только фейковый роутер"),
         };
         vm.Say = s => { lock (_said) _said.Add(s); };
-        return (vm, shell);
+        return (vm, pc);
     }
 
     void AssertNoSecretSaid(string secret)
@@ -40,8 +47,8 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.True(await vm.ConnectAsync("secret"));
         Assert.True(vm.Connected);
         Assert.Equal("Подключено, DpiShell 0.1.0", vm.ConnectionText);
-        Assert.Equal("secret", RouterSecrets.Unprotect(shell.State.RouterPassword));
-        var json = File.ReadAllText(shell.Paths.StateFile);
+        Assert.Equal("secret", RouterSecrets.Unprotect(Settings.RouterPassword));
+        var json = File.ReadAllText(Settings.File);
         Assert.DoesNotContain("secret", json);
         Assert.Contains(r.Address, json);
         // Главная: статус, стратегия, предупреждения.
@@ -56,7 +63,7 @@ public sealed class RouterViewModelTests : IDisposable
         // Новый запуск: сохранённый пароль, тихий вход.
         var (again, _) = Make(r, new Shell(new AppPaths(shell.Paths.Root, Repo.Data)));
         again.AddressAuto = false;
-        again.CustomAddress = AppState.Load(shell.Paths).RouterAddress!;
+        again.CustomAddress = Settings.RouterAddress!;
         await again.RefreshAsync();
         Assert.True(again.Connected);
         Assert.Equal(2, r.Logins);
@@ -70,8 +77,8 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.False(await vm.ConnectAsync("wrong-pass"));
         Assert.False(vm.Connected);
         Assert.Equal("Неверный пароль", vm.ConnectionText);
-        Assert.Null(shell.State.RouterPassword);
-        Assert.DoesNotContain("wrong-pass", File.ReadAllText(shell.Paths.StateFile));
+        Assert.Null(Settings.RouterPassword);
+        Assert.DoesNotContain("wrong-pass", File.ReadAllText(Settings.File));
         Assert.True(vm.NeedLogin);
         AssertNoSecretSaid("wrong-pass");
     }
@@ -81,11 +88,11 @@ public sealed class RouterViewModelTests : IDisposable
     {
         using var r = new FakeRouter();
         var (vm, shell) = Make(r);
-        shell.State.RouterPassword = RouterSecrets.Protect("old-pass");
+        Settings.RouterPassword = RouterSecrets.Protect("old-pass");
         await vm.RefreshAsync();
         Assert.False(vm.Connected);
         Assert.Equal("Неверный пароль", vm.ConnectionText);
-        Assert.Null(shell.State.RouterPassword);
+        Assert.Null(Settings.RouterPassword);
     }
 
     [Fact]
@@ -324,7 +331,7 @@ public sealed class RouterViewModelTests : IDisposable
     public async Task PcEnable_WhenRouterBypasses_AsksAboutDoubleProcessing()
     {
         using var r = new FakeRouter();
-        var vm = new MainViewModel(new Shell(new AppPaths(_tmp.Sub("main"), Repo.Data)));
+        var vm = TestWindow.Model(new Shell(new AppPaths(_tmp.Sub("main"), Repo.Data)));
         vm.Router.AddressAuto = false;
         vm.Router.CustomAddress = r.Address;
         await vm.Router.ConnectAsync("secret");

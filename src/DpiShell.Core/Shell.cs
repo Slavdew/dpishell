@@ -12,8 +12,8 @@ public sealed class Shell
     public AppState State { get; private set; }
     public StrategyCatalog Catalog { get; }
     public TargetSet DefaultTargets { get; }
-    /// <summary>«Починить адреса» — системный hosts (ТЗ v2 §3).</summary>
-    public HostsManager Hosts => _hosts ??= new HostsManager(Paths);
+    /// <summary>«Починить адреса» — системный hosts (ТЗ v2 §3); в тестах — копия во временной папке.</summary>
+    public HostsManager Hosts { get => _hosts ??= new HostsManager(Paths); set => _hosts = value; }
     HostsManager? _hosts;
     /// <summary>IP-списки (ТЗ v2 §2): общий из data.json, свои подсети, валидатор.</summary>
     public IpLists IpLists => _ipLists ??= new IpLists(Paths);

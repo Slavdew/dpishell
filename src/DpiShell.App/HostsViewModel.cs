@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using DpiShell.Core;
+using DpiShell.Core.Helper;
 
 namespace DpiShell.App;
 
@@ -38,23 +39,28 @@ public sealed record HostsRow(string Host, string Ip, string Owner, string Live,
 /// <summary>
 /// «Починить адреса» (ТЗ v2 §3, решение 4): выключено по умолчанию; «Проверить адреса» → таблица → предпросмотр →
 /// «Записать N адресов» с подтверждением → «Вернуть как было». Перепроверка раз в сутки и при старте, если функция включена.
+/// Окно без прав (11-helper-spec §1): hosts читает и пишет помощник — hosts_check/preview/apply/revert/recheck;
+/// состояние файла — из details. Адресов окно не передаёт: помощник пишет только то, что сам проверил.
 /// </summary>
 public sealed class HostsViewModel : Observable
 {
-    readonly Shell _shell;
+    readonly HelperLink _helper;
     HostsCheckReport? _report;
+    HostsPreview? _preview;
     CancellationTokenSource? _cts;
+    /// <summary>Переключатель включён в окне, но ещё ничего не записано: у помощника функция включится с первой записью.</summary>
+    bool _draftOn;
 
-    /// <summary>С чем работаем: системный hosts (по умолчанию) или копия в тестах.</summary>
-    public HostsManager Manager { get; set; }
+    /// <summary>Помощник для действия (с установкой по требованию). Null — не вышло, причина уже сказана.</summary>
+    public Func<Task<HelperClient?>> Need { get; set; }
     public Action<string> Say { get; set; } = _ => { };
     public Func<string, bool> Confirm { get; set; } = _ => false;
     public event Action<string>? Notify;
 
-    public HostsViewModel(Shell shell)
+    public HostsViewModel(HelperLink helper)
     {
-        _shell = shell;
-        Manager = shell.Hosts;
+        _helper = helper;
+        Need = () => Task.FromResult(helper.Client);
         CheckCmd = RelayCommand.Async(CheckAsync, () => Enabled && !Busy);
         StopCmd = new RelayCommand(() => _cts?.Cancel(), () => Checking);
         ApplyCmd = RelayCommand.Async(ApplyAsync, () => Enabled && !Busy && _report is { NothingToFix: false });
@@ -78,10 +84,16 @@ public sealed class HostsViewModel : Observable
 
     // ---------- включено / выключено ----------
 
-    /// <summary>Переключатель экрана. Выключение убирает наш блок (с вопросом).</summary>
+    /// <summary>Функция включена у помощника (записывали и не отменяли).</summary>
+    bool HelperOn => _helper.Reader is not null && _helper.Status?.HostsFix == true;
+
+    /// <summary>
+    /// Переключатель экрана. Включение — черновик окна (прав не нужно, у помощника включится с первой записью);
+    /// выключение убирает наш блок (с вопросом) через помощника.
+    /// </summary>
     public bool Enabled
     {
-        get => _shell.State.HostsFix;
+        get => _draftOn || HelperOn;
         set
         {
             if (value == Enabled) return;
@@ -90,17 +102,21 @@ public sealed class HostsViewModel : Observable
                 Raise();
                 return;
             }
-            _shell.State.HostsFix = value;
-            try { _shell.SaveState(); } catch (Exception e) { Say(Texts.Friendly(e)); }
-            Raise();
-            Raise(nameof(Disabled));
-            RaiseStatus();
-            if (!value && BlockPresent) _ = RevertAsync(ask: false);
+            _draftOn = value;
+            RaiseEnabled();
+            if (!value && (BlockPresent || HelperOn)) _ = RevertAsync(ask: false);
         }
     }
 
     public bool Disabled => !Enabled;
     public string OffHint => "Выключено. Включите, если не качаются файлы с GitHub, не открывается веб-версия Telegram или Discord запускается несколько минут.";
+
+    void RaiseEnabled()
+    {
+        Raise(nameof(Enabled));
+        Raise(nameof(Disabled));
+        RaiseStatus();
+    }
 
     // ---------- состояние файла ----------
 
@@ -113,7 +129,7 @@ public sealed class HostsViewModel : Observable
     {
         get
         {
-            if (_status is null) return "";
+            if (_status is null) return _helper.Reader is null ? "Состояние файла hosts покажет помощник DpiShell." : "";
             var n = _status.Block.Entries.Count;
             if (n == 0) return _status.Block.Present ? "Блок DpiShell в hosts пустой." : "Ничего не записано — hosts без изменений.";
             var at = _status.AppliedAt is { } a ? $" {a:dd.MM.yyyy} в {a:HH:mm}" : "";
@@ -146,19 +162,28 @@ public sealed class HostsViewModel : Observable
 
     public bool HasWarnings => Warnings.Count > 0;
 
-    /// <summary>Перечитать hosts (в фоне: файл может держать антивирус).</summary>
+    /// <summary>Перечитать состояние hosts у помощника (details; файл может держать антивирус — помощник читает в фоне).</summary>
     public async Task RefreshAsync()
     {
-        try { _status = await Task.Run(Manager.Status); }
-        catch (Exception e) { Say(Texts.Friendly(e)); }
-        RaiseStatus();
+        if (_helper.Reader is { } c)
+        {
+            try
+            {
+                _helper.Status = await c.StatusAsync();
+                _helper.Details = await c.DetailsAsync();
+            }
+            catch (HelperUnavailableException e) { _helper.MarkLost(e); }
+            catch (HelperException e) { Say(e.Message); }
+        }
+        RefreshNow();
     }
 
-    /// <summary>То же синхронно (тест окна строит экран по готовому состоянию).</summary>
+    /// <summary>Экран по последнему ответу помощника, без обращения к нему (и тест окна строит экран по готовому состоянию).</summary>
     public void RefreshNow()
     {
-        _status = Manager.Status();
-        RaiseStatus();
+        _status = _helper.Reader is not null ? _helper.Details?.Hosts : null;
+        if (HelperOn) _draftOn = false;   // включено у помощника — черновик больше не нужен
+        RaiseEnabled();
     }
 
     void RaiseStatus()
@@ -185,29 +210,41 @@ public sealed class HostsViewModel : Observable
     public async Task CheckAsync()
     {
         if (Busy) return;
+        if (await Need() is not { } c) return;
         Busy = true; Checking = true;
         using var cts = new CancellationTokenSource();
         _cts = cts;
         Rows.Clear(); PreviewLines.Clear(); SetReport(null); Summary = "";
         Done = 0; Total = 1; ProgressText = "Проверяю адреса…";
-        var progress = new Progress<(int Done, int Total)>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = $"Проверено {p.Done} из {p.Total}"; });
+        var progress = new Progress<HostsCheckProgress>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = $"Проверено {p.Done} из {p.Total}"; });
         try
         {
-            var report = await Task.Run(() => Manager.CheckAsync(progress, cts.Token));
-            ShowReport(report);
+            var report = await c.HostsCheckAsync(progress, cts.Token);
+            // Предпросмотр — по той же проверке у помощника: что именно он запишет.
+            HostsPreview? preview = null;
+            string? previewError = null;
+            if (!report.NothingToFix)
+            {
+                try { preview = await c.HostsPreviewAsync(); }
+                catch (HelperException e) { previewError = e.Message; }
+            }
+            ShowReport(report, preview);
+            if (previewError is not null) PreviewLines.Add(previewError);
         }
         catch (OperationCanceledException) { Summary = "Проверка остановлена."; }
+        catch (HelperUnavailableException e) { _helper.MarkLost(e); Summary = e.Message; }
         catch (Exception e) { Summary = Texts.Friendly(e); }
         finally { _cts = null; Busy = false; Checking = false; ProgressText = ""; }
         await RefreshAsync();
     }
 
     /// <summary>Таблица и предпросмотр по готовому отчёту (и для тестов окна).</summary>
-    public void ShowReport(HostsCheckReport report)
+    public void ShowReport(HostsCheckReport report, HostsPreview? preview)
     {
         Rows.Clear();
         foreach (var r in report.Rows.OrderByDescending(r => r.Install).ThenBy(r => r.Host)) Rows.Add(HostsRow.From(r));
         SetReport(report);
+        _preview = preview;
         PreviewLines.Clear();
         if (report.NothingToFix)
         {
@@ -215,19 +252,16 @@ public sealed class HostsViewModel : Observable
             return;
         }
         Summary = $"Можно записать адресов: {report.ToInstall.Count}. Остальные не нужны или не прошли проверку.";
-        try
-        {
-            var p = Manager.Preview(report.ToInstall);
-            foreach (var e in p.Added) PreviewLines.Add($"+ {e.Ip} {e.Host}");
-            foreach (var e in p.Removed) PreviewLines.Add($"− {e.Ip} {e.Host}");
-            if (!p.Changed) PreviewLines.Add("Эти адреса уже записаны — менять нечего.");
-        }
-        catch (Exception e) { PreviewLines.Add(Texts.Friendly(e)); }
+        if (preview is not { } p) return;
+        foreach (var e in p.Added) PreviewLines.Add($"+ {e.Ip} {e.Host}");
+        foreach (var e in p.Removed) PreviewLines.Add($"− {e.Ip} {e.Host}");
+        if (!p.Changed) PreviewLines.Add("Эти адреса уже записаны — менять нечего.");
     }
 
     void SetReport(HostsCheckReport? r)
     {
         _report = r;
+        if (r is null) _preview = null;
         Raise(nameof(CanWrite)); Raise(nameof(ApplyText));
         CommandManager.InvalidateRequerySuggested();
     }
@@ -239,22 +273,21 @@ public sealed class HostsViewModel : Observable
     public async Task ApplyAsync()
     {
         if (_report is not { NothingToFix: false } report) return;
-        int lines;
-        try { lines = Manager.Preview(report.ToInstall).BlockLines.Count; } catch (Exception) { lines = report.ToInstall.Count + 3; }
+        var lines = _preview?.BlockLines.Count ?? report.ToInstall.Count + 3;
         if (!Confirm(string.Format(WriteQuestion, lines))) return;
+        if (await Need() is not { } c) return;
         Busy = true;
         try
         {
-            var r = await Task.Run(() => Manager.Apply(report));
-            _shell.State.HostsCheckedAt = DateTime.Now;
-            _shell.SaveState();
+            await c.HostsApplyAsync();
+            _draftOn = false;   // помощник включил функцию сам
             Say($"Записано {report.ToInstall.Count}, проверка раз в день; устаревшие убираются сами.");
             PreviewLines.Clear();
             SetReport(null);
             Summary = "";
         }
-        catch (HostsWriteException e) { Say(e.Message); Summary = e.Message; }
-        catch (Exception e) { Say(Texts.Friendly(e)); }
+        catch (HelperUnavailableException e) { _helper.MarkLost(e); Say(e.Message); }
+        catch (HelperException e) { Say(e.Message); Summary = e.Message; }
         finally { Busy = false; }
         await RefreshAsync();
     }
@@ -264,25 +297,30 @@ public sealed class HostsViewModel : Observable
     async Task RevertAsync(bool ask)
     {
         if (ask && !Confirm("Убрать записи DpiShell из файла hosts? Другие строки файла не меняются.")) return;
+        if (await Need() is not { } c) { RefreshNow(); return; }
         Busy = true;
         try
         {
-            var r = await Task.Run(Manager.Revert);
+            var r = await c.HostsRevertAsync();
+            _draftOn = false;
             Say(r.Changed ? "Готово: записи DpiShell убраны из hosts." : "Записей DpiShell в hosts нет.");
         }
-        catch (HostsWriteException e) { Say(e.Message); }
-        catch (Exception e) { Say(Texts.Friendly(e)); }
+        catch (HelperUnavailableException e) { _helper.MarkLost(e); Say(e.Message); }
+        catch (HelperException e) { Say(e.Message); }
         finally { Busy = false; }
         await RefreshAsync();
     }
 
     // ---------- перепроверка ----------
 
-    /// <summary>Раз в сутки (и при старте): функция включена, а с прошлой проверки прошло больше суток — перепроверить записанное.</summary>
+    /// <summary>
+    /// Раз в сутки (и при старте): функция включена у помощника, а с прошлой проверки прошло больше суток — перепроверить записанное.
+    /// В фоне, без вопросов: помощника нет — перепроверять нечего (записывает только он).
+    /// </summary>
     public async Task RecheckIfDueAsync()
     {
         if (Busy) return;
-        if (!Enabled || _shell.State.HostsCheckedAt is { } at && DateTime.Now - at < TimeSpan.FromDays(1))
+        if (!HelperOn || _helper.Details?.HostsCheckedAt is { } at && DateTime.Now - at < TimeSpan.FromDays(1) || _helper.Client is not { } c)
         {
             if (_status is null) await RefreshAsync();   // первый раз — хотя бы состояние (для трея и предупреждений)
             return;
@@ -290,15 +328,13 @@ public sealed class HostsViewModel : Observable
         Busy = true;
         try
         {
-            var r = await Task.Run(() => Manager.RecheckAsync());
-            _shell.State.HostsCheckedAt = DateTime.Now;
-            _shell.SaveState();
+            var r = await c.HostsRecheckAsync();
             foreach (var host in r.Removed.Select(x => x.Host).Distinct())
                 Notify?.Invoke($"Адрес для {host} устарел, убран из hosts.");
             if (r.BlockLost) Notify?.Invoke("Записи DpiShell пропали из hosts (Защитник Windows?). Откройте «Починить адреса», чтобы записать снова.");
         }
-        catch (HostsWriteException e) { Say(e.Message); }
-        catch (Exception e) { Say(Texts.Friendly(e)); }
+        catch (HelperUnavailableException e) { _helper.MarkLost(e); }
+        catch (HelperException e) { Say(e.Message); }
         finally { Busy = false; }
         await RefreshAsync();
     }

@@ -4,6 +4,7 @@ using System.Security.Authentication;
 using System.Security.Principal;
 using System.Text;
 using DpiShell.Core;
+using DpiShell.App;
 using DpiShell.Core.Helper;
 
 namespace DpiShell.Tests;
@@ -36,14 +37,30 @@ public sealed class FakeHelperBackend : IHelperBackend
             [new StrategyScore(Alt9, [verdict], 1, 1)], cancelled);
     }
 
+    public static HelperStatus DefaultStatus => new(true, true, "service", "alt9", SvcState.Running, true, "alt9", CoreState.Ok,
+        new NetFeatures(IpsetMode.Off, null, IpsetMode.Off, GameMode.Off, false, false, null),
+        [new StrategyInfo("alt9", "Alt 9", "catalog")], [new GroupInfo("youtube", "YouTube", 2)],
+        ["youtube"], [], [], false, false, [], "test");
+
+    /// <summary>Что отвечает status (тесты окна подставляют своё: режимы, hosts).</summary>
+    public HelperStatus StatusValue { get; set; } = DefaultStatus;
+
+    /// <summary>Что отвечает details.</summary>
+    public HelperDetails DetailsValue { get; set; } = new(null, null, [], [], new CoreCheck(CoreState.Ok, [], []), "test", []);
+
     public HelperStatus Status()
     {
         Call("status");
-        return new HelperStatus(true, true, "service", "alt9", SvcState.Running, true, "alt9", CoreState.Ok,
-            new NetFeatures(IpsetMode.Off, null, IpsetMode.Off, GameMode.Off, false, false, null),
-            [new StrategyInfo("alt9", "Alt 9", "catalog")], [new GroupInfo("youtube", "YouTube", 2)],
-            ["youtube"], [], [], false, false, [], "test");
+        return StatusValue;
     }
+
+    public HelperDetails Details()
+    {
+        Call("details");
+        return DetailsValue;
+    }
+
+    public void Choose(string strategyId) => Call("choose " + strategyId);
 
     public void Enable(string strategyId)
     {
@@ -168,17 +185,27 @@ public sealed class HelperFixture : IAsyncDisposable
     public HelperServer Server { get; }
     public ConcurrentQueue<string> Log { get; } = new();
 
-    public HelperFixture(Func<HelperServerOptions, HelperServerOptions>? tune = null)
+    /// <param name="backend">Свой помощник (например, настоящий <see cref="ShellHelperBackend"/> над временной папкой); null — фейк.</param>
+    public HelperFixture(Func<HelperServerOptions, HelperServerOptions>? tune = null, IHelperBackend? backend = null)
     {
         using var me = WindowsIdentity.GetCurrent();
         var o = new HelperServerOptions { PipeName = PipeName, AllowedUser = me.User, Log = Log.Enqueue };
-        Server = new HelperServer(Backend, tune?.Invoke(o) ?? o);
+        Server = new HelperServer(backend ?? Backend, tune?.Invoke(o) ?? o);
         Server.Start();
     }
 
     public HelperClientOptions ClientOptions => new() { PipeName = PipeName, RequireTrustedServer = false, ConnectTimeout = TimeSpan.FromSeconds(5) };
 
     public Task<HelperClient> ConnectAsync() => HelperClient.ConnectAsync(ClientOptions);
+
+    /// <summary>Связь окна с этим помощником (без UAC: установка — подмена), уже подключённая и с данными.</summary>
+    public async Task<HelperLink> LinkAsync()
+    {
+        var link = new HelperLink { Connector = ct => HelperClient.ConnectAsync(ClientOptions, ct), Setup = new NoSetup(), WindowVersion = "0.0" };
+        if (!await link.ConnectAsync()) throw new InvalidOperationException("Не подключились к помощнику фикстуры: " + link.Problem);
+        await link.FetchAsync(full: true);
+        return link;
+    }
 
     /// <summary>Сырой клиент: hello, затем произвольные строки — для проверки того, что обычный клиент не отправит.</summary>
     public async Task<RawPipe> RawAsync()
@@ -218,4 +245,43 @@ public sealed class RawPipe(NamedPipeClientStream pipe) : IDisposable
     }
 
     public void Dispose() => pipe.Dispose();
+}
+
+/// <summary>Установка помощника в тестах: прав не просим, «пользователь отказал».</summary>
+public sealed class NoSetup : IHelperSetup
+{
+    public List<string> Calls { get; } = [];
+    public Task<SetupOutcome> RunElevatedAsync(string arguments)
+    {
+        Calls.Add(arguments);
+        return Task.FromResult(new SetupOutcome(SetupResult.Declined));
+    }
+}
+
+/// <summary>Настоящий помощник над временной папкой — для тестов окна: службы машины не трогает (sc, WMI — подмены).</summary>
+public static class PcHelper
+{
+    public static ShellHelperBackend Over(Shell shell) => new(shell)
+    {
+        InspectService = () => new ServiceInfo(SvcState.NotInstalled, null, null, false),
+        IsActive = () => false,
+        FindForeign = () => [],
+    };
+}
+
+/// <summary>Окно в тестах: связь с помощником и настройки окна во временной папке.</summary>
+public static class TestWindow
+{
+    /// <summary>Помощник не установлен: режим просмотра, установка — «отказ» без UAC.</summary>
+    public static HelperLink NoHelper() => new()
+    {
+        Connector = _ => throw new HelperUnavailableException(HelperUnavailableReason.NotInstalled),
+        Setup = new NoSetup(),
+    };
+
+    public static WindowSettings Settings(Shell shell) =>
+        WindowSettings.Load(Path.Combine(shell.Paths.Root, "window", "window.json"));
+
+    public static MainViewModel Model(Shell shell, HelperLink? link = null, WindowSettings? settings = null) =>
+        new(shell, link ?? NoHelper(), settings ?? Settings(shell));
 }

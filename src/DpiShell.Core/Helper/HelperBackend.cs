@@ -35,6 +35,10 @@ public interface IHelperBackend : IHelperCatalog
     void RemoveAll();
     int ClearHistory();
     ResultsSnapshot ReadResults();
+    /// <summary>Сведения из закрытой папки для окна без прав: hosts, свои подсети, ядро, найденные стратегии.</summary>
+    HelperDetails Details();
+    /// <summary>Выбрать стратегию без включения обхода (обход включён — окно зовёт enable).</summary>
+    void Choose(string strategyId);
     /// <summary>Все окна отключились от канала: в режиме без службы winws гасится.</summary>
     void OnClientsGone();
 }
@@ -81,6 +85,19 @@ public sealed record ResultsSnapshot(IReadOnlyDictionary<string, StrategyStats.S
 
 public sealed record ResultFile(string Name, JsonNode? Content);
 
+/// <summary>Ответ на details: то, что окно раньше читало из %ProgramData%\DpiShell само.</summary>
+/// <param name="Hosts">Состояние «Починить адреса»; null — hosts не прочитать.</param>
+/// <param name="HostsCheckedAt">Когда последний раз перепроверяли записи hosts (локальное время).</param>
+/// <param name="UserIpset">Свои подсети.</param>
+/// <param name="UserIpsetExclude">Исключения.</param>
+/// <param name="Core">Проверка файлов ядра (хеши).</param>
+/// <param name="CoreVersion">Версия ядра из поставки.</param>
+/// <param name="Found">Стратегии, найденные глубоким поиском (целиком — окно отправляет их на роутер).</param>
+public sealed record HelperDetails(
+    HostsStatus? Hosts, DateTime? HostsCheckedAt,
+    IReadOnlyList<string> UserIpset, IReadOnlyList<string> UserIpsetExclude,
+    CoreCheck Core, string CoreVersion, IReadOnlyList<Strategy> Found);
+
 /// <summary>Помощник над настоящим <see cref="Shell"/> (служба, SYSTEM).</summary>
 public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
 {
@@ -93,15 +110,22 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
     public IReadOnlyCollection<string> StrategyIds => shell.AllStrategies.Select(s => s.Id).ToHashSet();
     public IReadOnlyCollection<string> GroupIds => [.. shell.DefaultTargets.Groups.Select(g => g.Id), "user"];
 
+    /// <summary>Служба обхода (sc query); в тестах окна — подмена, чтобы не трогать службы машины.</summary>
+    public Func<ServiceInfo> InspectService { get; init; } = shell.InspectService;
+    /// <summary>Обход работает (в режиме службы — тоже sc).</summary>
+    public Func<bool> IsActive { get; init; } = () => shell.IsActive;
+    /// <summary>Чужие обходы (процессы через WMI, службы).</summary>
+    public Func<IReadOnlyList<Conflict>> FindForeign { get; init; } = () => Conflicts.Find(shell.Paths, shell.AllStrategies);
+
     public HelperStatus Status()
     {
-        var info = shell.InspectService();
+        var info = InspectService();
         var st = shell.State;
         IReadOnlyList<Conflict> foreign;
-        try { foreign = Conflicts.Find(shell.Paths, shell.AllStrategies); }
+        try { foreign = FindForeign(); }
         catch (Exception e) when (e is InvalidOperationException or System.Management.ManagementException or UnauthorizedAccessException) { foreign = []; }
         return new HelperStatus(
-            st.Enabled, shell.IsActive, st.RunMode, st.StrategyId,
+            st.Enabled, IsActive(), st.RunMode, st.StrategyId,
             info.State, info.OurCore, info.Strategy?.Id,
             shell.Installer.Check().State, shell.Features,
             shell.AllStrategies.Select(s => new StrategyInfo(s.Id, s.Title, s.Source)).ToList(),
@@ -111,20 +135,59 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
             HelperProtocol.AppVersion);
     }
 
-    public void Enable(string strategyId) => shell.Enable(strategyId);
+    /// <summary>Включить; выбранная руками — первая в запасных (раньше это делало окно).</summary>
+    public void Enable(string strategyId)
+    {
+        shell.Enable(strategyId);
+        WatchdogPolicy.Applied(shell.State, strategyId);
+        shell.SaveState();
+    }
+
     public void Disable() => shell.Disable();
     public void SetRunMode(bool service) => shell.SetRunMode(service);
 
-    public Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct)
+    public void Choose(string strategyId)
     {
-        RememberGroups(groups);
-        return shell.SelectAsync(quick, groups is null ? null : shell.SelectedGroups(groups), progress, ct);
+        shell.State.StrategyId = strategyId;
+        WatchdogPolicy.Applied(shell.State, strategyId);
+        shell.SaveState();
     }
 
-    public Task<SearchReport> SearchAsync(string? baseId, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct)
+    public async Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct)
     {
         RememberGroups(groups);
-        return shell.SearchAsync(baseId, groups is null ? null : shell.SelectedGroups(groups), progress, ct);
+        var r = await shell.SelectAsync(quick, groups is null ? null : shell.SelectedGroups(groups), progress, ct);
+        RememberFallbacks(r);
+        return r;
+    }
+
+    public async Task<SearchReport> SearchAsync(string? baseId, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct)
+    {
+        RememberGroups(groups);
+        var r = await shell.SearchAsync(baseId, groups is null ? null : shell.SelectedGroups(groups), progress, ct);
+        if (r.Final is { } f) RememberFallbacks(f);
+        return r;
+    }
+
+    /// <summary>Рабочие по рейтингу — запасные для автопереключения (раньше — окно, теперь state.json только у помощника).</summary>
+    void RememberFallbacks(SelectionReport r)
+    {
+        WatchdogPolicy.Remember(shell.State, r);
+        shell.SaveState();
+    }
+
+    public HelperDetails Details()
+    {
+        HostsStatus? hosts;
+        try { hosts = shell.Hosts.Status(); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { hosts = null; }
+        IReadOnlyList<string> Read(string file)
+        {
+            try { return shell.IpLists.Read(file); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return []; }
+        }
+        return new HelperDetails(hosts, shell.State.HostsCheckedAt, Read(IpLists.UserFile), Read(IpLists.UserExcludeFile),
+            shell.Installer.Check(), shell.Installer.Manifest.Version, UserStrategies.Load(shell.Paths));
     }
 
     /// <summary>Выбор групп в окне — обходная настройка, живёт у помощника (как раньше в state.json).</summary>

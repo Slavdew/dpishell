@@ -3,8 +3,9 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- WinDivert и sc требуют администратора; запрашиваем сразу, а не посреди работы. -->
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+        <!-- Окно без прав (docs/11-helper-spec.md): всё, что их требует, делает служба-помощник DpiShellHelper.
+             Права запрашиваются один раз — при установке помощника (DpiShell.exe -install-helper через runas). -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>

@@ -313,4 +313,6 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
         (await CallAsync("clear_history", null, null, ct)).GetProperty("removed").GetInt32();
 
     public Task<ResultsSnapshot> ReadResultsAsync(CancellationToken ct = default) => CallAsync<ResultsSnapshot>("read_results", null, null, ct);
+    public Task<HelperDetails> DetailsAsync(CancellationToken ct = default) => CallAsync<HelperDetails>("details", null, null, ct);
+    public Task ChooseAsync(string strategyId, CancellationToken ct = default) => CallAsync("choose", new { strategy = strategyId }, null, ct);
 }

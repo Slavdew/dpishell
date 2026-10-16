@@ -95,6 +95,10 @@ public static partial class HelperCommands
         new("remove_all", true, false),
         new("clear_history", true, false),
         new("read_results", false, false),
+        // Окну без прав: сведения из закрытой папки (hosts-статус, свои подсети, ядро, найденные стратегии).
+        new("details", false, false),
+        // Выбрать стратегию, не включая обход (запомнить у помощника).
+        new("choose", true, false, new ArgSpec("strategy", ArgKind.StrategyId, Required: true)),
     ];
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);

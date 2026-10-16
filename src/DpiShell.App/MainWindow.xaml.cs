@@ -119,14 +119,11 @@ public partial class MainWindow : Window
 
     void ShowTrayHintOnce()
     {
-        try
-        {
-            var marker = Path.Combine(_vm.Shell.Paths.Root, "app-tray-hint");
-            if (File.Exists(marker)) return;
-            _tray.Hint("Программа свернулась в трей. Выход — правой кнопкой по значку.");
-            Directory.CreateDirectory(_vm.Shell.Paths.Root);
-            File.WriteAllText(marker, "");
-        }
+        // Отметка — в настройках окна (%LocalAppData%): папка программы окну без прав закрыта.
+        if (_vm.Settings.TrayHintShown) return;
+        _tray.Hint("Программа свернулась в трей. Выход — правой кнопкой по значку.");
+        _vm.Settings.TrayHintShown = true;
+        try { _vm.Settings.Save(); }
         catch { /* подсказка не важна */ }
     }
 
@@ -141,8 +138,12 @@ public partial class MainWindow : Window
         // «Все адреса» без программы не вернутся сами до следующего запуска — спросить (ТЗ v2 §2).
         if (_vm.Net.AnyActive && !_vm.Busy && _vm.Confirm("Сейчас включены «Все адреса». Вернуть обычный режим перед выходом?"))
         {
-            try { await Task.Run(() => _vm.Shell.StopAllAddresses()); }
-            catch (Exception ex) { _vm.Message = Texts.Friendly(ex); }
+            // Через помощника: режимы меняет только он (без него «Все адреса» и не включить).
+            if (_vm.Helper.Client is { } c)
+            {
+                try { await c.StopAllAddressesAsync(); }
+                catch (Exception ex) { _vm.Message = Texts.Friendly(ex); }
+            }
         }
         // Подбор держит временный winws и остановленную службу — дать ему вернуть всё на место.
         if (_vm.Busy)

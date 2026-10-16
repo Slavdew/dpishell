@@ -9,12 +9,14 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using DpiShell.App;
 using DpiShell.Core;
+using DpiShell.Core.Helper;
 
 namespace DpiShell.Tests;
 
 /// <summary>
 /// Окно открывается в памяти (за пределами экрана), все вкладки строятся, ошибок привязок нет.
-/// Без прав администратора и сети: ядро не ставится (InitializeAsync не вызывается).
+/// Без прав администратора и сети: ядро не ставится (InitializeAsync не вызывается). Окно без прав: данные экранов — от помощника
+/// (настоящий над временной папкой, по каналу в процессе; sc и WMI подменены) или помощника нет — режим просмотра.
 /// Поймал бы падение 2026-10-16: TwoWay-привязка ProgressBar.Value к свойству без публичного set.
 /// DPISHELL_SNAPSHOTS=&lt;папка&gt; — тест тем сохраняет PNG каждой вкладки в светлой и тёмной теме: &lt;тема&gt;-&lt;вкладка&gt;.png.
 /// </summary>
@@ -116,6 +118,21 @@ public sealed class WindowSmokeTests
 
     static void SetProp(object o, string name, object? value) => o.GetType().GetProperty(name)!.SetValue(o, value);
 
+    /// <summary>Окно с настоящим помощником над временной папкой этого Shell (подключён до открытия окна).</summary>
+    static (MainViewModel, HelperFixture) WithPcHelper(Shell shell, WindowSettings settings)
+    {
+        var f = new HelperFixture(backend: PcHelper.Over(shell));
+        // Канал — в фоне: поток окна здесь занят, а продолжения клиента иначе ждали бы его.
+        var link = Task.Run(f.LinkAsync).GetAwaiter().GetResult();
+        return (TestWindow.Model(shell, link, settings), f);
+    }
+
+    static void Stop(MainViewModel vm, HelperFixture f) => Task.Run(async () =>
+    {
+        await vm.Helper.DisposeAsync();
+        await f.DisposeAsync();
+    }).GetAwaiter().GetResult();
+
     static readonly (int Page, string Name)[] AllPages =
         [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Targets, "targets"), (Pages.Net, "net"), (Pages.Hosts, "hosts"), (Pages.Diag, "diag")];
 
@@ -126,7 +143,7 @@ public sealed class WindowSmokeTests
         var errors = WithBindingErrors(() =>
         {
             ThemeManager.Apply(ThemeManager.Light);
-            var vm = new MainViewModel(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
+            var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
             var w = Open(vm);
             var tabs = Find<TabControl>(w)!;
             foreach (var page in new[] { Pages.Select, Pages.Targets, Pages.Net, Pages.Hosts, Pages.Diag, Pages.Home })
@@ -179,10 +196,11 @@ public sealed class WindowSmokeTests
             {
                 ThemeManager.Apply(theme);
                 var shell = new Shell(new AppPaths(tmp.Sub("root-" + theme), Repo.Data));
-                shell.State.Theme = theme;
+                var settings = TestWindow.Settings(shell);
+                settings.Theme = theme;
                 // Тёмная — в режиме без службы: на снимках видны обе подсказки у галочки и у настройки закрытия.
                 if (theme == ThemeManager.Dark) shell.State.RunMode = "process";
-                var vm = new MainViewModel(shell);
+                var (vm, helper) = WithPcHelper(shell, settings);
                 Fill(vm, shell);
                 var w = Open(vm);
                 AssertPage(w, theme == ThemeManager.Dark);
@@ -259,8 +277,9 @@ public sealed class WindowSmokeTests
                 AssertPage(w, ThemeManager.SystemPrefersDark());
                 ThemeManager.Refresh();
                 Pump();
-                if (AppState.Load(shell.Paths).Theme != ThemeManager.Auto) throw new Exception("Выбор темы не сохранился в состоянии");
+                if (WindowSettings.Load(settings.File).Theme != ThemeManager.Auto) throw new Exception("Выбор темы не сохранился в настройках окна");
                 Close(w);
+                Stop(vm, helper);
             }
         });
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
@@ -292,9 +311,10 @@ public sealed class WindowSmokeTests
             {
                 ThemeManager.Apply(theme);
                 var shell = new Shell(new AppPaths(tmp.Sub("router-" + theme), Repo.Data));
-                shell.State.Theme = theme;
+                var settings = TestWindow.Settings(shell);
+                settings.Theme = theme;
                 shell.State.UserTargets = ["example.com", "my-site.ru"];
-                var vm = new MainViewModel(shell);
+                var (vm, helper) = WithPcHelper(shell, settings);
                 var router = vm.Router;
                 router.AddressAuto = false;
                 router.CustomAddress = fake.Address;
@@ -353,6 +373,7 @@ public sealed class WindowSmokeTests
                 SetProp(vm, "IsLoading", true);
                 Close(w);
                 router.Dispose();
+                Stop(vm, helper);
             }
         });
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
@@ -390,7 +411,7 @@ public sealed class WindowSmokeTests
         var errors = WithBindingErrors(() =>
         {
             ThemeManager.Apply(ThemeManager.Light);
-            var vm = new MainViewModel(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
+            var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
             var w = Open(vm);
             foreach (var (page, _) in AllPages)
             {
@@ -421,7 +442,7 @@ public sealed class WindowSmokeTests
         if ((list.SelectedItem as StrategyChoice)?.Id != vm.ChosenStrategyId) throw new Exception("В списке не выделена выбранная стратегия");
         var mode = Find<CheckBox>(tabs, c => BindingOperations.GetBinding(c, ToggleButton.IsCheckedProperty)?.Path.Path == "ServiceMode")
             ?? throw new Exception("Нет галочки «Режим службы»");
-        if (mode.IsChecked != vm.Shell.ServiceMode) throw new Exception("Галочка режима не совпадает с режимом");
+        if (mode.IsChecked != (vm.Helper.Status?.RunMode != "process")) throw new Exception("Галочка режима не совпадает с режимом помощника");
     }
 
     static void AssertPage(Window w, bool dark)
@@ -435,6 +456,7 @@ public sealed class WindowSmokeTests
     /// <summary>Наполнение: строки таблиц и плашки — для проверки главной и для снимков. В памяти и во временной папке.</summary>
     static void Fill(MainViewModel vm, Shell shell)
     {
+        FillPc(vm, shell);
         var strategies = shell.Catalog.Strategies.Take(6).ToList();
         vm.StrategyChoices.Add(new("found-1", "Найденная: fake + split2", "открыла всё в 2 из 2 подборов (100 %)", true));
         foreach (var (s, i) in strategies.Select((s, i) => (s, i)))
@@ -490,6 +512,12 @@ public sealed class WindowSmokeTests
         vm.Findings.Add(new(true, "Adguard", "не запущен"));
         vm.Findings.Add(new(true, "Папка программы", "в порядке"));
 
+        vm.Message = "Готово.";
+    }
+
+    /// <summary>Состояние ПК (его хранит помощник): режимы IP-списка и игр, копия hosts — во временной папке.</summary>
+    static void FillPc(MainViewModel vm, Shell shell)
+    {
         // «Игры и IP-списки»: список из поставки — во временную папку. Светлая — «Все адреса» с отсчётом (игры ждут),
         // тёмная — «По списку», игры работают.
         bool dark = ThemeManager.IsDark;
@@ -499,22 +527,24 @@ public sealed class WindowSmokeTests
         shell.State.IpsetAnyUntil = dark ? null : DateTime.UtcNow.AddMinutes(7.5);
         shell.State.GameMode = "all";
         shell.State.Enabled = dark;
-        vm.Net.UserText = "203.0.113.0/24\r\n198.51.100.7";
-        SetProp(vm.Net, "UserMessage", "Сохранено: своих подсетей 2, исключений 0.");
-        vm.Net.Refresh();
 
         // «Починить адреса» — только копия hosts во временной папке. Светлая: включено, таблица и предпросмотр;
         // тёмная: выключено, а блок от прошлой установки остался.
         var hostsFile = Path.Combine(shell.Paths.Root, "hosts-copy");
         Directory.CreateDirectory(shell.Paths.Root);
         File.WriteAllText(hostsFile, "127.0.0.1 localhost\r\n0.0.0.0 web.telegram.org\r\n# DpiShell begin v1 2026-10-16\r\n140.82.121.3 github.com\r\n# DpiShell end\r\n");
-        vm.Hosts.Manager = new HostsManager(shell.Paths, hostsFile);
+        shell.Hosts = new HostsManager(shell.Paths, hostsFile);
         shell.State.HostsFix = !dark;
-        vm.Hosts.RefreshNow();
+
+        // Помощник отдаёт это окну (status, details) — экраны строятся по его ответу, как в работе.
+        if (Task.Run(() => vm.Helper.FetchAsync(full: true)).GetAwaiter().GetResult() is { } error) throw new Exception("Помощник: " + error);
+        vm.ApplyHelperData();
+        vm.Net.UserText = "203.0.113.0/24\r\n198.51.100.7";
+        SetProp(vm.Net, "UserMessage", "Сохранено: своих подсетей 2, исключений 0.");
         if (!dark)
         {
             var live = new EndpointCheck(EndpointOutcome.Ok, 0.2, "HTTP 200");
-            vm.Hosts.ShowReport(new HostsCheckReport(
+            var report = new HostsCheckReport(
             [
                 new("raw.githubusercontent.com", "146.75.22.132", HostsVerdict.Install, live, OwnerState.Match, "FASTLY", DnsState.Fails, "185.199.108.133: нет ответа"),
                 new("github.com", "140.82.121.3", HostsVerdict.Install, live, OwnerState.Match, "GITHUB", DnsState.Fails, "140.82.112.3: нет ответа"),
@@ -523,9 +553,9 @@ public sealed class WindowSmokeTests
                     OwnerState.Unknown, null, DnsState.Fails, ""),
                 new("updates.discord.com", "104.16.0.1", HostsVerdict.Unreachable, new(EndpointOutcome.Timeout, 5, "нет ответа за 5 с"),
                     OwnerState.Unknown, null, DnsState.Works, ""),
-            ], DateTime.Now));
+            ], DateTime.Now);
+            vm.Hosts.ShowReport(report, shell.Hosts.Preview(report.ToInstall));
         }
-        vm.Message = "Готово.";
     }
 
     static void Snap(Window w, string file)

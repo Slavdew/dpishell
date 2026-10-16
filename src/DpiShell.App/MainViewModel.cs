@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using DpiShell.Core;
+using DpiShell.Core.Helper;
 
 namespace DpiShell.App;
 
@@ -15,7 +16,11 @@ public static class Pages
     public const int Home = 0, Select = 1, Targets = 2, Net = 3, Hosts = 4, Diag = 5;
 }
 
-/// <summary>Всё состояние окна. Долгие и «sc»-операции Core — только через Task.Run, чтобы окно не замирало.</summary>
+/// <summary>
+/// Всё состояние окна. Окно работает без прав администратора (11-helper-spec): читает само (проверка сайтов, DNS, службы,
+/// роутер), а всё, что меняет систему, — через помощника (<see cref="HelperLink"/>). Помощника нет — значок щита на кнопках,
+/// нажатие предлагает установку (один запрос прав), и действие продолжается само.
+/// </summary>
 public sealed class MainViewModel : Observable
 {
     readonly Shell _shell;
@@ -24,9 +29,16 @@ public sealed class MainViewModel : Observable
     string? _error;
     string? _coreProblem;
     SvcState _svc = SvcState.Unknown;
-    bool _active;   // обход работает в своём режиме: служба запущена или наш winws жив (Shell.IsActive)
+    bool _active;   // обход работает в своём режиме: служба запущена или winws помощника жив
+    string? _draftStrategy;   // выбрана в списке без помощника — включится по «Включить»
+    string? _localStrategy;   // без помощника: стратегия из настроек службы DpiShell (реестр читается без прав)
+    bool _installing;
+    bool _groupsFromHelper, _targetsFromHelper;
 
+    /// <summary>Данные поставки: каталог, цели, пути (только чтение — папка программы закрыта).</summary>
     public Shell Shell => _shell;
+    public HelperLink Helper { get; }
+    public WindowSettings Settings { get; }
     public RouterViewModel Router { get; }
     /// <summary>«Игры и IP-списки» (09-features-spec §1–2).</summary>
     public NetViewModel Net { get; }
@@ -38,11 +50,19 @@ public sealed class MainViewModel : Observable
     /// <summary>Вопрос «Да/Нет» (в тестах подменяется).</summary>
     public Func<string, bool> Confirm { get; set; } = text =>
         MessageBox.Show(text, "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    /// <summary>Вопрос об установке помощника (в тестах подменяется).</summary>
+    public Func<string, bool> AskHelper { get; set; } = text =>
+        MessageBox.Show(text, "DpiShell", MessageBoxButton.OKCancel, MessageBoxImage.Information, MessageBoxResult.OK) == MessageBoxResult.OK;
+
     public event Action? StatusChanged;
 
-    public MainViewModel(Shell shell)
+    public MainViewModel(Shell shell, HelperLink helper, WindowSettings settings)
     {
         _shell = shell;
+        Helper = helper;
+        Settings = settings;
+        Helper.Changed += OnHelperChanged;
 
         RetryCmd = RelayCommand.Async(InitializeAsync, () => LoadFailed);
         EnableCmd = RelayCommand.Async(EnableAsync, () => !Busy && !IsLoading);
@@ -58,45 +78,206 @@ public sealed class MainViewModel : Observable
         ApplyBestCmd = RelayCommand.Async(() => ApplyAsync(_bestId!), () => !Busy && _bestId is not null);
         ApplySelectedCmd = RelayCommand.Async(() => ApplyAsync(SelectedScore!.Id), () => !Busy && SelectedScore is { Usable: true });
 
-        SaveTargetsCmd = new RelayCommand(SaveTargets);
+        SaveTargetsCmd = RelayCommand.Async(SaveTargetsAsync, () => !Busy);
 
         RefreshDiagCmd = RelayCommand.Async(RefreshDiagAsync, () => !IsLoading && !DiagRefreshing);
         RepairCoreCmd = RelayCommand.Async(RepairCoreAsync, () => !Busy && !IsLoading);
-        OpenLogsCmd = new RelayCommand(() => OpenFolder(_shell.Paths.Logs));
-        OpenResultsCmd = new RelayCommand(() => OpenFolder(_shell.Paths.Results));
+        OpenLogsCmd = new RelayCommand(() => OpenFolder(Path.Combine(WindowSettings.DefaultDir, "logs")));
+        OpenResultsCmd = RelayCommand.Async(OpenResultsAsync);
         RemoveServiceCmd = RelayCommand.Async(RemoveServiceAsync, () => !Busy && !IsLoading);
+        FixHelperCmd = RelayCommand.Async(async () => { if (await InstallHelperAsync()) Message = "Помощник установлен."; }, () => !Busy);
+        UninstallHelperCmd = RelayCommand.Async(UninstallHelperAsync, () => !Busy && !IsLoading);
 
         // Обход на роутере (docs/07-router-api.md §6): своя логика, свои команды; сюда — только строка состояния и переходы.
-        Router = new RouterViewModel(shell)
+        Router = new RouterViewModel(shell, settings)
         {
             Say = s => Message = s,
             Navigate = p => Page = p,
             SelectOptions = RouterSelectOptions,
+            FoundStrategies = () => Helper.Details?.Found ?? [],
+            PcUserTargets = () => Helper.Status?.UserTargets ?? [],
         };
         Router.Changed += UpdateStatus;
 
-        Net = new NetViewModel(shell)
+        Net = new NetViewModel(helper)
         {
             Guard = Guard,
+            Need = NeedHelperAsync,
             Say = s => Message = s,
             Confirm = s => Confirm(s),
             AfterChange = RefreshStatusAsync,
         };
         Net.Notify += s => Notify?.Invoke(s);
-        Hosts = new HostsViewModel(shell)
+        Hosts = new HostsViewModel(helper)
         {
+            Need = NeedHelperAsync,
             Say = s => Message = s,
             Confirm = s => Confirm(s),
         };
         Hosts.Notify += s => { Message = s; Notify?.Invoke(s); };
         ClearDiscordCmd = RelayCommand.Async(ClearDiscordAsync, () => !Busy && !IsLoading);
 
-        var chosen = _shell.State.Groups.ToHashSet();
+        // Группы — по умолчанию; у помощника свой выбор — подставится, когда он ответит.
+        var chosen = new AppState().Groups.ToHashSet();
         foreach (var g in _shell.DefaultTargets.Groups) Groups.Add(new(g.Id, g.Title, chosen.Contains(g.Id)));
         Groups.Add(new("user", "Свои адреса", chosen.Contains("user")));
+        UpdateStatus();
+    }
 
-        IReadOnlyList<string> targets = _shell.State.UserTargets.Count > 0 ? _shell.State.UserTargets : _shell.Data.ReadUserDomains();
-        _targetsText = string.Join(Environment.NewLine, targets);
+    // ---------- помощник ----------
+
+    /// <summary>Помощник не готов — у кнопок, которым нужны права, значок щита.</summary>
+    public bool NeedsHelper => !Helper.Ready;
+
+    /// <summary>Помощник есть, но не отвечает / устарел / чужой — текст и кнопка «Переустановить».</summary>
+    public string HelperProblem => Helper.State is HelperState.NotResponding or HelperState.Denied or HelperState.Outdated ? Helper.Problem : "";
+    public bool HasHelperProblem => HelperProblem.Length > 0;
+    public string FixHelperText => Helper.State == HelperState.Outdated ? "Обновить помощника" : "Переустановить помощника";
+
+    /// <summary>Строка «Помощник» на «Диагностике».</summary>
+    public string HelperText => Helper.State switch
+    {
+        HelperState.Connected => "работает" + (Helper.Reader?.HelperVersion is { Length: > 0 } v ? $" (версия {v})" : ""),
+        HelperState.Outdated => "устарел — обновится по первому действию",
+        HelperState.NotResponding or HelperState.Denied => Helper.Problem,
+        HelperState.NotInstalled => "не установлен — окно в режиме просмотра",
+        _ => "проверяется…",
+    };
+    public bool CanUninstallHelper => Helper.State is not (HelperState.NotInstalled or HelperState.Unknown);
+
+    public ICommand FixHelperCmd { get; }
+    public ICommand UninstallHelperCmd { get; }
+
+    const string ViewOnly = "Без помощника окно работает в режиме просмотра: проверка сайтов, DNS и роутер доступны, менять обход на ПК — нет.";
+
+    void OnHelperChanged()
+    {
+        foreach (var p in new[] { nameof(NeedsHelper), nameof(HelperProblem), nameof(HasHelperProblem), nameof(FixHelperText), nameof(HelperText), nameof(CanUninstallHelper) })
+            Raise(p);
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    /// <summary>
+    /// Действие с правами: помощник готов — сразу; нет — один вопрос, установка (UAC), подключение,
+    /// и вызывающий продолжает своё действие (02-spec §1: программа сама ведёт к результату). Null — не вышло, причина в строке состояния.
+    /// </summary>
+    public async Task<HelperClient?> NeedHelperAsync()
+    {
+        if (Helper.Client is { } ready) return ready;
+        if (_installing) return null;
+        // Связь могла оборваться ненадолго (помощник перезапустился) — сначала тихо переподключиться.
+        if (Helper.State is HelperState.Unknown or HelperState.NotResponding && await Helper.ConnectAsync())
+        {
+            await AfterConnectAsync();
+            return Helper.Client;
+        }
+        var question = Helper.State switch
+        {
+            HelperState.Outdated => "Помощника DpiShell нужно обновить до версии окна: один запрос прав администратора, дальше без вопросов.\n\nОбновить сейчас?",
+            HelperState.NotResponding => Helper.Problem + "\n\nПереустановить помощника? Это один запрос прав администратора.",
+            HelperState.Denied => Helper.Problem + "\n\nПереустановить помощника для вас? Это один запрос прав администратора.",
+            _ => "Нужен помощник DpiShell: один запрос прав администратора, дальше без вопросов.\n\n" +
+                 "Он включает обход, подбирает стратегии и меняет системные настройки по командам этого окна. Установить?",
+        };
+        if (!AskHelper(question)) { Message = ViewOnly; return null; }
+        return await InstallHelperAsync() ? Helper.Client : null;
+    }
+
+    /// <summary>Установка/обновление/переустановка: UAC → ожидание → подключение → данные помощника.</summary>
+    async Task<bool> InstallHelperAsync()
+    {
+        if (_installing) return false;
+        _installing = true;
+        Busy = true; BusyText = "Устанавливаю помощника…"; Message = "Подтвердите запрос прав администратора — он нужен один раз.";
+        UpdateStatus();
+        SetupOutcome r;
+        try { r = await Helper.InstallAsync(); }
+        catch (Exception e) { r = new(SetupResult.Failed, Texts.Friendly(e)); }
+        finally
+        {
+            _installing = false;
+            Busy = false; BusyText = "";
+            UpdateStatus();
+        }
+        switch (r.Result)
+        {
+            case SetupResult.Declined:
+                Message = "Права не выданы. " + ViewOnly;
+                return false;
+            case SetupResult.Failed:
+                Message = "Помощник не установился: " + r.Error;
+                return false;
+        }
+        Message = "";
+        await AfterConnectAsync();
+        return true;
+    }
+
+    async Task UninstallHelperAsync()
+    {
+        if (!Confirm("Удалить помощника DpiShell? Нужен один запрос прав администратора. Окно останется в режиме просмотра; служба обхода, если стоит, не удаляется — для этого «Удалить службу полностью»."))
+            return;
+        Busy = true; BusyText = "Удаляю помощника…"; UpdateStatus();
+        try
+        {
+            var r = await Helper.UninstallAsync();
+            Message = r.Result switch
+            {
+                SetupResult.Done => "Помощник удалён. " + ViewOnly,
+                SetupResult.Declined => "Права не выданы — помощник остался.",
+                _ => "Помощника удалить не удалось: " + r.Error,
+            };
+        }
+        finally { Busy = false; BusyText = ""; UpdateStatus(); }
+        await RefreshStatusAsync();
+        ReloadChoices();
+        Net.Refresh();
+        await Hosts.RefreshAsync();
+    }
+
+    /// <summary>
+    /// Подключились (при запуске, после установки или переподключения): данные помощника, и режим без службы —
+    /// был включён, а winws нет (помощник гасит его, когда окно отключается) — вернуть (замена ResumeIfNeeded).
+    /// </summary>
+    async Task AfterConnectAsync()
+    {
+        await FetchAsync(full: true);
+        ApplyHelperData();
+        if (Helper.Client is { } c && Helper.Status is { RunMode: "process", Enabled: true, Active: false, StrategyId: { } id })
+        {
+            try { await c.EnableAsync(id); }
+            catch (Exception e) when (e is HelperException or HelperUnavailableException) { _error = Texts.Friendly(e); Message = _error; }
+            await FetchAsync(full: false);
+        }
+        await RefreshStatusAsync();
+    }
+
+    /// <summary>Перечитать у помощника: status, а полностью — ещё результаты и сведения. Помощника нет — ничего.</summary>
+    async Task FetchAsync(bool full)
+    {
+        if (await Helper.FetchAsync(full) is { } error) Message = error;
+    }
+
+    /// <summary>Данные помощника — на экраны (синхронно: и тест окна строит экран по готовому состоянию).</summary>
+    public void ApplyHelperData()
+    {
+        if (Helper.Status is { } s)
+        {
+            if (!_groupsFromHelper && s.SelectedGroups.Count > 0)
+            {
+                _groupsFromHelper = true;
+                var chosen = s.SelectedGroups.ToHashSet();
+                foreach (var g in Groups) g.IsChecked = chosen.Contains(g.Id);
+            }
+            if (!_targetsFromHelper)
+            {
+                _targetsFromHelper = true;
+                if (s.UserTargets.Count > 0) TargetsText = string.Join(Environment.NewLine, s.UserTargets);
+            }
+        }
+        ReloadChoices();
+        Net.Refresh();
+        Hosts.RefreshNow();
         UpdateStatus();
     }
 
@@ -109,12 +290,18 @@ public sealed class MainViewModel : Observable
         set
         {
             if (!Set(ref _page, value) || IsLoading) return;
-            if (value == Pages.Net) Net.Refresh();
+            if (value == Pages.Net) _ = RefreshNetAsync();
             if (value == Pages.Hosts) _ = Hosts.RefreshAsync();
             if (value != Pages.Diag) return;
             _ = RefreshDiagAsync();
             if (Router.Connected) _ = Router.RefreshDiagAsync();
         }
+    }
+
+    async Task RefreshNetAsync()
+    {
+        await FetchAsync(full: true);
+        Net.Refresh();
     }
 
     bool _busy;
@@ -143,10 +330,11 @@ public sealed class MainViewModel : Observable
         }
         catch (Exception e)
         {
+            if (e is HelperUnavailableException u) Helper.MarkLost(u);
             _error = Texts.Friendly(e);
             Message = _error;
             // Чужие программы обхода: что именно мешает — на «Диагностике».
-            if (e is ConflictException) Page = Pages.Diag;
+            if (e is ConflictException or HelperException { Code: HelperErrors.Conflict }) Page = Pages.Diag;
             return false;
         }
         finally
@@ -155,6 +343,14 @@ public sealed class MainViewModel : Observable
             UpdateStatus();
             done.TrySetResult();
         }
+    }
+
+    /// <summary>Действие с правами под Guard: сначала помощник (с установкой по требованию), потом работа.</summary>
+    async Task<bool> WithHelper(string busyText, Func<HelperClient, Task> work)
+    {
+        if (Busy) return false;
+        if (await NeedHelperAsync() is not { } c) return false;
+        return await Guard(busyText, () => work(c));
     }
 
     /// <summary>Дождаться текущей операции (для выхода во время подбора).</summary>
@@ -174,27 +370,29 @@ public sealed class MainViewModel : Observable
 
     public bool ShowOverlay => IsLoading;
 
-    string _loadingText = "Загрузка ядра…";
+    string _loadingText = "Подключаюсь к помощнику…";
     public string LoadingText { get => _loadingText; private set => Set(ref _loadingText, value); }
 
+    /// <summary>
+    /// Старт окна без прав: подключиться к помощнику (нет — режим просмотра), данные — от него или из поставки.
+    /// Ядро ставит и проверяет помощник при своём запуске.
+    /// </summary>
     public async Task InitializeAsync()
     {
-        IsLoading = true; LoadFailed = false; LoadingText = "Загрузка ядра…";
+        IsLoading = true; LoadFailed = false; LoadingText = "Подключаюсь к помощнику…";
         try
         {
-            var log = new Progress<string>(s => LoadingText = s);
-            var check = await Task.Run(() => _shell.PrepareAsync(log));
-            _coreProblem = CoreProblem(check);
+            await Helper.ConnectAsync();
             IsLoading = false;
             // Роутер ищем сразу и параллельно: его нет — блок просто не появится.
             _ = Router.RefreshAsync();
-            // Без службы обход живёт, пока открыта программа: был включён — вернуть.
-            try { await Task.Run(_shell.ResumeIfNeeded); }
-            catch (Exception e) { _error = Texts.Friendly(e); Message = _error; }
-            await RefreshStatusAsync();
-            await ReloadChoicesAsync();
+            if (Helper.Reader is not null) await AfterConnectAsync();
+            else
+            {
+                ApplyHelperData();
+                await RefreshStatusAsync();
+            }
             _ = CheckDnsAsync();
-            Net.Refresh();
             // «Починить адреса» включено и с прошлой проверки прошли сутки — перепроверить записи (устаревшие уберутся).
             _ = Hosts.RecheckIfDueAsync();
         }
@@ -232,46 +430,48 @@ public sealed class MainViewModel : Observable
     /// <summary>Обход работает — в режиме службы или из программы.</summary>
     public bool IsRunning => _active;
 
-    /// <summary>Состояние службы и «работает ли обход» в текущем режиме. Вызывать в фоне: в режиме службы это sc.exe.</summary>
-    (SvcState Svc, bool Active) ReadRunState()
-    {
-        var svc = _shell.Service.State;
-        return (svc, _shell.ServiceMode ? svc == SvcState.Running : _shell.IsActive);
-    }
+    /// <summary>Статус помощника, если связь жива (иначе — то, что окно читает само).</summary>
+    HelperStatus? Live => Helper.Reader is null ? null : Helper.Status;
+
+    /// <summary>Выбранная стратегия: черновик окна, у помощника, или та, что стоит в службе.</summary>
+    public string? CurrentStrategyId => _draftStrategy ?? Live?.StrategyId ?? _localStrategy;
+
+    IReadOnlyList<string> UserTargets => Live?.UserTargets ?? [];
 
     readonly Dictionary<string, string> _titles = [];
 
-    /// <summary>Название по id — и готовых, и найденных поиском (те читаются из файла, поэтому кэш).</summary>
+    /// <summary>Название по id — и готовых, и найденных поиском.</summary>
     string StrategyTitle(string? id)
     {
         if (id is null) return "";
+        if (Helper.Status?.Strategies.FirstOrDefault(s => s.Id == id) is { } i) return i.Title;
         if (_shell.Catalog.Find(id) is { } s) return s.Title;
-        if (_titles.TryGetValue(id, out var t)) return t;
-        try { t = _shell.FindStrategy(id)?.Title ?? id; } catch (Exception) { t = id; }
-        return _titles[id] = t;
+        return _titles.TryGetValue(id, out var t) ? t : id;
     }
 
     void UpdateStatus()
     {
         var err = _error ?? _coreProblem;
+        var id = CurrentStrategyId;
         if (Selecting) { Kind = StatusKind.Busy; StatusTitle = _searching ? "Глубокий поиск…" : "Подбор…"; StatusDetail = SelectProgressText; }
         else if (Busy) { Kind = StatusKind.Busy; StatusTitle = BusyText; StatusDetail = ""; }
         else if (err is not null) { Kind = StatusKind.Error; StatusTitle = "Ошибка"; StatusDetail = err; }
-        else if (_active) { Kind = StatusKind.On; StatusTitle = "Работает"; StatusDetail = "Стратегия: " + StrategyTitle(_shell.State.StrategyId); }
-        else if (_shell.ServiceMode && _svc == SvcState.StartPending) { Kind = StatusKind.Busy; StatusTitle = "Запускается…"; StatusDetail = ""; }
+        else if (_active) { Kind = StatusKind.On; StatusTitle = "Работает"; StatusDetail = id is null ? "" : "Стратегия: " + StrategyTitle(id); }
+        else if (ServiceMode && _svc == SvcState.StartPending) { Kind = StatusKind.Busy; StatusTitle = "Запускается…"; StatusDetail = ""; }
         else
         {
             Kind = StatusKind.Off; StatusTitle = "Выключено";
             StatusDetail = Router.Found && Router.RouterEnabled ? "Обход делает роутер — на этом ПК включать не нужно"
-                : _shell.State.StrategyId is { } id ? "Выбрана стратегия: " + StrategyTitle(id) : "Стратегия не выбрана: выберите в списке или нажмите «Подобрать»";
+                : id is not null ? "Выбрана стратегия: " + StrategyTitle(id) : "Стратегия не выбрана: выберите в списке или нажмите «Подобрать»";
         }
         StatusBrush = BrushOf(Kind);
         Raise(nameof(IsRunning));
         Raise(nameof(ToggleText));
         Raise(nameof(CanChoose));
         Raise(nameof(StrategyHeader));
-        // Стратегию могли сменить с «Подбора» или автопереключением — меню показывает текущую, не вызывая перезапуск.
-        if (_chosen != _shell.State.StrategyId) { _chosen = _shell.State.StrategyId; Raise(nameof(ChosenStrategyId)); }
+        Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint));
+        // Стратегию могли сменить с «Подбора» или автопереключением — список показывает текущую, не вызывая перезапуск.
+        if (_chosen != id) { _chosen = id; Raise(nameof(ChosenStrategyId)); }
         StatusChanged?.Invoke();
     }
 
@@ -292,25 +492,37 @@ public sealed class MainViewModel : Observable
 
     public ObservableCollection<StrategyChoice> StrategyChoices { get; } = [];
 
-    /// <summary>Список на главной: готовые и найденные, с долей удачных подборов из статистики.</summary>
+    /// <summary>Перечитать у помощника и обновить список (после подбора: новая статистика и найденные).</summary>
     public async Task ReloadChoicesAsync()
     {
-        var (all, stats) = await Task.Run(() => (_shell.AllStrategies, StrategyStats.LoadDetailed(_shell.Paths)));
+        await FetchAsync(full: true);
+        ReloadChoices();
+    }
+
+    /// <summary>
+    /// Список на главной: стратегии помощника (готовые и найденные) или каталог поставки, по статистике подборов.
+    /// Статистика у помощника; до первого подбора (и без помощника) — «появится после первого подбора».
+    /// </summary>
+    public void ReloadChoices()
+    {
+        var list = Helper.Status?.Strategies ?? _shell.Catalog.Strategies.Select(s => new StrategyInfo(s.Id, s.Title, s.Source)).ToList();
+        var stats = Helper.Results?.Stats ?? new Dictionary<string, StrategyStats.Stat>();
         StrategyChoices.Clear();
-        foreach (var s in StrategyStats.Order(all, stats.ToDictionary(kv => kv.Key, kv => kv.Value.Score)))
+        foreach (var s in list.Select((s, i) => (s, i))
+                     .OrderByDescending(x => stats.TryGetValue(x.s.Id, out var v) ? v.Score : 0.5).ThenBy(x => x.i).Select(x => x.s))
         {
             // Не «процент сайтов», а сколько раз в прошлых подборах открыла всё отмеченное.
             var note = stats.TryGetValue(s.Id, out var st) && st.Runs > 0
                 ? $"открыла всё в {st.FullOk} из {st.Runs} подборов ({(double)st.FullOk / st.Runs:P0})"
-                : "в подборах ещё не участвовала";
+                : stats.Count == 0 ? "статистика появится после первого подбора" : "в подборах ещё не участвовала";
             StrategyChoices.Add(new(s.Id, s.Title, note, s.Source == "search"));
         }
-        _chosen = _shell.State.StrategyId;
+        _chosen = CurrentStrategyId;
         Raise(nameof(ChosenStrategyId));
     }
 
     string? _chosen;
-    /// <summary>Выбранная стратегия. Обход включён — перезапуск службы на новой; выключен — только запоминаем.</summary>
+    /// <summary>Выбранная стратегия. Обход включён — перезапуск на новой; выключен — запоминаем (у помощника или в окне).</summary>
     public string? ChosenStrategyId
     {
         get => _chosen;
@@ -320,35 +532,49 @@ public sealed class MainViewModel : Observable
             _chosen = value;
             Raise();
             if (IsRunning) _ = ApplyAsync(value);
-            else
-            {
-                _shell.State.StrategyId = value;
-                WatchdogPolicy.Applied(_shell.State, value);
-                _shell.SaveState();
-                UpdateStatus();
-            }
+            else _ = ChooseAsync(value);
         }
     }
 
-    public string StrategyHeader => _shell.State.StrategyId is { } id ? "Стратегия: " + StrategyTitle(id) : "Стратегия не выбрана";
+    /// <summary>Без помощника — черновик окна (включится по «Включить»); с помощником — запомнить у него.</summary>
+    async Task ChooseAsync(string id)
+    {
+        _draftStrategy = id;
+        UpdateStatus();
+        if (Helper.Client is not { } c) return;
+        try
+        {
+            await c.ChooseAsync(id);
+            await FetchAsync(full: false);
+            if (Live?.StrategyId == id) _draftStrategy = null;
+        }
+        catch (Exception e) when (e is HelperException or HelperUnavailableException) { Message = Texts.Friendly(e); }
+        UpdateStatus();
+    }
+
+    public string StrategyHeader => CurrentStrategyId is { } id ? "Стратегия: " + StrategyTitle(id) : "Стратегия не выбрана";
 
     // ---------- режим работы ----------
 
-    /// <summary>Галочка «Режим службы». Переключение — в фоне; обход, если работал, продолжает в новом режиме.</summary>
+    /// <summary>Галочка «Режим службы» (режим — у помощника). Переключение — через помощника; обход, если работал, продолжает.</summary>
     public bool ServiceMode
     {
-        get => _shell.ServiceMode;
-        set { if (value != _shell.ServiceMode) _ = SetRunModeAsync(value); }
+        get => Live?.RunMode != "process";
+        set { if (value != ServiceMode) _ = SetRunModeAsync(value); }
     }
 
-    public string RunModeHint => _shell.ServiceMode
+    public string RunModeHint => ServiceMode
         ? "Включается вместе с Windows и работает сама по себе — закрытие программы её не выключает"
         : "Обход работает, пока открыта программа (в окне или в трее)";
 
     async Task SetRunModeAsync(bool service)
     {
-        await Guard(service ? "Перехожу в режим службы…" : "Перехожу на работу из программы…", () => Task.Run(() => _shell.SetRunMode(service)));
-        // И при отказе (идёт другая операция, ошибка) — галочка показывает настоящий режим.
+        await WithHelper(service ? "Перехожу в режим службы…" : "Перехожу на работу из программы…", async c =>
+        {
+            await c.SetRunModeAsync(service);
+            await FetchAsync(full: false);
+        });
+        // И при отказе (идёт другая операция, нет помощника) — галочка показывает настоящий режим.
         Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint));
         await RefreshStatusAsync();
     }
@@ -365,16 +591,45 @@ public sealed class MainViewModel : Observable
     public ICommand GoDiagCmd { get; }
     public ICommand CheckNowCmd { get; }
 
-    /// <summary>Служба, конфликты, VPN, целостность ядра. Всё синхронное в Core — в фоне.</summary>
+    /// <summary>Без помощника: стратегия из настроек службы DpiShell (реестр) — что стоит, видно и без прав.</summary>
+    string? LocalServiceStrategy()
+    {
+        try
+        {
+            var (_, args) = ZapretDetector.SplitCommandLine(ServiceManager.QueryBinPath(ServiceManager.Name));
+            return ZapretDetector.Match(args, _shell.Catalog.Strategies)?.Id;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException) { return null; }
+    }
+
+    /// <summary>Служба, конфликты, VPN, ядро: у помощника (status) или сами, без прав (sc query, реестр, процессы).</summary>
     public async Task RefreshStatusAsync()
     {
         if (IsLoading) return;
         try
         {
-            var (run, conflicts, vpn, core) = await Task.Run(() =>
-                (ReadRunState(), Conflicts.Find(_shell.Paths), Conflicts.ActiveVpnAdapters(), _shell.Installer.Check()));
-            (_svc, _active) = run;
-            _coreProblem = CoreProblem(core);
+            await FetchAsync(full: false);
+            var st = Live;
+            var (svc, strategy, conflicts, vpn) = await Task.Run(() =>
+            {
+                var s = ServiceManager.Query(ServiceManager.Name);
+                return (s,
+                    st is null && s != SvcState.NotInstalled ? LocalServiceStrategy() : null,
+                    st?.Foreign ?? Conflicts.Find(_shell.Paths, _shell.Catalog.Strategies),
+                    Conflicts.ActiveVpnAdapters());
+            });
+            if (st is not null)
+            {
+                (_svc, _active) = (st.Service, st.Active);
+                _coreProblem = CoreProblem(st.Core);
+            }
+            else
+            {
+                // Без помощника видно только службу; winws режима без службы без помощника не работает.
+                (_svc, _active) = (svc, svc == SvcState.Running);
+                _localStrategy = strategy;
+                _coreProblem = null;
+            }
             VpnWarning = vpn.Count == 0 ? "" : $"Включён VPN ({string.Join(", ", vpn)}). С ним обход обычно не нужен, а подбор может показать неверный результат.";
             ConflictWarning = conflicts.Count == 0 ? "" : $"Мешают другие программы обхода: {string.Join(", ", conflicts.Select(c => c.Name).Distinct())}.";
         }
@@ -382,17 +637,22 @@ public sealed class MainViewModel : Observable
         UpdateStatus();
     }
 
-    /// <summary>Тихое обновление по таймеру — только когда ничего не идёт.</summary>
-    public Task TickAsync()
+    /// <summary>Тихое обновление по таймеру — только когда ничего не идёт. Помощник пропал — тихо пробуем переподключиться.</summary>
+    public async Task TickAsync()
     {
-        if (IsLoading) return Task.CompletedTask;
+        if (IsLoading) return;
         _ = Router.TickAsync();
-        if (Busy) return Task.CompletedTask;
+        if (Busy) return;
+        if (Helper.State == HelperState.NotResponding && !_installing && await Helper.ConnectAsync())
+        {
+            await AfterConnectAsync();
+            return;
+        }
         _ = Hosts.RecheckIfDueAsync();
-        return RefreshStatusAsync();
+        await RefreshStatusAsync();
     }
 
-    static string? CoreProblem(CoreCheck c) => c.State switch
+    static string? CoreProblem(CoreState c) => c switch
     {
         CoreState.Ok => null,
         CoreState.Missing => "Файлы ядра не найдены (антивирус?). Откройте «Диагностику» → «Восстановить ядро».",
@@ -408,47 +668,67 @@ public sealed class MainViewModel : Observable
             return Task.CompletedTask;
         // Стратегия не выбрана — не отправляем человека разбираться. Подборы уже были: берём лучшую по ним
         // (первая в списке, порядок по статистике). Не было: подбираем и включаем сами (автоприменение).
-        if (_shell.State.StrategyId is null)
+        if (CurrentStrategyId is not { } id)
         {
-            var stats = StrategyStats.Load(_shell.Paths);
             var top = StrategyChoices.FirstOrDefault()?.Id;
-            if (top is not null && stats.TryGetValue(top, out var score) && score > 0) return ApplyAsync(top);
+            if (top is not null && Helper.Results?.Stats.TryGetValue(top, out var score) == true && score.Score > 0) return ApplyAsync(top);
             Page = Pages.Select;
             return StartSelectAsync();
         }
-        return ApplyAsync(_shell.State.StrategyId);
+        return ApplyAsync(id);
     }
 
-    public Task DisableAsync() => Guard("Выключаю…", async () =>
+    public Task DisableAsync() => WithHelper("Выключаю…", async c =>
     {
-        await Task.Run(_shell.Disable);
+        await c.DisableAsync();
         await RefreshStatusAsync();
     });
 
-    Task<bool> ApplyAsync(string id) => Guard("Включаю…", async () =>
+    Task<bool> ApplyAsync(string id) => WithHelper("Включаю…", async c =>
     {
-        await Task.Run(() => _shell.Enable(id));
-        // Выбранная руками — первая в запасных (запасные хранятся после подбора, в окне не показываются).
-        WatchdogPolicy.Applied(_shell.State, id);
-        _shell.SaveState();
+        // Выбранная руками — первая в запасных: это делает помощник вместе с включением.
+        await c.EnableAsync(id);
+        _draftStrategy = null;
         await RefreshStatusAsync();
         Page = Pages.Home;
     });
 
+    /// <summary>«Проверить сейчас» — без прав: HTTPS-проверка целей с DoH, winws не нужен.</summary>
     Task CheckNowAsync()
     {
-        if (_shell.SelectedGroups().Count == 0) { Message = "Нечего проверять: отметьте группы на вкладке «Подбор»."; return Task.CompletedTask; }
+        var groups = CheckedGroups();
+        if (groups.Count == 0) { Message = "Нечего проверять: отметьте группы на вкладке «Подбор»."; return Task.CompletedTask; }
         return Guard("Проверяю…", async () =>
         {
             CheckRows.Clear(); CheckSummary = "";
             var dns = CheckDnsAsync();
-            var verdicts = await Task.Run(() => _shell.CheckNowAsync());
+            var verdicts = await Task.Run(async () =>
+            {
+                using var doh = new DohResolver();
+                return await new Selector(_shell.Paths, Shell.NewProbe(doh)).CheckGroupsAsync(groups, CancellationToken.None);
+            });
             foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, GroupTitle));
             CheckSummary = $"Открывается {verdicts.Count(v => v.Ok)} из {verdicts.Count}";
             await dns;
             await RefreshStatusAsync();
         });
     }
+
+    /// <summary>Отмеченные группы целей. Свои адреса — сохранённые у помощника, иначе черновик из «Свои адреса».</summary>
+    IReadOnlyList<TargetGroup> CheckedGroups()
+    {
+        var want = Groups.Where(g => g.IsChecked).Select(g => g.Id).ToHashSet();
+        var groups = _shell.DefaultTargets.Groups.Where(g => want.Contains(g.Id)).ToList();
+        if (want.Contains("user"))
+        {
+            var mine = UserTargets.Count > 0 ? UserTargets : DraftTargets();
+            if (mine.Count > 0) groups.Add(TargetSet.UserGroup(mine));
+        }
+        return groups;
+    }
+
+    List<string> DraftTargets() =>
+        TargetsText.Split('\n').Select(DataStore.NormalizeDomain).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
     // ---------- DNS ----------
 
@@ -466,7 +746,7 @@ public sealed class MainViewModel : Observable
 
     public ICommand CheckDnsCmd { get; }
 
-    /// <summary>Сравнить системный DNS с DoH. Тихо: без Busy, ошибки — в сводку DNS.</summary>
+    /// <summary>Сравнить системный DNS с DoH (без прав). Тихо: без Busy, ошибки — в сводку DNS.</summary>
     public async Task CheckDnsAsync()
     {
         if (DnsChecking || IsLoading) return;
@@ -474,11 +754,16 @@ public sealed class MainViewModel : Observable
         DnsSummary = "Проверяю…";
         try
         {
-            var list = await Task.Run(() => _shell.CheckDnsAsync());
+            var hosts = CheckedGroups().SelectMany(g => g.Targets).Select(t => new Uri(t.Url).Host).Distinct().ToList();
+            var list = await Task.Run(async () =>
+            {
+                using var doh = new DohResolver();
+                return await Task.WhenAll(hosts.Select(h => DnsCheck.CompareAsync(h, doh)));
+            });
             DnsRows.Clear();
             foreach (var c in list) DnsRows.Add(DnsRow.From(c));
             DnsSpoofed = list.Any(c => c.Spoofed);
-            DnsSummary = list.Count == 0 ? "Нечего проверять: не выбраны группы."
+            DnsSummary = list.Length == 0 ? "Нечего проверять: не выбраны группы."
                 : DnsSpoofed ? "DNS провайдера подменяет адреса сайтов."
                 : list.All(c => c.Doh.Length == 0) ? "Защищённый DNS не ответил — сравнить не с чем."
                 : "Подмены нет.";
@@ -526,19 +811,24 @@ public sealed class MainViewModel : Observable
     public ICommand ApplyBestCmd { get; }
     public ICommand ApplySelectedCmd { get; }
 
-    /// <summary>Отмеченные группы (и запомнить выбор); null — проверять нечего, причина уже в строке состояния.</summary>
-    IReadOnlyList<TargetGroup>? TakeGroups()
+    /// <summary>Отмеченные группы (выбор запомнит помощник вместе с подбором); null — проверять нечего, причина уже в строке состояния.</summary>
+    IReadOnlyList<string>? TakeGroups()
     {
         var ids = Groups.Where(g => g.IsChecked).Select(g => g.Id).ToList();
         if (ids.Count == 0) { Message = "Отметьте, что проверять."; return null; }
-        if (ids.Contains("user") && _shell.State.UserTargets.Count == 0)
+        if (ids.Contains("user") && UserTargets.Count == 0 && Helper.Ready)
         {
-            Message = "Список своих адресов пуст — заполните его на вкладке «Свои адреса».";
+            Message = "Список своих адресов пуст — заполните его на вкладке «Свои адреса» и сохраните.";
             return null;
         }
-        _shell.State.Groups = ids;
-        try { _shell.SaveState(); } catch (Exception e) { Message = Texts.Friendly(e); }
-        return _shell.SelectedGroups(ids);
+        return ids;
+    }
+
+    bool AnyChecked()
+    {
+        if (Groups.Any(g => g.IsChecked)) return true;
+        Message = "Отметьте, что проверять.";
+        return false;
     }
 
     /// <summary>Группы и режим для подбора на роутере. «Свои адреса» — роутерные, поэтому список ПК не проверяем.</summary>
@@ -546,8 +836,6 @@ public sealed class MainViewModel : Observable
     {
         var ids = Groups.Where(g => g.IsChecked).Select(g => g.Id).ToList();
         if (ids.Count == 0) { Message = "Отметьте, что проверять."; return null; }
-        _shell.State.Groups = ids;
-        try { _shell.SaveState(); } catch (Exception e) { Message = Texts.Friendly(e); }
         return (ids, Full);
     }
 
@@ -559,14 +847,18 @@ public sealed class MainViewModel : Observable
         SelectProgressText = "Подготовка…";
     }
 
+    /// <summary>Подбор — у помощника (запускает winws); ход и отмена — через канал.</summary>
     public async Task StartSelectAsync()
     {
         if (Busy) return;
-        if (TakeGroups() is not { } groups) return;
+        if (!AnyChecked()) return;
+        if (await NeedHelperAsync() is not { } c) return;
+        // Свои адреса проверяем после подключения: до установки их у помощника ещё нет.
+        if (TakeGroups() is not { } ids) return;
         if (!ConfirmPauseIfRunning()) return;
 
         ResetResults();
-        SelectProgressMax = Math.Max(1, _shell.Catalog.Strategies.Count);
+        SelectProgressMax = Math.Max(1, Helper.Status?.Strategies.Count ?? _shell.Catalog.Strategies.Count);
 
         using var cts = new CancellationTokenSource();
         _selectCts = cts;
@@ -584,7 +876,7 @@ public sealed class MainViewModel : Observable
         {
             await Guard("Подбор…", async () =>
             {
-                try { ShowReport(await Task.Run(() => _shell.SelectAsync(quick, groups, progress, cts.Token))); }
+                try { ShowReport(await c.SelectAsync(quick, ids, progress, cts.Token)); }
                 catch (OperationCanceledException) { ResultText = "Подбор остановлен."; }
             });
         }
@@ -611,9 +903,11 @@ public sealed class MainViewModel : Observable
     public async Task StartSearchAsync()
     {
         if (Busy) return;
-        if (TakeGroups() is not { } groups) return;
+        if (!AnyChecked()) return;
+        if (await NeedHelperAsync() is not { } c) return;
+        if (TakeGroups() is not { } ids) return;
         if (!ConfirmPauseIfRunning()) return;
-        var baseId = _bestId ?? _shell.State.StrategyId;
+        var baseId = _bestId ?? CurrentStrategyId;
 
         ResetResults();
         SelectProgressMax = 1;
@@ -646,9 +940,8 @@ public sealed class MainViewModel : Observable
         {
             await Guard("Глубокий поиск…", async () =>
             {
-                try { ShowSearch(await Task.Run(() => _shell.SearchAsync(baseId, groups, progress, cts.Token))); }
+                try { ShowSearch(await c.SearchAsync(baseId, ids, progress, cts.Token)); }
                 catch (OperationCanceledException) { ResultText = "Поиск остановлен."; }
-                finally { _titles.Clear(); }
             });
         }
         finally
@@ -691,26 +984,24 @@ public sealed class MainViewModel : Observable
         if (stopped is not null) ResultHint = stopped + ". " + ResultHint;
     }
 
-    /// <summary>Подбор при включённом обходе (служба или из программы): обход на время проверки стоит, стратегии меняются — предупредить.</summary>
+    /// <summary>Подбор при включённом обходе: обход на время проверки стоит, стратегии меняются — предупредить.</summary>
     bool ConfirmPauseIfRunning()
     {
         if (!IsRunning) return true;
-        return MessageBox.Show(
+        return Confirm(
             "Обход сейчас включён. На время проверки он будет приостановлен, а стратегии будут меняться одна за другой — " +
-            "сайты, звонки и загрузки могут прерываться.\n\nПосле проверки обход включится на лучшей найденной стратегии. Продолжить?",
-            "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.Yes) == MessageBoxResult.Yes;
+            "сайты, звонки и загрузки могут прерываться.\n\nПосле проверки обход включится на лучшей найденной стратегии. Продолжить?");
     }
 
     public ICommand StopConflictsCmd => _stopConflictsCmd ??= RelayCommand.Async(StopConflictsAsync, () => !Busy && !IsLoading && HasConflicts);
     ICommand? _stopConflictsCmd;
 
-    /// <summary>Остановить мешающие обходы одной кнопкой, а не объяснять, как это сделать.</summary>
+    /// <summary>Остановить мешающие обходы одной кнопкой (через помощника: чужие службы и процессы — с правами).</summary>
     async Task StopConflictsAsync()
     {
-        if (MessageBox.Show(ConflictWarning + "\n\nОстановить их сейчас? Настройки этих программ не меняются — их можно будет запустить снова.",
-                "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes) != MessageBoxResult.Yes) return;
-        (IReadOnlyList<string> Stopped, IReadOnlyList<string> ComeBackOnReboot) r = ([], []);
-        if (!await Guard("Останавливаю другие программы обхода…", async () => r = await Task.Run(_shell.StopForeign))) return;
+        if (!Confirm(ConflictWarning + "\n\nОстановить их сейчас? Настройки этих программ не меняются — их можно будет запустить снова.")) return;
+        StopForeignResult r = new([], []);
+        if (!await WithHelper("Останавливаю другие программы обхода…", async c => r = await c.StopForeignAsync())) return;
         await RefreshStatusAsync();
         Message = r.Stopped.Count == 0 ? "Нечего останавливать." : "Остановлено: " + string.Join(", ", r.Stopped) + "."
             + (r.ComeBackOnReboot.Count > 0 ? $" Служба {string.Join(", ", r.ComeBackOnReboot)} запустится снова после перезагрузки — удалите её в программе, которая её поставила." : "");
@@ -718,7 +1009,7 @@ public sealed class MainViewModel : Observable
 
     string? _autoApplyId;
 
-    /// <summary>После подбора/поиска: лучшая стратегия — в службу, обход работает на ней (ТЗ §9 п. 17).</summary>
+    /// <summary>После подбора/поиска: лучшая стратегия — в работу (ТЗ §9 п. 17).</summary>
     async Task AutoApplyAsync()
     {
         if (_autoApplyId is not { } id) return;
@@ -740,23 +1031,22 @@ public sealed class MainViewModel : Observable
 
     void ShowReport(SelectionReport r)
     {
+        foreach (var s in r.Scores) _titles[s.Strategy.Id] = s.Strategy.Title;
         // Итоговая таблица — в порядке оценки, лучшая отмечена.
         var ordered = r.Scores.OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds).ToList();
+        var best = r.Best;
         Scores.Clear();
-        foreach (var s in ordered) Scores.Add(new ScoreRow(s) { IsBest = ReferenceEquals(s, r.Best) });
+        foreach (var s in ordered) Scores.Add(new ScoreRow(s) { IsBest = best is not null && s.Strategy.Id == best.Strategy.Id });
         SelectProgress = SelectProgressMax;
-        _ = ReloadChoicesAsync();  // новая статистика и найденные стратегии — в меню на главной
-
-        // Рабочие по рейтингу — запасные для автопереключения.
-        WatchdogPolicy.Remember(_shell.State, r);
-        try { _shell.SaveState(); } catch (Exception e) { Message = Texts.Friendly(e); }
+        // Новая статистика и найденные стратегии — в список на главной; запасные помощник запомнил сам.
+        _ = ReloadChoicesAsync();
 
         if (r.NothingBlocked)
         {
             ResultText = "Без обхода всё открывается: блокировок нет или включён VPN.";
             return;
         }
-        if (r.Best is not { } best)
+        if (best is null)
         {
             ResultText = r.Cancelled ? "Подбор остановлен, подходящей стратегии пока нет." : "Ни одна стратегия не помогла.";
             if (!r.Cancelled)
@@ -765,7 +1055,7 @@ public sealed class MainViewModel : Observable
         }
         SetBest(best.Strategy.Id);
         ResultText = "Подходит: " + best.Strategy.Title;
-        // Подбор дошёл до конца — лучшая сразу ставится в службу (после выхода из Guard, см. AutoApplyAsync).
+        // Подбор дошёл до конца — лучшая сразу ставится в работу (после выхода из Guard, см. AutoApplyAsync).
         if (!r.Cancelled) _autoApplyId = best.Strategy.Id;
         var notes = new List<string>();
         if (!best.Perfect) notes.Add($"работают {best.GroupsPassed} из {best.GroupsTotal} групп");
@@ -778,6 +1068,7 @@ public sealed class MainViewModel : Observable
     // ---------- свои адреса ----------
 
     string _targetsText = "";
+    /// <summary>Черновик до «Сохранить»: сохраняет помощник.</summary>
     public string TargetsText { get => _targetsText; set => Set(ref _targetsText, value); }
 
     string _targetsMessage = "";
@@ -785,26 +1076,21 @@ public sealed class MainViewModel : Observable
 
     public ICommand SaveTargetsCmd { get; }
 
-    void SaveTargets()
+    async Task SaveTargetsAsync()
     {
-        try
-        {
-            var lines = TargetsText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
-            var rejected = _shell.Data.WriteUserDomains(lines);
-            var good = lines.Where(l => DataStore.NormalizeDomain(l) is not null).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            _shell.State.UserTargets = good;
-            if (good.Count > 0 && !_shell.State.Groups.Contains("user"))
+        var lines = TargetsText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+        UserTargetsResult? r = null;
+        if (!await WithHelper("Сохраняю адреса…", async c =>
             {
-                _shell.State.Groups.Add("user");
-                if (Groups.FirstOrDefault(g => g.Id == "user") is { } ug) ug.IsChecked = true;
-            }
-            _shell.SaveState();
-            TargetsText = string.Join(Environment.NewLine, good);
-            TargetsMessage = rejected.Count == 0
-                ? $"Сохранено адресов: {good.Count}."
-                : $"Сохранено адресов: {good.Count}. Не распознаны и убраны: {string.Join(", ", rejected)}.";
-        }
-        catch (Exception e) { TargetsMessage = Texts.Friendly(e); }
+                r = await c.SetUserTargetsAsync(lines);
+                await FetchAsync(full: false);
+            }) || r is null)
+            return;
+        if (r.Saved.Count > 0 && Groups.FirstOrDefault(g => g.Id == "user") is { } ug) ug.IsChecked = true;
+        TargetsText = string.Join(Environment.NewLine, r.Saved);
+        TargetsMessage = r.Rejected.Count == 0
+            ? $"Сохранено адресов: {r.Saved.Count}."
+            : $"Сохранено адресов: {r.Saved.Count}. Не распознаны и убраны: {string.Join(", ", r.Rejected)}.";
     }
 
     // ---------- диагностика ----------
@@ -842,33 +1128,54 @@ public sealed class MainViewModel : Observable
         DiagRefreshing = true;
         try
         {
-            // Без службы её настройки не читаем: InspectService «верит службе» и сбросил бы включённый обход.
-            bool serviceMode = _shell.ServiceMode;
-            var (info, run, drv, core, conflicts, vpn) = await Task.Run(() => (
-                serviceMode ? _shell.InspectService() : null, ReadRunState(), ServiceManager.Query("WinDivert"), _shell.Installer.Check(),
-                Conflicts.Find(_shell.Paths, _shell.AllStrategies), Conflicts.ActiveVpnAdapters()));
-            var svc = run.Svc;
-            // Стратегию показываем ту, что реально стоит в службе Windows; чужой файл в службе — отдельно.
-            ServiceText = info is null ? "не используется (обход работает из программы)"
-                : Texts.Svc(svc)
-                + (info.Strategy is { } st ? $" (стратегия: {st.Title})" : _shell.State.StrategyId is { } id && svc != SvcState.NotInstalled ? $" (стратегия: {StrategyTitle(id)})" : "")
-                + (svc != SvcState.NotInstalled && !info.OurCore ? $" — запускает чужой файл: {info.ExePath}" : "");
-            DriverText = Texts.Svc(drv);
-            CoreBroken = core.State != CoreState.Ok;
-            CoreText = core.State switch
+            await FetchAsync(full: true);
+            var st = Live;
+            var d = Helper.Reader is null ? null : Helper.Details;
+            var (svc, local, drv, conflicts, vpn) = await Task.Run(() =>
             {
-                CoreState.Ok => $"в порядке (версия {_shell.Installer.Manifest.Version})",
-                CoreState.Missing => "не найдено — возможно, удалено антивирусом",
-                _ => "изменено, возможно антивирусом: " + string.Join(", ", core.BadFiles),
-            };
-            if (core.ExtraFiles.Count > 0) CoreText += $"; лишние файлы: {string.Join(", ", core.ExtraFiles)}";
+                var s = ServiceManager.Query(ServiceManager.Name);
+                return (s, st is null && s != SvcState.NotInstalled ? LocalServiceStrategy() : null, ServiceManager.Query("WinDivert"),
+                    st?.Foreign ?? Conflicts.Find(_shell.Paths, _shell.Catalog.Strategies), Conflicts.ActiveVpnAdapters());
+            });
+            if (st is not null)
+            {
+                // Стратегию показываем ту, что реально стоит в службе Windows; чужой файл в службе — отдельно.
+                ServiceText = st.RunMode == "process" ? "не используется (обход работает из программы)"
+                    : Texts.Svc(st.Service)
+                    + (st.ServiceStrategy is { } ss ? $" (стратегия: {StrategyTitle(ss)})" : st.StrategyId is { } id && st.Service != SvcState.NotInstalled ? $" (стратегия: {StrategyTitle(id)})" : "")
+                    + (st.Service != SvcState.NotInstalled && !st.ServiceOurCore ? " — запускает чужой файл" : "");
+                (_svc, _active) = (st.Service, st.Active);
+                _coreProblem = CoreProblem(st.Core);
+            }
+            else
+            {
+                ServiceText = Texts.Svc(svc) + (local is { } l ? $" (стратегия: {StrategyTitle(l)})" : "");
+                (_svc, _active) = (svc, svc == SvcState.Running);
+                _localStrategy = local;
+                _coreProblem = null;
+            }
+            DriverText = Texts.Svc(drv);
+            if (d is not null)
+            {
+                var core = d.Core;
+                CoreBroken = core.State != CoreState.Ok;
+                CoreText = core.State switch
+                {
+                    CoreState.Ok => $"в порядке (версия {d.CoreVersion})",
+                    CoreState.Missing => "не найдено — возможно, удалено антивирусом",
+                    _ => "изменено, возможно антивирусом: " + string.Join(", ", core.BadFiles),
+                };
+                if (core.ExtraFiles.Count > 0) CoreText += $"; лишние файлы: {string.Join(", ", core.ExtraFiles)}";
+            }
+            else
+            {
+                CoreBroken = false;
+                CoreText = Helper.State == HelperState.NotInstalled ? "проверяет помощник — он не установлен" : "проверяет помощник — он не отвечает";
+            }
             ConflictList.Clear();
-            foreach (var c in conflicts)
-                ConflictList.Add($"{c.Name}. {c.Detail}");
+            foreach (var c in conflicts) ConflictList.Add($"{c.Name}. {c.Detail}");
             VpnList.Clear();
             foreach (var v in vpn) VpnList.Add(v);
-            (_svc, _active) = run;
-            _coreProblem = CoreProblem(core);
             UpdateStatus();
             if (DnsRows.Count == 0) _ = CheckDnsAsync();
             // Проверки окружения (§4) и временные метки — только чтение: netsh show, sc query, реестр, процессы.
@@ -876,6 +1183,7 @@ public sealed class MainViewModel : Observable
             TimestampsText = TimestampsLine(ts);
             Findings.Clear();
             foreach (var f in findings) Findings.Add(new FindingRow(f.Ok, f.Title, f.Text));
+            OnHelperChanged();
             DiagUpdated = $"обновлено в {DateTime.Now:HH:mm:ss}";
         }
         catch (Exception e) { Message = Texts.Friendly(e); }
@@ -898,7 +1206,7 @@ public sealed class MainViewModel : Observable
 
     public ICommand ClearDiscordCmd { get; }
 
-    /// <summary>Решение 5: кэш Discord (Cache, Code Cache, GPUCache) — с подтверждением; запущенный Discord закрывается.</summary>
+    /// <summary>Решение 5: кэш Discord (Cache, Code Cache, GPUCache) — с подтверждением; запущенный Discord закрывается. Права не нужны.</summary>
     async Task ClearDiscordAsync()
     {
         var found = await Task.Run(() => DiscordCache.Find());
@@ -919,18 +1227,23 @@ public sealed class MainViewModel : Observable
 
     static string Mb(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / 1024.0 / 1024:0.#} МБ" : $"{Math.Max(1, bytes / 1024)} КБ";
 
-    // ---------- оформление ----------
+    // ---------- оформление (настройки окна — %LocalAppData%) ----------
 
-    /// <summary>"system" / "light" / "dark" — хранится в AppState, применяется сразу.</summary>
+    void SaveSettings()
+    {
+        try { Settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Message = Texts.Friendly(e); }
+    }
+
+    /// <summary>"system" / "light" / "dark" — в window.json, применяется сразу.</summary>
     public string Theme
     {
-        get => ThemeManager.Normalize(_shell.State.Theme);
+        get => ThemeManager.Normalize(Settings.Theme);
         set
         {
             value = ThemeManager.Normalize(value);
             if (value == Theme) return;
-            _shell.State.Theme = value;
-            try { _shell.SaveState(); } catch (Exception e) { Message = Texts.Friendly(e); }
+            Settings.Theme = value;
+            SaveSettings();
             ThemeManager.Apply(value);
             Raise();
             Raise(nameof(ThemeAuto));
@@ -945,66 +1258,43 @@ public sealed class MainViewModel : Observable
     public bool ThemeDark { get => Theme == ThemeManager.Dark; set { if (value) Theme = ThemeManager.Dark; } }
 
     /// <summary>Крестик сворачивает в трей (иначе — закрывает программу; служба обхода работает в обоих случаях, обход из программы — только в трее).</summary>
-    public bool CloseToTray => _shell.State.CloseAction != "exit";
+    public bool CloseToTray => Settings.CloseAction != "exit";
     public bool CloseTray { get => CloseToTray; set { if (value) SetCloseAction("tray"); } }
     public bool CloseExit { get => !CloseToTray; set { if (value) SetCloseAction("exit"); } }
     void SetCloseAction(string a)
     {
-        if (_shell.State.CloseAction == a) return;
-        _shell.State.CloseAction = a;
-        _shell.SaveState();
+        if (Settings.CloseAction == a) return;
+        Settings.CloseAction = a;
+        SaveSettings();
         Raise(nameof(CloseTray)); Raise(nameof(CloseExit));
     }
 
-    public string CloseHint => _shell.ServiceMode
+    public string CloseHint => ServiceMode
         ? "Обход работает и без окна: его выключает только кнопка «Выключить»."
         : "Без режима службы закрытие программы выключает и обход.";
 
-    Task RepairCoreAsync() => Guard("Восстанавливаю ядро…", async () =>
+    /// <summary>Восстановить ядро — помощник останавливает обход, ставит файлы заново и возвращает как было.</summary>
+    Task RepairCoreAsync() => WithHelper("Восстанавливаю ядро…", async c =>
     {
-        var log = new Progress<string>(s => Message = s);
-        // Файлы работающего winws (служба или процесс программы) заняты: остановить, заменить, вернуть как было.
-        bool wasRunning = await Task.Run(() => _shell.IsActive);
-        if (wasRunning)
-        {
-            if (_shell.ServiceMode) await Task.Run(_shell.Service.Stop);
-            else
-            {
-                await Task.Run(_shell.Disable);
-                // Обход по-прежнему включён: не вернётся сейчас — вернётся при следующем запуске программы.
-                _shell.State.Enabled = true;
-                _shell.SaveState();
-            }
-        }
-        await Task.Run(() => _shell.RepairCoreAsync(log));
-        if (wasRunning && _shell.State.Enabled && _shell.State.StrategyId is { } id)
-            await Task.Run(() => _shell.Enable(id));
+        await c.CoreRepairAsync(new Progress<string>(s => Message = s));
         await RefreshDiagAsync();
         await RefreshStatusAsync();
     });
 
+    /// <summary>«Удалить службу полностью» — помощник: служба обхода, WinDivert, временные метки TCP (если включали мы).</summary>
     async Task RemoveServiceAsync()
     {
-        bool serviceMode = _shell.ServiceMode;
-        var ok = MessageBox.Show(serviceMode
-            ? "Удалить службу обхода и драйвер WinDivert? Обход перестанет работать, пока вы снова не нажмёте «Включить»."
-            : "Удалить службу обхода и драйвер WinDivert? Обход из программы, если включён, прервётся до следующего включения.",
-            "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
-        if (ok != MessageBoxResult.Yes) return;
-        if (await Guard("Удаляю службу…", async () =>
-        {
-            await Task.Run(_shell.Service.Remove);
-            // Решение 8: временные метки TCP, включённые нами, — вернуть как было.
-            await Task.Run(_shell.RestoreTcpTimestamps);
-            if (serviceMode)
+        if (!Confirm(ServiceMode
+                ? "Удалить службу обхода и драйвер WinDivert? Обход перестанет работать, пока вы снова не нажмёте «Включить»."
+                : "Удалить службу обхода и драйвер WinDivert? Обход из программы, если включён, прервётся до следующего включения."))
+            return;
+        if (await WithHelper("Удаляю службу…", async c =>
             {
-                _shell.State.Enabled = false;
-                _shell.SaveState();
-            }
-            await RefreshDiagAsync();
-            await RefreshStatusAsync();
-        }))
-            Message = "Служба и драйвер удалены.";
+                await c.RemoveAllAsync();
+                await RefreshDiagAsync();
+                await RefreshStatusAsync();
+            }))
+            Message = "Служба и драйвер удалены. Помощника можно удалить отдельной кнопкой.";
     }
 
     public ICommand ClearHistoryCmd => _clearHistoryCmd ??= RelayCommand.Async(ClearHistoryAsync, () => !Busy && !IsLoading && !Selecting);
@@ -1012,13 +1302,40 @@ public sealed class MainViewModel : Observable
 
     async Task ClearHistoryAsync()
     {
-        var ok = MessageBox.Show(
-            "Удалить результаты подборов, статистику и логи?\nСвои адреса, найденные стратегии и включённый обход останутся.",
-            "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
-        if (ok != MessageBoxResult.Yes) return;
-        var n = await Task.Run(() => ResultStore.ClearHistory(_shell.Paths));
+        if (!Confirm("Удалить результаты подборов, статистику и логи?\nСвои адреса, найденные стратегии и включённый обход останутся.")) return;
+        int n = 0;
+        if (!await WithHelper("Очищаю историю…", async c => n = await c.ClearHistoryAsync())) return;
         await ReloadChoicesAsync();
         Message = $"История очищена: удалено файлов — {n}.";
+    }
+
+    /// <summary>
+    /// «Папка результатов»: результаты лежат в закрытой папке — помощник отдаёт их (свои адреса уже скрыты),
+    /// окно кладёт копию в %LocalAppData%\DpiShell\results и открывает.
+    /// </summary>
+    async Task OpenResultsAsync()
+    {
+        await FetchAsync(full: true);
+        if (Helper.Reader is null || Helper.Results is not { } r)
+        {
+            Message = "Результаты подборов хранит помощник — появятся после первого подбора.";
+            return;
+        }
+        var dir = Path.Combine(WindowSettings.DefaultDir, "results");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            foreach (var f in r.Results)
+            {
+                var name = Path.GetFileName(f.Name);
+                if (name.Length == 0 || f.Content is null) continue;
+                File.WriteAllText(Path.Combine(dir, name), f.Content.ToJsonString(new System.Text.Json.JsonSerializerOptions
+                { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Message = Texts.Friendly(e); return; }
+        if (r.Results.Count == 0) Message = "Подборов ещё не было.";
+        OpenFolder(dir);
     }
 
     void OpenFolder(string path)

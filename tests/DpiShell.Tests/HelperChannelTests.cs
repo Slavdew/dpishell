@@ -48,6 +48,7 @@ public class HelperChannelTests
         var args = new Dictionary<string, object?>
         {
             ["enable"] = new { strategy = "found-1" },
+            ["choose"] = new { strategy = "alt9" },
             ["set_run_mode"] = new { service = true },
             ["ipset_mode"] = new { mode = "list" },
             ["game_mode"] = new { mode = "all" },

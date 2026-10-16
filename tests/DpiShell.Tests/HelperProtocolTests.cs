@@ -64,6 +64,11 @@ public class HelperProtocolTests
     [InlineData("""{"id":1,"cmd":"cancel"}""", "target")]
     [InlineData("""{"id":1,"cmd":"cancel","target":1,"args":{}}""", "аргументов")]
     [InlineData("""{"id":1,"cmd":"read_results","args":{"file":"..\\state.json"}}""", "лишнее поле")]
+    [InlineData("""{"id":1,"cmd":"choose"}""", "обязательного")]
+    [InlineData("""{"id":1,"cmd":"choose","args":{"strategy":"C:\\zapret\\bin\\winws.exe"}}""", "нет такой стратегии")]
+    [InlineData("""{"id":1,"cmd":"choose","args":{"strategy":"alt999"}}""", "нет такой стратегии")]
+    [InlineData("""{"id":1,"cmd":"details","args":{"file":"state.json"}}""", "лишнее поле")]
+    [InlineData("""{"id":1,"cmd":"hosts_apply","args":{"entries":[{"host":"github.com","ip":"6.6.6.6"}]}}""", "лишнее поле")]
     public void Bad_requests_are_invalid(string json, string why) =>
         Assert.Contains(why, Rejected(json), StringComparison.OrdinalIgnoreCase);
 
@@ -98,10 +103,11 @@ public class HelperProtocolTests
             "status", "enable", "disable", "set_run_mode", "select", "search", "cancel", "ipset_mode", "all_addresses_start",
             "all_addresses_stop", "game_mode", "ipset_update", "user_ipset_set", "user_targets_set", "hosts_check", "hosts_preview",
             "hosts_apply", "hosts_revert", "hosts_recheck", "stop_foreign", "core_repair", "remove_all", "clear_history", "read_results",
+            "details", "choose",
         ];
         Assert.Equal(spec.Order(), HelperCommands.Specs.Keys.Order());
         // Только чтение — не занимает «одну операцию за раз».
-        Assert.Equal(["cancel", "hosts_preview", "read_results", "status"],
+        Assert.Equal(["cancel", "details", "hosts_preview", "read_results", "status"],
             HelperCommands.Specs.Values.Where(s => !s.Exclusive).Select(s => s.Name).Order());
     }
 

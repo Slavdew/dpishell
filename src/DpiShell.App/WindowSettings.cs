@@ -1,0 +1,76 @@
+using System.IO;
+using System.Text.Json;
+using DpiShell.Core;
+using DpiShell.Core.Router;
+
+namespace DpiShell.App;
+
+/// <summary>
+/// Настройки окна — %LocalAppData%\DpiShell\window.json (11-helper-spec §4): принадлежат пользователю, права не нужны.
+/// Тема, крестик, адрес и пароль роутера (пароль — DPAPI CurrentUser, см. RouterSecrets). Обходные настройки — у помощника.
+/// </summary>
+public sealed class WindowSettings
+{
+    /// <summary>"system" / "light" / "dark".</summary>
+    public string Theme { get; set; } = "system";
+    /// <summary>"tray" — крестик сворачивает в трей, "exit" — закрывает программу.</summary>
+    public string CloseAction { get; set; } = "tray";
+    /// <summary>Адрес роутера; null — основной шлюз.</summary>
+    public string? RouterAddress { get; set; }
+    /// <summary>Пароль роутера под DPAPI (CurrentUser); открытым не хранится.</summary>
+    public string? RouterPassword { get; set; }
+    /// <summary>Подсказку «свернулась в трей» уже показывали.</summary>
+    public bool TrayHintShown { get; set; }
+
+    static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
+
+    /// <summary>Папка окна: %LocalAppData%\DpiShell (логи окна, выгруженные результаты, window.json).</summary>
+    public static string DefaultDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DpiShell");
+
+    /// <summary>Куда сохранять; задаётся при загрузке.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string File { get; private set; } = Path.Combine(DefaultDir, "window.json");
+
+    /// <summary>
+    /// Прочитать; файла нет — перенести тему, крестик и роутер из прежнего state.json, если он читается
+    /// (до помощника программа работала с правами и хранила всё в %ProgramData%).
+    /// </summary>
+    public static WindowSettings Load(string? file = null, AppPaths? legacy = null)
+    {
+        file ??= Path.Combine(DefaultDir, "window.json");
+        WindowSettings s;
+        try
+        {
+            s = System.IO.File.Exists(file) ? JsonSerializer.Deserialize<WindowSettings>(System.IO.File.ReadAllText(file), Json) ?? new() : Migrate(legacy);
+        }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException) { s = new(); }
+        s.File = file;
+        return s;
+    }
+
+    static WindowSettings Migrate(AppPaths? legacy)
+    {
+        var s = new WindowSettings();
+        if (legacy is null) return s;
+        try
+        {
+            if (!System.IO.File.Exists(legacy.StateFile)) return s;
+            var old = AppState.Load(legacy);
+            s.Theme = old.Theme;
+            s.CloseAction = old.CloseAction;
+            s.RouterAddress = old.RouterAddress;
+            // DPAPI CurrentUser: пароль расшифруется, только если его сохранял этот же пользователь.
+            s.RouterPassword = RouterSecrets.Unprotect(old.RouterPassword) is not null ? old.RouterPassword : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { }
+        return s;
+    }
+
+    public void Save()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(File)!);
+        var tmp = File + ".tmp";
+        System.IO.File.WriteAllText(tmp, JsonSerializer.Serialize(this, Json));
+        System.IO.File.Move(tmp, File, overwrite: true);
+    }
+}
