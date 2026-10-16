@@ -42,6 +42,9 @@ public sealed class HttpProbe
     public int MaxBytes { get; init; } = 1 << 20;
     public int Attempts { get; init; } = 2;
 
+    /// <summary>Если задан — адреса целей берутся из DoH, а не из DNS системы (см. ТЗ §9 п. 11). Не нашёл — системный DNS.</summary>
+    public DohResolver? Resolver { get; init; }
+
     public static readonly SslProtocols[] DefaultTls = [SslProtocols.Tls13, SslProtocols.Tls12];
 
     /// <summary>Цель проверяется для каждой версии TLS; успех — только если прошли все версии.</summary>
@@ -76,6 +79,8 @@ public sealed class HttpProbe
             AutomaticDecompression = DecompressionMethods.None,
             SslOptions = { EnabledSslProtocols = tls },
         };
+        if (Resolver is { } resolver)
+            handler.ConnectCallback = (ctx, token) => ConnectAsync(resolver, ctx.DnsEndPoint, token);
         using var http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(ConnectTimeout + ReadTimeout);
@@ -128,6 +133,29 @@ public sealed class HttpProbe
         {
             return new(t, tls, bytes > 0 ? ProbeOutcome.Truncated : ProbeOutcome.Reset, sw.Elapsed.TotalSeconds, bytes, Flatten(e));
         }
+    }
+
+    static async ValueTask<Stream> ConnectAsync(DohResolver resolver, DnsEndPoint ep, CancellationToken ct)
+    {
+        IPAddress[] addrs = IPAddress.TryParse(ep.Host, out var literal) ? [literal]
+            : ep.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ? [IPAddress.Loopback]
+            : await resolver.ResolveAsync(ep.Host, ct);
+        if (addrs.Length == 0)
+            addrs = await Dns.GetHostAddressesAsync(ep.Host, System.Net.Sockets.AddressFamily.InterNetwork, ct);
+
+        Exception? last = null;
+        foreach (var ip in addrs.Take(3))
+        {
+            var s = new System.Net.Sockets.Socket(ip.AddressFamily, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp) { NoDelay = true };
+            try
+            {
+                await s.ConnectAsync(new IPEndPoint(ip, ep.Port), ct);
+                return new System.Net.Sockets.NetworkStream(s, ownsSocket: true);
+            }
+            catch (Exception e) when (e is System.Net.Sockets.SocketException && !ct.IsCancellationRequested) { s.Dispose(); last = e; }
+            catch { s.Dispose(); throw; }
+        }
+        throw last ?? new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.HostNotFound);
     }
 
     static ProbeOutcome Classify(HttpRequestException e)

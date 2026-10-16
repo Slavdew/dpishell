@@ -104,7 +104,8 @@ public sealed class Shell
         if (wasRunning) Service.Stop();
         try
         {
-            var selector = new Selector(Paths, new HttpProbe());
+            using var doh = new DohResolver();
+            var selector = new Selector(Paths, NewProbe(doh));
             var report = await selector.RunAsync(Catalog.Strategies, groups ?? SelectedGroups(), quick, progress, ct);
             ResultStore.Save(Paths, report);
             return report;
@@ -117,8 +118,22 @@ public sealed class Shell
     }
 
     /// <summary>«Проверить сейчас»: работает ли то, что включено.</summary>
-    public async Task<IReadOnlyList<TargetVerdict>> CheckNowAsync(CancellationToken ct = default) =>
-        await new Selector(Paths, new HttpProbe()).CheckGroupsAsync(SelectedGroups(), ct);
+    public async Task<IReadOnlyList<TargetVerdict>> CheckNowAsync(CancellationToken ct = default)
+    {
+        using var doh = new DohResolver();
+        return await new Selector(Paths, NewProbe(doh)).CheckGroupsAsync(SelectedGroups(), ct);
+    }
+
+    /// <summary>Проверка резолвит цели через DoH: результат зависит от DPI, а не от DNS системы. Кэш DoH живёт один прогон.</summary>
+    public static HttpProbe NewProbe(DohResolver doh) => new() { Resolver = doh };
+
+    /// <summary>Подменяет ли DNS системы адреса проверяемых сайтов (для предупреждения и анализа DNS).</summary>
+    public async Task<IReadOnlyList<DnsComparison>> CheckDnsAsync(CancellationToken ct = default)
+    {
+        using var doh = new DohResolver();
+        var hosts = SelectedGroups().SelectMany(g => g.Targets).Select(t => new Uri(t.Url).Host).Distinct().ToList();
+        return await Task.WhenAll(hosts.Select(h => DnsCheck.CompareAsync(h, doh, ct)));
+    }
 
     public void SaveState() => State.Save(Paths);
 }

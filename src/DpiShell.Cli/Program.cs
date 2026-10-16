@@ -30,7 +30,7 @@ static async Task<int> SelfTest()
     }
 
     int failed = 0;
-    foreach (var step in new[] { "status", "prepare", "dry-run", "probe", "test alt11", "select" })
+    foreach (var step in new[] { "status", "prepare", "dns", "dry-run", "probe", "test alt11", "select" })
     {
         Console.WriteLine($"=== {step}");
         var parts = step.Split(' ');
@@ -82,9 +82,16 @@ static async Task<int> Run(string cmd, string[] rest)
                 foreach (var v in await shell.CheckNowAsync()) Print(v);
                 break;
             case "test":
-                var one = await new Selector(shell.Paths, new HttpProbe()).RunOneAsync(Need(shell, rest), shell.SelectedGroups(), default);
+                using (var doh = new DohResolver())
+                {
+                var one = await new Selector(shell.Paths, Shell.NewProbe(doh)).RunOneAsync(Need(shell, rest), shell.SelectedGroups(), default);
                 Console.WriteLine($"{one.Strategy.Id}: группы {one.GroupsPassed}/{one.GroupsTotal} {one.Error}");
                 foreach (var v in one.Verdicts) Print(v);
+                }
+                break;
+            case "dns":
+                foreach (var d in await shell.CheckDnsAsync())
+                    Console.WriteLine($"  {(d.Spoofed ? "ПОДМЕНА" : "ok     ")} {d.Host,-30} система: {(d.System.Length > 0 ? string.Join(",", d.System.Take(2).Select(a => a.ToString())) : d.SystemError ?? "-")}  DoH: {string.Join(",", d.Doh.Take(2).Select(a => a.ToString()))}");
                 break;
             case "select":
                 using (var cts = new CancellationTokenSource())
@@ -121,7 +128,7 @@ static async Task<int> Run(string cmd, string[] rest)
                 foreach (var v in Conflicts.ActiveVpnAdapters()) Console.WriteLine($"VPN: {v}");
                 break;
             default:
-                Console.WriteLine("dpishell-cli [selftest] | prepare | check-core | list | args <id> | dry-run [id] | probe | test <id> | select [--quick] | enable <id> | disable | remove | status");
+                Console.WriteLine("dpishell-cli [selftest] | prepare | dns | check-core | list | args <id> | dry-run [id] | probe | test <id> | select [--quick] | enable <id> | disable | remove | status");
                 break;
         }
         return 0;
