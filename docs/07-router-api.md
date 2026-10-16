@@ -47,12 +47,12 @@
 ```json
 { "api": 1, "version": "0.1.0", "engine": "zapret1",
   "core": { "version": "v72.13", "installed": true, "hash_ok": true },
-  "enabled": true, "strategy": "alt10", "backups": ["alt9", "alt13"], "needs_tcp_timestamps": true,
+  "enabled": true, "mode": "all", "strategy": "alt10", "backups": ["alt9", "alt13"], "needs_tcp_timestamps": true,
   "last_check": { "at": "2026-10-16T21:00:00Z", "source": "timer", "ok": true,
                   "groups": [ { "id": "youtube", "ok": true }, { "id": "discord", "ok": true } ] },
   "fail_streak": 0,
   "schedule": { "enabled": true, "hours": 1, "auto_select": false },
-  "jobs": { "select": false, "check": false, "core_install": false, "dns_analyze": false },
+  "jobs": { "select": false, "check": false, "core_install": false, "dns_analyze": false, "site_check": false },
   "warnings": [ { "code": "flow_offload", "text": "Включён flow offloading" } ] }
 ```
 `source`: `manual` | `timer` | `app`. Коды `warnings`: `flow_offload`, `ipv6`, `dns_spoofed`, `conflict`, `core_missing`, `switched_backup` (сработала запасная стратегия, в `text` — какая), `auto_selected` (автоподбор нашёл и включил стратегию, в `text` — какую), `auto_select_failed` (автоподбор ничего не нашёл, оставлена прежняя), `dns_fallback` (защищённый DNS недоступен, временно DNS провайдера).
@@ -70,9 +70,11 @@
 
 **`targets_get`** `{}` → `{ "items": [ { "url": "https://example.com/", "important": true } ] }` — только «Свои адреса» роутера.
 
-**`lists_get`** `{ "name": "user-general" | "user-exclude" }` → `{ "lines": ["example.com"] }`.
+**`lists_get`** `{ "name": "user-general" | "user-exclude" | "exclude" }` → `{ "lines": ["example.com"], "editable": true }` — `exclude` (стандартные исключения) только для чтения.
 
 **`diag`** `{}` → `{ "conflicts": [ { "kind": "service", "name": "zapret2", "running": true } ], "flow_offload": false, "ipv6_wan": false, "dns": { "spoofed": true, "checked_at": "…" }, "overlay_free_kb": 18000 }`.
+
+**`site_check_result`** `{}` → `{ "running": false, "url": "https://example.com/", "with_bypass": { "ok": false, "detail": "сброс после 16 КБ" }, "without_bypass": { "ok": true, "detail": "" }, "suggest_exclude": true }` — `suggest_exclude`: открывается только без обхода, предложить добавить в исключения (`lists_set user-exclude`).
 
 **`report`** `{}` → `{ "text": "…" }` — то же, что «Сохранить отчёт» на странице.
 
@@ -84,6 +86,8 @@
 |---|---|---|---|
 | `enable` | `{}` | включает обход с текущей стратегией | `{}` или `error` |
 | `disable` | `{}` | выключает | `{}` |
+| `mode_set` | `{ "mode": "all" \| "lists" }` | «Все сайты, кроме исключений» / «По спискам»; перезапуск zapret и полная проверка с контрольной группой (06-router-spec §3.4) | `{ "started": true }` |
+| `site_check` | `{ "url": "https://example.com/" }` | «Сайт не открывается с обходом»: проверка с обходом и без; ход — `status.jobs.site_check`, итог — `site_check_result` | `{ "started": true }` |
 | `strategy_set` | `{ "id": "alt9" }` | выбор стратегии; при включённом обходе — перезапуск | `{}` |
 | `check_now` | `{}` | запускает проверку (результат — в `status.last_check`, `source: app`) | `{ "started": true }` |
 | `select_start` | `{ "groups": ["youtube","discord","user"], "mode": "full" \| "quick", "depth": "main" \| "deep" }` | запускает подбор; `deep` — глубокий поиск по 02-spec §4.7 (генерация кандидатов по ролям, ориентир 5–15 мин), `main` — готовые стратегии (~2–3 мин) | `{ "started": true }` |
@@ -158,3 +162,4 @@
 - 2026-10-17: §2.3 — поиск DpiShell не только на шлюзе, но и на частных узлах пути наружу (роутер за роутером).
 - 2026-10-17: §6 — запрет одновременной работы обходов ПК и роутера (двойная обработка пакетов).
 - 2026-10-17: `status.needs_tcp_timestamps`; §6 — ПК включает метки TCP, если стратегия роутера их требует.
+- 2026-10-17: режим `mode` (`all` по умолчанию на роутере / `lists`), `mode_set`, `site_check`, `lists_get exclude`; группа `control` в подборе (06-router-spec §3.4, §4.1).
