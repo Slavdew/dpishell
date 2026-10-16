@@ -33,6 +33,9 @@ public partial class App : Application
             return;
         }
 
+        ThemeManager.Apply(shell.State.Theme);
+        ThemeManager.Listen();
+
         var vm = new MainViewModel(shell);
         RelayCommand.OnError = ex => { TryLog(ex); vm.Message = Texts.Friendly(ex); };
         try
@@ -51,6 +54,12 @@ public partial class App : Application
             return;
         }
         _ = vm.InitializeAsync();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        ThemeManager.StopListening();
+        base.OnExit(e);
     }
 
     void OnUiError(object sender, DispatcherUnhandledExceptionEventArgs e)

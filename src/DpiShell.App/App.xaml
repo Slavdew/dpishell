@@ -2,9 +2,11 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
-        <!-- Стили — в Theme.xaml: их же подгружает автотест окна, не запуская приложение. -->
+        <!-- Стили — в Theme.xaml: их же подгружает автотест окна, не запуская приложение.
+             Цвета — Themes/Light.xaml или Themes/Dark.xaml, ThemeManager подменяет их на лету. -->
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/Light.xaml" />
                 <ResourceDictionary Source="Theme.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>

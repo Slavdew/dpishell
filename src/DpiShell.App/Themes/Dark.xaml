@@ -1,0 +1,36 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <!-- Цвета тёмной темы. Ключи — те же, что в Light.xaml. -->
+    <sys:Boolean x:Key="ThemeIsDark">True</sys:Boolean>
+
+    <SolidColorBrush x:Key="Page" Color="#18191B" />
+    <SolidColorBrush x:Key="Surface" Color="#232427" />
+    <SolidColorBrush x:Key="Line" Color="#36383D" />
+    <SolidColorBrush x:Key="Text" Color="#E8EAED" />
+    <SolidColorBrush x:Key="Muted" Color="#A0A6B0" />
+
+    <SolidColorBrush x:Key="Accent" Color="#2563EB" />
+    <SolidColorBrush x:Key="AccentHover" Color="#3B82F6" />
+    <SolidColorBrush x:Key="OnAccent" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="AccentSoft" Color="#1F2C47" />
+    <SolidColorBrush x:Key="AccentText" Color="#86B4FF" />
+
+    <SolidColorBrush x:Key="Ok" Color="#4ADE80" />
+    <SolidColorBrush x:Key="Danger" Color="#F87171" />
+    <SolidColorBrush x:Key="DangerLine" Color="#7F3434" />
+    <SolidColorBrush x:Key="WarnBack" Color="#352C18" />
+    <SolidColorBrush x:Key="WarnLine" Color="#8A6A24" />
+
+    <SolidColorBrush x:Key="Hover" Color="#303236" />
+    <SolidColorBrush x:Key="ButtonBack" Color="#2B2D31" />
+    <SolidColorBrush x:Key="ButtonLine" Color="#45484E" />
+    <SolidColorBrush x:Key="InputBack" Color="#1C1D20" />
+    <SolidColorBrush x:Key="InputLine" Color="#45484E" />
+    <SolidColorBrush x:Key="InputLineHover" Color="#62666D" />
+    <SolidColorBrush x:Key="HeaderBack" Color="#2A2B2F" />
+    <SolidColorBrush x:Key="Selection" Color="#22345A" />
+    <SolidColorBrush x:Key="Track" Color="#36383D" />
+    <SolidColorBrush x:Key="ScrollThumb" Color="#4D5158" />
+    <SolidColorBrush x:Key="ScrollThumbHover" Color="#6B7079" />
+</ResourceDictionary>

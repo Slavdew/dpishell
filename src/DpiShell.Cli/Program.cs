@@ -150,6 +150,15 @@ static async Task<int> Run(string cmd, string[] rest)
                     finally { Console.CancelKeyPress -= onCancel; }
                 }
                 break;
+            case "detect":
+                foreach (var z in ZapretDetector.Find(shell.Paths, shell.AllStrategies))
+                    Console.WriteLine($"{z.Kind,-8} {z.Name,-14} {z.OwnerTitle,-22} стратегия: {z.Strategy?.Title ?? "не узнали"}  {z.ExePath}");
+                var si = shell.InspectService();
+                Console.WriteLine($"Служба DpiShell: {si.State}, наше ядро: {si.OurCore}, стратегия: {si.Strategy?.Title ?? "-"}, файл: {si.ExePath ?? "-"}");
+                break;
+            case "clear-history":
+                Console.WriteLine($"Удалено файлов: {ResultStore.ClearHistory(shell.Paths)}");
+                break;
             case "enable":
                 shell.Enable(Need(shell, rest).Id);
                 Console.WriteLine($"Служба: {shell.Service.State}");
@@ -168,7 +177,7 @@ static async Task<int> Run(string cmd, string[] rest)
                 foreach (var v in Conflicts.ActiveVpnAdapters()) Console.WriteLine($"VPN: {v}");
                 break;
             default:
-                Console.WriteLine("dpishell-cli [selftest] | prepare | dns | check-core | list | args <id> | dry-run [id] | probe | test <id> | select [--quick] | search [base-id] | enable <id> | disable | remove | status");
+                Console.WriteLine("dpishell-cli [selftest] | prepare | dns | check-core | list | args <id> | dry-run [id] | probe | test <id> | select [--quick] | search [base-id] | detect | clear-history | enable <id> | disable | remove | status");
                 break;
         }
         return 0;

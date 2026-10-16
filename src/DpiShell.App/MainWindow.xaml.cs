@@ -21,6 +21,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = _vm = vm;
         Icon = Icons.ImageFor(vm.Kind);
+        SourceInitialized += (_, _) => ThemeManager.SetTitleBar(this);
 
         _tray = new Tray(vm);
         _tray.OpenRequested += ShowFromTray;

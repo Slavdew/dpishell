@@ -37,6 +37,15 @@ public sealed partial class ServiceManager(AppPaths paths)
 
     public SvcState State => Query(Name);
 
+    /// <summary>Командная строка службы из её настроек (sc qc). Буфер с запасом: у служб zapret строка длинная.</summary>
+    public static string? QueryBinPath(string name)
+    {
+        var (code, o) = Sc("qc", name, "16384");
+        if (code != 0) return null;
+        var m = BinPathRx().Match(o);
+        return m.Success ? m.Groups[1].Value.Trim() : null;
+    }
+
     /// <summary>Поставить (или перенастроить) службу на стратегию и запустить.</summary>
     public void Apply(IReadOnlyList<string> args)
     {
@@ -92,6 +101,9 @@ public sealed partial class ServiceManager(AppPaths paths)
         if (r.Code != 0) throw new InvalidOperationException($"Не удалось {what}: код {r.Code}. {r.Output.Trim()}");
     }
 
+    [GeneratedRegex(@"BINARY_PATH_NAME\s*:\s*(.+)")]
+    private static partial Regex BinPathRx();
+
     [GeneratedRegex(@"STATE\s*:\s*(\d)")]
     private static partial Regex StateRx();
 }
@@ -101,20 +113,25 @@ public sealed record Conflict(string Kind, string Name, string Detail);
 public static class Conflicts
 {
     /// <summary>Чужие службы и процессы обхода DPI. Свою службу и свой winws не считаем.</summary>
-    public static IReadOnlyList<Conflict> Find(AppPaths paths)
+    /// <summary>
+    /// Чужие обходы (всё, кроме нашей службы с нашим ядром): кто это и какая стратегия — <see cref="ZapretDetector"/>.
+    /// Name — для человека («zapret от Flowseal, стратегия general (ALT11)»), Detail — как выключить.
+    /// </summary>
+    public static IReadOnlyList<Conflict> Find(AppPaths paths, IReadOnlyList<Strategy>? catalog = null)
     {
-        var r = new List<Conflict>();
-        foreach (var s in ServiceManager.ForeignServices)
-        {
-            var st = ServiceManager.Query(s);
-            if (st is not SvcState.NotInstalled) r.Add(new("service", s, st.ToString()));
-        }
-        foreach (var (pid, path) in WinwsProcess.FindRunning())
-            if (path is null || !path.Equals(paths.Winws, StringComparison.OrdinalIgnoreCase))
-                r.Add(new("process", "winws.exe", $"PID {pid} {path}"));
-        foreach (var (pid, path) in WinwsProcess.FindRunning("goodbyedpi"))
-            r.Add(new("process", "goodbyedpi.exe", $"PID {pid} {path}"));
-        return r;
+        catalog ??= LoadCatalog(paths);
+        return ZapretDetector.Find(paths, catalog)
+            .Where(z => z.Owner != ZapretOwner.DpiShell)
+            .Select(z => new Conflict(z.Kind,
+                z.OwnerTitle + (z.Kind == "service" ? $" (служба {z.Name})" : "") + (z.Strategy is { } st ? $", стратегия {st.Title}" : ""),
+                z.HowToStop))
+            .ToList();
+    }
+
+    static IReadOnlyList<Strategy> LoadCatalog(AppPaths paths)
+    {
+        try { return [.. StrategyCatalog.Load(Path.Combine(paths.Seed, "strategies.json")).Strategies, .. UserStrategies.Load(paths)]; }
+        catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException) { return []; }
     }
 
     /// <summary>

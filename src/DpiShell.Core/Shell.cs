@@ -74,9 +74,37 @@ public sealed class Shell
             throw new SecurityException($"В папке ядра посторонние файлы: {string.Join(", ", foreign)}. Восстановите ядро.");
     }
 
+    void ThrowIfConflicts()
+    {
+        var foreign = Conflicts.Find(Paths, AllStrategies);
+        if (foreign.Count > 0) throw new ConflictException(foreign);
+    }
+
+    /// <summary>
+    /// Что на самом деле стоит в службе Windows (её настройки, а не наша память): наше ли ядро и какая стратегия.
+    /// Если стратегия в службе не та, что в state.json (state потерян, программу перенесли), — верим службе.
+    /// </summary>
+    public ServiceInfo InspectService()
+    {
+        var state = Service.State;
+        if (state == SvcState.NotInstalled) return new(state, null, null, false);
+        var bin = ServiceManager.QueryBinPath(ServiceManager.Name);
+        var (exe, args) = ZapretDetector.SplitCommandLine(bin);
+        var strategy = ZapretDetector.Match(args, AllStrategies);
+        bool ours = exe is not null && exe.Equals(Paths.Winws, StringComparison.OrdinalIgnoreCase);
+        if (ours && strategy is not null && State.StrategyId != strategy.Id)
+        {
+            State.StrategyId = strategy.Id;
+            State.Enabled = state == SvcState.Running;
+            State.Save(Paths);
+        }
+        return new(state, exe, strategy, ours);
+    }
+
     public void Enable(string strategyId)
     {
         EnsureCoreIntact();
+        ThrowIfConflicts();
         var s = FindStrategy(strategyId) ?? throw new ArgumentException($"Нет стратегии {strategyId}");
         Service.Apply(WinwsArgs.Build(s, Paths));
         State.StrategyId = s.Id;
@@ -128,8 +156,7 @@ public sealed class Shell
     async Task<T> WithServicePausedAsync<T>(Func<Task<T>> work)
     {
         EnsureCoreIntact();
-        var foreign = Conflicts.Find(Paths);
-        if (foreign.Count > 0) throw new ConflictException(foreign);
+        ThrowIfConflicts();
 
         bool wasRunning = Service.State == SvcState.Running;
         if (wasRunning) Service.Stop();
@@ -168,3 +195,6 @@ public sealed class ConflictException(IReadOnlyList<Conflict> conflicts)
 {
     public IReadOnlyList<Conflict> Conflicts { get; } = conflicts;
 }
+
+/// <summary>Служба DpiShell по её настройкам в Windows. OurCore = false — служба с нашим именем запускает чужой файл.</summary>
+public sealed record ServiceInfo(SvcState State, string? ExePath, Strategy? Strategy, bool OurCore);

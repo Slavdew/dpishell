@@ -704,6 +704,31 @@ public sealed class MainViewModel : Observable
         catch (Exception e) { Message = Texts.Friendly(e); }
     }
 
+    // ---------- оформление ----------
+
+    /// <summary>"system" / "light" / "dark" — хранится в AppState, применяется сразу.</summary>
+    public string Theme
+    {
+        get => ThemeManager.Normalize(_shell.State.Theme);
+        set
+        {
+            value = ThemeManager.Normalize(value);
+            if (value == Theme) return;
+            _shell.State.Theme = value;
+            try { _shell.SaveState(); } catch (Exception e) { Message = Texts.Friendly(e); }
+            ThemeManager.Apply(value);
+            Raise();
+            Raise(nameof(ThemeAuto));
+            Raise(nameof(ThemeLight));
+            Raise(nameof(ThemeDark));
+        }
+    }
+
+    // Переключатели: снятие отметки (её снимает соседний) ничего не меняет.
+    public bool ThemeAuto { get => Theme == ThemeManager.Auto; set { if (value) Theme = ThemeManager.Auto; } }
+    public bool ThemeLight { get => Theme == ThemeManager.Light; set { if (value) Theme = ThemeManager.Light; } }
+    public bool ThemeDark { get => Theme == ThemeManager.Dark; set { if (value) Theme = ThemeManager.Dark; } }
+
     // ---------- автопроверка и запасные (ТЗ §9 п. 15) ----------
 
     /// <summary>Уведомление в трей (окно может быть скрыто).</summary>
