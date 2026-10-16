@@ -10,6 +10,7 @@ import * as st from 'dpishell.state';
 import * as sel from 'dpishell.select';
 import * as core from 'dpishell.core';
 import * as dg from 'dpishell.diag';
+import * as dns from 'dpishell.dns';
 
 const cmd = ARGV[0];
 
@@ -47,6 +48,10 @@ else if (cmd == 'check') {
 	unlink(l);
 }
 else if (cmd == 'watch') {
+	let dw = null;
+	try { dw = dns.watch(); } catch (x) {}
+	if (dw == 'dns_fallback') warn('dns_fallback', 'Защищённый DNS недоступен — временно работает DNS провайдера');
+	else if (dw == 'dns_back') warn('dns_fallback', null);
 	let s = st.settings();
 	if (!s.schedule.enabled || !s.enabled || st.job_running('select')) exit(0);
 	// Интервал выдерживаем сами: cron зовёт каждые 30 мин.
@@ -98,6 +103,24 @@ else if (cmd == 'core_install') {
 	if (!e && s.enabled && s.strategy && !st.write_zapret_config(s.strategy, s))
 		system('/etc/init.d/zapret enable; /etc/init.d/zapret restart >/dev/null 2>&1');
 	st.write_status_json();
+	unlink(l);
+}
+else if (cmd == 'dns_analyze' || cmd == 'dns_enable' || cmd == 'dns_restore') {
+	let l = lock('dns');
+	if (!l) exit(1);
+	let job = '/tmp/dpishell/dns_job.json';
+	st.write_atomic(job, sprintf('%J
+', { action: cmd, running: true }));
+	let e = null;
+	try {
+		if (cmd == 'dns_analyze') dns.analyze();
+		else if (cmd == 'dns_enable') { e = dns.enable(); if (!e) dns.analyze(); }
+		else e = dns.restore();
+	} catch (x) { e = `${x}`; }
+	st.write_atomic(job, sprintf('%J
+', { action: cmd, running: false, ok: !e, message: e ?? 'Готово', at: time() }));
+	let ds = st.read_json('/etc/dpishell/dns-status.json', {});
+	warn('dns_spoofed', ds.spoofed && dns.status().mode != 'doh' ? 'DNS провайдера подменяет адреса — приложения вне браузера могут не работать' : null);
 	unlink(l);
 }
 else if (cmd == 'site_check') {

@@ -178,8 +178,10 @@ function check_batch(items, opts) {
 	let cmds = [];
 	for (let i = 0; i < length(items); i++) {
 		let host = host_of(items[i].target.url);
-		let ip = null;
-		if (opts.use_doh !== false) {
+		let ip = items[i].ip ?? null;
+		if (ip)
+			items[i].dns = 'given';
+		else if (opts.use_doh !== false) {
 			let ips = doh_resolve(host, cache);
 			ip = ips[0];
 			items[i].dns = ip ? 'doh' : 'system';

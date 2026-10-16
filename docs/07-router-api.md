@@ -78,7 +78,7 @@
 
 **`report`** `{}` → `{ "text": "…" }` — то же, что «Сохранить отчёт» на странице.
 
-**`dns_status`** `{}` → `{ "mode": "provider" | "doh", "spoofed": true, "checked_at": "…", "servers": [ { "name": "Google", "doh_ok": true, "ms": 38 }, { "name": "Cloudflare", "doh_ok": true, "ms": 41 } ], "fallback_active": false }` — `fallback_active`: оба DoH пропали, временно работает DNS провайдера (06-router-spec §3.8).
+**`dns_status`** `{}` → `{ "mode": "provider" | "doh", "spoofed": true, "checked_at": "…", "servers": [ { "name": "Google", "doh_ok": true, "ms": 38 }, { "name": "Cloudflare", "doh_ok": true, "ms": 41 } ], "fallback_active": false }` — `job` — последнее DNS-задание: `{ "action": "dns_enable", "running": false, "ok": true, "message": "Готово" }` (установка пакета занимает 10–20 с, поэтому `dns_enable`/`dns_restore` фоновые, как подбор). `fallback_active`: оба DoH пропали, временно работает DNS провайдера (06-router-spec §3.8).
 
 ### 5.2 Действия
 
@@ -98,8 +98,8 @@
 | `lists_set` | `{ "name": "user-general", "lines": [ … ] }` | свои списки (домены по шаблону, до 5000 строк) | `{}` |
 | `strategies_user_set` | `{ "items": [ { "id": "u-…", "title": "…", "roles": { "google": "…" } } ] }` — `id` по шаблону `^u-[a-z0-9-]{1,48}$`, `title` до 80 символов; роли и значения — в той же записи, что `strategies.json` (§5.3) | загрузить найденные на ПК стратегии (§6); заменяет весь прежний набор из приложения | `{}` или `error: invalid` |
 | `dns_analyze` | `{}` | анализ DNS (06-router-spec §3.8), результат — в `dns_status` | `{ "started": true }` |
-| `dns_enable` | `{}` | включить защищённый DNS для всей сети, прежние настройки сохраняются | `{}` или `error` |
-| `dns_restore` | `{}` | вернуть DNS как было | `{}` |
+| `dns_enable` | `{}` | включить защищённый DNS для всей сети, прежние настройки сохраняются | `{ "started": true }` |
+| `dns_restore` | `{}` | вернуть DNS как было | `{ "started": true }` |
 | `conflict_stop` | `{ "name": "zapret2" }` (только имя из `diag.conflicts`) | остановить и отключить чужой обход | `{}` |
 | `core_install` | `{}` | загрузить ядро по манифесту | `{ "started": true }` |
 
@@ -163,3 +163,4 @@
 - 2026-10-17: §6 — запрет одновременной работы обходов ПК и роутера (двойная обработка пакетов).
 - 2026-10-17: `status.needs_tcp_timestamps`; §6 — ПК включает метки TCP, если стратегия роутера их требует.
 - 2026-10-17: режим `mode` (`all` по умолчанию на роутере / `lists`), `mode_set`, `site_check`, `lists_get exclude`; группа `control` в подборе (06-router-spec §3.4, §4.1).
+- 2026-10-17: `dns_enable`/`dns_restore` — фоновые (`{ "started": true }`), итог — `dns_status.job`; проверено в эмуляторе.

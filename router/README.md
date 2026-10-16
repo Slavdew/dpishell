@@ -16,4 +16,6 @@
 
 Также готово: `core_install` — установка ядра с роутера (наш zip, основной адрес → зеркало, хеши архива и nfqws, шаги install_easy без cron), замки заданий с PID (мёртвый замок не блокирует).
 
-Дальше: DNS (`dns_*`, https-dns-proxy по кнопке), `site_check`, `diag`/`report`/`conflict_stop`, Makefile пакетов и сборка apk, глубокий поиск. Страницы LuCI пишет отдельный агент — его заметки: scratchpad `router/luci-notes.md`.
+Также готово: `site_check` (адрес временно в nozapret), `diag`/`report`/`conflict_stop`, DNS (анализ подмены: NXDOMAIN/служебные адреса/проверка делом; https-dns-proxy по кнопке; возврат с перезапуском dnsmasq; временный откат при недоступности DoH).
+
+Дальше: Makefile пакетов и сборка apk (OpenWRT SDK), глубокий поиск, проверка на настоящем роутере. Страницы LuCI пишет отдельный агент — его заметки: scratchpad `router/luci-notes.md`.

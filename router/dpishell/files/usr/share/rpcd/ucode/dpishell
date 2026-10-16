@@ -7,6 +7,7 @@ import * as cat from 'dpishell.catalog';
 import * as st from 'dpishell.state';
 import * as core from 'dpishell.core';
 import * as dg from 'dpishell.diag';
+import * as dns from 'dpishell.dns';
 
 function err(code, text, field) {
 	let e = { code, text };
@@ -44,8 +45,9 @@ function warnings(s) {
 
 function jobs() {
 	let j = {};
-	for (let n in ['select', 'check', 'core_install', 'dns_analyze', 'site_check'])
+	for (let n in ['select', 'check', 'core_install', 'site_check'])
 		j[n] = st.job_running(n);
+	j.dns_analyze = st.job_running('dns');
 	return j;
 }
 
@@ -384,6 +386,24 @@ methods.site_check_result = {
 		return st.read_json('/tmp/dpishell/site_check.json', { running: false, url: null });
 	}
 };
+
+methods.dns_status = {
+	call: function() {
+		let r = dns.status();
+		r.job = st.read_json('/tmp/dpishell/dns_job.json', null);
+		return r;
+	}
+};
+
+for (let name in ['dns_analyze', 'dns_enable', 'dns_restore'])
+	methods[name] = ((n) => ({
+		call: function() {
+			let b = busy(); if (b) return b;
+			if (!st.job_running('dns'))
+				spawn(n);
+			return { started: true };
+		}
+	}))(name);
 
 // Методы, которые появятся с подбором, проверкой, DNS и диагностикой: пока отвечают «не готово».
 for (let name in ['check_now', 'select_start', 'select_cancel', 'select_progress', 'apply', 'dns_status', 'dns_analyze',
