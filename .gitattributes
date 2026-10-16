@@ -3,3 +3,6 @@
 *.sys binary
 *.dll binary
 *.exe binary
+
+# Файлы для роутера (sh, ucode, json): только LF, иначе скрипты на OpenWRT не запустятся
+router/** text eol=lf
