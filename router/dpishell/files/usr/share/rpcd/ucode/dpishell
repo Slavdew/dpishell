@@ -279,6 +279,68 @@ const methods = {
 	},
 };
 
+function spawn(args) {
+	// Фоном, без ожидания: rpcd-вызов должен вернуться сразу (07-router-api §4).
+	sh(`( /usr/libexec/dpishell/run ${args} >/dev/null 2>&1 & )`);
+}
+
+function q(s) { return `'${replace(`${s}`, "'", "'\\''")}'`; }
+
+const GROUPS = ['youtube', 'discord', 'user'];
+
+methods.select_start = {
+	args: { groups: [], mode: 'full', depth: 'main' },
+	call: function(req) {
+		let b = busy(); if (b) return b;
+		if (!st.core_installed()) return err('not_installed', 'Ядро обхода не установлено');
+		let a = req.args;
+		let groups = a.groups ?? GROUPS;
+		if (type(groups) != 'array' || !length(groups) || length(filter(groups, g => index(GROUPS, g) < 0)))
+			return err('invalid', 'Группы: youtube, discord, user', 'groups');
+		if (index(['full', 'quick'], a.mode ?? 'full') < 0) return err('invalid', 'Режим: full или quick', 'mode');
+		if (index(['main', 'deep'], a.depth ?? 'main') < 0) return err('invalid', 'Глубина: main или deep', 'depth');
+		if (a.depth == 'deep') return err('failed', 'Глубокий поиск ещё не реализован на роутере');
+		spawn(`select ${q(sprintf('%J', { groups, mode: a.mode ?? 'full', depth: 'main', started_by: 'app' }))}`);
+		return { started: true };
+	}
+};
+
+methods.select_progress = {
+	call: function() {
+		return st.read_json('/tmp/dpishell/select.json', { running: false, rows: [], best: null, applied: false, backups: [] });
+	}
+};
+
+methods.select_cancel = {
+	call: function() {
+		if (stat('/tmp/dpishell/select.lock'))
+			writefile('/tmp/dpishell/select.cancel', '1');
+		return {};
+	}
+};
+
+methods.apply = {
+	args: { id: 'id', backups: [] },
+	call: function(req) {
+		let r = methods.strategy_set.call({ args: { id: req.args.id } });
+		if (r.error) return r;
+		let bk = filter(req.args.backups ?? [], x => type(x) == 'string' && cat.find(st.catalogs(), x));
+		st.uci_set({ backups: slice(bk, 0, 3) });
+		return {};
+	}
+};
+
+methods.check_now = {
+	call: function() {
+		let b = busy(); if (b) return b;
+		let s = st.settings();
+		if (!s.enabled) return err('failed', 'Обход выключен — проверять нечего');
+		if (stat('/tmp/dpishell/check.lock')) return { started: true };
+		spawn('check app');
+		return { started: true };
+	}
+};
+
 // Методы, которые появятся с подбором, проверкой, DNS и диагностикой: пока отвечают «не готово».
 for (let name in ['check_now', 'select_start', 'select_cancel', 'select_progress', 'apply', 'dns_status', 'dns_analyze',
                   'dns_enable', 'dns_restore', 'site_check', 'site_check_result', 'diag', 'report', 'conflict_stop', 'core_install'])

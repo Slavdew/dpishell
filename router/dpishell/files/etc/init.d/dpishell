@@ -1,0 +1,57 @@
+#!/bin/sh /etc/rc.common
+# DpiShell: после загрузки — привести zapret к сохранённому выбору (перезагрузка посреди подбора оставила бы
+# в config проверяемую стратегию), status.json, проверка по таймеру через cron.
+
+START=95
+USE_PROCD=1
+
+CRON=/etc/crontabs/root
+CRON_LINE='*/30 * * * * /usr/libexec/dpishell/run watch'
+
+cron_set() {
+	touch "$CRON"
+	grep -v '/usr/libexec/dpishell/run watch' "$CRON" > "$CRON.dpishell" || true
+	[ "$1" = 1 ] && echo "$CRON_LINE" >> "$CRON.dpishell"
+	if ! cmp -s "$CRON" "$CRON.dpishell"; then
+		mv "$CRON.dpishell" "$CRON"
+		/etc/init.d/cron restart >/dev/null 2>&1
+	else
+		rm -f "$CRON.dpishell"
+	fi
+}
+
+restore_choice() {
+	ucode -e '
+		import * as st from "dpishell.state";
+		st.ensure_dirs();
+		let s = st.settings();
+		if (s.enabled && s.strategy && !st.write_zapret_config(s.strategy, s))
+			system("/etc/init.d/zapret restart >/dev/null 2>&1");
+		else if (!s.enabled)
+			system("/etc/init.d/zapret stop >/dev/null 2>&1");
+		st.write_status_json();
+	'
+}
+
+start_service() {
+	restore_choice
+	config_load dpishell
+	local sched
+	config_get sched main schedule_enabled 1
+	cron_set "$sched"
+}
+
+reload_service() {
+	config_load dpishell
+	local sched
+	config_get sched main schedule_enabled 1
+	cron_set "$sched"
+}
+
+stop_service() {
+	cron_set 0
+}
+
+service_triggers() {
+	procd_add_reload_trigger dpishell
+}

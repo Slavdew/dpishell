@@ -1,0 +1,88 @@
+#!/usr/bin/ucode -S
+// Фоновые задания DpiShell: подбор, проверка, проверка по таймеру.
+//   run select '<json args>'   — подбор (select_start)
+//   run check <manual|app>     — полная проверка текущей стратегии
+//   run watch                  — проверка по таймеру: запасные стратегии, автоподбор (06 §3.5)
+'use strict';
+
+import { writefile, readfile, stat, unlink } from 'fs';
+import * as st from 'dpishell.state';
+import * as sel from 'dpishell.select';
+
+const cmd = ARGV[0];
+
+function lock(name) {
+	let f = `/tmp/dpishell/${name}.lock`;
+	if (stat(f))
+		return null;
+	st.ensure_dirs();
+	writefile(f, `${time()}\n`);
+	return f;
+}
+
+function warn(code, text) {
+	let w = filter(st.read_json('/tmp/dpishell/warnings.json', []), x => x.code != code);
+	if (text)
+		push(w, { code, text });
+	st.write_atomic('/tmp/dpishell/warnings.json', sprintf('%J\n', w));
+}
+
+if (cmd == 'select') {
+	let l = lock('select');
+	if (!l) exit(1);
+	let args = {};
+	try { args = json(ARGV[1] ?? '{}'); } catch (e) {}
+	try { sel.select_run(args); } catch (e) { warn('select_failed', `Подбор прервался: ${e}`); }
+	unlink(l);
+}
+else if (cmd == 'check') {
+	if (stat('/tmp/dpishell/select.lock')) exit(1);
+	let l = lock('check');
+	if (!l) exit(1);
+	try { sel.check_run(ARGV[1] == 'manual' ? 'manual' : 'app', false); } catch (e) {}
+	unlink(l);
+}
+else if (cmd == 'watch') {
+	let s = st.settings();
+	if (!s.schedule.enabled || !s.enabled || stat('/tmp/dpishell/select.lock')) exit(0);
+	// Интервал выдерживаем сами: cron зовёт каждые 30 мин.
+	let last = st.read_json(`${st.P.etc}/last-check.json`, null);
+	if (last && time() - last.at < s.schedule.hours * 3600 - 120) exit(0);
+	let l = lock('check');
+	if (!l) exit(0);
+	let r = sel.check_run('timer', true);
+	unlink(l);
+	if (!r || r.fail_streak < 2) exit(0);
+	// Две неудачи подряд: следующая запасная (02-spec §9.15 — на роутере остаётся).
+	let backups = s.backups;
+	if (length(backups)) {
+		let next = backups[0];
+		s.strategy = next;
+		if (!st.write_zapret_config(next, s) && system('/etc/init.d/zapret restart >/dev/null 2>&1') == 0) {
+			st.uci_set({ strategy: next, backups: slice(backups, 1) });
+			st.write_atomic(`${st.P.etc}/fail-streak.json`, '0\n');
+			warn('switched_backup', `Стратегия перестала работать — включена запасная ${next}`);
+			st.write_status_json();
+		}
+		exit(0);
+	}
+	if (!s.schedule.auto_select) {
+		warn('switched_backup', null);
+		exit(0);
+	}
+	let lr = st.read_json(`${st.P.etc}/auto-select.json`, { at: 0 });
+	if (time() - lr.at < 6 * 3600) exit(0);
+	st.write_atomic(`${st.P.etc}/auto-select.json`, sprintf('%J\n', { at: time() }));
+	let ls = lock('select');
+	if (!ls) exit(0);
+	let p = sel.select_run({ mode: 'quick', depth: 'main', started_by: 'timer' });
+	unlink(ls);
+	if (p.applied)
+		warn('auto_selected', `Автоподбор включил ${p.best}`);
+	else
+		warn('auto_select_failed', 'Автоподбор не нашёл рабочую стратегию — оставлена прежняя');
+}
+else {
+	print('usage: run select|check|watch\n');
+	exit(2);
+}
