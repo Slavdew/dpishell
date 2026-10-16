@@ -33,8 +33,15 @@ public sealed class WinwsProcess : IDisposable
             RedirectStandardError = true,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
-        return new WinwsProcess(Process.Start(psi) ?? throw new InvalidOperationException("winws не запустился"));
+        var p = Process.Start(psi) ?? throw new InvalidOperationException("winws не запустился");
+        // Любой наш winws (подбор, режим без службы) завершается вместе с программой — даже при её аварийном выходе.
+        try { Job.Add(p); }
+        catch (InvalidOperationException) { if (!p.HasExited) p.Kill(); p.Dispose(); throw; }
+        return new WinwsProcess(p);
     }
+
+    static readonly Lazy<JobObject> LazyJob = new(() => new JobObject());
+    static JobObject Job => LazyJob.Value;
 
     /// <summary>Ждём, что winws открыл WinDivert и не упал: процесс жив заданное время.</summary>
     public async Task<bool> WaitReadyAsync(TimeSpan settle, CancellationToken ct = default)

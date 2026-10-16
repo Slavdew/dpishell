@@ -23,6 +23,8 @@ public sealed class AppState
     public string Theme { get; set; } = "system";
     /// <summary>Крестик окна: "tray" — свернуть в трей (по умолчанию), "exit" — закрыть программу. Служба обхода работает в обоих случаях.</summary>
     public string CloseAction { get; set; } = "tray";
+    /// <summary>"service" — служба Windows (с Windows, без окна); "process" — winws живёт, пока открыта программа.</summary>
+    public string RunMode { get; set; } = "service";
 
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 

@@ -132,12 +132,32 @@ public sealed class Shell
         return (stopped, comeBack);
     }
 
+    // ---------- режимы работы: служба Windows или процесс программы ----------
+
+    WinwsProcess? _proc;
+
+    public bool ServiceMode => State.RunMode != "process";
+
+    /// <summary>Обход сейчас работает — в своём режиме (служба запущена или наш процесс winws жив).</summary>
+    public bool IsActive => ServiceMode ? Service.State == SvcState.Running : _proc is { Alive: true };
+
     public void Enable(string strategyId)
     {
         EnsureCoreIntact();
         ThrowIfConflicts();
         var s = FindStrategy(strategyId) ?? throw new ArgumentException($"Нет стратегии {strategyId}");
-        Service.Apply(WinwsArgs.Build(s, Paths));
+        var args = WinwsArgs.Build(s, Paths);
+        if (ServiceMode)
+        {
+            StopProcess();
+            Service.Apply(args);
+        }
+        else
+        {
+            // Без службы: служба (если стояла) не должна стартовать с Windows и держать WinDivert.
+            if (Service.State != SvcState.NotInstalled) Service.Disable();
+            StartProcess(args);
+        }
         State.StrategyId = s.Id;
         State.Enabled = true;
         State.Save(Paths);
@@ -145,9 +165,48 @@ public sealed class Shell
 
     public void Disable()
     {
-        Service.Disable();
+        if (ServiceMode) Service.Disable(); else StopProcess();
         State.Enabled = false;
         State.Save(Paths);
+    }
+
+    /// <summary>Переключить режим. Обход был включён — продолжает работать в новом режиме на той же стратегии.</summary>
+    public void SetRunMode(bool service)
+    {
+        var mode = service ? "service" : "process";
+        if (State.RunMode == mode) return;
+        bool wasOn = State.Enabled && IsActive && State.StrategyId is not null;
+        if (ServiceMode) Service.Disable(); else StopProcess();
+        State.RunMode = mode;
+        State.Save(Paths);
+        if (wasOn) Enable(State.StrategyId!);
+    }
+
+    /// <summary>Режим без службы: при старте программы вернуть обход, если он был включён.</summary>
+    public void ResumeIfNeeded()
+    {
+        if (!ServiceMode && State.Enabled && State.StrategyId is { } id && !IsActive) Enable(id);
+    }
+
+    void StartProcess(IReadOnlyList<string> args)
+    {
+        StopProcess();
+        var p = WinwsProcess.Start(Paths, args);
+        // winws с ошибкой в параметрах или без доступа к WinDivert завершается сразу.
+        Thread.Sleep(1000);
+        if (!p.Alive)
+        {
+            var output = p.Output;
+            p.Dispose();
+            throw new InvalidOperationException("winws не запустился: " + (output.Length > 300 ? output[^300..] : output).Trim());
+        }
+        _proc = p;
+    }
+
+    void StopProcess()
+    {
+        _proc?.Dispose();
+        _proc = null;
     }
 
     /// <summary>Готовые стратегии + найденные глубоким поиском (user-strategies.json, та же проверка).</summary>
@@ -189,13 +248,19 @@ public sealed class Shell
         EnsureCoreIntact();
         ThrowIfConflicts();
 
-        bool wasRunning = Service.State == SvcState.Running;
-        if (wasRunning) Service.Stop();
+        bool serviceWasRunning = Service.State == SvcState.Running;
+        bool processWasRunning = _proc is { Alive: true };
+        if (serviceWasRunning) Service.Stop();
+        if (processWasRunning) StopProcess();
         try { return await work(); }
         finally
         {
-            if (wasRunning && State.Enabled && State.StrategyId is not null)
-                ServiceManager.Sc("start", ServiceManager.Name);
+            if (State.Enabled && State.StrategyId is { } id)
+            {
+                if (serviceWasRunning) ServiceManager.Sc("start", ServiceManager.Name);
+                if (processWasRunning && FindStrategy(id) is { } s)
+                    try { StartProcess(WinwsArgs.Build(s, Paths)); } catch (InvalidOperationException) { }
+            }
         }
     }
 
