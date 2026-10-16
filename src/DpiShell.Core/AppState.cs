@@ -21,6 +21,8 @@ public sealed class AppState
     public bool WatchGaveUp { get; set; }
     /// <summary>Оформление окна: "system" (как в Windows), "light" или "dark".</summary>
     public string Theme { get; set; } = "system";
+    /// <summary>Крестик окна: "tray" — свернуть в трей (по умолчанию), "exit" — закрыть программу. Служба обхода работает в обоих случаях.</summary>
+    public string CloseAction { get; set; } = "tray";
 
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 

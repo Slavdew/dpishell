@@ -61,10 +61,10 @@ public partial class MainWindow : Window
     {
         if (!_exiting)
         {
-            // Крестик — в трей: обход работает службой и без окна.
             e.Cancel = true;
-            Hide();
-            ShowTrayHintOnce();
+            // Крестик — по настройке: в трей (обход работает службой и без окна) или выход из программы.
+            if (_vm.CloseToTray) { Hide(); ShowTrayHintOnce(); }
+            else _ = ExitAsync();
         }
         base.OnClosing(e);
     }

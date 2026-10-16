@@ -15,7 +15,14 @@ public sealed partial class ServiceManager(AppPaths paths)
 
     public static (int Code, string Output) Sc(params string[] args)
     {
-        var psi = new ProcessStartInfo("sc.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        // sc пишет в кодировке консоли (cp866 на русской Windows) — иначе его сообщения об ошибках приходят кракозябрами.
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+        var oem = System.Text.Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
+        var psi = new ProcessStartInfo("sc.exe")
+        {
+            UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            StandardOutputEncoding = oem, StandardErrorEncoding = oem,
+        };
         foreach (var a in args) psi.ArgumentList.Add(a);
         using var p = Process.Start(psi)!;
         var o = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
@@ -27,23 +34,27 @@ public sealed partial class ServiceManager(AppPaths paths)
     {
         var (code, o) = Sc("query", name);
         if (code == 1060) return SvcState.NotInstalled;
+        // Подписи полей sc переводит («Состояние» на русской Windows), а коды состояний (RUNNING и т. п.) — нет.
         var m = StateRx().Match(o);
         if (!m.Success) return SvcState.Unknown;
         return m.Groups[1].Value switch
         {
-            "1" => SvcState.Stopped, "2" => SvcState.StartPending, "3" => SvcState.StopPending, "4" => SvcState.Running, _ => SvcState.Unknown,
+            "STOPPED" => SvcState.Stopped, "START_PENDING" => SvcState.StartPending, "STOP_PENDING" => SvcState.StopPending,
+            "RUNNING" => SvcState.Running, _ => SvcState.Unknown,
         };
     }
 
     public SvcState State => Query(Name);
 
-    /// <summary>Командная строка службы из её настроек (sc qc). Буфер с запасом: у служб zapret строка длинная.</summary>
+    /// <summary>Командная строка службы — из реестра (ImagePath): не зависит от языка Windows и длины строки, в отличие от вывода sc qc.</summary>
     public static string? QueryBinPath(string name)
     {
-        var (code, o) = Sc("qc", name, "16384");
-        if (code != 0) return null;
-        var m = BinPathRx().Match(o);
-        return m.Success ? m.Groups[1].Value.Trim() : null;
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Services\{name}");
+            return key?.GetValue("ImagePath", null, Microsoft.Win32.RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+        }
+        catch (Exception e) when (e is System.Security.SecurityException or UnauthorizedAccessException or IOException) { return null; }
     }
 
     /// <summary>Поставить (или перенастроить) службу на стратегию и запустить.</summary>
@@ -101,10 +112,7 @@ public sealed partial class ServiceManager(AppPaths paths)
         if (r.Code != 0) throw new InvalidOperationException($"Не удалось {what}: код {r.Code}. {r.Output.Trim()}");
     }
 
-    [GeneratedRegex(@"BINARY_PATH_NAME\s*:\s*(.+)")]
-    private static partial Regex BinPathRx();
-
-    [GeneratedRegex(@"STATE\s*:\s*(\d)")]
+    [GeneratedRegex(@":\s*\d+\s+(STOPPED|START_PENDING|STOP_PENDING|RUNNING|CONTINUE_PENDING|PAUSE_PENDING|PAUSED)\b")]
     private static partial Regex StateRx();
 }
 

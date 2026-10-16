@@ -246,7 +246,16 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,4">
-                                <Button DockPanel.Dock="Right" Content="Обновить" Style="{StaticResource LinkButton}" Command="{Binding RefreshDiagCmd}" VerticalAlignment="Top" />
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <TextBlock Text="{Binding DiagUpdated}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <Button Style="{StaticResource LinkButton}" Command="{Binding RefreshDiagCmd}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <!-- Значок «обновить» из системного шрифта Windows 10/11 (Segoe Fluent Icons / Segoe MDL2 Assets). -->
+                                            <TextBlock Text="&#xE72C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <TextBlock Text="{Binding RefreshButtonText}" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
                                 <TextBlock Text="Диагностика" Style="{StaticResource H1}" />
                             </DockPanel>
 
@@ -356,12 +365,19 @@
 
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="Оформление" Style="{StaticResource H2}" />
+                                    <TextBlock Text="Настройки" Style="{StaticResource H2}" />
+                                    <TextBlock Text="Оформление" Style="{StaticResource Hint}" Margin="0,4,0,2" />
                                     <WrapPanel>
                                         <RadioButton Content="Как в Windows" IsChecked="{Binding ThemeAuto}" Margin="0,3,24,3" />
                                         <RadioButton Content="Светлое" IsChecked="{Binding ThemeLight}" Margin="0,3,24,3" />
                                         <RadioButton Content="Тёмное" IsChecked="{Binding ThemeDark}" Margin="0,3,24,3" />
                                     </WrapPanel>
+                                    <TextBlock Text="При закрытии окна" Style="{StaticResource Hint}" Margin="0,12,0,2" />
+                                    <WrapPanel>
+                                        <RadioButton Content="Сворачивать в трей" IsChecked="{Binding CloseTray}" Margin="0,3,24,3" />
+                                        <RadioButton Content="Закрывать программу" IsChecked="{Binding CloseExit}" Margin="0,3,24,3" />
+                                    </WrapPanel>
+                                    <TextBlock Text="Обход работает и без окна: его выключает только кнопка «Выключить»." Style="{StaticResource Hint}" Margin="0,4,0,0" />
                                 </StackPanel>
                             </Border>
 

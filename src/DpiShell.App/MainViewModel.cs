@@ -48,7 +48,7 @@ public sealed class MainViewModel : Observable
 
         SaveTargetsCmd = new RelayCommand(SaveTargets);
 
-        RefreshDiagCmd = RelayCommand.Async(RefreshDiagAsync, () => !IsLoading);
+        RefreshDiagCmd = RelayCommand.Async(RefreshDiagAsync, () => !IsLoading && !DiagRefreshing);
         RepairCoreCmd = RelayCommand.Async(RepairCoreAsync, () => !Busy && !IsLoading);
         OpenLogsCmd = new RelayCommand(() => OpenFolder(_shell.Paths.Logs));
         OpenResultsCmd = new RelayCommand(() => OpenFolder(_shell.Paths.Results));
@@ -324,7 +324,7 @@ public sealed class MainViewModel : Observable
         await RefreshStatusAsync();
     });
 
-    Task ApplyAsync(string id) => Guard("Включаю…", async () =>
+    Task<bool> ApplyAsync(string id) => Guard("Включаю…", async () =>
     {
         await Task.Run(() => _shell.Enable(id));
         // Выбранная руками — первая в запасных, автопроверка начинает с неё.
@@ -453,6 +453,7 @@ public sealed class MainViewModel : Observable
     {
         if (Busy) return;
         if (TakeGroups() is not { } groups) return;
+        if (!ConfirmPauseIfRunning()) return;
 
         ResetResults();
         SelectProgressMax = Math.Max(1, _shell.Catalog.Strategies.Count);
@@ -484,6 +485,7 @@ public sealed class MainViewModel : Observable
             SelectProgressText = "";
             UpdateStatus();
         }
+        await AutoApplyAsync();
         await RefreshStatusAsync();
     }
 
@@ -500,6 +502,7 @@ public sealed class MainViewModel : Observable
     {
         if (Busy) return;
         if (TakeGroups() is not { } groups) return;
+        if (!ConfirmPauseIfRunning()) return;
         var baseId = _bestId ?? _shell.State.StrategyId;
 
         ResetResults();
@@ -547,6 +550,7 @@ public sealed class MainViewModel : Observable
             SelectProgressText = "";
             UpdateStatus();
         }
+        await AutoApplyAsync();
         await RefreshStatusAsync();
     }
 
@@ -575,6 +579,31 @@ public sealed class MainViewModel : Observable
         ShowReport(f);
         if (f.Best is { Strategy.Source: "search" } best) ResultText = "Найдена новая: " + best.Strategy.Title;
         if (stopped is not null) ResultHint = stopped + ". " + ResultHint;
+    }
+
+    /// <summary>Подбор при включённом обходе: служба на время проверки стоит, стратегии меняются — предупредить.</summary>
+    bool ConfirmPauseIfRunning()
+    {
+        if (!IsRunning) return true;
+        return MessageBox.Show(
+            "Обход сейчас включён. На время проверки он будет приостановлен, а стратегии будут меняться одна за другой — " +
+            "сайты, звонки и загрузки могут прерываться.\n\nПосле проверки обход включится на лучшей найденной стратегии. Продолжить?",
+            "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.Yes) == MessageBoxResult.Yes;
+    }
+
+    string? _autoApplyId;
+
+    /// <summary>После подбора/поиска: лучшая стратегия — в службу, обход работает на ней (ТЗ §9 п. 17).</summary>
+    async Task AutoApplyAsync()
+    {
+        if (_autoApplyId is not { } id) return;
+        _autoApplyId = null;
+        var title = StrategyTitle(id);
+        if (await ApplyAsync(id))
+        {
+            ResultText = $"Применена: {title} — обход работает.";
+            Message = ResultText;
+        }
     }
 
     void SetBest(string? id)
@@ -612,6 +641,8 @@ public sealed class MainViewModel : Observable
         }
         SetBest(best.Strategy.Id);
         ResultText = "Подходит: " + best.Strategy.Title;
+        // Подбор дошёл до конца — лучшая сразу ставится в службу (после выхода из Guard, см. AutoApplyAsync).
+        if (!r.Cancelled) _autoApplyId = best.Strategy.Id;
         var notes = new List<string>();
         if (!best.Perfect) notes.Add($"работают {best.GroupsPassed} из {best.GroupsTotal} групп");
         if (r.Cancelled) notes.Add("подбор остановлен, проверены не все стратегии");
@@ -673,14 +704,28 @@ public sealed class MainViewModel : Observable
     public ICommand OpenResultsCmd { get; }
     public ICommand RemoveServiceCmd { get; }
 
+    bool _diagRefreshing;
+    /// <summary>Идёт обновление «Диагностики» — кнопка показывает «Обновляю…» и не нажимается.</summary>
+    public bool DiagRefreshing { get => _diagRefreshing; private set { if (Set(ref _diagRefreshing, value)) { Raise(nameof(RefreshButtonText)); CommandManager.InvalidateRequerySuggested(); } } }
+    public string RefreshButtonText => DiagRefreshing ? "Обновляю…" : "Обновить";
+
+    string _diagUpdated = "";
+    public string DiagUpdated { get => _diagUpdated; private set => Set(ref _diagUpdated, value); }
+
     public async Task RefreshDiagAsync()
     {
+        if (DiagRefreshing) return;
+        DiagRefreshing = true;
         try
         {
-            var (svc, drv, core, conflicts, vpn) = await Task.Run(() => (
-                _shell.Service.State, ServiceManager.Query("WinDivert"), _shell.Installer.Check(),
-                Conflicts.Find(_shell.Paths), Conflicts.ActiveVpnAdapters()));
-            ServiceText = Texts.Svc(svc) + (_shell.State.StrategyId is { } id ? $" (стратегия: {StrategyTitle(id)})" : "");
+            var (info, drv, core, conflicts, vpn) = await Task.Run(() => (
+                _shell.InspectService(), ServiceManager.Query("WinDivert"), _shell.Installer.Check(),
+                Conflicts.Find(_shell.Paths, _shell.AllStrategies), Conflicts.ActiveVpnAdapters()));
+            var svc = info.State;
+            // Стратегию показываем ту, что реально стоит в службе Windows; чужой файл в службе — отдельно.
+            ServiceText = Texts.Svc(svc)
+                + (info.Strategy is { } st ? $" (стратегия: {st.Title})" : _shell.State.StrategyId is { } id && svc != SvcState.NotInstalled ? $" (стратегия: {StrategyTitle(id)})" : "")
+                + (svc != SvcState.NotInstalled && !info.OurCore ? $" — запускает чужой файл: {info.ExePath}" : "");
             DriverText = Texts.Svc(drv);
             CoreBroken = core.State != CoreState.Ok;
             CoreText = core.State switch
@@ -692,7 +737,7 @@ public sealed class MainViewModel : Observable
             if (core.ExtraFiles.Count > 0) CoreText += $"; лишние файлы: {string.Join(", ", core.ExtraFiles)}";
             ConflictList.Clear();
             foreach (var c in conflicts)
-                ConflictList.Add(c.Kind == "service" ? $"Служба {c.Name} ({c.Detail})" : $"Программа {c.Name} ({c.Detail})");
+                ConflictList.Add($"{c.Name}. {c.Detail}");
             VpnList.Clear();
             foreach (var v in vpn) VpnList.Add(v);
             _svc = svc;
@@ -700,8 +745,10 @@ public sealed class MainViewModel : Observable
             UpdateStatus();
             RefreshWatchText();
             if (DnsRows.Count == 0) _ = CheckDnsAsync();
+            DiagUpdated = $"обновлено в {DateTime.Now:HH:mm:ss}";
         }
         catch (Exception e) { Message = Texts.Friendly(e); }
+        finally { DiagRefreshing = false; }
     }
 
     // ---------- оформление ----------
@@ -728,6 +775,18 @@ public sealed class MainViewModel : Observable
     public bool ThemeAuto { get => Theme == ThemeManager.Auto; set { if (value) Theme = ThemeManager.Auto; } }
     public bool ThemeLight { get => Theme == ThemeManager.Light; set { if (value) Theme = ThemeManager.Light; } }
     public bool ThemeDark { get => Theme == ThemeManager.Dark; set { if (value) Theme = ThemeManager.Dark; } }
+
+    /// <summary>Крестик сворачивает в трей (иначе — закрывает программу; служба обхода работает в обоих случаях).</summary>
+    public bool CloseToTray => _shell.State.CloseAction != "exit";
+    public bool CloseTray { get => CloseToTray; set { if (value) SetCloseAction("tray"); } }
+    public bool CloseExit { get => !CloseToTray; set { if (value) SetCloseAction("exit"); } }
+    void SetCloseAction(string a)
+    {
+        if (_shell.State.CloseAction == a) return;
+        _shell.State.CloseAction = a;
+        _shell.SaveState();
+        Raise(nameof(CloseTray)); Raise(nameof(CloseExit));
+    }
 
     // ---------- автопроверка и запасные (ТЗ §9 п. 15) ----------
 
