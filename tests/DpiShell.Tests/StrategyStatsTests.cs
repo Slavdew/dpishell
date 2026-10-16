@@ -27,6 +27,8 @@ public sealed class StrategyStatsTests
         Assert.Equal(1.0, stats["a"]);
         Assert.Equal(0.0, stats["b"]);
         Assert.True(stats["c"] < 0.5);   // свежая неудача весит больше старого успеха
+        var d = StrategyStats.LoadDetailed(p);
+        Assert.Equal(new StrategyStats.Stat(stats["c"], 2, 1), d["c"]);   // подпись: «открыла всё в 1 из 2 подборов»
 
         var order = StrategyStats.Order([S("b"), S("new1"), S("c"), S("a"), S("new2")], stats).Select(s => s.Id);
         Assert.Equal(["a", "new1", "new2", "c", "b"], order);

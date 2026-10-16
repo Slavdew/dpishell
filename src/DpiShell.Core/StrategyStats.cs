@@ -11,10 +11,16 @@ public static class StrategyStats
     const int Runs = 10;
     const double Unknown = 0.5;   // новые стратегии — после проверенно рабочих, но до проверенно нерабочих
 
-    public static IReadOnlyDictionary<string, double> Load(AppPaths p)
+    /// <summary>Score — взвешенная доля групп (для порядка); Runs — в скольких подборах участвовала; FullOk — во скольких открыла всё.</summary>
+    public sealed record Stat(double Score, int Runs, int FullOk);
+
+    public static IReadOnlyDictionary<string, double> Load(AppPaths p) =>
+        LoadDetailed(p).ToDictionary(kv => kv.Key, kv => kv.Value.Score);
+
+    public static IReadOnlyDictionary<string, Stat> LoadDetailed(AppPaths p)
     {
-        var sum = new Dictionary<string, (double W, double V)>();
-        if (!Directory.Exists(p.Results)) return new Dictionary<string, double>();
+        var sum = new Dictionary<string, (double W, double V, int Runs, int Full)>();
+        if (!Directory.Exists(p.Results)) return new Dictionary<string, Stat>();
         var files = Directory.GetFiles(p.Results, "*.json").OrderByDescending(f => f, StringComparer.Ordinal).Take(Runs).ToList();
         for (int i = 0; i < files.Count; i++)
         {
@@ -28,14 +34,15 @@ public static class StrategyStats
                     var id = s.GetProperty("Id").GetString();
                     var total = s.GetProperty("GroupsTotal").GetInt32();
                     if (id is null || total == 0 || s.TryGetProperty("Error", out var e) && e.ValueKind == JsonValueKind.String) continue;
-                    var share = (double)s.GetProperty("GroupsPassed").GetInt32() / total;
-                    var (w, v) = sum.GetValueOrDefault(id);
-                    sum[id] = (w + weight, v + share * weight);
+                    var passed = s.GetProperty("GroupsPassed").GetInt32();
+                    var share = (double)passed / total;
+                    var (w, v, runs, full) = sum.GetValueOrDefault(id);
+                    sum[id] = (w + weight, v + share * weight, runs + 1, full + (passed == total ? 1 : 0));
                 }
             }
             catch (Exception ex) when (ex is JsonException or IOException or KeyNotFoundException or InvalidOperationException) { }
         }
-        return sum.ToDictionary(kv => kv.Key, kv => kv.Value.V / kv.Value.W);
+        return sum.ToDictionary(kv => kv.Key, kv => new Stat(kv.Value.V / kv.Value.W, kv.Value.Runs, kv.Value.Full));
     }
 
     /// <summary>Порядок проверки: по статистике, при равенстве — исходный порядок (сначала готовые, потом найденные).</summary>

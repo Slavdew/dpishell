@@ -233,12 +233,13 @@ public sealed class MainViewModel : Observable
     /// <summary>Список для выпадающего меню: готовые и найденные, с долей удачных подборов из статистики.</summary>
     public async Task ReloadChoicesAsync()
     {
-        var (all, stats) = await Task.Run(() => (_shell.AllStrategies, StrategyStats.Load(_shell.Paths)));
+        var (all, stats) = await Task.Run(() => (_shell.AllStrategies, StrategyStats.LoadDetailed(_shell.Paths)));
         StrategyChoices.Clear();
-        foreach (var s in StrategyStats.Order(all, stats))
+        foreach (var s in StrategyStats.Order(all, stats.ToDictionary(kv => kv.Key, kv => kv.Value.Score)))
         {
-            var note = s.Source == "search" ? " · найдена" : "";
-            if (stats.TryGetValue(s.Id, out var v)) note += $" · работала в {v:P0}";
+            var note = s.Source == "search" ? " · найдена поиском" : "";
+            // Не «процент сайтов», а сколько раз в прошлых подборах открыла всё отмеченное.
+            if (stats.TryGetValue(s.Id, out var st)) note += $" · открыла всё в {st.FullOk} из {st.Runs} подборов";
             StrategyChoices.Add(new(s.Id, s.Title + note));
         }
         _chosen = _shell.State.StrategyId;
