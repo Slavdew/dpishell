@@ -1,0 +1,46 @@
+# Сборка пакетов роутера (dpishell, luci-app-dpishell) официальным OpenWRT SDK.
+# Пакеты не зависят от архитектуры (PKGARCH:=all) — один SDK x86-64 собирает их для любого роутера, включая роутер.
+name: router-packages
+
+on:
+  push:
+    paths: [ 'router/**', 'data/**', '.github/workflows/router.yml' ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: openwrt/sdk:x86-64-v25.12.5
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Пакеты в дерево SDK, данные из data/
+        run: |
+          SDK=/builder
+          rm -rf $SDK/package/dpishell $SDK/package/luci-app-dpishell
+          cp -r router/dpishell router/luci-app-dpishell $SDK/package/
+          D=$SDK/package/dpishell/files/usr/share/dpishell
+          mkdir -p $D/lists $D/fake
+          cp data/strategies.json data/targets.json $D/
+          cp data/lists/*.txt $D/lists/
+          cp data/fake/*.bin $D/fake/
+
+      - name: Сборка
+        working-directory: /builder
+        env:
+          FORCE_UNSAFE_CONFIGURE: 1
+        run: |
+          make defconfig >/dev/null
+          make package/dpishell/compile V=s
+          make package/luci-app-dpishell/compile V=s
+          mkdir -p $GITHUB_WORKSPACE/out
+          find bin -name '*dpishell*.apk' -exec cp {} $GITHUB_WORKSPACE/out/ \;
+          ls -la $GITHUB_WORKSPACE/out
+          cd $GITHUB_WORKSPACE/out && sha256sum *.apk > sha256sums.txt && cat sha256sums.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: router-packages
+          path: out/
