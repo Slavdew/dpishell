@@ -5,6 +5,7 @@
 import { readfile, writefile, stat, popen } from 'fs';
 import * as cat from 'dpishell.catalog';
 import * as st from 'dpishell.state';
+import * as core from 'dpishell.core';
 
 function err(code, text, field) {
 	let e = { code, text };
@@ -76,7 +77,7 @@ const methods = {
 			let strat = s.strategy ? cat.find(st.catalogs(), s.strategy) : null;
 			return {
 				api: st.API, version: st.VERSION, engine: 'zapret1',
-				core: { version: 'v72.13', installed: st.core_installed(), hash_ok: st.core_installed() },
+				core: { version: 'v72.13', installed: st.core_installed(), hash_ok: st.core_installed() && core.verify() },
 				enabled: s.enabled, mode: s.mode, strategy: s.strategy, backups: s.backups,
 				needs_tcp_timestamps: strat ? cat.uses_ts(strat) : false,
 				last_check: lc, fail_streak: st.read_json(`${st.P.etc}/fail-streak.json`, 0),
@@ -337,6 +338,16 @@ methods.check_now = {
 		if (!s.enabled) return err('failed', 'Обход выключен — проверять нечего');
 		if (stat('/tmp/dpishell/check.lock')) return { started: true };
 		spawn('check app');
+		return { started: true };
+	}
+};
+
+methods.core_install = {
+	call: function() {
+		let b = busy(); if (b) return b;
+		if (!core.arch()) return err('failed', 'Архитектура роутера не поддерживается');
+		if (!stat('/tmp/dpishell/core_install.lock'))
+			spawn('core_install');
 		return { started: true };
 	}
 };

@@ -82,7 +82,22 @@ else if (cmd == 'watch') {
 	else
 		warn('auto_select_failed', 'Автоподбор не нашёл рабочую стратегию — оставлена прежняя');
 }
+else if (cmd == 'core_install') {
+	let l = lock('core_install');
+	if (!l) exit(1);
+	let core = require('dpishell.core');
+	let e = null;
+	try { e = core.install(msg => st.write_atomic('/tmp/dpishell/core_install.json', sprintf('%J\n', { running: true, message: msg }))); }
+	catch (x) { e = `${x}`; }
+	st.write_atomic('/tmp/dpishell/core_install.json', sprintf('%J\n', { running: false, ok: !e, message: e ?? 'Ядро установлено' }));
+	warn('core_install_failed', e);
+	let s = st.settings();
+	if (!e && s.enabled && s.strategy && !st.write_zapret_config(s.strategy, s))
+		system('/etc/init.d/zapret enable; /etc/init.d/zapret restart >/dev/null 2>&1');
+	st.write_status_json();
+	unlink(l);
+}
 else {
-	print('usage: run select|check|watch\n');
+	print('usage: run select|check|watch|core_install\n');
 	exit(2);
 }

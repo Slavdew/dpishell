@@ -1,0 +1,28 @@
+{
+  "_comment": "Ядро для роутера: тот же zip, что data/core.json Windows-версии; хеши nfqws по архитектурам — из этого zip (router/tools/core-hashes). Кандидат в раздел linux общего core.json.",
+  "version": "v72.13",
+  "zip_url": "https://github.com/bol-van/zapret/releases/download/v72.13/zapret-v72.13.zip",
+  "mirror_urls": [
+    "https://github.com/Slavdew/zapret/releases/download/v72.13/zapret-v72.13.zip"
+  ],
+  "zip_sha256": "c493e33a0dc4eba23a8686efdaba55f59755ad6ade3564aebd9d13f4c65e2e0c",
+  "zip_dir": "zapret-v72.13/",
+  "nfqws": {
+    "mips64": "cf5a9b6d28cb9a81fd04d0280ff5d9aaa34f0a2c7807502ce567cc8638d992be",
+    "arm64": "75fc3d6352eb9ebf510dfa470797c5ea079c475755ae3c0a79b1e9aaaf0c37a6",
+    "mipsel": "71b558ddbfaea3a2ca7484cb95ca4fa6dd5b8785750ed7e07c677af4231294aa",
+    "ppc": "c4e828515eee9582a49b1e829e73b7a1370b456b4d33a85ece0ee68595efe5fc",
+    "x86": "24519298173a96935508d8f60263c62a6ad5f0a0a7d7e9702fd612e52355e7d1",
+    "arm": "a6281e65fdd74f1d72be2b6b86c4b8c068c275fd3ae35abe520921fb551d3058",
+    "lexra": "1e54365bde5f73a11cfb942dafa113a312dbf46cb0e0fc8db0eb8cd94f633ca7",
+    "x86_64": "f34615964d7321650197cd69d3f7cbfdaabe8118b5a0d57c6e41dccdff658999",
+    "mips": "f385d610da994c9473263d2df187fcfdd19a1b7b254937b5aa3c983be239db83"
+  },
+  "extract": [
+    "common/",
+    "init.d/openwrt/",
+    "files/fake/",
+    "ipset/",
+    "config.default"
+  ]
+}
