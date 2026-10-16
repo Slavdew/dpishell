@@ -37,6 +37,7 @@ public sealed class Shell
     public async Task<CoreCheck> PrepareAsync(IProgress<string>? log = null, CancellationToken ct = default)
     {
         Data.Seed();
+        if (IsAdmin()) Paths.Harden();   // свои адреса и ядро — только системе и администраторам
         var check = Installer.Check();
         if (check.State == CoreState.Missing)
         {
