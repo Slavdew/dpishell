@@ -1,0 +1,18 @@
+{
+	"dpishell": {
+		"description": "DpiShell: управление обходом DPI (только объект dpishell, без exec и записи файлов)",
+		"read": {
+			"ubus": {
+				"dpishell": [ "status", "strategies", "select_progress", "targets_get", "lists_get", "diag", "report",
+				              "dns_status", "site_check_result" ]
+			}
+		},
+		"write": {
+			"ubus": {
+				"dpishell": [ "enable", "disable", "strategy_set", "mode_set", "check_now", "select_start", "select_cancel", "apply",
+				              "schedule_set", "targets_set", "lists_set", "strategies_user_set", "conflict_stop", "core_install",
+				              "dns_analyze", "dns_enable", "dns_restore", "site_check" ]
+			}
+		}
+	}
+}

@@ -1,0 +1,287 @@
+// ubus-объект dpishell: методы договора docs/07-router-api.md. Страница LuCI и Windows-приложение вызывают одно и то же.
+// Ни один метод не принимает командную строку или путь: всё проверяется здесь.
+'use strict';
+
+import { readfile, writefile, stat, popen } from 'fs';
+import * as cat from 'dpishell.catalog';
+import * as st from 'dpishell.state';
+
+function err(code, text, field) {
+	let e = { code, text };
+	if (field)
+		e.field = field;
+	return { error: e };
+}
+
+function busy() {
+	return stat(`${st.P.run}/select.lock`) ? err('busy', 'Идёт подбор') : null;
+}
+
+function sh(cmd) {
+	let p = popen(`${cmd} 2>&1`);
+	let out = p ? p.read('all') : '';
+	let rc = p ? p.close() : -1;
+	return { rc, out };
+}
+
+function zapret(action) {
+	if (!st.core_installed())
+		return err('not_installed', 'Ядро обхода не установлено');
+	let r = sh(`/etc/init.d/zapret ${action}`);
+	return r.rc == 0 ? null : err('failed', `zapret ${action}: ${trim(r.out)}`);
+}
+
+function warnings(s) {
+	let w = [];
+	if (!st.core_installed())
+		push(w, { code: 'core_missing', text: 'Ядро обхода не установлено' });
+	for (let x in st.read_json(`${st.P.run}/warnings.json`, []))
+		push(w, x);
+	return w;
+}
+
+function jobs() {
+	let j = {};
+	for (let n in ['select', 'check', 'core_install', 'dns_analyze', 'site_check'])
+		j[n] = !!stat(`${st.P.run}/${n}.lock`);
+	return j;
+}
+
+function strategy_list() {
+	let stats = st.read_json(`${st.P.etc}/stats.json`, {});
+	let items = [];
+	for (let c in st.catalogs())
+		for (let s in c.strategies)
+			push(items, {
+				id: s.id, title: s.title ?? s.id, source: (s.source == 'user' || index(s.id, 'u-') == 0) ? 'user' : 'catalog',
+				runs: stats[s.id]?.runs ?? 0, passed: stats[s.id]?.passed ?? 0,
+			});
+	// Порядок — по статистике (02-spec §9.16): доля удачных, затем число прогонов.
+	return sort(items, (a, b) => {
+		let ra = a.runs ? a.passed / a.runs : 0.5, rb = b.runs ? b.passed / b.runs : 0.5;
+		return ra != rb ? (rb - ra) : (b.runs - a.runs);
+	});
+}
+
+function lines_of(v) {
+	return type(v) == 'array' ? v : null;
+}
+
+const LIST_LIMIT = 5000;
+
+const methods = {
+	status: {
+		call: function() {
+			let s = st.settings(), lc = st.last_check();
+			let strat = s.strategy ? cat.find(st.catalogs(), s.strategy) : null;
+			return {
+				api: st.API, version: st.VERSION, engine: 'zapret1',
+				core: { version: 'v72.13', installed: st.core_installed(), hash_ok: st.core_installed() },
+				enabled: s.enabled, mode: s.mode, strategy: s.strategy, backups: s.backups,
+				needs_tcp_timestamps: strat ? cat.uses_ts(strat) : false,
+				last_check: lc, fail_streak: st.read_json(`${st.P.etc}/fail-streak.json`, 0),
+				schedule: s.schedule, jobs: jobs(), warnings: warnings(s),
+			};
+		}
+	},
+
+	strategies: {
+		call: function() {
+			return { catalog_version: st.catalog().version, items: strategy_list() };
+		}
+	},
+
+	enable: {
+		call: function() {
+			let b = busy(); if (b) return b;
+			let s = st.settings();
+			if (!s.strategy) {
+				// Без стратегии — лучшая по статистике (06 §3.2); подбор без статистики — в select.uc.
+				let best = strategy_list()[0];
+				if (!best?.runs)
+					return err('failed', 'Стратегия не выбрана и подборов ещё не было — запустите подбор');
+				s.strategy = best.id;
+				st.uci_set({ strategy: best.id });
+			}
+			let e = st.write_zapret_config(s.strategy, s);
+			if (e) return err('failed', e);
+			let z = zapret('enable') ?? zapret('restart');
+			if (z) return z;
+			st.uci_set({ enabled: 1 });
+			st.write_status_json();
+			return {};
+		}
+	},
+
+	disable: {
+		call: function() {
+			let b = busy(); if (b) return b;
+			if (st.core_installed()) {
+				sh('/etc/init.d/zapret stop');
+				sh('/etc/init.d/zapret disable');
+			}
+			st.uci_set({ enabled: 0 });
+			st.write_status_json();
+			return {};
+		}
+	},
+
+	strategy_set: {
+		args: { id: 'id' },
+		call: function(req) {
+			let b = busy(); if (b) return b;
+			let id = req.args.id;
+			if (type(id) != 'string' || !cat.find(st.catalogs(), id))
+				return err('invalid', 'Нет такой стратегии', 'id');
+			let s = st.settings();
+			s.strategy = id;
+			if (s.enabled) {
+				let e = st.write_zapret_config(id, s);
+				if (e) return err('failed', e);
+				let z = zapret('restart');
+				if (z) return z;
+			}
+			st.uci_set({ strategy: id });
+			st.write_status_json();
+			return {};
+		}
+	},
+
+	mode_set: {
+		args: { mode: 'mode' },
+		call: function(req) {
+			let b = busy(); if (b) return b;
+			let m = req.args.mode;
+			if (index(st.MODES, m) < 0)
+				return err('invalid', 'Режим: all или lists', 'mode');
+			let s = st.settings();
+			s.mode = m;
+			st.uci_set({ mode: m });
+			if (s.enabled && s.strategy) {
+				let e = st.write_zapret_config(s.strategy, s);
+				if (e) return err('failed', e);
+				let z = zapret('restart');
+				if (z) return z;
+			}
+			// Полная проверка с контрольной группой после смены режима — check.uc (06 §3.4).
+			return { started: false };
+		}
+	},
+
+	schedule_set: {
+		args: { enabled: true, hours: 1, auto_select: false },
+		call: function(req) {
+			let a = req.args;
+			if (type(a.enabled) != 'bool')
+				return err('invalid', 'enabled: true/false', 'enabled');
+			if (index(st.HOURS, a.hours) < 0)
+				return err('invalid', 'Интервал: 0.5, 1, 3, 6, 12 или 24 ч', 'hours');
+			if (a.auto_select != null && type(a.auto_select) != 'bool')
+				return err('invalid', 'auto_select: true/false', 'auto_select');
+			st.uci_set({ schedule_enabled: a.enabled ? 1 : 0, schedule_hours: a.hours, auto_select: a.auto_select ? 1 : 0 });
+			sh('/etc/init.d/dpishell reload');
+			return {};
+		}
+	},
+
+	targets_get: {
+		call: function() {
+			return { items: st.read_json(`${st.P.etc}/user-targets.json`, []) };
+		}
+	},
+
+	targets_set: {
+		args: { items: [] },
+		call: function(req) {
+			let items = lines_of(req.args.items);
+			if (!items)
+				return err('invalid', 'items: список', 'items');
+			if (length(items) > 50)
+				return err('invalid', 'Не больше 50 адресов', 'items');
+			let out = [];
+			for (let i = 0; i < length(items); i++) {
+				let it = items[i], url = it?.url;
+				if (type(url) != 'string' || !match(url, /^https?:\/\/[a-z0-9.-]+(:[0-9]{1,5})?(\/[A-Za-z0-9._~%!$&'()*+,;=:@\/?-]*)?$/) || length(url) > 300)
+					return err('invalid', 'Адрес вида https://example.com/', `items[${i}].url`);
+				push(out, { url, important: it.important === true });
+			}
+			st.ensure_dirs();
+			return st.write_atomic(`${st.P.etc}/user-targets.json`, sprintf('%J\n', out)) ? {} : err('failed', 'Не удалось сохранить');
+		}
+	},
+
+	lists_get: {
+		args: { name: 'name' },
+		call: function(req) {
+			let n = req.args.name;
+			let editable = index(st.USER_LISTS, n) >= 0;
+			if (!editable && n != 'exclude')
+				return err('invalid', 'Нет такого списка', 'name');
+			let path = editable ? `${st.P.lists}/${n}.txt` : `${st.P.share}/lists/exclude.txt`;
+			let text = readfile(path) ?? '';
+			return { lines: filter(split(text, '\n'), l => length(trim(l)) > 0), editable };
+		}
+	},
+
+	lists_set: {
+		args: { name: 'name', lines: [] },
+		call: function(req) {
+			let n = req.args.name, lines = lines_of(req.args.lines);
+			if (index(st.USER_LISTS, n) < 0)
+				return err('invalid', 'Этот список менять нельзя', 'name');
+			if (!lines || length(lines) > LIST_LIMIT)
+				return err('invalid', `Список строк, не больше ${LIST_LIMIT}`, 'lines');
+			let ipset = index(n, 'ipset') >= 0;
+			let out = [];
+			for (let i = 0; i < length(lines); i++) {
+				let l = lc(trim(`${lines[i]}`));
+				if (!length(l))
+					continue;
+				if (!(ipset ? st.valid_subnet_line(l) : st.valid_domain_line(l)))
+					return err('invalid', ipset ? 'Подсеть вида 1.2.3.0/24' : 'Домен вида example.com', `lines[${i}]`);
+				push(out, l);
+			}
+			st.ensure_dirs();
+			if (!st.write_atomic(`${st.P.lists}/${n}.txt`, join('\n', out) + (length(out) ? '\n' : '')))
+				return err('failed', 'Не удалось сохранить');
+			return {};   // nfqws перечитывает списки сам
+		}
+	},
+
+	strategies_user_set: {
+		args: { items: [] },
+		call: function(req) {
+			let items = lines_of(req.args.items);
+			if (!items || length(items) > 50)
+				return err('invalid', 'items: список, не больше 50', 'items');
+			let r = st.roles(), out = [];
+			for (let i = 0; i < length(items); i++) {
+				let it = items[i];
+				if (type(it?.id) != 'string' || !match(it.id, /^u-[a-z0-9-]{1,48}$/))
+					return err('invalid', 'id вида u-…', `items[${i}].id`);
+				if (it.title != null && (type(it.title) != 'string' || length(it.title) > 80))
+					return err('invalid', 'Название до 80 символов', `items[${i}].title`);
+				let e = cat.validate({ id: it.id, roles: it.roles }, r, `items[${i}]`);
+				if (e) {
+					let colon = index(e, ': ');
+					return err('invalid', substr(e, colon + 2), substr(e, 0, colon));
+				}
+				// Файлы фейков должны быть у роутера.
+				for (let role in it.roles)
+					for (let m in match(it.roles[role], /\{fake\}\/[A-Za-z0-9_.-]+\.bin/g) ?? [])
+						if (!stat(`${st.P.fake}/${substr(m[0], 7)}`))
+							return err('invalid', `Нет файла ${substr(m[0], 7)}`, `items[${i}].roles.${role}`);
+				push(out, { id: it.id, title: it.title ?? it.id, source: 'user', roles: it.roles });
+			}
+			st.ensure_dirs();
+			return st.write_atomic(`${st.P.etc}/user-strategies.json`, sprintf('%J\n', { strategies: out })) ? {} : err('failed', 'Не удалось сохранить');
+		}
+	},
+};
+
+// Методы, которые появятся с подбором, проверкой, DNS и диагностикой: пока отвечают «не готово».
+for (let name in ['check_now', 'select_start', 'select_cancel', 'select_progress', 'apply', 'dns_status', 'dns_analyze',
+                  'dns_enable', 'dns_restore', 'site_check', 'site_check_result', 'diag', 'report', 'conflict_stop', 'core_install'])
+	methods[name] ??= { call: function() { return err('failed', 'Ещё не реализовано в этой версии пакета'); } };
+
+return { dpishell: methods };
