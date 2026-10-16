@@ -197,7 +197,8 @@ function eval_strategy(strat, groups, items, cache, s, ts_was) {
 			if (better(sc2, sc) && sc2.group_share > sc.group_share) { sc = sc2; row.needs_ts = true; }
 		}
 	}
-	return { ...row, group_share: sc.group_share, target_share: sc.target_share, avg_s: sc.avg_s, error: sc.error, perfect: sc.perfect };
+	// avg_s 99 — внутренняя заглушка «ничего не открылось» для сравнения; в таблицу — null (прочерк).
+	return { ...row, group_share: sc.group_share, target_share: sc.target_share, avg_s: sc.target_share > 0 ? sc.avg_s : null, error: sc.error, perfect: sc.perfect };
 }
 
 // Без обхода: что открывается и так — не оцениваем; контрольные — оставляем только открывающиеся.

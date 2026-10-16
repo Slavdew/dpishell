@@ -20,10 +20,13 @@
 
 Также готово: страницы LuCI (`luci-app-dpishell`); пакеты собираются в GitHub Actions (`.github/workflows/router.yml`, SDK `openwrt/sdk:x86-64-v25.12.5`); первая сборка поставлена в эмулятор через `apk add --allow-untrusted` — объект ubus, cron, страница на месте. Найдена и исправлена ошибка порядка функций (ucode разрешает имена при компиляции) — проверка `tools/check-order.py` в тестах и в сборке; дымовой тест API — `SMOKE=1 sh router/tools/vm-test.sh`.
 
-## Где остановился (2026-10-17, ~01:50)
-- Запушен `50b4b50`: подписанная витрина пакетов на GitHub Pages (https://slavdew.github.io/dpishell/feed/). Секрет `APK_SIGNING_KEY` задан; секретный ключ лежит в профиле пользователя (`.config/dpishell/apk-signing-key.pem`), открытый — `router/keys/dpishell.pem`. Сборка этого коммита не проверена: `gh run list -R Slavdew/dpishell`; если не прошли `apk mkndx`/`apk verify` в SDK — смотреть журнал шага «Сборка и подписанный индекс».
-- Следующий шаг: в эмуляторе поставить пакеты с витрины как на роутере — ключ в `/etc/apk/keys/dpishell.pem`, строка `https://slavdew.github.io/dpishell/feed/packages.adb` в `/etc/apk/repositories.d/customfeeds.list`, `apk update && apk add dpishell luci-app-dpishell` без `--allow-untrusted`; затем `ubus call dpishell core_install` и `SMOKE=1 sh router/tools/vm-test.sh`.
-- Эмулятор: QEMU запущен из прошлой сессии (порты 8080/8022); если не отвечает — `sh /c/Dev/owrt-vm/run.sh` в фоне.
-- Связь с Windows-сессией — напрямую через SendMessage; договор согласуем в 07 §8/§9.
+Также готово (2026-10-17, вторая сессия): подписанная витрина (пакеты ставятся с https://slavdew.github.io/dpishell/feed/ без `--allow-untrusted`, проверено в эмуляторе); глубокий поиск (`select.uc` + генератор `search.uc` = `CandidateGenerator` ПК, эталон `test/golden-search.json`, «первое улучшение» как `RefineAsync`); `flow_offload_fix` (разгрузку ведёт zapret), `ipv6_set`; предупреждения `flow_offload`/`ipv6`/`conflict`; чужой zapret пакетом (Zapret Manager) — конфликт `kind: package`. Инструкция установки — `INSTALL-роутер.md`.
 
-Дальше: витрина и установка с неё, инструкция установки на роутер (сторонняя прошивка OpenWrt → ключ и витрина → пакеты), глубокий поиск на роутере, действия flow offload/IPv6 в API, проверка на настоящем роутере.
+Исправлено: ucode делит целые нацело (доли групп были 0 при частичном успехе, порядок по статистике не работал) — `1.0 *`, проверка в `check-order.py`; после `zapret restart` nfqws поднимается асинхронно (1–2 с) — подбор ждёт новый процесс; busybox `sleep` не понимает дробей — `sleep(мс)` ucode.
+
+Проверка подбора в эмуляторе — имитатор DPI: `/tmp/dpishell/fake-dpi.json` (правила «сайт открывается, если в профиле nfqws есть такие приёмы», пример — `06` §4.5); без файла не действует.
+
+## Где остановился (2026-10-17, ~03:30)
+- Всё запушено; эмулятор — с пакетами из витрины поверх развёрнутых `vm-deploy.sh` файлов, ядро стоит.
+- **Блокер для роутера:** в фидах сторонняя прошивка OpenWrt (2026-10-17, разбор индексов `apk adbdump`) нет `kmod-nft-queue`/`kmod-nfnetlink-queue`; фид модулей собран под ядро 6.18.36, образ 1.4.8 — на 6.18.52. Без модуля nfqws не получает пакеты. Варианты — в итоге сессии пользователю (спросить автора сторонняя прошивка OpenWrt / собрать модуль самим / дождаться). Проверка на роутере — `INSTALL-роутер.md` §4.
+- Дальше: живая проверка на роутер с пользователем; игровой режим и IP-списки (роутер v2, 09-features-spec).
