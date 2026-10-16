@@ -102,7 +102,8 @@ public sealed class Shell
         WithServicePausedAsync(async () =>
         {
             using var doh = new DohResolver();
-            var report = await new Selector(Paths, NewProbe(doh)).RunAsync(AllStrategies, groups ?? SelectedGroups(), quick, progress, ct);
+            var report = await new Selector(Paths, NewProbe(doh)).RunAsync(
+                StrategyStats.Order(AllStrategies, StrategyStats.Load(Paths)), groups ?? SelectedGroups(), quick, progress, ct);
             ResultStore.Save(Paths, report);
             return report;
         });
