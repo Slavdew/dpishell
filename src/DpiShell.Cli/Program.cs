@@ -5,84 +5,150 @@ Console.OutputEncoding = Encoding.UTF8;
 var cmd = args.FirstOrDefault() ?? "help";
 var rest = args.Skip(1).ToArray();
 
-try
+// Без аргументов (двойной щелчок) — самопроверка: один запрос прав, все шаги в одном процессе, лог рядом с exe.
+if (cmd is "help" && args.Length == 0 || cmd == "selftest")
+    return await SelfTest();
+return await Run(cmd, rest);
+
+static async Task<int> SelfTest()
 {
+    var logFile = Path.Combine(AppContext.BaseDirectory, "live.log");
+    using var file = new StreamWriter(logFile, false, new UTF8Encoding(false)) { AutoFlush = true };
+    var console = Console.Out;
+    Console.SetOut(new Tee(console, file));
+    Console.SetError(Console.Out);
+    Console.WriteLine($"DpiShell самопроверка {DateTime.Now:yyyy-MM-dd HH:mm:ss}, лог: {logFile}");
+
     var shell = new Shell();
-    var log = new Progress<string>(Console.WriteLine);
-    switch (cmd)
+    var conflicts = Conflicts.Find(shell.Paths);
+    if (conflicts.Count > 0)
     {
-        case "prepare":
-            var c = await shell.PrepareAsync(log);
-            Console.WriteLine($"Ядро: {c.State} {string.Join(",", c.BadFiles)} лишние: {string.Join(",", c.ExtraFiles)}");
-            break;
-        case "check-core":
-            var cc = shell.Installer.Check();
-            Console.WriteLine($"Ядро: {cc.State} {string.Join(",", cc.BadFiles)}");
-            break;
-        case "list":
-            foreach (var s in shell.Catalog.Strategies) Console.WriteLine($"{s.Id,-22} {s.Title}");
-            break;
-        case "args":
-            Console.WriteLine(WinwsArgs.Join(WinwsArgs.Build(Need(shell, rest), shell.Paths)));
-            break;
-        case "dry-run":
-            foreach (var s in rest.Length > 0 ? [Need(shell, rest)] : shell.Catalog.Strategies)
-            {
-                var (ok, o) = await WinwsProcess.DryRunAsync(shell.Paths, WinwsArgs.Build(s, shell.Paths));
-                Console.WriteLine($"{s.Id,-22} {(ok ? "OK" : "ОШИБКА")} {(ok ? "" : o.Trim())}");
-            }
-            break;
-        case "probe":
-            foreach (var v in await shell.CheckNowAsync()) Print(v);
-            break;
-        case "test":
-            var one = await new Selector(shell.Paths, new HttpProbe()).RunOneAsync(Need(shell, rest), shell.SelectedGroups(), default);
-            Console.WriteLine($"{one.Strategy.Id}: группы {one.GroupsPassed}/{one.GroupsTotal} {one.Error}");
-            foreach (var v in one.Verdicts) Print(v);
-            break;
-        case "select":
-            using (var cts = new CancellationTokenSource())
-            {
-                Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
-                var progress = new Progress<SelectorProgress>(p => Console.WriteLine($"[{p.Index}/{p.Total}] {p.Message}"));
-                var r = await shell.SelectAsync(rest.Contains("--quick"), null, progress, cts.Token);
-                if (r.NothingBlocked) { Console.WriteLine("Без обхода всё открывается: блокировок нет или включён VPN."); break; }
-                foreach (var s in r.Scores.OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds))
-                    Console.WriteLine($"{s.Strategy.Id,-22} группы {s.GroupsPassed}/{s.GroupsTotal} цели {s.TargetShare:P0} {s.AvgSeconds:F2}с {s.Error}");
-                Console.WriteLine(r.Best is null ? "Ни одна стратегия не помогла." : $"Лучшая: {r.Best.Strategy.Id}");
-            }
-            break;
-        case "enable":
-            shell.Enable(Need(shell, rest).Id);
-            Console.WriteLine($"Служба: {shell.Service.State}");
-            break;
-        case "disable":
-            shell.Disable();
-            Console.WriteLine($"Служба: {shell.Service.State}");
-            break;
-        case "remove":
-            shell.Service.Remove();
-            Console.WriteLine("Служба и драйвер удалены.");
-            break;
-        case "status":
-            Console.WriteLine($"Служба: {shell.Service.State}, стратегия: {shell.State.StrategyId ?? "-"}, админ: {Shell.IsAdmin()}");
-            foreach (var x in Conflicts.Find(shell.Paths)) Console.WriteLine($"Мешает: {x.Kind} {x.Name} {x.Detail}");
-            foreach (var v in Conflicts.ActiveVpnAdapters()) Console.WriteLine($"VPN: {v}");
-            break;
-        default:
-            Console.WriteLine("dpishell-cli prepare | check-core | list | args <id> | dry-run [id] | probe | test <id> | select [--quick] | enable <id> | disable | remove | status");
-            break;
+        Console.WriteLine("Сначала выключите другие программы обхода (Flowseal и т. п.) — с ними проверка бессмысленна:");
+        foreach (var c in conflicts) Console.WriteLine($"  {c.Name}: {c.Detail}");
+        Pause();
+        return 2;
     }
-    return 0;
+
+    int failed = 0;
+    foreach (var step in new[] { "status", "prepare", "dry-run", "probe", "test alt11", "select" })
+    {
+        Console.WriteLine($"=== {step}");
+        var parts = step.Split(' ');
+        if (await Run(parts[0], parts[1..]) != 0) failed++;
+    }
+    Console.WriteLine($"=== done, шагов с ошибкой: {failed}");
+    Console.SetOut(console);
+    Pause();
+    return failed == 0 ? 0 : 1;
 }
-catch (Exception e)
+
+static void Pause()
 {
-    Console.Error.WriteLine($"Ошибка: {e.Message}");
-    return 1;
+    if (Console.IsInputRedirected) return;
+    Console.WriteLine("Готово. Нажмите Enter, чтобы закрыть окно.");
+    Console.ReadLine();
+}
+
+static async Task<int> Run(string cmd, string[] rest)
+{
+    try
+    {
+        var shell = new Shell();
+        var log = new SyncProgress<string>(Console.WriteLine);
+        switch (cmd)
+        {
+            case "prepare":
+                var c = await shell.PrepareAsync(log);
+                Console.WriteLine($"Ядро: {c.State} {string.Join(",", c.BadFiles)} лишние: {string.Join(",", c.ExtraFiles)}");
+                break;
+            case "check-core":
+                var cc = shell.Installer.Check();
+                Console.WriteLine($"Ядро: {cc.State} {string.Join(",", cc.BadFiles)}");
+                break;
+            case "list":
+                foreach (var s in shell.Catalog.Strategies) Console.WriteLine($"{s.Id,-22} {s.Title}");
+                break;
+            case "args":
+                Console.WriteLine(WinwsArgs.Join(WinwsArgs.Build(Need(shell, rest), shell.Paths)));
+                break;
+            case "dry-run":
+                foreach (var s in rest.Length > 0 ? [Need(shell, rest)] : shell.Catalog.Strategies)
+                {
+                    var (ok, o) = await WinwsProcess.DryRunAsync(shell.Paths, WinwsArgs.Build(s, shell.Paths));
+                    Console.WriteLine($"{s.Id,-22} {(ok ? "OK" : "ОШИБКА")} {(ok ? "" : o.Trim())}");
+                }
+                break;
+            case "probe":
+                foreach (var v in await shell.CheckNowAsync()) Print(v);
+                break;
+            case "test":
+                var one = await new Selector(shell.Paths, new HttpProbe()).RunOneAsync(Need(shell, rest), shell.SelectedGroups(), default);
+                Console.WriteLine($"{one.Strategy.Id}: группы {one.GroupsPassed}/{one.GroupsTotal} {one.Error}");
+                foreach (var v in one.Verdicts) Print(v);
+                break;
+            case "select":
+                using (var cts = new CancellationTokenSource())
+                {
+                    ConsoleCancelEventHandler onCancel = (_, e) => { e.Cancel = true; cts.Cancel(); };
+                    Console.CancelKeyPress += onCancel;
+                    try
+                    {
+                        var progress = new SyncProgress<SelectorProgress>(p => Console.WriteLine($"[{p.Index}/{p.Total}] {p.Message}"));
+                        var r = await shell.SelectAsync(rest.Contains("--quick"), null, progress, cts.Token);
+                        if (r.NothingBlocked) { Console.WriteLine("Без обхода всё открывается: блокировок нет или включён VPN."); break; }
+                        foreach (var s in r.Scores.OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds))
+                            Console.WriteLine($"{s.Strategy.Id,-22} группы {s.GroupsPassed}/{s.GroupsTotal} цели {s.TargetShare:P0} {s.AvgSeconds:F2}с {s.Error}");
+                        Console.WriteLine(r.Best is null ? "Ни одна стратегия не помогла." : $"Лучшая: {r.Best.Strategy.Id}");
+                    }
+                    finally { Console.CancelKeyPress -= onCancel; }
+                }
+                break;
+            case "enable":
+                shell.Enable(Need(shell, rest).Id);
+                Console.WriteLine($"Служба: {shell.Service.State}");
+                break;
+            case "disable":
+                shell.Disable();
+                Console.WriteLine($"Служба: {shell.Service.State}");
+                break;
+            case "remove":
+                shell.Service.Remove();
+                Console.WriteLine("Служба и драйвер удалены.");
+                break;
+            case "status":
+                Console.WriteLine($"Служба: {shell.Service.State}, стратегия: {shell.State.StrategyId ?? "-"}, админ: {Shell.IsAdmin()}");
+                foreach (var x in Conflicts.Find(shell.Paths)) Console.WriteLine($"Мешает: {x.Kind} {x.Name} {x.Detail}");
+                foreach (var v in Conflicts.ActiveVpnAdapters()) Console.WriteLine($"VPN: {v}");
+                break;
+            default:
+                Console.WriteLine("dpishell-cli [selftest] | prepare | check-core | list | args <id> | dry-run [id] | probe | test <id> | select [--quick] | enable <id> | disable | remove | status");
+                break;
+        }
+        return 0;
+    }
+    catch (Exception e)
+    {
+        Console.Error.WriteLine($"Ошибка: {e.Message}");
+        return 1;
+    }
 }
 
 static Strategy Need(Shell shell, string[] rest) =>
-    rest.Length > 0 && shell.Catalog.Find(rest[0]) is { } s ? s : throw new ArgumentException("Укажите id стратегии (dpishell list)");
+    rest.Length > 0 && shell.Catalog.Find(rest[0]) is { } s ? s : throw new ArgumentException("Укажите id стратегии (dpishell-cli list)");
 
 static void Print(TargetVerdict v) =>
     Console.WriteLine($"  {(v.Ok ? "OK " : "-- ")} {v.Target.Url,-55} {string.Join(" | ", v.Probes.Select(p => $"{p.Tls}: {p.Outcome} {p.Detail}"))}");
+
+/// <summary>Progress без пересылки в пул потоков: строки лога идут по порядку.</summary>
+sealed class SyncProgress<T>(Action<T> report) : IProgress<T>
+{
+    public void Report(T value) => report(value);
+}
+
+sealed class Tee(TextWriter a, TextWriter b) : TextWriter
+{
+    public override Encoding Encoding => a.Encoding;
+    public override void Write(char value) { lock (this) { a.Write(value); b.Write(value); } }
+    public override void Write(string? value) { lock (this) { a.Write(value); b.Write(value); } }
+    public override void WriteLine(string? value) { lock (this) { a.WriteLine(value); b.WriteLine(value); } }
+}
