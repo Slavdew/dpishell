@@ -155,14 +155,26 @@ public sealed class HttpProbe
         return string.Join(" / ", parts.Distinct());
     }
 
-    /// <summary>youtube.com → www.youtube.com — один сайт; youtube.com → warning.rt.ru — нет.</summary>
+    /// <summary>
+    /// youtube.com ↔ www.youtube.com — один сайт (один хост — поддомен другого); youtube.com → warning.rt.ru — нет.
+    /// Без списка публичных суффиксов: соседние bbc.co.uk и stub.co.uk не считаются одним сайтом. IP — только точное совпадение.
+    /// </summary>
     public static bool SameSite(string a, string b)
     {
-        static string Base(string h)
+        a = a.ToLowerInvariant().TrimEnd('.');
+        b = b.ToLowerInvariant().TrimEnd('.');
+        if (a == b) return true;
+        if (System.Net.IPAddress.TryParse(a, out _) || System.Net.IPAddress.TryParse(b, out _)) return false;
+        if (a.EndsWith("." + b) || b.EndsWith("." + a)) return true;
+        // Соседние поддомены (www.youtube.com → m.youtube.com), если общий родитель — не суффикс вида co.uk / com.ru.
+        var pa = Parent(a); var pb = Parent(b);
+        return pa is not null && pa == pb && !LooksLikeSuffix(pa);
+
+        static string? Parent(string h) { var i = h.IndexOf('.'); return i > 0 && h.IndexOf('.', i + 1) > 0 ? h[(i + 1)..] : null; }
+        static bool LooksLikeSuffix(string h)
         {
-            var p = h.ToLowerInvariant().Split('.');
-            return p.Length >= 2 ? $"{p[^2]}.{p[^1]}" : h;
+            var p = h.Split('.');
+            return p.Length == 2 && p[1].Length == 2 && p[0].Length <= 3;
         }
-        return Base(a) == Base(b);
     }
 }

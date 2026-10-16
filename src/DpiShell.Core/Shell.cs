@@ -68,6 +68,10 @@ public sealed class Shell
             throw new SecurityException(c.State == CoreState.Missing
                 ? "Файлы ядра не найдены. Возможно, их удалил антивирус."
                 : $"Файлы ядра изменены: {string.Join(", ", c.BadFiles)}. Возможно, их тронул антивирус — восстановите ядро.");
+        // Чужая dll или exe рядом с winws может быть подхвачена при запуске.
+        var foreign = c.ExtraFiles.Where(f => f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (foreign.Count > 0)
+            throw new SecurityException($"В папке ядра посторонние файлы: {string.Join(", ", foreign)}. Восстановите ядро.");
     }
 
     public void Enable(string strategyId)

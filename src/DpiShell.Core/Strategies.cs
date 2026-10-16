@@ -47,6 +47,19 @@ public static class WinwsArgs
         "--dup-autottl", "--dup-ttl", "--dpi-desync-fakedsplit-mod", "--dpi-desync-start", "--dpi-desync-badack-increment",
     ];
 
+    // Параметры, значение которых — файл: только {fake}/имя.bin или шестнадцатеричные байты.
+    // Голое имя winws искал бы в рабочем каталоге (core\), то есть мог бы прочитать свою же dll.
+    static readonly HashSet<string> FileOptions =
+    [
+        "--dpi-desync-split-seqovl-pattern", "--dpi-desync-fake-tls", "--dpi-desync-fake-http", "--dpi-desync-fake-quic",
+        "--dpi-desync-fake-discord", "--dpi-desync-fake-stun", "--dpi-desync-fake-unknown-udp", "--dpi-desync-fakedsplit-pattern",
+        "--dpi-desync-fake-syndata",
+    ];
+
+    // Токен целиком: без пробельных символов, кавычек и обратных слешей — иначе строка службы разберётся иначе, чем список.
+    static readonly System.Text.RegularExpressions.Regex TokenRx = new(@"^--[a-z0-9-]+(=[A-Za-z0-9_.,+=/{}!-]+)?$");
+    static readonly System.Text.RegularExpressions.Regex FileValueRx = new(@"^(\{fake\}/[A-Za-z0-9_.-]+\.bin|0x[0-9A-Fa-f]+|!)$"); // '!' — встроенный фейк winws
+
     public static void Validate(Strategy s)
     {
         foreach (var (role, args) in s.Roles)
@@ -54,12 +67,13 @@ public static class WinwsArgs
             if (!RoleOrder.Contains(role)) throw new InvalidDataException($"{s.Id}: неизвестная роль {role}");
             foreach (var tok in args.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
+                if (!TokenRx.IsMatch(tok)) throw new InvalidDataException($"{s.Id}: недопустимые символы в {tok}");
                 var name = tok.Split('=', 2)[0];
                 if (!AllowedOptions.Contains(name)) throw new InvalidDataException($"{s.Id}: параметр {name} не в списке разрешённых");
                 var val = tok.Contains('=') ? tok.Split('=', 2)[1] : "";
-                if (val.Contains('/') && !val.StartsWith("{fake}/"))
+                if (FileOptions.Contains(name) ? !FileValueRx.IsMatch(val) : val.Contains('/'))
                     throw new InvalidDataException($"{s.Id}: путь вне папки фейков: {tok}");
-                if (val.Contains("..") || val.Contains('\\') || val.Contains(':') && !val.StartsWith("0x"))
+                if (val.Contains(".."))
                     throw new InvalidDataException($"{s.Id}: недопустимое значение {tok}");
             }
         }
@@ -68,20 +82,27 @@ public static class WinwsArgs
     public static IReadOnlyList<string> Build(Strategy s, AppPaths p)
     {
         string L(string f) => Path.Combine(p.Lists, f);
-        var hostlists = $"--hostlist={L("general.txt")} --hostlist={L(DataStore.UserGeneral)} " +
-                        $"--hostlist-exclude={L("exclude.txt")} --hostlist-exclude={L(DataStore.UserExclude)} " +
-                        $"--ipset-exclude={L("ipset-exclude.txt")}";
-        var ipsetAll = $"--ipset={L("ipset-all.txt")} --hostlist-exclude={L("exclude.txt")} " +
-                       $"--hostlist-exclude={L(DataStore.UserExclude)} --ipset-exclude={L("ipset-exclude.txt")}";
-        var filters = new Dictionary<string, string>
+        // Списки собираются поэлементно: путь с пробелом остаётся одним аргументом.
+        string[] hostlists =
+        [
+            $"--hostlist={L("general.txt")}", $"--hostlist={L(DataStore.UserGeneral)}",
+            $"--hostlist-exclude={L("exclude.txt")}", $"--hostlist-exclude={L(DataStore.UserExclude)}",
+            $"--ipset-exclude={L("ipset-exclude.txt")}",
+        ];
+        string[] ipsetAll =
+        [
+            $"--ipset={L("ipset-all.txt")}", $"--hostlist-exclude={L("exclude.txt")}",
+            $"--hostlist-exclude={L(DataStore.UserExclude)}", $"--ipset-exclude={L("ipset-exclude.txt")}",
+        ];
+        var filters = new Dictionary<string, string[]>
         {
-            ["quic"] = $"--filter-udp=443 {hostlists}",
-            ["discord_udp"] = "--filter-udp=19294-19344,50000-50100 --filter-l7=discord,stun",
-            ["discord_media"] = "--filter-tcp=2053,2083,2087,2096,8443 --hostlist-domains=discord.media",
-            ["google"] = $"--filter-tcp=443 --hostlist={L("google.txt")}",
-            ["general"] = $"--filter-tcp=80,443 {hostlists}",
-            ["ipset_udp"] = $"--filter-udp=443 {ipsetAll}",
-            ["ipset_tcp"] = $"--filter-tcp=80,443,8443 {ipsetAll}",
+            ["quic"] = ["--filter-udp=443", .. hostlists],
+            ["discord_udp"] = ["--filter-udp=19294-19344,50000-50100", "--filter-l7=discord,stun"],
+            ["discord_media"] = ["--filter-tcp=2053,2083,2087,2096,8443", "--hostlist-domains=discord.media"],
+            ["google"] = ["--filter-tcp=443", $"--hostlist={L("google.txt")}"],
+            ["general"] = ["--filter-tcp=80,443", .. hostlists],
+            ["ipset_udp"] = ["--filter-udp=443", .. ipsetAll],
+            ["ipset_tcp"] = ["--filter-tcp=80,443,8443", .. ipsetAll],
         };
 
         var args = new List<string> { $"--wf-tcp={WfTcp}", $"--wf-udp={WfUdp}" };
@@ -91,16 +112,21 @@ public static class WinwsArgs
             if (!s.Roles.TryGetValue(role, out var desync)) continue;
             if (!first) args.Add("--new");
             first = false;
-            args.AddRange(filters[role].Split(' ', StringSplitOptions.RemoveEmptyEntries));
-            args.AddRange(desync.Replace("{fake}/", p.Fake + Path.DirectorySeparatorChar)
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries));
+            args.AddRange(filters[role]);
+            // Сначала режем каталожную строку (в ней пробелов внутри значений нет — см. Validate), потом подставляем путь.
+            args.AddRange(desync.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Replace("{fake}/", p.Fake + Path.DirectorySeparatorChar)));
         }
         return args;
     }
 
-    /// <summary>Строка для командной строки/службы. Пути в %ProgramData% без пробелов, но кавычки ставим на всякий случай.</summary>
+    /// <summary>Строка для командной строки/службы. Кавычки — только у аргументов с пробелами (пути).</summary>
     public static string Join(IEnumerable<string> args) =>
-        string.Join(' ', args.Select(a => a.Contains(' ') ? Quote(a) : a));
+        string.Join(' ', args.Select(a =>
+        {
+            if (a.Contains('"')) throw new ArgumentException($"Кавычка в аргументе winws: {a}");
+            return a.Any(char.IsWhiteSpace) ? Quote(a) : a;
+        }));
 
     static string Quote(string a)
     {

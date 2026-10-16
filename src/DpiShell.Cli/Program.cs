@@ -70,7 +70,7 @@ try
             foreach (var v in Conflicts.ActiveVpnAdapters()) Console.WriteLine($"VPN: {v}");
             break;
         default:
-            Console.WriteLine("dpishell prepare | check-core | list | args <id> | dry-run [id] | probe | test <id> | select [--quick] | enable <id> | disable | remove | status");
+            Console.WriteLine("dpishell-cli prepare | check-core | list | args <id> | dry-run [id] | probe | test <id> | select [--quick] | enable <id> | disable | remove | status");
             break;
     }
     return 0;

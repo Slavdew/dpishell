@@ -55,7 +55,7 @@ public sealed partial class DataStore(AppPaths paths)
     {
         var s = raw.Trim().ToLowerInvariant();
         if (s.Length == 0 || s.StartsWith('#')) return null;
-        if (Uri.TryCreate(s.Contains("://") ? s : "https://" + s, UriKind.Absolute, out var u)) s = u.Host;
+        if (Uri.TryCreate(s.Contains("://") ? s : "https://" + s, UriKind.Absolute, out var u)) s = u.IdnHost;
         s = s.TrimEnd('.');
         if (s.StartsWith("www.")) s = s[4..];
         return DomainRx().IsMatch(s) ? s : null;
