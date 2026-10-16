@@ -77,7 +77,7 @@
   - `--qnum`, `--user`, `--dpi-desync-fwmark` добавляет init-скрипт zapret;
   - профили ролей (`--filter-tcp/udp … --hostlist … --new`) идут в `NFQWS_OPT` без изменений, `MODE_FILTER=none`.
 - `{fake}/*.bin`: в zapret есть 3 из 8 используемых; остальные 5 (Flowseal: `ACTIVE_DISCORD_UDP`, `max_ru`, `4pda_to`, `stun2`, `sochi_park`) везём в пакете — они уже проверены (`03-vetting.md`).
-- Встроенный фейк `--dpi-desync-fake-tls=!`: в каталоге было `^!` из .bat (nfqws и winws искали бы файл «^!»), исправлено в 4401f0b.
+- Встроенный фейк `--dpi-desync-fake-tls=!`: в каталоге было `^!` из .bat (nfqws и winws искали бы файл «^!»), исправлено в a1aad39.
 
 ## 4. Готовые решения
 

@@ -49,7 +49,7 @@
 | `--dpi-desync` (fake, multisplit, multidisorder, fakedsplit, hostfakesplit, syndata) | да | нет |
 | `--dpi-desync-repeats`, `--dpi-desync-fooling` (ts, badseq, md5sig) | да | режимы: none md5sig badseq badsum datanoack ts hopbyhop hopbyhop2 |
 | `--dpi-desync-split-pos` (`1`, `2,sniext+1`, `1,midsld`), `--dpi-desync-split-seqovl`, `--dpi-desync-split-seqovl-pattern` | да | нет |
-| `--dpi-desync-fake-tls=@файл`, `=0xHEX`, `=!`/`!+N` | да | нет. В .bat Flowseal встречается `^!` (экранирование cmd); в `data/strategies.json` было `^!`, исправлено в 4401f0b |
+| `--dpi-desync-fake-tls=@файл`, `=0xHEX`, `=!`/`!+N` | да | нет. В .bat Flowseal встречается `^!` (экранирование cmd); в `data/strategies.json` было `^!`, исправлено в a1aad39 |
 | `--dpi-desync-fake-tls-mod` (none, rnd, dupsid, sni=) | да | нет |
 | `--dpi-desync-fake-http`, `-fake-quic`, `-fake-discord`, `-fake-stun`, `-fake-unknown-udp`, `-fake-syndata` | да | нет |
 | `--dpi-desync-fakedsplit-pattern=0x00`, `--dpi-desync-fakedsplit-mod` | да | нет |

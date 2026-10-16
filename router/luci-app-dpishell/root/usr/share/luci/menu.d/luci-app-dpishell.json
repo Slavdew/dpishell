@@ -1,0 +1,57 @@
+{
+	"admin/services/dpishell": {
+		"title": "DpiShell",
+		"order": 10,
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"acl": [ "dpishell" ]
+		}
+	},
+
+	"admin/services/dpishell/main": {
+		"title": "Обход",
+		"order": 1,
+		"action": {
+			"type": "view",
+			"path": "dpishell/main"
+		}
+	},
+
+	"admin/services/dpishell/select": {
+		"title": "Подбор",
+		"order": 2,
+		"action": {
+			"type": "view",
+			"path": "dpishell/select"
+		}
+	},
+
+	"admin/services/dpishell/lists": {
+		"title": "Исключения и списки",
+		"order": 3,
+		"action": {
+			"type": "view",
+			"path": "dpishell/lists"
+		}
+	},
+
+	"admin/services/dpishell/dns": {
+		"title": "DNS",
+		"order": 4,
+		"action": {
+			"type": "view",
+			"path": "dpishell/dns"
+		}
+	},
+
+	"admin/services/dpishell/diag": {
+		"title": "Диагностика",
+		"order": 5,
+		"action": {
+			"type": "view",
+			"path": "dpishell/diag"
+		}
+	}
+}

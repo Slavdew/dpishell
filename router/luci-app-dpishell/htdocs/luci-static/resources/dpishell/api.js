@@ -142,14 +142,14 @@ return baseclass.extend({
 		return E('div', { 'class': 'dps-error' }, this.text(e));
 	},
 
-	// Кнопка «(i)»: раскрывает пояснение под строкой.
+	// Кнопка «(i)»: раскрывает пояснение под строкой. Один элемент — можно класть в любой список детей E().
 	info: function(text) {
 		var box = E('div', { 'class': 'dps-info-text' }, text);
 		var i = E('span', { 'class': 'dps-info', 'title': 'Пояснение', 'click': function(ev) {
 			box.classList.toggle('open');
 			ev.preventDefault();
 		} }, 'i');
-		return [i, box];
+		return E('span', { 'class': 'dps-info-wrap' }, [i, box]);
 	},
 
 	// Строка «подпись — элемент» в стиле cbi.
@@ -170,11 +170,11 @@ return baseclass.extend({
 		return E('label', { 'class': 'dps-check' }, [input, label]);
 	},
 
-	// Время: сегодня — ЧЧ:ММ, иначе ДД.ММ ЧЧ:ММ.
+	// Время: сегодня — ЧЧ:ММ, иначе ДД.ММ ЧЧ:ММ. Принимает ISO 8601 (договор) и секунды эпохи (бэкенд).
 	time: function(iso) {
 		if (!iso)
 			return '';
-		var d = new Date(iso);
+		var d = (typeof iso == 'number' || /^\d+$/.test(iso)) ? new Date(iso * 1000) : new Date(iso);
 		if (isNaN(d.getTime()))
 			return iso;
 		var hm = '%02d:%02d'.format(d.getHours(), d.getMinutes());
@@ -285,7 +285,7 @@ return baseclass.extend({
 		ui.showModal('Включить защищённый DNS', [
 			E('p', {}, 'Для всей домашней сети. Что изменится:'),
 			self.dnsConsequences(),
-			E('p', {}, 'Прежние настройки сохраняются — «Вернуть как было» отменит всё.'),
+			E('p', {}, 'Прежние настройки сохраняются — «Вернуть как было» отменит всё. Включение занимает около минуты: роутер ставит пакет и проверяет, что DNS отвечает.'),
 			errBox,
 			E('div', { 'class': 'right' }, [
 				E('button', { 'class': 'btn', 'click': ui.hideModal }, 'Отмена'), ' ',
