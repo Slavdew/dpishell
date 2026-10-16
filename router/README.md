@@ -18,4 +18,12 @@
 
 Также готово: `site_check` (адрес временно в nozapret), `diag`/`report`/`conflict_stop`, DNS (анализ подмены: NXDOMAIN/служебные адреса/проверка делом; https-dns-proxy по кнопке; возврат с перезапуском dnsmasq; временный откат при недоступности DoH).
 
-Дальше: Makefile пакетов и сборка apk (OpenWRT SDK), глубокий поиск, проверка на настоящем роутере. Страницы LuCI пишет отдельный агент — его заметки: scratchpad `router/luci-notes.md`.
+Также готово: страницы LuCI (`luci-app-dpishell`); пакеты собираются в GitHub Actions (`.github/workflows/router.yml`, SDK `openwrt/sdk:x86-64-v25.12.5`); первая сборка поставлена в эмулятор через `apk add --allow-untrusted` — объект ubus, cron, страница на месте. Найдена и исправлена ошибка порядка функций (ucode разрешает имена при компиляции) — проверка `tools/check-order.py` в тестах и в сборке; дымовой тест API — `SMOKE=1 sh router/tools/vm-test.sh`.
+
+## Где остановился (2026-10-17, ~01:50)
+- Запушен `50b4b50`: подписанная витрина пакетов на GitHub Pages (https://slavdew.github.io/dpishell/feed/). Секрет `APK_SIGNING_KEY` задан; секретный ключ лежит в профиле пользователя (`.config/dpishell/apk-signing-key.pem`), открытый — `router/keys/dpishell.pem`. Сборка этого коммита не проверена: `gh run list -R Slavdew/dpishell`; если не прошли `apk mkndx`/`apk verify` в SDK — смотреть журнал шага «Сборка и подписанный индекс».
+- Следующий шаг: в эмуляторе поставить пакеты с витрины как на роутере — ключ в `/etc/apk/keys/dpishell.pem`, строка `https://slavdew.github.io/dpishell/feed/packages.adb` в `/etc/apk/repositories.d/customfeeds.list`, `apk update && apk add dpishell luci-app-dpishell` без `--allow-untrusted`; затем `ubus call dpishell core_install` и `SMOKE=1 sh router/tools/vm-test.sh`.
+- Эмулятор: QEMU запущен из прошлой сессии (порты 8080/8022); если не отвечает — `sh /c/Dev/owrt-vm/run.sh` в фоне.
+- Связь с Windows-сессией — напрямую через SendMessage; договор согласуем в 07 §8/§9.
+
+Дальше: витрина и установка с неё, инструкция установки на роутер (сторонняя прошивка OpenWrt → ключ и витрина → пакеты), глубокий поиск на роутере, действия flow offload/IPv6 в API, проверка на настоящем роутере.
