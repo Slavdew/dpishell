@@ -12,6 +12,8 @@ tar -C "$ROOT" -cf - router/dpishell/files router/test data/strategies.json data
 	ucode -L "$F/usr/share/ucode/*.uc" router/test/catalog_test.uc data $F/usr/share/dpishell/roles.json router/test/golden.json'
 "$VM/ssh.sh" 'cd /tmp/dpitest && F=/tmp/dpitest/router/dpishell/files &&
 	ucode -L "$F/usr/share/ucode/*.uc" router/test/probe_test.uc '"${LIVE:+live}"
+"$VM/ssh.sh" 'cd /tmp/dpitest && F=/tmp/dpitest/router/dpishell/files &&
+	ucode -L "$F/usr/share/ucode/*.uc" router/test/select_test.uc'
 # Дымовой тест API — только если пакет развёрнут (vm-deploy.sh или apk add)
 if [ -n "$SMOKE" ]; then
 	"$VM/ssh.sh" 'sh /tmp/dpitest/router/test/api_smoke.sh'

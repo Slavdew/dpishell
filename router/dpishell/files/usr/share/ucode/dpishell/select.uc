@@ -23,7 +23,7 @@ function load_groups(selected, mode) {
 	let data = cat.load_json(`${st.P.share}/targets.json`);
 	let groups = [];
 	for (let g in data.groups) {
-		if (g.id == 'control') {
+		if (g.control === true || g.id == 'control') {
 			if (mode == 'all')
 				push(groups, { ...g, control: true });
 			continue;
@@ -87,7 +87,7 @@ function score(groups, verdicts) {
 			continue;
 		if (g.control) {
 			for (let v in vs)
-				if (!v.ok)
+				if (v.required && !v.ok)
 					push(broken, pr.host_of(v.url));
 			continue;
 		}
