@@ -22,7 +22,7 @@
   ```
   Хеши остальных архитектур — из архива при подготовке манифеста.
 - Поставка — как 02-spec §9.2: в пакете ядра нет. При первом запуске роутер качает zip (основной адрес, затем `mirror_urls`), проверяет sha256 архива и `nfqws`, извлекает только пути из `extract` в `/opt/zapret`. Не вышло — «Загрузить файл ядра» на странице или из приложения ПК (у приложения есть копия того же zip), проверка та же.
-- Установка zapret — его же скриптами без вопросов (переменные окружения `install_easy.sh`), без `install_prereq.sh`. Служба `/etc/init.d/zapret` и таблица `inet zapret` — штатные zapret. Мы пишем только `/opt/zapret/config`.
+- Установка zapret — повторением шагов `install_easy.sh` для OpenWRT без его вопросов и cron (§6). Служба `/etc/init.d/zapret` и таблица `inet zapret` — штатные zapret. Мы пишем только `/opt/zapret/config`.
 
 ### 2.2 Зависимости пакета
 `curl` (TLS 1.3 через mbedtls), `unzip`, `nftables`, `kmod-nft-queue`, `kmod-nft-nat`, `ucode`, `ucode-mod-fs`, `ucode-mod-uci`, `rpcd-mod-ucode`, `luci-base`. Проверено в эмуляторе (OpenWRT 25.12.5 x86_64, 2026-10-17): все есть в официальных фидах; curl 8.22.0 / mbedTLS 3.6.7, без DoH и HTTP/3. Наличие в фиде сторонняя прошивка OpenWrt — проверить при установке.
@@ -179,6 +179,8 @@ luci-app-dpishell (PKGARCH:=all)
 - ucode (rpcd, логика), LuCI JS (страницы), POSIX sh только в init-скрипте. Своих бинарников нет.
 - Исходники — в этом репозитории: `router/dpishell/`, `router/luci-app-dpishell/`; данные берутся из `data/` при сборке.
 - Сборка: GitHub Actions, `ghcr.io/openwrt/sdk` (snapshot/25.12), `apk mkpkg --sign-key` своим ключом (образец — `extra-feed.yml` сторонняя прошивка OpenWrt). Релиз GitHub + подписанный фид в gh-pages; пользователь один раз кладёт наш ключ в `/etc/apk/keys/`, без `--allow-untrusted`.
+- Эмулятор (2026-10-17): QEMU (MSYS2) + OpenWRT 25.12.5 x86_64, `C:\Dev\owrt-vm` (`run.sh`, `ssh.sh` — порт 8022, LuCI — `127.0.0.1:8080`). Проверено в нём: ядро ставится из нашего zip (хеш совпал, распаковано 804 КБ, на флеше 516 КБ), init-скрипт zapret поднимает nfqws и таблицу `inet zapret` с нашими портами; запросы curl с роутера проходят через nfqws (журнал `--debug=syslog`: fake + multisplit). **Ограничение:** сеть QEMU `user` — программный прокси, пересобирающий TCP; обманные пакеты он доставляет как данные, соединение рвётся. Действие стратегий в эмуляторе не проверяется — только на роутере.
+- Установка ядра — **не `install_easy.sh`**: он интерактивный и добавляет в cron ежедневную загрузку списков со сторонних адресов (`download_list`, `crontab_add 0 6`). Повторяем его шаги для OpenWRT сами: копия `common/`, `init.d/openwrt/`, `files/`, `ipset/`, `config.default` в `/opt/zapret`, `nfqws` нужной архитектуры → `/opt/zapret/nfq/nfqws`, наш `config`, ссылки `/etc/init.d/zapret` и `/etc/hotplug.d/iface/90-zapret`, `enable` + `restart`. Проверено в эмуляторе.
 - Тесты: сборщик config на ucode — те же примеры, что тесты `WinwsArgs` (одна стратегия → одинаковые профили); проверка цели — на записанных ответах curl; страница и ubus — в эмуляторе OpenWRT (x86_64 в QEMU/Hyper-V) до появления роутера.
 
 ## 7. Ошибки и крайние случаи
