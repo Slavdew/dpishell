@@ -39,6 +39,8 @@ public interface IHelperBackend : IHelperCatalog
     HelperDetails Details();
     /// <summary>Выбрать стратегию без включения обхода (обход включён — окно зовёт enable).</summary>
     void Choose(string strategyId);
+    /// <summary>Включить временные метки TCP (их требует стратегия роутера, 07-router-api §6). true — включены.</summary>
+    bool TcpTimestampsOn();
     /// <summary>Все окна отключились от канала: в режиме без службы winws гасится.</summary>
     void OnClientsGone();
 }
@@ -144,6 +146,12 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
     }
 
     public void Disable() => shell.Disable();
+
+    public bool TcpTimestampsOn()
+    {
+        shell.EnsureTcpTimestamps();
+        return TcpTimestamps.IsEnabled() == true;
+    }
     public void SetRunMode(bool service) => shell.SetRunMode(service);
 
     public void Choose(string strategyId)

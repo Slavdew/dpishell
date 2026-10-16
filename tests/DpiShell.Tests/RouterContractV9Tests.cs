@@ -63,7 +63,11 @@ public sealed class RouterContractV9Tests
         var d = await c.DnsStatusAsync();
         Assert.Equal("provider", d.Mode);
         Assert.Equal(2, d.Servers!.Count);
-        Assert.Equal("dns_enable", d.Job!.Action);
+        // job — последнее DNS-задание: сначала идёт, потом итог.
+        Assert.Equal("dns_analyze", d.Job!.Action);
+        Assert.True(d.Job.Running);
+        d = await c.DnsStatusAsync();
+        Assert.False(d.Job!.Running);
         Assert.True(d.Job.Ok);
         Assert.NotNull(d.Job.At);
     }

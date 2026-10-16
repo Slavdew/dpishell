@@ -13,7 +13,7 @@ public enum StatusKind { Off, On, Busy, Error }
 
 public static class Pages
 {
-    public const int Home = 0, Select = 1, Targets = 2, Net = 3, Hosts = 4, Diag = 5;
+    public const int Home = 0, Select = 1, Targets = 2, Net = 3, Hosts = 4, Diag = 5, Router = 6;
 }
 
 /// <summary>
@@ -21,7 +21,7 @@ public static class Pages
 /// роутер), а всё, что меняет систему, — через помощника (<see cref="HelperLink"/>). Помощника нет — значок щита на кнопках,
 /// нажатие предлагает установку (один запрос прав), и действие продолжается само.
 /// </summary>
-public sealed class MainViewModel : Observable
+public sealed partial class MainViewModel : Observable
 {
     readonly Shell _shell;
     CancellationTokenSource? _selectCts;
@@ -98,6 +98,7 @@ public sealed class MainViewModel : Observable
             PcUserTargets = () => Helper.Status?.UserTargets ?? [],
         };
         Router.Changed += UpdateStatus;
+        WireRouterPc();   // обход ПК и роутера вместе не работают (07-router-api §6) — MainViewModel.Router.cs
 
         Net = new NetViewModel(helper)
         {
@@ -292,6 +293,7 @@ public sealed class MainViewModel : Observable
             if (!Set(ref _page, value) || IsLoading) return;
             if (value == Pages.Net) _ = RefreshNetAsync();
             if (value == Pages.Hosts) _ = Hosts.RefreshAsync();
+            if (value == Pages.Router) _ = Router.RefreshRouterPageAsync();
             if (value != Pages.Diag) return;
             _ = RefreshDiagAsync();
             if (Router.Connected) _ = Router.RefreshDiagAsync();
@@ -468,6 +470,7 @@ public sealed class MainViewModel : Observable
         Raise(nameof(IsRunning));
         Raise(nameof(ToggleText));
         Raise(nameof(CanChoose));
+        Router.PcChanged();
         Raise(nameof(StrategyHeader));
         Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint));
         // Стратегию могли сменить с «Подбора» или автопереключением — список показывает текущую, не вызывая перезапуск.
@@ -659,13 +662,15 @@ public sealed class MainViewModel : Observable
         _ => "Файлы ядра изменены (антивирус?). Откройте «Диагностику» → «Восстановить ядро».",
     };
 
-    public Task EnableAsync()
+    public async Task EnableAsync()
     {
-        // Роутер уже обходит для всего дома — двойная обработка ломает сайты: включать здесь только осознанно.
-        if (!IsRunning && Router.Found && Router.RouterEnabled && !Confirm(
-                "Обход уже делает роутер — для всех устройств дома, и для этого ПК тоже. Если включить и здесь, " +
-                "трафик будет обрабатываться дважды, и сайты могут перестать открываться.\n\nВсё равно включить на этом ПК?"))
-            return Task.CompletedTask;
+        // Роутер уже обходит для всего дома — двойная обработка ломает сайты (07-router-api §6): подобрать там или выключить там.
+        if (!IsRunning && !await RouterGateAsync(select: false)) return;
+        await EnableCoreAsync();
+    }
+
+    Task EnableCoreAsync()
+    {
         // Стратегия не выбрана — не отправляем человека разбираться. Подборы уже были: берём лучшую по ним
         // (первая в списке, порядок по статистике). Не было: подбираем и включаем сами (автоприменение).
         if (CurrentStrategyId is not { } id)
@@ -856,6 +861,8 @@ public sealed class MainViewModel : Observable
         // Свои адреса проверяем после подключения: до установки их у помощника ещё нет.
         if (TakeGroups() is not { } ids) return;
         if (!ConfirmPauseIfRunning()) return;
+        // Обход на роутере: подбор на ПК при нём неверен (07-router-api §6) — подобрать там или выключить там на время подбора.
+        if (!await RouterGateAsync(select: true)) return;
 
         ResetResults();
         SelectProgressMax = Math.Max(1, Helper.Status?.Strategies.Count ?? _shell.Catalog.Strategies.Count);
@@ -889,6 +896,7 @@ public sealed class MainViewModel : Observable
         }
         await AutoApplyAsync();
         await RefreshStatusAsync();
+        await RouterResumeAsync();
     }
 
     bool _indeterminate;
@@ -907,6 +915,8 @@ public sealed class MainViewModel : Observable
         if (await NeedHelperAsync() is not { } c) return;
         if (TakeGroups() is not { } ids) return;
         if (!ConfirmPauseIfRunning()) return;
+        // Обход на роутере: подбор на ПК при нём неверен (07-router-api §6) — подобрать там или выключить там на время подбора.
+        if (!await RouterGateAsync(select: true)) return;
         var baseId = _bestId ?? CurrentStrategyId;
 
         ResetResults();
@@ -955,6 +965,7 @@ public sealed class MainViewModel : Observable
         }
         await AutoApplyAsync();
         await RefreshStatusAsync();
+        await RouterResumeAsync();
     }
 
     static string RoleTitle(string message) => message.Split(':')[0] switch

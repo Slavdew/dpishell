@@ -26,24 +26,58 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title) : Observab
     public RouterSelectRow Row { get; } = row;
     public string Id => Row.Id;
     public string Title { get; } = title;
-    public string Groups => $"{Row.GroupShare * 100:0} %";
-    public string Share => $"{Row.TargetShare * 100:0} %";
+    /// <summary>Вариант глубокого поиска (candidate): в списке стратегий роутера его нет — только посмотреть, применить нельзя.</summary>
+    public bool IsCandidate => Row.Candidate;
+    public string Kind => IsCandidate ? "вариант поиска" : "";
+    public string Groups => IsCandidate ? "—" : $"{Row.GroupShare * 100:0} %";
+    /// <summary>У варианта поиска — сколько обязательных адресов его части открылось (ok из total).</summary>
+    public string Share => IsCandidate && Row.Total is > 0 ? $"{Row.Ok ?? 0} из {Row.Total}" : $"{Row.TargetShare * 100:0} %";
     public string Avg => Row.Error is null && Row.AvgS > 0 ? $"{Row.AvgS:0.00} с" : "—";
     public string Error => Row.Error ?? "";
-    public bool Usable => Row.Error is null && Row.GroupShare > 0;
+    public bool Usable => !IsCandidate && Row.Error is null && Row.GroupShare > 0;
     public bool IsBest { get => _best; set { if (Set(ref _best, value)) Raise(nameof(Mark)); } }
     public string Mark => IsBest ? "★" : "";
 }
 
-/// <summary>Чужой обход на роутере (diag.conflicts).</summary>
-public sealed record RouterConflictRow(string Name, string Detail);
+/// <summary>Чужой обход на роутере (diag.conflicts). Пакет (kind: package) не остановить — только удалить.</summary>
+public sealed record RouterConflictRow(string Name, string Detail, bool CanStop = true);
+
+/// <summary>Предупреждение роутера на главной; Fix — подпись кнопки, если роутер умеет исправить сам.</summary>
+public sealed record RouterWarningRow(string Code, string Text, string? Fix = null)
+{
+    public bool HasFix => Fix is not null;
+}
 
 public static class RouterTexts
 {
     /// <summary>Ошибка роутера → строка состояния. Тексты уже в исключении; пароля в них нет (RouterClient не кладёт запрос в текст).</summary>
-    public static string Friendly(RouterException e) => e.AppError?.Code == "busy"
-        ? "Роутер занят: " + (e.AppError.Text is { Length: > 0 } t ? char.ToLower(t[0]) + t[1..] : "идёт подбор или проверка")
-        : e.Message;
+    public static string Friendly(RouterException e) => e.AppError?.Code switch
+    {
+        "busy" => "Роутер занят: " + (e.AppError.Text is { Length: > 0 } t ? char.ToLower(t[0]) + t[1..] : "идёт подбор или проверка"),
+        // §9: enable/select_start при чужом обходе — conflict.
+        "conflict" => Conflict,
+        _ => e.Message,
+    };
+
+    public const string Conflict = "На роутере работает другая программа обхода — остановите или удалите её: «Диагностика» → «Роутер».";
+
+    /// <summary>Предупреждение status.warnings → строка главной. flow_offload и ipv6 роутер исправляет сам (§9).</summary>
+    public static RouterWarningRow Warning(RouterWarning w) => w.Code switch
+    {
+        "flow_offload" => new(w.Code, "Ускорение сети на роутере мешает обходу", "Исправить"),
+        "ipv6" => new(w.Code, "Сайты по IPv6 идут мимо обхода", "Исправить"),
+        "conflict" => new(w.Code, "На роутере работает другая программа обхода", "Подробнее"),
+        _ => new(w.Code, w.Text ?? w.Code),
+    };
+
+    /// <summary>Хост из адреса для списка исключений: «https://www.example.com/a» → «www.example.com».</summary>
+    public static string? Host(string url)
+    {
+        var s = url.Trim();
+        if (s.Length == 0) return null;
+        if (!s.Contains("://")) s = "https://" + s;
+        return Uri.TryCreate(s, UriKind.Absolute, out var u) && u.Host.Contains('.') ? u.Host.ToLowerInvariant() : null;
+    }
 
     /// <summary>Время роутера (UTC) → «ЧЧ:ММ» по часам этого ПК.</summary>
     public static string Time(DateTime? at) => at is { } t
@@ -108,6 +142,15 @@ public sealed class RouterViewModel : Observable, IDisposable
         RefreshDiagCmd = RelayCommand.Async(RefreshDiagAsync, () => CanAct);
         StopConflictCmd = new RelayCommand(p => { if (p is string name) _ = StopConflictAsync(name); }, _ => CanAct);
         SaveReportCmd = RelayCommand.Async(SaveReportAsync, () => CanAct);
+        SiteCheckCmd = RelayCommand.Async(SiteCheckAsync, () => CanAct);
+        AddExcludeCmd = RelayCommand.Async(AddSiteToExcludeAsync, () => CanAct && SiteSuggestExclude);
+        DnsCheckCmd = RelayCommand.Async(DnsAnalyzeAsync, () => CanAct);
+        DnsEnableCmd = RelayCommand.Async(DnsEnableAsync, () => CanAct && !DnsProtected);
+        DnsRestoreCmd = RelayCommand.Async(DnsRestoreAsync, () => CanAct && DnsProtected);
+        FixWarningCmd = new RelayCommand(p => { if (p is string code) _ = FixWarningAsync(code); }, _ => CanAct);
+        StopPcCmd = RelayCommand.Async(StopPcForRouterAsync, () => !Busy);
+        StopRouterCmd = RelayCommand.Async(async () => { if (await DisableAsync()) Say("Обход на роутере выключен — работает этот ПК."); }, () => CanAct);
+        EnableTimestampsCmd = RelayCommand.Async(() => CheckTimestampsAsync(ask: true), () => !Busy);
     }
 
     // ---------- связь с окном (в тестах подменяются) ----------
@@ -131,6 +174,18 @@ public sealed class RouterViewModel : Observable, IDisposable
     public Func<string?> Gateway { get; set; } = RouterClient.DefaultGateway;
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(1);
     public TimeSpan CheckTimeout { get; set; } = TimeSpan.FromMinutes(3);
+    /// <summary>Установка пакета защищённого DNS на роутере — 10–20 с (§5.1), с запасом.</summary>
+    public TimeSpan DnsTimeout { get; set; } = TimeSpan.FromMinutes(2);
+
+    // Этот ПК (07-router-api §6): обходы ПК и роутера вместе не работают.
+    /// <summary>Обход на этом ПК включён.</summary>
+    public Func<bool> PcRunning { get; set; } = () => false;
+    /// <summary>Выключить обход на этом ПК (через помощника); true — выключен.</summary>
+    public Func<Task<bool>> StopPc { get; set; } = () => Task.FromResult(false);
+    /// <summary>Метки TCP на этом ПК: null — не удалось узнать. Чтение без прав.</summary>
+    public Func<bool?> PcTimestamps { get; set; } = TcpTimestamps.IsEnabled;
+    /// <summary>Включить метки TCP на этом ПК через помощника; ask — можно предложить его установку (по кнопке), иначе только если он уже есть.</summary>
+    public Func<bool, Task<bool>> EnablePcTimestamps { get; set; } = _ => Task.FromResult(false);
 
     /// <summary>Поменялось то, что видно на главной (найден ли роутер, включён ли на нём обход).</summary>
     public event Action? Changed;
@@ -366,9 +421,10 @@ public sealed class RouterViewModel : Observable, IDisposable
             // Расписание — как на роутере (без обратного вызова schedule_set).
             if (value?.Schedule is { } sch)
             {
-                _scheduleEnabled = sch.Enabled; _scheduleHours = sch.Hours;
-                Raise(nameof(ScheduleEnabled)); Raise(nameof(ScheduleHours)); Raise(nameof(ScheduleEditable));
+                _scheduleEnabled = sch.Enabled; _scheduleHours = sch.Hours; _autoSelect = sch.AutoSelect;
+                Raise(nameof(ScheduleEnabled)); Raise(nameof(ScheduleHours)); Raise(nameof(ScheduleEditable)); Raise(nameof(AutoSelect));
             }
+            Raise(nameof(ModeAll)); Raise(nameof(ModeLists)); Raise(nameof(ModeHint));
             UpdateHome();
         }
     }
@@ -391,7 +447,7 @@ public sealed class RouterViewModel : Observable, IDisposable
     public bool ScheduleEnabled
     {
         get => _scheduleEnabled;
-        set { if (value != _scheduleEnabled) _ = SetScheduleAsync(value, _scheduleHours); }
+        set { if (value != _scheduleEnabled) _ = SetScheduleAsync(value, _scheduleHours, _autoSelect); }
     }
 
     public bool ScheduleEditable => CanAct && ScheduleEnabled;
@@ -399,24 +455,69 @@ public sealed class RouterViewModel : Observable, IDisposable
     public double ScheduleHours
     {
         get => _scheduleHours;
-        set { if (value != _scheduleHours) _ = SetScheduleAsync(_scheduleEnabled, value); }
+        set { if (value != _scheduleHours) _ = SetScheduleAsync(_scheduleEnabled, value, _autoSelect); }
     }
 
-    public async Task SetScheduleAsync(bool enabled, double hours)
+    bool _autoSelect;
+    /// <summary>«Подбирать заново сам»: проверка не прошла и запасные кончились — роутер сам подбирает и включает лучшую (§5.2 schedule_set).</summary>
+    public bool AutoSelect
+    {
+        get => _autoSelect;
+        set { if (value != _autoSelect) _ = SetScheduleAsync(_scheduleEnabled, _scheduleHours, value); }
+    }
+
+    public async Task SetScheduleAsync(bool enabled, double hours, bool autoSelect = false)
     {
         if (await Guard("Меняю расписание проверки на роутере…", async () =>
             {
-                await Call(c => c.ScheduleSetAsync(enabled, hours));
+                await Call(c => c.ScheduleSetAsync(enabled, hours, autoSelect));
                 await RefreshStatusCoreAsync();
             }))
-            Say(enabled ? "Роутер будет проверять сайты " + (ScheduleOptions.FirstOrDefault(o => o.Hours == hours)?.Title ?? $"раз в {hours} ч") + "."
-                        : "Проверка по расписанию на роутере выключена.");
+            Say(!enabled ? "Проверка по расписанию на роутере выключена."
+                : "Роутер будет проверять сайты " + (ScheduleOptions.FirstOrDefault(o => o.Hours == hours)?.Title ?? $"раз в {hours} ч")
+                  + (autoSelect ? ", а если запасные не помогут — подберёт заново." : "."));
         else
         {
             // Не получилось — переключатели показывают то, что на роутере.
-            Raise(nameof(ScheduleEnabled)); Raise(nameof(ScheduleHours));
+            Raise(nameof(ScheduleEnabled)); Raise(nameof(ScheduleHours)); Raise(nameof(AutoSelect));
         }
     }
+
+    // ---------- режим: все сайты / по спискам (mode_set) ----------
+
+    bool? _modeWanted;
+    /// <summary>«Все сайты, кроме исключений» — по умолчанию на роутере. Пока смена идёт — то, что выбрали.</summary>
+    public bool ModeAll
+    {
+        get => _modeWanted ?? (_status?.Mode ?? "all") != "lists";
+        set { if (value != ModeAll) _ = SetModeAsync(value); }
+    }
+    public bool ModeLists { get => !ModeAll; set => ModeAll = !value; }
+    public string ModeHint => ModeAll
+        ? "Обход для всех сайтов. Если какой-то сайт сломался — добавьте его в исключения (ниже — «Сайт не открывается»)."
+        : "Обход только для YouTube, Discord и сайтов из списков.";
+
+    public async Task SetModeAsync(bool all)
+    {
+        _modeWanted = all;
+        RaiseMode();
+        try
+        {
+            if (await Guard("Меняю режим на роутере…", async () =>
+                {
+                    await Call(c => c.ModeSetAsync(all));
+                    await RefreshStatusCoreAsync();
+                }))
+                Say((all ? "Роутер обходит все сайты, кроме исключений." : "Роутер обходит только сайты из списков.") + " Он сам перепроверит, что всё открывается.");
+        }
+        finally
+        {
+            _modeWanted = null;
+            RaiseMode();
+        }
+    }
+
+    void RaiseMode() { Raise(nameof(ModeAll)); Raise(nameof(ModeLists)); Raise(nameof(ModeHint)); }
 
     /// <summary>Обход на роутере включён (по status, без входа — по status.json).</summary>
     public bool RouterEnabled => _status?.Enabled ?? _detection?.Status?.Enabled ?? false;
@@ -432,7 +533,8 @@ public sealed class RouterViewModel : Observable, IDisposable
     {
         if (id is null) return "не выбрана";
         if (_titles.TryGetValue(id, out var t)) return t;
-        return _shell.Catalog.Find(id)?.Title ?? id;
+        // Найденная глубоким поиском на роутере («r-…») — в строках подбора она уже с названием.
+        return _shell.Catalog.Find(id)?.Title ?? Scores.FirstOrDefault(s => s.Id == id && s.Title != id)?.Title ?? id;
     }
 
     void UpdateHome()
@@ -455,10 +557,130 @@ public sealed class RouterViewModel : Observable, IDisposable
         }
         if (_detection?.Found is RouterFound.AppTooOld or RouterFound.RouterTooOld) parts.Add(ConnectionText.ToLowerInvariant()[..1] + ConnectionText[1..]);
         HomeDetail = string.Join(", ", parts.Where(p => p.Length > 0));
-        Warnings = string.Join(" · ", (_status?.Warnings ?? []).Select(w => w.Text ?? w.Code));
+        var rows = (_status?.Warnings ?? []).Select(RouterTexts.Warning).ToList();
+        if (!rows.SequenceEqual(WarningRows))
+        {
+            WarningRows.Clear();
+            foreach (var r in rows) WarningRows.Add(r);
+        }
+        Warnings = string.Join(" · ", rows.Select(r => r.Text));
         ToggleText = enabled ? "Выключить на роутере" : "Включить на роутере";
         Raise(nameof(RouterEnabled));
+        Raise(nameof(FlowOffloadFixable)); Raise(nameof(Ipv6Fixable));
+        RaisePc();
         Changed?.Invoke();
+    }
+
+    /// <summary>Предупреждения роутера — по строке, у исправимых кнопка (flow_offload, ipv6 — §9).</summary>
+    public ObservableCollection<RouterWarningRow> WarningRows { get; } = [];
+    public ICommand FixWarningCmd { get; }
+    public bool FlowOffloadFixable => _status?.Warnings?.Any(w => w.Code == "flow_offload") == true;
+    public bool Ipv6Fixable => _status?.Warnings?.Any(w => w.Code == "ipv6") == true;
+
+    /// <summary>«Исправить» у предупреждения: разгрузку — zapret (flow_offload_fix), обход по IPv6 (ipv6_set); чужой обход — в диагностику.</summary>
+    public async Task FixWarningAsync(string code)
+    {
+        switch (code)
+        {
+            case "flow_offload":
+                if (await Guard("Исправляю ускорение сети на роутере…", async () =>
+                    {
+                        await Call(c => c.FlowOffloadFixAsync());
+                        await RefreshStatusCoreAsync();
+                    }))
+                    Say("Готово: ускорение сети работает вместе с обходом, скорость та же.");
+                break;
+            case "ipv6":
+                if (await Guard("Включаю обход по IPv6 на роутере…", async () =>
+                    {
+                        await Call(c => c.Ipv6SetAsync(true));
+                        await RefreshStatusCoreAsync();
+                    }))
+                    Say("Готово: обход работает и для сайтов по IPv6.");
+                break;
+            case "conflict":
+                Navigate(Pages.Diag);
+                await RefreshDiagAsync();
+                break;
+        }
+        if (DiagLoaded && code != "conflict") await RefreshDiagAsync();
+    }
+
+    // ---------- этот ПК и роутер вместе (07-router-api §6) ----------
+
+    /// <summary>Обход включён и на этом ПК, и на роутере: пакеты обрабатываются дважды, сайты ломаются.</summary>
+    public bool BothOn => RouterEnabled && PcRunning();
+    public ICommand StopPcCmd { get; }
+    public ICommand StopRouterCmd { get; }
+
+    /// <summary>Окно сообщает, что обход на ПК включился или выключился.</summary>
+    public void PcChanged() => RaisePc();
+
+    void RaisePc() { Raise(nameof(BothOn)); Raise(nameof(TimestampsNote)); Raise(nameof(HasTimestampsNote)); Raise(nameof(TimestampsNeedAction)); }
+
+    async Task StopPcForRouterAsync()
+    {
+        if (await StopPc()) Say("Обход на этом ПК выключен — работает роутер.");
+        RaisePc();
+    }
+
+    /// <summary>Выключить обход на роутере (например, чтобы включить на ПК). true — выключен.</summary>
+    public async Task<bool> DisableAsync()
+    {
+        if (!RouterEnabled) return true;
+        return await Guard("Выключаю обход на роутере…", async () =>
+        {
+            await Call(c => c.DisableAsync());
+            await RefreshStatusCoreAsync();
+        }) && !RouterEnabled;
+    }
+
+    /// <summary>Включить обход на роутере обратно (после подбора на ПК).</summary>
+    public async Task<bool> EnableAsync()
+    {
+        if (RouterEnabled) return true;
+        return await Guard("Включаю обход на роутере…", async () =>
+        {
+            await Call(c => c.EnableAsync());
+            await RefreshStatusCoreAsync();
+        });
+    }
+
+    // ---------- временные метки TCP (needs_tcp_timestamps, §6) ----------
+
+    bool? _pcTimestamps;
+    bool _timestampsTried, _timestampsByRouter;
+
+    /// <summary>Стратегия роутера работает только с метками TCP: включили сами — одна строка; не смогли — подсказка и кнопка.</summary>
+    public string TimestampsNote => !NeedsTimestamps ? ""
+        : _pcTimestamps == false ? "Стратегии роутера нужны временные метки TCP — на этом ПК они выключены, часть сайтов может не открываться."
+        : _timestampsByRouter ? "Включены временные метки TCP — нужны стратегии роутера."
+        : "";
+    public bool HasTimestampsNote => TimestampsNote.Length > 0;
+    public bool TimestampsNeedAction => NeedsTimestamps && _pcTimestamps == false;
+    public ICommand EnableTimestampsCmd { get; }
+    bool NeedsTimestamps => _status is { NeedsTcpTimestamps: true, Enabled: true };
+
+    /// <summary>Метки нужны, а на ПК выключены — включить через помощника. Сам — один раз и без вопросов; по кнопке — с предложением установить помощника.</summary>
+    public async Task CheckTimestampsAsync(bool ask = false)
+    {
+        if (!NeedsTimestamps) { RaisePc(); return; }
+        if (_pcTimestamps != true) _pcTimestamps = await Task.Run(PcTimestamps);
+        if (_pcTimestamps == false && (ask || !_timestampsTried))
+        {
+            _timestampsTried = true;
+            bool on;
+            try { on = await EnablePcTimestamps(ask); }
+            catch (Exception e) when (e is IOException or InvalidOperationException or TimeoutException) { on = false; }
+            if (on)
+            {
+                _pcTimestamps = true;
+                _timestampsByRouter = true;
+                Say("Включены временные метки TCP — нужны стратегии роутера.");
+            }
+            else if (ask) Say("Не удалось включить метки TCP на этом ПК.");
+        }
+        RaisePc();
     }
 
     /// <param name="resumeSelect">Подбор уже идёт (запущен не нами или до запуска программы) — показать его ход.</param>
@@ -466,6 +688,7 @@ public sealed class RouterViewModel : Observable, IDisposable
     {
         Status = await Call(c => c.StatusAsync());
         if (resumeSelect && _status?.Jobs?.Select == true && !_polling) _ = PollSelectAsync();
+        await CheckTimestampsAsync();
     }
 
     public ObservableCollection<RouterStrategyRow> Strategies { get; } = [];
@@ -477,7 +700,9 @@ public sealed class RouterViewModel : Observable, IDisposable
         foreach (var s in list.Items)
         {
             _titles[s.Id] = s.Title;
-            Strategies.Add(new(s.Id, s.Title, s.Runs > 0 ? $"удачных проверок: {s.Passed} из {s.Runs}" : ""));
+            var origin = s.FoundOnRouter ? "найдена на роутере" : s.FromPc ? "с ПК" : "";
+            var stats = s.Runs > 0 ? $"удачных проверок: {s.Passed} из {s.Runs}" : "";
+            Strategies.Add(new(s.Id, s.Title, string.Join(" · ", new[] { origin, stats }.Where(x => x.Length > 0))));
         }
     }
 
@@ -537,6 +762,13 @@ public sealed class RouterViewModel : Observable, IDisposable
     public async Task ToggleAsync()
     {
         bool enable = !RouterEnabled;
+        // §6: вместе с обходом ПК роутер не работает — включение второго только осознанно и с выключением первого.
+        if (enable && PcRunning())
+        {
+            if (!Confirm("На этом ПК обход включён. Вместе с роутером он не работает: трафик обрабатывается дважды, и сайты перестают открываться.\n\n"
+                         + "Выключить обход на этом ПК и включить на роутере?")) return;
+            if (!await StopPc()) { Say("Не удалось выключить обход на этом ПК — на роутере не включаю."); return; }
+        }
         if (await Guard(enable ? "Включаю обход на роутере…" : "Выключаю обход на роутере…", async () =>
             {
                 await Call(c => enable ? c.EnableAsync() : c.DisableAsync());
@@ -752,6 +984,9 @@ public sealed class RouterViewModel : Observable, IDisposable
         }
         // Только что опросили до конца — не начинать опрос снова, даже если status ещё не обновил jobs.select.
         await RefreshStatusSafeAsync(resumeSelect: false);
+        // Глубокий поиск мог найти новые (id «r-…») — они появляются в списке стратегий роутера.
+        try { if (Connected) await LoadStrategiesAsync(); }
+        catch (RouterException) { /* список обновится при следующем входе */ }
     }
 
     /// <summary>«осталось ~3 мин» по eta_s; null — оценки ещё нет.</summary>
@@ -941,6 +1176,206 @@ public sealed class RouterViewModel : Observable, IDisposable
         else TargetsMessage = "Не сохранено — причина в строке состояния.";
     }
 
+    // ---------- вкладка «Роутер» ----------
+
+    /// <summary>Открыли вкладку «Роутер»: DNS — свежим (статус уже есть).</summary>
+    public async Task RefreshRouterPageAsync()
+    {
+        if (!Connected || Busy) return;
+        await Guard("Читаю DNS роутера…", async () => ShowDns(await Call(c => c.DnsStatusAsync())));
+        Say("");
+    }
+
+    // ---------- «Сайт не открывается» (site_check) ----------
+
+    string _siteUrl = "", _siteResult = "", _siteHint = "", _siteDetail = "";
+    bool _siteSuggest, _siteChecking;
+    string? _siteHost;
+    public string SiteUrl { get => _siteUrl; set => Set(ref _siteUrl, value); }
+    public string SiteResult { get => _siteResult; private set { if (Set(ref _siteResult, value)) Raise(nameof(HasSiteResult)); } }
+    public bool HasSiteResult => SiteResult.Length > 0;
+    public string SiteHint { get => _siteHint; private set => Set(ref _siteHint, value); }
+    /// <summary>Что именно ответил сайт с обходом и без — под «Подробнее».</summary>
+    public string SiteDetail { get => _siteDetail; private set { if (Set(ref _siteDetail, value)) Raise(nameof(HasSiteDetail)); } }
+    public bool HasSiteDetail => SiteDetail.Length > 0;
+    /// <summary>Открывается только без обхода — кнопка «Добавить в исключения».</summary>
+    public bool SiteSuggestExclude { get => _siteSuggest; private set { if (Set(ref _siteSuggest, value)) Requery(); } }
+    public bool SiteChecking { get => _siteChecking; private set => Set(ref _siteChecking, value); }
+    public ICommand SiteCheckCmd { get; }
+    public ICommand AddExcludeCmd { get; }
+
+    /// <summary>Роутер проверяет адрес с обходом и без; ждём site_check_result.running == false.</summary>
+    public async Task SiteCheckAsync()
+    {
+        var url = SiteUrl.Trim();
+        if (RouterTexts.Host(url) is not { } host) { SiteResult = "Впишите адрес сайта, например example.com"; SiteHint = ""; SiteDetail = ""; SiteSuggestExclude = false; return; }
+        RouterSiteCheckResult? res = null;
+        SiteSuggestExclude = false;
+        if (!await Guard("Роутер проверяет сайт…", async () =>
+            {
+                SiteChecking = true;
+                SiteResult = "Проверяю " + host + "…"; SiteHint = ""; SiteDetail = "";
+                try
+                {
+                    await Call(c => c.SiteCheckAsync(url));
+                    var deadline = DateTime.UtcNow + CheckTimeout;
+                    while (DateTime.UtcNow < deadline)
+                    {
+                        await Task.Delay(PollInterval);
+                        var r = await Call(c => c.SiteCheckResultAsync());
+                        if (!r.Running) { res = r; break; }
+                    }
+                }
+                finally { SiteChecking = false; }
+            }))
+        {
+            if (SiteResult.StartsWith("Проверяю")) SiteResult = "";
+            return;
+        }
+        Say("");
+        ShowSiteResult(host, res);
+    }
+
+    void ShowSiteResult(string host, RouterSiteCheckResult? r)
+    {
+        _siteHost = host;
+        if (r is null) { SiteResult = "Роутер ещё проверяет — попробуйте через минуту."; SiteHint = ""; SiteDetail = ""; return; }
+        bool with = r.WithBypass?.Ok == true, without = r.WithoutBypass?.Ok == true;
+        (SiteResult, SiteHint) = (with, without) switch
+        {
+            (true, _) => ("С обходом сайт открывается", "Значит, дело не в обходе: попробуйте обновить страницу или другой браузер."),
+            (false, true) => ("Сайт открывается только без обхода", "Добавьте его в исключения — роутер перестанет его трогать."),
+            _ => ("Сайт не открывается и без обхода", "Похоже, он не работает сам или заблокирован по адресу."),
+        };
+        SiteSuggestExclude = r.SuggestExclude || (!with && without);
+        static string Side(RouterSiteCheckSide? s) => s is null ? "не проверялось" : s.Ok ? "открылся" : "не открылся" + (s.Detail is { Length: > 0 } d ? $" ({d})" : "");
+        SiteDetail = $"С обходом: {Side(r.WithBypass)}. Без обхода: {Side(r.WithoutBypass)}.";
+    }
+
+    /// <summary>«Добавить в исключения»: хост — в user-exclude роутера (lists_set), не трогая остальные строки.</summary>
+    public async Task AddSiteToExcludeAsync()
+    {
+        if (_siteHost is not { } host) return;
+        if (await Guard("Добавляю в исключения роутера…", async () =>
+            {
+                var lines = (await Call(c => c.ListsGetAsync("user-exclude"))).Lines.ToList();
+                if (!lines.Contains(host, StringComparer.OrdinalIgnoreCase)) lines.Add(host);
+                await Call(c => c.ListsSetAsync("user-exclude", lines));
+                if (_listsLoaded) ListExcludeText = string.Join(Environment.NewLine, lines);
+            }))
+        {
+            SiteSuggestExclude = false;
+            SiteResult = $"{host} — в исключениях роутера";
+            SiteHint = "Роутер больше не применяет к нему обход.";
+            Say(SiteResult + ".");
+        }
+    }
+
+    // ---------- DNS для всей сети (dns_status, dns_analyze / dns_enable / dns_restore) ----------
+
+    RouterDnsStatus? _dnsStatus;
+    string _dnsState = "", _dnsHint = "", _dnsJob = "";
+    bool _dnsRunning;
+    public bool DnsLoaded => _dnsStatus is not null;
+    /// <summary>Защищённый DNS включён для всей сети — кнопка «Вернуть как было».</summary>
+    public bool DnsProtected => _dnsStatus?.Mode == "doh";
+    public bool DnsCanEnable => !DnsProtected;
+    public string DnsState { get => _dnsState; private set => Set(ref _dnsState, value); }
+    public string DnsHint { get => _dnsHint; private set { if (Set(ref _dnsHint, value)) Raise(nameof(HasDnsHint)); } }
+    public bool HasDnsHint => DnsHint.Length > 0;
+    /// <summary>Ход и итог последнего DNS-задания (установка занимает 10–20 с).</summary>
+    public string DnsJobText { get => _dnsJob; private set { if (Set(ref _dnsJob, value)) Raise(nameof(HasDnsJob)); } }
+    public bool HasDnsJob => DnsJobText.Length > 0;
+    public bool DnsRunning { get => _dnsRunning; private set => Set(ref _dnsRunning, value); }
+    /// <summary>Под «Подробнее»: серверы и время ответа.</summary>
+    public ObservableCollection<string> DnsServers { get; } = [];
+    public ICommand DnsCheckCmd { get; }
+    public ICommand DnsEnableCmd { get; }
+    public ICommand DnsRestoreCmd { get; }
+
+    void ShowDns(RouterDnsStatus d)
+    {
+        _dnsStatus = d;
+        var at = d.CheckedAt is { } t ? $" · проверено в {RouterTexts.Time(t)}" : "";
+        if (d.Mode == "doh")
+        {
+            DnsState = d.FallbackActive ? "Защищённый DNS сейчас недоступен" : "Защищённый DNS включён для всей сети";
+            DnsHint = d.FallbackActive ? "Временно работает DNS провайдера — роутер вернёт защищённый сам." : "";
+        }
+        else if (d.CheckedAt is null) { DnsState = "DNS провайдера, не проверялся"; DnsHint = "Нажмите «Проверить»."; }
+        else if (d.Spoofed) { DnsState = "Провайдер подменяет адреса сайтов" + at; DnsHint = "Включите защищённый DNS — он поможет всем устройствам дома."; }
+        else { DnsState = "Подмены нет" + at; DnsHint = ""; }
+        DnsServers.Clear();
+        foreach (var s in d.Servers ?? []) DnsServers.Add($"{s.Name}: " + (s.DohOk ? "отвечает" + (s.Ms is { } ms ? $", {ms} мс" : "") : "не отвечает"));
+        DnsJobText = d.Job switch
+        {
+            null => "",
+            { Running: true } j => JobTitle(j.Action) + "…",
+            { Ok: false } j => JobTitle(j.Action) + ": не получилось" + (j.Message is { Length: > 0 } m ? $" — {m}" : ""),
+            _ => "",
+        };
+        Raise(nameof(DnsLoaded)); Raise(nameof(DnsProtected)); Raise(nameof(DnsCanEnable));
+        Requery();
+    }
+
+    static string JobTitle(string? action) => action switch
+    {
+        "dns_enable" => "Включаю защищённый DNS",
+        "dns_restore" => "Возвращаю DNS как было",
+        _ => "Проверяю DNS",
+    };
+
+    public Task DnsAnalyzeAsync() => DnsJobAsync("dns_analyze", c => c.DnsAnalyzeAsync(), "Роутер проверил DNS.");
+
+    public Task DnsEnableAsync()
+    {
+        if (!Confirm("Включить защищённый DNS для всей сети?\n\n"
+                     + "Все устройства дома будут получать настоящие адреса сайтов — провайдер не сможет их подменять. "
+                     + "Фильтры провайдера (родительский контроль) перестанут действовать, сайты могут открываться чуть медленнее. "
+                     + "Прежние настройки сохранятся: «Вернуть как было» вернёт их."))
+            return Task.CompletedTask;
+        return DnsJobAsync("dns_enable", c => c.DnsEnableAsync(), "Защищённый DNS включён для всей сети.");
+    }
+
+    public Task DnsRestoreAsync() => DnsJobAsync("dns_restore", c => c.DnsRestoreAsync(), "DNS на роутере — как было.");
+
+    /// <summary>Фоновое DNS-задание: запустить и опрашивать dns_status, пока job этого действия не закончится.</summary>
+    async Task DnsJobAsync(string action, Func<RouterClient, Task<RouterStarted>> start, string done)
+    {
+        RouterDnsJob? job = null;
+        if (!await Guard(JobTitle(action) + " на роутере…", async () =>
+            {
+                DnsRunning = true;
+                try
+                {
+                    var before = _dnsStatus?.Job;
+                    await Call(start);
+                    DnsJobText = JobTitle(action) + "…";
+                    bool sawRunning = false;
+                    var deadline = DateTime.UtcNow + DnsTimeout;
+                    while (DateTime.UtcNow < deadline)
+                    {
+                        await Task.Delay(PollInterval);
+                        var d = await Call(c => c.DnsStatusAsync());
+                        var j = d.Job;
+                        if (j?.Running == true) { sawRunning = true; DnsJobText = JobTitle(action) + "…"; continue; }
+                        // Закончилось наше: видели, как шло, или у задания новое время (at) — не прошлое такое же.
+                        if (j is not null && j.Action == action && (sawRunning || (j.At is not null && j.At != before?.At)))
+                        {
+                            job = j;
+                            ShowDns(d);
+                            return;
+                        }
+                    }
+                    DnsJobText = JobTitle(action) + " — роутер ещё не закончил, итог появится здесь позже.";
+                }
+                finally { DnsRunning = false; }
+            }))
+            return;
+        if (job is null) { Say(DnsJobText); return; }
+        Say(job.Ok == false ? DnsJobText : done);
+    }
+
     // ---------- диагностика роутера ----------
 
     public ObservableCollection<RouterConflictRow> Conflicts { get; } = [];
@@ -969,9 +1404,13 @@ public sealed class RouterViewModel : Observable, IDisposable
                 var d = await Call(c => c.DiagAsync());
                 Conflicts.Clear();
                 foreach (var c in d.Conflicts ?? [])
-                    Conflicts.Add(new(c.Name, (c.Kind == "service" ? "служба" : c.Kind) + (c.Running ? ", работает" : ", остановлена")));
-                FlowOffloadText = d.FlowOffload ? "включено — обход может не срабатывать; выключите «Flow offloading» в настройках межсетевого экрана роутера" : "выключено";
-                Ipv6Text = d.Ipv6Wan ? "есть — часть сайтов может идти по IPv6 мимо обхода" : "нет";
+                    Conflicts.Add(c.Kind == "package"
+                        // §9: пакет conflict_stop не останавливает — только удаление.
+                        ? new(c.Name, "установлен пакет, он мешает — удалите его в меню роутера: «Система» → «Программное обеспечение»", CanStop: false)
+                        : new(c.Name, (c.Kind == "service" ? "служба" : c.Kind) + (c.Running ? ", работает" : ", остановлена")));
+                FlowOffloadText = !d.FlowOffload ? "выключено"
+                    : FlowOffloadFixable ? "включено — мешает обходу" : "включено";
+                Ipv6Text = !d.Ipv6Wan ? "нет" : Ipv6Fixable ? "есть — сайты по IPv6 идут мимо обхода" : "есть";
                 DnsText = d.Dns is null ? "не проверялся"
                     : (d.Dns.Spoofed ? "провайдер подменяет адреса сайтов" : "подмены нет") + (d.Dns.CheckedAt is { } at ? $" (проверено в {RouterTexts.Time(at)})" : "");
                 SpaceText = $"{d.OverlayFreeKb / 1024.0:0.#} МБ" + (d.OverlayFreeKb < 2048 ? " — мало, обновления могут не поместиться" : "");
