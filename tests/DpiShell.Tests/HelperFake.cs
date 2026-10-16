@@ -163,6 +163,16 @@ public sealed class FakeHelperBackend : IHelperBackend
         ct.ThrowIfCancellationRequested();
     }
 
+    /// <summary>Что отвечает data_update.</summary>
+    public DataUpdateResult DataUpdateValue { get; set; } = new(true, false, false, "Данные обновлены до 2026-11-01.", "2026-11-01");
+
+    public Task<DataUpdateResult> UpdateDataAsync(bool confirmed, IProgress<string> log, CancellationToken ct)
+    {
+        Call("data_update " + confirmed);
+        log.Report("Скачиваю lists/general.txt…");
+        return Task.FromResult(DataUpdateValue);
+    }
+
     public void RemoveAll() => Call("remove_all");
     public int ClearHistory() { Call("clear_history"); return 3; }
 

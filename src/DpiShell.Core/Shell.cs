@@ -7,11 +7,11 @@ public sealed class Shell
 {
     public AppPaths Paths { get; }
     public DataStore Data { get; }
-    public CoreInstaller Installer { get; }
+    public CoreInstaller Installer { get; private set; }
     public ServiceManager Service { get; }
     public AppState State { get; private set; }
-    public StrategyCatalog Catalog { get; }
-    public TargetSet DefaultTargets { get; }
+    public StrategyCatalog Catalog { get; private set; }
+    public TargetSet DefaultTargets { get; private set; }
     /// <summary>«Починить адреса» — системный hosts (ТЗ v2 §3); в тестах — копия во временной папке.</summary>
     public HostsManager Hosts { get => _hosts ??= new HostsManager(Paths); set => _hosts = value; }
     HostsManager? _hosts;
@@ -64,6 +64,48 @@ public sealed class Shell
     {
         using var http = CreateDownloadClient();
         await Installer.InstallAsync(http, log, ct);
+    }
+
+    /// <summary>Источники обновлений данных — только из поставки (02-spec §9, решение 23).</summary>
+    public UpdateSources UpdateSources => UpdateSources.Load(Path.Combine(Paths.Package, UpdateSources.FileName));
+
+    /// <summary>Версия данных в работе (обновлённых или поставки).</summary>
+    public string? DataVersion => Paths.SeedManifest?.Version;
+
+    /// <summary>
+    /// Поставить обновление данных по data.json с источников из списка (02-spec §3.6). Новое ядро в манифесте —
+    /// ставится по нему же до замены данных; затем каталог, цели и списки перечитываются, свои файлы не трогаются.
+    /// </summary>
+    public async Task<DataUpdateResult> UpdateDataAsync(bool confirmed, Func<CoreManifest, Task>? installCore, IProgress<string>? log = null,
+        CancellationToken ct = default, HttpClient? http = null)
+    {
+        var own = http is null;
+        http ??= new HttpClient(new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(5) }) { Timeout = Timeout.InfiniteTimeSpan };
+        try
+        {
+            var updater = new DataUpdater(Paths, new DataUpdateClient(http, UpdateSources)) { InstallCore = installCore };
+            var r = await updater.InstallAsync(confirmed, log, ct);
+            if (r.Applied) ReloadData();
+            return r;
+        }
+        finally { if (own) http.Dispose(); }
+    }
+
+    /// <summary>Перечитать данные (после обновления): каталог, цели, манифест ядра; стандартные списки — в lists\ и fake\.</summary>
+    public void ReloadData()
+    {
+        Paths.ResetSeed();
+        Installer = new CoreInstaller(Paths, CoreManifest.Load(Path.Combine(Paths.Seed, "core.json")));
+        Catalog = StrategyCatalog.Load(Path.Combine(Paths.Seed, "strategies.json"));
+        DefaultTargets = TargetSet.Load(Path.Combine(Paths.Seed, "targets.json"));
+        Data.Seed();
+    }
+
+    /// <summary>Поставить ядро по другому манифесту (новое из обновления данных) — тем же установщиком, по хешам.</summary>
+    public async Task InstallCoreAsync(CoreManifest manifest, IProgress<string>? log = null, CancellationToken ct = default)
+    {
+        using var http = CreateDownloadClient();
+        await new CoreInstaller(Paths, manifest).InstallAsync(http, log, ct);
     }
 
     public IReadOnlyList<TargetGroup> SelectedGroups(IEnumerable<string>? ids = null)

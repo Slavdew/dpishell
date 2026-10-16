@@ -307,6 +307,10 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public Task<HostsRecheckResult> HostsRecheckAsync(CancellationToken ct = default) => CallAsync<HostsRecheckResult>("hosts_recheck", null, null, ct);
     public Task<StopForeignResult> StopForeignAsync(CancellationToken ct = default) => CallAsync<StopForeignResult>("stop_foreign", null, null, ct);
     public Task CoreRepairAsync(IProgress<string>? log = null, CancellationToken ct = default) => CallAsync("core_repair", null, MapLog(log), ct);
+
+    /// <summary>Обновить данные по манифесту: что и откуда качать, помощник решает сам (окно не передаёт ни адресов, ни путей).</summary>
+    public Task<DataUpdateResult> UpdateDataAsync(bool confirmed = false, IProgress<string>? log = null, CancellationToken ct = default) =>
+        CallAsync<DataUpdateResult>("data_update", new { confirmed }, MapLog(log), ct);
     public Task RemoveAllAsync(CancellationToken ct = default) => CallAsync("remove_all", null, null, ct);
 
     public async Task<int> ClearHistoryAsync(CancellationToken ct = default) =>

@@ -52,7 +52,7 @@
                   "groups": [ { "id": "youtube", "ok": true }, { "id": "discord", "ok": true } ] },
   "fail_streak": 0,
   "schedule": { "enabled": true, "hours": 1, "auto_select": false },
-  "jobs": { "select": false, "check": false, "core_install": false, "dns_analyze": false, "site_check": false },
+  "jobs": { "select": false, "check": false, "core_install": false, "dns": false, "dns_analyze": false, "site_check": false },
   "warnings": [ { "code": "flow_offload", "text": "Включён flow offloading" } ] }
 ```
 `source`: `manual` | `timer` | `app`. Коды `warnings`: `flow_offload`, `ipv6`, `dns_spoofed`, `conflict`, `core_missing`, `switched_backup` (сработала запасная стратегия, в `text` — какая), `auto_selected` (автоподбор нашёл и включил стратегию, в `text` — какую), `auto_select_failed` (автоподбор ничего не нашёл, оставлена прежняя), `dns_fallback` (защищённый DNS недоступен, временно DNS провайдера).
@@ -72,13 +72,13 @@
 
 **`lists_get`** `{ "name": "user-general" | "user-exclude" | "exclude" }` → `{ "lines": ["example.com"], "editable": true }` — `exclude` (стандартные исключения) только для чтения.
 
-**`diag`** `{}` → `{ "conflicts": [ { "kind": "service", "name": "zapret2", "running": true } ], "flow_offload": false, "ipv6_wan": false, "dns": { "spoofed": true, "checked_at": "…" }, "overlay_free_kb": 18000 }`.
+**`diag`** `{}` → `{ "conflicts": [ { "kind": "service", "name": "zapret2", "running": true } ], "flow_offload": false, "flowoffload": "software", "ipv6_wan": false, "dns": { "spoofed": true, "checked_at": "…" }, "overlay_free_kb": 18000 }`. `flow_offload` — разгрузка включена в межсетевом экране (мешает обходу, предупреждение `flow_offload`); `flowoffload` — разгрузку ведёт zapret после `flow_offload_fix` (`none` | `software` | `hardware`, обходу не мешает).
 
 **`site_check_result`** `{}` → `{ "running": false, "url": "https://example.com/", "with_bypass": { "ok": false, "detail": "сброс после 16 КБ" }, "without_bypass": { "ok": true, "detail": "" }, "suggest_exclude": true }` — `suggest_exclude`: открывается только без обхода, предложить добавить в исключения (`lists_set user-exclude`).
 
 **`report`** `{}` → `{ "text": "…" }` — то же, что «Сохранить отчёт» на странице.
 
-**`dns_status`** `{}` → `{ "mode": "provider" | "doh", "spoofed": true, "checked_at": "…", "servers": [ { "name": "Google", "doh_ok": true, "ms": 38 }, { "name": "Cloudflare", "doh_ok": true, "ms": 41 } ], "fallback_active": false }` — `job` — последнее DNS-задание: `{ "action": "dns_enable", "running": false, "ok": true, "message": "Готово" }` (установка пакета занимает 10–20 с, поэтому `dns_enable`/`dns_restore` фоновые, как подбор). `fallback_active`: оба DoH пропали, временно работает DNS провайдера (06-router-spec §3.8).
+**`dns_status`** `{}` → `{ "mode": "provider" | "doh", "spoofed": true, "checked_at": "…", "servers": [ { "name": "Google", "doh_ok": true, "ms": 38 }, { "name": "Cloudflare", "doh_ok": true, "ms": 41 } ], "fallback_active": false }` — `job` — последнее DNS-задание (`null`, если их не было): `{ "action": "dns_enable", "running": false, "ok": true, "message": "Готово", "at": "2026-10-17T00:30:00Z" }`, `at` — когда закончилось (пока `running: true` — нет); `status.jobs.dns` — идёт любое DNS-задание (`dns_analyze` — прежнее имя, то же значение) (установка пакета занимает 10–20 с, поэтому `dns_enable`/`dns_restore` фоновые, как подбор). `fallback_active`: оба DoH пропали, временно работает DNS провайдера (06-router-spec §3.8).
 
 ### 5.2 Действия
 
@@ -170,3 +170,4 @@
 - 2026-10-17: группа `control` в `targets.json` опознаётся по полю `"control": true` (как `TargetGroup.Control` на ПК); стратегию бракуют только `required`-цели этой группы, в счёт успеха она не входит.
 - 2026-10-17: глубокий поиск на роутере (`select_start` с `depth: deep`). В `select_progress.rows` у кандидатов — `candidate: true`, `ok`, `total` (открылось обязательных целей роли); найденные стратегии — id `r-…`, `source: user` в `strategies`, хранятся отдельно от присланных `strategies_user_set`. Исправлено: доли `group_share`/`target_share` дробные (ucode делил целые нацело — частичный успех показывался как 0).
 - 2026-10-17: `flow_offload_fix`, `ipv6_set`; предупреждения `flow_offload`, `ipv6`, `conflict` теперь выдаются в `status.warnings`; `enable`/`select_start` при работающем чужом обходе — ошибка `conflict`; в `diag.conflicts` — `kind: package` (пакеты `zapret`, `luci-app-zapret`, `zapret-manager-beam`, `zapret2` — Zapret Manager в сторонняя прошивка OpenWrt, занимает `/opt/zapret`): `conflict_stop` их не останавливает, только удаление; `core_install` при них отказывает.
+- 2026-10-17 (вопросы окна ПК): в §5.1 описаны `status.jobs.dns` и `dns_status.job.at`; в `diag` — поле `flowoffload` (после `flow_offload_fix` `flow_offload` становится `false`, а `flowoffload` — `software`/`hardware`). Метки TCP (`needs_tcp_timestamps`) нужны только Windows-клиентам сети: у Android, iOS, macOS и Linux они включены по умолчанию.

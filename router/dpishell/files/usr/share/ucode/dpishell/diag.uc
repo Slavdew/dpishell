@@ -64,6 +64,8 @@ function diag() {
 	return {
 		conflicts: conflicts(),
 		flow_offload: flow_offload(),
+		// Разгрузку ведёт zapret (после flow_offload_fix): none | software | hardware — обходу не мешает.
+		flowoffload: st.settings().flowoffload,
 		ipv6_wan: ipv6_wan(),
 		dns: { spoofed: dns?.spoofed ?? null, checked_at: dns?.checked_at ?? null },
 		overlay_free_kb: overlay_free_kb(),

@@ -41,6 +41,8 @@ public interface IHelperBackend : IHelperCatalog
     void Choose(string strategyId);
     /// <summary>Включить временные метки TCP (их требует стратегия роутера, 07-router-api §6). true — включены.</summary>
     bool TcpTimestampsOn();
+    /// <summary>Обновление данных по data.json с источников помощника (02-spec §3.6).</summary>
+    Task<DataUpdateResult> UpdateDataAsync(bool confirmed, IProgress<string> log, CancellationToken ct);
     /// <summary>Все окна отключились от канала: в режиме без службы winws гасится.</summary>
     void OnClientsGone();
 }
@@ -53,7 +55,7 @@ public sealed record HelperStatus(
     IReadOnlyList<StrategyInfo> Strategies, IReadOnlyList<GroupInfo> Groups,
     IReadOnlyList<string> SelectedGroups, IReadOnlyList<string> UserTargets, IReadOnlyList<string> Fallbacks,
     bool TimestampsEnabledByUs, bool HostsFix, IReadOnlyList<Conflict> Foreign,
-    string HelperVersion);
+    string HelperVersion, string? DataVersion = null);
 
 public sealed record StrategyInfo(string Id, string Title, string Source);
 public sealed record GroupInfo(string Id, string Title, int Targets);
@@ -134,7 +136,41 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
             [.. shell.DefaultTargets.Groups.Select(g => new GroupInfo(g.Id, g.Title, g.Targets.Count)), new GroupInfo("user", "Свои адреса", st.UserTargets.Count)],
             st.Groups, st.UserTargets, st.Fallbacks,
             st.TimestampsEnabledByUs, st.HostsFix, foreign,
-            HelperProtocol.AppVersion);
+            HelperProtocol.AppVersion, shell.DataVersion);
+    }
+
+    /// <summary>Клиент HTTP для обновления данных; в тестах — подмена без сети.</summary>
+    public Func<HttpClient>? UpdateHttp { get; init; }
+
+    /// <summary>
+    /// Обновить данные. Новое ядро в манифесте — как «Восстановить ядро»: работающий обход останавливается, ядро ставится
+    /// по хешам нового core.json, обход возвращается на той же стратегии (аргументы — уже по новому каталогу).
+    /// </summary>
+    public async Task<DataUpdateResult> UpdateDataAsync(bool confirmed, IProgress<string> log, CancellationToken ct)
+    {
+        bool stopped = false;
+        var http = UpdateHttp?.Invoke();
+        try
+        {
+            var r = await shell.UpdateDataAsync(confirmed, async m =>
+            {
+                if (shell.State.Enabled && shell.IsActive)
+                {
+                    stopped = true;
+                    if (shell.ServiceMode) shell.Service.Stop(); else shell.StopOwnProcess();
+                }
+                await shell.InstallCoreAsync(m, log, ct);
+            }, log, ct, http);
+            try
+            {
+                // Ядро меняли — обход вернуть; иначе служба на старых аргументах (каталог поменялся) — перезапустить на новых.
+                if (stopped && shell.State.StrategyId is { } id) shell.Enable(id);
+                else if (r.Applied) shell.RefreshServiceIfOutdated();
+            }
+            catch (Exception e) when (e is InvalidOperationException or SecurityException or IOException) { log.Report(e.Message); }
+            return r;
+        }
+        finally { http?.Dispose(); }
     }
 
     /// <summary>Включить; выбранная руками — первая в запасных (раньше это делало окно).</summary>

@@ -21,6 +21,16 @@ public sealed class WindowSettings
     public string? RouterPassword { get; set; }
     /// <summary>Подсказку «свернулась в трей» уже показывали.</summary>
     public bool TrayHintShown { get; set; }
+    /// <summary>Окно при входе в Windows (в трее). Null — не выбирали: по режиму работы (решение 22 в 02-spec §9).</summary>
+    public bool? Autostart { get; set; }
+    /// <summary>Последняя попытка проверить обновления (раз в день при запуске окна).</summary>
+    public DateTime? UpdatesCheckedAt { get; set; }
+    /// <summary>Последняя удачная проверка.</summary>
+    public DateTime? UpdatesOkAt { get; set; }
+    /// <summary>Версия данных у источника, если она новее установленной (показываем до установки).</summary>
+    public string? UpdatesData { get; set; }
+    /// <summary>Новая версия программы у источника.</summary>
+    public string? UpdatesApp { get; set; }
 
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 

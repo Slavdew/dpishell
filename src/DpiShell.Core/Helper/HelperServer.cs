@@ -334,6 +334,7 @@ public sealed class HelperServer : IAsyncDisposable
             case "details": return await Task.Run(b.Details, ct);
             case "choose": await Task.Run(() => b.Choose(c.Str("strategy")!), ct); return null;
             case "tcp_timestamps_on": return new { enabled = await Task.Run(b.TcpTimestampsOn, ct) };
+            case "data_update": return await Task.Run(() => b.UpdateDataAsync(c.Bool("confirmed"), log, ct), ct);
         }
         // Белый список и диспетчер должны совпадать — тест проверяет, что сюда не попасть.
         throw new HelperRequestException(c.Id, $"Команда «{c.Cmd}» не поддерживается.");
