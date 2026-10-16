@@ -2,8 +2,11 @@
 
 Обновлено 2026-10-17. Читать первым при возобновлении работы.
 
-## В работе (агент, не закоммичено)
-- **Шаг 3 из `11-helper-spec.md` §6**: окно без прав (`asInvoker`), точка входа `--helper`/`--install-helper`, все админ-действия через `HelperClient`, щит и установка помощника по первому требованию, настройки окна в `%LocalAppData%\DpiShell\window.json`. Готово и закоммичено до него: ядро v2 (ef7b7f1), помощник (1c0556b), окно v2 (df1645a).
+## Остановлено по просьбе пользователя (2026-10-17, перезапуск VS Code от администратора)
+- **Окно без прав (шаг 3, 11-helper-spec §6)** — агент остановлен на «пишу HostsViewModel на помощнике». Решение **не собирается**: MainViewModel и часть моделей окна уже переведены на `HelperLink`/`WindowSettings` (новые файлы в App), остальные (Hosts/Net/RouterViewModel, App.xaml.cs) — ещё нет; правки в `Core/Helper/*` (новые команды `details`, `choose`). Продолжить тем же заданием (агент «Доделать окно без прав (продолжение)»), сначала `git diff`.
+- **Моё, не закоммичено, Core собирается**: группа `control` «Обычные сайты» (`data/targets.json`, `TargetGroup.Control`, `Selector.KeepForSelection/Score`, тесты `ControlGroupTests.cs`); роутерный клиент по 07 §5/§9 (mode/mode_set, site_check(+_result), dns_status/analyze/enable/restore с job.at, needs_tcp_timestamps, schedule.auto_select, jobs.site_check/dns, lists_get exclude, id `u-` по шаблону, `CandidateAddressesAsync` §2.3; `FakeRouter` и `RouterContractV9Tests.cs`). Тесты не прогнаны — проект тестов ждёт сборки окна. Закоммитить своими путями после прогона.
+- После перезапуска с правами — живая проверка (см. «Следующие шаги» п. 3), затем вернуть всё как было (удалить помощника и службу, Flowseal запустить обратно).
+- Сессия роутера (ai-1c) общается напрямую через SendMessage; её попросили прерваться.
 
 Если агенты оборвались: `git status` покажет, что успели. Проверить `dotnet build DpiShell.sln` и `dotnet test tests/DpiShell.Tests`, довести или перезапустить задание по тому же ТЗ (агент сначала смотрит, что уже сделано).
 
