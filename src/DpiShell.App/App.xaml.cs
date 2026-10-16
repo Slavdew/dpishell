@@ -35,9 +35,21 @@ public partial class App : Application
 
         var vm = new MainViewModel(shell);
         RelayCommand.OnError = ex => { TryLog(ex); vm.Message = Texts.Friendly(ex); };
-        var window = new MainWindow(vm);
-        MainWindow = window;
-        window.Show();
+        try
+        {
+            var window = new MainWindow(vm);
+            MainWindow = window;
+            window.Show();
+        }
+        catch (Exception ex)
+        {
+            // Окно не открылось — сказать и выйти, а не висеть в фоне без окна.
+            TryLog(ex);
+            MessageBox.Show($"Не удалось открыть окно DpiShell. Подробности — в {Path.Combine(new AppPaths().Logs, "app-errors.log")}.\n\n" + Texts.Friendly(ex),
+                "DpiShell", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+            return;
+        }
         _ = vm.InitializeAsync();
     }
 
@@ -45,8 +57,13 @@ public partial class App : Application
     {
         e.Handled = true;
         TryLog(e.Exception);
-        if (MainWindow?.DataContext is MainViewModel vm) vm.Message = Texts.Friendly(e.Exception);
-        else MessageBox.Show(Texts.Friendly(e.Exception), "DpiShell", MessageBoxButton.OK, MessageBoxImage.Error);
+        if (MainWindow is { IsLoaded: true, DataContext: MainViewModel vm }) vm.Message = Texts.Friendly(e.Exception);
+        else
+        {
+            // Ошибка до того, как окно показалось: без окна приложение бесполезно и висело бы в фоне.
+            MessageBox.Show(Texts.Friendly(e.Exception), "DpiShell", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+        }
     }
 
     static void TryLog(Exception? ex)

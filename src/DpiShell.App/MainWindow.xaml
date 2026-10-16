@@ -163,7 +163,7 @@
                                 <Button Content="Глубокий поиск (10–15 мин)" Command="{Binding StartSearchCmd}" Margin="16,0,8,8" />
                             </WrapPanel>
                             <TextBlock Text="Глубокий поиск ищет новые сочетания параметров, если готовые стратегии не помогли." Style="{StaticResource Hint}" Margin="0,0,0,6" />
-                            <ProgressBar Height="8" Maximum="{Binding SelectProgressMax}" Value="{Binding SelectProgress}" IsIndeterminate="{Binding SelectIndeterminate}" Margin="0,2,0,4"
+                            <ProgressBar Height="8" Maximum="{Binding SelectProgressMax}" Value="{Binding SelectProgress, Mode=OneWay}" IsIndeterminate="{Binding SelectIndeterminate}" Margin="0,2,0,4"
                                          Foreground="{StaticResource Accent}" Background="#E5E7EB" BorderThickness="0" />
                             <TextBlock Text="{Binding SelectProgressText}" Style="{StaticResource Hint}" Margin="0,0,0,8" />
                         </StackPanel>

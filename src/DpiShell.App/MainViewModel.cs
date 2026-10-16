@@ -239,7 +239,7 @@ public sealed class MainViewModel : Observable
         {
             var note = s.Source == "search" ? " · найдена поиском" : "";
             // Не «процент сайтов», а сколько раз в прошлых подборах открыла всё отмеченное.
-            if (stats.TryGetValue(s.Id, out var st)) note += $" · открыла всё в {st.FullOk} из {st.Runs} подборов";
+            if (stats.TryGetValue(s.Id, out var st)) note += $" · открыла всё в {st.FullOk} из {st.Runs} подборов ({(double)st.FullOk / st.Runs:P0})";
             StrategyChoices.Add(new(s.Id, s.Title + note));
         }
         _chosen = _shell.State.StrategyId;
