@@ -35,6 +35,14 @@ public sealed class WindowSmokeTests
         if (error is not null) throw new Exception("Окно упало: " + error.Message, error);
     }
 
+    static System.Windows.Controls.TabControl? FindTabControl(DependencyObject root)
+    {
+        if (root is System.Windows.Controls.TabControl t) return t;
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+            if (FindTabControl(System.Windows.Media.VisualTreeHelper.GetChild(root, i)) is { } found) return found;
+        return null;
+    }
+
     static void Pump() => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
 
     [Fact]
@@ -64,10 +72,14 @@ public sealed class WindowSmokeTests
             };
             w.Show();
             Pump();
+            var tabs = FindTabControl(w)!;
             foreach (var page in new[] { Pages.Select, Pages.Targets, Pages.Diag, Pages.Home })
             {
                 vm.Page = page;
                 Pump();
+                // Пункты меню стоят на экране в порядке вкладок, какая бы ни была выбрана (TabPanel переставлял выбранную в конец).
+                var ys = tabs.Items.Cast<System.Windows.Controls.TabItem>().Select(t => t.TranslatePoint(new Point(0, 0), w).Y).ToList();
+                if (!ys.SequenceEqual(ys.Order())) throw new Exception($"Меню перемешано при вкладке {page}: {string.Join(", ", ys)}");
             }
             w.Hide();
         });
