@@ -4,7 +4,7 @@
 
 ## В работе (агенты, не закоммичено)
 1. **Окно v2** — IP-списки и игровой режим, «Починить адреса» (hosts), кнопки «(i)» из `10-info-texts.md`, дополнения Диагностики (временные метки TCP, кэш Discord). Файлы: `src/DpiShell.App/*`, тесты окна. ТЗ — `09-features-spec.md` (+ «Решения» в конце).
-2. **Помощник** (окно без прав администратора) — шаги 1–2 из `11-helper-spec.md` §6: протокол и белый список команд, канал `\\.\pipe\DpiShell.Helper` с проверкой клиента, клиент для окна, служба `DpiShellHelper` и установка (`HelperEntry`). Файлы: `src/DpiShell.Core/Helper/*`, `tests/DpiShell.Tests/Helper*Tests.cs`.
+2. ~~**Помощник**~~ — шаги 1–2 **готовы и закоммичены** (1c0556b): клиент `HelperClient`, вход `HelperEntry.RunService/Install(userSid)/Uninstall`. Было: (окно без прав администратора) — шаги 1–2 из `11-helper-spec.md` §6: протокол и белый список команд, канал `\\.\pipe\DpiShell.Helper` с проверкой клиента, клиент для окна, служба `DpiShellHelper` и установка (`HelperEntry`). Файлы: `src/DpiShell.Core/Helper/*`, `tests/DpiShell.Tests/Helper*Tests.cs`.
 
 Если агенты оборвались: `git status` покажет, что успели. Проверить `dotnet build DpiShell.sln` и `dotnet test tests/DpiShell.Tests`, довести или перезапустить задание по тому же ТЗ (агент сначала смотрит, что уже сделано).
 
