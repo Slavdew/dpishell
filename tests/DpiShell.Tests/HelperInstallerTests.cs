@@ -22,6 +22,29 @@ public class HelperInstallerTests
     }
 
     [Fact]
+    public async Task Delete_waits_until_exe_is_released()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dpishell-del-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var held = File.Open(Path.Combine(dir, "DpiShell.exe"), FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+        // Как уходящий процесс службы: отпускает файл чуть позже, чем SCM ответил «остановлена».
+        var release = Task.Delay(600).ContinueWith(_ => held.Dispose());
+        HelperInstaller.DeleteWhenReleased(dir, TimeSpan.FromSeconds(10));
+        await release;
+        Assert.False(Directory.Exists(dir));
+    }
+
+    [Fact]
+    public void Delete_gives_up_with_original_error()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dpishell-del-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        using (File.Open(Path.Combine(dir, "DpiShell.exe"), FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+            Assert.ThrowsAny<IOException>(() => HelperInstaller.DeleteWhenReleased(dir, TimeSpan.FromMilliseconds(700)));
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
     public void Sc_other_commands_target_helper_service_only()
     {
         Assert.Equal("config", HelperInstaller.ScConfigArgs(Exe)[0]);

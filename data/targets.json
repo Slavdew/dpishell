@@ -25,8 +25,8 @@
       "title": "Обычные сайты",
       "control": true,
       "targets": [
-        { "url": "https://www.sberbank.ru/", "required": true },
-        { "url": "https://www.tbank.ru/", "required": true },
+        { "url": "https://vk.com/", "required": true },
+        { "url": "https://www.rbc.ru/", "required": true },
         { "url": "https://www.gosuslugi.ru/", "required": true },
         { "url": "https://www.ozon.ru/", "required": true },
         { "url": "https://www.wildberries.ru/", "required": true },

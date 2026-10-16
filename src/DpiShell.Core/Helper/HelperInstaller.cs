@@ -81,7 +81,7 @@ public sealed class HelperInstaller(AppPaths paths)
         }
 
         log?.Report("Копирую помощника…");
-        if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        DeleteWhenReleased(dir);
         Directory.CreateDirectory(dir);
         foreach (var rel in FilesToCopy(source))
         {
@@ -116,9 +116,30 @@ public sealed class HelperInstaller(AppPaths paths)
             ServiceManager.WaitFor(HelperProtocol.ServiceName, SvcState.Stopped, TimeSpan.FromSeconds(30));
             Check(ServiceManager.Sc(ScDeleteArgs()), "удалить службу помощника");
         }
-        var dir = HelperDir(paths);
-        if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        DeleteWhenReleased(HelperDir(paths));
         log?.Report("Помощник удалён.");
+    }
+
+    /// <summary>
+    /// Стереть папку помощника, дождавшись, пока её отпустят. Служба отвечает «остановлена» раньше, чем процесс выходит
+    /// и отпускает свой exe (живая проверка 2026-10-17: обновление падало с «Access denied» на DpiShell.exe); файл может
+    /// держать и антивирус. Повтор до 20 с, потом — исходная ошибка.
+    /// </summary>
+    public static void DeleteWhenReleased(string dir, TimeSpan? timeout = null)
+    {
+        var until = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(20));
+        while (true)
+        {
+            try
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+                return;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException && DateTime.UtcNow < until)
+            {
+                Thread.Sleep(300);
+            }
+        }
     }
 
     static void Check((int Code, string Output) r, string what)

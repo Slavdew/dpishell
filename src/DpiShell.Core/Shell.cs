@@ -74,6 +74,13 @@ public sealed class Shell
         return groups;
     }
 
+    /// <summary>
+    /// Для подбора и поиска: выбранные группы + «Обычные сайты». Контрольную группу не выбирают — это страховка «не сломать»,
+    /// она идёт в каждый подбор (живая проверка 2026-10-17: без этого подбор её не проверял вовсе).
+    /// </summary>
+    public static IReadOnlyList<TargetGroup> WithControl(IReadOnlyList<TargetGroup> groups, TargetSet all) =>
+        [.. groups.Where(g => !g.Control), .. all.Groups.Where(g => g.Control)];
+
     void EnsureCoreIntact()
     {
         var c = Installer.Check();
@@ -265,7 +272,7 @@ public sealed class Shell
         {
             using var doh = new DohResolver();
             var report = await new Selector(Paths, NewProbe(doh)).RunAsync(
-                StrategyStats.Order(AllStrategies, StrategyStats.Load(Paths)), groups ?? SelectedGroups(), quick, progress, ct);
+                StrategyStats.Order(AllStrategies, StrategyStats.Load(Paths)), WithControl(groups ?? SelectedGroups(), DefaultTargets), quick, progress, ct);
             ResultStore.Save(Paths, report);
             return report;
         });
@@ -277,7 +284,7 @@ public sealed class Shell
         {
             var baseStrategy = FindStrategy(baseId ?? State.StrategyId ?? "alt9") ?? Catalog.Strategies[0];
             using var doh = new DohResolver();
-            var report = await new StrategySearch(Paths, () => NewProbe(doh)).RunAsync(baseStrategy, groups ?? SelectedGroups(), progress, ct);
+            var report = await new StrategySearch(Paths, () => NewProbe(doh)).RunAsync(baseStrategy, WithControl(groups ?? SelectedGroups(), DefaultTargets), progress, ct);
             if (report.Final is { } f)
             {
                 ResultStore.Save(Paths, f);

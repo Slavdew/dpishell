@@ -52,6 +52,15 @@ public sealed class ControlGroupTests
     }
 
     [Fact]
+    public void WithControl_AlwaysAddsControlOnce()
+    {
+        var all = new TargetSet([Youtube, Control]);
+        Assert.Equal(["youtube", "control"], Shell.WithControl([Youtube], all).Select(g => g.Id));
+        Assert.Equal(["youtube", "control"], Shell.WithControl([Youtube, Control], all).Select(g => g.Id));
+        Assert.Equal(["control"], Shell.WithControl([], all).Select(g => g.Id));
+    }
+
+    [Fact]
     public void OnlyControlLeft_MeansNothingBlocked()
     {
         var r = new SelectionReport([V("youtube", Yt, true)], [Control], [], false);

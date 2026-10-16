@@ -119,7 +119,7 @@ public sealed class MainViewModel : Observable
 
         // Группы — по умолчанию; у помощника свой выбор — подставится, когда он ответит.
         var chosen = new AppState().Groups.ToHashSet();
-        foreach (var g in _shell.DefaultTargets.Groups) Groups.Add(new(g.Id, g.Title, chosen.Contains(g.Id)));
+        foreach (var g in _shell.DefaultTargets.Groups.Where(g => !g.Control)) Groups.Add(new(g.Id, g.Title, chosen.Contains(g.Id)));
         Groups.Add(new("user", "Свои адреса", chosen.Contains("user")));
         UpdateStatus();
     }
