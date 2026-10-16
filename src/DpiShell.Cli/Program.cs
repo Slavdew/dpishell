@@ -8,7 +8,24 @@ var rest = args.Skip(1).ToArray();
 // Без аргументов (двойной щелчок) — самопроверка: один запрос прав, все шаги в одном процессе, лог рядом с exe.
 if (cmd is "help" && args.Length == 0 || cmd == "selftest")
     return await SelfTest();
+// Долгие команды пишут лог рядом с exe и ждут Enter: их запускают ярлыком, окно иначе закроется.
+if (cmd is "select" or "search")
+    return await Logged(cmd, () => Run(cmd, rest));
 return await Run(cmd, rest);
+
+static async Task<int> Logged(string name, Func<Task<int>> body)
+{
+    var logFile = Path.Combine(AppContext.BaseDirectory, name + ".log");
+    using var file = new StreamWriter(logFile, false, new UTF8Encoding(false)) { AutoFlush = true };
+    var console = Console.Out;
+    Console.SetOut(new Tee(console, file));
+    Console.SetError(Console.Out);
+    Console.WriteLine($"DpiShell {name} {DateTime.Now:yyyy-MM-dd HH:mm:ss}, лог: {logFile}");
+    var code = await body();
+    Console.SetOut(console);
+    Pause();
+    return code;
+}
 
 static async Task<int> SelfTest()
 {
@@ -66,7 +83,7 @@ static async Task<int> Run(string cmd, string[] rest)
                 Console.WriteLine($"Ядро: {cc.State} {string.Join(",", cc.BadFiles)}");
                 break;
             case "list":
-                foreach (var s in shell.Catalog.Strategies) Console.WriteLine($"{s.Id,-22} {s.Title}");
+                foreach (var s in shell.AllStrategies) Console.WriteLine($"{s.Id,-22} {s.Title}");
                 break;
             case "args":
                 Console.WriteLine(WinwsArgs.Join(WinwsArgs.Build(Need(shell, rest), shell.Paths)));
@@ -110,6 +127,29 @@ static async Task<int> Run(string cmd, string[] rest)
                     finally { Console.CancelKeyPress -= onCancel; }
                 }
                 break;
+            case "search":
+                using (var cts = new CancellationTokenSource())
+                {
+                    ConsoleCancelEventHandler onCancel = (_, e) => { e.Cancel = true; cts.Cancel(); };
+                    Console.CancelKeyPress += onCancel;
+                    try
+                    {
+                        var progress = new SyncProgress<SelectorProgress>(p => Console.WriteLine(p.Total > 0 ? $"[{p.Index}/{p.Total}] {p.Message}" : $"  #{p.Index} {p.Message}"));
+                        var r = await shell.SearchAsync(rest.FirstOrDefault(), null, progress, cts.Token);
+                        foreach (var (role, list) in r.ByRole)
+                        {
+                            Console.WriteLine($"Роль {role}: проверено {list.Count}, сработало {list.Count(x => x.Ok > 0)}");
+                            foreach (var x in list.OrderByDescending(x => x.Share).ThenBy(x => x.Cost).Take(5))
+                                Console.WriteLine($"  {x.Ok}/{x.Total} цена {x.Cost:F1} {x.Seconds:F2}с  {x.Desync}");
+                        }
+                        if (r.Final is { } f)
+                            foreach (var s in f.Scores.OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds))
+                                Console.WriteLine($"{s.Strategy.Id,-22} группы {s.GroupsPassed}/{s.GroupsTotal} цели {s.TargetShare:P0} {s.AvgSeconds:F2}с {s.Error}");
+                        Console.WriteLine(r.Stopped is null ? $"Найдено и сохранено: {r.Generated.Count}" : $"Поиск прерван: {r.Stopped}");
+                    }
+                    finally { Console.CancelKeyPress -= onCancel; }
+                }
+                break;
             case "enable":
                 shell.Enable(Need(shell, rest).Id);
                 Console.WriteLine($"Служба: {shell.Service.State}");
@@ -128,7 +168,7 @@ static async Task<int> Run(string cmd, string[] rest)
                 foreach (var v in Conflicts.ActiveVpnAdapters()) Console.WriteLine($"VPN: {v}");
                 break;
             default:
-                Console.WriteLine("dpishell-cli [selftest] | prepare | dns | check-core | list | args <id> | dry-run [id] | probe | test <id> | select [--quick] | enable <id> | disable | remove | status");
+                Console.WriteLine("dpishell-cli [selftest] | prepare | dns | check-core | list | args <id> | dry-run [id] | probe | test <id> | select [--quick] | search [base-id] | enable <id> | disable | remove | status");
                 break;
         }
         return 0;
@@ -141,7 +181,7 @@ static async Task<int> Run(string cmd, string[] rest)
 }
 
 static Strategy Need(Shell shell, string[] rest) =>
-    rest.Length > 0 && shell.Catalog.Find(rest[0]) is { } s ? s : throw new ArgumentException("Укажите id стратегии (dpishell-cli list)");
+    rest.Length > 0 && shell.FindStrategy(rest[0]) is { } s ? s : throw new ArgumentException("Укажите id стратегии (dpishell-cli list)");
 
 static void Print(TargetVerdict v) =>
     Console.WriteLine($"  {(v.Ok ? "OK " : "-- ")} {v.Target.Url,-55} {string.Join(" | ", v.Probes.Select(p => $"{p.Tls}: {p.Outcome} {p.Detail}"))}");

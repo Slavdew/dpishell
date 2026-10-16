@@ -77,7 +77,7 @@ public sealed class Shell
     public void Enable(string strategyId)
     {
         EnsureCoreIntact();
-        var s = Catalog.Find(strategyId) ?? throw new ArgumentException($"Нет стратегии {strategyId}");
+        var s = FindStrategy(strategyId) ?? throw new ArgumentException($"Нет стратегии {strategyId}");
         Service.Apply(WinwsArgs.Build(s, Paths));
         State.StrategyId = s.Id;
         State.Enabled = true;
@@ -91,25 +91,48 @@ public sealed class Shell
         State.Save(Paths);
     }
 
+    /// <summary>Готовые стратегии + найденные глубоким поиском (user-strategies.json, та же проверка).</summary>
+    public IReadOnlyList<Strategy> AllStrategies => [.. Catalog.Strategies, .. UserStrategies.Load(Paths)];
+
+    public Strategy? FindStrategy(string id) => AllStrategies.FirstOrDefault(s => s.Id == id);
+
     /// <summary>Подбор. Служба на время подбора останавливается и потом возвращается в прежнее состояние.</summary>
-    public async Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<TargetGroup>? groups = null,
-        IProgress<SelectorProgress>? progress = null, CancellationToken ct = default)
+    public Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<TargetGroup>? groups = null,
+        IProgress<SelectorProgress>? progress = null, CancellationToken ct = default) =>
+        WithServicePausedAsync(async () =>
+        {
+            using var doh = new DohResolver();
+            var report = await new Selector(Paths, NewProbe(doh)).RunAsync(AllStrategies, groups ?? SelectedGroups(), quick, progress, ct);
+            ResultStore.Save(Paths, report);
+            return report;
+        });
+
+    /// <summary>Глубокий поиск (ТЗ §4.7) от базовой стратегии; найденное, что прошло полную проверку, сохраняется как свои стратегии.</summary>
+    public Task<SearchReport> SearchAsync(string? baseId = null, IReadOnlyList<TargetGroup>? groups = null,
+        IProgress<SelectorProgress>? progress = null, CancellationToken ct = default) =>
+        WithServicePausedAsync(async () =>
+        {
+            var baseStrategy = FindStrategy(baseId ?? State.StrategyId ?? "alt9") ?? Catalog.Strategies[0];
+            using var doh = new DohResolver();
+            var report = await new StrategySearch(Paths, () => NewProbe(doh)).RunAsync(baseStrategy, groups ?? SelectedGroups(), progress, ct);
+            if (report.Final is { } f)
+            {
+                ResultStore.Save(Paths, f);
+                var good = f.Scores.Where(x => x.Strategy.Source == "search" && x.Error is null && x.GroupsPassed > 0).Select(x => x.Strategy).ToList();
+                if (good.Count > 0) UserStrategies.Add(Paths, good);
+            }
+            return report;
+        });
+
+    async Task<T> WithServicePausedAsync<T>(Func<Task<T>> work)
     {
         EnsureCoreIntact();
         var foreign = Conflicts.Find(Paths);
-        if (foreign.Count > 0)
-            throw new InvalidOperationException("Мешают другие программы обхода: " + string.Join("; ", foreign.Select(c => $"{c.Name} ({c.Detail})")));
+        if (foreign.Count > 0) throw new ConflictException(foreign);
 
         bool wasRunning = Service.State == SvcState.Running;
         if (wasRunning) Service.Stop();
-        try
-        {
-            using var doh = new DohResolver();
-            var selector = new Selector(Paths, NewProbe(doh));
-            var report = await selector.RunAsync(Catalog.Strategies, groups ?? SelectedGroups(), quick, progress, ct);
-            ResultStore.Save(Paths, report);
-            return report;
-        }
+        try { return await work(); }
         finally
         {
             if (wasRunning && State.Enabled && State.StrategyId is not null)
@@ -136,4 +159,11 @@ public sealed class Shell
     }
 
     public void SaveState() => State.Save(Paths);
+}
+
+/// <summary>Работают другие программы обхода (Flowseal, GoodbyeDPI…): подбор с ними бессмысленен.</summary>
+public sealed class ConflictException(IReadOnlyList<Conflict> conflicts)
+    : InvalidOperationException("Мешают другие программы обхода: " + string.Join("; ", conflicts.Select(c => $"{c.Name} ({c.Detail})")))
+{
+    public IReadOnlyList<Conflict> Conflicts { get; } = conflicts;
 }
