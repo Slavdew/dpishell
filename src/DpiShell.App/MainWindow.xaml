@@ -7,6 +7,7 @@
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <local:ZeroToVisible x:Key="Zero" />
+        <local:ZeroToVisible x:Key="NonZero" Invert="True" />
     </Window.Resources>
     <Grid>
         <DockPanel>
@@ -55,6 +56,28 @@
                                     <Button DockPanel.Dock="Right" Content="Подробнее" Style="{StaticResource LinkButton}" Command="{Binding GoDiagCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
                                     <TextBlock Text="{Binding ConflictWarning}" VerticalAlignment="Center" />
                                 </DockPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Warn}" Visibility="{Binding DnsSpoofed, Converter={StaticResource Vis}}">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="Подробнее" Style="{StaticResource LinkButton}" Command="{Binding GoDiagCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                        <TextBlock Text="DNS провайдера подменяет адреса сайтов. В браузере сайты могут работать, а Discord и другие программы — нет." VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <Expander Header="Как исправить (Windows 11)" Margin="0,8,0,0">
+                                        <TextBlock Margin="0,6,0,0">
+                                            <Run Text="1. Параметры → Сеть и Интернет → ваше подключение (Wi-Fi → свойства сети, или Ethernet)." />
+                                            <LineBreak />
+                                            <Run Text="2. «Назначение DNS-сервера» → «Изменить» → «Вручную», включите IPv4." />
+                                            <LineBreak />
+                                            <Run Text="3. Основной DNS: 8.8.8.8, дополнительный: 8.8.4.4." />
+                                            <LineBreak />
+                                            <Run Text="4. У обоих «DNS через HTTPS»: «Вкл. (автоматический шаблон)», «Возврат к обычному тексту»: «Выкл.»." />
+                                            <LineBreak />
+                                            <Run Text="5. «Сохранить», затем нажмите «Проверить сейчас»." />
+                                        </TextBlock>
+                                    </Expander>
+                                </StackPanel>
                             </Border>
 
                             <StackPanel Margin="0,6,0,0">
@@ -131,8 +154,10 @@
                             <WrapPanel>
                                 <Button Content="Начать подбор" Style="{StaticResource Primary}" Command="{Binding StartSelectCmd}" />
                                 <Button Content="Стоп" Command="{Binding StopSelectCmd}" />
+                                <Button Content="Глубокий поиск (10–15 мин)" Command="{Binding StartSearchCmd}" Margin="16,0,8,8" />
                             </WrapPanel>
-                            <ProgressBar Height="8" Maximum="{Binding SelectProgressMax}" Value="{Binding SelectProgress}" Margin="0,2,0,4"
+                            <TextBlock Text="Глубокий поиск ищет новые сочетания параметров, если готовые стратегии не помогли." Style="{StaticResource Hint}" Margin="0,0,0,6" />
+                            <ProgressBar Height="8" Maximum="{Binding SelectProgressMax}" Value="{Binding SelectProgress}" IsIndeterminate="{Binding SelectIndeterminate}" Margin="0,2,0,4"
                                          Foreground="{StaticResource Accent}" Background="#E5E7EB" BorderThickness="0" />
                             <TextBlock Text="{Binding SelectProgressText}" Style="{StaticResource Hint}" Margin="0,0,0,8" />
                         </StackPanel>
@@ -154,7 +179,19 @@
                                   Background="White" BorderBrush="{StaticResource Line}" RowHeaderWidth="0" MinHeight="120">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="" Binding="{Binding Mark}" Width="26" />
-                                <DataGridTextColumn Header="Стратегия" Binding="{Binding Title}" Width="2*" />
+                                <DataGridTemplateColumn Header="Стратегия" Width="2*">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" VerticalAlignment="Center" />
+                                                <Border Background="#E8EEFD" CornerRadius="4" Padding="5,0" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                        Visibility="{Binding Found, Converter={StaticResource Vis}}" ToolTip="Найдена глубоким поиском">
+                                                    <TextBlock Text="найдена" FontSize="12" Foreground="{StaticResource Accent}" />
+                                                </Border>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="Группы" Binding="{Binding Groups}" Width="70" />
                                 <DataGridTextColumn Header="Открылось" Binding="{Binding Share}" Width="90" />
                                 <DataGridTextColumn Header="Время" Binding="{Binding Avg}" Width="80" />
@@ -257,6 +294,57 @@
                                     <ItemsControl ItemsSource="{Binding VpnList}" />
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
                                                Text="При включённом VPN обход обычно не нужен, а подбор показывает неверный результат." />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="Проверить DNS" Style="{StaticResource LinkButton}" Command="{Binding CheckDnsCmd}" VerticalAlignment="Top" />
+                                        <TextBlock Text="DNS" Style="{StaticResource H2}" />
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding DnsSummary}" Margin="0,0,0,6" />
+                                    <Grid Margin="0,0,0,2" Visibility="{Binding DnsRows.Count, Converter={StaticResource NonZero}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="80" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Сайт" Style="{StaticResource Hint}" />
+                                        <TextBlock Grid.Column="1" Text="Системный DNS" Style="{StaticResource Hint}" />
+                                        <TextBlock Grid.Column="2" Text="Защищённый DNS" Style="{StaticResource Hint}" />
+                                        <TextBlock Grid.Column="3" Text="Подмена" Style="{StaticResource Hint}" />
+                                    </Grid>
+                                    <ItemsControl ItemsSource="{Binding DnsRows}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,2">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="2*" />
+                                                        <ColumnDefinition Width="2*" />
+                                                        <ColumnDefinition Width="2*" />
+                                                        <ColumnDefinition Width="80" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Host}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Host}" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding System}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding System}" />
+                                                    <TextBlock Grid.Column="2" Text="{Binding Doh}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Doh}" />
+                                                    <TextBlock Grid.Column="3" Text="{Binding Mark}" Foreground="{StaticResource Danger}" FontWeight="SemiBold" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
+                                               Text="Подбор и проверка берут адреса через защищённый DNS, поэтому подмена на их результат не влияет. Как исправить для программ — на «Главной»." />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="Автопроверка" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{Binding WatchText}" />
+                                    <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
+                                               Text="Раз в 30 минут и после смены сети. Если обход дважды подряд не работает — включается следующая запасная." />
                                 </StackPanel>
                             </Border>
 

@@ -1,3 +1,4 @@
+using System.Net;
 using DpiShell.Core;
 
 namespace DpiShell.App;
@@ -34,6 +35,22 @@ public sealed class ScoreRow(StrategyScore s) : Observable
     public bool Usable => Score.Error is null && Score.GroupsPassed > 0;
     public bool IsBest { get => _best; set { if (Set(ref _best, value)) Raise(nameof(Mark)); } }
     public string Mark => IsBest ? "★" : "";
+    /// <summary>Найдена глубоким поиском, а не из готового набора.</summary>
+    public bool Found => Score.Strategy.Source == "search";
+}
+
+/// <summary>Строка сравнения DNS на «Диагностике».</summary>
+public sealed record DnsRow(string Host, string System, string Doh, bool Spoofed)
+{
+    public string Mark => Spoofed ? "подмена" : "";
+
+    public static DnsRow From(DnsComparison c) => new(
+        c.Host,
+        c.System.Length > 0 ? Ips(c.System) : "имени нет",
+        c.Doh.Length > 0 ? Ips(c.Doh) : "нет ответа",
+        c.Spoofed);
+
+    static string Ips(IPAddress[] a) => string.Join(", ", a.Take(2)) + (a.Length > 2 ? " …" : "");
 }
 
 public static class Texts
@@ -69,6 +86,7 @@ public static class Texts
     {
         System.Net.Http.HttpRequestException => "Не удалось скачать ядро. Проверьте интернет и повторите (GitHub тоже бывает заблокирован — помогает повтор).",
         SecurityException s => s.Message,
+        ConflictException c => $"Мешают другие программы обхода: {string.Join(", ", c.Conflicts.Select(x => x.Name).Distinct())}. Закройте их и повторите.",
         UnauthorizedAccessException => "Нет доступа к файлам программы. Возможно, их держит антивирус. " + e.Message,
         System.ComponentModel.Win32Exception w => "Не удалось запустить программу обхода (антивирус?): " + w.Message,
         AggregateException { InnerException: { } inner } => Friendly(inner),

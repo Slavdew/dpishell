@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
+using System.Net.NetworkInformation;
 using System.Windows;
+using DpiShell.Core;
 using System.Windows.Data;
 using System.Windows.Threading;
 
@@ -29,7 +31,22 @@ public partial class MainWindow : Window
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
         _timer.Tick += (_, _) => _ = vm.TickAsync();
         _timer.Start();
+
+        // Автопроверка запасных: по таймеру и после смены сети (с паузой, пока сеть поднимается).
+        vm.Notify += _tray.Hint;
+        _watchTimer = new DispatcherTimer { Interval = WatchdogPolicy.Interval };
+        _watchTimer.Tick += (_, _) => _ = vm.WatchAsync();
+        _watchTimer.Start();
+        _netSettle = new DispatcherTimer { Interval = WatchdogPolicy.NetworkSettle };
+        _netSettle.Tick += (_, _) => { _netSettle.Stop(); _ = vm.WatchAsync(); };
+        NetworkChange.NetworkAddressChanged += OnNetworkChanged;
     }
+
+    readonly DispatcherTimer _watchTimer, _netSettle;
+
+    /// <summary>Событие приходит из чужого потока и пачкой — перезапускаем отсчёт на потоке окна.</summary>
+    void OnNetworkChanged(object? sender, EventArgs e) =>
+        Dispatcher.BeginInvoke(() => { _netSettle.Stop(); _netSettle.Start(); });
 
     void ShowFromTray()
     {
@@ -69,6 +86,9 @@ public partial class MainWindow : Window
         if (_exiting) return;
         _exiting = true;
         _timer.Stop();
+        _watchTimer.Stop();
+        _netSettle.Stop();
+        NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
         // Подбор держит временный winws и остановленную службу — дать ему вернуть всё на место.
         if (_vm.Busy)
         {
@@ -81,11 +101,13 @@ public partial class MainWindow : Window
     }
 }
 
-/// <summary>0 → Visible, иначе Collapsed: «ничего не найдено».</summary>
+/// <summary>0 → Visible, иначе Collapsed: «ничего не найдено». Invert — наоборот (заголовок таблицы, когда есть строки).</summary>
 public sealed class ZeroToVisible : IValueConverter
 {
+    public bool Invert { get; set; }
+
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is int n && n == 0 ? Visibility.Visible : Visibility.Collapsed;
+        (value is int n && n == 0) != Invert ? Visibility.Visible : Visibility.Collapsed;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }

@@ -11,6 +11,15 @@ public sealed class AppState
     public List<string> Groups { get; set; } = ["youtube", "discord"];
     public Dictionary<string, NetworkMemory> Networks { get; set; } = [];
 
+    /// <summary>Рабочие стратегии по рейтингу последнего подбора (до 3): на них переключается автопроверка (ТЗ §9 п. 15).</summary>
+    public List<string> Fallbacks { get; set; } = [];
+    /// <summary>Когда последний раз была автопроверка (локальное время).</summary>
+    public DateTime? WatchCheckedAt { get; set; }
+    /// <summary>Неудачных автопроверок подряд у текущей стратегии.</summary>
+    public int WatchFails { get; set; }
+    /// <summary>Запасные кончились, пользователю уже сказали «подберите заново» — больше не дёргаем до нового подбора или успеха.</summary>
+    public bool WatchGaveUp { get; set; }
+
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
     public static AppState Load(AppPaths p)

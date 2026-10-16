@@ -40,6 +40,8 @@ public sealed class MainViewModel : Observable
         CheckNowCmd = RelayCommand.Async(CheckNowAsync, () => !Busy && !IsLoading);
 
         StartSelectCmd = RelayCommand.Async(StartSelectAsync, () => !Busy && !IsLoading);
+        StartSearchCmd = RelayCommand.Async(StartSearchAsync, () => !Busy && !IsLoading);
+        CheckDnsCmd = RelayCommand.Async(CheckDnsAsync, () => !IsLoading && !DnsChecking);
         StopSelectCmd = new RelayCommand(() => _selectCts?.Cancel(), () => Selecting);
         ApplyBestCmd = RelayCommand.Async(() => ApplyAsync(_bestId!), () => !Busy && _bestId is not null);
         ApplySelectedCmd = RelayCommand.Async(() => ApplyAsync(SelectedScore!.Id), () => !Busy && SelectedScore is { Usable: true });
@@ -59,6 +61,7 @@ public sealed class MainViewModel : Observable
         IReadOnlyList<string> targets = _shell.State.UserTargets.Count > 0 ? _shell.State.UserTargets : _shell.Data.ReadUserDomains();
         _targetsText = string.Join(Environment.NewLine, targets);
         UpdateStatus();
+        RefreshWatchText();
     }
 
     // ---------- общее ----------
@@ -98,6 +101,8 @@ public sealed class MainViewModel : Observable
         {
             _error = Texts.Friendly(e);
             Message = _error;
+            // Чужие программы обхода: что именно мешает — на «Диагностике».
+            if (e is ConflictException) Page = Pages.Diag;
             return false;
         }
         finally
@@ -138,6 +143,7 @@ public sealed class MainViewModel : Observable
             _coreProblem = CoreProblem(check);
             IsLoading = false;
             await RefreshStatusAsync();
+            _ = CheckDnsAsync();
         }
         catch (Exception e)
         {
@@ -172,12 +178,22 @@ public sealed class MainViewModel : Observable
 
     public bool IsRunning => _svc == SvcState.Running;
 
-    string StrategyTitle(string? id) => id is null ? "" : _shell.Catalog.Find(id)?.Title ?? id;
+    readonly Dictionary<string, string> _titles = [];
+
+    /// <summary>Название по id — и готовых, и найденных поиском (те читаются из файла, поэтому кэш).</summary>
+    string StrategyTitle(string? id)
+    {
+        if (id is null) return "";
+        if (_shell.Catalog.Find(id) is { } s) return s.Title;
+        if (_titles.TryGetValue(id, out var t)) return t;
+        try { t = _shell.FindStrategy(id)?.Title ?? id; } catch (Exception) { t = id; }
+        return _titles[id] = t;
+    }
 
     void UpdateStatus()
     {
         var err = _error ?? _coreProblem;
-        if (Selecting) { Kind = StatusKind.Busy; StatusTitle = "Подбор…"; StatusDetail = SelectProgressText; }
+        if (Selecting) { Kind = StatusKind.Busy; StatusTitle = _searching ? "Глубокий поиск…" : "Подбор…"; StatusDetail = SelectProgressText; }
         else if (Busy) { Kind = StatusKind.Busy; StatusTitle = BusyText; StatusDetail = ""; }
         else if (err is not null) { Kind = StatusKind.Error; StatusTitle = "Ошибка"; StatusDetail = err; }
         else if (_svc == SvcState.Running) { Kind = StatusKind.On; StatusTitle = "Работает"; StatusDetail = "Стратегия: " + StrategyTitle(_shell.State.StrategyId); }
@@ -259,6 +275,10 @@ public sealed class MainViewModel : Observable
     Task ApplyAsync(string id) => Guard("Включаю…", async () =>
     {
         await Task.Run(() => _shell.Enable(id));
+        // Выбранная руками — первая в запасных, автопроверка начинает с неё.
+        WatchdogPolicy.Applied(_shell.State, id);
+        _shell.SaveState();
+        RefreshWatchText();
         await RefreshStatusAsync();
         Page = Pages.Home;
     });
@@ -269,11 +289,50 @@ public sealed class MainViewModel : Observable
         return Guard("Проверяю…", async () =>
         {
             CheckRows.Clear(); CheckSummary = "";
+            var dns = CheckDnsAsync();
             var verdicts = await Task.Run(() => _shell.CheckNowAsync());
             foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, GroupTitle));
             CheckSummary = $"Открывается {verdicts.Count(v => v.Ok)} из {verdicts.Count}";
+            await dns;
             await RefreshStatusAsync();
         });
+    }
+
+    // ---------- DNS ----------
+
+    public ObservableCollection<DnsRow> DnsRows { get; } = [];
+
+    bool _dnsSpoofed;
+    /// <summary>Системный DNS подменяет адреса проверяемых сайтов (ТЗ §9 п. 11).</summary>
+    public bool DnsSpoofed { get => _dnsSpoofed; private set => Set(ref _dnsSpoofed, value); }
+
+    string _dnsSummary = "Ещё не проверялось.";
+    public string DnsSummary { get => _dnsSummary; private set => Set(ref _dnsSummary, value); }
+
+    bool _dnsChecking;
+    public bool DnsChecking { get => _dnsChecking; private set { if (Set(ref _dnsChecking, value)) CommandManager.InvalidateRequerySuggested(); } }
+
+    public ICommand CheckDnsCmd { get; }
+
+    /// <summary>Сравнить системный DNS с DoH. Тихо: без Busy, ошибки — в сводку DNS.</summary>
+    public async Task CheckDnsAsync()
+    {
+        if (DnsChecking || IsLoading) return;
+        DnsChecking = true;
+        DnsSummary = "Проверяю…";
+        try
+        {
+            var list = await Task.Run(() => _shell.CheckDnsAsync());
+            DnsRows.Clear();
+            foreach (var c in list) DnsRows.Add(DnsRow.From(c));
+            DnsSpoofed = list.Any(c => c.Spoofed);
+            DnsSummary = list.Count == 0 ? "Нечего проверять: не выбраны группы."
+                : DnsSpoofed ? "DNS провайдера подменяет адреса сайтов."
+                : list.All(c => c.Doh.Length == 0) ? "Защищённый DNS не ответил — сравнить не с чем."
+                : "Подмены нет.";
+        }
+        catch (Exception e) { DnsSummary = Texts.Friendly(e); }
+        finally { DnsChecking = false; }
     }
 
     string GroupTitle(string id) => Groups.FirstOrDefault(g => g.Id == id)?.Title ?? id;
@@ -315,25 +374,36 @@ public sealed class MainViewModel : Observable
     public ICommand ApplyBestCmd { get; }
     public ICommand ApplySelectedCmd { get; }
 
-    public async Task StartSelectAsync()
+    /// <summary>Отмеченные группы (и запомнить выбор); null — проверять нечего, причина уже в строке состояния.</summary>
+    IReadOnlyList<TargetGroup>? TakeGroups()
     {
-        if (Busy) return;
         var ids = Groups.Where(g => g.IsChecked).Select(g => g.Id).ToList();
-        if (ids.Count == 0) { Message = "Отметьте, что проверять."; return; }
+        if (ids.Count == 0) { Message = "Отметьте, что проверять."; return null; }
         if (ids.Contains("user") && _shell.State.UserTargets.Count == 0)
         {
             Message = "Список своих адресов пуст — заполните его на вкладке «Свои адреса».";
-            return;
+            return null;
         }
-
         _shell.State.Groups = ids;
         try { _shell.SaveState(); } catch (Exception e) { Message = Texts.Friendly(e); }
-        var groups = _shell.SelectedGroups(ids);
+        return _shell.SelectedGroups(ids);
+    }
 
+    void ResetResults()
+    {
         Scores.Clear(); SelectedScore = null;
         ResultText = ""; ResultHint = ""; SetBest(null);
-        SelectProgress = 0; SelectProgressMax = Math.Max(1, _shell.Catalog.Strategies.Count);
+        SelectProgress = 0; SelectIndeterminate = false;
         SelectProgressText = "Подготовка…";
+    }
+
+    public async Task StartSelectAsync()
+    {
+        if (Busy) return;
+        if (TakeGroups() is not { } groups) return;
+
+        ResetResults();
+        SelectProgressMax = Math.Max(1, _shell.Catalog.Strategies.Count);
 
         using var cts = new CancellationTokenSource();
         _selectCts = cts;
@@ -365,6 +435,96 @@ public sealed class MainViewModel : Observable
         await RefreshStatusAsync();
     }
 
+    bool _indeterminate;
+    /// <summary>Шаги глубокого поиска заранее не сосчитать — полоса «бегущая».</summary>
+    public bool SelectIndeterminate { get => _indeterminate; private set => Set(ref _indeterminate, value); }
+
+    bool _searching;
+
+    public ICommand StartSearchCmd { get; }
+
+    /// <summary>Глубокий поиск (ТЗ §4.7): от лучшей стратегии последнего подбора или от текущей.</summary>
+    public async Task StartSearchAsync()
+    {
+        if (Busy) return;
+        if (TakeGroups() is not { } groups) return;
+        var baseId = _bestId ?? _shell.State.StrategyId;
+
+        ResetResults();
+        SelectProgressMax = 1;
+        SelectIndeterminate = true;
+
+        using var cts = new CancellationTokenSource();
+        _selectCts = cts;
+        _searching = true;
+        Selecting = true;
+        var progress = new Progress<SelectorProgress>(p =>
+        {
+            if (p.Total == 0)
+            {
+                // Шаги поиска: Index — номер варианта, Message — «роль: …».
+                SelectIndeterminate = true;
+                SelectProgressText = $"Ищу для {RoleTitle(p.Message)}: проверено вариантов — {p.Index}";
+            }
+            else
+            {
+                // Финал: полная проверка найденного.
+                SelectIndeterminate = false;
+                SelectProgressMax = Math.Max(1, p.Total);
+                SelectProgress = p.Index;
+                SelectProgressText = "Проверяю найденное: " + p.Message;
+                if (p.Last is { } s) Scores.Add(new ScoreRow(s));
+            }
+            UpdateStatus();
+        });
+        try
+        {
+            await Guard("Глубокий поиск…", async () =>
+            {
+                try { ShowSearch(await Task.Run(() => _shell.SearchAsync(baseId, groups, progress, cts.Token))); }
+                catch (OperationCanceledException) { ResultText = "Поиск остановлен."; }
+                finally { _titles.Clear(); }
+            });
+        }
+        finally
+        {
+            _selectCts = null;
+            _searching = false;
+            Selecting = false;
+            SelectIndeterminate = false;
+            SelectProgressText = "";
+            UpdateStatus();
+        }
+        await RefreshStatusAsync();
+    }
+
+    static string RoleTitle(string message) => message.Split(':')[0] switch
+    {
+        "google" => "YouTube",
+        "general" => "Discord и своих адресов",
+        var r => r,
+    };
+
+    void ShowSearch(SearchReport r)
+    {
+        string? stopped = r.Stopped switch
+        {
+            null => null,
+            "остановлено" => "Поиск остановлен",
+            var s => char.ToUpper(s[0]) + s[1..],
+        };
+        if (r.Final is not { } f)
+        {
+            Scores.Clear();
+            ResultText = stopped is null ? "Новых рабочих сочетаний не нашлось." : stopped + ".";
+            if (stopped is null) ResultHint = "Попробуйте позже или в другой сети.";
+            return;
+        }
+        ShowReport(f);
+        if (f.Best is { Strategy.Source: "search" } best) ResultText = "Найдена новая: " + best.Strategy.Title;
+        if (stopped is not null) ResultHint = stopped + ". " + ResultHint;
+    }
+
     void SetBest(string? id)
     {
         _bestId = id;
@@ -379,6 +539,11 @@ public sealed class MainViewModel : Observable
         Scores.Clear();
         foreach (var s in ordered) Scores.Add(new ScoreRow(s) { IsBest = ReferenceEquals(s, r.Best) });
         SelectProgress = SelectProgressMax;
+
+        // Рабочие по рейтингу — запасные для автопереключения.
+        WatchdogPolicy.Remember(_shell.State, r);
+        try { _shell.SaveState(); } catch (Exception e) { Message = Texts.Friendly(e); }
+        RefreshWatchText();
 
         if (r.NothingBlocked)
         {
@@ -480,8 +645,61 @@ public sealed class MainViewModel : Observable
             _svc = svc;
             _coreProblem = CoreProblem(core);
             UpdateStatus();
+            RefreshWatchText();
+            if (DnsRows.Count == 0) _ = CheckDnsAsync();
         }
         catch (Exception e) { Message = Texts.Friendly(e); }
+    }
+
+    // ---------- автопроверка и запасные (ТЗ §9 п. 15) ----------
+
+    /// <summary>Уведомление в трей (окно может быть скрыто).</summary>
+    public event Action<string>? Notify;
+
+    string _watchText = "";
+    public string WatchText { get => _watchText; private set => Set(ref _watchText, value); }
+
+    void RefreshWatchText()
+    {
+        var s = _shell.State;
+        var list = s.Fallbacks.Count == 0 ? "нет — появятся после подбора" : string.Join(" → ", s.Fallbacks.Select(StrategyTitle));
+        var last = s.WatchCheckedAt is { } at ? $"{at:dd.MM HH:mm}" : "ещё не было";
+        WatchText = $"Запасные: {list}. Последняя проверка: {last}.";
+    }
+
+    bool _watching;
+
+    /// <summary>Раз в 30 мин и после смены сети: лёгкая проверка; две неудачи подряд — следующая запасная.</summary>
+    public async Task WatchAsync()
+    {
+        if (_watching || IsLoading) return;
+        _watching = true;
+        try
+        {
+            var svc = await Task.Run(() => _shell.Service.State);
+            if (!WatchdogPolicy.ShouldCheck(_shell.State, svc == SvcState.Running, Busy || Selecting)) return;
+
+            var id = _shell.State.StrategyId;
+            var groups = _shell.SelectedGroups();
+            var outcome = await Task.Run(() => WatchdogProbe.CheckAsync(groups, _shell.Paths));
+            // За время проверки пользователь что-то сделал (подбор, выключение, другая стратегия) — итог не в счёт.
+            if (Busy || Selecting || !_shell.State.Enabled || _shell.State.StrategyId != id) return;
+
+            var d = WatchdogPolicy.Decide(_shell.State, outcome, DateTime.Now, x => _shell.FindStrategy(x) is not null);
+            _shell.SaveState();
+            RefreshWatchText();
+
+            if (d is { Action: WatchAction.Switch, NextId: { } next })
+            {
+                if (await Guard("Переключаю стратегию…", () => Task.Run(() => _shell.Enable(next))))
+                    Notify?.Invoke($"Обход перестал работать — включена запасная стратегия: {StrategyTitle(next)}.");
+                await RefreshStatusAsync();
+            }
+            else if (d.Action == WatchAction.GiveUp)
+                Notify?.Invoke("Обход перестал работать, запасные стратегии тоже. Подберите стратегию заново.");
+        }
+        catch (Exception) { /* автопроверка не должна мешать: следующая попытка по таймеру */ }
+        finally { _watching = false; }
     }
 
     Task RepairCoreAsync() => Guard("Восстанавливаю ядро…", async () =>
