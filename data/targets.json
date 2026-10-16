@@ -1,0 +1,24 @@
+{
+  "groups": [
+    {
+      "id": "youtube",
+      "title": "YouTube",
+      "targets": [
+        { "url": "https://www.youtube.com/", "min_bytes": 20480, "required": true },
+        { "url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg", "min_bytes": 20480, "required": true },
+        { "url": "https://redirector.googlevideo.com/", "handshake_only": true, "required": true },
+        { "url": "https://yt3.ggpht.com/", "handshake_only": true, "required": false }
+      ]
+    },
+    {
+      "id": "discord",
+      "title": "Discord",
+      "targets": [
+        { "url": "https://discord.com/", "min_bytes": 20480, "required": true },
+        { "url": "https://gateway.discord.gg/", "handshake_only": true, "required": true },
+        { "url": "https://cdn.discordapp.com/", "handshake_only": true, "required": true },
+        { "url": "https://updates.discord.com/", "handshake_only": true, "required": false }
+      ]
+    }
+  ]
+}
