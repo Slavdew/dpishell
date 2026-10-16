@@ -44,11 +44,12 @@ public sealed class WindowSmokeTests
         var errors = new BindingErrors();
         RunSta(() =>
         {
-            // Общие стили окна живут в App.xaml: поднимаем приложение без OnStartup (тот требует админа).
+            // Только стили (Theme.xaml) на голом Application. Не DpiShell.App.App: его конструктор ставит в очередь
+            // OnStartup, и тот показывал пользователю «нужны права администратора» прямо во время тестов.
             if (Application.Current is null)
             {
-                var app = new DpiShell.App.App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-                app.InitializeComponent();
+                var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("pack://application:,,,/DpiShell;component/Theme.xaml") });
             }
             PresentationTraceSources.Refresh();
             PresentationTraceSources.DataBindingSource.Listeners.Add(errors);
