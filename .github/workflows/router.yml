@@ -65,7 +65,9 @@ jobs:
           find bin -name '*dpishell*.apk' -exec cp {} $FEED/ \;
           # Индекс только наших пакетов, подписанный ключом.
           ./staging_dir/host/bin/apk mkndx --allow-untrusted --sign private-key.pem --output $FEED/packages.adb $FEED/*.apk
-          ./staging_dir/host/bin/apk verify --keys-dir . $FEED/packages.adb || { echo 'подпись индекса не прошла проверку'; exit 1; }
+          # --keys-dir apk считает от корня (--root, по умолчанию /), поэтому путь абсолютный; в каталоге — только открытый ключ.
+          mkdir -p /builder/verify-keys && cp $GITHUB_WORKSPACE/router/keys/dpishell.pem /builder/verify-keys/
+          ./staging_dir/host/bin/apk verify --keys-dir /builder/verify-keys $FEED/packages.adb || { echo 'подпись индекса не прошла проверку'; exit 1; }
           cp $GITHUB_WORKSPACE/router/keys/dpishell.pem $FEED/dpishell.pem
           cd $FEED && sha256sum *.apk packages.adb > sha256sums.txt && cat sha256sums.txt
           rm -f /builder/private-key.pem
