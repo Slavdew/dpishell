@@ -331,6 +331,18 @@ public sealed class RouterViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Diag_AfterFlowOffloadFix_HandedToBypass()
+    {
+        using var r = new FakeRouter();
+        var (vm, _) = Make(r);
+        vm.Confirm = _ => true;
+        await vm.ConnectAsync("secret");
+        await vm.FixWarningAsync("flow_offload");
+        await vm.RefreshDiagAsync();
+        Assert.Equal("передано обходу — не мешает", vm.FlowOffloadText);
+    }
+
+    [Fact]
     public async Task PcEnable_WhenRouterBypasses_AsksAboutDoubleProcessing()
     {
         using var r = new FakeRouter();

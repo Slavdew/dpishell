@@ -86,7 +86,8 @@ public sealed record RouterConflict(string Kind, string Name, bool Running);
 /// <summary>Ответ flow_offload_fix: flowoffload — кому передана разгрузка (software | hardware).</summary>
 public sealed record RouterFlowOffloadFix(bool Changed, string? Flowoffload);
 public sealed record RouterDns(bool Spoofed, DateTime? CheckedAt);
-public sealed record RouterDiag(List<RouterConflict>? Conflicts, bool FlowOffload, bool Ipv6Wan, RouterDns? Dns, long OverlayFreeKb);
+/// <summary>flow_offload — разгрузка в межсетевом экране (мешает обходу); flowoffload — её ведёт zapret после flow_offload_fix: none | software | hardware (07 §5.1).</summary>
+public sealed record RouterDiag(List<RouterConflict>? Conflicts, bool FlowOffload, bool Ipv6Wan, RouterDns? Dns, long OverlayFreeKb, string? Flowoffload = null);
 
 public sealed record RouterReport(string Text);
 public sealed record RouterStarted(bool Started);

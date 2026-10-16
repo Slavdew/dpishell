@@ -1408,7 +1408,8 @@ public sealed class RouterViewModel : Observable, IDisposable
                         // §9: пакет conflict_stop не останавливает — только удаление.
                         ? new(c.Name, "установлен пакет, он мешает — удалите его в меню роутера: «Система» → «Программное обеспечение»", CanStop: false)
                         : new(c.Name, (c.Kind == "service" ? "служба" : c.Kind) + (c.Running ? ", работает" : ", остановлена")));
-                FlowOffloadText = !d.FlowOffload ? "выключено"
+                FlowOffloadText = !d.FlowOffload
+                    ? (d.Flowoffload is "software" or "hardware" ? "передано обходу — не мешает" : "выключено")
                     : FlowOffloadFixable ? "включено — мешает обходу" : "включено";
                 Ipv6Text = !d.Ipv6Wan ? "нет" : Ipv6Fixable ? "есть — сайты по IPv6 идут мимо обхода" : "есть";
                 DnsText = d.Dns is null ? "не проверялся"

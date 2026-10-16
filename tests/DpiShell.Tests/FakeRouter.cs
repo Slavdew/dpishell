@@ -206,7 +206,7 @@ public sealed class FakeRouter : IDisposable
             "lists_get" => args["name"]?.GetValue<string>() == "exclude"
                 ? """{ "lines": ["gosuslugi.ru"], "editable": false }"""
                 : $$"""{ "lines": {{System.Text.Json.JsonSerializer.Serialize(Lists.GetValueOrDefault(args["name"]!.GetValue<string>()) ?? ["example.com"])}}, "editable": true }""",
-            "diag" => $$"""{ "conflicts": {{ConflictsJson}}, "flow_offload": {{(FlowOffloadFixed ? "false" : "true")}}, "ipv6_wan": true, "dns": { "spoofed": true, "checked_at": "2026-10-16T21:00:00Z" }, "overlay_free_kb": 18000 }""",
+            "diag" => $$"""{ "conflicts": {{ConflictsJson}}, "flow_offload": {{(FlowOffloadFixed ? "false" : "true")}}, "flowoffload": "{{(FlowOffloadFixed ? "software" : "none")}}","ipv6_wan": true, "dns": { "spoofed": true, "checked_at": "2026-10-16T21:00:00Z" }, "overlay_free_kb": 18000 }""",
             "report" => """{ "text": "отчёт роутера" }""",
             "core_install" => """{ "started": true }""",
             _ => "{}",
