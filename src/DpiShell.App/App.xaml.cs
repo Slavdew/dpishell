@@ -7,6 +7,9 @@ namespace DpiShell.App;
 
 public partial class App : Application
 {
+    Mutex? _single;
+    EventWaitHandle? _showSignal;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -22,6 +25,22 @@ public partial class App : Application
             Shutdown(1);
             return;
         }
+
+        // Одна копия: повторный запуск показывает окно уже работающей (она могла быть свёрнута в трей) и выходит.
+        _single = new Mutex(true, @"Global\DpiShell.App", out bool first);
+        _showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Global\DpiShell.App.Show");
+        if (!first)
+        {
+            _showSignal.Set();
+            Shutdown(0);
+            return;
+        }
+        var listener = new Thread(() =>
+        {
+            while (_showSignal.WaitOne())
+                Dispatcher.BeginInvoke(() => (MainWindow as MainWindow)?.ShowFromTray());
+        }) { IsBackground = true, Name = "DpiShell show signal" };
+        listener.Start();
 
         Shell shell;
         try { shell = new Shell(); }

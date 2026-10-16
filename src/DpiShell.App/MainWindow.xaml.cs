@@ -49,7 +49,7 @@ public partial class MainWindow : Window
     void OnNetworkChanged(object? sender, EventArgs e) =>
         Dispatcher.BeginInvoke(() => { _netSettle.Stop(); _netSettle.Start(); });
 
-    void ShowFromTray()
+    public void ShowFromTray()
     {
         Show();
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
