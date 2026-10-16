@@ -178,24 +178,8 @@ public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
                     if (!await ControlStillOk()) { stopped = "провайдер, похоже, временно ограничил соединения — продолжите поиск позже"; break; }
                 }
 
-                // Уточнение вокруг трёх лучших семейств, по одному параметру за шаг.
-                int budget = RefineBudget;
-                var frontier = Best(results, 3).Where(r => r.Ok > 0).ToList();
-                while (stopped is null && budget > 0 && frontier.Count > 0)
-                {
-                    var next = new List<CandidateResult>();
-                    foreach (var f in frontier)
-                        foreach (var n in CandidateGenerator.Neighbours(f.Desync))
-                        {
-                            if (budget <= 0) break;
-                            var r = await Try(n);
-                            if (r is null) continue;
-                            budget--;
-                            if (Better(r, f)) next.Add(r);
-                            if (!await ControlStillOk()) { stopped = "провайдер, похоже, временно ограничил соединения — продолжите поиск позже"; budget = 0; break; }
-                        }
-                    frontier = Best(next, 3).ToList();
-                }
+                if (!await RefineAsync(Best(results, 3).Where(r => r.Ok > 0).ToList(), Try, ControlStillOk, RefineBudget))
+                    stopped = "провайдер, похоже, временно ограничил соединения — продолжите поиск позже";
             }
             catch (OperationCanceledException) { stopped = "остановлено"; }
             byRole[role] = results;
@@ -240,6 +224,38 @@ public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
 
     static IEnumerable<CandidateResult> Best(IEnumerable<CandidateResult> l, int n) =>
         l.OrderByDescending(r => r.Share).ThenBy(r => r.Cost).ThenBy(r => r.Seconds).Take(n);
+
+    /// <summary>
+    /// Уточнение вокруг лучших семейств, по одному параметру за шаг, «первое улучшение»: нашли соседа лучше —
+    /// сразу продолжаем от него. Прежний обход слоями тратил бюджет на первый слой соседей (у трёх лучших ~45),
+    /// и улучшение в два шага (fooling, потом repeats) не находилось никогда (сессия роутера, 2026-10-17; на роутере — так же).
+    /// Бюджет общий на все семейства; уже проверенное не повторяется (<paramref name="tryOne"/> отдаёт null).
+    /// False — контроль сказал, что провайдер режет нас самих.
+    /// </summary>
+    public static async Task<bool> RefineAsync(IReadOnlyList<CandidateResult> seeds, Func<string, Task<CandidateResult?>> tryOne,
+        Func<Task<bool>> stillOk, int budget)
+    {
+        foreach (var seed in seeds)
+        {
+            var current = seed;
+            bool improved = true;
+            while (improved && budget > 0)
+            {
+                improved = false;
+                foreach (var n in CandidateGenerator.Neighbours(current.Desync))
+                {
+                    if (budget <= 0) break;
+                    var r = await tryOne(n);
+                    if (r is null) continue;
+                    budget--;
+                    if (!await stillOk()) return false;
+                    if (Better(r, current)) { current = r; improved = true; break; }
+                }
+            }
+            if (budget <= 0) break;
+        }
+        return true;
+    }
 
     static bool Better(CandidateResult a, CandidateResult b) =>
         a.Share > b.Share || a.Share == b.Share && (a.Cost < b.Cost - 0.01 || a.Cost <= b.Cost && a.Seconds < b.Seconds * 0.8);
