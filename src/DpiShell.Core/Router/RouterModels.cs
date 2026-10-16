@@ -1,0 +1,88 @@
+using System.Text.Json.Serialization;
+
+namespace DpiShell.Core.Router;
+
+// Форматы — docs/07-router-api.md (API 1). Имена полей — snake_case, как в договоре.
+
+public sealed record RouterPublicStatus(
+    string? Product, int? Api, string? Version, string? Engine, string? Core,
+    bool Enabled, string? Strategy, int? CatalogVersion, DateTime? CheckedAt, bool? LastCheckOk);
+
+public enum RouterFound
+{
+    /// <summary>Нет ответа, 404, не JSON или чужой product — «На роутере DpiShell не найден».</summary>
+    NotFound,
+    /// <summary>Всё совместимо.</summary>
+    Ok,
+    /// <summary>api роутера новее приложения — «Обновите приложение», только чтение статуса.</summary>
+    AppTooOld,
+    /// <summary>api роутера старше (или не указан) — «Обновите пакет на роутере».</summary>
+    RouterTooOld,
+}
+
+public sealed record RouterDetection(string Address, RouterFound Found, RouterPublicStatus? Status)
+{
+    public bool CanControl => Found == RouterFound.Ok;
+}
+
+public sealed record RouterCore(string? Version, bool Installed, bool HashOk);
+public sealed record RouterGroupCheck(string Id, bool Ok);
+public sealed record RouterLastCheck(DateTime? At, string? Source, bool Ok, List<RouterGroupCheck>? Groups);
+public sealed record RouterSchedule(bool Enabled, int Hours);
+public sealed record RouterJobs(bool Select, bool Check, bool CoreInstall);
+public sealed record RouterWarning(string Code, string? Text);
+
+public sealed record RouterStatus(
+    int Api, string? Version, string? Engine, RouterCore? Core, bool Enabled, string? Strategy, List<string>? Backups,
+    RouterLastCheck? LastCheck, int FailStreak, RouterSchedule? Schedule, RouterJobs? Jobs, List<RouterWarning>? Warnings);
+
+public sealed record RouterStrategyItem(string Id, string Title, string Source, int Runs, int Passed);
+public sealed record RouterStrategies(int CatalogVersion, List<RouterStrategyItem> Items);
+
+public sealed record RouterSelectRow(string Id, double GroupShare, double TargetShare, double AvgS, string? Error);
+public sealed record RouterSelectProgress(
+    bool Running, int Index, int Total, string? Message, List<RouterSelectRow>? Rows,
+    DateTime? FinishedAt, string? Best, DateTime? RestoreAt);
+
+public sealed record RouterTarget(string Url, bool Important);
+public sealed record RouterTargets(List<RouterTarget> Items);
+public sealed record RouterLines(List<string> Lines);
+
+public sealed record RouterConflict(string Kind, string Name, bool Running);
+public sealed record RouterDns(bool Spoofed, DateTime? CheckedAt);
+public sealed record RouterDiag(List<RouterConflict>? Conflicts, bool FlowOffload, bool Ipv6Wan, RouterDns? Dns, long OverlayFreeKb);
+
+public sealed record RouterReport(string Text);
+public sealed record RouterStarted(bool Started);
+
+/// <summary>Стратегия для `strategies_user_set`: только id, название и роли — пути и командную строку роутер не принимает.</summary>
+public sealed record RouterUserStrategy(string Id, string Title, Dictionary<string, string> Roles);
+
+/// <summary>Ошибка уровня DpiShell (код 0 от ubus, но в ответе `error`).</summary>
+public sealed record RouterAppError(string Code, string? Text, string? Field);
+
+public enum RouterFailure
+{
+    /// <summary>Роутер не ответил (сеть, таймаут HTTP).</summary>
+    Unreachable,
+    /// <summary>Неверный пароль (login → 6) или доступ не вернулся после повторного входа.</summary>
+    AccessDenied,
+    /// <summary>ubus 2 — неверные аргументы.</summary>
+    InvalidArgs,
+    /// <summary>ubus 4 — метода/объекта нет: пакет не установлен или старый.</summary>
+    NotSupported,
+    /// <summary>ubus 5/7 — ответа нет или таймаут на роутере.</summary>
+    NoResponse,
+    /// <summary>Ошибка DpiShell на роутере (busy, conflict, invalid…) — см. <see cref="RouterException.AppError"/>.</summary>
+    App,
+    /// <summary>Ответ не по договору.</summary>
+    Protocol,
+}
+
+public sealed class RouterException(RouterFailure failure, string message, RouterAppError? appError = null, int? ubusCode = null)
+    : Exception(message)
+{
+    public RouterFailure Failure { get; } = failure;
+    public RouterAppError? AppError { get; } = appError;
+    public int? UbusCode { get; } = ubusCode;
+}

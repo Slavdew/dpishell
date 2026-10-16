@@ -25,6 +25,10 @@ public sealed class AppState
     public string CloseAction { get; set; } = "tray";
     /// <summary>"service" — служба Windows (с Windows, без окна); "process" — winws живёт, пока открыта программа.</summary>
     public string RunMode { get; set; } = "service";
+    /// <summary>Адрес роутера (IP или имя); null — «Автоматически — основной шлюз» (07-router-api §2).</summary>
+    public string? RouterAddress { get; set; }
+    /// <summary>Пароль роутера, зашифрованный DPAPI (CurrentUser) — см. RouterSecrets. Открытым не хранится.</summary>
+    public string? RouterPassword { get; set; }
 
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
