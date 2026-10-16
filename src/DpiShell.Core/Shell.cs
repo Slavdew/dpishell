@@ -101,6 +101,37 @@ public sealed class Shell
         return new(state, exe, strategy, ours);
     }
 
+    /// <summary>
+    /// Остановить чужие обходы (Flowseal и т. п.), чтобы не мешали: процессы завершаются, службы останавливаются,
+    /// но не удаляются — чужие настройки не трогаем. Возвращает, что остановили, и службы, которые вернутся после перезагрузки.
+    /// </summary>
+    public (IReadOnlyList<string> Stopped, IReadOnlyList<string> ComeBackOnReboot) StopForeign()
+    {
+        var stopped = new List<string>(); var comeBack = new List<string>();
+        var found = ZapretDetector.Find(Paths, AllStrategies).Where(z => z.Owner != ZapretOwner.DpiShell).ToList();
+        foreach (var z in found.Where(z => z.Kind == "service"))
+        {
+            ServiceManager.Sc("stop", z.Name);
+            ServiceManager.WaitFor(z.Name, SvcState.Stopped, TimeSpan.FromSeconds(10));
+            stopped.Add(z.OwnerTitle + $" (служба {z.Name})");
+            comeBack.Add(z.Name);
+        }
+        foreach (var z in found.Where(z => z.Kind == "process"))
+        {
+            if (!int.TryParse(z.Name.Replace("PID ", ""), out var pid)) continue;
+            try
+            {
+                using var p = System.Diagnostics.Process.GetProcessById(pid);
+                p.Kill(entireProcessTree: true);
+                p.WaitForExit(5000);
+                stopped.Add(z.OwnerTitle);
+            }
+            catch (ArgumentException) { }            // уже завершился
+            catch (InvalidOperationException) { }
+        }
+        return (stopped, comeBack);
+    }
+
     public void Enable(string strategyId)
     {
         EnsureCoreIntact();

@@ -309,11 +309,15 @@ public sealed class MainViewModel : Observable
 
     public Task EnableAsync()
     {
+        // Стратегия не выбрана — не отправляем человека разбираться. Подборы уже были: берём лучшую по ним
+        // (первая в списке, порядок по статистике). Не было: подбираем и включаем сами (автоприменение).
         if (_shell.State.StrategyId is null)
         {
+            var stats = StrategyStats.Load(_shell.Paths);
+            var top = StrategyChoices.FirstOrDefault()?.Id;
+            if (top is not null && stats.TryGetValue(top, out var score) && score > 0) return ApplyAsync(top);
             Page = Pages.Select;
-            Message = "Сначала подберите стратегию.";
-            return Task.CompletedTask;
+            return StartSelectAsync();
         }
         return ApplyAsync(_shell.State.StrategyId);
     }
@@ -589,6 +593,21 @@ public sealed class MainViewModel : Observable
             "Обход сейчас включён. На время проверки он будет приостановлен, а стратегии будут меняться одна за другой — " +
             "сайты, звонки и загрузки могут прерываться.\n\nПосле проверки обход включится на лучшей найденной стратегии. Продолжить?",
             "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.Yes) == MessageBoxResult.Yes;
+    }
+
+    public ICommand StopConflictsCmd => _stopConflictsCmd ??= RelayCommand.Async(StopConflictsAsync, () => !Busy && !IsLoading && HasConflicts);
+    ICommand? _stopConflictsCmd;
+
+    /// <summary>Остановить мешающие обходы одной кнопкой, а не объяснять, как это сделать.</summary>
+    async Task StopConflictsAsync()
+    {
+        if (MessageBox.Show(ConflictWarning + "\n\nОстановить их сейчас? Настройки этих программ не меняются — их можно будет запустить снова.",
+                "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes) != MessageBoxResult.Yes) return;
+        (IReadOnlyList<string> Stopped, IReadOnlyList<string> ComeBackOnReboot) r = ([], []);
+        if (!await Guard("Останавливаю другие программы обхода…", async () => r = await Task.Run(_shell.StopForeign))) return;
+        await RefreshStatusAsync();
+        Message = r.Stopped.Count == 0 ? "Нечего останавливать." : "Остановлено: " + string.Join(", ", r.Stopped) + "."
+            + (r.ComeBackOnReboot.Count > 0 ? $" Служба {string.Join(", ", r.ComeBackOnReboot)} запустится снова после перезагрузки — удалите её в программе, которая её поставила." : "");
     }
 
     string? _autoApplyId;
