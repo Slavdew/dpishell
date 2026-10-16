@@ -117,13 +117,34 @@ public static class Conflicts
         return r;
     }
 
-    /// <summary>Есть ли поднятый VPN/туннельный адаптер — тогда обход, скорее всего, не нужен.</summary>
-    public static IReadOnlyList<string> ActiveVpnAdapters() =>
-        System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+    /// <summary>
+    /// Идёт ли интернет через VPN — тогда обход, скорее всего, не нужен. Смотрим не «есть ли VPN-адаптер»
+    /// (Radmin VPN, ZeroTier и т. п. — виртуальные локальные сети, интернет через них не ходит), а через какой
+    /// адаптер Windows отправит пакет наружу.
+    /// </summary>
+    public static IReadOnlyList<string> ActiveVpnAdapters()
+    {
+        var outbound = OutboundAddress();
+        if (outbound is null) return [];
+        return System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
             .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up)
+            .Where(n => n.GetIPProperties().UnicastAddresses.Any(a => a.Address.Equals(outbound)))
             .Where(n => n.NetworkInterfaceType is System.Net.NetworkInformation.NetworkInterfaceType.Ppp
                      || VpnRx.IsMatch(n.Description) || VpnRx.IsMatch(n.Name))
-            .Select(n => n.Description).ToList();
+            .Select(n => n.Name).Distinct().ToList();
+    }
+
+    /// <summary>Локальный адрес, с которого ушёл бы пакет в интернет. UDP-«подключение» пакетов не шлёт — только выбирает маршрут.</summary>
+    static System.Net.IPAddress? OutboundAddress()
+    {
+        try
+        {
+            using var s = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Dgram, System.Net.Sockets.ProtocolType.Udp);
+            s.Connect(new System.Net.IPEndPoint(System.Net.IPAddress.Parse("1.1.1.1"), 53));
+            return (s.LocalEndPoint as System.Net.IPEndPoint)?.Address;
+        }
+        catch (System.Net.Sockets.SocketException) { return null; }
+    }
 
     static readonly Regex VpnRx = new(@"wireguard|openvpn|tap-windows|wintun|amneziawg|outline|nordlynx|proton|tailscale|zerotier|vpn", RegexOptions.IgnoreCase);
 }

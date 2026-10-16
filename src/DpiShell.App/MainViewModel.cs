@@ -202,7 +202,7 @@ public sealed class MainViewModel : Observable
         else
         {
             Kind = StatusKind.Off; StatusTitle = "Выключено";
-            StatusDetail = _shell.State.StrategyId is { } id ? "Выбрана стратегия: " + StrategyTitle(id) : "Стратегия ещё не подобрана";
+            StatusDetail = _shell.State.StrategyId is { } id ? "Выбрана стратегия: " + StrategyTitle(id) : "Стратегия не выбрана: выберите в списке ниже или нажмите «Подобрать»";
         }
         StatusBrush = BrushOf(Kind);
         Raise(nameof(IsRunning));
