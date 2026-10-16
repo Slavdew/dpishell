@@ -1,11 +1,21 @@
-# Сборка пакетов роутера (dpishell, luci-app-dpishell) официальным OpenWRT SDK.
+# Сборка пакетов роутера (dpishell, luci-app-dpishell) официальным OpenWRT SDK и подписанная витрина пакетов на GitHub Pages.
 # Пакеты не зависят от архитектуры (PKGARCH:=all) — один SDK x86-64 собирает их для любого роутера, включая роутер.
+# Подпись: SDK подписывает индекс packages.adb ключом из секрета APK_SIGNING_KEY; открытый ключ — router/keys/dpishell.pem.
 name: router-packages
 
 on:
   push:
     paths: [ 'router/**', 'data/**', '.github/workflows/router.yml' ]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: router-pages
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -30,20 +40,53 @@ jobs:
           cp data/lists/*.txt $D/lists/
           cp data/fake/*.bin $D/fake/
 
-      - name: Сборка
+      - name: Ключ подписи индекса
+        env:
+          APK_SIGNING_KEY: ${{ secrets.APK_SIGNING_KEY }}
+        run: |
+          printf '%s\n' "$APK_SIGNING_KEY" > /builder/private-key.pem
+          chmod 600 /builder/private-key.pem
+          cp router/keys/dpishell.pem /builder/public-key.pem
+          # Открытый ключ из репозитория должен соответствовать секрету — иначе роутер отвергнет индекс.
+          openssl ec -in /builder/private-key.pem -pubout 2>/dev/null | cmp -s - router/keys/dpishell.pem \
+            || { echo 'ключ в секрете не соответствует router/keys/dpishell.pem'; exit 1; }
+
+      - name: Сборка и подписанный индекс
         working-directory: /builder
         env:
           FORCE_UNSAFE_CONFIGURE: 1
         run: |
           make defconfig >/dev/null
+          echo CONFIG_SIGNED_PACKAGES=y >> .config
           make package/dpishell/compile V=s
           make package/luci-app-dpishell/compile V=s
-          mkdir -p $GITHUB_WORKSPACE/out
-          find bin -name '*dpishell*.apk' -exec cp {} $GITHUB_WORKSPACE/out/ \;
-          ls -la $GITHUB_WORKSPACE/out
-          cd $GITHUB_WORKSPACE/out && sha256sum *.apk > sha256sums.txt && cat sha256sums.txt
+          FEED=$GITHUB_WORKSPACE/site/feed
+          mkdir -p $FEED
+          find bin -name '*dpishell*.apk' -exec cp {} $FEED/ \;
+          # Индекс только наших пакетов, подписанный ключом.
+          ./staging_dir/host/bin/apk mkndx --allow-untrusted --sign private-key.pem --output $FEED/packages.adb $FEED/*.apk
+          ./staging_dir/host/bin/apk verify --keys-dir . $FEED/packages.adb || { echo 'подпись индекса не прошла проверку'; exit 1; }
+          cp $GITHUB_WORKSPACE/router/keys/dpishell.pem $FEED/dpishell.pem
+          cd $FEED && sha256sum *.apk packages.adb > sha256sums.txt && cat sha256sums.txt
+          rm -f /builder/private-key.pem
 
       - uses: actions/upload-artifact@v4
         with:
           name: router-packages
-          path: out/
+          path: site/feed/
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/master'
+        with:
+          path: site/
+
+  pages:
+    if: github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
