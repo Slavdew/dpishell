@@ -60,5 +60,6 @@ if (ARGV[0] == 'live') {
 	print(sprintf('%.3J\n', r));
 }
 
+system('rm -f /tmp/dpishell/t[0-9]*.?');
 print(`${passed} прошло, ${failed} не прошло\n`);
 exit(failed ? 1 : 0);

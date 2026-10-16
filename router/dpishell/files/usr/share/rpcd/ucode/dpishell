@@ -15,7 +15,7 @@ function err(code, text, field) {
 }
 
 function busy() {
-	return stat(`${st.P.run}/select.lock`) ? err('busy', 'Идёт подбор') : null;
+	return st.job_running('select') ? err('busy', 'Идёт подбор') : null;
 }
 
 function sh(cmd) {
@@ -44,7 +44,7 @@ function warnings(s) {
 function jobs() {
 	let j = {};
 	for (let n in ['select', 'check', 'core_install', 'dns_analyze', 'site_check'])
-		j[n] = !!stat(`${st.P.run}/${n}.lock`);
+		j[n] = st.job_running(n);
 	return j;
 }
 
@@ -314,7 +314,7 @@ methods.select_progress = {
 
 methods.select_cancel = {
 	call: function() {
-		if (stat('/tmp/dpishell/select.lock'))
+		if (st.job_running('select'))
 			writefile('/tmp/dpishell/select.cancel', '1');
 		return {};
 	}
@@ -336,7 +336,7 @@ methods.check_now = {
 		let b = busy(); if (b) return b;
 		let s = st.settings();
 		if (!s.enabled) return err('failed', 'Обход выключен — проверять нечего');
-		if (stat('/tmp/dpishell/check.lock')) return { started: true };
+		if (st.job_running('check')) return { started: true };
 		spawn('check app');
 		return { started: true };
 	}
@@ -346,7 +346,7 @@ methods.core_install = {
 	call: function() {
 		let b = busy(); if (b) return b;
 		if (!core.arch()) return err('failed', 'Архитектура роутера не поддерживается');
-		if (!stat('/tmp/dpishell/core_install.lock'))
+		if (!st.job_running('core_install'))
 			spawn('core_install');
 		return { started: true };
 	}

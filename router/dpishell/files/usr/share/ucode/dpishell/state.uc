@@ -142,6 +142,12 @@ function write_status_json() {
 	chmod(P.status_json, 0o644);
 }
 
+// Фоновое задание идёт: замок есть и его процесс жив (мёртвый замок после ошибки не считается).
+function job_running(name) {
+	let pid = +trim(readfile(`${P.run}/${name}.lock`) ?? '');
+	return !!(pid && stat(`/proc/${pid}`));
+}
+
 function valid_domain_line(l) {
 	return match(l, DOMAIN_RX) != null;
 }
@@ -159,5 +165,5 @@ function valid_subnet_line(l) {
 export {
 	P, VERSION, API, MODES, HOURS, USER_LISTS,
 	ensure_dirs, write_atomic, read_json, uci_set, settings, roles, catalog, user_catalog, catalogs,
-	write_zapret_config, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line
+	write_zapret_config, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running
 };

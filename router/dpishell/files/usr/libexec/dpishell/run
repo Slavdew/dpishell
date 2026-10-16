@@ -8,15 +8,18 @@
 import { writefile, readfile, stat, unlink } from 'fs';
 import * as st from 'dpishell.state';
 import * as sel from 'dpishell.select';
+import * as core from 'dpishell.core';
 
 const cmd = ARGV[0];
 
+// Замок с PID: если хозяин умер (ошибка, kill), замок считается снятым — иначе задание не запустить до перезагрузки.
 function lock(name) {
 	let f = `/tmp/dpishell/${name}.lock`;
-	if (stat(f))
+	let pid = +trim(readfile(f) ?? '');
+	if (pid && stat(`/proc/${pid}`))
 		return null;
 	st.ensure_dirs();
-	writefile(f, `${time()}\n`);
+	writefile(f, `${split(readfile('/proc/self/stat'), ' ')[0]}\n`);
 	return f;
 }
 
@@ -36,7 +39,7 @@ if (cmd == 'select') {
 	unlink(l);
 }
 else if (cmd == 'check') {
-	if (stat('/tmp/dpishell/select.lock')) exit(1);
+	if (st.job_running('select')) exit(1);
 	let l = lock('check');
 	if (!l) exit(1);
 	try { sel.check_run(ARGV[1] == 'manual' ? 'manual' : 'app', false); } catch (e) {}
@@ -44,7 +47,7 @@ else if (cmd == 'check') {
 }
 else if (cmd == 'watch') {
 	let s = st.settings();
-	if (!s.schedule.enabled || !s.enabled || stat('/tmp/dpishell/select.lock')) exit(0);
+	if (!s.schedule.enabled || !s.enabled || st.job_running('select')) exit(0);
 	// Интервал выдерживаем сами: cron зовёт каждые 30 мин.
 	let last = st.read_json(`${st.P.etc}/last-check.json`, null);
 	if (last && time() - last.at < s.schedule.hours * 3600 - 120) exit(0);
@@ -85,7 +88,6 @@ else if (cmd == 'watch') {
 else if (cmd == 'core_install') {
 	let l = lock('core_install');
 	if (!l) exit(1);
-	let core = require('dpishell.core');
 	let e = null;
 	try { e = core.install(msg => st.write_atomic('/tmp/dpishell/core_install.json', sprintf('%J\n', { running: true, message: msg }))); }
 	catch (x) { e = `${x}`; }
