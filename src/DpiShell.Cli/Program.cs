@@ -9,7 +9,7 @@ var rest = args.Skip(1).ToArray();
 if (cmd is "help" && args.Length == 0 || cmd == "selftest")
     return await SelfTest();
 // Долгие команды пишут лог рядом с exe и ждут Enter: их запускают ярлыком, окно иначе закроется.
-if (cmd is "select" or "search")
+if (cmd is "select" or "search" or "detect")
     return await Logged(cmd, () => Run(cmd, rest));
 return await Run(cmd, rest);
 

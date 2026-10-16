@@ -810,6 +810,20 @@ public sealed class MainViewModel : Observable
             Message = "Служба и драйвер удалены.";
     }
 
+    public ICommand ClearHistoryCmd => _clearHistoryCmd ??= RelayCommand.Async(ClearHistoryAsync, () => !Busy && !IsLoading && !Selecting);
+    ICommand? _clearHistoryCmd;
+
+    async Task ClearHistoryAsync()
+    {
+        var ok = MessageBox.Show(
+            "Удалить результаты подборов, статистику и логи?\nСвои адреса, найденные стратегии и включённый обход останутся.",
+            "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
+        if (ok != MessageBoxResult.Yes) return;
+        var n = await Task.Run(() => ResultStore.ClearHistory(_shell.Paths));
+        await ReloadChoicesAsync();
+        Message = $"История очищена: удалено файлов — {n}.";
+    }
+
     void OpenFolder(string path)
     {
         try

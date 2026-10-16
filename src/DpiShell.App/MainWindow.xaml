@@ -147,10 +147,10 @@
                             </StackPanel>
                             <StackPanel Grid.Column="1">
                                 <TextBlock Text="Режим" Style="{StaticResource H2}" />
-                                <RadioButton GroupName="Mode" IsChecked="{Binding Full}" Margin="0,3">
+                                <RadioButton IsChecked="{Binding Full}" Margin="0,3">
                                     <TextBlock><Run Text="Полный" /><Run Text=" — все стратегии, выбор лучшей" Foreground="{DynamicResource Muted}" /></TextBlock>
                                 </RadioButton>
-                                <RadioButton GroupName="Mode" IsChecked="{Binding Quick}" Margin="0,3">
+                                <RadioButton IsChecked="{Binding Quick}" Margin="0,3">
                                     <TextBlock><Run Text="Быстрый" /><Run Text=" — до первой рабочей, начиная с прежних" Foreground="{DynamicResource Muted}" /></TextBlock>
                                 </RadioButton>
                             </StackPanel>
@@ -187,13 +187,14 @@
                                 <DataGridTemplateColumn Header="Стратегия" Width="2*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" VerticalAlignment="Center" />
-                                                <Border Background="{DynamicResource AccentSoft}" CornerRadius="4" Padding="5,0" Margin="6,0,0,0" VerticalAlignment="Center"
+                                            <!-- Метка справа и целиком, обрезается название (в StackPanel метка уезжала за край). -->
+                                            <DockPanel LastChildFill="True">
+                                                <Border DockPanel.Dock="Right" Background="{DynamicResource AccentSoft}" CornerRadius="4" Padding="5,0" Margin="6,0,4,0" VerticalAlignment="Center"
                                                         Visibility="{Binding Found, Converter={StaticResource Vis}}" ToolTip="Найдена глубоким поиском">
                                                     <TextBlock Text="найдена" FontSize="12" Foreground="{DynamicResource AccentText}" />
                                                 </Border>
-                                            </StackPanel>
+                                                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" VerticalAlignment="Center" ToolTip="{Binding Title}" />
+                                            </DockPanel>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
@@ -357,9 +358,9 @@
                                 <StackPanel>
                                     <TextBlock Text="Оформление" Style="{StaticResource H2}" />
                                     <WrapPanel>
-                                        <RadioButton GroupName="Theme" Content="Как в Windows" IsChecked="{Binding ThemeAuto}" Margin="0,3,24,3" />
-                                        <RadioButton GroupName="Theme" Content="Светлое" IsChecked="{Binding ThemeLight}" Margin="0,3,24,3" />
-                                        <RadioButton GroupName="Theme" Content="Тёмное" IsChecked="{Binding ThemeDark}" Margin="0,3,24,3" />
+                                        <RadioButton Content="Как в Windows" IsChecked="{Binding ThemeAuto}" Margin="0,3,24,3" />
+                                        <RadioButton Content="Светлое" IsChecked="{Binding ThemeLight}" Margin="0,3,24,3" />
+                                        <RadioButton Content="Тёмное" IsChecked="{Binding ThemeDark}" Margin="0,3,24,3" />
                                     </WrapPanel>
                                 </StackPanel>
                             </Border>
@@ -367,6 +368,8 @@
                             <WrapPanel>
                                 <Button Content="Папка логов" Command="{Binding OpenLogsCmd}" />
                                 <Button Content="Папка результатов" Command="{Binding OpenResultsCmd}" />
+                                <Button Content="Очистить историю" Command="{Binding ClearHistoryCmd}"
+                                        ToolTip="Удалить результаты подборов, статистику и логи. Свои адреса и найденные стратегии останутся." />
                                 <Button Content="Удалить службу полностью" Style="{StaticResource DangerButton}" Command="{Binding RemoveServiceCmd}" />
                             </WrapPanel>
                         </StackPanel>
@@ -383,7 +386,7 @@
                     <TextBlock Text="{Binding LoadingText}" Margin="0,0,0,14" />
                     <ProgressBar Height="6" IsIndeterminate="True">
                         <ProgressBar.Style>
-                            <Style TargetType="ProgressBar">
+                            <Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding LoadFailed}" Value="True">
                                         <Setter Property="Visibility" Value="Collapsed" />
