@@ -5,7 +5,8 @@ using System.Text.Json;
 namespace DpiShell.Core;
 
 /// <summary>Закреплённая версия ядра: откуда качать и какие хеши обязаны совпасть (data/core.json).</summary>
-public sealed record CoreManifest(string Version, string ZipUrl, string ZipSha256, string ZipDir, Dictionary<string, string> Files)
+/// <param name="MirrorUrls">Запасные адреса того же архива: пробуются, только если основной недоступен или отдал не тот файл. Подменить ядро через них нельзя — хеш тот же.</param>
+public sealed record CoreManifest(string Version, string ZipUrl, string ZipSha256, string ZipDir, Dictionary<string, string> Files, List<string>? MirrorUrls = null)
 {
     static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
@@ -59,12 +60,18 @@ public sealed class CoreInstaller(AppPaths paths, CoreManifest manifest)
         try
         {
             var zip = Path.Combine(tmp, "core.zip");
-            log?.Report($"Скачиваю ядро {manifest.Version}…");
-            await DownloadWithRetriesAsync(http, manifest.ZipUrl, zip, ct);
-
-            var zipHash = Sha256(zip);
-            if (!string.Equals(zipHash, manifest.ZipSha256, StringComparison.OrdinalIgnoreCase))
-                throw new SecurityException($"Хеш архива ядра не совпал: ожидался {manifest.ZipSha256}, получен {zipHash}. Файл удалён.");
+            Exception? failure = null;
+            foreach (var url in new[] { manifest.ZipUrl }.Concat(manifest.MirrorUrls ?? []))
+            {
+                log?.Report(url == manifest.ZipUrl ? $"Скачиваю ядро {manifest.Version}…" : $"Основной адрес не сработал, пробую запасной: {url}");
+                try { await DownloadWithRetriesAsync(http, url, zip, ct); }
+                catch (HttpRequestException e) { failure = e; continue; }
+                var zipHash = Sha256(zip);
+                if (string.Equals(zipHash, manifest.ZipSha256, StringComparison.OrdinalIgnoreCase)) { failure = null; break; }
+                File.Delete(zip);
+                failure = new SecurityException($"Хеш архива ядра с {url} не совпал: ожидался {manifest.ZipSha256}, получен {zipHash}. Файл удалён.");
+            }
+            if (failure is not null) throw failure;
 
             var staged = Path.Combine(tmp, "core");
             Directory.CreateDirectory(staged);
@@ -110,7 +117,9 @@ public sealed class CoreInstaller(AppPaths paths, CoreManifest manifest)
                 await resp.Content.CopyToAsync(fs, ct);
                 return;
             }
-            catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException && !ct.IsCancellationRequested)
+            // 4xx (файла нет) повтором не лечится — сразу к запасному адресу.
+            catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException && !ct.IsCancellationRequested
+                                      && !(e is HttpRequestException { StatusCode: { } sc } && (int)sc is >= 400 and < 500))
             {
                 last = e;
                 await Task.Delay(1500 * (i + 1), ct);

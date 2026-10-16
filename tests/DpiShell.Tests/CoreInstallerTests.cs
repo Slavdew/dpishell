@@ -34,9 +34,12 @@ public sealed class CoreInstallerTests : IAsyncLifetime
     public Task InitializeAsync()
     {
         _zip = MakeZip();
-        _srv = new RawHttpServer((path, s, ct) => path == "/core.zip"
-            ? RawHttpServer.RespondAsync(s, 200, _zip, "Content-Type: application/zip")
-            : RawHttpServer.RespondAsync(s, 404, []));
+        _srv = new RawHttpServer((path, s, ct) => path switch
+        {
+            "/core.zip" => RawHttpServer.RespondAsync(s, 200, _zip, "Content-Type: application/zip"),
+            "/tampered.zip" => RawHttpServer.RespondAsync(s, 200, [.. _zip, 0], "Content-Type: application/zip"),
+            _ => RawHttpServer.RespondAsync(s, 404, []),
+        });
         _p = new AppPaths(_t.Sub("root"), Repo.Data);
         return Task.CompletedTask;
     }
@@ -110,6 +113,28 @@ public sealed class CoreInstallerTests : IAsyncLifetime
         var inst = new CoreInstaller(_p, Manifest(zipHash: Hash(_zip).ToUpperInvariant(), winwsHash: Hash(Winws).ToUpperInvariant()));
         await inst.InstallAsync(http);
         Assert.Equal(CoreState.Ok, inst.Check().State);
+    }
+
+    [Theory]
+    [InlineData("/missing.zip")]   // основной адрес пропал (404)
+    [InlineData("/tampered.zip")]  // основной отдал подменённый архив
+    public async Task Install_PrimaryFails_MirrorUsed(string primary)
+    {
+        using var http = new HttpClient();
+        var m = Manifest() with { ZipUrl = _srv.Url(primary), MirrorUrls = [_srv.Url("/core.zip")] };
+        var log = new List<string>();
+        await new CoreInstaller(_p, m).InstallAsync(http, new SyncProgress(log));
+        Assert.Equal(CoreState.Ok, new CoreInstaller(_p, m).Check().State);
+        Assert.Contains(log, l => l.Contains("запасной"));
+    }
+
+    [Fact]
+    public async Task Install_AllMirrorsTampered_SecurityException()
+    {
+        using var http = new HttpClient();
+        var m = Manifest() with { ZipUrl = _srv.Url("/tampered.zip"), MirrorUrls = [_srv.Url("/tampered.zip")] };
+        await Assert.ThrowsAsync<SecurityException>(() => new CoreInstaller(_p, m).InstallAsync(http));
+        Assert.Empty(Directory.Exists(_p.Core) ? Directory.GetFiles(_p.Core) : []);
     }
 
     [Fact]

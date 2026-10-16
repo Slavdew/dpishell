@@ -1,6 +1,9 @@
 {
   "version": "v72.13",
   "zip_url": "https://github.com/bol-van/zapret/releases/download/v72.13/zapret-v72.13.zip",
+  "mirror_urls": [
+    "https://github.com/Slavdew/zapret/releases/download/v72.13/zapret-v72.13.zip"
+  ],
   "zip_sha256": "c493e33a0dc4eba23a8686efdaba55f59755ad6ade3564aebd9d13f4c65e2e0c",
   "zip_dir": "zapret-v72.13/binaries/windows-x86_64/",
   "files": {
