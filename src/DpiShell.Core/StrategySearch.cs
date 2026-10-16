@@ -128,8 +128,9 @@ public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
     {
         var byRole = new Dictionary<string, IReadOnlyList<CandidateResult>>();
         string? stopped = null;
-        // Быстрая оценка: обязательные цели, только TLS 1.3, одна попытка, короткие таймауты.
-        var quick = new Selector(paths, QuickProbe()) { Tls = [SslProtocols.Tls13] };
+        // Быстрая оценка: обязательные цели, одна попытка, короткие таймауты. Обе версии TLS: живой прогон 2026-10-16 показал,
+        // что «тихий» multidisorder проходит по TLS 1.3 и не проходит по 1.2 — проверка только 1.3 пропускала такие находки.
+        var quick = new Selector(paths, QuickProbe()) { Tls = HttpProbe.DefaultTls };
 
         foreach (var (role, groupIds) in RoleGroups)
         {

@@ -143,6 +143,7 @@ public sealed class MainViewModel : Observable
             _coreProblem = CoreProblem(check);
             IsLoading = false;
             await RefreshStatusAsync();
+            await ReloadChoicesAsync();
             _ = CheckDnsAsync();
         }
         catch (Exception e)
@@ -205,6 +206,10 @@ public sealed class MainViewModel : Observable
         }
         StatusBrush = BrushOf(Kind);
         Raise(nameof(IsRunning));
+        Raise(nameof(ToggleText));
+        Raise(nameof(CanChoose));
+        // Стратегию могли сменить с «Подбора» или автопереключением — меню показывает текущую, не вызывая перезапуск.
+        if (_chosen != _shell.State.StrategyId) { _chosen = _shell.State.StrategyId; Raise(nameof(ChosenStrategyId)); }
         StatusChanged?.Invoke();
     }
 
@@ -220,6 +225,52 @@ public sealed class MainViewModel : Observable
 
     string _checkSummary = "";
     public string CheckSummary { get => _checkSummary; private set => Set(ref _checkSummary, value); }
+
+    // ---------- выбор стратегии (отдельно от выключателя) ----------
+
+    public ObservableCollection<StrategyChoice> StrategyChoices { get; } = [];
+
+    /// <summary>Список для выпадающего меню: готовые и найденные, с долей удачных подборов из статистики.</summary>
+    public async Task ReloadChoicesAsync()
+    {
+        var (all, stats) = await Task.Run(() => (_shell.AllStrategies, StrategyStats.Load(_shell.Paths)));
+        StrategyChoices.Clear();
+        foreach (var s in StrategyStats.Order(all, stats))
+        {
+            var note = s.Source == "search" ? " · найдена" : "";
+            if (stats.TryGetValue(s.Id, out var v)) note += $" · работала в {v:P0}";
+            StrategyChoices.Add(new(s.Id, s.Title + note));
+        }
+        _chosen = _shell.State.StrategyId;
+        Raise(nameof(ChosenStrategyId));
+    }
+
+    string? _chosen;
+    /// <summary>Выбранная стратегия. Обход включён — перезапуск службы на новой; выключен — только запоминаем.</summary>
+    public string? ChosenStrategyId
+    {
+        get => _chosen;
+        set
+        {
+            if (value is null || value == _chosen) return;
+            _chosen = value;
+            Raise();
+            if (IsRunning) _ = ApplyAsync(value);
+            else
+            {
+                _shell.State.StrategyId = value;
+                WatchdogPolicy.Applied(_shell.State, value);
+                _shell.SaveState();
+                RefreshWatchText();
+                UpdateStatus();
+            }
+        }
+    }
+
+    public string ToggleText => IsRunning ? "Выключить" : "Включить";
+    public bool CanChoose => !Busy && !IsLoading && !Selecting;
+    public ICommand ToggleCmd => _toggleCmd ??= RelayCommand.Async(() => IsRunning ? DisableAsync() : EnableAsync(), () => !Busy && !IsLoading);
+    ICommand? _toggleCmd;
 
     public ICommand RetryCmd { get; }
     public ICommand EnableCmd { get; }
@@ -539,6 +590,7 @@ public sealed class MainViewModel : Observable
         Scores.Clear();
         foreach (var s in ordered) Scores.Add(new ScoreRow(s) { IsBest = ReferenceEquals(s, r.Best) });
         SelectProgress = SelectProgressMax;
+        _ = ReloadChoicesAsync();  // новая статистика и найденные стратегии — в меню на главной
 
         // Рабочие по рейтингу — запасные для автопереключения.
         WatchdogPolicy.Remember(_shell.State, r);

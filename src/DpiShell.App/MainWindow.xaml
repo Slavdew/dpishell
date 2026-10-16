@@ -37,9 +37,15 @@
                                 </Grid>
                             </Border>
 
+                            <DockPanel Margin="0,0,0,8">
+                                <TextBlock Text="Стратегия" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <ComboBox ItemsSource="{Binding StrategyChoices}" SelectedValue="{Binding ChosenStrategyId}" SelectedValuePath="Id"
+                                          DisplayMemberPath="Label" MinWidth="320" MaxWidth="520" HorizontalAlignment="Left" Padding="8,5"
+                                          IsEnabled="{Binding CanChoose}" />
+                            </DockPanel>
+
                             <WrapPanel Margin="0,0,0,8">
-                                <Button Content="Включить" Style="{StaticResource Primary}" Command="{Binding EnableCmd}" />
-                                <Button Content="Выключить" Command="{Binding DisableCmd}" />
+                                <Button Content="{Binding ToggleText}" Style="{StaticResource Primary}" Command="{Binding ToggleCmd}" MinWidth="130" />
                                 <Button Content="Подобрать" Command="{Binding GoSelectCmd}" />
                                 <Button Content="Проверить сейчас" Command="{Binding CheckNowCmd}" />
                             </WrapPanel>

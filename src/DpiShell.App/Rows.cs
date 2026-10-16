@@ -12,6 +12,8 @@ public sealed class GroupOption(string id, string title, bool isChecked) : Obser
 }
 
 /// <summary>Строка «Проверить сейчас».</summary>
+public sealed record StrategyChoice(string Id, string Label);
+
 public sealed record CheckRow(bool Ok, string Group, string Url, string Detail)
 {
     public string Mark => Ok ? "✓" : "✗";
