@@ -215,6 +215,8 @@ public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
                 if (d is not null) roles["general"] = d.Desync;
                 // ipset-профиль общего трафика — тот же приём, что и general.
                 if (d is not null && roles.ContainsKey("ipset_tcp")) roles["ipset_tcp"] = d.Desync;
+                // Игровой TCP-профиль базы построен на её general — с новым general он выводится заново (WinwsArgs.DeriveGameTcp).
+                if (d is not null) roles.Remove("game_tcp");
                 var s = new Strategy($"found-{stamp}-{generated.Count + 1}", $"Найденная {generated.Count + 1} ({stamp})", "search", roles);
                 WinwsArgs.Validate(s);
                 generated.Add(s);

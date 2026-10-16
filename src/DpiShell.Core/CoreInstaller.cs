@@ -104,7 +104,7 @@ public sealed class CoreInstaller(AppPaths paths, CoreManifest manifest)
     }
 
     // github.com и его файловый хостинг сами бывают под DPI: обрывы TLS лечатся повтором.
-    static async Task DownloadWithRetriesAsync(HttpClient http, string url, string file, CancellationToken ct)
+    internal static async Task DownloadWithRetriesAsync(HttpClient http, string url, string file, CancellationToken ct)
     {
         Exception? last = null;
         for (int i = 0; i < 6; i++)

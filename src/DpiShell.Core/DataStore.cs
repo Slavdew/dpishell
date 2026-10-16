@@ -14,20 +14,25 @@ public sealed partial class DataStore(AppPaths paths)
     public void Seed()
     {
         paths.EnsureDirectories();
-        CopyDir(Path.Combine(paths.Seed, "lists"), paths.Lists);
+        // Общий IP-список ставит IpLists: с проверкой, не затирая скачанный более свежий.
+        CopyDir(Path.Combine(paths.Seed, "lists"), paths.Lists, skip: IpLists.AllFile);
         CopyDir(Path.Combine(paths.Seed, "fake"), paths.Fake);
         foreach (var f in new[] { UserGeneral, UserExclude })
         {
             var p = Path.Combine(paths.Lists, f);
             if (!File.Exists(p)) File.WriteAllText(p, Placeholder + "\n");
         }
+        var ip = new IpLists(paths);
+        ip.EnsureFiles();
+        ip.SeedFromPackage();
     }
 
-    static void CopyDir(string from, string to)
+    static void CopyDir(string from, string to, string? skip = null)
     {
         if (!Directory.Exists(from)) throw new DirectoryNotFoundException($"Нет данных поставки: {from}");
         foreach (var f in Directory.GetFiles(from))
-            File.Copy(f, Path.Combine(to, Path.GetFileName(f)), overwrite: true);
+            if (!string.Equals(Path.GetFileName(f), skip, StringComparison.OrdinalIgnoreCase))
+                File.Copy(f, Path.Combine(to, Path.GetFileName(f)), overwrite: true);
     }
 
     public IReadOnlyList<string> ReadUserDomains(string file = UserGeneral) =>

@@ -143,7 +143,8 @@ public class WinwsArgsBuildTests
         {
             var a = WinwsArgs.Build(s, P);
             Assert.DoesNotContain(a, x => x.Contains("{fake}"));
-            Assert.Equal(s.Roles.Count - 1, a.Count(x => x == "--new"));
+            // Игровые роли каталога без игрового режима в строку не попадают.
+            Assert.Equal(s.Roles.Keys.Count(r => !r.StartsWith("game_")) - 1, a.Count(x => x == "--new"));
             Assert.NotEqual("--new", a[^1]);
             Assert.DoesNotContain(a, x => x.Contains(' '));
         }

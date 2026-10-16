@@ -1,0 +1,723 @@
+{
+  "version": 1,
+  "source": "https://github.com/Flowseal/zapret-discord-youtube/blob/eb16c1419057e36b8a36fbe7c959483450e6ac8b/.service/hosts",
+  "source_sha256": "e7dcca4f85f425ddb641586823d15a66618eaec4df010027ad95f9cc1af489a9",
+  "candidates": [
+    {
+      "host": "github.com",
+      "ips": [
+        "140.82.121.3"
+      ],
+      "owner_any_of": [
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "objects.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "raw.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "release-assets.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "private-user-images.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "gist.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "avatars.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "media.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "avatars0.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "avatars1.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "avatars2.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "avatars3.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "avatars4.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "avatars5.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "avatars6.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "avatars7.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "avatars8.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "camo.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "cloud.githubusercontent.com",
+      "ips": [
+        "146.75.22.132",
+        "2606:50c0:8000::154"
+      ],
+      "owner_any_of": [
+        "FASTLY",
+        "GITHU"
+      ],
+      "reason": "github-ip-block",
+      "since": "2026-08-30",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #17088"
+    },
+    {
+      "host": "my.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "desktop.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "macos.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "oauth.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "oauth.tg.dev",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "cdn.telesco.pe",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "cdn1.telesco.pe",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "cdn2.telesco.pe",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "cdn3.telesco.pe",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "cdn4.telesco.pe",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "cdn5.telesco.pe",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "cdn6.telesco.pe",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "core.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "zws4.web.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "vesta.web.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "vesta-1.web.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "venus-1.web.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "telegram.me",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "telegram.dog",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "telegram.space",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "telesco.pe",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "tg.dev",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "t.me",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "api.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "td.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "venus.web.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "web.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "kws2-1.web.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "kws2.web.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "kws4-1.web.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "kws4.web.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "zws2-1.web.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "zws2.web.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "zws4-1.web.telegram.org",
+      "ips": [
+        "149.154.167.220"
+      ],
+      "owner_any_of": [
+        "TELEGRAM"
+      ],
+      "reason": "telegram-web",
+      "since": "2026-09-20",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #15948"
+    },
+    {
+      "host": "discord.com",
+      "ips": [
+        "162.159.138.232",
+        "162.159.137.232",
+        "162.159.128.233",
+        "162.159.135.232"
+      ],
+      "owner_any_of": [
+        "CLOUDFLARE",
+        "CLOUD14"
+      ],
+      "reason": "discord-ip-block",
+      "since": "2026-08-15",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #16741"
+    },
+    {
+      "host": "updates.discord.com",
+      "ips": [
+        "162.159.138.232",
+        "162.159.137.232",
+        "162.159.128.233",
+        "162.159.135.232"
+      ],
+      "owner_any_of": [
+        "CLOUDFLARE",
+        "CLOUD14"
+      ],
+      "reason": "discord-ip-block",
+      "since": "2026-08-15",
+      "source": "Flowseal/zapret-discord-youtube@eb16c14 .service/hosts, PR #16741"
+    }
+  ]
+}

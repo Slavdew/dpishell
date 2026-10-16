@@ -25,10 +25,24 @@ public sealed class AppState
     public string CloseAction { get; set; } = "tray";
     /// <summary>"service" — служба Windows (с Windows, без окна); "process" — winws живёт, пока открыта программа.</summary>
     public string RunMode { get; set; } = "service";
+    /// <summary>Временные метки TCP включили мы (были выключены) — «Удалить полностью» вернёт как было.</summary>
+    public bool TimestampsEnabledByUs { get; set; }
     /// <summary>Адрес роутера (IP или имя); null — «Автоматически — основной шлюз» (07-router-api §2).</summary>
     public string? RouterAddress { get; set; }
     /// <summary>Пароль роутера, зашифрованный DPAPI (CurrentUser) — см. RouterSecrets. Открытым не хранится.</summary>
     public string? RouterPassword { get; set; }
+    /// <summary>IP-список: "off" (заглушка, по умолчанию), "list" (загруженный + свои), "any" (все адреса, временно) — 09-features-spec §2.</summary>
+    public string IpsetMode { get; set; } = "off";
+    /// <summary>До какого момента (UTC) действует «Все адреса»; позже — считается прежний режим (BuildOptions.From).</summary>
+    public DateTime? IpsetAnyUntil { get; set; }
+    /// <summary>Режим, в который «Все адреса» возвращается сам.</summary>
+    public string IpsetModeBeforeAny { get; set; } = "off";
+    /// <summary>Игровой режим: "off" (по умолчанию), "all" (TCP+UDP — переключатель окна), "tcp"/"udp" — только отладочная консоль.</summary>
+    public string GameMode { get; set; } = "off";
+    /// <summary>«Починить адреса» (hosts, ТЗ v2 §3) включено. По умолчанию выключено.</summary>
+    public bool HostsFix { get; set; }
+    /// <summary>Когда последний раз перепроверяли записи hosts (локальное время) — окно делает это раз в сутки и при старте.</summary>
+    public DateTime? HostsCheckedAt { get; set; }
 
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 

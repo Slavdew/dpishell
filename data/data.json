@@ -1,0 +1,23 @@
+{
+  "version": "2026-10-17",
+  "source": "Flowseal/zapret-discord-youtube@eb16c1419057e36b8a36fbe7c959483450e6ac8b (MIT), проверка — docs/03-vetting.md",
+  "files": {
+    "lists/ipset-all.txt": {
+      "sha256": "f4250118b065e0977547b3e4412c6f15489ffcffb0d11c4ef71af8fdd80b21fb",
+      "url": "https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/eb16c1419057e36b8a36fbe7c959483450e6ac8b/.service/ipset-service.txt",
+      "lines": 33048,
+      "ipv4_share": 0.1032,
+      "updated": "2026-09-26T09:41:16Z",
+      "source": "Flowseal .service/ipset-service.txt (V3nilla/IPSets-For-Bypass-in-Russia, PR #17737)"
+    },
+    "fake/ACTIVE_GAME_UDP.bin": {
+      "sha256": "e065870cb0d13152e6132807bbf42218a9e7cd8d96f5602b61674cc540f3a56e",
+      "url": "https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/eb16c1419057e36b8a36fbe7c959483450e6ac8b/bin/ACTIVE_GAME_UDP.bin",
+      "source": "Flowseal bin/ACTIVE_GAME_UDP.bin"
+    },
+    "hosts/hosts-candidates.json": {
+      "sha256": "11243545a67d55a3e797fc15ff7dd33bdc06ea8c9e6c17410d49b7f12d859974",
+      "source": "кандидаты для «Починить адреса» (ТЗ v2 §3), см. data/hosts/hosts-candidates.sha256"
+    }
+  }
+}

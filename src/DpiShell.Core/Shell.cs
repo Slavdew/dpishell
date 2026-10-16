@@ -12,6 +12,12 @@ public sealed class Shell
     public AppState State { get; private set; }
     public StrategyCatalog Catalog { get; }
     public TargetSet DefaultTargets { get; }
+    /// <summary>«Починить адреса» — системный hosts (ТЗ v2 §3).</summary>
+    public HostsManager Hosts => _hosts ??= new HostsManager(Paths);
+    HostsManager? _hosts;
+    /// <summary>IP-списки (ТЗ v2 §2): общий из data.json, свои подсети, валидатор.</summary>
+    public IpLists IpLists => _ipLists ??= new IpLists(Paths);
+    IpLists? _ipLists;
 
     public Shell(AppPaths? paths = null)
     {
@@ -44,6 +50,12 @@ public sealed class Shell
             using var http = CreateDownloadClient();
             await Installer.InstallAsync(http, log, ct);
             check = Installer.Check();
+        }
+        if (check.State == CoreState.Ok && IsAdmin())
+        {
+            // Программу закрыли во время «Все адреса» — срок вышел, вернуть; служба после обновления программы — на новые аргументы.
+            try { if (!RevertExpiredAllAddresses()) RefreshServiceIfOutdated(); }
+            catch (Exception e) when (e is InvalidOperationException or SecurityException or IOException) { log?.Report(e.Message); }
         }
         return check;
     }
@@ -142,12 +154,37 @@ public sealed class Shell
     /// <summary>Обход сейчас работает — в своём режиме (служба запущена или наш процесс winws жив).</summary>
     public bool IsActive => ServiceMode ? Service.State == SvcState.Running : _proc is { Alive: true };
 
+    /// <summary>Временные метки TCP нужны стратегиям с fooling=ts; выключены — включаем и запоминаем, что это сделали мы.</summary>
+    public void EnsureTcpTimestamps()
+    {
+        if (TcpTimestamps.IsEnabled() != false) return;
+        if (TcpTimestamps.Set(true))
+        {
+            State.TimestampsEnabledByUs = true;
+            State.Save(Paths);
+        }
+    }
+
+    /// <summary>«Удалить полностью»: вернуть временные метки, если включали мы.</summary>
+    public void RestoreTcpTimestamps()
+    {
+        if (!State.TimestampsEnabledByUs) return;
+        if (TcpTimestamps.Set(false))
+        {
+            State.TimestampsEnabledByUs = false;
+            State.Save(Paths);
+        }
+    }
+
     public void Enable(string strategyId)
     {
         EnsureCoreIntact();
         ThrowIfConflicts();
+        EnsureTcpTimestamps();
         var s = FindStrategy(strategyId) ?? throw new ArgumentException($"Нет стратегии {strategyId}");
-        var args = WinwsArgs.Build(s, Paths);
+        // Список «По списку» удалён/изменён антивирусом — вернуть из поставки, иначе winws не стартует без файла.
+        if (CurrentOptions.Ipset == IpsetMode.List && !IpLists.HasList) IpLists.SeedFromPackage();
+        var args = WinwsArgs.Build(s, Paths, CurrentOptions);
         if (ServiceMode)
         {
             StopProcess();
@@ -248,6 +285,7 @@ public sealed class Shell
     {
         EnsureCoreIntact();
         ThrowIfConflicts();
+        EnsureTcpTimestamps();   // иначе подбор отбросит стратегии с fooling=ts как нерабочие
 
         bool serviceWasRunning = Service.State == SvcState.Running;
         bool processWasRunning = _proc is { Alive: true };
@@ -260,7 +298,7 @@ public sealed class Shell
             {
                 if (serviceWasRunning) ServiceManager.Sc("start", ServiceManager.Name);
                 if (processWasRunning && FindStrategy(id) is { } s)
-                    try { StartProcess(WinwsArgs.Build(s, Paths)); } catch (InvalidOperationException) { }
+                    try { StartProcess(WinwsArgs.Build(s, Paths, CurrentOptions)); } catch (InvalidOperationException) { }
             }
         }
     }
@@ -283,8 +321,152 @@ public sealed class Shell
         return await Task.WhenAll(hosts.Select(h => DnsCheck.CompareAsync(h, doh, ct)));
     }
 
+    // ---------- IP-списки и игровой режим (09-features-spec §1–2) ----------
+
+    /// <summary>С чем собирается командная строка сейчас. «Все адреса» с истёкшим сроком уже не действует.</summary>
+    public BuildOptions CurrentOptions => BuildOptions.From(State, DateTime.UtcNow);
+
+    /// <summary>Состояние для экранов «IP-списки» и «Игровой режим».</summary>
+    public NetFeatures Features
+    {
+        get
+        {
+            var o = CurrentOptions;
+            var game = BuildOptions.ParseGame(State.GameMode);
+            return new(o.Ipset, o.Ipset == IpsetMode.Any ? State.IpsetAnyUntil : null,
+                o.Ipset == IpsetMode.Any ? BuildOptions.ParseIpset(State.IpsetModeBeforeAny) : o.Ipset,
+                game, o.GameTcp || o.GameUdp, game != GameMode.Off && o.Ipset == IpsetMode.Any, IpLists.Meta);
+        }
+    }
+
+    /// <summary>
+    /// «Выкл» или «По списку». «Все адреса» — через <see cref="StartAllAddresses"/>. «Выкл» выключает и игровой режим:
+    /// без списка ему нечего ловить. Обход включён — перезапускается на той же стратегии.
+    /// </summary>
+    public void SetIpsetMode(IpsetMode mode)
+    {
+        if (mode == IpsetMode.Any) { StartAllAddresses(); return; }
+        if (mode == IpsetMode.List && !IpLists.HasList && !IpLists.SeedFromPackage())
+            throw new InvalidOperationException("IP-список не загружен — обновите его.");
+        if (CurrentOptions.Ipset == mode && State.IpsetMode != "any") return;
+        State.IpsetMode = BuildOptions.Format(mode);
+        State.IpsetAnyUntil = null;
+        if (mode == IpsetMode.Off) State.GameMode = BuildOptions.Format(GameMode.Off);
+        State.Save(Paths);
+        ReapplyIfActive();
+    }
+
+    /// <summary>«Все адреса — на 10 минут»: потом сам возврат к прежнему режиму. Повторный вызов продлевает срок.</summary>
+    public void StartAllAddresses()
+    {
+        var current = CurrentOptions.Ipset;
+        if (current != IpsetMode.Any) State.IpsetModeBeforeAny = BuildOptions.Format(current);
+        State.IpsetMode = BuildOptions.Format(IpsetMode.Any);
+        State.IpsetAnyUntil = DateTime.UtcNow + IpLists.AnyDuration;
+        State.Save(Paths);
+        ReapplyIfActive();
+    }
+
+    /// <summary>Вернуть прежний режим сейчас (и при выходе из программы, если пользователь согласился). False — «Все адреса» не включены.</summary>
+    public bool StopAllAddresses()
+    {
+        if (State.IpsetMode != BuildOptions.Format(IpsetMode.Any)) return false;
+        var back = BuildOptions.ParseIpset(State.IpsetModeBeforeAny);
+        State.IpsetMode = BuildOptions.Format(back == IpsetMode.Any ? IpsetMode.Off : back);
+        State.IpsetAnyUntil = null;
+        State.Save(Paths);
+        ReapplyIfActive();   // служба запущена с пустым списком — без перезапуска она так и ловила бы всё
+        return true;
+    }
+
+    /// <summary>Для таймера окна (раз в 10–30 с) и старта программы: срок «Все адреса» вышел — вернуть. True — вернули (показать уведомление).</summary>
+    public bool RevertExpiredAllAddresses() =>
+        State.IpsetMode == BuildOptions.Format(IpsetMode.Any) && (State.IpsetAnyUntil is not { } until || until <= DateTime.UtcNow)
+        && StopAllAddresses();
+
+    /// <summary>
+    /// Игровой режим. Окно передаёт только Off/TcpUdp. При включении без загруженного списка IP-список включается сам
+    /// (если файла нет — ставится из поставки или скачивается по манифесту); при «Все адреса» — запрещено.
+    /// </summary>
+    public async Task<GameModeChange> SetGameModeAsync(GameMode mode, IProgress<string>? log = null, CancellationToken ct = default)
+    {
+        if (BuildOptions.ParseGame(State.GameMode) == mode) return new(false, null);
+        string? note = null;
+        if (mode != GameMode.Off)
+        {
+            var ipset = CurrentOptions.Ipset;
+            if (ipset == IpsetMode.Any)
+                throw new InvalidOperationException("Игровой режим недоступен, пока включены «Все адреса».");
+            if (ipset == IpsetMode.Off || !IpLists.HasList)
+            {
+                if (!IpLists.HasList && !IpLists.SeedFromPackage())
+                {
+                    using var http = CreateDownloadClient();
+                    var r = await IpLists.UpdateFromManifestAsync(http, null, false, log, ct);
+                    if (!r.Applied) throw new InvalidOperationException(r.Message);
+                }
+                if (ipset == IpsetMode.Off)
+                {
+                    State.IpsetMode = BuildOptions.Format(IpsetMode.List);
+                    State.IpsetAnyUntil = null;
+                    note = "Включён IP-список: игровой режим работает по нему.";
+                }
+            }
+        }
+        State.GameMode = BuildOptions.Format(mode);
+        State.Save(Paths);
+        ReapplyIfActive();
+        return new(note is not null, note);
+    }
+
+    /// <summary>Обновить общий IP-список из файла. Перезапуск не нужен: winws перечитывает список сам.</summary>
+    public IpsetUpdateResult UpdateIpsetFromFile(string file, bool confirmed = false) => IpLists.UpdateFromFile(file, confirmed);
+
+    /// <summary>Обновить общий IP-список по манифесту (sha256 из data.json поставки).</summary>
+    public async Task<IpsetUpdateResult> UpdateIpsetFromManifestAsync(bool confirmed = false, IProgress<string>? log = null, CancellationToken ct = default)
+    {
+        using var http = CreateDownloadClient();
+        return await IpLists.UpdateFromManifestAsync(http, null, confirmed, log, ct);
+    }
+
+    /// <summary>Свои подсети / исключения (одна на строку). Ошибочные строки — в Problems; широкие — только с confirmed.</summary>
+    public IpsetVerdict WriteUserIpset(IEnumerable<string> lines, bool exclude = false, bool confirmed = false) =>
+        IpLists.WriteUser(lines, exclude, confirmed);
+
+    /// <summary>Изменились режимы — работающий обход перезапускается на той же стратегии (как Enable).</summary>
+    void ReapplyIfActive()
+    {
+        // Сначала state: выключенный обход не трогаем и не опрашиваем службу.
+        if (!State.Enabled || State.StrategyId is not { } id) return;
+        if (IsActive) Enable(id);
+    }
+
+    /// <summary>Служба работает со старой командной строкой (обновилась программа или режимы) — переставить. True — переставили.</summary>
+    public bool RefreshServiceIfOutdated()
+    {
+        if (!ServiceMode || !State.Enabled || State.StrategyId is not { } id || FindStrategy(id) is not { } s) return false;
+        if (Service.State != SvcState.Running) return false;
+        var (exe, args) = ZapretDetector.SplitCommandLine(ServiceManager.QueryBinPath(ServiceManager.Name));
+        if (exe is null || !exe.Equals(Paths.Winws, StringComparison.OrdinalIgnoreCase)) return false;
+        if (args.SequenceEqual(WinwsArgs.Build(s, Paths, CurrentOptions))) return false;
+        Enable(id);
+        return true;
+    }
+
     public void SaveState() => State.Save(Paths);
 }
+
+/// <param name="Ipset">Действующий режим IP-списка.</param>
+/// <param name="AnyUntilUtc">Когда «Все адреса» вернутся сами (только при Ipset = Any).</param>
+/// <param name="ReturnTo">Куда вернутся «Все адреса» (иначе = Ipset).</param>
+/// <param name="Game">Выбранный игровой режим.</param>
+/// <param name="GameActive">Игровые профили реально в командной строке.</param>
+/// <param name="GameBlocked">Игровой режим выбран, но не действует из-за «Все адреса» (переключатель серый).</param>
+/// <param name="List">Установленный общий список: подсети, доля IPv4, дата; null — не установлен.</param>
+public sealed record NetFeatures(IpsetMode Ipset, DateTime? AnyUntilUtc, IpsetMode ReturnTo, GameMode Game, bool GameActive, bool GameBlocked, IpsetMeta? List);
+
+/// <param name="IpsetSwitched">IP-список включён автоматически — показать <paramref name="Note"/> одной строкой.</param>
+public sealed record GameModeChange(bool IpsetSwitched, string? Note);
 
 /// <summary>Работают другие программы обхода (Flowseal, GoodbyeDPI…): подбор с ними бессмысленен.</summary>
 public sealed class ConflictException(IReadOnlyList<Conflict> conflicts)
