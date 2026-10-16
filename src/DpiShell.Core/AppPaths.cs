@@ -13,12 +13,54 @@ public sealed class AppPaths
     public string Winws => Path.Combine(Core, "winws.exe");
 
     /// <summary>Данные, приехавшие вместе с программой (data\ рядом с exe).</summary>
-    public string Seed { get; }
+    public string Package { get; }
+
+    /// <summary>Обновлённые данные (ставит помощник по data.json, 02-spec §3.6) — в закрытой папке программы.</summary>
+    public string Updates => Path.Combine(Root, "data");
+
+    /// <summary>
+    /// Откуда читать данные: обновлённые, если они новее поставки и целы (хеши сходятся с их data.json), иначе — поставка.
+    /// Окну без прав папка программы закрыта — у него всегда поставка (данные помощника — через status).
+    /// </summary>
+    public string Seed => _seed ??= ResolveSeed();
+    string? _seed;
+
+    /// <summary>Перечитать, откуда брать данные (после установки обновления).</summary>
+    public void ResetSeed() => _seed = null;
+
+    /// <summary>Манифест данных, которые сейчас в работе; null — его нет.</summary>
+    public DataManifest? SeedManifest
+    {
+        get
+        {
+            var f = Path.Combine(Seed, DataManifest.FileName);
+            try { return File.Exists(f) ? DataManifest.Load(f) : null; }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException) { return null; }
+        }
+    }
 
     public AppPaths(string? root = null, string? seed = null)
     {
         Root = root ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "DpiShell");
-        Seed = seed ?? Path.Combine(AppContext.BaseDirectory, "data");
+        Package = seed ?? Path.Combine(AppContext.BaseDirectory, "data");
+    }
+
+    string ResolveSeed()
+    {
+        try
+        {
+            var upd = Path.Combine(Updates, DataManifest.FileName);
+            if (!File.Exists(upd)) return Package;
+            var u = DataManifest.Load(upd);
+            var pkg = Path.Combine(Package, DataManifest.FileName);
+            if (File.Exists(pkg) && DataManifest.CompareVersions(u.Version, DataManifest.Load(pkg).Version) <= 0) return Package;
+            // Повреждено (антивирус, ручная правка) — поставка: она проверена при выпуске.
+            return u.Mismatches(Updates).Count == 0 ? Updates : Package;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException)
+        {
+            return Package;
+        }
     }
 
     public void EnsureDirectories()

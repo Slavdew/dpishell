@@ -1,0 +1,9 @@
+{
+  // Откуда помощник качает обновления данных (02-spec §3.6, решение 23): по очереди, 5 с на адрес.
+  // Адрес — папка data/ нашего репозитория: манифест {адрес}data.json, файлы {адрес}<ключ из манифеста>.
+  // Зеркало — ещё одна строка (https, тот же состав папки). Каждый файл сверяется с sha256 манифеста.
+  "sources": [
+    "https://raw.githubusercontent.com/Slavdew/dpishell/master/data/"
+  ],
+  "release_page": "https://github.com/Slavdew/dpishell/releases/latest"
+}

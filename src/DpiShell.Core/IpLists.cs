@@ -5,17 +5,66 @@ namespace DpiShell.Core;
 /// <summary>Файл данных в манифесте: хеш обязателен; для IP-списка — ещё адрес источника и счётчики (09-features-spec §2).</summary>
 public sealed record DataFile(string Sha256, string? Url = null, int? Lines = null, double? Ipv4Share = null, DateTime? Updated = null, string? Source = null);
 
-/// <summary>Манифест данных (data/data.json): версия и sha256 каждого файла — по образцу core.json. Ключ — путь от data/ через «/».</summary>
-public sealed record DataManifest(string Version, Dictionary<string, DataFile> Files, string? Source = null)
+/// <summary>
+/// Манифест данных (data/data.json): версия и sha256 каждого файла — по образцу core.json. Ключ — путь от data/ через «/».
+/// Версия — дата выпуска данных «ГГГГ-ММ-ДД» (вторая за день — «ГГГГ-ММ-ДД.2»).
+/// </summary>
+/// <param name="AppVersion">Последняя версия программы — окно покажет ссылку на релиз, если у него старее.</param>
+/// <param name="MinAppVersion">С какой версии программы эти данные можно ставить (новый формат, новые параметры winws).</param>
+public sealed record DataManifest(string Version, Dictionary<string, DataFile> Files, string? Source = null,
+    string? AppVersion = null, string? MinAppVersion = null)
 {
     public const string FileName = "data.json";
     public const string IpsetKey = "lists/" + IpLists.AllFile;
+    public const int MaxFiles = 200;
 
     static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
     public static DataManifest Load(string path) =>
         JsonSerializer.Deserialize<DataManifest>(File.ReadAllText(path), Json)
         ?? throw new InvalidDataException($"Пустой манифест данных: {path}");
+
+    public static DataManifest Parse(byte[] utf8) =>
+        JsonSerializer.Deserialize<DataManifest>(utf8, Json) ?? throw new InvalidDataException("Пустой манифест данных.");
+
+    /// <summary>Что не так с манифестом для установки обновления (пусто — годен): версия, ключи, хеши, адреса.</summary>
+    public IReadOnlyList<string> UpdateProblems()
+    {
+        var p = new List<string>();
+        if (ParseVersion(Version) is null) p.Add("версия не в формате ГГГГ-ММ-ДД");
+        if (Files is null || Files.Count == 0) { p.Add("нет файлов"); return p; }
+        if (Files.Count > MaxFiles) p.Add("слишком много файлов");
+        foreach (var (key, f) in Files)
+        {
+            if (!DataKeys.IsAllowed(key)) p.Add($"недопустимый файл «{(key.Length > 40 ? key[..40] : key)}»");
+            else if (f?.Sha256 is not { Length: 64 } h || !h.All(Uri.IsHexDigit)) p.Add($"нет sha256 у {key}");
+            else if (f.Url is not null && !UpdateSources.IsSafeHttps(f.Url)) p.Add($"адрес {key} не https");
+        }
+        foreach (var v in new[] { AppVersion, MinAppVersion })
+            if (v is not null && !System.Version.TryParse(v, out _)) p.Add("версия программы не читается");
+        return p;
+    }
+
+    /// <summary>Сравнить версии данных; нечитаемая — старше любой читаемой.</summary>
+    public static int CompareVersions(string? a, string? b)
+    {
+        var x = ParseVersion(a);
+        var y = ParseVersion(b);
+        if (x is null || y is null) return (x is null ? 0 : 1) - (y is null ? 0 : 1);
+        int c = x.Value.Date.CompareTo(y.Value.Date);
+        return c != 0 ? c : x.Value.N.CompareTo(y.Value.N);
+    }
+
+    static (DateOnly Date, int N)? ParseVersion(string? v)
+    {
+        if (v is null) return null;
+        var parts = v.Split('.');
+        if (parts.Length > 2 || !DateOnly.TryParseExact(parts[0], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var d)) return null;
+        int n = 1;
+        if (parts.Length == 2 && (!int.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out n) || n is < 1 or > 999)) return null;
+        return (d, n);
+    }
 
     /// <summary>Файлы из манифеста, которых нет в <paramref name="dataDir"/> или у которых другой хеш.</summary>
     public IReadOnlyList<string> Mismatches(string dataDir) =>
@@ -26,13 +75,13 @@ public sealed record DataManifest(string Version, Dictionary<string, DataFile> F
         }).Select(f => f.Key).ToList();
 
     /// <summary>
-    /// Хеш файла данных. Текст (.txt, .json) — по содержимому с переводами строк LF: git с text=auto может выдать CRLF,
+    /// Хеш файла данных. Текст (.txt, .json, .sha256) — по содержимому с переводами строк LF: git с text=auto может выдать CRLF,
     /// а смысл файла от этого не меняется. Двоичные (.bin) — побайтно.
     /// </summary>
     public static string Sha256(string path)
     {
         var ext = Path.GetExtension(path).ToLowerInvariant();
-        if (ext is not (".txt" or ".json")) return CoreInstaller.Sha256(path);
+        if (ext is not (".txt" or ".json" or ".sha256")) return CoreInstaller.Sha256(path);
         var b = File.ReadAllBytes(path);
         var lf = new List<byte>(b.Length);
         for (int i = 0; i < b.Length; i++)

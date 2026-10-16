@@ -1,0 +1,88 @@
+﻿<#
+  Сборка portable-архива DpiShell (02-spec §9, решение 8: без установщика и подписи — portable-zip).
+
+  Что делает:
+    1. dotnet publish окна: Release, win-x64, self-contained, single-file (как в DpiShell.App.csproj);
+       папка data\ ложится рядом с exe (цель KeepDataNextToExe в csproj).
+    2. Проверяет data\ по data\data.json (sha256 каждого файла) — в архив не попадёт то, что не проверено.
+    3. Кладёт рядом README.txt, THIRD-PARTY-NOTICES.txt (тексты лицензий полностью) и LICENSE.txt, если он есть в корне репозитория.
+    4. Упаковывает папку DpiShell\ в publish\DpiShell-<версия>-portable.zip и печатает sha256 архива.
+
+  Запуск из корня репозитория:  powershell -ExecutionPolicy Bypass -File packaging\make-portable.ps1
+  Сам архив в git не кладётся (publish\ в .gitignore).
+#>
+param(
+    [string]$Configuration = 'Release',
+    [string]$OutDir
+)
+$ErrorActionPreference = 'Stop'
+
+$repo = Split-Path -Parent $PSScriptRoot
+if (-not $OutDir) { $OutDir = Join-Path $repo 'publish' }
+$work = Join-Path $OutDir 'portable-work'
+$stage = Join-Path $work 'DpiShell'
+if (Test-Path $work) { Remove-Item $work -Recurse -Force }
+New-Item -ItemType Directory -Force $stage | Out-Null
+
+# 1. Публикация окна.
+$proj = Join-Path $repo 'src\DpiShell.App\DpiShell.App.csproj'
+& dotnet publish $proj -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=true -o $stage -nologo
+if ($LASTEXITCODE -ne 0) { throw "dotnet publish завершился с кодом $LASTEXITCODE" }
+
+$exe = Join-Path $stage 'DpiShell.exe'
+if (-not (Test-Path $exe)) { throw 'Нет DpiShell.exe в выходе публикации' }
+
+# 2. Данные: всё, что перечислено в data.json, есть и совпадает по sha256 (текст — по LF, как в DataManifest.Sha256).
+$data = Join-Path $stage 'data'
+$manifest = Get-Content (Join-Path $data 'data.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$sha = [Security.Cryptography.SHA256]::Create()
+$bad = @()
+foreach ($p in $manifest.files.PSObject.Properties) {
+    $file = Join-Path $data ($p.Name -replace '/', '\')
+    if (-not (Test-Path $file)) { $bad += "$($p.Name): нет файла"; continue }
+    $bytes = [IO.File]::ReadAllBytes($file)
+    if ([IO.Path]::GetExtension($file).ToLowerInvariant() -in '.txt', '.json', '.sha256') {
+        $lf = New-Object 'System.Collections.Generic.List[byte]' $bytes.Length
+        for ($i = 0; $i -lt $bytes.Length; $i++) {
+            if (-not ($bytes[$i] -eq 13 -and $i + 1 -lt $bytes.Length -and $bytes[$i + 1] -eq 10)) { $lf.Add($bytes[$i]) }
+        }
+        $bytes = $lf.ToArray()
+    }
+    $h = -join ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') })
+    if ($h -ne $p.Value.sha256) { $bad += "$($p.Name): sha256 не совпал" }
+}
+if ($bad.Count -gt 0) { throw "Данные не совпали с data.json:`n" + ($bad -join "`n") }
+Write-Host "data\ проверена: файлов $(@($manifest.files.PSObject.Properties).Count), версия данных $($manifest.version)"
+
+# Лишнее из публикации (отладочные символы встроены в exe).
+Get-ChildItem $stage -Filter '*.pdb' -Recurse | Remove-Item -Force
+
+# 3. Тексты рядом с exe.
+Copy-Item (Join-Path $PSScriptRoot 'README.txt') $stage
+Copy-Item (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.txt') $stage
+$license = Join-Path $repo 'LICENSE'
+if (Test-Path $license) { Copy-Item $license (Join-Path $stage 'LICENSE.txt') }
+else { Write-Warning 'В корне репозитория нет LICENSE: лицензия DpiShell не выбрана (docs/owner-questions.md, вопрос 3) — архив без неё.' }
+
+# 4. Архив: внутри — папка DpiShell\.
+$version = (Get-Item $exe).VersionInfo.ProductVersion
+if (-not $version) { $version = (Get-Item $exe).VersionInfo.FileVersion }
+$version = ($version -split '\+')[0]
+$zip = Join-Path $OutDir "DpiShell-$version-portable.zip"
+if (Test-Path $zip) { Remove-Item $zip -Force }
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+# Имена записей — через «/»: CreateFromDirectory в Windows PowerShell 5.1 пишет «\», и не всякий распаковщик это понимает.
+$archive = [IO.Compression.ZipFile]::Open($zip, [IO.Compression.ZipArchiveMode]::Create)
+try {
+    foreach ($f in Get-ChildItem $stage -Recurse -File) {
+        $name = 'DpiShell/' + $f.FullName.Substring($stage.Length + 1).Replace('\', '/')
+        [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $f.FullName, $name, [IO.Compression.CompressionLevel]::Optimal)
+    }
+}
+finally { $archive.Dispose() }
+Remove-Item $work -Recurse -Force
+
+$zipHash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$size = [math]::Round((Get-Item $zip).Length / 1MB, 1)
+Write-Host "Готово: $zip ($size МБ)"
+Write-Host "sha256: $zipHash"

@@ -44,6 +44,10 @@ public sealed class MainViewModel : Observable
     public NetViewModel Net { get; }
     /// <summary>«Починить адреса» — hosts (09-features-spec §3).</summary>
     public HostsViewModel Hosts { get; }
+    /// <summary>Обновления данных (02-spec §3.6).</summary>
+    public UpdatesViewModel Updates { get; }
+    /// <summary>Окно при входе в Windows (02-spec §3.8).</summary>
+    public Autostart Autostart { get; }
     /// <summary>Уведомление в трей (окно может быть свёрнуто): «Все адреса» закончились, адрес в hosts устарел.</summary>
     public event Action<string>? Notify;
 
@@ -63,6 +67,15 @@ public sealed class MainViewModel : Observable
         Helper = helper;
         Settings = settings;
         Helper.Changed += OnHelperChanged;
+        Updates = new UpdatesViewModel(helper, shell, settings)
+        {
+            Guard = Guard,
+            Need = NeedHelperAsync,
+            Say = s => Message = s,
+            Confirm = s => Confirm(s),
+            AfterInstall = ReloadChoicesAsync,
+        };
+        Autostart = new Autostart(settings) { Say = s => Message = s };
 
         RetryCmd = RelayCommand.Async(InitializeAsync, () => LoadFailed);
         EnableCmd = RelayCommand.Async(EnableAsync, () => !Busy && !IsLoading);
@@ -395,6 +408,8 @@ public sealed class MainViewModel : Observable
             _ = CheckDnsAsync();
             // «Починить адреса» включено и с прошлой проверки прошли сутки — перепроверить записи (устаревшие уберутся).
             _ = Hosts.RecheckIfDueAsync();
+            // Обновления данных — раз в день, тихо (02-spec §3.6).
+            _ = Updates.CheckIfDueAsync();
         }
         catch (Exception e)
         {
@@ -470,6 +485,9 @@ public sealed class MainViewModel : Observable
         Raise(nameof(CanChoose));
         Raise(nameof(StrategyHeader));
         Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint));
+        // Автозапуск по умолчанию следует за режимом — когда режим известен (помощник ответил).
+        if (Live is not null) Autostart.OnRunMode(ServiceMode);
+        Updates.Refresh();
         // Стратегию могли сменить с «Подбора» или автопереключением — список показывает текущую, не вызывая перезапуск.
         if (_chosen != id) { _chosen = id; Raise(nameof(ChosenStrategyId)); }
         StatusChanged?.Invoke();

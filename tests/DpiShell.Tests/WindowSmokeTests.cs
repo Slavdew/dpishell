@@ -198,6 +198,10 @@ public sealed class WindowSmokeTests
                 var shell = new Shell(new AppPaths(tmp.Sub("root-" + theme), Repo.Data));
                 var settings = TestWindow.Settings(shell);
                 settings.Theme = theme;
+                // Обновления (02-spec §3.6): у источника данные новее и вышла новая программа — плашка на главной и карточка в настройках.
+                settings.UpdatesData = "2099-01-01";
+                settings.UpdatesApp = "99.0";
+                settings.UpdatesCheckedAt = settings.UpdatesOkAt = new DateTime(2026, 10, 17, 12, 0, 0);
                 // Тёмная — в режиме без службы: на снимках видны обе подсказки у галочки и у настройки закрытия.
                 if (theme == ThemeManager.Dark) shell.State.RunMode = "process";
                 var (vm, helper) = WithPcHelper(shell, settings);
@@ -216,7 +220,14 @@ public sealed class WindowSmokeTests
                     SetProp(vm, "IsLoading", true);
                     vm.Page = page;
                     Pump();
-                    if (page == Pages.Home) AssertHome(w, vm);
+                    if (page == Pages.Home)
+                    {
+                        AssertHome(w, vm);
+                        if (!vm.Updates.DataAvailable || Find<Button>(Find<TabControl>(w)!, b => b.Content as string == "Обновить" && b.IsVisible) is null)
+                            throw new Exception("На главной нет плашки «Доступно обновление списков» с кнопкой");
+                        if (vm.Autostart.Enabled != (theme == ThemeManager.Dark))
+                            throw new Exception("Автозапуск по умолчанию: включён без службы, выключен в режиме службы");
+                    }
                     if (snapDir is null) continue;
                     SetProp(vm, "IsLoading", false);
                     typeof(MainViewModel).GetMethod("UpdateStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
@@ -240,6 +251,11 @@ public sealed class WindowSmokeTests
                         sv.ScrollToVerticalOffset(card.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-diag-checks.png"));
+                        // Настройки (автозапуск) и «Обновления».
+                        var settingsCard = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Настройки")!;
+                        sv.ScrollToVerticalOffset(settingsCard.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-diag-updates.png"));
                         sv.ScrollToHome();
                     }
                     if (page == Pages.Net && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } nv)

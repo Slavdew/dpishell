@@ -99,6 +99,9 @@ public static partial class HelperCommands
         new("details", false, false),
         // Выбрать стратегию, не включая обход (запомнить у помощника).
         new("choose", true, false, new ArgSpec("strategy", ArgKind.StrategyId, Required: true)),
+        // Обновление данных по data.json (02-spec §3.6): адреса и хеши помощник берёт сам — из своего списка источников
+        // и скачанного манифеста; окно передаёт только согласие на сильно изменившийся IP-список.
+        new("data_update", true, true, new ArgSpec("confirmed", ArgKind.Bool)),
     ];
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);

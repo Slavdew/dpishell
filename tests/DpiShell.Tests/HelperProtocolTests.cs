@@ -103,7 +103,7 @@ public class HelperProtocolTests
             "status", "enable", "disable", "set_run_mode", "select", "search", "cancel", "ipset_mode", "all_addresses_start",
             "all_addresses_stop", "game_mode", "ipset_update", "user_ipset_set", "user_targets_set", "hosts_check", "hosts_preview",
             "hosts_apply", "hosts_revert", "hosts_recheck", "stop_foreign", "core_repair", "remove_all", "clear_history", "read_results",
-            "details", "choose",
+            "details", "choose", "data_update",
         ];
         Assert.Equal(spec.Order(), HelperCommands.Specs.Keys.Order());
         // Только чтение — не занимает «одну операцию за раз».

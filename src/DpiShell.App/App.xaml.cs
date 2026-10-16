@@ -71,12 +71,18 @@ public partial class App : Application
 
         var helper = new HelperLink { Post = a => Dispatcher.BeginInvoke(a) };
         var vm = new MainViewModel(shell, helper, settings);
+        // Настоящие реестр и сеть — только здесь: тесты окна получают память и выключенную проверку обновлений.
+        vm.Autostart.Store = new RegistryRunKeyStore();
+        vm.Autostart.Apply();
+        vm.Updates.Http = () => new System.Net.Http.HttpClient(new System.Net.Http.SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(5) })
+            { Timeout = Timeout.InfiniteTimeSpan };
         RelayCommand.OnError = ex => { TryLog(ex); vm.Message = Texts.Friendly(ex); };
         try
         {
             var window = new MainWindow(vm);
             MainWindow = window;
-            window.Show();
+            // Автозапуск при входе (--tray): окно не показываем — только значок в трее, обход поднимается как обычно.
+            if (!e.Args.Contains(Autostart.TrayArg, StringComparer.OrdinalIgnoreCase)) window.Show();
         }
         catch (Exception ex)
         {
