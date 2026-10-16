@@ -1,0 +1,94 @@
+using DpiShell.Core;
+using DpiShell.Core.Helper;
+
+namespace DpiShell.Tests;
+
+/// <summary>Установка помощника — только чистые функции: аргументы sc, пути, что копировать, SID владельца. sc не запускается.</summary>
+public class HelperInstallerTests
+{
+    const string Exe = @"C:\ProgramData\DpiShell\helper\DpiShell.exe";
+
+    [Fact]
+    public void Sc_create_is_localsystem_auto_with_helper_switch()
+    {
+        var a = HelperInstaller.ScCreateArgs(Exe);
+        Assert.Equal(["create", "DpiShellHelper"], a[..2]);
+        Assert.Equal("\"" + Exe + "\" --helper", a[Array.IndexOf(a, "binPath=") + 1]);
+        Assert.Equal("auto", a[Array.IndexOf(a, "start=") + 1]);
+        Assert.Equal("LocalSystem", a[Array.IndexOf(a, "obj=") + 1]);
+        // Путь с пробелами разбирается Windows обратно в exe + ключ.
+        var parsed = Native.ParseCommandLine(HelperInstaller.BinPath(@"C:\Program Data\Dpi Shell\helper\DpiShell.exe"));
+        Assert.Equal([@"C:\Program Data\Dpi Shell\helper\DpiShell.exe", "--helper"], parsed);
+    }
+
+    [Fact]
+    public void Sc_other_commands_target_helper_service_only()
+    {
+        Assert.Equal("config", HelperInstaller.ScConfigArgs(Exe)[0]);
+        foreach (var a in new[] { HelperInstaller.ScConfigArgs(Exe), HelperInstaller.ScDescriptionArgs(), HelperInstaller.ScFailureArgs(),
+                     HelperInstaller.ScStartArgs(), HelperInstaller.ScStopArgs(), HelperInstaller.ScDeleteArgs() })
+            Assert.Equal(HelperProtocol.ServiceName, a[1]);
+        var f = HelperInstaller.ScFailureArgs();
+        Assert.StartsWith("restart/", f[Array.IndexOf(f, "actions=") + 1]);
+        Assert.NotEqual(ServiceManager.Name, HelperProtocol.ServiceName);   // служба обхода остаётся отдельной
+    }
+
+    [Fact]
+    public void Helper_dir_is_inside_closed_root()
+    {
+        using var t = new TempDir();
+        var p = new AppPaths(t.Sub("root"), Repo.Data);
+        var dir = HelperInstaller.HelperDir(p);
+        Assert.Equal(Path.Combine(p.Root, "helper"), dir);
+        Assert.True(HelperInstaller.IsInHelperDir(p, dir + Path.DirectorySeparatorChar));
+        Assert.False(HelperInstaller.IsInHelperDir(p, p.Root));
+        Assert.False(HelperInstaller.IsInHelperDir(p, t.Sub("elsewhere")));
+        Assert.False(HelperInstaller.IsInHelperDir(p, dir + "-evil"));
+    }
+
+    [Fact]
+    public void Files_to_copy_keep_data_and_skip_pdb()
+    {
+        using var t = new TempDir();
+        Directory.CreateDirectory(t.Sub(@"data\lists"));
+        File.WriteAllText(t.Sub("DpiShell.exe"), "x");
+        File.WriteAllText(t.Sub("DpiShell.pdb"), "x");
+        File.WriteAllText(t.Sub(@"data\strategies.json"), "{}");
+        File.WriteAllText(t.Sub(@"data\lists\general.txt"), "a");
+        var files = HelperInstaller.FilesToCopy(t.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.True(files.SetEquals([@"data\lists\general.txt", @"data\strategies.json", "DpiShell.exe"]));
+    }
+
+    [Fact]
+    public void Owner_sid_read_back_or_null()
+    {
+        using var t = new TempDir();
+        var p = new AppPaths(t.Sub("root"), Repo.Data);
+        Assert.Null(HelperInstaller.ReadOwner(p));
+        Directory.CreateDirectory(HelperInstaller.HelperDir(p));
+        File.WriteAllText(HelperInstaller.OwnerPath(p), "S-1-5-21-1-2-3-1001\r\n");
+        Assert.Equal("S-1-5-21-1-2-3-1001", HelperInstaller.ReadOwner(p)!.Value);
+        File.WriteAllText(HelperInstaller.OwnerPath(p), "C:\\not-a-sid");
+        Assert.Null(HelperInstaller.ReadOwner(p));
+    }
+
+    [Fact]
+    public void Shell_backend_catalog_and_user_targets()
+    {
+        using var t = new TempDir();
+        var shell = new Shell(new AppPaths(t.Sub("root"), Repo.Data));
+        var b = new ShellHelperBackend(shell);
+        Assert.Contains("alt9", b.StrategyIds);
+        Assert.Contains("user", b.GroupIds);
+        Assert.Contains("youtube", b.GroupIds);
+
+        var r = b.SetUserTargets(["example.com", "  ", "не домен!!", "Example.com"]);
+        Assert.Equal(["example.com"], r.Saved);
+        Assert.Contains("не домен!!", r.Rejected);
+        Assert.Contains("user", shell.State.Groups);
+        Assert.Equal(["example.com"], AppState.Load(shell.Paths).UserTargets);
+
+        var results = b.ReadResults();
+        Assert.Empty(results.Results);
+    }
+}

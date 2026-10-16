@@ -241,6 +241,12 @@ public sealed class Shell
         _proc = p;
     }
 
+    /// <summary>
+    /// Помощник: окно отключилось от канала (или помощник останавливается) — winws режима «без службы» гасится.
+    /// state.json не меняется: при следующем подключении окно вернёт обход (как <see cref="ResumeIfNeeded"/>).
+    /// </summary>
+    public void StopOwnProcess() => StopProcess();
+
     void StopProcess()
     {
         _proc?.Dispose();
