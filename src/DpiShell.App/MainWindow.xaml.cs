@@ -62,7 +62,8 @@ public partial class MainWindow : Window
         if (!_exiting)
         {
             e.Cancel = true;
-            // Крестик — по настройке: в трей (обход работает службой и без окна) или выход из программы.
+            // Крестик — по настройке: в трей или выход из программы (без режима службы выход выключает и обход:
+            // winws программы в Job-объекте и завершается вместе с ней; при следующем запуске ResumeIfNeeded вернёт его).
             if (_vm.CloseToTray) { Hide(); ShowTrayHintOnce(); }
             else _ = ExitAsync();
         }

@@ -11,9 +11,10 @@ public sealed class GroupOption(string id, string title, bool isChecked) : Obser
     public bool IsChecked { get => _checked; set => Set(ref _checked, value); }
 }
 
-/// <summary>Строка «Проверить сейчас».</summary>
-public sealed record StrategyChoice(string Id, string Label);
+/// <summary>Строка списка стратегий на главной: название, статистика подборов, найдена ли поиском.</summary>
+public sealed record StrategyChoice(string Id, string Title, string Stats, bool Found);
 
+/// <summary>Строка «Проверить сейчас».</summary>
 public sealed record CheckRow(bool Ok, string Group, string Url, string Detail)
 {
     public string Mark => Ok ? "✓" : "✗";

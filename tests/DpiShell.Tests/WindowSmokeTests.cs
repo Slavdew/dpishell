@@ -180,8 +180,10 @@ public sealed class WindowSmokeTests
                 ThemeManager.Apply(theme);
                 var shell = new Shell(new AppPaths(tmp.Sub("root-" + theme), Repo.Data));
                 shell.State.Theme = theme;
+                // Тёмная — в режиме без службы: на снимках видны обе подсказки у галочки и у настройки закрытия.
+                if (theme == ThemeManager.Dark) shell.State.RunMode = "process";
                 var vm = new MainViewModel(shell);
-                if (snapDir is not null) Fill(vm, shell);
+                Fill(vm, shell);
                 var w = Open(vm);
                 AssertPage(w, theme == ThemeManager.Dark);
 
@@ -196,12 +198,20 @@ public sealed class WindowSmokeTests
                     SetProp(vm, "IsLoading", true);
                     vm.Page = page;
                     Pump();
+                    if (page == Pages.Home) AssertHome(w, vm);
                     if (snapDir is null) continue;
                     SetProp(vm, "IsLoading", false);
                     typeof(MainViewModel).GetMethod("UpdateStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
                     Pump();
                     Snap(w, Path.Combine(snapDir, $"{theme}-{name}.png"));
-                    if (page == Pages.Home) SnapDropDown(w, Path.Combine(snapDir, $"{theme}-home-strategies.png"));
+                    // Главная: правая колонка (плашки и «Проверить сейчас») прокручена до конца.
+                    if (page == Pages.Home && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } hv)
+                    {
+                        hv.ScrollToEnd();
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-home-end.png"));
+                        hv.ScrollToHome();
+                    }
                     if (page == Pages.Diag && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } sv)
                     {
                         sv.ScrollToEnd();
@@ -232,6 +242,19 @@ public sealed class WindowSmokeTests
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
 
+    /// <summary>Главная: выпадающего списка нет, стратегии — списком с выбранной, галочка режима показывает режим ядра.</summary>
+    static void AssertHome(Window w, MainViewModel vm)
+    {
+        var tabs = Find<TabControl>(w)!;
+        if (Find<ComboBox>(tabs) is not null) throw new Exception("На главной остался выпадающий список");
+        var list = Find<ListBox>(tabs) ?? throw new Exception("На главной нет списка стратегий");
+        if (list.Items.Count != vm.StrategyChoices.Count || list.Items.Count == 0) throw new Exception($"В списке {list.Items.Count} строк, ждали {vm.StrategyChoices.Count}");
+        if ((list.SelectedItem as StrategyChoice)?.Id != vm.ChosenStrategyId) throw new Exception("В списке не выделена выбранная стратегия");
+        var mode = Find<CheckBox>(tabs, c => BindingOperations.GetBinding(c, ToggleButton.IsCheckedProperty)?.Path.Path == "ServiceMode")
+            ?? throw new Exception("Нет галочки «Режим службы»");
+        if (mode.IsChecked != vm.Shell.ServiceMode) throw new Exception("Галочка режима не совпадает с режимом");
+    }
+
     static void AssertPage(Window w, bool dark)
     {
         var expected = (Color)ColorConverter.ConvertFromString(dark ? "#18191B" : "#F4F5F7");
@@ -240,11 +263,13 @@ public sealed class WindowSmokeTests
             throw new Exception($"Фон окна {actual}, ждали {expected} ({(dark ? "тёмная" : "светлая")})");
     }
 
-    /// <summary>Наполнение для снимков: строки таблиц и плашки, чтобы было что разглядывать. Только в памяти.</summary>
+    /// <summary>Наполнение: строки таблиц и плашки — для проверки главной и для снимков. В памяти и во временной папке.</summary>
     static void Fill(MainViewModel vm, Shell shell)
     {
         var strategies = shell.Catalog.Strategies.Take(6).ToList();
-        foreach (var s in strategies) vm.StrategyChoices.Add(new(s.Id, s.Title + " · открыла всё в 3 из 4 подборов (75 %)"));
+        vm.StrategyChoices.Add(new("found-1", "Найденная: fake + split2", "открыла всё в 2 из 2 подборов (100 %)", true));
+        foreach (var (s, i) in strategies.Select((s, i) => (s, i)))
+            vm.StrategyChoices.Add(new(s.Id, s.Title, i < 4 ? $"открыла всё в {4 - i} из 4 подборов ({(4 - i) * 25} %)" : "в подборах ещё не участвовала", false));
         vm.ChosenStrategyId = strategies[0].Id;
 
         SetProp(vm, "VpnWarning", "Включён VPN (WireGuard Tunnel). С ним обход обычно не нужен, а подбор может показать неверный результат.");
@@ -298,29 +323,6 @@ public sealed class WindowSmokeTests
     {
         var root = (FrameworkElement)VisualTreeHelper.GetChild(w, 0);
         Save(root, file);
-    }
-
-    /// <summary>
-    /// Выпадающий список стратегий. Открывать Popup нельзя: он сам переезжает на видимый экран.
-    /// Его содержимое раскладываем и рисуем отдельно, как оно было бы в открытом списке.
-    /// </summary>
-    static void SnapDropDown(Window w, string file)
-    {
-        var cb = Find<ComboBox>(w)!;
-        var popup = (Popup)cb.Template.FindName("PART_Popup", cb);
-        var child = (FrameworkElement)popup.Child;
-        child.Measure(new Size(double.PositiveInfinity, 400));
-        child.Arrange(new Rect(child.DesiredSize));
-        child.UpdateLayout();
-        // Под списком — поле самого ComboBox, как на экране.
-        var host = new StackPanel { Background = (Brush)Application.Current.FindResource("Page") };
-        var field = new Image { Source = Render(cb), Width = cb.ActualWidth, Height = cb.ActualHeight, HorizontalAlignment = HorizontalAlignment.Left };
-        var list = new Image { Source = Render(child), Width = child.ActualWidth, Height = child.ActualHeight, HorizontalAlignment = HorizontalAlignment.Left };
-        host.Children.Add(field);
-        host.Children.Add(list);
-        host.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        host.Arrange(new Rect(host.DesiredSize));
-        Save(host, file);
     }
 
     /// <summary>Через VisualBrush: RenderTargetBitmap.Render(e) сдвигает картинку на смещение элемента в родителе.</summary>

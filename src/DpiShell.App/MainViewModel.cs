@@ -24,6 +24,7 @@ public sealed class MainViewModel : Observable
     string? _error;
     string? _coreProblem;
     SvcState _svc = SvcState.Unknown;
+    bool _active;   // обход работает в своём режиме: служба запущена или наш winws жив (Shell.IsActive)
 
     public Shell Shell => _shell;
     public event Action? StatusChanged;
@@ -142,6 +143,9 @@ public sealed class MainViewModel : Observable
             var check = await Task.Run(() => _shell.PrepareAsync(log));
             _coreProblem = CoreProblem(check);
             IsLoading = false;
+            // Без службы обход живёт, пока открыта программа: был включён — вернуть.
+            try { await Task.Run(_shell.ResumeIfNeeded); }
+            catch (Exception e) { _error = Texts.Friendly(e); Message = _error; }
             await RefreshStatusAsync();
             await ReloadChoicesAsync();
             _ = CheckDnsAsync();
@@ -177,7 +181,15 @@ public sealed class MainViewModel : Observable
 
     static Brush Frozen(byte r, byte g, byte b) { var x = new SolidColorBrush(Color.FromRgb(r, g, b)); x.Freeze(); return x; }
 
-    public bool IsRunning => _svc == SvcState.Running;
+    /// <summary>Обход работает — в режиме службы или из программы.</summary>
+    public bool IsRunning => _active;
+
+    /// <summary>Состояние службы и «работает ли обход» в текущем режиме. Вызывать в фоне: в режиме службы это sc.exe.</summary>
+    (SvcState Svc, bool Active) ReadRunState()
+    {
+        var svc = _shell.Service.State;
+        return (svc, _shell.ServiceMode ? svc == SvcState.Running : _shell.IsActive);
+    }
 
     readonly Dictionary<string, string> _titles = [];
 
@@ -197,17 +209,18 @@ public sealed class MainViewModel : Observable
         if (Selecting) { Kind = StatusKind.Busy; StatusTitle = _searching ? "Глубокий поиск…" : "Подбор…"; StatusDetail = SelectProgressText; }
         else if (Busy) { Kind = StatusKind.Busy; StatusTitle = BusyText; StatusDetail = ""; }
         else if (err is not null) { Kind = StatusKind.Error; StatusTitle = "Ошибка"; StatusDetail = err; }
-        else if (_svc == SvcState.Running) { Kind = StatusKind.On; StatusTitle = "Работает"; StatusDetail = "Стратегия: " + StrategyTitle(_shell.State.StrategyId); }
-        else if (_svc == SvcState.StartPending) { Kind = StatusKind.Busy; StatusTitle = "Запускается…"; StatusDetail = ""; }
+        else if (_active) { Kind = StatusKind.On; StatusTitle = "Работает"; StatusDetail = "Стратегия: " + StrategyTitle(_shell.State.StrategyId); }
+        else if (_shell.ServiceMode && _svc == SvcState.StartPending) { Kind = StatusKind.Busy; StatusTitle = "Запускается…"; StatusDetail = ""; }
         else
         {
             Kind = StatusKind.Off; StatusTitle = "Выключено";
-            StatusDetail = _shell.State.StrategyId is { } id ? "Выбрана стратегия: " + StrategyTitle(id) : "Стратегия не выбрана: выберите в списке ниже или нажмите «Подобрать»";
+            StatusDetail = _shell.State.StrategyId is { } id ? "Выбрана стратегия: " + StrategyTitle(id) : "Стратегия не выбрана: выберите в списке или нажмите «Подобрать»";
         }
         StatusBrush = BrushOf(Kind);
         Raise(nameof(IsRunning));
         Raise(nameof(ToggleText));
         Raise(nameof(CanChoose));
+        Raise(nameof(StrategyHeader));
         // Стратегию могли сменить с «Подбора» или автопереключением — меню показывает текущую, не вызывая перезапуск.
         if (_chosen != _shell.State.StrategyId) { _chosen = _shell.State.StrategyId; Raise(nameof(ChosenStrategyId)); }
         StatusChanged?.Invoke();
@@ -230,17 +243,18 @@ public sealed class MainViewModel : Observable
 
     public ObservableCollection<StrategyChoice> StrategyChoices { get; } = [];
 
-    /// <summary>Список для выпадающего меню: готовые и найденные, с долей удачных подборов из статистики.</summary>
+    /// <summary>Список на главной: готовые и найденные, с долей удачных подборов из статистики.</summary>
     public async Task ReloadChoicesAsync()
     {
         var (all, stats) = await Task.Run(() => (_shell.AllStrategies, StrategyStats.LoadDetailed(_shell.Paths)));
         StrategyChoices.Clear();
         foreach (var s in StrategyStats.Order(all, stats.ToDictionary(kv => kv.Key, kv => kv.Value.Score)))
         {
-            var note = s.Source == "search" ? " · найдена поиском" : "";
             // Не «процент сайтов», а сколько раз в прошлых подборах открыла всё отмеченное.
-            if (stats.TryGetValue(s.Id, out var st)) note += $" · открыла всё в {st.FullOk} из {st.Runs} подборов ({(double)st.FullOk / st.Runs:P0})";
-            StrategyChoices.Add(new(s.Id, s.Title + note));
+            var note = stats.TryGetValue(s.Id, out var st) && st.Runs > 0
+                ? $"открыла всё в {st.FullOk} из {st.Runs} подборов ({(double)st.FullOk / st.Runs:P0})"
+                : "в подборах ещё не участвовала";
+            StrategyChoices.Add(new(s.Id, s.Title, note, s.Source == "search"));
         }
         _chosen = _shell.State.StrategyId;
         Raise(nameof(ChosenStrategyId));
@@ -268,6 +282,29 @@ public sealed class MainViewModel : Observable
         }
     }
 
+    public string StrategyHeader => _shell.State.StrategyId is { } id ? "Стратегия: " + StrategyTitle(id) : "Стратегия не выбрана";
+
+    // ---------- режим работы ----------
+
+    /// <summary>Галочка «Режим службы». Переключение — в фоне; обход, если работал, продолжает в новом режиме.</summary>
+    public bool ServiceMode
+    {
+        get => _shell.ServiceMode;
+        set { if (value != _shell.ServiceMode) _ = SetRunModeAsync(value); }
+    }
+
+    public string RunModeHint => _shell.ServiceMode
+        ? "Включается вместе с Windows и работает сама по себе — закрытие программы её не выключает"
+        : "Обход работает, пока открыта программа (в окне или в трее)";
+
+    async Task SetRunModeAsync(bool service)
+    {
+        await Guard(service ? "Перехожу в режим службы…" : "Перехожу на работу из программы…", () => Task.Run(() => _shell.SetRunMode(service)));
+        // И при отказе (идёт другая операция, ошибка) — галочка показывает настоящий режим.
+        Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint));
+        await RefreshStatusAsync();
+    }
+
     public string ToggleText => IsRunning ? "Выключить" : "Включить";
     public bool CanChoose => !Busy && !IsLoading && !Selecting;
     public ICommand ToggleCmd => _toggleCmd ??= RelayCommand.Async(() => IsRunning ? DisableAsync() : EnableAsync(), () => !Busy && !IsLoading);
@@ -286,9 +323,9 @@ public sealed class MainViewModel : Observable
         if (IsLoading) return;
         try
         {
-            var (svc, conflicts, vpn, core) = await Task.Run(() =>
-                (_shell.Service.State, Conflicts.Find(_shell.Paths), Conflicts.ActiveVpnAdapters(), _shell.Installer.Check()));
-            _svc = svc;
+            var (run, conflicts, vpn, core) = await Task.Run(() =>
+                (ReadRunState(), Conflicts.Find(_shell.Paths), Conflicts.ActiveVpnAdapters(), _shell.Installer.Check()));
+            (_svc, _active) = run;
             _coreProblem = CoreProblem(core);
             VpnWarning = vpn.Count == 0 ? "" : $"Включён VPN ({string.Join(", ", vpn)}). С ним обход обычно не нужен, а подбор может показать неверный результат.";
             ConflictWarning = conflicts.Count == 0 ? "" : $"Мешают другие программы обхода: {string.Join(", ", conflicts.Select(c => c.Name).Distinct())}.";
@@ -585,7 +622,7 @@ public sealed class MainViewModel : Observable
         if (stopped is not null) ResultHint = stopped + ". " + ResultHint;
     }
 
-    /// <summary>Подбор при включённом обходе: служба на время проверки стоит, стратегии меняются — предупредить.</summary>
+    /// <summary>Подбор при включённом обходе (служба или из программы): обход на время проверки стоит, стратегии меняются — предупредить.</summary>
     bool ConfirmPauseIfRunning()
     {
         if (!IsRunning) return true;
@@ -737,12 +774,15 @@ public sealed class MainViewModel : Observable
         DiagRefreshing = true;
         try
         {
-            var (info, drv, core, conflicts, vpn) = await Task.Run(() => (
-                _shell.InspectService(), ServiceManager.Query("WinDivert"), _shell.Installer.Check(),
+            // Без службы её настройки не читаем: InspectService «верит службе» и сбросил бы включённый обход.
+            bool serviceMode = _shell.ServiceMode;
+            var (info, run, drv, core, conflicts, vpn) = await Task.Run(() => (
+                serviceMode ? _shell.InspectService() : null, ReadRunState(), ServiceManager.Query("WinDivert"), _shell.Installer.Check(),
                 Conflicts.Find(_shell.Paths, _shell.AllStrategies), Conflicts.ActiveVpnAdapters()));
-            var svc = info.State;
+            var svc = run.Svc;
             // Стратегию показываем ту, что реально стоит в службе Windows; чужой файл в службе — отдельно.
-            ServiceText = Texts.Svc(svc)
+            ServiceText = info is null ? "не используется (обход работает из программы)"
+                : Texts.Svc(svc)
                 + (info.Strategy is { } st ? $" (стратегия: {st.Title})" : _shell.State.StrategyId is { } id && svc != SvcState.NotInstalled ? $" (стратегия: {StrategyTitle(id)})" : "")
                 + (svc != SvcState.NotInstalled && !info.OurCore ? $" — запускает чужой файл: {info.ExePath}" : "");
             DriverText = Texts.Svc(drv);
@@ -759,7 +799,7 @@ public sealed class MainViewModel : Observable
                 ConflictList.Add($"{c.Name}. {c.Detail}");
             VpnList.Clear();
             foreach (var v in vpn) VpnList.Add(v);
-            _svc = svc;
+            (_svc, _active) = run;
             _coreProblem = CoreProblem(core);
             UpdateStatus();
             RefreshWatchText();
@@ -795,7 +835,7 @@ public sealed class MainViewModel : Observable
     public bool ThemeLight { get => Theme == ThemeManager.Light; set { if (value) Theme = ThemeManager.Light; } }
     public bool ThemeDark { get => Theme == ThemeManager.Dark; set { if (value) Theme = ThemeManager.Dark; } }
 
-    /// <summary>Крестик сворачивает в трей (иначе — закрывает программу; служба обхода работает в обоих случаях).</summary>
+    /// <summary>Крестик сворачивает в трей (иначе — закрывает программу; служба обхода работает в обоих случаях, обход из программы — только в трее).</summary>
     public bool CloseToTray => _shell.State.CloseAction != "exit";
     public bool CloseTray { get => CloseToTray; set { if (value) SetCloseAction("tray"); } }
     public bool CloseExit { get => !CloseToTray; set { if (value) SetCloseAction("exit"); } }
@@ -806,6 +846,10 @@ public sealed class MainViewModel : Observable
         _shell.SaveState();
         Raise(nameof(CloseTray)); Raise(nameof(CloseExit));
     }
+
+    public string CloseHint => _shell.ServiceMode
+        ? "Обход работает и без окна: его выключает только кнопка «Выключить»."
+        : "Без режима службы закрытие программы выключает и обход.";
 
     // ---------- автопроверка и запасные (ТЗ §9 п. 15) ----------
 
@@ -832,8 +876,8 @@ public sealed class MainViewModel : Observable
         _watching = true;
         try
         {
-            var svc = await Task.Run(() => _shell.Service.State);
-            if (!WatchdogPolicy.ShouldCheck(_shell.State, svc == SvcState.Running, Busy || Selecting)) return;
+            var active = await Task.Run(() => _shell.IsActive);
+            if (!WatchdogPolicy.ShouldCheck(_shell.State, active, Busy || Selecting)) return;
 
             var id = _shell.State.StrategyId;
             var groups = _shell.SelectedGroups();
@@ -861,9 +905,19 @@ public sealed class MainViewModel : Observable
     Task RepairCoreAsync() => Guard("Восстанавливаю ядро…", async () =>
     {
         var log = new Progress<string>(s => Message = s);
-        // Файлы работающей службы заняты: остановить, заменить, вернуть как было.
-        bool wasRunning = await Task.Run(() => _shell.Service.State == SvcState.Running);
-        if (wasRunning) await Task.Run(_shell.Service.Stop);
+        // Файлы работающего winws (служба или процесс программы) заняты: остановить, заменить, вернуть как было.
+        bool wasRunning = await Task.Run(() => _shell.IsActive);
+        if (wasRunning)
+        {
+            if (_shell.ServiceMode) await Task.Run(_shell.Service.Stop);
+            else
+            {
+                await Task.Run(_shell.Disable);
+                // Обход по-прежнему включён: не вернётся сейчас — вернётся при следующем запуске программы.
+                _shell.State.Enabled = true;
+                _shell.SaveState();
+            }
+        }
         await Task.Run(() => _shell.RepairCoreAsync(log));
         if (wasRunning && _shell.State.Enabled && _shell.State.StrategyId is { } id)
             await Task.Run(() => _shell.Enable(id));
@@ -873,15 +927,20 @@ public sealed class MainViewModel : Observable
 
     async Task RemoveServiceAsync()
     {
-        var ok = MessageBox.Show(
-            "Удалить службу обхода и драйвер WinDivert? Обход перестанет работать, пока вы снова не нажмёте «Включить».",
+        bool serviceMode = _shell.ServiceMode;
+        var ok = MessageBox.Show(serviceMode
+            ? "Удалить службу обхода и драйвер WinDivert? Обход перестанет работать, пока вы снова не нажмёте «Включить»."
+            : "Удалить службу обхода и драйвер WinDivert? Обход из программы, если включён, прервётся до следующего включения.",
             "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         if (ok != MessageBoxResult.Yes) return;
         if (await Guard("Удаляю службу…", async () =>
         {
             await Task.Run(_shell.Service.Remove);
-            _shell.State.Enabled = false;
-            _shell.SaveState();
+            if (serviceMode)
+            {
+                _shell.State.Enabled = false;
+                _shell.SaveState();
+            }
             await RefreshDiagAsync();
             await RefreshStatusAsync();
         }))
