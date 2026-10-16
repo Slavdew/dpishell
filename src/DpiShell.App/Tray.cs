@@ -54,7 +54,7 @@ public sealed class Tray : IDisposable
 {
     readonly Forms.NotifyIcon _icon;
     readonly MainViewModel _vm;
-    readonly Forms.ToolStripMenuItem _enable, _disable, _select;
+    readonly Forms.ToolStripMenuItem _enable, _disable, _select, _hostsRevert;
 
     public event Action? OpenRequested;
     public event Action? ExitRequested;
@@ -66,13 +66,16 @@ public sealed class Tray : IDisposable
         _enable = new("Включить", null, (_, _) => Run(_vm.EnableCmd));
         _disable = new("Выключить", null, (_, _) => Run(_vm.DisableCmd));
         _select = new("Подобрать", null, (_, _) => { OpenRequested?.Invoke(); _vm.Page = Pages.Select; });
+        // «Вернуть как было» для hosts — всегда под рукой, пока наш блок стоит (ТЗ v2 §3).
+        _hostsRevert = new("Убрать адреса из hosts", null, (_, _) => Run(_vm.Hosts.RevertCmd)) { Visible = false };
         var open = new Forms.ToolStripMenuItem("Открыть", null, (_, _) => OpenRequested?.Invoke()) { Font = new Drawing.Font(menu.Font, Drawing.FontStyle.Bold) };
         var exit = new Forms.ToolStripMenuItem("Выход", null, (_, _) => ExitRequested?.Invoke());
-        menu.Items.AddRange([_enable, _disable, _select, new Forms.ToolStripSeparator(), open, exit]);
+        menu.Items.AddRange([_enable, _disable, _select, _hostsRevert, new Forms.ToolStripSeparator(), open, exit]);
         menu.Opening += (_, _) =>
         {
             _enable.Enabled = _vm.EnableCmd.CanExecute(null) && !_vm.IsRunning;
             _disable.Enabled = _vm.DisableCmd.CanExecute(null) && _vm.IsRunning;
+            _hostsRevert.Visible = _vm.Hosts.BlockPresent;
         };
 
         _icon = new Forms.NotifyIcon { ContextMenuStrip = menu, Visible = true };

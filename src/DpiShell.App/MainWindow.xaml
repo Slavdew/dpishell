@@ -112,8 +112,9 @@
                             </Grid.ColumnDefinitions>
 
                             <DockPanel>
-                                <TextBlock DockPanel.Dock="Top" Text="{Binding StrategyHeader}" Style="{StaticResource H2}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
-                                           ToolTip="{Binding StrategyHeader}" />
+                                <!-- «(i)» — сразу за текстом заголовка: внутри строки, чтобы длинное название обрезалось, а кнопка не уезжала. -->
+                                <TextBlock DockPanel.Dock="Top" Style="{StaticResource H2}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                                           ToolTip="{Binding StrategyHeader}"><Run Text="{Binding StrategyHeader, Mode=OneWay}" /><InlineUIContainer BaselineAlignment="Center"><local:InfoButton Topic="{x:Static local:InfoTexts.Home}" /></InlineUIContainer></TextBlock>
                                 <ListBox ItemsSource="{Binding StrategyChoices}" SelectedValue="{Binding ChosenStrategyId}" SelectedValuePath="Id"
                                          IsEnabled="{Binding CanChoose}" Margin="0,0,0,10">
                                     <ListBox.ItemTemplate>
@@ -232,7 +233,10 @@
                                 <RadioButton Content="На этом ПК" IsChecked="{Binding SelectOnPc}" Margin="0,0,16,0" IsEnabled="{Binding CanConnect}" />
                                 <RadioButton Content="На роутере" IsChecked="{Binding SelectOnRouter}" IsEnabled="{Binding CanConnect}" />
                             </StackPanel>
-                            <TextBlock Text="Подбор стратегии" Style="{StaticResource H1}" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
+                                <TextBlock Text="Подбор стратегии" Style="{StaticResource H1}" />
+                                <local:InfoButton Topic="{x:Static local:InfoTexts.Select}" Margin="10,0,0,12" />
+                            </StackPanel>
                         </DockPanel>
 
                         <Grid Grid.Row="1" Margin="0,0,0,8">
@@ -410,7 +414,10 @@
                                 <RadioButton Content="На этом ПК" IsChecked="{Binding TargetsOnPc}" Margin="0,0,16,0" />
                                 <RadioButton Content="На роутере" IsChecked="{Binding TargetsOnRouter}" />
                             </StackPanel>
-                            <TextBlock Text="Свои адреса" Style="{StaticResource H1}" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
+                                <TextBlock Text="Свои адреса" Style="{StaticResource H1}" />
+                                <local:InfoButton Topic="{x:Static local:InfoTexts.Targets}" Margin="10,0,0,12" />
+                            </StackPanel>
                         </DockPanel>
 
                         <Grid Grid.Row="1" Grid.RowSpan="3" Visibility="{Binding Router.TargetsOnPcVisible, Converter={StaticResource Vis}}">
@@ -419,8 +426,14 @@
                                 <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10"
-                                       Text="Сайт или адрес на строку. Эти сайты проверяются при подборе и открываются через обход." />
+                            <DockPanel Margin="0,0,0,10">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="16,0,0,0">
+                                    <TextBlock Text="Списки доменов" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                    <local:InfoButton Topic="{x:Static local:InfoTexts.DomainLists}" />
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center"
+                                           Text="Сайт или адрес на строку. Эти сайты проверяются при подборе и открываются через обход." />
+                            </DockPanel>
                             <TextBox Grid.Row="1" Text="{Binding TargetsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True"
                                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap"
                                      FontFamily="Consolas" FontSize="14" Padding="8" />
@@ -494,6 +507,230 @@
                     </Grid>
                 </TabItem>
 
+                <!-- ===== Игры и IP-списки (09-features-spec §1–2) =====
+                     Один экран: игровой режим работает только по IP-списку — зависимость видна сразу, и «включил IP-список сам» не сюрприз. -->
+                <TabItem Header="Игры и IP-списки">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel DataContext="{Binding Net}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Игровой режим" Style="{StaticResource H1}" />
+                                <local:InfoButton Topic="{x:Static local:InfoTexts.Game}" Margin="10,0,0,12" />
+                            </StackPanel>
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding GameOn}" IsEnabled="{Binding GameCanToggle}" HorizontalAlignment="Left">
+                                        <TextBlock Text="Игры и голосовые программы" FontSize="15" FontWeight="SemiBold" />
+                                    </CheckBox>
+                                    <TextBlock Text="{Binding GameStatus}" Margin="50,6,0,0" />
+                                    <TextBlock Text="{Binding GameHint}" Style="{StaticResource Hint}" Margin="50,2,0,0" />
+                                    <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="6"
+                                            Padding="10,6" Margin="50,10,0,0" HorizontalAlignment="Left">
+                                        <TextBlock Text="Может вырасти задержка (пинг) в играх и нагрузка на процессор — особенно при торрентах." FontSize="13" />
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <TextBlock Text="IP-списки" Style="{StaticResource H1}" FontSize="19" />
+                                <local:InfoButton Topic="{x:Static local:InfoTexts.IpLists}" Margin="10,0,0,12" />
+                            </StackPanel>
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="Обход по адресам" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                    <WrapPanel IsEnabled="{Binding CanEdit}">
+                                        <RadioButton Content="Выкл" IsChecked="{Binding IpsetOff}" Margin="0,3,24,3" />
+                                        <RadioButton Content="По списку" IsChecked="{Binding IpsetList}" Margin="0,3,24,3" />
+                                        <RadioButton Content="Все адреса — 10 минут" IsChecked="{Binding IpsetAny}" Margin="0,3,24,3" />
+                                    </WrapPanel>
+                                    <Border Style="{StaticResource Warn}" Margin="0,10,0,0" Visibility="{Binding AnyActive, Converter={StaticResource Vis}}">
+                                        <DockPanel>
+                                            <Button DockPanel.Dock="Right" Content="Вернуть сейчас" Command="{Binding StopAnyCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding AnyText}" FontWeight="SemiBold" />
+                                                <TextBlock Text="Сейчас обход идёт для любого соединения — многие сайты могут работать с ошибками." FontSize="13" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                    <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,12,0,0" Padding="0,12,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="Список адресов" Style="{StaticResource Hint}" Margin="0,0,0,2" />
+                                            <TextBlock Text="{Binding ListText}" />
+                                            <TextBlock Text="{Binding UpdateNote}" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,4,0,0"
+                                                       Visibility="{Binding HasUpdateNote, Converter={StaticResource Vis}}" />
+                                            <WrapPanel Margin="0,10,0,0">
+                                                <Button Content="Обновить список" Command="{Binding UpdateListCmd}" />
+                                                <Button Content="Загрузить из файла…" Command="{Binding LoadFileCmd}" />
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="Свои подсети" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{Binding UserHint}" Style="{StaticResource Hint}" Margin="0,0,0,8" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="14" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Добавить к списку" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                            <TextBox Text="{Binding UserText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110"
+                                                     VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Не трогать (исключения)" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                            <TextBox Text="{Binding ExcludeText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110"
+                                                     VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <DockPanel Margin="0,10,0,0">
+                                        <Button DockPanel.Dock="Left" Content="Сохранить" Style="{StaticResource Primary}" Command="{Binding SaveUserCmd}" VerticalAlignment="Top" />
+                                        <TextBlock Text="{Binding UserMessage}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- ===== Починить адреса (hosts, 09-features-spec §3) ===== -->
+                <TabItem Header="Починить адреса">
+                    <Grid DataContext="{Binding Hosts}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Починить адреса" Style="{StaticResource H1}" />
+                            <local:InfoButton Topic="{x:Static local:InfoTexts.Hosts}" Margin="10,0,0,12" />
+                        </StackPanel>
+
+                        <Border Grid.Row="1" Style="{StaticResource Card}">
+                            <StackPanel>
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Вернуть как было" Command="{Binding RevertCmd}" VerticalAlignment="Top" Margin="12,0,0,0"
+                                            Visibility="{Binding BlockPresent, Converter={StaticResource Vis}}" />
+                                    <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding Enabled}" HorizontalAlignment="Left" VerticalAlignment="Top">
+                                        <TextBlock Text="GitHub, Telegram и Discord через проверенные адреса" FontSize="15" FontWeight="SemiBold" />
+                                    </CheckBox>
+                                </DockPanel>
+                                <TextBlock Text="{Binding OffHint}" Style="{StaticResource Hint}" Margin="50,4,0,0" Visibility="{Binding Disabled, Converter={StaticResource Vis}}" />
+                                <StackPanel Margin="50,4,0,0" Visibility="{Binding Enabled, Converter={StaticResource Vis}}">
+                                    <TextBlock Text="{Binding StatusText}" />
+                                    <ItemsControl ItemsSource="{Binding AppliedLines}" Margin="0,4,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="13" Foreground="{DynamicResource Muted}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                                <ItemsControl ItemsSource="{Binding Warnings}" Margin="0,6,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="6"
+                                                    Padding="10,6" Margin="0,6,0,0">
+                                                <TextBlock Text="{Binding}" FontSize="13" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Grid.Row="2" Visibility="{Binding Enabled, Converter={StaticResource Vis}}">
+                            <WrapPanel>
+                                <Button Content="Проверить адреса" Style="{StaticResource Primary}" Command="{Binding CheckCmd}" />
+                                <Button Content="Стоп" Command="{Binding StopCmd}" Visibility="{Binding Checking, Converter={StaticResource Vis}}" />
+                            </WrapPanel>
+                            <StackPanel Visibility="{Binding Checking, Converter={StaticResource Vis}}">
+                                <ProgressBar Height="8" Maximum="{Binding Total}" Value="{Binding Done, Mode=OneWay}" Margin="0,2,0,4" />
+                                <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Hint}" Margin="0,0,0,8" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding Summary}" FontSize="15" FontWeight="SemiBold" Margin="0,2,0,8" Visibility="{Binding HasSummary, Converter={StaticResource Vis}}" />
+                        </StackPanel>
+
+                        <DataGrid Grid.Row="3" ItemsSource="{Binding Rows}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
+                                  HeadersVisibility="Column" CanUserAddRows="False" MinHeight="90"
+                                  Visibility="{Binding Rows.Count, Converter={StaticResource NonZero}}">
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                    <Style.Triggers>
+                                        <!-- Не записываются — серым «не нужно» (ТЗ v2 §3). -->
+                                        <DataTrigger Binding="{Binding Install}" Value="False">
+                                            <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.RowStyle>
+                            <DataGrid.Columns>
+                                <!-- Две строки на ячейку: таблица помещается в окно минимальной ширины без обрезанных слов. -->
+                                <DataGridTemplateColumn Header="Сайт и адрес" Width="1.5*">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel ToolTip="{Binding Host}">
+                                                <TextBlock Text="{Binding Host}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                                <TextBlock Text="{Binding Ip}" FontSize="12.5" Opacity="0.75" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="Владелец" Width="0.9*">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Owner}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Owner}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="Проверка" Width="1.3*">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Live}" TextWrapping="NoWrap" />
+                                                <TextBlock FontSize="12.5" Opacity="0.75" TextWrapping="NoWrap"><Run Text="DNS: " /><Run Text="{Binding Dns, Mode=OneWay}" /></TextBlock>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="Итог" Width="2*">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel ToolTip="{Binding Reason}">
+                                                <TextBlock Text="{Binding Verdict}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding Reason}" FontSize="12.5" Opacity="0.75" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <!-- Предпросмотр: что именно изменится в hosts, затем «Записать» с подтверждением. -->
+                        <Border Grid.Row="4" Style="{StaticResource Card}" Margin="0,12,0,0" Padding="14" Visibility="{Binding CanWrite, Converter={StaticResource Vis}}">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="{Binding ApplyText}" Style="{StaticResource Primary}" Command="{Binding ApplyCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                <StackPanel>
+                                    <TextBlock Text="Что изменится в hosts" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                    <ItemsControl ItemsSource="{Binding PreviewLines}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="13" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                    </Grid>
+                </TabItem>
+
                 <!-- ===== Диагностика ===== -->
                 <TabItem Header="Диагностика">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -509,7 +746,10 @@
                                         </StackPanel>
                                     </Button>
                                 </StackPanel>
-                                <TextBlock Text="Диагностика" Style="{StaticResource H1}" />
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
+                                    <TextBlock Text="Диагностика" Style="{StaticResource H1}" />
+                                    <local:InfoButton Topic="{x:Static local:InfoTexts.Diag}" Margin="10,0,0,12" />
+                                </StackPanel>
                             </DockPanel>
 
                             <Border Style="{StaticResource Card}">
@@ -522,7 +762,10 @@
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="3" Text="Временные метки TCP" Style="{StaticResource Hint}" Margin="0,6,0,0" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding TimestampsText}" Margin="0,6,0,0" />
                                     <TextBlock Text="Служба обхода" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                     <TextBlock Grid.Column="1" Text="{Binding ServiceText}" Margin="0,0,0,6" />
                                     <TextBlock Grid.Row="1" Text="Драйвер" Style="{StaticResource Hint}" Margin="0,0,0,6" />
@@ -565,11 +808,55 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- Проверки окружения (09-features-spec §4): только показываем, что мешает и что сделать. -->
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="Что ещё может мешать" Style="{StaticResource H2}" />
+                                    <TextBlock Text="Проверяется при обновлении страницы." Style="{StaticResource Hint}" Visibility="{Binding Findings.Count, Converter={StaticResource Zero}}" />
+                                    <ItemsControl ItemsSource="{Binding Findings}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,3">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="22" />
+                                                        <ColumnDefinition Width="150" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock x:Name="M" Text="{Binding Mark}" FontWeight="Bold" Foreground="{DynamicResource Ok}" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Title}" Style="{StaticResource Hint}" />
+                                                    <TextBlock Grid.Column="2" Text="{Binding Text}" />
+                                                </Grid>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding Ok}" Value="False">
+                                                        <Setter TargetName="M" Property="Foreground" Value="{DynamicResource Danger}" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Решение 5: кэш Discord — кнопкой, с подтверждением (открытый Discord закрывается). -->
+                            <Border Style="{StaticResource Card}">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Очистить кэш Discord" Command="{Binding ClearDiscordCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                    <StackPanel>
+                                        <TextBlock Text="Discord долго подключается" Style="{StaticResource H2}" />
+                                        <TextBlock Style="{StaticResource Hint}"
+                                                   Text="После смены стратегии Discord может помнить неудачные попытки. Очистка удаляет только его временные файлы — вход и настройки останутся." />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <DockPanel>
                                         <Button DockPanel.Dock="Right" Content="Проверить DNS" Style="{StaticResource LinkButton}" Command="{Binding CheckDnsCmd}" VerticalAlignment="Top" />
-                                        <TextBlock Text="DNS" Style="{StaticResource H2}" />
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
+                                            <TextBlock Text="DNS" Style="{StaticResource H2}" />
+                                            <local:InfoButton Topic="{x:Static local:InfoTexts.Dns}" Margin="8,0,0,6" />
+                                        </StackPanel>
                                     </DockPanel>
                                     <TextBlock Text="{Binding DnsSummary}" Margin="0,0,0,6" />
                                     <Grid Margin="0,0,0,2" Visibility="{Binding DnsRows.Count, Converter={StaticResource NonZero}}">

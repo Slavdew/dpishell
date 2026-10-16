@@ -14,6 +14,7 @@ public partial class MainWindow : Window
     readonly MainViewModel _vm;
     readonly Tray _tray;
     readonly DispatcherTimer _timer;
+    readonly DispatcherTimer _clock;
     bool _exiting;
 
     public MainWindow(MainViewModel vm)
@@ -32,6 +33,12 @@ public partial class MainWindow : Window
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
         _timer.Tick += (_, _) => _ = vm.TickAsync();
         _timer.Start();
+
+        // «Все адреса — 10 минут»: обратный отсчёт и возврат по сроку (и когда окно в трее).
+        _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _clock.Tick += (_, _) => vm.Net.Tick();
+        _clock.Start();
+        vm.Notify += s => _tray.Hint(s);
 
         // Смена сети — с паузой, пока сеть поднимается.
         _netSettle = new DispatcherTimer { Interval = WatchdogPolicy.NetworkSettle };
@@ -128,8 +135,15 @@ public partial class MainWindow : Window
         if (_exiting) return;
         _exiting = true;
         _timer.Stop();
+        _clock.Stop();
         _netSettle.Stop();
         NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
+        // «Все адреса» без программы не вернутся сами до следующего запуска — спросить (ТЗ v2 §2).
+        if (_vm.Net.AnyActive && !_vm.Busy && _vm.Confirm("Сейчас включены «Все адреса». Вернуть обычный режим перед выходом?"))
+        {
+            try { await Task.Run(() => _vm.Shell.StopAllAddresses()); }
+            catch (Exception ex) { _vm.Message = Texts.Friendly(ex); }
+        }
         // Подбор держит временный winws и остановленную службу — дать ему вернуть всё на место.
         if (_vm.Busy)
         {

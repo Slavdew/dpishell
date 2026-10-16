@@ -97,7 +97,7 @@ public sealed class WindowSmokeTests
             WindowStartupLocation = WindowStartupLocation.Manual,
             Left = -20000, Top = -20000, ShowActivated = false, ShowInTaskbar = false,
         };
-        foreach (var name in new[] { "_timer", "_netSettle" })
+        foreach (var name in new[] { "_timer", "_netSettle", "_clock" })
             (Field(w, name) as DispatcherTimer)?.Stop();
         w.Show();
         Pump();
@@ -117,7 +117,7 @@ public sealed class WindowSmokeTests
     static void SetProp(object o, string name, object? value) => o.GetType().GetProperty(name)!.SetValue(o, value);
 
     static readonly (int Page, string Name)[] AllPages =
-        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Targets, "targets"), (Pages.Diag, "diag")];
+        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Targets, "targets"), (Pages.Net, "net"), (Pages.Hosts, "hosts"), (Pages.Diag, "diag")];
 
     [Fact]
     public void MainWindow_OpensAndAllPagesBind_WithoutErrors()
@@ -129,7 +129,7 @@ public sealed class WindowSmokeTests
             var vm = new MainViewModel(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
             var w = Open(vm);
             var tabs = Find<TabControl>(w)!;
-            foreach (var page in new[] { Pages.Select, Pages.Targets, Pages.Diag, Pages.Home })
+            foreach (var page in new[] { Pages.Select, Pages.Targets, Pages.Net, Pages.Hosts, Pages.Diag, Pages.Home })
             {
                 vm.Page = page;
                 Pump();
@@ -217,7 +217,31 @@ public sealed class WindowSmokeTests
                         sv.ScrollToEnd();
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-diag-end.png"));
+                        // Середина: проверки окружения и кэш Discord.
+                        var card = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Что ещё может мешать")!;
+                        sv.ScrollToVerticalOffset(card.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-diag-checks.png"));
                         sv.ScrollToHome();
+                    }
+                    if (page == Pages.Net && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } nv)
+                    {
+                        nv.ScrollToEnd();
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-net-end.png"));
+                        nv.ScrollToHome();
+                    }
+                    if (page == Pages.Hosts)
+                    {
+                        // Карточка «(i)»: открыть как по нажатию и снять её содержимое.
+                        var info = Find<InfoButton>(Find<TabControl>(w)!, b => b.Topic == InfoTexts.Hosts)!;
+                        var popup = (System.Windows.Controls.Primitives.Popup)Field(info, "_popup")!;
+                        ((System.Windows.Automation.Provider.IInvokeProvider)new System.Windows.Automation.Peers.ButtonAutomationPeer(info)).Invoke();
+                        Pump();
+                        if (!info.IsOpen) throw new Exception("Карточка «(i)» не открылась");
+                        Save((FrameworkElement)popup.Child, Path.Combine(snapDir, $"{theme}-info.png"));
+                        popup.IsOpen = false;
+                        Pump();
                     }
                 }
                 SetProp(vm, "IsLoading", true);
@@ -334,6 +358,59 @@ public sealed class WindowSmokeTests
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
 
+    /// <summary>Разделы docs/10-info-texts.md: заголовок «## …» → текст абзаца (обратные кавычки разметки убраны).</summary>
+    static Dictionary<string, string> DocInfoTexts()
+    {
+        var root = Directory.GetParent(Repo.Data)!.FullName;
+        var map = new Dictionary<string, string>();
+        string? head = null;
+        var body = new List<string>();
+        void Flush()
+        {
+            if (head is not null) map[head] = string.Join(" ", body).Replace("`", "").Trim();
+            body.Clear();
+        }
+        foreach (var line in File.ReadAllLines(Path.Combine(root, "docs", "10-info-texts.md")))
+        {
+            if (line.StartsWith("## ")) { Flush(); head = line[3..].Trim(); continue; }
+            if (head is not null && line.Trim().Length > 0) body.Add(line.Trim());
+        }
+        Flush();
+        return map;
+    }
+
+    /// <summary>У каждого раздела из 10-info-texts.md в окне есть «(i)», и её текст — дословно из документа.</summary>
+    [Fact]
+    public void InfoButtons_EveryDocSection_HasButton_WithDocText()
+    {
+        var doc = DocInfoTexts();
+        Assert.Equal(9, doc.Count);
+        using var tmp = new TempDir();
+        var seen = new Dictionary<string, string>();
+        var errors = WithBindingErrors(() =>
+        {
+            ThemeManager.Apply(ThemeManager.Light);
+            var vm = new MainViewModel(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
+            var w = Open(vm);
+            foreach (var (page, _) in AllPages)
+            {
+                vm.Page = page;
+                Pump();
+                var buttons = new List<InfoButton>();
+                Collect(Find<TabControl>(w)!, buttons);
+                foreach (var b in buttons.Where(b => b.IsVisible)) seen[b.Topic ?? ""] = b.Text;
+            }
+            Close(w);
+        });
+        Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
+        foreach (var (head, text) in doc)
+        {
+            Assert.True(seen.ContainsKey(head), $"Нет кнопки «(i)» у раздела «{head}»");
+            Assert.Equal(text, seen[head]);
+        }
+        Assert.Empty(seen.Keys.Except(doc.Keys));
+    }
+
     /// <summary>Главная: выпадающего списка нет, стратегии — списком с выбранной, галочка режима показывает режим ядра.</summary>
     static void AssertHome(Window w, MainViewModel vm)
     {
@@ -407,6 +484,47 @@ public sealed class WindowSmokeTests
         vm.DnsRows.Add(new("www.youtube.com", "195.208.4.1", "142.250.74.46, 142.250.74.78 …", true));
         vm.DnsRows.Add(new("discord.com", "162.159.135.232", "162.159.135.232", false));
         SetProp(vm, "DnsSummary", "DNS провайдера подменяет адреса сайтов.");
+        SetProp(vm, "TimestampsText", MainViewModel.TimestampsLine(true));
+        vm.Findings.Add(new(true, "Служба BFE", "работает"));
+        vm.Findings.Add(new(false, "Системный прокси", SystemChecks.ProxyFinding((true, "127.0.0.1:8888")).Text));
+        vm.Findings.Add(new(true, "Adguard", "не запущен"));
+        vm.Findings.Add(new(true, "Папка программы", "в порядке"));
+
+        // «Игры и IP-списки»: список из поставки — во временную папку. Светлая — «Все адреса» с отсчётом (игры ждут),
+        // тёмная — «По списку», игры работают.
+        bool dark = ThemeManager.IsDark;
+        if (!shell.IpLists.SeedFromPackage()) throw new Exception("IP-список из поставки не встал");
+        shell.State.IpsetMode = dark ? "list" : "any";
+        shell.State.IpsetModeBeforeAny = "list";
+        shell.State.IpsetAnyUntil = dark ? null : DateTime.UtcNow.AddMinutes(7.5);
+        shell.State.GameMode = "all";
+        shell.State.Enabled = dark;
+        vm.Net.UserText = "203.0.113.0/24\r\n198.51.100.7";
+        SetProp(vm.Net, "UserMessage", "Сохранено: своих подсетей 2, исключений 0.");
+        vm.Net.Refresh();
+
+        // «Починить адреса» — только копия hosts во временной папке. Светлая: включено, таблица и предпросмотр;
+        // тёмная: выключено, а блок от прошлой установки остался.
+        var hostsFile = Path.Combine(shell.Paths.Root, "hosts-copy");
+        Directory.CreateDirectory(shell.Paths.Root);
+        File.WriteAllText(hostsFile, "127.0.0.1 localhost\r\n0.0.0.0 web.telegram.org\r\n# DpiShell begin v1 2026-10-16\r\n140.82.121.3 github.com\r\n# DpiShell end\r\n");
+        vm.Hosts.Manager = new HostsManager(shell.Paths, hostsFile);
+        shell.State.HostsFix = !dark;
+        vm.Hosts.RefreshNow();
+        if (!dark)
+        {
+            var live = new EndpointCheck(EndpointOutcome.Ok, 0.2, "HTTP 200");
+            vm.Hosts.ShowReport(new HostsCheckReport(
+            [
+                new("raw.githubusercontent.com", "146.75.22.132", HostsVerdict.Install, live, OwnerState.Match, "FASTLY", DnsState.Fails, "185.199.108.133: нет ответа"),
+                new("github.com", "140.82.121.3", HostsVerdict.Install, live, OwnerState.Match, "GITHUB", DnsState.Fails, "140.82.112.3: нет ответа"),
+                new("discord.com", "162.159.138.232", HostsVerdict.NotNeeded, live, OwnerState.Match, "CLOUDFLARENET", DnsState.Works, "162.159.136.232: HTTP 200"),
+                new("web.telegram.org", "149.154.167.220", HostsVerdict.BadCertificate, new(EndpointOutcome.BadCertificate, 0.3, "сертификат выдан другому сайту"),
+                    OwnerState.Unknown, null, DnsState.Fails, ""),
+                new("updates.discord.com", "104.16.0.1", HostsVerdict.Unreachable, new(EndpointOutcome.Timeout, 5, "нет ответа за 5 с"),
+                    OwnerState.Unknown, null, DnsState.Works, ""),
+            ], DateTime.Now));
+        }
         vm.Message = "Готово.";
     }
 

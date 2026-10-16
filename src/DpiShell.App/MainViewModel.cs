@@ -12,7 +12,7 @@ public enum StatusKind { Off, On, Busy, Error }
 
 public static class Pages
 {
-    public const int Home = 0, Select = 1, Targets = 2, Diag = 3;
+    public const int Home = 0, Select = 1, Targets = 2, Net = 3, Hosts = 4, Diag = 5;
 }
 
 /// <summary>Всё состояние окна. Долгие и «sc»-операции Core — только через Task.Run, чтобы окно не замирало.</summary>
@@ -28,6 +28,12 @@ public sealed class MainViewModel : Observable
 
     public Shell Shell => _shell;
     public RouterViewModel Router { get; }
+    /// <summary>«Игры и IP-списки» (09-features-spec §1–2).</summary>
+    public NetViewModel Net { get; }
+    /// <summary>«Починить адреса» — hosts (09-features-spec §3).</summary>
+    public HostsViewModel Hosts { get; }
+    /// <summary>Уведомление в трей (окно может быть свёрнуто): «Все адреса» закончились, адрес в hosts устарел.</summary>
+    public event Action<string>? Notify;
 
     /// <summary>Вопрос «Да/Нет» (в тестах подменяется).</summary>
     public Func<string, bool> Confirm { get; set; } = text =>
@@ -69,6 +75,22 @@ public sealed class MainViewModel : Observable
         };
         Router.Changed += UpdateStatus;
 
+        Net = new NetViewModel(shell)
+        {
+            Guard = Guard,
+            Say = s => Message = s,
+            Confirm = s => Confirm(s),
+            AfterChange = RefreshStatusAsync,
+        };
+        Net.Notify += s => Notify?.Invoke(s);
+        Hosts = new HostsViewModel(shell)
+        {
+            Say = s => Message = s,
+            Confirm = s => Confirm(s),
+        };
+        Hosts.Notify += s => { Message = s; Notify?.Invoke(s); };
+        ClearDiscordCmd = RelayCommand.Async(ClearDiscordAsync, () => !Busy && !IsLoading);
+
         var chosen = _shell.State.Groups.ToHashSet();
         foreach (var g in _shell.DefaultTargets.Groups) Groups.Add(new(g.Id, g.Title, chosen.Contains(g.Id)));
         Groups.Add(new("user", "Свои адреса", chosen.Contains("user")));
@@ -86,7 +108,10 @@ public sealed class MainViewModel : Observable
         get => _page;
         set
         {
-            if (!Set(ref _page, value) || value != Pages.Diag || IsLoading) return;
+            if (!Set(ref _page, value) || IsLoading) return;
+            if (value == Pages.Net) Net.Refresh();
+            if (value == Pages.Hosts) _ = Hosts.RefreshAsync();
+            if (value != Pages.Diag) return;
             _ = RefreshDiagAsync();
             if (Router.Connected) _ = Router.RefreshDiagAsync();
         }
@@ -169,6 +194,9 @@ public sealed class MainViewModel : Observable
             await RefreshStatusAsync();
             await ReloadChoicesAsync();
             _ = CheckDnsAsync();
+            Net.Refresh();
+            // «Починить адреса» включено и с прошлой проверки прошли сутки — перепроверить записи (устаревшие уберутся).
+            _ = Hosts.RecheckIfDueAsync();
         }
         catch (Exception e)
         {
@@ -359,7 +387,9 @@ public sealed class MainViewModel : Observable
     {
         if (IsLoading) return Task.CompletedTask;
         _ = Router.TickAsync();
-        return Busy ? Task.CompletedTask : RefreshStatusAsync();
+        if (Busy) return Task.CompletedTask;
+        _ = Hosts.RecheckIfDueAsync();
+        return RefreshStatusAsync();
     }
 
     static string? CoreProblem(CoreCheck c) => c.State switch
@@ -841,11 +871,53 @@ public sealed class MainViewModel : Observable
             _coreProblem = CoreProblem(core);
             UpdateStatus();
             if (DnsRows.Count == 0) _ = CheckDnsAsync();
+            // Проверки окружения (§4) и временные метки — только чтение: netsh show, sc query, реестр, процессы.
+            var (ts, findings) = await Task.Run(() => (TcpTimestamps.IsEnabled(), SystemChecks.Run(_shell.Paths)));
+            TimestampsText = TimestampsLine(ts);
+            Findings.Clear();
+            foreach (var f in findings) Findings.Add(new FindingRow(f.Ok, f.Title, f.Text));
             DiagUpdated = $"обновлено в {DateTime.Now:HH:mm:ss}";
         }
         catch (Exception e) { Message = Texts.Friendly(e); }
         finally { DiagRefreshing = false; }
     }
+
+    string _timestampsText = "";
+    /// <summary>Решение 8: метки включаются сами при «Включить» и перед подбором — здесь только показываем.</summary>
+    public string TimestampsText { get => _timestampsText; private set => Set(ref _timestampsText, value); }
+
+    public static string TimestampsLine(bool? enabled) => enabled switch
+    {
+        true => "включены (нужны части стратегий)",
+        false => "выключены — включатся при включении обхода",
+        _ => "не удалось узнать",
+    };
+
+    /// <summary>Проверки окружения (09-features-spec §4): ✓ — в порядке, ⚠ — что мешает и что сделать.</summary>
+    public ObservableCollection<FindingRow> Findings { get; } = [];
+
+    public ICommand ClearDiscordCmd { get; }
+
+    /// <summary>Решение 5: кэш Discord (Cache, Code Cache, GPUCache) — с подтверждением; запущенный Discord закрывается.</summary>
+    async Task ClearDiscordAsync()
+    {
+        var found = await Task.Run(() => DiscordCache.Find());
+        if (found.Folders.Count == 0) { Message = "Кэш Discord не найден — чистить нечего."; return; }
+        bool running = await Task.Run(DiscordCache.IsRunning);
+        if (!Confirm($"Удалить кэш Discord ({Mb(found.Bytes)})? Удаляются только папки Cache, Code Cache и GPUCache — вход, настройки и сообщения останутся, "
+                     + "Discord просто загрузит всё заново."
+                     + (running ? "\n\nDiscord сейчас открыт — программа закроет его. После очистки запустите Discord снова." : "")))
+            return;
+        DiscordCacheInfo? r = null;
+        if (await Guard("Очищаю кэш Discord…", async () => r = await Task.Run(() =>
+            {
+                if (running) DiscordCache.Close();
+                return DiscordCache.Clear();
+            })) && r is not null)
+            Message = $"Кэш Discord очищен: {Mb(r.Bytes)}." + (r.Failed.Count > 0 ? $" Не удалось удалить файлов: {r.Failed.Count} — они заняты." : "");
+    }
+
+    static string Mb(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / 1024.0 / 1024:0.#} МБ" : $"{Math.Max(1, bytes / 1024)} КБ";
 
     // ---------- оформление ----------
 
@@ -922,6 +994,8 @@ public sealed class MainViewModel : Observable
         if (await Guard("Удаляю службу…", async () =>
         {
             await Task.Run(_shell.Service.Remove);
+            // Решение 8: временные метки TCP, включённые нами, — вернуть как было.
+            await Task.Run(_shell.RestoreTcpTimestamps);
             if (serviceMode)
             {
                 _shell.State.Enabled = false;

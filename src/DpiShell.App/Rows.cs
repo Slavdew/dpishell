@@ -56,6 +56,12 @@ public sealed record DnsRow(string Host, string System, string Doh, bool Spoofed
     static string Ips(IPAddress[] a) => string.Join(", ", a.Take(2)) + (a.Length > 2 ? " …" : "");
 }
 
+/// <summary>Проверка окружения на «Диагностике»: ✓ — в порядке, ⚠ — мешает (что делать — в тексте).</summary>
+public sealed record FindingRow(bool Ok, string Title, string Text)
+{
+    public string Mark => Ok ? "✓" : "⚠";
+}
+
 public static class Texts
 {
     public static string Svc(SvcState s) => s switch
