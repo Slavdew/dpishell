@@ -32,5 +32,10 @@ check('сломанная контрольная не портит долю це
 sc = sel.score(groups, [ v('youtube', 'https://www.youtube.com/', true), v('banks', 'https://example.com/', false, false) ]);
 check('необязательная контрольная не бракует', sc.perfect && sc.error == null, sc);
 
-print(`select: ${passed} прошло, ${failed} не прошло\n`);
+// В ucode деление целых — целое: доля 1 из 2 групп должна быть 0.5, а не 0.
+let g2 = [ { id: 'youtube', targets: [] }, { id: 'discord', targets: [] } ];
+sc = sel.score(g2, [ v('youtube', 'https://www.youtube.com/', true), v('discord', 'https://discord.com/', false) ]);
+check('доля групп дробная', sc.group_share == 0.5 && sc.target_share == 0.5, sc);
+
+print(`select:${passed} прошло, ${failed} не прошло\n`);
 exit(failed ? 1 : 0);

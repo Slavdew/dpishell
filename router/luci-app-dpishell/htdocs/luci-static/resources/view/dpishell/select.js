@@ -124,9 +124,28 @@ return view.extend({
 		return id;
 	},
 
+	// Глубокий поиск: кандидаты (candidate: true) — отдельным свёрнутым списком, во время поиска — последние 8.
 	table: function(p, withApply) {
+		var all = p.rows || [];
+		var cands = all.filter(function(r) { return r.candidate; });
+		if (!cands.length)
+			return this.rowsTable(p, all, withApply);
+		var full = all.filter(function(r) { return !r.candidate; });
+		var parts = [];
+		if (full.length)
+			parts.push(this.rowsTable(p, full, withApply));
+		if (p.running && !full.length)
+			parts.push(this.rowsTable(p, cands.slice(-8), false));
+		else
+			parts.push(E('details', { 'class': 'dps-muted', 'style': 'margin-top:.5em' }, [
+				E('summary', {}, 'Проверено приёмов: %d'.format(cands.length)),
+				this.rowsTable(p, cands, false)
+			]));
+		return E('div', {}, parts);
+	},
+
+	rowsTable: function(p, rows, withApply) {
 		var self = this;
-		var rows = p.rows || [];
 		if (!rows.length)
 			return E('div', { 'class': 'dps-muted' }, 'Пока ни одна стратегия не проверена');
 		var t = E('table', { 'class': 'table dps-table' }, [
@@ -145,7 +164,7 @@ return view.extend({
 				last = E('span', { 'class': 'dps-error' }, r.error);
 			else if (isBest)
 				last = E('span', { 'class': 'dps-ok' }, p.applied ? 'включена' : 'лучшая');
-			else if (withApply && r.group_share > 0)
+			else if (withApply && !r.candidate && r.group_share > 0)
 				last = api.btn('Выбрать другую', function() { return self.apply(p, r.id); }, 'cbi-button-neutral');
 			else
 				last = '';

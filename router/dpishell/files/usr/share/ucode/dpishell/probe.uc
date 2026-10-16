@@ -105,7 +105,8 @@ function header_value(headers, name) {
 	return v;
 }
 
-function curl_cmd(t, tls, ip, out_prefix) {
+function curl_cmd(t, tls, ip, out_prefix, tm) {
+	let cs = tm?.connect_s ?? CONNECT_S, rs = tm?.read_s ?? READ_S;
 	let host = host_of(t.url);
 	let port = match(t.url, /^https:/) ? 443 : 80;
 	let pm = match(t.url, /^https?:\/\/[^\/:]+:([0-9]+)/);
@@ -113,7 +114,7 @@ function curl_cmd(t, tls, ip, out_prefix) {
 		port = +pm[1];
 	let args = [
 		'curl', '-sS', '-o', '/dev/null', '-D', q(`${out_prefix}.h`),
-		'--connect-timeout', CONNECT_S, '--max-time', CONNECT_S + READ_S, '--max-filesize', MAX_BYTES * 64,
+		'--connect-timeout', cs, '--max-time', cs + rs, '--max-filesize', MAX_BYTES * 64,
 		'-A', q(UA), '-H', q('Accept: */*'),
 		'-w', q('%{http_code} %{size_download} %{exitcode} %{time_total} %{redirect_url}'),
 	];
@@ -167,10 +168,39 @@ function classify(t, out_prefix) {
 	return res('ok', `HTTP ${code}, ${int(bytes / 1024)} КБ`);
 }
 
+// Имитация DPI для проверки подбора и глубокого поиска в эмуляторе (настоящего DPI там нет, сеть QEMU пересобирает TCP).
+// Включается файлом в каталоге root (0700): { "rules": [ { "host": "youtube.com", "profile": "google.txt", "need": ["multidisorder"] } ] }.
+// Цель под правилом открывается, только если nfqws запущен и в профиле nfqws с подстрокой profile есть все подстроки need;
+// цели без правила открываются всегда (как обычные сайты).
+const FAKE_DPI = '/tmp/dpishell/fake-dpi.json';
+
+function fake_dpi(items) {
+	let t = readfile(FAKE_DPI);
+	if (t == null)
+		return null;
+	let rules = json(t).rules ?? [];
+	let running = length(trim(run('pidof nfqws').out)) > 0;
+	let m = match(readfile('/opt/zapret/config') ?? '', /NFQWS_OPT="([^"]*)"/);
+	let profiles = m ? split(m[1], ' --new ') : [];
+	let res = [];
+	for (let it in items) {
+		let host = host_of(it.target.url);
+		let rule = filter(rules, r => index(host, r.host) >= 0)[0];
+		let ok = !rule || (running && length(filter(profiles, pf => index(pf, rule.profile) >= 0 &&
+			!length(filter(rule.need, n => index(pf, n) < 0)))) > 0);
+		push(res, { outcome: ok ? 'ok' : 'reset', ok, seconds: 0.3, bytes: ok ? 1000 : 0, detail: 'имитация DPI',
+			url: it.target.url, tls: it.tls, dns: 'fake' });
+	}
+	return res;
+}
+
 // Проверить набор (цель × версия TLS) параллельно, до `parallel` запросов сразу.
-// items: [{ target: {url, min_bytes, handshake_only}, tls: '1.3'|'1.2' }]; opts: { parallel, dns_cache, use_doh }
+// items: [{ target: {url, min_bytes, handshake_only}, tls: '1.3'|'1.2' }]; opts: { parallel, dns_cache, use_doh, connect_s, read_s }
 function check_batch(items, opts) {
 	opts ??= {};
+	let fake = fake_dpi(items);
+	if (fake)
+		return fake;
 	let dir = `/tmp/dpishell/probe-${time()}-${++batch_seq}`;
 	mkdir('/tmp/dpishell', 0o700);
 	mkdir(dir, 0o700);
@@ -186,7 +216,7 @@ function check_batch(items, opts) {
 			ip = ips[0];
 			items[i].dns = ip ? 'doh' : 'system';
 		}
-		push(cmds, curl_cmd(items[i].target, items[i].tls, ip, `${dir}/${i}`));
+		push(cmds, curl_cmd(items[i].target, items[i].tls, ip, `${dir}/${i}`, opts));
 	}
 	// Пачками по parallel: фоновые процессы и wait.
 	let par = opts.parallel ?? 8;

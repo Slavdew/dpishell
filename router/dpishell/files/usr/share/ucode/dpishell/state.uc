@@ -104,7 +104,9 @@ function settings() {
 function roles() { return cat.load_json(`${P.share}/roles.json`); }
 function catalog() { return cat.load_json(`${P.share}/strategies.json`); }
 function user_catalog() { return read_json(`${P.etc}/user-strategies.json`, { strategies: [] }); }
-function catalogs() { return [catalog(), user_catalog()]; }
+// Найденные глубоким поиском на роутере (id r-…): отдельный файл, чтобы strategies_user_set приложения их не затирал.
+function found_catalog() { return read_json(`${P.etc}/found-strategies.json`, { strategies: [] }); }
+function catalogs() { return [catalog(), user_catalog(), found_catalog()]; }
 
 function build_opts(s) {
 	return {
@@ -113,17 +115,22 @@ function build_opts(s) {
 	};
 }
 
-// Записать /opt/zapret/config для стратегии. null — успех, иначе текст ошибки.
+// Записать /opt/zapret/config для стратегии-объекта (в т.ч. кандидата поиска). null — успех, иначе текст ошибки.
+function write_zapret_config_for(st, s) {
+	let r = roles();
+	let err = cat.validate(st, r);
+	if (err)
+		return `Стратегия ${st.id} не прошла проверку: ${err}`;
+	ensure_dirs();
+	return write_atomic(P.zapret_config, cat.render_config(st, r, build_opts(s))) ? null : 'Не удалось записать config zapret';
+}
+
+// То же по id из каталогов.
 function write_zapret_config(strategy_id, s) {
 	let st = cat.find(catalogs(), strategy_id);
 	if (!st)
 		return `Стратегия ${strategy_id} не найдена`;
-	let r = roles();
-	let err = cat.validate(st, r);
-	if (err)
-		return `Стратегия ${strategy_id} не прошла проверку: ${err}`;
-	ensure_dirs();
-	return write_atomic(P.zapret_config, cat.render_config(st, r, build_opts(s))) ? null : 'Не удалось записать config zapret';
+	return write_zapret_config_for(st, s);
 }
 
 function core_installed() {
@@ -173,6 +180,6 @@ function valid_subnet_line(l) {
 
 export {
 	P, VERSION, API, MODES, HOURS, USER_LISTS,
-	ensure_dirs, write_atomic, read_json, uci_set, settings, roles, catalog, user_catalog, catalogs,
-	write_zapret_config, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running, iso
+	ensure_dirs, write_atomic, read_json, uci_set, settings, roles, catalog, user_catalog, found_catalog, catalogs,
+	write_zapret_config, write_zapret_config_for, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running, iso
 };

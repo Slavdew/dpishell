@@ -63,7 +63,7 @@ function strategy_list() {
 			});
 	// Порядок — по статистике (02-spec §9.16): доля удачных, затем число прогонов.
 	return sort(items, (a, b) => {
-		let ra = a.runs ? a.passed / a.runs : 0.5, rb = b.runs ? b.passed / b.runs : 0.5;
+		let ra = a.runs ? 1.0 * a.passed / a.runs : 0.5, rb = b.runs ? 1.0 * b.passed / b.runs : 0.5;
 		return ra != rb ? (rb - ra) : (b.runs - a.runs);
 	});
 }
@@ -304,8 +304,7 @@ methods.select_start = {
 			return err('invalid', 'Группы: youtube, discord, user', 'groups');
 		if (index(['full', 'quick'], a.mode ?? 'full') < 0) return err('invalid', 'Режим: full или quick', 'mode');
 		if (index(['main', 'deep'], a.depth ?? 'main') < 0) return err('invalid', 'Глубина: main или deep', 'depth');
-		if (a.depth == 'deep') return err('failed', 'Глубокий поиск ещё не реализован на роутере');
-		spawn(`select ${q(sprintf('%J', { groups, mode: a.mode ?? 'full', depth: 'main', started_by: 'app' }))}`);
+		spawn(`select ${q(sprintf('%J', { groups, mode: a.mode ?? 'full', depth: a.depth ?? 'main', started_by: a.started_by == 'page' ? 'page' : 'app' }))}`);
 		return { started: true };
 	}
 };
