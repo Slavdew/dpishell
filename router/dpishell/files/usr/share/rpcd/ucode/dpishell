@@ -6,6 +6,7 @@ import { readfile, writefile, stat, popen } from 'fs';
 import * as cat from 'dpishell.catalog';
 import * as st from 'dpishell.state';
 import * as core from 'dpishell.core';
+import * as dg from 'dpishell.diag';
 
 function err(code, text, field) {
 	let e = { code, text };
@@ -349,6 +350,38 @@ methods.core_install = {
 		if (!st.job_running('core_install'))
 			spawn('core_install');
 		return { started: true };
+	}
+};
+
+methods.diag = { call: function() { return dg.diag(); } };
+
+methods.report = { call: function() { return { text: dg.report() }; } };
+
+methods.conflict_stop = {
+	args: { name: 'name' },
+	call: function(req) {
+		let e = dg.conflict_stop(req.args.name);
+		return e ? err('invalid', e, 'name') : {};
+	}
+};
+
+methods.site_check = {
+	args: { url: 'url' },
+	call: function(req) {
+		let u = req.args.url;
+		if (type(u) == 'string' && !match(u, /^https?:\/\//))
+			u = `https://${u}/`;
+		if (type(u) != 'string' || length(u) > 300 || !match(u, /^https?:\/\/[a-z0-9.-]+(:[0-9]{1,5})?(\/[A-Za-z0-9._~%!$&'()*+,;=:@\/?-]*)?$/))
+			return err('invalid', 'Адрес вида example.com', 'url');
+		if (!st.job_running('site_check'))
+			spawn(`site_check ${q(u)}`);
+		return { started: true };
+	}
+};
+
+methods.site_check_result = {
+	call: function() {
+		return st.read_json('/tmp/dpishell/site_check.json', { running: false, url: null });
 	}
 };
 

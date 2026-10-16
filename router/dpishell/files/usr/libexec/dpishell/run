@@ -9,6 +9,7 @@ import { writefile, readfile, stat, unlink } from 'fs';
 import * as st from 'dpishell.state';
 import * as sel from 'dpishell.select';
 import * as core from 'dpishell.core';
+import * as dg from 'dpishell.diag';
 
 const cmd = ARGV[0];
 
@@ -99,7 +100,16 @@ else if (cmd == 'core_install') {
 	st.write_status_json();
 	unlink(l);
 }
+else if (cmd == 'site_check') {
+	let l = lock('site_check');
+	if (!l) exit(1);
+	st.write_atomic('/tmp/dpishell/site_check.json', sprintf('%J\n', { running: true, url: ARGV[1] }));
+	let r;
+	try { r = dg.site_check(ARGV[1]); } catch (e) { r = { running: false, url: ARGV[1], error: `${e}` }; }
+	st.write_atomic('/tmp/dpishell/site_check.json', sprintf('%J\n', r));
+	unlink(l);
+}
 else {
-	print('usage: run select|check|watch|core_install\n');
+	print('usage: run select|check|watch|core_install|site_check\n');
 	exit(2);
 }

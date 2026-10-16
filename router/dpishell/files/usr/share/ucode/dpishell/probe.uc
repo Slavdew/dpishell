@@ -8,6 +8,8 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const CONNECT_S = 3, READ_S = 6, MAX_BYTES = 1048576;
 let batch_seq = 0;
 
+const DOH_IPS = ['8.8.8.8', '1.1.1.1'];
+
 const DOH = [
 	{ name: 'Google', url: 'https://8.8.8.8/resolve?type=A&name=' },
 	{ name: 'Cloudflare', url: 'https://1.1.1.1/dns-query?type=A&name=', accept: 'application/dns-json' },
@@ -56,26 +58,41 @@ function same_site(a, b) {
 	return !(length(p) == 2 && length(p[1]) == 2 && length(p[0]) <= 3);
 }
 
-// Адреса IPv4 через DoH; [] — не удалось (вызывающий решает, идти ли через системный DNS).
-function doh_resolve(host, cache) {
-	if (cache?.[host])
-		return cache[host];
-	if (is_ip(host))
-		return [host];
+function doh_try(host) {
 	for (let d in DOH) {
 		let cmd = `curl -sS --max-time 4 ${d.accept ? '-H ' + q('accept: ' + d.accept) : ''} ${q(d.url + host)} 2>/dev/null`;
 		let r = run(cmd);
 		let j;
 		try { j = json(r.out); } catch (e) { continue; }
 		let ips = map(filter(j?.Answer ?? [], a => a.type == 1 && match(a.data, /^[0-9.]+$/)), a => a.data);
-		if (length(ips)) {
-			if (cache)
-				cache[host] = ips;
+		if (length(ips))
 			return ips;
-		}
 	}
 	return [];
 }
+
+// Адреса IPv4 через DoH; [] — не удалось (вызывающий решает, идти ли через системный DNS).
+function doh_resolve(host, cache) {
+	if (cache?.[host])
+		return cache[host];
+	if (is_ip(host))
+		return [host];
+	let ips = doh_try(host);
+	if (!length(ips)) {
+		// Обход мог сломать сам DoH (режим «Все сайты», адреса Google/Cloudflare в IP-списке): на время запроса
+		// выводим DoH-серверы из-под обхода через набор nozapret zapret — остальная сеть не затронута.
+		let added = filter(DOH_IPS, ip => run(`nft add element inet zapret nozapret { ${ip} } 2>/dev/null`).rc == 0);
+		if (length(added)) {
+			ips = doh_try(host);
+			for (let ip in added)
+				run(`nft delete element inet zapret nozapret { ${ip} } 2>/dev/null`);
+		}
+	}
+	if (length(ips) && cache)
+		cache[host] = ips;
+	return ips;
+}
+
 
 function header_value(headers, name) {
 	// Последний ответ в файле (-D пишет все, но без -L ответ один).
