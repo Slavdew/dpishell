@@ -1,0 +1,162 @@
+{
+  "_comment": "Роли каталога и их фильтры — копия WinwsArgs (Windows, Strategies.cs). Сверка — router/test/golden.json. Кандидат в общий data/roles.json.",
+  "ports": {
+    "tcp": "80,443,2053,2083,2087,2096,8443",
+    "udp": "443,19294-19344,50000-50100",
+    "game": "1024-65535"
+  },
+  "list_sets": {
+    "hostlists": [
+      "--hostlist={lists}/general.txt",
+      "--hostlist={lists}/user-general.txt",
+      "--hostlist-exclude={lists}/exclude.txt",
+      "--hostlist-exclude={lists}/user-exclude.txt",
+      "--ipset-exclude={lists}/ipset-exclude.txt",
+      "--ipset-exclude={lists}/user-ipset-exclude.txt"
+    ],
+    "excludes": [
+      "--hostlist-exclude={lists}/exclude.txt",
+      "--hostlist-exclude={lists}/user-exclude.txt",
+      "--ipset-exclude={lists}/ipset-exclude.txt",
+      "--ipset-exclude={lists}/user-ipset-exclude.txt"
+    ],
+    "ipset": [
+      "--ipset={lists}/{ipset_file}",
+      "--hostlist-exclude={lists}/exclude.txt",
+      "--hostlist-exclude={lists}/user-exclude.txt",
+      "--ipset-exclude={lists}/ipset-exclude.txt",
+      "--ipset-exclude={lists}/user-ipset-exclude.txt"
+    ],
+    "game": [
+      "--ipset={lists}/{ipset_file}",
+      "--ipset-exclude={lists}/ipset-exclude.txt",
+      "--ipset-exclude={lists}/user-ipset-exclude.txt"
+    ]
+  },
+  "roles": [
+    {
+      "id": "quic",
+      "filter": [
+        "--filter-udp=443"
+      ],
+      "lists": "hostlists",
+      "lists_all": "excludes"
+    },
+    {
+      "id": "discord_udp",
+      "filter": [
+        "--filter-udp=19294-19344,50000-50100",
+        "--filter-l7=discord,stun"
+      ]
+    },
+    {
+      "id": "discord_media",
+      "filter": [
+        "--filter-tcp=2053,2083,2087,2096,8443",
+        "--hostlist-domains=discord.media"
+      ]
+    },
+    {
+      "id": "google",
+      "filter": [
+        "--filter-tcp=443",
+        "--hostlist={lists}/google.txt"
+      ]
+    },
+    {
+      "id": "general",
+      "filter": [
+        "--filter-tcp=80,443"
+      ],
+      "lists": "hostlists",
+      "lists_all": "excludes"
+    },
+    {
+      "id": "ipset_udp",
+      "filter": [
+        "--filter-udp=443"
+      ],
+      "lists": "ipset"
+    },
+    {
+      "id": "ipset_tcp",
+      "filter": [
+        "--filter-tcp=80,443,8443"
+      ],
+      "lists": "ipset"
+    },
+    {
+      "id": "game_tcp",
+      "feature": "game",
+      "filter": [
+        "--filter-tcp=1024-65535"
+      ],
+      "lists": "game"
+    },
+    {
+      "id": "game_udp",
+      "feature": "game",
+      "filter": [
+        "--filter-udp=1024-65535"
+      ],
+      "lists": "game"
+    }
+  ],
+  "options": [
+    "--dpi-desync",
+    "--dpi-desync-repeats",
+    "--dpi-desync-fooling",
+    "--dpi-desync-split-pos",
+    "--dpi-desync-split-seqovl",
+    "--dpi-desync-split-seqovl-pattern",
+    "--dpi-desync-fake-tls",
+    "--dpi-desync-fake-tls-mod",
+    "--dpi-desync-fake-http",
+    "--dpi-desync-fake-quic",
+    "--dpi-desync-fake-discord",
+    "--dpi-desync-fake-stun",
+    "--dpi-desync-fakedsplit-pattern",
+    "--dpi-desync-autottl",
+    "--dpi-desync-ttl",
+    "--dpi-desync-badseq-increment",
+    "--dpi-desync-fake-syndata",
+    "--dpi-desync-hostfakesplit-mod",
+    "--dpi-desync-hostfakesplit-midhost",
+    "--dpi-desync-fake-tcp-mod",
+    "--ip-id",
+    "--dup",
+    "--dup-cutoff",
+    "--dup-fooling",
+    "--dup-autottl",
+    "--dup-ttl",
+    "--dpi-desync-fakedsplit-mod",
+    "--dpi-desync-start",
+    "--dpi-desync-badack-increment"
+  ],
+  "file_options": [
+    "--dpi-desync-split-seqovl-pattern",
+    "--dpi-desync-fake-tls",
+    "--dpi-desync-fake-http",
+    "--dpi-desync-fake-quic",
+    "--dpi-desync-fake-discord",
+    "--dpi-desync-fake-stun",
+    "--dpi-desync-fake-unknown-udp",
+    "--dpi-desync-fakedsplit-pattern",
+    "--dpi-desync-fake-syndata",
+    "--dpi-desync-fake-unknown"
+  ],
+  "role_options": {
+    "game_tcp": [
+      "--dpi-desync-any-protocol",
+      "--dpi-desync-cutoff",
+      "--dpi-desync-fake-unknown-udp",
+      "--dpi-desync-fake-unknown"
+    ],
+    "game_udp": [
+      "--dpi-desync-any-protocol",
+      "--dpi-desync-cutoff",
+      "--dpi-desync-fake-unknown-udp",
+      "--dpi-desync-fake-unknown"
+    ]
+  }
+}

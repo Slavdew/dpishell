@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
+  <ItemGroup><Reference Include="DpiShell.Core"><HintPath>C:\Dev\zapret-automation\src\DpiShell.Core\bin\Debug\net10.0-windows\DpiShell.Core.dll</HintPath></Reference></ItemGroup>
+</Project>
