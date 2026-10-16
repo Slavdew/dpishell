@@ -949,7 +949,7 @@
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
-                                            <TextBlock Text="Ускорение (offload)" Style="{StaticResource Hint}" Margin="0,0,0,6" />
+                                            <TextBlock Text="Ускорение сети" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,6">
                                                 <TextBlock Text="{Binding FlowOffloadText}" />
                                                 <Button Content="Исправить" Style="{StaticResource LinkButton}" Margin="10,0,0,0" Command="{Binding FixWarningCmd}" CommandParameter="flow_offload"
