@@ -164,3 +164,4 @@
 - 2026-10-17: `status.needs_tcp_timestamps`; §6 — ПК включает метки TCP, если стратегия роутера их требует.
 - 2026-10-17: режим `mode` (`all` по умолчанию на роутере / `lists`), `mode_set`, `site_check`, `lists_get exclude`; группа `control` в подборе (06-router-spec §3.4, §4.1).
 - 2026-10-17: `dns_enable`/`dns_restore` — фоновые (`{ "started": true }`), итог — `dns_status.job`; проверено в эмуляторе.
+- 2026-10-17 (по проверке страницы LuCI): `status.jobs.dns` — любое DNS-задание (`dns_analyze` оставлен с тем же значением); `select_progress.index` — номер проверяемой стратегии с 1; `site_check.url` принимает и голое имя (`example.com` → `https://example.com/`). Действий «выключить flow offloading» и «включить IPv6» в API пока нет — страница ведёт в настройки межсетевого экрана; добавить вместе с роутером v1.1.

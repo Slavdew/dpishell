@@ -54,7 +54,8 @@ function ensure_dirs() {
 
 function write_atomic(path, text) {
 	let tmp = `${path}.tmp`;
-	if (!writefile(tmp, text))
+	// writefile возвращает число записанных байт: 0 у пустого файла — не ошибка.
+	if (writefile(tmp, text) == null)
 		return false;
 	return rename(tmp, path);
 }
@@ -136,7 +137,7 @@ function write_status_json() {
 	let pub = {
 		product: 'dpishell-router', api: API, version: VERSION, engine: 'zapret1', core: 'v72.13',
 		enabled: s.enabled, strategy: s.strategy, catalog_version: catalog().version,
-		checked_at: lc?.at, last_check_ok: lc?.ok,
+		checked_at: iso(lc?.at), last_check_ok: lc?.ok,
 	};
 	write_atomic(P.status_json, sprintf('%J\n', pub));
 	chmod(P.status_json, 0o644);
@@ -146,6 +147,14 @@ function write_status_json() {
 function job_running(name) {
 	let pid = +trim(readfile(`${P.run}/${name}.lock`) ?? '');
 	return !!(pid && stat(`/proc/${pid}`));
+}
+
+// Время в ответах API — ISO 8601 UTC (07-router-api §5); внутри храним секунды.
+function iso(t) {
+	if (t == null)
+		return null;
+	let g = gmtime(t);
+	return sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ', g.year, g.mon, g.mday, g.hour, g.min, g.sec);
 }
 
 function valid_domain_line(l) {
@@ -165,5 +174,5 @@ function valid_subnet_line(l) {
 export {
 	P, VERSION, API, MODES, HOURS, USER_LISTS,
 	ensure_dirs, write_atomic, read_json, uci_set, settings, roles, catalog, user_catalog, catalogs,
-	write_zapret_config, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running
+	write_zapret_config, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running, iso
 };
