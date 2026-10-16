@@ -142,7 +142,7 @@
                             <StackPanel Grid.Column="1">
                                 <TextBlock Text="Режим" Style="{StaticResource H2}" />
                                 <RadioButton GroupName="Mode" IsChecked="{Binding Quick}" Margin="0,3">
-                                    <TextBlock><Run Text="Быстрый" /><Run Text=" — до первой полностью рабочей" Foreground="{StaticResource Muted}" /></TextBlock>
+                                    <TextBlock><Run Text="Быстрый" /><Run Text=" — до первой рабочей, начиная с прежних" Foreground="{StaticResource Muted}" /></TextBlock>
                                 </RadioButton>
                                 <RadioButton GroupName="Mode" IsChecked="{Binding Full}" Margin="0,3">
                                     <TextBlock><Run Text="Полный" /><Run Text=" — все стратегии, выбор лучшей" Foreground="{StaticResource Muted}" /></TextBlock>

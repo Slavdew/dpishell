@@ -342,7 +342,7 @@ public sealed class MainViewModel : Observable
     public ObservableCollection<GroupOption> Groups { get; } = [];
     public ObservableCollection<ScoreRow> Scores { get; } = [];
 
-    bool _quick = true;
+    bool _quick; // основной режим — полный; быстрый — «выключил и забыл, какая стояла»
     public bool Quick { get => _quick; set { if (Set(ref _quick, value)) Raise(nameof(Full)); } }
     public bool Full { get => !_quick; set => Quick = !value; }
 
