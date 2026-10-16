@@ -28,6 +28,8 @@ public sealed class RouterViewModelTests : IDisposable
             CustomAddress = r.Address,
             PollInterval = TimeSpan.FromMilliseconds(10),
             CheckTimeout = TimeSpan.FromSeconds(5),
+            DnsTimeout = TimeSpan.FromSeconds(5),
+            PcTimestamps = () => true,   // netsh в тестах не зовём
             Gateway = () => throw new InvalidOperationException("в тестах — только фейковый роутер"),
         };
         vm.Say = s => { lock (_said) _said.Add(s); };
@@ -56,7 +58,8 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.True(vm.RouterEnabled);
         Assert.Equal("Обход делает роутер", vm.HomeTitle);
         Assert.StartsWith("Стратегия general (ALT10), проверено в ", vm.HomeDetail);
-        Assert.Equal("Включён flow offloading", vm.Warnings);
+        Assert.Equal("Ускорение сети на роутере мешает обходу", vm.Warnings);
+        Assert.Equal("Исправить", Assert.Single(vm.WarningRows).Fix);
         Assert.Single(vm.Strategies);
         AssertNoSecretSaid("secret");
 
@@ -319,7 +322,7 @@ public sealed class RouterViewModelTests : IDisposable
         await vm.ConnectAsync("secret");
         await vm.RefreshDiagAsync();
         Assert.Equal("zapret2", Assert.Single(vm.Conflicts).Name);
-        Assert.Equal("выключено", vm.FlowOffloadText);
+        Assert.Equal("включено — мешает обходу", vm.FlowOffloadText);
         Assert.StartsWith("провайдер подменяет", vm.DnsText);
         await vm.StopConflictAsync("zapret2");
         Assert.Equal("zapret2", r.Calls.Single(c => Method(c) == "conflict_stop")["params"]![3]!["name"]!.GetValue<string>());
@@ -332,14 +335,15 @@ public sealed class RouterViewModelTests : IDisposable
     {
         using var r = new FakeRouter();
         var vm = TestWindow.Model(new Shell(new AppPaths(_tmp.Sub("main"), Repo.Data)));
+        vm.Router.PcTimestamps = () => true;
         vm.Router.AddressAuto = false;
         vm.Router.CustomAddress = r.Address;
         await vm.Router.ConnectAsync("secret");
         Assert.Equal("Обход делает роутер — на этом ПК включать не нужно", vm.StatusDetail);
         string? asked = null;
-        vm.Confirm = t => { asked = t; return false; };   // «Нет» — на ПК ничего не включаем (и не трогаем sc.exe)
+        vm.Choose = (t, _) => { asked = t; return -1; };   // «Отмена» — на ПК ничего не включаем (и не трогаем sc.exe)
         await vm.EnableAsync();
-        Assert.Contains("обрабатываться дважды", asked);
+        Assert.Contains("обрабатывается дважды", asked);
         Assert.False(vm.Busy);
         Assert.False(vm.IsRunning);
     }

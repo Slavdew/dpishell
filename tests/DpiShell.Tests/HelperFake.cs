@@ -62,6 +62,8 @@ public sealed class FakeHelperBackend : IHelperBackend
 
     public void Choose(string strategyId) => Call("choose " + strategyId);
 
+    public bool TcpTimestampsOn() { Call("tcp_timestamps_on"); return true; }
+
     public void Enable(string strategyId)
     {
         Call("enable " + strategyId);

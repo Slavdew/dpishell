@@ -41,11 +41,21 @@ public sealed record RouterStatus(
     // needs_tcp_timestamps: стратегия роутера работает только у устройств с метками TCP — ПК включает их сам (§6).
     string? Mode = null, bool NeedsTcpTimestamps = false);
 
-public sealed record RouterStrategyItem(string Id, string Title, string Source, int Runs, int Passed);
+/// <summary>source: catalog | user; у user id «u-…» — присланные с ПК (strategies_user_set), «r-…» — найденные глубоким поиском на роутере (§9).</summary>
+public sealed record RouterStrategyItem(string Id, string Title, string Source, int Runs, int Passed)
+{
+    public bool FoundOnRouter => Source == "user" && Id.StartsWith("r-", StringComparison.Ordinal);
+    public bool FromPc => Source == "user" && Id.StartsWith("u-", StringComparison.Ordinal);
+}
 public sealed record RouterStrategies(int CatalogVersion, List<RouterStrategyItem> Items);
 
-/// <summary>Строка хода подбора; title — название из каталога или описание кандидата глубокого поиска (редакция §9, 2026-10-17).</summary>
-public sealed record RouterSelectRow(string Id, double GroupShare, double TargetShare, double AvgS, string? Error, string? Title = null);
+/// <summary>
+/// Строка хода подбора; title — название из каталога или описание кандидата глубокого поиска (редакция §9, 2026-10-17).
+/// Кандидат глубокого поиска — candidate: true, ok из total — открылось обязательных целей его роли (§9, 2026-10-17);
+/// в strategies его нет — применить нельзя, найденные в финале приходят в strategies с id «r-…».
+/// </summary>
+public sealed record RouterSelectRow(string Id, double GroupShare, double TargetShare, double AvgS, string? Error, string? Title = null,
+    bool Candidate = false, int? Ok = null, int? Total = null);
 /// <summary>
 /// Ход подбора (§5.1, редакция §9 от 2026-10-16): по завершении роутер сам включает лучшую — `applied`, `backups`;
 /// остановленный — `cancelled`. `started_by`: page | app | auto. `eta_s` — оценка оставшегося, null — неизвестна.
@@ -71,7 +81,10 @@ public sealed record RouterDnsJob(string? Action, bool Running, bool? Ok, string
 /// <summary>DNS для всей сети: mode provider|doh; fallback_active — оба DoH пропали, временно DNS провайдера.</summary>
 public sealed record RouterDnsStatus(string? Mode, bool Spoofed, DateTime? CheckedAt, List<RouterDnsServer>? Servers, bool FallbackActive, RouterDnsJob? Job);
 
+/// <summary>kind: service | package (§9: zapret, luci-app-zapret, zapret-manager-beam, zapret2 — conflict_stop их не останавливает, только удаление).</summary>
 public sealed record RouterConflict(string Kind, string Name, bool Running);
+/// <summary>Ответ flow_offload_fix: flowoffload — кому передана разгрузка (software | hardware).</summary>
+public sealed record RouterFlowOffloadFix(bool Changed, string? Flowoffload);
 public sealed record RouterDns(bool Spoofed, DateTime? CheckedAt);
 public sealed record RouterDiag(List<RouterConflict>? Conflicts, bool FlowOffload, bool Ipv6Wan, RouterDns? Dns, long OverlayFreeKb);
 

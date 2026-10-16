@@ -296,11 +296,12 @@ public sealed class WindowSmokeTests
         using var fake = new FakeRouter
         {
             SelectSteps = 0,
+            ConflictsJson = """[ { "kind": "service", "name": "zapret2", "running": true }, { "kind": "package", "name": "zapret-manager-beam", "running": true } ]""",
             SelectRowsJson = """
                 [ { "id": "alt", "group_share": 1.0, "target_share": 0.88, "avg_s": 0.74, "error": null },
                   { "id": "alt9", "group_share": 1.0, "target_share": 0.80, "avg_s": 0.61, "error": null },
                   { "id": "alt10", "group_share": 0.5, "target_share": 0.5, "avg_s": 0.92, "error": null },
-                  { "id": "d-17", "title": "fake + multisplit, ts — YouTube", "group_share": 0.5, "target_share": 0.62, "avg_s": 0.83, "error": null },
+                  { "id": "d-17", "title": "fake + multisplit, ts — YouTube", "group_share": 0.5, "target_share": 0.62, "avg_s": 0.83, "error": null, "candidate": true, "ok": 3, "total": 4 },
                   { "id": "alt2", "group_share": 0.0, "target_share": 0.0, "avg_s": 0, "error": "не открылось ни одной группы" } ]
                 """,
         };
@@ -320,6 +321,9 @@ public sealed class WindowSmokeTests
                 router.CustomAddress = fake.Address;
                 router.PollInterval = TimeSpan.FromMilliseconds(10);
                 router.Gateway = () => null;
+                router.PcTimestamps = () => false;   // netsh не зовём; метки «выключены» — видна подсказка роутера
+                router.EnablePcTimestamps = _ => Task.FromResult(false);
+                router.Confirm = _ => true;
                 // Сеть — в фоне без контекста окна (поток окна здесь занят), потом окно строится по готовому состоянию.
                 Task.Run(async () =>
                 {
@@ -327,13 +331,16 @@ public sealed class WindowSmokeTests
                     await router.StartSelectAsync(deep: false);
                     await router.LoadTargetsAsync();
                     await router.RefreshDiagAsync();
+                    await router.RefreshRouterPageAsync();
+                    router.SiteUrl = "example.org";
+                    await router.SiteCheckAsync();
                 }).GetAwaiter().GetResult();
                 router.TargetsOnRouter = true;
                 router.SelectedScore = router.Scores.First(x => x.Id == "alt9");
                 Fill(vm, shell);
 
                 var w = Open(vm);
-                foreach (var (page, name) in AllPages)
+                foreach (var (page, name) in AllPages.Append((Pages.Router, "tab")))
                 {
                     SetProp(vm, "IsLoading", true);
                     vm.Page = page;
@@ -354,13 +361,22 @@ public sealed class WindowSmokeTests
                         throw new Exception("На «Подборе» нет итога роутера или «Применить выбранную»");
                     if (page == Pages.Diag && Find<Button>(tabs, b => b.Content as string == "Остановить" && b.IsVisible) is null)
                         throw new Exception("В диагностике роутера нет «Остановить» у конфликта");
+                    if (page == Pages.Home && Find<Button>(tabs, b => b.Content as string == "Исправить" && b.IsVisible) is null)
+                        throw new Exception("У предупреждения роутера нет «Исправить»");
+                    if (page == Pages.Router)
+                    {
+                        foreach (var text in new[] { "Для каких сайтов обход", "Сайт не открывается", "DNS для всей сети", "Проверка по расписанию", "Сайт открывается только без обхода" })
+                            if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is null) throw new Exception($"На вкладке «Роутер» нет «{text}»");
+                        if (Find<Button>(tabs, b => b.Content as string == "Добавить в исключения" && b.IsVisible) is null) throw new Exception("Нет «Добавить в исключения»");
+                        if (Find<Button>(tabs, b => b.Content as string == "Включить защищённый DNS" && b.IsVisible) is null) throw new Exception("Нет «Включить защищённый DNS»");
+                    }
                     if (snapDir is null) continue;
                     Directory.CreateDirectory(snapDir);
                     Snap(w, Path.Combine(snapDir, $"{theme}-router-{name}.png"));
                     if (page == Pages.Diag && Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } sv)
                     {
                         // Карточки роутера — в середине и в конце страницы.
-                        var card = Find<TextBlock>(tabs, t => t.Text == "Роутер")!;
+                        var card = Find<Button>(tabs, b => b.Content as string == "Сохранить отчёт роутера")!;
                         sv.ScrollToVerticalOffset(card.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-router-diag-card.png"));
@@ -368,6 +384,17 @@ public sealed class WindowSmokeTests
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-router-diag-end.png"));
                         sv.ScrollToHome();
+                    }
+                    if (page == Pages.Router && Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } rsv)
+                    {
+                        var expanders = new List<Expander>();
+                        Collect(tabs, expanders);
+                        foreach (var e in expanders) e.IsExpanded = true;
+                        Pump();
+                        rsv.ScrollToEnd();
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-router-tab-end.png"));
+                        rsv.ScrollToHome();
                     }
                 }
                 SetProp(vm, "IsLoading", true);
@@ -405,15 +432,21 @@ public sealed class WindowSmokeTests
     public void InfoButtons_EveryDocSection_HasButton_WithDocText()
     {
         var doc = DocInfoTexts();
-        Assert.Equal(9, doc.Count);
+        Assert.Equal(12, doc.Count);
         using var tmp = new TempDir();
+        using var fake = new FakeRouter();
         var seen = new Dictionary<string, string>();
         var errors = WithBindingErrors(() =>
         {
             ThemeManager.Apply(ThemeManager.Light);
             var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
+            // Вкладка «Роутер» со своими «(i)» — только при подключённом роутере.
+            vm.Router.AddressAuto = false;
+            vm.Router.CustomAddress = fake.Address;
+            vm.Router.PcTimestamps = () => true;
+            Task.Run(() => vm.Router.ConnectAsync("secret")).GetAwaiter().GetResult();
             var w = Open(vm);
-            foreach (var (page, _) in AllPages)
+            foreach (var (page, _) in AllPages.Append((Pages.Router, "router")))
             {
                 vm.Page = page;
                 Pump();

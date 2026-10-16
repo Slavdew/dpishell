@@ -271,6 +271,10 @@ public sealed class RouterClient : IDisposable
         CallAsync("strategies_user_set", new JsonObject { ["items"] = JsonSerializer.SerializeToNode(items, Json) }, ct);
 
     public Task ConflictStopAsync(string name, CancellationToken ct = default) => CallAsync("conflict_stop", new JsonObject { ["name"] = name }, ct);
+    /// <summary>Разгрузку (flow offloading) из межсетевого экрана передать zapret: та же скорость, пакеты обхода — мимо разгрузки (§9).</summary>
+    public Task<RouterFlowOffloadFix> FlowOffloadFixAsync(CancellationToken ct = default) => CallAsync<RouterFlowOffloadFix>("flow_offload_fix", null, ct);
+    /// <summary>Обход по IPv6; при включённом обходе роутер перезапускает zapret (§9).</summary>
+    public Task Ipv6SetAsync(bool enabled, CancellationToken ct = default) => CallAsync("ipv6_set", new JsonObject { ["enabled"] = enabled }, ct);
     public Task<RouterStarted> CoreInstallAsync(CancellationToken ct = default) => CallAsync<RouterStarted>("core_install", null, ct);
 
     static string CheckListName(string name) =>

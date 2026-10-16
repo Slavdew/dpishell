@@ -315,4 +315,7 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public Task<ResultsSnapshot> ReadResultsAsync(CancellationToken ct = default) => CallAsync<ResultsSnapshot>("read_results", null, null, ct);
     public Task<HelperDetails> DetailsAsync(CancellationToken ct = default) => CallAsync<HelperDetails>("details", null, null, ct);
     public Task ChooseAsync(string strategyId, CancellationToken ct = default) => CallAsync("choose", new { strategy = strategyId }, null, ct);
+    /// <summary>Включить метки TCP (нужны стратегии роутера); true — включены.</summary>
+    public async Task<bool> TcpTimestampsOnAsync(CancellationToken ct = default) =>
+        (await CallAsync("tcp_timestamps_on", null, null, ct)).GetProperty("enabled").GetBoolean();
 }

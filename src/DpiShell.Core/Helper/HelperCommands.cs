@@ -99,6 +99,8 @@ public static partial class HelperCommands
         new("details", false, false),
         // Выбрать стратегию, не включая обход (запомнить у помощника).
         new("choose", true, false, new ArgSpec("strategy", ArgKind.StrategyId, Required: true)),
+        // Метки TCP нужны стратегии роутера (07-router-api §6) — включить на этом ПК, не включая обход.
+        new("tcp_timestamps_on", true, false),
     ];
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);

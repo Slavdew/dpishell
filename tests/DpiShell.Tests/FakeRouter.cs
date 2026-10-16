@@ -49,6 +49,30 @@ public sealed class FakeRouter : IDisposable
         """{ "catalog_version": 3, "items": [ { "id": "alt10", "title": "general (ALT10)", "source": "catalog", "runs": 7, "passed": 6 } ] }""";
     public string WarningsJson { get; set; } = """[ { "code": "flow_offload", "text": "Включён flow offloading" } ]""";
 
+    // «Сайт не открывается»: столько опросов site_check_result отвечают running: true (§5.1).
+    public int SiteCheckRunningPolls { get; set; }
+    int _sitePolls;
+    public bool SiteWithBypassOk { get; set; }
+    public bool SiteWithoutBypassOk { get; set; } = true;
+
+    // DNS (§5.1 dns_status): задания фоновые, столько опросов job.running: true; итог — ok и mode.
+    public string DnsMode { get; set; } = "provider";
+    public bool DnsSpoofed { get; set; } = true;
+    public int DnsJobRunningPolls { get; set; } = 1;
+    public bool DnsJobOk { get; set; } = true;
+    string _dnsAction = "dns_enable";
+    DateTime _dnsAt = new(2026, 10, 17, 10, 1, 0, DateTimeKind.Utc);
+    int _dnsPolls = int.MaxValue;
+    string? _dnsTarget;
+    /// <summary>Пишется ли job.at (в §5.1 его нет, роутер отдаёт — §9 не упоминает).</summary>
+    public bool DnsJobAt { get; set; } = true;
+
+    /// <summary>§9: enable/select_start при чужом обходе — error: conflict.</summary>
+    public bool ConflictOnEnable { get; set; }
+    public string ConflictsJson { get; set; } = """[ { "kind": "service", "name": "zapret2", "running": true } ]""";
+    public bool FlowOffloadFixed { get; private set; }
+    public bool? Ipv6Enabled { get; private set; }
+
     public List<JsonObject> Calls { get; } = [];
     public List<string> RawBodies { get; } = [];
     readonly HashSet<string> _sessions = [];
@@ -127,6 +151,11 @@ public sealed class FakeRouter : IDisposable
             await Write(ctx, Result(0, $$$"""{"error":{"code":"invalid","text":"Неверное значение","field":"{{{inv.Field}}}"}}"""));
             return;
         }
+        if (ConflictOnEnable && method is "enable" or "select_start")
+        {
+            await Write(ctx, Result(0, """{"error":{"code":"conflict","text":"Работает чужой обход"}}"""));
+            return;
+        }
         if (BusyOn == method) { await Write(ctx, Result(0, """{"error":{"code":"busy","text":"Идёт подбор"}}""")); return; }
 
         await Write(ctx, Result(0, method switch
@@ -156,23 +185,28 @@ public sealed class FakeRouter : IDisposable
                 AutoSelect = args["auto_select"]?.GetValue<bool>() ?? false;
             }),
             "mode_set" => Do(() => Mode = args["mode"]!.GetValue<string>(), """{ "started": true }"""),
-            "site_check" => Do(() => SiteCheckUrl = args["url"]!.GetValue<string>(), """{ "started": true }"""),
+            "site_check" => Do(() => { SiteCheckUrl = args["url"]!.GetValue<string>(); _sitePolls = 0; }, """{ "started": true }"""),
             "site_check_result" => $$"""
-                { "running": false, "url": "{{SiteCheckUrl}}", "with_bypass": { "ok": false, "detail": "сброс после 16 КБ" },
-                  "without_bypass": { "ok": true, "detail": "" }, "suggest_exclude": true }
+                { "running": {{(_sitePolls++ < SiteCheckRunningPolls ? "true" : "false")}}, "url": "{{SiteCheckUrl}}",
+                  "with_bypass": { "ok": {{(SiteWithBypassOk ? "true" : "false")}}, "detail": "{{(SiteWithBypassOk ? "" : "сброс после 16 КБ")}}" },
+                  "without_bypass": { "ok": {{(SiteWithoutBypassOk ? "true" : "false")}}, "detail": "" },
+                  "suggest_exclude": {{(!SiteWithBypassOk && SiteWithoutBypassOk ? "true" : "false")}} }
                 """,
-            "dns_status" => """
-                { "mode": "provider", "spoofed": true, "checked_at": "2026-10-17T10:00:00Z",
-                  "servers": [ { "name": "Google", "doh_ok": true, "ms": 38 }, { "name": "Cloudflare", "doh_ok": true, "ms": 41 } ],
-                  "fallback_active": false, "job": { "action": "dns_enable", "running": false, "ok": true, "message": "Готово", "at": "2026-10-17T10:01:00Z" } }
-                """,
-            "dns_analyze" or "dns_enable" or "dns_restore" => """{ "started": true }""",
+            "dns_status" => DnsStatus(),
+            "dns_analyze" or "dns_enable" or "dns_restore" => Do(() =>
+            {
+                _dnsAction = method; _dnsPolls = 0; _dnsAt = _dnsAt.AddMinutes(1);
+                _dnsTarget = method switch { "dns_enable" => "doh", "dns_restore" => "provider", _ => null };
+            }, """{ "started": true }"""),
+            "flow_offload_fix" => Do(() => { FlowOffloadFixed = true; WarningsJson = "[]"; }, """{ "changed": true, "flowoffload": "software" }"""),
+            "ipv6_set" => Do(() => { Ipv6Enabled = args["enabled"]!.GetValue<bool>(); WarningsJson = "[]"; }),
+            "lists_set" => Do(() => Lists[args["name"]!.GetValue<string>()] = args["lines"]!.AsArray().Select(x => x!.GetValue<string>()).ToList()),
             "select_progress" => Progress(),
             "targets_get" => """{ "items": [ { "url": "https://example.com/", "important": true } ] }""",
             "lists_get" => args["name"]?.GetValue<string>() == "exclude"
                 ? """{ "lines": ["gosuslugi.ru"], "editable": false }"""
-                : """{ "lines": ["example.com"], "editable": true }""",
-            "diag" => """{ "conflicts": [ { "kind": "service", "name": "zapret2", "running": true } ], "flow_offload": false, "ipv6_wan": false, "dns": { "spoofed": true, "checked_at": "2026-10-16T21:00:00Z" }, "overlay_free_kb": 18000 }""",
+                : $$"""{ "lines": {{System.Text.Json.JsonSerializer.Serialize(Lists.GetValueOrDefault(args["name"]!.GetValue<string>()) ?? ["example.com"])}}, "editable": true }""",
+            "diag" => $$"""{ "conflicts": {{ConflictsJson}}, "flow_offload": {{(FlowOffloadFixed ? "false" : "true")}}, "ipv6_wan": true, "dns": { "spoofed": true, "checked_at": "2026-10-16T21:00:00Z" }, "overlay_free_kb": 18000 }""",
             "report" => """{ "text": "отчёт роутера" }""",
             "core_install" => """{ "started": true }""",
             _ => "{}",
@@ -180,6 +214,23 @@ public sealed class FakeRouter : IDisposable
     }
 
     static string Do(Action a, string payload = "{}") { a(); return payload; }
+
+    /// <summary>Свои списки после lists_set (до него — пример §5.1).</summary>
+    public Dictionary<string, List<string>> Lists { get; } = [];
+
+    string DnsStatus()
+    {
+        bool running = _dnsPolls < DnsJobRunningPolls;
+        if (_dnsPolls != int.MaxValue) _dnsPolls++;
+        if (!running && _dnsTarget is { } m && DnsJobOk) { DnsMode = m; _dnsTarget = null; }
+        var at = DnsJobAt ? $", \"at\": \"{_dnsAt:yyyy-MM-dd'T'HH:mm:ss'Z'}\"" : "";
+        return $$"""
+            { "mode": "{{DnsMode}}", "spoofed": {{(DnsSpoofed ? "true" : "false")}}, "checked_at": "2026-10-17T10:00:00Z",
+              "servers": [ { "name": "Google", "doh_ok": true, "ms": 38 }, { "name": "Cloudflare", "doh_ok": true, "ms": 41 } ],
+              "fallback_active": false,
+              "job": { "action": "{{_dnsAction}}", "running": {{(running ? "true" : "false")}}, "ok": {{(running ? "null" : DnsJobOk ? "true" : "false")}}, "message": "{{(running ? "" : DnsJobOk ? "Готово" : "Не удалось установить пакет")}}"{{at}} } }
+            """;
+    }
 
     string Step0(string payload) { _selectStep = -1; _cancelled = false; return payload; }
 
