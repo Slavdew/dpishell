@@ -132,6 +132,14 @@ function core_installed() {
 
 function last_check() { return read_json(`${P.run}/last-check.json`, null) ?? read_json(`${P.etc}/last-check.json`, null); }
 
+// Время в ответах API — ISO 8601 UTC (07-router-api §5); внутри храним секунды.
+function iso(t) {
+	if (t == null)
+		return null;
+	let g = gmtime(t);
+	return sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ', g.year, g.mon, g.mday, g.hour, g.min, g.sec);
+}
+
 function write_status_json() {
 	let s = settings(), lc = last_check();
 	let pub = {
@@ -147,14 +155,6 @@ function write_status_json() {
 function job_running(name) {
 	let pid = +trim(readfile(`${P.run}/${name}.lock`) ?? '');
 	return !!(pid && stat(`/proc/${pid}`));
-}
-
-// Время в ответах API — ISO 8601 UTC (07-router-api §5); внутри храним секунды.
-function iso(t) {
-	if (t == null)
-		return null;
-	let g = gmtime(t);
-	return sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ', g.year, g.mon, g.mday, g.hour, g.min, g.sec);
 }
 
 function valid_domain_line(l) {

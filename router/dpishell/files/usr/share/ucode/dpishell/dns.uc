@@ -135,31 +135,6 @@ function pkg(action, name) {
 	return sh(`opkg ${action == 'install' ? 'update >/dev/null; opkg install' : 'remove'} ${q(name)}`);
 }
 
-function enable() {
-	let t = doh_timing();
-	if (!length(filter(t, x => x.doh_ok)))
-		return 'Серверы защищённого DNS недоступны — включать нельзя, сеть останется без DNS';
-	if (!stat(BACKUP)) {
-		let c = cursor();
-		let sec = c.get_first('dhcp', 'dnsmasq');
-		st.write_atomic(BACKUP, sprintf('%J\n', {
-			at: time(), section: sec,
-			noresolv: c.get('dhcp', sec, 'noresolv'), server: c.get('dhcp', sec, 'server'),
-			peerdns: c.get('network', 'wan', 'peerdns'),
-		}));
-	}
-	let r = pkg('install', 'https-dns-proxy');
-	if (r.rc != 0 && !stat('/etc/init.d/https-dns-proxy'))
-		return `Не удалось установить https-dns-proxy: ${trim(r.out)}`;
-	sh('/etc/init.d/https-dns-proxy enable; /etc/init.d/https-dns-proxy restart');
-	sh('sleep 2');
-	if (!resolves_locally()) {
-		restore();
-		return 'Защищённый DNS не заработал — всё возвращено как было';
-	}
-	return null;
-}
-
 function restore() {
 	let b = st.read_json(BACKUP, null);
 	if (stat('/etc/init.d/https-dns-proxy'))
@@ -189,6 +164,32 @@ function restore() {
 	}
 	return 'DNS роутера не отвечает после возврата — перезагрузите роутер';
 }
+
+function enable() {
+	let t = doh_timing();
+	if (!length(filter(t, x => x.doh_ok)))
+		return 'Серверы защищённого DNS недоступны — включать нельзя, сеть останется без DNS';
+	if (!stat(BACKUP)) {
+		let c = cursor();
+		let sec = c.get_first('dhcp', 'dnsmasq');
+		st.write_atomic(BACKUP, sprintf('%J\n', {
+			at: time(), section: sec,
+			noresolv: c.get('dhcp', sec, 'noresolv'), server: c.get('dhcp', sec, 'server'),
+			peerdns: c.get('network', 'wan', 'peerdns'),
+		}));
+	}
+	let r = pkg('install', 'https-dns-proxy');
+	if (r.rc != 0 && !stat('/etc/init.d/https-dns-proxy'))
+		return `Не удалось установить https-dns-proxy: ${trim(r.out)}`;
+	sh('/etc/init.d/https-dns-proxy enable; /etc/init.d/https-dns-proxy restart');
+	sh('sleep 2');
+	if (!resolves_locally()) {
+		restore();
+		return 'Защищённый DNS не заработал — всё возвращено как было';
+	}
+	return null;
+}
+
 
 // Таймер: оба DoH-сервера пропали — временно DNS провайдера; вернулись — снова защищённый (06 §3.8).
 function watch() {

@@ -16,6 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Порядок объявлений функций ucode
+        run: python3 router/tools/check-order.py
+
       - name: Пакеты в дерево SDK, данные из data/
         run: |
           SDK=/builder
