@@ -29,7 +29,9 @@ var PARAMS = {
 	targets_set: ['items'],
 	lists_set: ['name', 'lines'],
 	strategies_user_set: ['items'],
-	conflict_stop: ['name']
+	conflict_stop: ['name'],
+	flow_offload_fix: [],
+	ipv6_set: ['enabled']
 };
 
 var declared = {};

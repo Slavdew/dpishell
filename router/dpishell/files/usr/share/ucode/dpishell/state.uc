@@ -93,6 +93,7 @@ function settings() {
 		backups: type(backups) == 'array' ? backups : [backups],
 		mode: uci_get('mode', 'all'),
 		ipv6: uci_get('ipv6', '0') == '1',
+		flowoffload: uci_get('flowoffload', 'none'),
 		schedule: {
 			enabled: uci_get('schedule_enabled', '1') == '1',
 			hours: +uci_get('schedule_hours', '1'),
@@ -111,7 +112,7 @@ function catalogs() { return [catalog(), user_catalog(), found_catalog()]; }
 function build_opts(s) {
 	return {
 		mode: s.mode, lists_dir: P.lists, fake_dir: P.fake,
-		ipset_file: 'ipset-none.txt', ipv6: s.ipv6, features: {},
+		ipset_file: 'ipset-none.txt', ipv6: s.ipv6, flowoffload: s.flowoffload, features: {},
 	};
 }
 

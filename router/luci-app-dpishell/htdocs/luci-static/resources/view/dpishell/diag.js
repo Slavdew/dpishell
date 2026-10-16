@@ -87,14 +87,17 @@ return view.extend({
 		(d.conflicts || []).forEach(function(c) {
 			if (!c.running)
 				return;
+			if (c.kind == 'package')
+				return kids.push(finding('warning', 'Установлен другой zapret (пакет ' + c.name + ') — он занимает те же файлы. Удалите его: Сервисы → Дополнения или apk del ' + c.name + '. До этого включение и подбор заблокированы.'));
 			kids.push(finding('warning', 'Работает другой обход: ' + c.name + '. Пока он работает, включение и подбор заблокированы.',
 				api.btn('Остановить', function() { return self.conflictStop(c.name); }, 'cbi-button-remove')));
 		});
 		if (d.flow_offload)
-			kids.push(finding('warning', 'Включено аппаратное ускорение межсетевого экрана (flow offloading) — обход с ним не работает. Выключите его в настройках межсетевого экрана.',
-				api.btn('Открыть настройки', function() { window.location.href = L.url('admin/network/firewall'); }, 'cbi-button-neutral')));
+			kids.push(finding('warning', 'Включено ускорение межсетевого экрана (flow offloading) — с ним обход не работает. Ускорение можно передать zapret: скорость та же, обход работает.',
+				api.btn('Передать zapret', function() { return self.act('flow_offload_fix'); }, 'cbi-button-apply')));
 		if (d.ipv6_wan)
-			kids.push(finding('notice', 'У роутера есть адрес IPv6 от провайдера. Обход по IPv6 сейчас выключен — сайты могут открываться в обход него.'));
+			kids.push(finding('notice', 'У роутера есть адрес IPv6 от провайдера. Обход по IPv6 сейчас выключен — сайты могут открываться в обход него.',
+				api.btn('Включить обход по IPv6', function() { return self.act('ipv6_set', { enabled: true }); }, 'cbi-button-apply')));
 		if (d.dns && d.dns.spoofed)
 			kids.push(finding('warning', 'Провайдер подменяет ответы DNS' + (d.dns.checked_at ? ' (проверено ' + api.time(d.dns.checked_at) + ')' : ''),
 				api.btn('Включить защищённый DNS', function() { api.dnsEnableDialog(function() { self.reload(); }); }, 'cbi-button-apply')));
@@ -134,6 +137,16 @@ return view.extend({
 			self.coreTicks = 600;
 			self.status.jobs.core_install = true;
 			self.renderCore();
+		}, function(e) {
+			self.el.err.textContent = api.text(e);
+		});
+	},
+
+	act: function(method, args) {
+		var self = this;
+		this.el.err.textContent = '';
+		return api.call(method, args).then(function() {
+			return self.reload();
 		}, function(e) {
 			self.el.err.textContent = api.text(e);
 		});

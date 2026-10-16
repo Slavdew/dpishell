@@ -360,22 +360,24 @@ function deep_search(p, groups, s, ts_was, cache) {
 			if (!control_ok()) { state.stop = 'limited'; break; }
 		}
 
-		// Уточнение вокруг трёх лучших семейств, по одному параметру за шаг.
+		// Уточнение «первое улучшение» (как StrategySearch.RefineAsync): семейства по очереди, от каждого шагаем
+		// к первому соседу лучше текущего, пока улучшения есть. Бюджет общий, проверенное не повторяется (try_c → null);
+		// контроль провайдера — после каждого кандидата, до сравнения. Обход слоями тратил бюджет на первый слой соседей.
 		let budget = SEARCH_REFINE;
-		let frontier = filter(srch.best(results, 3), r => r.ok > 0);
-		while (!state.stop && budget > 0 && length(frontier)) {
-			let next = [];
-			for (let f in frontier) {
-				for (let n in srch.neighbours(f.desync)) {
+		for (let seed in filter(srch.best(results, 3), r => r.ok > 0)) {
+			let current = seed, improved = true;
+			while (improved && budget > 0 && !state.stop) {
+				improved = false;
+				for (let n in srch.neighbours(current.desync)) {
 					if (budget <= 0 || state.stop) break;
 					let r = try_c(n);
 					if (r == null) continue;
 					budget--;
-					if (srch.cand_better(r, f)) push(next, r);
 					if (!control_ok()) { state.stop = 'limited'; break; }
+					if (srch.cand_better(r, current)) { current = r; improved = true; break; }
 				}
 			}
-			frontier = srch.best(next, 3);
+			if (budget <= 0 || state.stop) break;
 		}
 		by_role[role] = results;
 		if (state.stop) break;

@@ -20,6 +20,12 @@ function busy() {
 	return st.job_running('select') ? err('busy', 'Идёт подбор') : null;
 }
 
+// Чужой обход работает — включение и подбор заблокированы (06 §7): два обхода обрабатывали бы одни пакеты.
+function conflict() {
+	let running = filter(dg.conflicts(), c => c.running);
+	return length(running) ? err('conflict', `Работает другой обход: ${join(', ', map(running, c => c.name))} — остановите его на вкладке «Диагностика»`) : null;
+}
+
 function sh(cmd) {
 	let p = popen(`${cmd} 2>&1`);
 	let out = p ? p.read('all') : '';
@@ -38,6 +44,13 @@ function warnings(s) {
 	let w = [];
 	if (!st.core_installed())
 		push(w, { code: 'core_missing', text: 'Ядро обхода не установлено' });
+	let running = filter(dg.conflicts(), c => c.running);
+	if (length(running))
+		push(w, { code: 'conflict', text: `Работает другой обход: ${join(', ', map(running, c => c.name))}` });
+	if (dg.flow_offload())
+		push(w, { code: 'flow_offload', text: 'Включено ускорение межсетевого экрана (flow offloading) — с ним обход не работает' });
+	if (!s.ipv6 && dg.ipv6_wan())
+		push(w, { code: 'ipv6', text: 'У роутера есть IPv6 от провайдера, а обход по IPv6 выключен' });
 	for (let x in st.read_json(`${st.P.run}/warnings.json`, []))
 		push(w, x);
 	return w;
@@ -98,7 +111,7 @@ const methods = {
 
 	enable: {
 		call: function() {
-			let b = busy(); if (b) return b;
+			let b = busy() ?? conflict(); if (b) return b;
 			let s = st.settings();
 			if (!s.strategy) {
 				// Без стратегии — лучшая по статистике (06 §3.2); подбор без статистики — в select.uc.
@@ -170,6 +183,51 @@ const methods = {
 			}
 			// Полная проверка с контрольной группой после смены режима — check.uc (06 §3.4).
 			return { started: false };
+		}
+	},
+
+	// Разгрузка из firewall передаётся zapret: та же скорость, но пакеты для nfqws в обход разгрузки (06 §3.6).
+	flow_offload_fix: {
+		call: function() {
+			let b = busy(); if (b) return b;
+			let fw = k => trim(sh(`uci -q get firewall.@defaults[0].${k}`).out) == '1';
+			let sw = fw('flow_offloading'), hw = fw('flow_offloading_hw');
+			let s = st.settings();
+			if (!sw && !hw)
+				return { changed: false, flowoffload: s.flowoffload };
+			let mode = hw ? 'hardware' : 'software';
+			let r = sh('uci set firewall.@defaults[0].flow_offloading=0 && uci set firewall.@defaults[0].flow_offloading_hw=0 && uci commit firewall');
+			if (r.rc != 0)
+				return err('failed', `firewall: ${trim(r.out)}`);
+			st.uci_set({ flowoffload: mode, fw_offload_prev: mode });
+			sh('/etc/init.d/firewall reload');
+			s.flowoffload = mode;
+			if (s.enabled && s.strategy) {
+				let e = st.write_zapret_config(s.strategy, s);
+				if (e) return err('failed', e);
+				let z = zapret('restart');
+				if (z) return z;
+			}
+			return { changed: true, flowoffload: mode };
+		}
+	},
+
+	ipv6_set: {
+		args: { enabled: true },
+		call: function(req) {
+			let b = busy(); if (b) return b;
+			if (type(req.args.enabled) != 'bool')
+				return err('invalid', 'enabled: true/false', 'enabled');
+			let s = st.settings();
+			s.ipv6 = req.args.enabled;
+			st.uci_set({ ipv6: s.ipv6 ? 1 : 0 });
+			if (s.enabled && s.strategy) {
+				let e = st.write_zapret_config(s.strategy, s);
+				if (e) return err('failed', e);
+				let z = zapret('restart');
+				if (z) return z;
+			}
+			return {};
 		}
 	},
 
@@ -296,7 +354,7 @@ const GROUPS = ['youtube', 'discord', 'user'];
 methods.select_start = {
 	args: { groups: [], mode: 'full', depth: 'main' },
 	call: function(req) {
-		let b = busy(); if (b) return b;
+		let b = busy() ?? conflict(); if (b) return b;
 		if (!st.core_installed()) return err('not_installed', 'Ядро обхода не установлено');
 		let a = req.args;
 		let groups = a.groups ?? GROUPS;

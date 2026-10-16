@@ -7,6 +7,7 @@ import { readfile } from 'fs';
 const TOKEN_RX = /^--[a-z0-9-]+(=[A-Za-z0-9_.,+=\/{}!-]+)?$/;
 const FILE_VALUE_RX = /^(\{fake\}\/[A-Za-z0-9_.-]+\.bin|0x[0-9A-Fa-f]+|!)$/;
 const MODES = { all: true, lists: true };
+const FLOWOFFLOAD = { none: true, software: true, hardware: true };
 
 function load_json(path) {
 	let text = readfile(path);
@@ -94,6 +95,9 @@ function build(strategy, roles, opts) {
 // Содержимое /opt/zapret/config. Значения проверены validate() и путями пакета: кавычек, $ и ` в них нет.
 function render_config(strategy, roles, opts) {
 	let tokens = build(strategy, roles, opts);
+	let fo = opts.flowoffload ?? 'none';
+	if (!FLOWOFFLOAD[fo])
+		die(`неизвестный FLOWOFFLOAD ${fo}`);
 	for (let t in tokens)
 		if (match(t, /["$`\\]/))
 			die(`недопустимый символ в аргументе: ${t}`);
@@ -110,7 +114,8 @@ function render_config(strategy, roles, opts) {
 		'NFQWS_UDP_PKT_IN=0',
 		`NFQWS_OPT="${join(' ', tokens)}"`,
 		'MODE_FILTER=none',
-		'FLOWOFFLOAD=none',
+		// software/hardware — разгрузку ведёт zapret со своим исключением для пакетов nfqws (06 §3.6), firewall её не включает.
+		`FLOWOFFLOAD=${fo}`,
 		'INIT_APPLY_FW=1',
 		`DISABLE_IPV6=${opts.ipv6 ? 0 : 1}`,
 		'DESYNC_MARK=0x40000000',

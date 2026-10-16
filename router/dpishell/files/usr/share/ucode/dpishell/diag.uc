@@ -4,6 +4,7 @@
 import { readfile, stat, popen, lsdir, readlink } from 'fs';
 import * as st from 'dpishell.state';
 import * as pr from 'dpishell.probe';
+import * as core from 'dpishell.core';
 
 // Чужие обходы, которые мешают нашему (06 §3.6). Имя — init-скрипт в /etc/init.d.
 const CONFLICTS = ['zapret2', 'youtubeUnblock', 'b4', 'zapret-manager', 'zapret-manager-beam', 'byedpi', 'podkop'];
@@ -23,6 +24,9 @@ function conflicts() {
 	for (let n in CONFLICTS)
 		if (stat(`/etc/init.d/${n}`))
 			push(out, { kind: 'service', name: n, running: sh(`/etc/init.d/${n} running`).rc == 0 });
+	// Пакеты другого zapret: остановить их нельзя — только удалить (07 §5.1, kind: package).
+	for (let n in core.foreign_packages())
+		push(out, { kind: 'package', name: n, running: true });
 	// nfqws/nfqws2 не из нашего ядра.
 	for (let pid in lsdir('/proc') ?? []) {
 		if (!match(pid, /^[0-9]+$/))
@@ -106,4 +110,4 @@ function site_check(url) {
 	};
 }
 
-export { conflicts, conflict_stop, diag, report, site_check, flow_offload };
+export { conflicts, conflict_stop, diag, report, site_check, flow_offload, ipv6_wan };

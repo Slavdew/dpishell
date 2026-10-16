@@ -83,7 +83,8 @@
 
 ### 3.6 Диагностика
 - Чужие обходы: службы `zapret2`, `youtubeUnblock`, `b4`, пакет `zapret-manager-beam`, процессы `nfqws`/`nfqws2` не нашего запуска. Пока работают — включение и подбор заблокированы, кнопка «Остановить» (stop + disable).
-- `flow_offloading=1` в uci firewall → предупреждение и «Выключить».
+- `flow_offloading=1` в uci firewall → предупреждение и «Передать zapret» (`flow_offload_fix`): разгрузка в firewall выключается, в config zapret — `FLOWOFFLOAD=software|hardware`, zapret ведёт свою flowtable с исключением для пакетов nfqws (скорость не теряется). Прежнее значение — `dpishell.main.fw_offload_prev`, при удалении пакета возвращается.
+- Чужой zapret пакетом (`zapret`/`luci-app-zapret`/`zapret-manager-beam`/`zapret2` — Zapret Manager в сторонняя прошивка OpenWrt) занимает `/opt/zapret` и `/etc/init.d/zapret`: конфликт `kind: package`, установка ядра отказывает, включение и подбор заблокированы до удаления.
 - IPv6: глобальный адрес на `wan6` → «Включить обход по IPv6» (`DISABLE_IPV6=0`). У пользователя сейчас IPv6 нет.
 - DNS — §3.8.
 - «Сохранить отчёт»: версии, хеши, config zapret, `nft list table inet zapret`, настройки DNS, хвост `logread`.

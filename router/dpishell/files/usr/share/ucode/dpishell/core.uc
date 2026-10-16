@@ -62,7 +62,19 @@ function download(m, progress) {
 }
 
 // Разложить zapret в /opt/zapret. Свой config пишет state.write_zapret_config.
+// Пакеты, которые сами владеют /opt/zapret и /etc/init.d/zapret (Zapret Manager в сторонняя прошивка OpenWrt ставит zapret от remittor):
+// наше ядро и их файлы затирали бы друг друга при каждой установке и обновлении.
+const FOREIGN_PACKAGES = ['zapret', 'luci-app-zapret', 'zapret-manager-beam', 'zapret2', 'luci-app-zapret2'];
+
+function foreign_packages() {
+	// Списки файлов пакетов: apk — /lib/apk/packages/<имя>.list, opkg — /usr/lib/opkg/info/<имя>.control (без запуска apk).
+	return filter(FOREIGN_PACKAGES, n => stat(`/lib/apk/packages/${n}.list`) || stat(`/usr/lib/opkg/info/${n}.control`));
+}
+
 function install(progress) {
+	let fp = foreign_packages();
+	if (length(fp))
+		return `Установлен другой zapret (${join(', ', fp)}) — он занимает /opt/zapret. Удалите его (Сервисы → Дополнения или apk del ${join(' ', fp)}) и повторите.`;
 	let m = manifest();
 	let a = arch();
 	if (!a || !m.nfqws[a])
@@ -120,4 +132,4 @@ function verify() {
 	return h != null && a != null && h == m.nfqws[a];
 }
 
-export { arch, install, verify };
+export { arch, install, verify, foreign_packages };

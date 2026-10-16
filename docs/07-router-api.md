@@ -101,6 +101,8 @@
 | `dns_enable` | `{}` | включить защищённый DNS для всей сети, прежние настройки сохраняются | `{ "started": true }` |
 | `dns_restore` | `{}` | вернуть DNS как было | `{ "started": true }` |
 | `conflict_stop` | `{ "name": "zapret2" }` (только имя из `diag.conflicts`) | остановить и отключить чужой обход | `{}` |
+| `flow_offload_fix` | `{}` | разгрузку из межсетевого экрана передать zapret (`FLOWOFFLOAD=software`, при аппаратной — `hardware`): та же скорость, пакеты для nfqws — в обход разгрузки; при удалении пакета разгрузка возвращается межсетевому экрану | `{ "changed": true, "flowoffload": "software" }` |
+| `ipv6_set` | `{ "enabled": true }` | обход по IPv6 (`DISABLE_IPV6=0`); перезапуск zapret, если включён | `{}` |
 | `core_install` | `{}` | загрузить ядро по манифесту | `{ "started": true }` |
 
 Роутер проверяет всё сам: стратегии — по `options.json`, домены — по шаблону, длины — по лимитам. Командной строки и путей от клиента не принимает.
@@ -167,3 +169,4 @@
 - 2026-10-17 (по проверке страницы LuCI): `status.jobs.dns` — любое DNS-задание (`dns_analyze` оставлен с тем же значением); `select_progress.index` — номер проверяемой стратегии с 1; `site_check.url` принимает и голое имя (`example.com` → `https://example.com/`). Действий «выключить flow offloading» и «включить IPv6» в API пока нет — страница ведёт в настройки межсетевого экрана; добавить вместе с роутером v1.1.
 - 2026-10-17: группа `control` в `targets.json` опознаётся по полю `"control": true` (как `TargetGroup.Control` на ПК); стратегию бракуют только `required`-цели этой группы, в счёт успеха она не входит.
 - 2026-10-17: глубокий поиск на роутере (`select_start` с `depth: deep`). В `select_progress.rows` у кандидатов — `candidate: true`, `ok`, `total` (открылось обязательных целей роли); найденные стратегии — id `r-…`, `source: user` в `strategies`, хранятся отдельно от присланных `strategies_user_set`. Исправлено: доли `group_share`/`target_share` дробные (ucode делил целые нацело — частичный успех показывался как 0).
+- 2026-10-17: `flow_offload_fix`, `ipv6_set`; предупреждения `flow_offload`, `ipv6`, `conflict` теперь выдаются в `status.warnings`; `enable`/`select_start` при работающем чужом обходе — ошибка `conflict`; в `diag.conflicts` — `kind: package` (пакеты `zapret`, `luci-app-zapret`, `zapret-manager-beam`, `zapret2` — Zapret Manager в сторонняя прошивка OpenWrt, занимает `/opt/zapret`): `conflict_stop` их не останавливает, только удаление; `core_install` при них отказывает.

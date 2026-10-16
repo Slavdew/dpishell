@@ -240,7 +240,10 @@ return view.extend({
 				action = api.btn('Подобрать', function() { return self.openSelect(); }, 'cbi-button-apply');
 				break;
 			case 'flow_offload':
-				action = api.btn('Открыть настройки', function() { window.location.href = L.url('admin/network/firewall'); }, 'cbi-button-neutral');
+				action = api.btn('Передать zapret', function() { return self.act('flow_offload_fix'); }, 'cbi-button-apply');
+				break;
+			case 'ipv6':
+				action = api.btn('Включить обход по IPv6', function() { return self.act('ipv6_set', { enabled: true }); }, 'cbi-button-apply');
 				break;
 			case 'dns_fallback':
 				action = api.btn('Подробнее', function() { api.go('dns'); }, 'cbi-button-neutral');
