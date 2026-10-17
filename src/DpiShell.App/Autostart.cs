@@ -79,7 +79,7 @@ public sealed class Autostart(WindowSettings settings) : Observable
 
     public string Hint => _serviceMode == false
         ? "Без режима службы обход работает, пока открыта программа, — так он включится после входа."
-        : "Окно откроется в трее после входа. Служба обхода стартует и без него.";
+        : "Окно откроется в трее после входа. Обход стартует и без него.";
 
     /// <summary>Режим помощника стал известен или сменился — выбор по умолчанию следует за ним.</summary>
     public void OnRunMode(bool service)

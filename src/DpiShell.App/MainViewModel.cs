@@ -13,7 +13,7 @@ public enum StatusKind { Off, On, Busy, Error }
 
 public static class Pages
 {
-    public const int Home = 0, Select = 1, Targets = 2, Net = 3, Hosts = 4, Diag = 5, Router = 6;
+    public const int Home = 0, Select = 1, Targets = 2, Net = 3, Hosts = 4, Diag = 5, Router = 6, Settings = 7;
 }
 
 /// <summary>
@@ -150,7 +150,7 @@ public sealed partial class MainViewModel : Observable
     public bool HasHelperProblem => HelperProblem.Length > 0;
     public string FixHelperText => Helper.State == HelperState.Outdated ? "Обновить помощника" : "Переустановить помощника";
 
-    /// <summary>Строка «Помощник» на «Диагностике».</summary>
+    /// <summary>Состояние помощника — в «Настройках» → «О программе».</summary>
     public string HelperText => Helper.State switch
     {
         HelperState.Connected => "работает" + (Helper.Reader?.HelperVersion is { Length: > 0 } v ? $" (версия {v})" : ""),
@@ -168,7 +168,7 @@ public sealed partial class MainViewModel : Observable
 
     void OnHelperChanged()
     {
-        foreach (var p in new[] { nameof(NeedsHelper), nameof(HelperProblem), nameof(HasHelperProblem), nameof(FixHelperText), nameof(HelperText), nameof(CanUninstallHelper) })
+        foreach (var p in new[] { nameof(NeedsHelper), nameof(HelperProblem), nameof(HasHelperProblem), nameof(FixHelperText), nameof(HelperText), nameof(CanUninstallHelper), nameof(AboutText) })
             Raise(p);
         CommandManager.InvalidateRequerySuggested();
     }
@@ -1149,6 +1149,25 @@ public sealed partial class MainViewModel : Observable
 
     public string CoreFolder => _shell.Paths.Core;
 
+    /// <summary>Путь для исключения Защитника — не переписывать руками (п. 16 аудита).</summary>
+    public ICommand CopyCoreFolderCmd => _copyCoreFolderCmd ??= new RelayCommand(() =>
+    {
+        try { Clipboard.SetText(CoreFolder); Message = "Путь скопирован: " + CoreFolder; }
+        catch (System.Runtime.InteropServices.ExternalException) { Message = "Не удалось скопировать — буфер обмена занят другой программой."; }
+    });
+    ICommand? _copyCoreFolderCmd;
+
+    /// <summary>«Безопасность Windows» → параметры защиты от вирусов (там «Исключения»).</summary>
+    public ICommand OpenDefenderCmd => _openDefenderCmd ??= new RelayCommand(() =>
+    {
+        try { Process.Start(new ProcessStartInfo("windowsdefender://threatsettings") { UseShellExecute = true }); }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Message = "Не удалось открыть «Безопасность Windows»: " + e.Message; }
+    });
+    ICommand? _openDefenderCmd;
+
+    /// <summary>«Настройки» → «О программе»: версия окна и состояние помощника.</summary>
+    public string AboutText => $"DpiShell {typeof(MainViewModel).Assembly.GetName().Version?.ToString(3)} · помощник: {HelperText}";
+
     public ICommand RefreshDiagCmd { get; }
     public ICommand RepairCoreCmd { get; }
     public ICommand OpenLogsCmd { get; }
@@ -1156,7 +1175,7 @@ public sealed partial class MainViewModel : Observable
     public ICommand RemoveServiceCmd { get; }
 
     bool _diagRefreshing;
-    /// <summary>Идёт обновление «Диагностики» — кнопка показывает «Обновляю…» и не нажимается.</summary>
+    /// <summary>Идёт обновление «Диагностики» — кнопка показывает «Проверяю…» и не нажимается.</summary>
     public bool DiagRefreshing { get => _diagRefreshing; private set { if (Set(ref _diagRefreshing, value)) { Raise(nameof(RefreshButtonText)); CommandManager.InvalidateRequerySuggested(); } } }
     public string RefreshButtonText => DiagRefreshing ? "Проверяю…" : "Проверить снова";
 

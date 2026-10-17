@@ -134,7 +134,7 @@ public sealed class WindowSmokeTests
     }).GetAwaiter().GetResult();
 
     static readonly (int Page, string Name)[] AllPages =
-        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Targets, "targets"), (Pages.Net, "net"), (Pages.Hosts, "hosts"), (Pages.Diag, "diag")];
+        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Targets, "targets"), (Pages.Net, "net"), (Pages.Hosts, "hosts"), (Pages.Diag, "diag"), (Pages.Settings, "settings")];
 
     [Fact]
     public void MainWindow_OpensAndAllPagesBind_WithoutErrors()
@@ -146,7 +146,7 @@ public sealed class WindowSmokeTests
             var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
             var w = Open(vm);
             var tabs = Find<TabControl>(w)!;
-            foreach (var page in new[] { Pages.Select, Pages.Targets, Pages.Net, Pages.Hosts, Pages.Diag, Pages.Home })
+            foreach (var page in new[] { Pages.Select, Pages.Targets, Pages.Net, Pages.Hosts, Pages.Diag, Pages.Router, Pages.Settings, Pages.Home })
             {
                 vm.Page = page;
                 Pump();
@@ -214,7 +214,7 @@ public sealed class WindowSmokeTests
                     Directory.CreateDirectory(snapDir);
                     Snap(w, Path.Combine(snapDir, $"{theme}-loading.png"));
                 }
-                foreach (var (page, name) in AllPages)
+                foreach (var (page, name) in AllPages.Append((Pages.Router, "router-none")))
                 {
                     // Пока «загрузка» — смена вкладки не запускает проверку службы (sc.exe); потом снять заставку для снимка.
                     SetProp(vm, "IsLoading", true);
@@ -226,7 +226,24 @@ public sealed class WindowSmokeTests
                         if (vm.Autostart.Enabled != (theme == ThemeManager.Dark))
                             throw new Exception("Автозапуск по умолчанию: включён без службы, выключен в режиме службы");
                     }
-                    if (page == Pages.Diag) AssertServiceMode(w, vm);
+                    if (page == Pages.Settings) AssertServiceMode(w, vm);
+                    // Роутера нет — вкладка всё равно есть: пустое состояние и адрес (UX-аудит п. 47).
+                    if (page == Pages.Router && Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Роутер с DpiShell не найден" && t.IsVisible) is null)
+                        throw new Exception("На вкладке «Роутер» без роутера нет пустого состояния");
+                    // Вход на роутер — небольшое окно на месте (п. 14): Enter — «Войти», Esc — «Отмена».
+                    if (page == Pages.Router)
+                    {
+                        var login = RouterLoginDialog.Create(vm.Router, null);
+                        login.WindowStartupLocation = WindowStartupLocation.Manual;
+                        login.Left = login.Top = -20000;
+                        login.ShowActivated = false;
+                        login.Show();
+                        Pump();
+                        if (Find<Button>(login, b => b.IsDefault && b.Content as string == "Войти") is null || Find<Button>(login, b => b.IsCancel) is null || Find<PasswordBox>(login) is null)
+                            throw new Exception("В окне входа нет пароля, «Войти» по Enter или «Отмена» по Esc");
+                        if (snapDir is not null) Snap(login, Path.Combine(snapDir, $"{theme}-router-login.png"));
+                        login.Close();
+                    }
                     if (snapDir is null) continue;
                     SetProp(vm, "IsLoading", false);
                     typeof(MainViewModel).GetMethod("UpdateStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
@@ -260,19 +277,23 @@ public sealed class WindowSmokeTests
                         sv.ScrollToVerticalOffset(card.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-diag-checks.png"));
-                        // Настройки (автозапуск) и «Обновления».
-                        var settingsCard = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Настройки")!;
-                        sv.ScrollToVerticalOffset(settingsCard.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
-                        Pump();
-                        Snap(w, Path.Combine(snapDir, $"{theme}-diag-updates.png"));
-                        // DNS: проверка подмены и «DNS этого компьютера» (свой вариант раскрыт).
-                        var dnsCard = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "DNS этого компьютера")!;
+                        // DNS — одна карточка: вывод проверки, таблица в «Подробнее» (раскрыта) и «DNS этого компьютера» (свой вариант раскрыт).
+                        var dnsCard = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "DNS" && t.IsVisible)!;
                         if (Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Свой вариант") is { } own) own.IsExpanded = true;
+                        if (Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Подробнее: ответы DNS") is { } answers) answers.IsExpanded = true;
                         Pump();
                         sv.ScrollToVerticalOffset(dnsCard.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-diag-dns.png"));
                         sv.ScrollToHome();
+                    }
+                    // Настройки: конец — «О программе» и «Очистка и удаление».
+                    if (page == Pages.Settings && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } stv)
+                    {
+                        stv.ScrollToEnd();
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-settings-end.png"));
+                        stv.ScrollToHome();
                     }
                     if (page == Pages.Net && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } nv)
                     {
