@@ -1,36 +1,31 @@
 #!/bin/sh
 # Набор для установки DpiShell на роутер без интернета (запасной путь, если GitHub с роутера недоступен).
 # Запуск на компьютере, где интернет работает (обход включён), из корня репозитория:
-#   sh router/tools/offline-bundle.sh [папка] [customfeeds.list с роутера]
-# Без второго аргумента — фиды сторонняя прошивка OpenWrt 1.4.8 (роутер); KEYS_DIR=<папка> — ключи других фидов. Для другой прошивки взять с роутера
-# /etc/apk/repositories.d/customfeeds.list (там адрес модулей ядра под её хеш) и передать путь к нему.
+#   sh router/tools/offline-bundle.sh <папка> <feeds.tgz с роутера>
+# feeds.tgz — фиды, ключи и версия прошивки самого роутера (там адрес модулей ядра под его хеш):
+#   на роутере: tar -czf /tmp/feeds.tgz /etc/apk/repositories.d /etc/apk/keys /etc/openwrt_release
 # Пакеты разрешает и качает apk в эмуляторе (C:\Dev\owrt-vm) в отдельном пустом корне — система эмулятора не меняется;
-# подписи индексов проверяются ключами router/keys (сторонняя прошивка OpenWrt — из образа 1.4.8, DpiShell — наш).
-# На роутер: scp -r <папка> root@<роутер>:/tmp/dpishell-offline && ssh root@<роутер> sh /tmp/dpishell-offline/install.sh
+# подписи индексов проверяются ключами роутера и ключом DpiShell (router/keys/dpishell.pem).
+# На роутер: scp -O -r <папка> root@<роутер>:/tmp/dpishell-offline && ssh root@<роутер> sh /tmp/dpishell-offline/install.sh
 set -e
 VM=${VM:-/c/Dev/owrt-vm}
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-OUT=${1:-$ROOT/router/offline-bundle}
+OUT=${1:-}
 FEEDS=${2:-}
-ARCH=aarch64_cortex-a73
-B=https://example.org/firmware-feed
+[ -n "$OUT" ] && [ -f "$FEEDS" ] || { sed -n '3,6p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 
 mkdir -p "$OUT"
 rm -f "$OUT"/*.apk "$OUT"/*.zip "$OUT"/SHA256SUMS "$OUT"/packages.txt
+FT=$(mktemp -d)
+# Через поток: GNU tar принимает «C:» в пути Windows за адрес удалённой машины.
+gzip -dc < "$FEEDS" | tar -xf - -C "$FT"
 
-# Фиды: прошивки (с роутера или 1.4.8) + витрина DpiShell.
-if [ -n "$FEEDS" ]; then
-	grep -E '^https?://' "$FEEDS" | tr -d '\r' > "$OUT/repos"
-	# Архитектура пакетов — из адресов фидов (aarch64_cortex-a73, mipsel_24kc, x86_64…), не из targets/<цель>/<подцель>.
-	a=$(grep -o -E '/(aarch64_[a-z0-9_-]+|arm_[a-z0-9_-]+|mips[a-z0-9]*_[a-z0-9_-]+|x86_64|i386_[a-z0-9_-]+)/' "$OUT/repos" | head -1 | tr -d /)
-	[ -n "$a" ] && ARCH=$a
-else
-	{
-		for d in base packages luci; do echo "$B/main-d958caf/$ARCH/$d/packages.adb"; done
-		echo "$B/targets/SoC/SoC/<vermagic>/packages/packages.adb"
-	} > "$OUT/repos"
-fi
+# Фиды прошивки (незакомментированные строки всех списков) + витрина DpiShell; архитектура — из openwrt_release.
+cat "$FT"/etc/apk/repositories.d/*.list 2>/dev/null | tr -d '\r' | grep -E '^https?://' > "$OUT/repos" || true
+[ -s "$OUT/repos" ] || { echo "В $FEEDS нет фидов apk (/etc/apk/repositories.d) — роутер без apk пока не поддерживается"; exit 1; }
 echo https://slavdew.github.io/dpishell/feed/packages.adb >> "$OUT/repos"
+ARCH=$(sed -n "s/^DISTRIB_ARCH='\(.*\)'/\1/p" "$FT/etc/openwrt_release")
+[ -n "$ARCH" ] || { echo "Не удалось узнать архитектуру роутера из $FEEDS"; exit 1; }
 echo "$ARCH" > "$OUT/ARCH"
 
 # Архив ядра zapret — с тех же адресов и с тем же хешем, что у установщика на роутере (core.json).
@@ -48,8 +43,7 @@ done
 [ -f "$OUT/$ZIPNAME" ] || { echo "Не удалось скачать $ZIPNAME с проверенным хешем"; exit 1; }
 
 # Пакеты с зависимостями — apk в эмуляторе, пустой корень, архитектура роутера.
-# KEYS_DIR — доп. ключи фидов (для другой прошивки — /etc/apk/keys с роутера).
-KT=$(mktemp -d); cp "$ROOT/router/keys/сторонняя прошивка OpenWrt.pem" "$ROOT/router/keys/dpishell.pem" "$KT/"; [ -n "$KEYS_DIR" ] && cp "$KEYS_DIR"/*.pem "$KT/"
+KT=$(mktemp -d); cp "$FT"/etc/apk/keys/*.pem "$KT/"; cp -f "$ROOT/router/keys/dpishell.pem" "$KT/"
 tar -C "$KT" -cf - . | "$VM/ssh.sh" 'R=/tmp/dpibundle; rm -rf $R; mkdir -p $R/keys $R/out $R/root/lib/apk/db $R/root/etc/apk; tar -C $R/keys -xf -'
 "$VM/ssh.sh" "cat > /tmp/dpibundle/repos; echo $ARCH > /tmp/dpibundle/root/etc/apk/arch" < "$OUT/repos"
 "$VM/ssh.sh" 'set -e; R=/tmp/dpibundle; touch $R/root/lib/apk/db/installed $R/root/etc/apk/world
@@ -66,6 +60,6 @@ tar -C "$KT" -cf - . | "$VM/ssh.sh" 'R=/tmp/dpibundle; rm -rf $R; mkdir -p $R/ke
 [ "$(ls "$OUT"/*.apk 2>/dev/null | wc -l)" -gt 0 ] && grep -q '^dpishell ' "$OUT/packages.txt" || { echo "Пакеты не скачались (архитектура $ARCH, фиды — см. выше)"; exit 1; }
 cp "$ROOT/router/keys/dpishell.pem" "$OUT/dpishell.pem"
 tr -d '\r' < "$ROOT/router/tools/offline-install.sh" > "$OUT/install.sh"
-rm -f "$OUT/repos"
+rm -rf "$OUT/repos" "$FT" "$KT"
 ( cd "$OUT" && sha256sum *.apk "$ZIPNAME" packages.txt ARCH dpishell.pem install.sh | sed 's/ \*/  /' > SHA256SUMS )
 echo "Готово: $OUT ($(ls "$OUT"/*.apk | wc -l) пакетов, $(du -sh "$OUT" | cut -f1))"

@@ -62,7 +62,7 @@ function download(m, progress) {
 }
 
 // Разложить zapret в /opt/zapret. Свой config пишет state.write_zapret_config.
-// Пакеты, которые сами владеют /opt/zapret и /etc/init.d/zapret (Zapret Manager в сторонняя прошивка OpenWrt ставит zapret от remittor):
+// Пакеты, которые сами владеют /opt/zapret и /etc/init.d/zapret (менеджеры zapret в сторонних прошивках ставят zapret от remittor):
 // наше ядро и их файлы затирали бы друг друга при каждой установке и обновлении.
 const FOREIGN_PACKAGES = ['zapret', 'luci-app-zapret', 'zapret-manager-beam', 'zapret2', 'luci-app-zapret2'];
 

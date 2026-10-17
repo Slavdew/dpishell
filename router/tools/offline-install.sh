@@ -64,7 +64,7 @@ while ! out=$(apk add --simulate --no-network --allow-untrusted "$@" 2>&1); do
 	i=$((i + 1))
 done
 echo "Установка пакетов: $#"
-# Пакеты из набора проверены при сборке по подписанным индексам (сторонняя прошивка OpenWrt и DpiShell) и здесь — по SHA256SUMS.
+# Пакеты из набора проверены при сборке по подписанным индексам (прошивки и DpiShell) и здесь — по SHA256SUMS.
 apk add --no-network --allow-untrusted "$@"
 
 # Ключ и адрес витрины — для будущих обновлений через apk, когда GitHub доступен.

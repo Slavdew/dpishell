@@ -1,5 +1,5 @@
 # Сборка пакетов роутера (dpishell, luci-app-dpishell) официальным OpenWRT SDK и подписанная витрина пакетов на GitHub Pages.
-# Пакеты не зависят от архитектуры (PKGARCH:=all) — один SDK x86-64 собирает их для любого роутера, включая роутер.
+# Пакеты не зависят от архитектуры (PKGARCH:=all) — один SDK x86-64 собирает их для любого роутера.
 # Подпись: SDK подписывает индекс packages.adb ключом из секрета APK_SIGNING_KEY; открытый ключ — router/keys/dpishell.pem.
 name: router-packages
 

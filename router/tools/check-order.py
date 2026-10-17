@@ -29,5 +29,16 @@ for f in files:
         if re.search(r'\s/\s', code) and '1.0 *' not in code and not re.search(r'int\([^)]*/ \d+\)', code):
             print(f'{f.relative_to(ROOT)}:{i + 1}: деление без 1.0 * — в ucode целые делятся нацело')
             bad += 1
+# Управляющие байты и голый CR в текстах router/ — след правки через heredoc, где «\1», «\r» превратились в символы
+# (2026-10-17: так сломались sed и tr в offline-bundle.sh). Такие правки делать инструментом Edit/Write.
+TEXT = ('.uc', '.sh', '.js', '.json', '.md', '.py', '.pem', '')
+for f in ROOT.rglob('*'):
+    if not f.is_file() or f.suffix not in TEXT or {'offline-bundle', 'bin', 'obj'} & set(f.parts):
+        continue
+    data = f.read_bytes()
+    for i, line in enumerate(data.split(b'\n')):
+        if re.search(rb'[\x00-\x08\x0b-\x1f]', line.rstrip(b'\r').replace(b'\t', b'')):
+            print(f'{f.relative_to(ROOT)}:{i + 1}: управляющий символ — потерянный обратный слеш?')
+            bad += 1
 print(f'{len(files)} файлов, нарушений: {bad}')
 sys.exit(1 if bad else 0)

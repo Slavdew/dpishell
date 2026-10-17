@@ -1,0 +1,24 @@
+{
+  "_comment": "Варианты DNS для всей сети (07 §5, dns_presets/dns_set). resolvers — DoH через https-dns-proxy (bootstrap — адреса сервера DoH, DNS провайдера подменяет ответы), plain — обычный DNS (порт 53) для dnsmasq, если DoH нет. Адреса проверены запросом RFC 8484 2026-10-17.",
+  "presets": [
+    { "id": "provider", "title": "От провайдера", "note": "как было до DpiShell", "resolvers": [], "plain": [] },
+    { "id": "default", "title": "Google + Cloudflare", "note": "по умолчанию: два сервера разных компаний",
+      "resolvers": [
+        { "doh": "https://dns.google/dns-query", "bootstrap": ["8.8.8.8", "8.8.4.4", "2001:4860:4860::8888", "2001:4860:4860::8844"] },
+        { "doh": "https://cloudflare-dns.com/dns-query", "bootstrap": ["1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001"] }
+      ],
+      "plain": ["8.8.8.8", "1.1.1.1"] },
+    { "id": "google", "title": "Google",
+      "resolvers": [ { "doh": "https://dns.google/dns-query", "bootstrap": ["8.8.8.8", "8.8.4.4", "2001:4860:4860::8888", "2001:4860:4860::8844"] } ],
+      "plain": ["8.8.8.8", "8.8.4.4"] },
+    { "id": "cloudflare", "title": "Cloudflare",
+      "resolvers": [ { "doh": "https://cloudflare-dns.com/dns-query", "bootstrap": ["1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001"] } ],
+      "plain": ["1.1.1.1", "1.0.0.1"] },
+    { "id": "quad9", "title": "Quad9", "note": "блокирует вредоносные сайты",
+      "resolvers": [ { "doh": "https://dns.quad9.net/dns-query", "bootstrap": ["9.9.9.9", "149.112.112.112", "2620:fe::fe", "2620:fe::9"] } ],
+      "plain": ["9.9.9.9", "149.112.112.112"] },
+    { "id": "yandex", "title": "Яндекс", "note": "российский: применяет реестр блокировок",
+      "resolvers": [ { "doh": "https://common.dot.dns.yandex.net/dns-query", "bootstrap": ["77.88.8.8", "77.88.8.1", "2a02:6b8::feed:ff"] } ],
+      "plain": ["77.88.8.8", "77.88.8.1"] }
+  ]
+}

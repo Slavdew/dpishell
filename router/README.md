@@ -20,13 +20,8 @@
 
 Также готово: страницы LuCI (`luci-app-dpishell`); пакеты собираются в GitHub Actions (`.github/workflows/router.yml`, SDK `openwrt/sdk:x86-64-v25.12.5`); первая сборка поставлена в эмулятор через `apk add --allow-untrusted` — объект ubus, cron, страница на месте. Найдена и исправлена ошибка порядка функций (ucode разрешает имена при компиляции) — проверка `tools/check-order.py` в тестах и в сборке; дымовой тест API — `SMOKE=1 sh router/tools/vm-test.sh`.
 
-Также готово (2026-10-17, вторая сессия): подписанная витрина (пакеты ставятся с https://slavdew.github.io/dpishell/feed/ без `--allow-untrusted`, проверено в эмуляторе); глубокий поиск (`select.uc` + генератор `search.uc` = `CandidateGenerator` ПК, эталон `test/golden-search.json`, «первое улучшение» как `RefineAsync`); `flow_offload_fix` (разгрузку ведёт zapret), `ipv6_set`; предупреждения `flow_offload`/`ipv6`/`conflict`; чужой zapret пакетом (Zapret Manager) — конфликт `kind: package`. Инструкция установки — `INSTALL-роутер.md`.
+Также готово (2026-10-17, вторая сессия): подписанная витрина (пакеты ставятся с https://slavdew.github.io/dpishell/feed/ без `--allow-untrusted`, проверено в эмуляторе); глубокий поиск (`select.uc` + генератор `search.uc` = `CandidateGenerator` ПК, эталон `test/golden-search.json`, «первое улучшение» как `RefineAsync`); `flow_offload_fix` (разгрузку ведёт zapret), `ipv6_set`; предупреждения `flow_offload`/`ipv6`/`conflict`; чужой zapret пакетом (Zapret Manager) — конфликт `kind: package`. Инструкция установки — `INSTALL.md`.
 
 Исправлено: ucode делит целые нацело (доли групп были 0 при частичном успехе, порядок по статистике не работал) — `1.0 *`, проверка в `check-order.py`; после `zapret restart` nfqws поднимается асинхронно (1–2 с) — подбор ждёт новый процесс; busybox `sleep` не понимает дробей — `sleep(мс)` ucode.
 
 Проверка подбора в эмуляторе — имитатор DPI: `/tmp/dpishell/fake-dpi.json` (правила «сайт открывается, если в профиле nfqws есть такие приёмы», пример — `06` §4.5); без файла не действует.
-
-## Где остановился (2026-10-17, ~03:30)
-- Всё запушено; эмулятор — с пакетами из витрины поверх развёрнутых `vm-deploy.sh` файлов, ядро стоит.
-- `kmod-nft-queue` для сторонняя прошивка OpenWrt 1.4.8 есть: модули лежат в папке по хешу ядра — `feed/targets/SoC/SoC/<vermagic>/packages/` (`kmod-nft-queue`, `kmod-nfnetlink-queue` 6.18.52), образ прописывает этот адрес себе в `customfeeds.list` при сборке. Каталог `feed/targets/.../packages` без хеша — старый фид для 1.2.x (на нём я сначала ошибочно решил, что модуля нет). У другой версии сторонняя прошивка OpenWrt хеш другой — проверка `INSTALL-роутер.md` §4.
-- Дальше: живая проверка на роутер с пользователем; игровой режим и IP-списки (роутер v2, 09-features-spec).
