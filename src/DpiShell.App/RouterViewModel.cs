@@ -105,7 +105,7 @@ public static class RouterTexts
 }
 
 /// <summary>
-/// Обход на роутере (docs/07-router-api.md §6): поиск, вход, статус для главной, подбор, свои адреса, диагностика.
+/// Обход на роутере (docs/dev/router-api.md §6): поиск, вход, статус для главной, подбор, свои адреса, диагностика.
 /// Все запросы к роутеру — по одному (семафор), асинхронно; действия пользователя — по одному (Busy).
 /// Пароль: из поля — только на время входа, на диске — только зашифрованным и только после успешного входа.
 /// </summary>
@@ -178,7 +178,7 @@ public sealed class RouterViewModel : Observable, IDisposable
     /// <summary>Установка пакета защищённого DNS на роутере — 10–20 с (§5.1), с запасом.</summary>
     public TimeSpan DnsTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
-    // Этот ПК (07-router-api §6): обходы ПК и роутера вместе не работают.
+    // Этот ПК (router-api §6): обходы ПК и роутера вместе не работают.
     /// <summary>Обход на этом ПК включён.</summary>
     public Func<bool> PcRunning { get; set; } = () => false;
     /// <summary>Выключить обход на этом ПК (через помощника); true — выключен.</summary>
@@ -607,7 +607,7 @@ public sealed class RouterViewModel : Observable, IDisposable
         if (DiagLoaded && code != "conflict") await RefreshDiagAsync();
     }
 
-    // ---------- этот ПК и роутер вместе (07-router-api §6) ----------
+    // ---------- этот ПК и роутер вместе (router-api §6) ----------
 
     /// <summary>Обход включён и на этом ПК, и на роутере: пакеты обрабатываются дважды, сайты ломаются.</summary>
     public bool BothOn => RouterEnabled && PcRunning();
@@ -941,7 +941,7 @@ public sealed class RouterViewModel : Observable, IDisposable
     {
         if (Selecting || SelectOptions() is not { } o) return;
         bool onlyUser = o.Groups.Count == 1 && o.Groups[0] == "user";
-        // Подбор только по своим адресам, а на роутере их нет (07-router-api §9) — предложить свои адреса ПК заранее.
+        // Подбор только по своим адресам, а на роутере их нет (router-api §5.2) — предложить свои адреса ПК заранее.
         if (onlyUser && _targetsLoaded && Targets.Count == 0 && PcUserTargets().Count > 0)
         {
             if (!await OfferPcTargetsAsync()) return;
@@ -973,7 +973,7 @@ public sealed class RouterViewModel : Observable, IDisposable
         await PollSelectAsync();
     }
 
-    /// <summary>Отказ подбора: только «Свои адреса», а на роутере их список пуст (07-router-api §9: invalid, field groups).</summary>
+    /// <summary>Отказ подбора: только «Свои адреса», а на роутере их список пуст (router-api §5.2: invalid, field groups).</summary>
     static bool IsEmptyUserTargets(RouterException e) =>
         e.AppError is { Code: "invalid", Field: "groups" };
 

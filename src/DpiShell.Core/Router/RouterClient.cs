@@ -8,7 +8,7 @@ using System.Text.Json.Nodes;
 namespace DpiShell.Core.Router;
 
 /// <summary>
-/// Управление DpiShell на роутере по договору docs/07-router-api.md (API 1): JSON-RPC 2.0 через rpcd/ubus,
+/// Управление DpiShell на роутере по договору docs/dev/router-api.md (API 1): JSON-RPC 2.0 через rpcd/ubus,
 /// те же методы, что вызывает страница в меню роутера. Пароль сюда приходит открытым только в памяти —
 /// хранение через <see cref="RouterSecrets"/>, в логи и исключения не попадает.
 /// </summary>
@@ -80,7 +80,7 @@ public sealed class RouterClient : IDisposable
             if (!resp.IsSuccessStatusCode) return new(Address, RouterFound.NotFound, null);
             var st = await resp.Content.ReadFromJsonAsync<RouterPublicStatus>(Json, cts.Token);
             if (st?.Product != "dpishell-router") return new(Address, RouterFound.NotFound, null);
-            // Без поля api — пакет старше договора (вопрос 1 в 07-router-api.md).
+            // Без поля api — пакет старше договора (router-api §2).
             var found = st.Api is not { } api || api < SupportedApi ? RouterFound.RouterTooOld
                       : api > SupportedApi ? RouterFound.AppTooOld : RouterFound.Ok;
             return new(Address, found, st);

@@ -5,7 +5,7 @@ using DpiShell.Core.Router;
 namespace DpiShell.Tests;
 
 /// <summary>
-/// Вкладка «Роутер» и связь с ПК на фейковом роутере (07-router-api §5–6, §9): режим, «Сайт не открывается», DNS для всей сети,
+/// Вкладка «Роутер» и связь с ПК на фейковом роутере (router-api §5–6, §9): режим, «Сайт не открывается», DNS для всей сети,
 /// автоподбор, метки TCP, запрет одновременного обхода ПК и роутера, кандидаты глубокого поиска, flow offload / IPv6 / чужой обход.
 /// </summary>
 public sealed class RouterWindowFeaturesTests : IDisposable
@@ -534,7 +534,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.True(vm.Conflicts.Single(c => c.Name == "zapret2").CanStop);
     }
 
-    // ---------- свои адреса роутера пусты (07-router-api §9, 2026-10-17) ----------
+    // ---------- свои адреса роутера пусты (router-api §5.2) ----------
 
     [Fact]
     public async Task SelectOnlyUser_RouterListEmpty_OffersPcTargets_SendsAndRetries()

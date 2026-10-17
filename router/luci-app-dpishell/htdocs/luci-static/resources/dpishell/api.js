@@ -3,7 +3,7 @@
 'require rpc';
 'require ui';
 
-// Общее для страниц DpiShell: вызовы ubus-объекта dpishell (docs/07-router-api.md §4–5),
+// Общее для страниц DpiShell: вызовы ubus-объекта dpishell (docs/dev/router-api.md §4–5),
 // тексты ошибок, мелкие элементы вёрстки, общие диалоги (подбор, защищённый DNS).
 
 var UBUS_TEXT = {

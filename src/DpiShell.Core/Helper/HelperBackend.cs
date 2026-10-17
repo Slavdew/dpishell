@@ -39,7 +39,7 @@ public interface IHelperBackend : IHelperCatalog
     HelperDetails Details();
     /// <summary>Выбрать стратегию без включения обхода (обход включён — окно зовёт enable).</summary>
     void Choose(string strategyId);
-    /// <summary>Включить временные метки TCP (их требует стратегия роутера, 07-router-api §6). true — включены.</summary>
+    /// <summary>Включить временные метки TCP (их требует стратегия роутера, router-api §6). true — включены.</summary>
     bool TcpTimestampsOn();
     /// <summary>Обновление данных по data.json с источников помощника (02-spec §3.6).</summary>
     Task<DataUpdateResult> UpdateDataAsync(bool confirmed, IProgress<string> log, CancellationToken ct);

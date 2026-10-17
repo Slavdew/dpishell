@@ -1,5 +1,5 @@
 {
-  "_comment": "Варианты DNS для всей сети (07 §5, dns_presets/dns_set). resolvers — DoH через https-dns-proxy (bootstrap — адреса сервера DoH, DNS провайдера подменяет ответы), plain — обычный DNS (порт 53) для dnsmasq, если DoH нет. Адреса проверены запросом RFC 8484 2026-10-17.",
+  "_comment": "Варианты DNS для всей сети (router-api §5, dns_presets/dns_set). resolvers — DoH через https-dns-proxy (bootstrap — адреса сервера DoH, DNS провайдера подменяет ответы), plain — обычный DNS (порт 53) для dnsmasq, если DoH нет. Адреса проверены запросом RFC 8484 2026-10-17.",
   "presets": [
     { "id": "provider", "title": "От провайдера", "note": "как было до DpiShell", "resolvers": [], "plain": [] },
     { "id": "default", "title": "Google + Cloudflare", "note": "по умолчанию: два сервера разных компаний",

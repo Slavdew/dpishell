@@ -119,7 +119,7 @@ function cost(desync) {
 
 const ROLE_TITLES = { google: 'YouTube', general: 'Discord и свои' };
 
-// Короткое описание кандидата для таблицы подбора: «fake + multisplit, ts — YouTube» (07-router-api §8, вопрос 8).
+// Короткое описание кандидата для таблицы подбора: «fake + multisplit, ts — YouTube» (router-api §5.1).
 function describe(desync, role) {
 	let t = parse(desync);
 	let parts = [join(' + ', split(get(t, '--dpi-desync') ?? '?', ','))];

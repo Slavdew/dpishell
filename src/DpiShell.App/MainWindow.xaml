@@ -57,7 +57,7 @@
                             </Grid>
                         </Border>
 
-                        <!-- Роутер с DpiShell найден (07-router-api §6): обход для всего дома делает он. -->
+                        <!-- Роутер с DpiShell найден (router-api §6): обход для всего дома делает он. -->
                         <Border Grid.Row="1" Style="{StaticResource Card}" Padding="18,12" Margin="0,0,0,12" DataContext="{Binding Router}"
                                 Visibility="{Binding Found, Converter={StaticResource Vis}}">
                             <Grid>
@@ -96,7 +96,7 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                    <!-- 07-router-api §6: обход и на ПК, и на роутере — вместе не работают; выключить один. -->
+                                    <!-- router-api §6: обход и на ПК, и на роутере — вместе не работают; выключить один. -->
                                     <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="4"
                                             Padding="8,4" Margin="0,6,0,0" HorizontalAlignment="Left" Visibility="{Binding BothOn, Converter={StaticResource Vis}}">
                                         <StackPanel Orientation="Horizontal">
@@ -156,7 +156,7 @@
                                                     <TextBlock Text="{Binding Title}" FontSize="15" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Title}" />
                                                 </DockPanel>
                                                 <DockPanel Margin="0,1,0,0">
-                                                    <!-- Найденную на ПК — на роутер (07-router-api §6); видно, только если роутер подключён. -->
+                                                    <!-- Найденную на ПК — на роутер (router-api §6); видно, только если роутер подключён. -->
                                                     <Border DockPanel.Dock="Right" Margin="8,0,0,0" VerticalAlignment="Center"
                                                             Visibility="{Binding DataContext.Router.Connected, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource Vis}}">
                                                         <Button Content="Отправить на роутер" Style="{StaticResource LinkButton}" FontSize="12" Padding="8,1"
@@ -265,7 +265,7 @@
                         </Grid.RowDefinitions>
 
                         <DockPanel>
-                            <!-- Где подбирать — только когда роутер подключён (07-router-api §6). -->
+                            <!-- Где подбирать — только когда роутер подключён (router-api §6). -->
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,4,0,0" DataContext="{Binding Router}"
                                         Visibility="{Binding Connected, Converter={StaticResource Vis}}">
                                 <TextBlock Text="Где подбирать:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,12,0" />
@@ -945,7 +945,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Роутер: diag, чужие обходы с «Остановить», отчёт (07-router-api §6). -->
+                            <!-- Роутер: diag, чужие обходы с «Остановить», отчёт (router-api §6). -->
                             <Border Style="{StaticResource Card}" DataContext="{Binding Router}" Visibility="{Binding Found, Converter={StaticResource Vis}}">
                                 <StackPanel>
                                     <DockPanel>
@@ -1047,7 +1047,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Настройки → «Роутер»: адрес, пароль, «Подключиться» (07-router-api §6). Пароль — только из PasswordBox по кнопке. -->
+                            <!-- Настройки → «Роутер»: адрес, пароль, «Подключиться» (router-api §6). Пароль — только из PasswordBox по кнопке. -->
                             <Border x:Name="RouterSettings" Style="{StaticResource Card}" DataContext="{Binding Router}">
                                 <StackPanel>
                                     <TextBlock Text="Роутер" Style="{StaticResource H2}" />
@@ -1102,7 +1102,7 @@
                     </ScrollViewer>
                 </TabItem>
 
-                <!-- ===== Роутер (07-router-api §5–6): режим, «Сайт не открывается», DNS для всей сети, расписание. Только если DpiShell на роутере найден. ===== -->
+                <!-- ===== Роутер (router-api §5–6): режим, «Сайт не открывается», DNS для всей сети, расписание. Только если DpiShell на роутере найден. ===== -->
                 <TabItem Header="Роутер" Visibility="{Binding Router.Found, Converter={StaticResource Vis}}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Router}">
                         <StackPanel>

@@ -28,7 +28,7 @@ function role_ids(roles) {
 }
 
 // Ошибка проверки — строка вида "<поле>: <текст>", null — всё в порядке.
-// field — путь для ответа ubus (07-router-api §4: items[3].roles.google).
+// field — путь для ответа ubus (router-api §4: items[3].roles.google).
 function validate(strategy, roles, field) {
 	field ??= strategy.id;
 	if (type(strategy.roles) != 'object' || !length(strategy.roles))

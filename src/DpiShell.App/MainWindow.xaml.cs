@@ -42,7 +42,7 @@ public partial class MainWindow : Window
 
         // Смена сети — с паузой, пока сеть поднимается.
         _netSettle = new DispatcherTimer { Interval = WatchdogPolicy.NetworkSettle };
-        // Сеть сменилась — и роутер ищем заново: ушли из дома — блок роутера пропадёт (07-router-api §6).
+        // Сеть сменилась — и роутер ищем заново: ушли из дома — блок роутера пропадёт (router-api §6).
         _netSettle.Tick += (_, _) => { _netSettle.Stop(); _ = vm.Router.RefreshAsync(); };
         NetworkChange.NetworkAddressChanged += OnNetworkChanged;
 

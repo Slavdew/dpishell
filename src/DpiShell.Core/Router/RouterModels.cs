@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace DpiShell.Core.Router;
 
-// Форматы — docs/07-router-api.md (API 1). Имена полей — snake_case, как в договоре.
+// Форматы — docs/dev/router-api.md (API 1). Имена полей — snake_case, как в договоре.
 
 public sealed record RouterPublicStatus(
     string? Product, int? Api, string? Version, string? Engine, string? Core,
@@ -97,7 +97,7 @@ public sealed record RouterConflict(string Kind, string Name, bool Running);
 /// <summary>Ответ flow_offload_fix: flowoffload — кому передана разгрузка (software | hardware).</summary>
 public sealed record RouterFlowOffloadFix(bool Changed, string? Flowoffload);
 public sealed record RouterDns(bool Spoofed, DateTime? CheckedAt);
-/// <summary>flow_offload — разгрузка в межсетевом экране (мешает обходу); flowoffload — её ведёт zapret после flow_offload_fix: none | software | hardware (07 §5.1).</summary>
+/// <summary>flow_offload — разгрузка в межсетевом экране (мешает обходу); flowoffload — её ведёт zapret после flow_offload_fix: none | software | hardware (router-api §5.1).</summary>
 public sealed record RouterDiag(List<RouterConflict>? Conflicts, bool FlowOffload, bool Ipv6Wan, RouterDns? Dns, long OverlayFreeKb, string? Flowoffload = null);
 
 public sealed record RouterReport(string Text);

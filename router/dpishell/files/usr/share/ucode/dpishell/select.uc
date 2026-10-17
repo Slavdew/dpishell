@@ -263,7 +263,7 @@ function same_roles(a, b) {
 	return true;
 }
 
-// Найденные стратегии роутера: последние 20, id r-…, source user (07-router-api §5.1, вопрос 8).
+// Найденные стратегии роутера: последние 20, id r-…, source user (router-api §5.1).
 function save_found(list) {
 	let cur = st.found_catalog().strategies ?? [];
 	let ids = map(list, x => x.id);

@@ -27,7 +27,7 @@ public sealed class AppState
     public string RunMode { get; set; } = "service";
     /// <summary>Временные метки TCP включили мы (были выключены) — «Удалить полностью» вернёт как было.</summary>
     public bool TimestampsEnabledByUs { get; set; }
-    /// <summary>Адрес роутера (IP или имя); null — «Автоматически — основной шлюз» (07-router-api §2).</summary>
+    /// <summary>Адрес роутера (IP или имя); null — «Автоматически — основной шлюз» (router-api §2).</summary>
     public string? RouterAddress { get; set; }
     /// <summary>Пароль роутера, зашифрованный DPAPI (CurrentUser) — см. RouterSecrets. Открытым не хранится.</summary>
     public string? RouterPassword { get; set; }

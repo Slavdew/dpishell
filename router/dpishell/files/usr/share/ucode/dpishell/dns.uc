@@ -332,7 +332,7 @@ function apply(id) {
 	return `DNS «${p.title}» не заработал — возвращено как было`;
 }
 
-// Прежняя кнопка «Включить защищённый DNS» (07 §5): Google + Cloudflare.
+// Прежняя кнопка «Включить защищённый DNS» (router-api §5): Google + Cloudflare.
 function enable() {
 	return apply('default');
 }

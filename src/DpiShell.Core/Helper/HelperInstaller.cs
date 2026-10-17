@@ -122,7 +122,7 @@ public sealed class HelperInstaller(AppPaths paths)
 
     /// <summary>
     /// Стереть папку помощника, дождавшись, пока её отпустят. Служба отвечает «остановлена» раньше, чем процесс выходит
-    /// и отпускает свой exe (живая проверка 2026-10-17: обновление падало с «Access denied» на DpiShell.exe); файл может
+    /// и отпускает свой exe (иначе обновление падает с «Access denied» на занятом DpiShell.exe); файл может
     /// держать и антивирус. Повтор до 20 с, потом — исходная ошибка.
     /// </summary>
     public static void DeleteWhenReleased(string dir, TimeSpan? timeout = null)

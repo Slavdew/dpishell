@@ -3,7 +3,7 @@ using DpiShell.Core.Router;
 
 namespace DpiShell.Tests;
 
-/// <summary>Случаи docs/07-router-api.md §7 на фейковом роутере.</summary>
+/// <summary>Случаи docs/dev/router-api.md §7 на фейковом роутере.</summary>
 public sealed class RouterClientTests
 {
     static async Task<RouterClient> LoggedIn(FakeRouter r)

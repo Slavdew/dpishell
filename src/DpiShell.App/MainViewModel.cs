@@ -101,7 +101,7 @@ public sealed partial class MainViewModel : Observable
         FixHelperCmd = RelayCommand.Async(async () => { if (await InstallHelperAsync()) Message = "Помощник установлен."; }, () => !Busy);
         UninstallHelperCmd = RelayCommand.Async(UninstallHelperAsync, () => !Busy && !IsLoading);
 
-        // Обход на роутере (docs/07-router-api.md §6): своя логика, свои команды; сюда — только строка состояния и переходы.
+        // Обход на роутере (docs/dev/router-api.md §6): своя логика, свои команды; сюда — только строка состояния и переходы.
         Router = new RouterViewModel(shell, settings)
         {
             Say = s => Message = s,
@@ -111,7 +111,7 @@ public sealed partial class MainViewModel : Observable
             PcUserTargets = () => Helper.Status?.UserTargets ?? [],
         };
         Router.Changed += UpdateStatus;
-        WireRouterPc();   // обход ПК и роутера вместе не работают (07-router-api §6) — MainViewModel.Router.cs
+        WireRouterPc();   // обход ПК и роутера вместе не работают (router-api §6) — MainViewModel.Router.cs
         InitPcDns();      // DNS этого компьютера — MainViewModel.Dns.cs
 
         Net = new NetViewModel(helper)
@@ -684,7 +684,7 @@ public sealed partial class MainViewModel : Observable
 
     public async Task EnableAsync()
     {
-        // Роутер уже обходит для всего дома — двойная обработка ломает сайты (07-router-api §6): подобрать там или выключить там.
+        // Роутер уже обходит для всего дома — двойная обработка ломает сайты (router-api §6): подобрать там или выключить там.
         if (!IsRunning && !await RouterGateAsync(select: false)) return;
         await EnableCoreAsync();
     }
@@ -881,7 +881,7 @@ public sealed partial class MainViewModel : Observable
         // Свои адреса проверяем после подключения: до установки их у помощника ещё нет.
         if (TakeGroups() is not { } ids) return;
         if (!ConfirmPauseIfRunning()) return;
-        // Обход на роутере: подбор на ПК при нём неверен (07-router-api §6) — подобрать там или выключить там на время подбора.
+        // Обход на роутере: подбор на ПК при нём неверен (router-api §6) — подобрать там или выключить там на время подбора.
         if (!await RouterGateAsync(select: true)) return;
 
         ResetResults();
@@ -935,7 +935,7 @@ public sealed partial class MainViewModel : Observable
         if (await NeedHelperAsync() is not { } c) return;
         if (TakeGroups() is not { } ids) return;
         if (!ConfirmPauseIfRunning()) return;
-        // Обход на роутере: подбор на ПК при нём неверен (07-router-api §6) — подобрать там или выключить там на время подбора.
+        // Обход на роутере: подбор на ПК при нём неверен (router-api §6) — подобрать там или выключить там на время подбора.
         if (!await RouterGateAsync(select: true)) return;
         var baseId = _bestId ?? CurrentStrategyId;
 

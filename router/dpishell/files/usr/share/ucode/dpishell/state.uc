@@ -26,7 +26,7 @@ const DOMAIN_RX = /^\^?(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+(xn--[a-z0-
 const SUBNET_RX = /^([0-9]{1,3}\.){3}[0-9]{1,3}(\/[0-9]{1,2})?$/;
 
 // nfqws работает от пользователя daemon (WS_USER zapret): списки и фейки должны быть ему читаемы.
-// Свои настройки и результаты — только root; status.json — публичный для uhttpd (07-router-api §2).
+// Свои настройки и результаты — только root; status.json — публичный для uhttpd (router-api §2).
 const DIRS = { '/etc/dpishell': 0o711, '/etc/dpishell/lists': 0o755, '/etc/dpishell/results': 0o700, '/tmp/dpishell': 0o700, '/www/dpishell': 0o755 };
 
 function ensure_dirs() {
@@ -140,7 +140,7 @@ function core_installed() {
 
 function last_check() { return read_json(`${P.run}/last-check.json`, null) ?? read_json(`${P.etc}/last-check.json`, null); }
 
-// Время в ответах API — ISO 8601 UTC (07-router-api §5); внутри храним секунды.
+// Время в ответах API — ISO 8601 UTC (router-api §5); внутри храним секунды.
 function iso(t) {
 	if (t == null)
 		return null;

@@ -164,7 +164,7 @@ public sealed class NetViewModel : Observable
     /// <summary>По манифесту из поставки: сильно изменившийся список — вопрос «Применить?» и повтор с подтверждением.</summary>
     Task UpdateFromManifestAsync() => UpdateAsync("Обновляю IP-список…", (c, confirmed) => c.UpdateIpsetFromManifestAsync(confirmed, new Progress<string>(Say)));
 
-    /// <summary>Файл читает окно (он у пользователя), помощник получает содержимое и прогоняет валидатор — путей не принимает.</summary>
+    /// <summary>Файл читает окно (он в профиле пользователя), помощник получает содержимое и прогоняет валидатор — путей не принимает.</summary>
     Task UpdateFromFileAsync()
     {
         if (PickFile() is not { } file) return Task.CompletedTask;

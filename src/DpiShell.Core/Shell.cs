@@ -118,7 +118,7 @@ public sealed class Shell
 
     /// <summary>
     /// Для подбора и поиска: выбранные группы + «Обычные сайты». Контрольную группу не выбирают — это страховка «не сломать»,
-    /// она идёт в каждый подбор (живая проверка 2026-10-17: без этого подбор её не проверял вовсе).
+    /// она идёт в каждый подбор (без этого подбор её не проверял вовсе).
     /// </summary>
     public static IReadOnlyList<TargetGroup> WithControl(IReadOnlyList<TargetGroup> groups, TargetSet all) =>
         [.. groups.Where(g => !g.Control), .. all.Groups.Where(g => g.Control)];

@@ -24,7 +24,7 @@ function conflicts() {
 	for (let n in CONFLICTS)
 		if (stat(`/etc/init.d/${n}`))
 			push(out, { kind: 'service', name: n, running: sh(`/etc/init.d/${n} running`).rc == 0 });
-	// Пакеты другого zapret: остановить их нельзя — только удалить (07 §5.1, kind: package).
+	// Пакеты другого zapret: остановить их нельзя — только удалить (router-api §5.1, kind: package).
 	for (let n in core.foreign_packages())
 		push(out, { kind: 'package', name: n, running: true });
 	// nfqws/nfqws2 не из нашего ядра.

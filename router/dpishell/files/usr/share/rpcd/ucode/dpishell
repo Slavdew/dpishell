@@ -1,4 +1,4 @@
-// ubus-объект dpishell: методы договора docs/07-router-api.md. Страница LuCI и Windows-приложение вызывают одно и то же.
+// ubus-объект dpishell: методы договора docs/dev/router-api.md. Страница LuCI и Windows-приложение вызывают одно и то же.
 // Ни один метод не принимает командную строку или путь: всё проверяется здесь.
 'use strict';
 
@@ -61,7 +61,7 @@ function jobs() {
 	for (let n in ['select', 'check', 'core_install', 'site_check'])
 		j[n] = st.job_running(n);
 	j.dns = st.job_running('dns');
-	j.dns_analyze = j.dns;   // прежнее имя (07 §5.1), то же значение
+	j.dns_analyze = j.dns;   // прежнее имя (router-api §5.1), то же значение
 	return j;
 }
 
@@ -343,7 +343,7 @@ const methods = {
 };
 
 function spawn(args) {
-	// Фоном, без ожидания: rpcd-вызов должен вернуться сразу (07-router-api §4).
+	// Фоном, без ожидания: rpcd-вызов должен вернуться сразу (router-api §4).
 	sh(`( /usr/libexec/dpishell/run ${args} >/dev/null 2>&1 & )`);
 }
 

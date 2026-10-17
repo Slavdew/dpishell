@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 namespace DpiShell.Tests;
 
 /// <summary>
-/// Роутер с DpiShell в памяти — по docs/07-router-api.md (API 1). Ответы — примеры из §3–5 дословно;
+/// Роутер с DpiShell в памяти — по docs/dev/router-api.md (API 1). Ответы — примеры из §3–5 дословно;
 /// поведение для случаев §7 включается полями. HttpListener на localhost работает без прав администратора.
 /// </summary>
 public sealed class FakeRouter : IDisposable
