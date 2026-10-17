@@ -71,6 +71,48 @@ public sealed class HomeViewModelTests : IDisposable
         Assert.Empty(vm.CheckGroups);
     }
 
+    /// <summary>UX-аудит 2, п. 15 (п. 33 первого круга): дописали сайт и не нажали «Сохранить» — проверка берёт поле, уход с вкладки и подбор сохраняют сами.</summary>
+    [Fact]
+    public async Task UnsavedTargets_CheckedAsTyped_SavedOnLeave_AndBeforeSelect()
+    {
+        await using var f = new HelperFixture();
+        f.Backend.StatusValue = Status(active: false);
+        var vm = Model(await f.LinkAsync());
+        vm.Confirm = _ => false;
+        await vm.RefreshStatusAsync();
+        foreach (var g in vm.Groups) g.IsChecked = g.Id == "user";
+
+        vm.Page = Pages.Targets;
+        vm.TargetsText = "example.com";
+        Assert.True(vm.TargetsDirty);
+        var urls = new List<string>();
+        vm.ProbeGroups = Probe(() => true, urls);
+        await vm.CheckNowAsync();
+        Assert.Contains(urls, u => u.Contains("example.com"));
+
+        // Ушли с вкладки — помощник на связи, сохраняем сами и говорим об этом.
+        vm.Page = Pages.Home;
+        for (int i = 0; i < 200 && !f.Backend.Calls.Contains("user_targets_set example.com"); i++) await Task.Delay(10);
+        Assert.Contains("user_targets_set example.com", f.Backend.Calls);
+        Assert.Equal("Свои адреса сохранены.", vm.Toast);
+
+        // Дописали ещё и сразу в подбор: сначала сохранить, потом подбирать — иначе новый сайт молча не учтётся.
+        f.Backend.StatusValue = Status(active: false) with { UserTargets = ["example.com"] };
+        await vm.RefreshStatusAsync();
+        Assert.False(vm.TargetsDirty);
+        vm.TargetsText = "example.com\r\nnew-site.org";
+        Assert.True(vm.TargetsDirty);
+        f.Backend.StatusValue = Status(active: false) with { UserTargets = ["example.com", "new-site.org"] };
+        var select = vm.StartSelectAsync();
+        await f.Backend.LongStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var calls = f.Backend.Calls.ToList();
+        int saved = calls.IndexOf("user_targets_set example.com,new-site.org"), started = calls.FindIndex(c => c.StartsWith("select "));
+        Assert.True(saved >= 0 && saved < started, string.Join("; ", calls));
+        Assert.False(vm.TargetsDirty);
+        vm.StopSelectCmd.Execute(null);
+        await select;
+    }
+
     [Fact]
     public async Task CheckResult_StateChangedWhileChecking_IsNotShown()
     {

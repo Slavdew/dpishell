@@ -306,7 +306,9 @@ public sealed partial class MainViewModel : Observable
         get => _page;
         set
         {
+            int was = _page;
             if (!Set(ref _page, value) || IsLoading) return;
+            if (was == Pages.Targets) _ = SaveDraftOnLeaveAsync();
             if (value == Pages.Net) _ = RefreshNetAsync();
             if (value == Pages.Hosts) _ = Hosts.RefreshAsync();
             if (value == Pages.Router) _ = Router.RefreshRouterPageAsync();
@@ -495,7 +497,7 @@ public sealed partial class MainViewModel : Observable
         DropStaleCheck();
         Raise(nameof(IsRunning));
         Raise(nameof(ToggleText)); Raise(nameof(PcSecondary)); Raise(nameof(PcPrimary));
-        Raise(nameof(CanChoose));
+        Raise(nameof(CanChoose)); Raise(nameof(TargetsDirty));
         Router.PcChanged();
         Raise(nameof(StrategyHeader));
         Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint));
@@ -806,14 +808,15 @@ public sealed partial class MainViewModel : Observable
         await RefreshStatusAsync();
     }
 
-    /// <summary>Отмеченные группы целей. Свои адреса — сохранённые у помощника, иначе черновик из «Свои адреса».</summary>
+    /// <summary>Отмеченные группы целей. Свои адреса — из поля «Свои адреса», как на экране.</summary>
     IReadOnlyList<TargetGroup> CheckedGroups()
     {
         var want = Groups.Where(g => g.IsChecked).Select(g => g.Id).ToHashSet();
         var groups = _shell.DefaultTargets.Groups.Where(g => want.Contains(g.Id)).ToList();
         if (want.Contains("user"))
         {
-            var mine = UserTargets.Count > 0 ? UserTargets : DraftTargets();
+            // То, что в поле «Свои адреса», — как видит человек, сохранено оно или нет.
+            var mine = DraftTargets();
             if (mine.Count > 0) groups.Add(TargetSet.UserGroup(mine));
         }
         return groups;
@@ -946,6 +949,7 @@ public sealed partial class MainViewModel : Observable
         if (!AnyChecked()) return;
         if (await NeedHelperAsync() is not { } c) return;
         // Свои адреса проверяем после подключения: до установки их у помощника ещё нет.
+        if (!await SaveDraftBeforeSelectAsync()) return;
         if (TakeGroups() is not { } ids) return;
         if (!ConfirmPauseIfRunning()) return;
         // Обход на роутере: подбор на ПК при нём неверен (router-api §6) — подобрать там или выключить там на время подбора.
@@ -1000,6 +1004,7 @@ public sealed partial class MainViewModel : Observable
         if (Busy) return;
         if (!AnyChecked()) return;
         if (await NeedHelperAsync() is not { } c) return;
+        if (!await SaveDraftBeforeSelectAsync()) return;
         if (TakeGroups() is not { } ids) return;
         if (!ConfirmPauseIfRunning()) return;
         // Обход на роутере: подбор на ПК при нём неверен (router-api §6) — подобрать там или выключить там на время подбора.
@@ -1168,14 +1173,48 @@ public sealed partial class MainViewModel : Observable
 
     string _targetsText = "";
     /// <summary>Черновик до «Сохранить»: сохраняет помощник.</summary>
-    public string TargetsText { get => _targetsText; set => Set(ref _targetsText, value); }
+    public string TargetsText { get => _targetsText; set { if (Set(ref _targetsText, value)) Raise(nameof(TargetsDirty)); } }
+
+    /// <summary>
+    /// В поле не то, что сохранено (UX-аудит 2, п. 15; п. 33 первого круга): подбор берёт сохранённое у помощника,
+    /// поэтому перед подбором и при уходе с вкладки черновик сохраняется (или об этом говорит тост).
+    /// </summary>
+    public bool TargetsDirty
+    {
+        get
+        {
+            var saved = UserTargets.Select(DataStore.NormalizeDomain).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return !saved.SetEquals(DraftTargets());
+        }
+    }
+
+    /// <summary>Ушли с «Своих адресов», не сохранив: с помощником — сохранить сами (прав не спросит), без него — тост «Сохранить».</summary>
+    async Task SaveDraftOnLeaveAsync()
+    {
+        if (!TargetsDirty || Busy) return;
+        if (Helper.Ready)
+        {
+            if (await SaveTargetsAsync()) ShowToast("Свои адреса сохранены.");
+            return;
+        }
+        ShowToast("Свои адреса не сохранены — подбор и обход их не учтут.", "Сохранить", async () => await SaveTargetsAsync());
+    }
+
+    /// <summary>Перед подбором: несохранённые свои адреса — сохранить (помощник уже подключён), иначе подбор их молча не учтёт.</summary>
+    async Task<bool> SaveDraftBeforeSelectAsync()
+    {
+        if (!TargetsDirty) return true;
+        if (!await SaveTargetsAsync()) return false;
+        Message = "Свои адреса сохранены — подбор их учтёт.";
+        return true;
+    }
 
     string _targetsMessage = "";
     public string TargetsMessage { get => _targetsMessage; private set => Set(ref _targetsMessage, value); }
 
     public ICommand SaveTargetsCmd { get; }
 
-    async Task SaveTargetsAsync()
+    async Task<bool> SaveTargetsAsync()
     {
         var lines = TargetsText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
         UserTargetsResult? r = null;
@@ -1184,12 +1223,14 @@ public sealed partial class MainViewModel : Observable
                 r = await c.SetUserTargetsAsync(lines);
                 await FetchAsync(full: false);
             }) || r is null)
-            return;
+            return false;
         if (r.Saved.Count > 0 && Groups.FirstOrDefault(g => g.Id == "user") is { } ug) ug.IsChecked = true;
         TargetsText = string.Join(Environment.NewLine, r.Saved);
         TargetsMessage = r.Rejected.Count == 0
             ? $"Сохранено адресов: {r.Saved.Count}."
             : $"Сохранено адресов: {r.Saved.Count}. Не распознаны и убраны: {string.Join(", ", r.Rejected)}.";
+        Raise(nameof(TargetsDirty));
+        return true;
     }
 
     // ---------- диагностика ----------

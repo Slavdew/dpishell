@@ -474,6 +474,9 @@
                                      FontFamily="Consolas" FontSize="14" Padding="8" />
                             <DockPanel Grid.Row="2" Margin="0,10,0,0">
                                 <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="Сохранить" Style="{StaticResource Primary}" Command="{Binding SaveTargetsCmd}" VerticalAlignment="Top" />
+                                <!-- Несохранённое видно (UX-аудит 2, п. 15): подбор берёт сохранённое; при уходе с вкладки и перед подбором сохраняется само. -->
+                                <TextBlock DockPanel.Dock="Left" Text="Не сохранено" Foreground="{DynamicResource Danger}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,8,8"
+                                           Visibility="{Binding TargetsDirty, Converter={StaticResource Vis}}" ToolTip="Подбор учитывает сохранённый список. Сохраню сам перед подбором и при уходе с вкладки." />
                                 <TextBlock Text="{Binding TargetsMessage}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8" />
                             </DockPanel>
                         </Grid>
