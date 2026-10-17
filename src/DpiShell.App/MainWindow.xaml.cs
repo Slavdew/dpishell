@@ -48,6 +48,9 @@ public partial class MainWindow : Window
 
         // «Войти» — небольшой диалог на месте, без перехода на другую вкладку (UX-аудит п. 14).
         vm.Router.LoginRequested += () => Dispatcher.BeginInvoke(() => RouterLoginDialog.Show(vm.Router, this), DispatcherPriority.Loaded);
+        // Установка и удаление DpiShell на роутере — диалоги на месте (по SSH и API, architecture.md «Установка, обновление, удаление»).
+        vm.Router.InstallRequested += () => Dispatcher.BeginInvoke(() => RouterInstallDialog.Show(vm.Router.NewInstall(), this), DispatcherPriority.Loaded);
+        vm.Router.UninstallRequested += () => Dispatcher.BeginInvoke(() => RouterUninstallDialog.Show(vm.Router.NewUninstall(), this), DispatcherPriority.Loaded);
 
         // Ссылка ведёт к месту, а не в начало вкладки (UX-аудит 2, п. 2, 4): прокрутить, когда вкладка построится.
         vm.ShowRequested += spot => Dispatcher.BeginInvoke(() => ShowSpot(spot), DispatcherPriority.ContextIdle);

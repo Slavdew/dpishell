@@ -57,23 +57,7 @@ public static class RouterLoginDialog
         if (Application.Current?.TryFindResource("Hint") is Style hint) note.Style = hint;
         panel.Children.Add(note);
 
-        // «Дополнительно»: адрес роутера (обычно определяется сам, менять не нужно).
-        var address = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
-        var auto = new RadioButton { Margin = new Thickness(0, 3, 0, 3), HorizontalAlignment = HorizontalAlignment.Left };
-        auto.SetBinding(ContentControl.ContentProperty, new Binding(nameof(RouterViewModel.AutoAddressText)) { Mode = BindingMode.OneWay });
-        auto.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, nameof(RouterViewModel.AddressAuto));
-        address.Children.Add(auto);
-        var customRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
-        var custom = new RadioButton { Content = "Свой:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-        custom.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, nameof(RouterViewModel.AddressCustom));
-        var customText = new TextBox { Width = 200, Padding = new Thickness(6, 4, 6, 4), ToolTip = "IP или имя роутера, например 192.168.1.1" };
-        customText.SetBinding(TextBox.TextProperty, new Binding(nameof(RouterViewModel.CustomAddress)) { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged });
-        customText.SetBinding(UIElement.IsEnabledProperty, nameof(RouterViewModel.AddressCustom));
-        AutomationProperties.SetName(customText, "Адрес роутера");
-        customRow.Children.Add(custom);
-        customRow.Children.Add(customText);
-        address.Children.Add(customRow);
-        panel.Children.Add(new Expander { Header = "Дополнительно: адрес роутера", Content = address, Margin = new Thickness(0, 0, 0, 16) });
+        panel.Children.Add(AddressExpander(router));
 
         var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
         var login = new Button { Content = "Войти", IsDefault = true };
@@ -100,5 +84,28 @@ public static class RouterLoginDialog
         };
         w.Loaded += (_, _) => password.Focus();
         return w;
+    }
+
+    /// <summary>«Дополнительно: адрес роутера» — шлюз или свой (обычно определяется сам). DataContext — роутер.</summary>
+    public static Expander AddressExpander(RouterViewModel router)
+    {
+        // «Дополнительно»: адрес роутера (обычно определяется сам, менять не нужно).
+        var address = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var auto = new RadioButton { Margin = new Thickness(0, 3, 0, 3), HorizontalAlignment = HorizontalAlignment.Left };
+        auto.SetBinding(ContentControl.ContentProperty, new Binding(nameof(RouterViewModel.AutoAddressText)) { Mode = BindingMode.OneWay });
+        auto.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, nameof(RouterViewModel.AddressAuto));
+        address.Children.Add(auto);
+        var customRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
+        var custom = new RadioButton { Content = "Свой:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        custom.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, nameof(RouterViewModel.AddressCustom));
+        var customText = new TextBox { Width = 200, Padding = new Thickness(6, 4, 6, 4), ToolTip = "IP или имя роутера, например 192.168.1.1" };
+        customText.SetBinding(TextBox.TextProperty, new Binding(nameof(RouterViewModel.CustomAddress)) { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged });
+        customText.SetBinding(UIElement.IsEnabledProperty, nameof(RouterViewModel.AddressCustom));
+        AutomationProperties.SetName(customText, "Адрес роутера");
+        customRow.Children.Add(custom);
+        customRow.Children.Add(customText);
+        address.Children.Add(customRow);
+        return new Expander { Header = "Дополнительно: адрес роутера", Content = address, Margin = new Thickness(0, 0, 0, 16), DataContext = router };
+
     }
 }

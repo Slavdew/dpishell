@@ -64,6 +64,19 @@ public class RouterInstallFlowTests
     }
 
     [Fact]
+    public async Task Check_OnlyPreflight_NothingUploaded()
+    {
+        using var d = new TempDir();
+        var ssh = new FakeSsh { OnScript = (_, _) => RouterSshScenarioTests.PreflightOk };
+        var v = await Flow(ssh, d).CheckAsync(new("192.168.1.1"), () => "pw");
+        Assert.True(v.CanInstall);
+        Assert.False(v.NeedsTunnel);
+        Assert.Equal("sh -s -- --update", Assert.Single(ssh.Runs).Command);
+        Assert.Empty(ssh.Uploads);
+        Assert.True(ssh.Disposed);
+    }
+
+    [Fact]
     public async Task Blocker_NothingInstalled()
     {
         using var d = new TempDir();

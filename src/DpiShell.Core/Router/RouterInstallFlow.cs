@@ -18,6 +18,14 @@ public sealed class RouterInstallFlow(ISshConnector connector, RouterReleases re
     /// <summary>Готовые копии архива ядра на ПК (напр. уже скачанный для Windows тот же zip) — проверяются по хешу.</summary>
     public IReadOnlyList<string> LocalCoreCandidates { get; init; } = [];
 
+    /// <summary>Только предпроверка и решение — для «Проверить роутер» до установки (ничего не меняет, кроме индексов пакетов).</summary>
+    public async Task<RouterVerdict> CheckAsync(RouterSshTarget target, Func<string> password, CancellationToken ct = default)
+    {
+        await using var ssh = await connector.ConnectAsync(target, password, ct);
+        var r = new RouterSsh(ssh);
+        return RouterSuitability.Evaluate(await r.PreflightAsync(updateIndexes: true, ct: ct), releases, core.Manifest.Nfqws.Keys.ToArray());
+    }
+
     public async Task<RouterInstallOutcome> InstallAsync(RouterSshTarget target, Func<string> password, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         progress?.Report("Подключение к роутеру");

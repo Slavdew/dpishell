@@ -146,4 +146,26 @@ public class RouterUpdateUninstallTests
             new RouterSsh(ssh).UploadUpdateAsync([new("dpishell-0.2.1-r1.apk", p, new string('0', 64))]));
         Assert.Empty(ssh.Uploads);
     }
+
+    [Fact]
+    public void UpdatePackages_ReleaseUrl_FromListOrTag()
+    {
+        var releases = RouterReleases.Load(Path.Combine(Repo.Data, "router-releases.json"));
+        Assert.Equal("0.2.1", RouterUpdatePackages.BaseVersion("0.2.1-r1"));
+        Assert.Equal(releases.Releases[0].ReleaseJson, RouterUpdatePackages.ReleaseJsonUrl(releases, "0.2.0-r3"));
+        Assert.Equal("https://github.com/Slavdew/dpishell/releases/download/router-v0.2.1/release.json", RouterUpdatePackages.ReleaseJsonUrl(releases, "0.2.1-r1"));
+    }
+
+    [Fact]
+    public async Task UpdatePackages_OnlyOurPackages_Verified()
+    {
+        using var d = new TempDir();
+        var signer = new TestSigner();
+        using var http = new HttpClient(RouterSetupViewModelTests.ServeRelease(signer));
+        var files = await RouterUpdatePackages.DownloadAsync(http, null, "0.2.1-r1", d.Sub("u"), signer.PublicKey);
+        Assert.Equal(["dpishell-0.2.1-r1.apk", "luci-app-dpishell-0.2.1-r1.apk"], files.Select(f => f.Name));
+        Assert.All(files, f => Assert.True(File.Exists(f.LocalPath)));
+        // Подпись ключом выпусков (не тестовым) не сойдётся.
+        await Assert.ThrowsAsync<DpiShell.Core.SecurityException>(() => RouterUpdatePackages.DownloadAsync(http, null, "0.2.1-r1", d.Sub("v")));
+    }
 }

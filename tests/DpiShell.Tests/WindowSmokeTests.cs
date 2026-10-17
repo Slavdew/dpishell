@@ -89,6 +89,15 @@ public sealed class WindowSmokeTests
         return null;
     }
 
+    /// <summary>Дождаться задачи на потоке окна, прокачивая очередь (её продолжения идут через Dispatcher).</summary>
+    static void WaitUi(Task t)
+    {
+        var frame = new DispatcherFrame();
+        t.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
+        Dispatcher.PushFrame(frame);
+        t.GetAwaiter().GetResult();
+    }
+
     static void Pump() => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
 
     /// <summary>Окно за экраном, без активации и панели задач. Таймеры окна остановлены: они ходят в sc.exe.</summary>
@@ -501,10 +510,160 @@ public sealed class WindowSmokeTests
                         rsv.ScrollToHome();
                     }
                 }
+                // Совместимость (§5.4): роутер новее программы — плашка и «Обновить программу»; требует программу новее — Blocked, команды неактивны.
+                foreach (var (api, minApp, name) in new[] { ("\"1.3\"", (string?)null, "warning"), ("\"1.0\"", "99.0.0", "blocked") })
+                {
+                    fake.StatusApi = api;
+                    fake.MinApp = minApp;
+                    WaitUi(router.RefreshAsync());   // на потоке окна: меняет списки, привязанные к окну
+                    vm.Page = Pages.Router;
+                    Pump();
+                    var tabs = Find<TabControl>(w)!;
+                    if (Find<Button>(tabs, b => b.Content as string == "Обновить программу ↗" && b.IsVisible) is null) throw new Exception($"Нет плашки совместимости ({name})");
+                    if (name == "blocked" && Find<Button>(tabs, b => b.Content as string == "Проверить" && b.IsVisible && b.IsEnabled) is not null)
+                        throw new Exception("При несовместимости «Проверить» активна");
+                    if (Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } csv) csv.ScrollToHome();
+                    Pump();
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-compat-{name}.png"));
+                }
+                // Доступно обновление (status.update): на вкладке — строка, «Что нового», «Обновить»; на главной — коротко.
+                fake.StatusApi = "\"1.0\"";
+                fake.MinApp = null;
+                fake.UpdateFieldOn = true;
+                WaitUi(router.RefreshAsync());
+                Pump();
+                {
+                    var tabs = Find<TabControl>(w)!;
+                    if (Find<Button>(tabs, b => b.Content as string == "Обновить" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Обновить» у доступного обновления");
+                    if (Find<Expander>(tabs, e => e.Header as string == "Что нового" && e.IsVisible) is not { } news) throw new Exception("Нет «Что нового»");
+                    news.IsExpanded = true;
+                    if (Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } usv) usv.ScrollToHome();
+                    Pump();
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-update.png"));
+                    vm.Page = Pages.Home;
+                    Pump();
+                    if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text.Contains("доступно обновление 0.2.1-r1") && t.IsVisible) is null && !router.HomeLine.Contains("предупрежд"))
+                        throw new Exception("На главной нет «доступно обновление»");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-update-home.png"));
+                }
+                fake.UpdateFieldOn = false;
+                fake.StatusApi = "1";
                 SetProp(vm, "IsLoading", true);
                 Close(w);
                 router.Dispose();
                 Stop(vm, helper);
+            }
+        });
+        Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
+    }
+
+    /// <summary>
+    /// Установка и удаление на роутере (FakeRouter + FakeSsh): диалоги строятся без ошибок привязок в обеих темах; кнопки на месте.
+    /// Снимки: &lt;тема&gt;-setup-&lt;состояние&gt;.png.
+    /// </summary>
+    [Fact]
+    public void RouterSetup_Dialogs_BindAndSnap()
+    {
+        using var tmp = new TempDir();
+        var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
+        var errors = WithBindingErrors(() =>
+        {
+            foreach (var theme in new[] { ThemeManager.Light, ThemeManager.Dark })
+            {
+                ThemeManager.Apply(theme);
+                using var fake = new FakeRouter().As020();
+                var shell = new Shell(new AppPaths(tmp.Sub("setup-" + theme), Repo.Data));
+                var settings = TestWindow.Settings(shell);
+                var offline = RouterSshScenarioTests.PreflightOk.Replace("\"net\":{\"feed\":true,\"fw_feed\":true,\"github\":true}", "\"net\":{\"feed\":false,\"fw_feed\":true,\"github\":false}");
+                var bad = RouterSshScenarioTests.PreflightOk.Replace("\"foreign\":[]", "\"foreign\":[{\"kind\":\"package\",\"name\":\"zapret\"}]")
+                    .Replace("\"tmp_free_kb\":221000", "\"tmp_free_kb\":9000");
+                var failed = "# Ключ витрины DpiShell\n# Витрина пакетов\n# Пакеты DpiShell и зависимости\n"
+                             + "{\"schema\":1,\"ok\":false,\"step\":\"packages\",\"message\":\"ERROR: unable to select packages:\\n  dpishell (no such package):\\n    required by: world[dpishell]\",\"version\":null,\"api\":null,\"core\":null}\n";
+                var router = new RouterViewModel(shell, settings)
+                {
+                    AddressAuto = false, CustomAddress = fake.Address, PollInterval = TimeSpan.FromMilliseconds(10), Gateway = () => "192.168.1.1",
+                    PcTimestamps = () => true, Http = new HttpClient(new RouterSetupViewModelTests.NoNetwork()), CoreCandidates = [RouterSetupViewModelTests.Vendor],
+                };
+
+                Window Show(Window d)
+                {
+                    d.WindowStartupLocation = WindowStartupLocation.Manual;
+                    d.Left = d.Top = -20000;
+                    d.ShowActivated = false;
+                    d.Show();
+                    Pump();
+                    return d;
+                }
+                void Shot(Window d, string name)
+                {
+                    Pump();
+                    if (snapDir is null) return;
+                    Directory.CreateDirectory(snapDir);
+                    Snap(d, Path.Combine(snapDir, $"{theme}-setup-{name}.png"));
+                }
+
+                // Удаление: подтверждение (не в один клик, «Отмена» по умолчанию) → итог «Ничего не осталось» и «Установить заново».
+                var uninstallSsh = RouterSetupViewModelTests.Ssh(fake);
+                RouterSetupViewModelTests.UninstallWritesResult(fake, uninstallSsh);
+                router.SshConnector = new FakeSshConnector(uninstallSsh);
+                Task.Run(() => router.ConnectAsync("secret")).GetAwaiter().GetResult();
+                var u = router.NewUninstall();
+                var ud = Show(RouterUninstallDialog.Create(u, null));
+                if (Find<Button>(ud, b => b.Content as string == "Удалить" && !b.IsEnabled) is null) throw new Exception("«Удалить» активна без подтверждения");
+                if (Find<Button>(ud, b => b.Content as string == "Отмена" && b.IsDefault && b.IsCancel) is null) throw new Exception("«Отмена» не по умолчанию");
+                Shot(ud, "uninstall-confirm");
+                u.Understood = true;
+                Task.Run(() => u.UninstallAsync()).GetAwaiter().GetResult();
+                Pump();
+                if (Find<Button>(ud, b => b.Content as string == "Установить заново" && b.IsVisible) is null) throw new Exception("После удаления нет «Установить заново»");
+                Shot(ud, "uninstall-done");
+                ud.Close();
+                // Без входа — по SSH, с паролем.
+                fake.Reinstall();
+                settings.RouterPassword = null;
+                Task.Run(() => router.ConnectAsync("")).GetAwaiter().GetResult();
+                var u2 = router.NewUninstall();
+                var ud2 = Show(RouterUninstallDialog.Create(u2, null));
+                if (Find<PasswordBox>(ud2, p => p.IsVisible) is null) throw new Exception("Без входа удаление не спрашивает пароль");
+                Shot(ud2, "uninstall-ssh");
+                ud2.Close();
+                fake.Remove();
+
+                // Установка: начало → роутер не подходит → подходит, через этот ПК → сбой пакетов с «Подробнее» → готово.
+                var i = router.NewInstall();
+                var d = Show(RouterInstallDialog.Create(i, null));
+                if (Find<Button>(d, b => b.Content as string == "Проверить роутер" && b.IsVisible) is null || Find<PasswordBox>(d) is null
+                    || Find<CheckBox>(d, c => c.Content as string == "Пароль не задан (свежая OpenWrt)") is null)
+                    throw new Exception("В диалоге установки нет пароля, «Пароль не задан» или «Проверить роутер»");
+                Shot(d, "install-start");
+                router.SshConnector = new FakeSshConnector(RouterSetupViewModelTests.Ssh(fake, bad));
+                Task.Run(() => i.CheckAsync("secret")).GetAwaiter().GetResult();
+                Shot(d, "install-unsuitable");
+                router.SshConnector = new FakeSshConnector(RouterSetupViewModelTests.Ssh(fake, offline, failed));
+                Task.Run(() => i.CheckAsync("secret")).GetAwaiter().GetResult();
+                Pump();
+                if (Find<Button>(d, b => b.Content as string == "Установить" && b.IsEnabled) is null) throw new Exception("Роутер подходит, а «Установить» неактивна");
+                Shot(d, "install-checked");
+                Task.Run(() => i.InstallAsync("secret")).GetAwaiter().GetResult();
+                Pump();
+                if (Find<Expander>(d, e => e.Header as string == "Подробнее" && e.IsVisible) is not { } more) throw new Exception("У ошибки установки нет «Подробнее»");
+                more.IsExpanded = true;
+                Shot(d, "install-failed");
+                router.SshConnector = new FakeSshConnector(RouterSetupViewModelTests.Ssh(fake));
+                Task.Run(async () => { await i.CheckAsync("secret"); await i.InstallAsync("secret"); }).GetAwaiter().GetResult();
+                Pump();
+                if (Find<Button>(d, b => b.Content as string == "Подобрать на роутере" && b.IsVisible) is null) throw new Exception("После установки нет «Подобрать на роутере»");
+                Shot(d, "install-done");
+                d.Close();
+
+                // Ключ роутера изменился: «Отмена» — главная и по умолчанию, «Доверять новому» — только явно.
+                var (hk, _) = HostKeyDialog.Create(RouterViewModel.HostKeyText, null);
+                Show(hk);
+                if (Find<Button>(hk, b => b.Content as string == "Отмена" && b.IsDefault && b.IsCancel) is null || Find<Button>(hk, b => b.Content as string == "Доверять новому") is null)
+                    throw new Exception("В вопросе о ключе роутера «Отмена» не по умолчанию или нет «Доверять новому»");
+                Shot(hk, "hostkey");
+                hk.Close();
+                router.Dispose();
             }
         });
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
