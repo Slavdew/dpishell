@@ -62,7 +62,7 @@ Copy-Item (Join-Path $PSScriptRoot 'README.txt') $stage
 Copy-Item (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.txt') $stage
 $license = Join-Path $repo 'LICENSE'
 if (Test-Path $license) { Copy-Item $license (Join-Path $stage 'LICENSE.txt') }
-else { Write-Warning 'В корне репозитория нет LICENSE: лицензия DpiShell не выбрана (docs/owner-questions.md, вопрос 4) — архив без неё.' }
+else { Write-Warning 'В корне репозитория нет LICENSE: лицензия DpiShell (MIT) должна лежать там — архив без неё.' }
 
 # 4. Архив: внутри — папка DpiShell\.
 $version = (Get-Item $exe).VersionInfo.ProductVersion
