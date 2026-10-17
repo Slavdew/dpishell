@@ -235,9 +235,11 @@ public sealed class WindowSmokeTests
                             throw new Exception("Автозапуск по умолчанию: включён без службы, выключен в режиме службы");
                     }
                     if (page == Pages.Settings) AssertServiceMode(w, vm);
-                    // Роутера нет — вкладка всё равно есть: пустое состояние и адрес (UX-аудит п. 47).
-                    if (page == Pages.Router && Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Роутер с DpiShell не найден" && t.IsVisible) is null)
-                        throw new Exception("На вкладке «Роутер» без роутера нет пустого состояния");
+                    // Роутера нет — вкладка всё равно есть: пустое состояние и адрес (UX-аудит п. 47). Ещё не искали — «не проверялся» (UX-аудит 2, п. 10),
+                    // и как поставить — ссылка на инструкцию (п. 9).
+                    if (page == Pages.Router && (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Роутер не проверялся" && t.IsVisible) is null
+                                                 || Find<Button>(Find<TabControl>(w)!, b => b.Content as string == "Как поставить на роутер ↗" && b.IsVisible) is null))
+                        throw new Exception("На вкладке «Роутер» без роутера нет пустого состояния или ссылки «Как поставить»");
                     // Вход на роутер — небольшое окно на месте (п. 14): Enter — «Войти», Esc — «Отмена».
                     if (page == Pages.Router)
                     {
@@ -249,6 +251,11 @@ public sealed class WindowSmokeTests
                         Pump();
                         if (Find<Button>(login, b => b.IsDefault && b.Content as string == "Войти") is null || Find<Button>(login, b => b.IsCancel) is null || Find<PasswordBox>(login) is null)
                             throw new Exception("В окне входа нет пароля, «Войти» по Enter или «Отмена» по Esc");
+                        // Пароль не задан — явный выбор (п. 11); «пустое — с сохранённым» — только когда сохранённый есть (здесь его нет).
+                        if (Find<CheckBox>(login, c => c.Content as string == "Пароль не задан (свежая OpenWrt)") is null)
+                            throw new Exception("В окне входа нет «Пароль не задан»");
+                        if (Find<TextBlock>(login, t => t.Text.Contains("вход с сохранённым")) is not null)
+                            throw new Exception("Подсказка про сохранённый пароль — а сохранённого нет");
                         if (snapDir is not null) Snap(login, Path.Combine(snapDir, $"{theme}-router-login.png"));
                         login.Close();
                     }

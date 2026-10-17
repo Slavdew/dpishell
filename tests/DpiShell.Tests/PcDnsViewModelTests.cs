@@ -43,7 +43,8 @@ public sealed class PcDnsViewModelTests : IDisposable
         Assert.Equal("Вернуть", vm.ToastAction);
 
         vm.ToastCmd.Execute(null);
-        for (int i = 0; i < 200 && vm.PcDns.CanRestore; i++) await Task.Delay(10);
+        // «Вернуть как было» снимается раньше, чем пройдёт повторная проверка, — ждём обоих.
+        for (int i = 0; i < 200 && (vm.PcDns.CanRestore || rechecks < 2); i++) await Task.Delay(10);
         Assert.False(vm.HasToast);
         Assert.Contains("dns_restore", f.Backend.Calls);
         Assert.False(vm.PcDns.CanRestore);

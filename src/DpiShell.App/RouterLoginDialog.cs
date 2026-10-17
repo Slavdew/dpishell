@@ -43,11 +43,21 @@ public static class RouterLoginDialog
         var error = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 4), Visibility = Visibility.Collapsed };
         error.SetResourceReference(TextBlock.ForegroundProperty, "Danger");
         panel.Children.Add(error);
-        var note = new TextBlock { Text = "Пароль хранится зашифрованным и только на этом компьютере. Поле пустое — вход с сохранённым.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 10) };
+        // У свежей OpenWrt пароль root не задан (UX-аудит 2, п. 11): явный выбор, а не «пустое поле», — пустое поле значит «взять сохранённый».
+        var noPassword = new CheckBox { Content = "Пароль не задан (свежая OpenWrt)", Margin = new Thickness(0, 2, 0, 6), HorizontalAlignment = HorizontalAlignment.Left };
+        noPassword.Checked += (_, _) => { password.Clear(); password.IsEnabled = false; };
+        noPassword.Unchecked += (_, _) => { password.IsEnabled = true; password.Focus(); };
+        panel.Children.Add(noPassword);
+        // «Поле пустое — вход с сохранённым» — только когда сохранённый есть.
+        var note = new TextBlock
+        {
+            Text = "Пароль хранится зашифрованным и только на этом компьютере." + (router.HasSavedPassword ? " Поле пустое — вход с сохранённым." : ""),
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 10),
+        };
         if (Application.Current?.TryFindResource("Hint") is Style hint) note.Style = hint;
         panel.Children.Add(note);
 
-        // «Дополнительно»: адрес роутера (обычно — основной шлюз, менять не нужно).
+        // «Дополнительно»: адрес роутера (обычно определяется сам, менять не нужно).
         var address = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
         var auto = new RadioButton { Margin = new Thickness(0, 3, 0, 3), HorizontalAlignment = HorizontalAlignment.Left };
         auto.SetBinding(ContentControl.ContentProperty, new Binding(nameof(RouterViewModel.AutoAddressText)) { Mode = BindingMode.OneWay });
@@ -80,7 +90,7 @@ public static class RouterLoginDialog
             password.Clear();
             login.IsEnabled = false;
             error.Visibility = Visibility.Collapsed;
-            try { await router.ConnectAsync(pw); }
+            try { await router.ConnectAsync(pw, noPassword: noPassword.IsChecked == true); }
             catch (Exception ex) { router.Say(Texts.Friendly(ex)); }
             finally { login.IsEnabled = true; }
             if (router.Connected) { w.Close(); return; }

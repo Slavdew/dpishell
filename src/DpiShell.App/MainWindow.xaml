@@ -1034,13 +1034,23 @@
                             <TextBlock Text="Роутер" Style="{StaticResource H1}" />
 
                             <!-- Пустое состояние: DpiShell на роутере не найден. -->
+                            <!-- Пока не искали — «не проверялся» (UX-аудит 2, п. 10); как поставить — ссылка на инструкцию и место под «Установить на роутер» (п. 9). -->
                             <Border Style="{StaticResource Card}" Visibility="{Binding Found, Converter={StaticResource InvVis}}">
                                 <StackPanel>
-                                    <TextBlock Text="Роутер с DpiShell не найден" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{Binding EmptyTitle}" Style="{StaticResource H2}" />
                                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
                                                Text="Если у вас роутер с OpenWrt, на него можно поставить DpiShell — тогда обход будет работать для всех устройств дома: телефонов, телевизора, приставки. Без роутера всё работает и на одном этом компьютере." />
                                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,8,0,0"
-                                               Text="DpiShell на роутере уже стоит? Проверьте адрес роутера ниже и нажмите «Найти»." />
+                                               Text="OpenWrt ли у вас: откройте в браузере адрес роутера (обычно 192.168.1.1) — у OpenWrt страница входа называется LuCI." />
+                                    <WrapPanel Margin="-4,10,0,0">
+                                        <!-- Установка из окна по SSH (router-api §5.4): кнопка появится, когда окно задаст Router.InstallCmd. -->
+                                        <Button Content="Установить на роутер" Style="{StaticResource Primary}" Command="{Binding InstallCmd}" Margin="4,0,8,0"
+                                                Visibility="{Binding CanInstall, Converter={StaticResource Vis}}" />
+                                        <Button Content="Как поставить на роутер ↗" Style="{StaticResource LinkButton}" Command="{Binding GuideCmd}" VerticalAlignment="Center"
+                                                ToolTip="Инструкция на GitHub: docs/router/README.md" />
+                                    </WrapPanel>
+                                    <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,8,0,0"
+                                               Text="DpiShell на роутере уже стоит? Нажмите «Найти» ниже." />
                                 </StackPanel>
                             </Border>
 
@@ -1082,12 +1092,19 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
-                                        <!-- Метки TCP (needs_tcp_timestamps): включили сами — одна строка; не смогли — «Включить». -->
-                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding HasTimestampsNote, Converter={StaticResource Vis}}">
-                                            <TextBlock Text="{Binding TimestampsNote}" Style="{StaticResource Hint}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="560" />
-                                            <Button Content="Включить" Style="{StaticResource LinkButton}" Margin="8,0,0,0" VerticalAlignment="Center" Command="{Binding EnableTimestampsCmd}"
-                                                    Visibility="{Binding TimestampsNeedAction, Converter={StaticResource Vis}}" />
-                                        </StackPanel>
+                                        <!-- Метки TCP (needs_tcp_timestamps): не смогли включить сами — плашка как у предупреждений и «Включить» со щитом (меняет Windows этого ПК);
+                                             включили — серой строкой. Термин — только в подсказке (UX-аудит 2, п. 8). -->
+                                        <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="4"
+                                                Padding="8,3" Margin="0,6,0,0" HorizontalAlignment="Left" ToolTip="{x:Static local:RouterViewModel.TimestampsTerm}"
+                                                Visibility="{Binding TimestampsNeedAction, Converter={StaticResource Vis}}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding TimestampsNote}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="520" />
+                                                <Button Content="Включить" ContentTemplate="{StaticResource Shield}" Style="{StaticResource LinkButton}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                        Command="{Binding EnableTimestampsCmd}" ToolTip="{x:Static local:RouterViewModel.TimestampsTerm}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <TextBlock Text="{Binding TimestampsNote}" Style="{StaticResource Hint}" FontSize="13" Margin="0,6,0,0" TextWrapping="Wrap"
+                                                   ToolTip="{x:Static local:RouterViewModel.TimestampsTerm}" Visibility="{Binding TimestampsDone, Converter={StaticResource Vis}}" />
                                         <WrapPanel Margin="0,12,0,0" Visibility="{Binding Connected, Converter={StaticResource Vis}}">
                                             <Button Content="{Binding ToggleText}" Command="{Binding ToggleCmd}" />
                                             <Button Content="Проверить" Command="{Binding CheckCmd}" />
@@ -1210,23 +1227,13 @@
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <TextBlock Text="Подключение" Style="{StaticResource H2}" />
-                                    <TextBlock Text="Адрес роутера" Style="{StaticResource Hint}" Margin="0,4,0,2" />
-                                    <RadioButton Content="{Binding AutoAddressText}" IsChecked="{Binding AddressAuto}" Margin="0,3" HorizontalAlignment="Left" />
-                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                        <RadioButton Content="Свой:" IsChecked="{Binding AddressCustom}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                        <TextBox Text="{Binding CustomAddress, UpdateSourceTrigger=PropertyChanged}" Width="200" Padding="6,4" IsEnabled="{Binding AddressCustom}"
-                                                 ToolTip="IP или имя роутера, например 192.168.1.1" AutomationProperties.Name="Адрес роутера">
-                                            <TextBox.InputBindings>
-                                                <KeyBinding Key="Enter" Command="{Binding FindCmd}" />
-                                            </TextBox.InputBindings>
-                                        </TextBox>
-                                    </StackPanel>
-                                    <WrapPanel Margin="0,12,0,0">
+                                    <WrapPanel Margin="0,4,0,0">
                                         <Button Content="Найти" Command="{Binding FindCmd}" />
                                         <Button Content="Войти…" Style="{StaticResource Primary}" Command="{Binding LoginCmd}" Visibility="{Binding NeedLogin, Converter={StaticResource Vis}}" />
                                         <Button Content="Сменить пароль…" Command="{Binding LoginCmd}" Visibility="{Binding Connected, Converter={StaticResource Vis}}" />
                                     </WrapPanel>
-                                    <TextBlock Text="{Binding ConnectionText}" FontWeight="SemiBold" Margin="0,4,0,0" TextWrapping="Wrap">
+                                    <TextBlock Text="{Binding ConnectionText}" FontWeight="SemiBold" Margin="0,4,0,0" TextWrapping="Wrap"
+                                               Visibility="{Binding Searched, Converter={StaticResource Vis}}">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="{DynamicResource Text}" />
@@ -1238,7 +1245,21 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
-                                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="Пароль хранится зашифрованным и только на этом компьютере." />
+                                    <!-- Адрес — в «Дополнительно», как в окне входа: обычно его определяют сами (UX-аудит 2, п. 10). -->
+                                    <Expander Header="Дополнительно: адрес роутера" Margin="0,8,0,0" IsExpanded="{Binding AddressCustom, Mode=OneTime}">
+                                        <StackPanel Margin="0,4,0,0">
+                                            <RadioButton Content="{Binding AutoAddressText}" IsChecked="{Binding AddressAuto}" Margin="0,3" HorizontalAlignment="Left" />
+                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                <RadioButton Content="Свой:" IsChecked="{Binding AddressCustom}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                                <TextBox Text="{Binding CustomAddress, UpdateSourceTrigger=PropertyChanged}" Width="200" Padding="6,4" IsEnabled="{Binding AddressCustom}"
+                                                         ToolTip="IP или имя роутера, например 192.168.1.1" AutomationProperties.Name="Адрес роутера">
+                                                    <TextBox.InputBindings>
+                                                        <KeyBinding Key="Enter" Command="{Binding FindCmd}" />
+                                                    </TextBox.InputBindings>
+                                                </TextBox>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Expander>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

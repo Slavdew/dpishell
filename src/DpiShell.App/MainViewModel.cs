@@ -436,8 +436,8 @@ public sealed partial class MainViewModel : Observable
         try { await Task.Delay(LoadSlowAfter, ct); }
         catch (OperationCanceledException) { return; }
         if (!IsLoading || LoadFailed) return;
-        LoadSlow = true;
         LoadingText = "Помощник отвечает дольше обычного. Можно подождать, повторить или открыть окно без него — только для просмотра.";
+        LoadSlow = true;
     }
 
     /// <summary>«Открыть без помощника»: не ждать его — окно в режиме просмотра; помощник подхватится сам, когда ответит (TickAsync).</summary>
