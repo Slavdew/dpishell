@@ -68,7 +68,7 @@ public static class WinwsArgs
     // Порядок ролей = порядок профилей: winws берёт первый подходящий профиль. Игровые — последними (general.bat:24-25).
     public static readonly string[] RoleOrder = ["quic", "discord_udp", "discord_media", "google", "general", "ipset_udp", "ipset_tcp", "game_tcp", "game_udp"];
 
-    // Разрешённые параметры десинхронизации: всё, что встречается в проверенном каталоге (docs/03-vetting.md).
+    // Разрешённые параметры десинхронизации: всё, что встречается в проверенном каталоге (docs/vetting.md).
     static readonly HashSet<string> AllowedOptions =
     [
         "--dpi-desync", "--dpi-desync-repeats", "--dpi-desync-fooling", "--dpi-desync-split-pos", "--dpi-desync-split-seqovl",

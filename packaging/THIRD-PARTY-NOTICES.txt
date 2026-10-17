@@ -3,7 +3,7 @@
 
 DpiShell — оболочка над zapret/winws. Ниже — всё чужое, что лежит в архиве или что
 программа скачивает при первом запуске, откуда оно взято и под какой лицензией.
-Проверка каждого источника (хеши, состав) — docs/03-vetting.md в репозитории
+Проверка каждого источника (хеши, состав) — docs/vetting.md в репозитории
 https://github.com/Slavdew/dpishell. Полные тексты лицензий — в конце файла.
 
 1. zapret (winws.exe) — bol-van
@@ -34,7 +34,7 @@ https://github.com/Slavdew/dpishell. Полные тексты лицензий 
    распространяется в составе Flowseal (.service/ipset-service.txt).
    https://github.com/V3nilla/IPSets-For-Bypass-in-Russia
    Лицензия у источника не объявлена. Это перечень адресов сетей (фактические
-   данные), проверен валидатором DpiShell (docs/03-vetting.md).
+   данные), проверен валидатором DpiShell (docs/vetting.md).
 
 6. .NET 10 (среда выполнения внутри DpiShell.exe) — Microsoft и .NET Foundation
    https://github.com/dotnet/runtime

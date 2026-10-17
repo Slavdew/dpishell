@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <!-- Проверенные данные (docs/03-vetting.md) едут рядом с exe и раскладываются в %ProgramData% при первом запуске. -->
+  <!-- Проверенные данные (docs/vetting.md) едут рядом с exe и раскладываются в %ProgramData% при первом запуске. -->
   <ItemGroup>
     <None Include="..\..\data\**\*" LinkBase="data" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
