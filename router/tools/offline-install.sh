@@ -15,6 +15,28 @@ arch=$(sed -n "s/^DISTRIB_ARCH='\(.*\)'/\1/p" /etc/openwrt_release)
 
 file_of() { awk -v n="$1" '$1 == n { print $2 }' packages.txt; }
 
+# Ядро: модули из набора (kmod-nft-queue…) загрузятся только в то ядро, под которое собраны, — версия и хеш
+# конфигурации (vermagic) пакета kernel из набора должны совпасть с установленным. Нет записи в базе apk — по uname -r.
+want=$(file_of kernel | sed 's/^kernel-//; s/\.apk$//')
+have=$(awk '/^P:kernel$/ { f = 1; next } f && /^V:/ { print substr($0, 3); exit } /^$/ { f = 0 }' /lib/apk/db/installed 2>/dev/null)
+if [ -n "$want" ]; then
+	# Без $(… && …): под set -e ложное условие в подстановке молча обрывает сценарий.
+	ok=
+	if [ -n "$have" ]; then
+		[ "$want" = "$have" ] && ok=1
+	else
+		have=$(uname -r)
+		[ "${want%%~*}" = "$have" ] && ok=1
+	fi
+	[ -n "$ok" ] || {
+		echo "Набор собран для ядра ${want%%-r[0-9]*}, а на роутере — ${have%%-r[0-9]*}."
+		echo 'Модули ядра из набора здесь не загрузятся, обход не заработает. Ничего не установлено.'
+		echo 'Соберите набор под эту прошивку: скопируйте с роутера /etc/apk/repositories.d/customfeeds.list'
+		echo 'и на компьютере: sh router/tools/offline-bundle.sh router/offline-bundle customfeeds.list'
+		exit 1
+	}
+fi
+
 # Что ставить, решает apk роутера: начинаем с DpiShell и добавляем из набора то, чего ему не хватает.
 # Набор собран в пустом корне — в нём есть и то, что в прошивке уже стоит или заменено (nftables-json/-nojson).
 set -- "$D/$(file_of dpishell)" "$D/$(file_of luci-app-dpishell)"
