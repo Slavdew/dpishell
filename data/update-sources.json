@@ -8,5 +8,11 @@
     "https://slavdew.github.io/dpishell/data/",
     "https://raw.githubusercontent.com/Slavdew/dpishell/master/data/"
   ],
-  "release_page": "https://github.com/Slavdew/dpishell/releases/latest"
+  "release_page": "https://github.com/Slavdew/dpishell/releases/latest",
+  // Выпуски программы (architecture.md «Обновление программы»): {адрес}release.json + release.json.sig (подпись обязательна),
+  // {адрес}DpiShell-X.Y.Z-portable.zip по sha256 из release.json. «latest» репозитория — всегда выпуск windows-v*
+  // (релизы роутера публикуются с --latest=false). Зеркало — ещё одна строка с тем же составом файлов.
+  "app_sources": [
+    "https://github.com/Slavdew/dpishell/releases/latest/download/"
+  ]
 }

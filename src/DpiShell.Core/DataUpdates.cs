@@ -9,29 +9,41 @@ namespace DpiShell.Core;
 /// и обновлением данных не меняется: зеркало не может само себя назначить или добавить другое (architecture.md «Обновления данных»).
 /// </summary>
 /// <param name="Sources">Базовые адреса (https, с «/» в конце): манифест — <c>{адрес}data.json</c>, файлы — <c>{адрес}{ключ}</c>.</param>
-/// <param name="ReleasePage">Страница релизов — ссылка «Скачать новую версию» (приложение само себя не обновляет).</param>
+/// <param name="ReleasePage">Страница релизов — ссылка «Скачать новую версию» (если обновиться из окна не вышло).</param>
 public sealed record UpdateSources(IReadOnlyList<string> Sources, string? ReleasePage = null)
 {
     public const string FileName = "update-sources.json";
 
+    /// <summary>Источник выпусков программы, если в файле нет <c>app_sources</c>: «последний» релиз репозитория — всегда Windows (релизы роутера — не latest).</summary>
+    public static readonly IReadOnlyList<string> DefaultAppSources = ["https://github.com/Slavdew/dpishell/releases/latest/download/"];
+
+    /// <summary>
+    /// Откуда брать выпуски программы (<see cref="AppUpdateClient"/>): <c>{адрес}release.json</c>, <c>{адрес}release.json.sig</c>,
+    /// <c>{адрес}{имя архива}</c>. По очереди, как данные; зеркало — ещё одна строка <c>app_sources</c>.
+    /// </summary>
+    public IReadOnlyList<string> AppSources { get; init; } = DefaultAppSources;
+
     static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower, ReadCommentHandling = JsonCommentHandling.Skip };
 
-    sealed record FileForm(List<string>? Sources, string? ReleasePage);
+    sealed record FileForm(List<string>? Sources, string? ReleasePage, List<string>? AppSources);
 
-    /// <summary>Прочитать; негодные адреса (не https, с запросом, логином) отбрасываются. Файла нет — источников нет.</summary>
+    /// <summary>Прочитать; негодные адреса (не https, с запросом, логином) отбрасываются. Файла нет — источников данных нет.</summary>
     public static UpdateSources Load(string path)
     {
         if (!File.Exists(path)) return new([]);
         var f = JsonSerializer.Deserialize<FileForm>(File.ReadAllText(path), Json);
-        return From(f?.Sources ?? [], f?.ReleasePage);
+        return From(f?.Sources ?? [], f?.ReleasePage, f?.AppSources);
     }
 
-    public static UpdateSources From(IEnumerable<string> sources, string? releasePage = null)
+    public static UpdateSources From(IEnumerable<string> sources, string? releasePage = null, IEnumerable<string>? appSources = null) =>
+        new(Clean(sources), IsSafeHttps(releasePage) ? releasePage : null) { AppSources = appSources is null ? DefaultAppSources : Clean(appSources) };
+
+    static List<string> Clean(IEnumerable<string> sources)
     {
         var list = new List<string>();
         foreach (var s in sources)
             if (Normalize(s) is { } n && !list.Contains(n)) list.Add(n);
-        return new(list, IsSafeHttps(releasePage) ? releasePage : null);
+        return list;
     }
 
     static string? Normalize(string? s)
