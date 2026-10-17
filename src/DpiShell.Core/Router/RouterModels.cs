@@ -33,7 +33,18 @@ public sealed record RouterLastCheck(DateTime? At, string? Source, bool Ok, List
 /// <summary>Таймер проверки; hours ∈ 0.5, 1, 3, 6, 12, 24 (редакция §9).</summary>
 public sealed record RouterSchedule(bool Enabled, double Hours, bool AutoSelect = false);
 /// <summary>Фоновые задания роутера; dns — любое DNS-задание (§9, 2026-10-17), dns_analyze оставлен с тем же значением.</summary>
-public sealed record RouterJobs(bool Select, bool Check, bool CoreInstall, bool DnsAnalyze = false, bool SiteCheck = false, bool Dns = false);
+public sealed record RouterJobs(bool Select, bool Check, bool CoreInstall, bool DnsAnalyze = false, bool SiteCheck = false, bool Dns = false, bool Update = false);
+
+/// <summary>Последнее задание обновления (status.update.job): action update | update_check, from feed | local; at — когда закончилось.</summary>
+public sealed record RouterUpdateJob(string? Action, string? From, bool Running, bool? Ok, string? Message, DateTime? At = null);
+/// <summary>
+/// status.update (ядро договора §5.4): available — в витрине версия новее установленной, notes — что нового (до 15 строк),
+/// job — последнее задание обновления (null — не было).
+/// </summary>
+public sealed record RouterUpdate(bool Available, string? Version, List<string>? Notes, DateTime? CheckedAt, RouterUpdateJob? Job = null);
+
+/// <summary>Откуда обновлять: feed — витрина; local — /tmp/dpishell-update (кладёт окно по SSH, <see cref="RouterSsh.UploadUpdateAsync"/>).</summary>
+public enum RouterUpdateSource { Feed, Local }
 public sealed record RouterWarning(string Code, string? Text);
 
 public sealed record RouterStatus(
@@ -43,7 +54,9 @@ public sealed record RouterStatus(
     // needs_tcp_timestamps: стратегия роутера работает только у устройств с метками TCP — ПК включает их сам (§6).
     string? Mode = null, bool NeedsTcpTimestamps = false,
     // С 0.2.0: методы, которые роутер реально обрабатывает (null — старый роутер, считаем «все из API 1.0»), и min_app.
-    List<string>? Methods = null, string? MinApp = null);
+    List<string>? Methods = null, string? MinApp = null,
+    // С 0.2.0 (ядро договора): есть ли обновление и последнее задание обновления.
+    RouterUpdate? Update = null);
 
 /// <summary>source: catalog | user; у user id «u-…» — присланные с ПК (strategies_user_set), «r-…» — найденные глубоким поиском на роутере (§9).</summary>
 public sealed record RouterStrategyItem(string Id, string Title, string Source, int Runs, int Passed)

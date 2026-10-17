@@ -10,11 +10,20 @@
   <ItemGroup>
     <None Include="..\..\data\**\*" LinkBase="data" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- Сценарии для роутера по SSH (router-api.md §5.5) — те же файлы, что в router/, ссылкой (не копией), чтобы не расходились. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\router\tools\dpishell-preflight.sh" Link="Router\Scripts\dpishell-preflight.sh" LogicalName="DpiShell.Router.dpishell-preflight.sh" />
+    <EmbeddedResource Include="..\..\router\tools\dpishell-install.sh" Link="Router\Scripts\dpishell-install.sh" LogicalName="DpiShell.Router.dpishell-install.sh" />
+    <EmbeddedResource Include="..\..\router\dpishell\files\usr\libexec\dpishell\uninstall.sh" Link="Router\Scripts\uninstall.sh" LogicalName="DpiShell.Router.uninstall.sh" />
+    <EmbeddedResource Include="..\..\router\dpishell\files\usr\share\dpishell\core.json" Link="Router\Scripts\core.json" LogicalName="DpiShell.Router.core.json" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="System.Management" Version="10.0.13" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.13" />
     <!-- Хост помощника (служба Windows DpiShellHelper, docs/dev/helper-protocol.md). Версия закреплена. -->
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.13" />
+    <!-- SSH к роутеру: установка/удаление без API, SFTP, проброс -R (docs/vetting.md «SSH.NET»). Версия закреплена. -->
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
   </ItemGroup>
 
 </Project>

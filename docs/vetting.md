@@ -46,6 +46,18 @@
 - Пустой include-лист в режиме «Все адреса»: по исходнику `nfq/ipset.c` v72.13 (`IpsetCheck_`, «all include lists are empty means check passes») — проверка проходит для любого адреса; поэтому в этом режиме подставляется **только** пустой `ipset-any.txt`, без `user-ipset.txt`.
 - Манифест `data/data.json` перечисляет все файлы `data/` (кроме самого манифеста и `update-sources.json`) с sha256 — по нему помощник ставит обновления. Тест `PackageManifest_CoversEveryDataFile_AndPassesUpdateRules` ловит файл, не попавший в манифест, и несовпавший хеш: правишь данные — правь и `data.json` (и `version`).
 
+## Библиотека SSH: SSH.NET 2026.0.0 (MIT)
+
+Нужна окну для установки, удаления и обновления DpiShell на роутере без API (router-api.md §5.5): вход по паролю, `sh -s` со stdin, загрузка файлов, проброс `-R` к прокси ПК. Проверено 2026-10-17.
+- Пакет NuGet `SSH.NET` (сборка `Renci.SshNet`), владельцы на nuget.org — `SSH.NET`, `drieseng`, `olegkap`, `wojtpl2` (исторические авторы и организация проекта); 345 млн загрузок. Исходники — `github.com/sshnet/SSH.NET` (4,4 тыс. звёзд, живой: последняя правка 2026-10-14); в `.nuspec` указан коммит сборки `7b2fd3db`.
+- Версия 2026.0.0 — стабильная, выпущена 2026-08-09 (больше двух месяцев назад), есть сборка под `net10.0`. Ломающих изменений в заметках выпуска нет.
+- Лицензия: MIT (`licenseExpression` пакета и `LICENSE` репозитория).
+- Файл: `ssh.net.2026.0.0.nupkg`, sha256 `b2515de6…fecac2`; подпись репозитория nuget.org (`dotnet nuget verify` — «NuGet.org Repository by Microsoft»).
+- Известные уязвимости: GHSA-q939-rpr3-3284 (CVE-2026-48798, запись файлов при рекурсивной загрузке `ScpClient`) и GHSA-mggc-4xg6-vcxf (CVE-2026-85756, выполнение команд через пути `ScpClient`) — обе «high», обе в `<= 2025.1.0`, исправлены в 2026.0.0. Мы `ScpClient` не используем вовсе (только `SshClient`, `SftpClient`, `ForwardedPortRemote`). У 2026.0.0 nuget.org уязвимостей не показывает.
+- Зависимости под net10.0: `BouncyCastle.Cryptography` 2.7.0 (MIT, выпуск 2026-07-30, уязвимостей нет) и `Microsoft.Extensions.Logging.Abstractions` 8.0.3 (MIT, Microsoft).
+- Как защищаемся сами: ключ роутера запоминается при первом входе (`IRouterHostKeyStore`, отпечаток SHA256 как у OpenSSH); другой ключ — отказ с текстом «Ключ роутера изменился (переустановили прошивку?)», а не молча. Сеанс SFTP принимает только тот же ключ. Сценарии передаются через stdin из ресурсов сборки (`router/tools/*.sh`, `uninstall.sh` — те же файлы, что в репозитории); загруженное (ядро, пакеты обновления) сверяется `sha256sum` на самом роутере.
+- У OpenWrt по умолчанию dropbear без `sftp-server` (пакет `openssh-sftp-server`): тогда файл идёт потоком в `cat > файл` по тому же SSH, проверка хеша — та же.
+
 ## Лицензии в portable-архиве
 
 `packaging/THIRD-PARTY-NOTICES.txt` — откуда что и полные тексты: zapret — MIT (`zapret-v72.13/docs/LICENSE.txt` из архива релиза в `vendor/`); Flowseal — MIT (`data/licenses/flowseal-MIT.txt`); WinDivert — по выбору LGPL v3 или GPL v2 (GitHub API: `NOASSERTION`, условия — reqrypt.org/windivert.html); cygwin1.dll — LGPL v3; .NET 10 (Microsoft.NETCore.App и WindowsDesktop) — MIT + THIRD-PARTY-NOTICES пакета среды. Тексты GPL v2/v3 и LGPL v3 — канонические файлы FSF (sha256 LGPL v3 `a853c2ff…9d1c`, GPL v3 `8ceb4b9e…b903`, GPL v2 `8177f975…0643`). **IP-список V3nilla/IPSets-For-Bypass-in-Russia: лицензия у источника не объявлена** (GitHub API `license: null`) — перечень адресов сетей, идёт через Flowseal; отмечено в уведомлениях. DpiShell — MIT (`LICENSE`).
