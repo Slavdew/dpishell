@@ -599,7 +599,7 @@ public sealed class WindowSmokeTests
         vm.ShowPcDns(new DnsStatusInfo("google", true, false, true, true,
             [new DnsAdapterInfo("Ethernet", "ethernet", false, ["8.8.8.8", "8.8.4.4"], true), new DnsAdapterInfo("Wi-Fi", "wifi", false, ["8.8.8.8", "8.8.4.4"], true)],
             ["Radmin VPN", "vEthernet (Default Switch)"]));
-        SetProp(vm, "CheckSummary", "Открывается 3 из 4");
+        SetProp(vm, "CheckSummary", "Открывается 1 из 2");
         vm.CheckRows.Add(new(true, "YouTube", "https://www.youtube.com/", "0.4 с"));
         vm.CheckRows.Add(new(true, "YouTube", "https://rr1---sn-4g5e6nsz.googlevideo.com/", "0.7 с"));
         vm.CheckRows.Add(new(true, "Discord", "https://discord.com/", "0.5 с"));

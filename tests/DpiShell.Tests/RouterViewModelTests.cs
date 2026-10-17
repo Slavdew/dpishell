@@ -351,7 +351,9 @@ public sealed class RouterViewModelTests : IDisposable
         vm.Router.AddressAuto = false;
         vm.Router.CustomAddress = r.Address;
         await vm.Router.ConnectAsync("secret");
-        Assert.Equal("Обход делает роутер — на этом ПК включать не нужно", vm.StatusDetail);
+        // Не «Выключено» — обход работает, только через роутер (UX-аудит 2, п. 3).
+        Assert.Equal("Работает через роутер", vm.StatusTitle);
+        Assert.Equal("На этом ПК включать не нужно", vm.StatusDetail);
         string? asked = null;
         vm.Choose = (t, _) => { asked = t; return -1; };   // «Отмена» — на ПК ничего не включаем (и не трогаем sc.exe)
         await vm.EnableAsync();

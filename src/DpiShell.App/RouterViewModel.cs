@@ -159,6 +159,9 @@ public sealed class RouterViewModel : Observable, IDisposable
 
     /// <summary>Строка состояния окна.</summary>
     public Action<string> Say { get; set; } = _ => { };
+    /// <summary>Ошибка действия: окно показывает её тостом, а не только в строке состояния (UX-аудит 2, п. 16). По умолчанию — как <see cref="Say"/>.</summary>
+    public Action<string>? Fail { get; set; }
+    void Failed(string text) => (Fail ?? Say)(text);
     /// <summary>Стратегии, найденные глубоким поиском на ПК (их хранит помощник).</summary>
     public Func<IReadOnlyList<Strategy>> FoundStrategies { get; set; } = () => [];
     /// <summary>Свои адреса этого ПК (сохранены у помощника).</summary>
@@ -378,7 +381,7 @@ public sealed class RouterViewModel : Observable, IDisposable
     void TrySave()
     {
         try { _settings.Save(); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say(Texts.Friendly(e)); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Failed(Texts.Friendly(e)); }
     }
 
     bool _refreshing;
@@ -684,7 +687,7 @@ public sealed class RouterViewModel : Observable, IDisposable
                 _timestampsByRouter = true;
                 Say("Включены временные метки TCP — нужны стратегии роутера.");
             }
-            else if (ask) Say("Не удалось включить метки TCP на этом ПК.");
+            else if (ask) Failed("Не удалось включить настройку Windows для роутера. Попробуйте ещё раз или перезагрузите компьютер.");
         }
         RaisePc();
     }
@@ -742,7 +745,7 @@ public sealed class RouterViewModel : Observable, IDisposable
         }
         catch (RouterException e)
         {
-            Say(RouterTexts.Friendly(e));
+            Failed(RouterTexts.Friendly(e));
             if (e.Failure == RouterFailure.AccessDenied)
             {
                 Connected = false;
@@ -755,7 +758,7 @@ public sealed class RouterViewModel : Observable, IDisposable
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            Say(Texts.Friendly(e));
+            Failed(Texts.Friendly(e));
             return false;
         }
         finally { Busy = false; }
@@ -775,7 +778,7 @@ public sealed class RouterViewModel : Observable, IDisposable
         {
             if (!Confirm("На этом ПК обход включён. Вместе с роутером он не работает: трафик обрабатывается дважды, и сайты перестают открываться.\n\n"
                          + "Выключить обход на этом ПК и включить на роутере?")) return;
-            if (!await StopPc()) { Say("Не удалось выключить обход на этом ПК — на роутере не включаю."); return; }
+            if (!await StopPc()) { Failed("Не удалось выключить обход на этом ПК — на роутере не включаю."); return; }
         }
         if (await Guard(enable ? "Включаю обход на роутере…" : "Выключаю обход на роутере…", async () =>
             {

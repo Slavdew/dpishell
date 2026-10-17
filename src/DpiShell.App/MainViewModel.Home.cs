@@ -9,6 +9,9 @@ public sealed record CheckGroupMark(string Title, bool Ok)
     public string Mark => Ok ? "✓" : "✗";
 }
 
+/// <summary>Место в окне, куда прокрутить по ссылке (<see cref="MainViewModel.ShowRequested"/>).</summary>
+public enum Spot { Strategies, PcDns }
+
 /// <summary>
 /// Главная по UX-аудиту («Главная»): одно главное действие — выключатель; итог проверки — в карточке состояния;
 /// стратегии — под «Сменить стратегию»; помехи — одной строкой «Нашлось N помех», раскрыта только самая важная.
@@ -17,6 +20,9 @@ public sealed partial class MainViewModel
 {
     /// <summary>Помехи на главной в порядке важности: показывается первая, остальные — по «Показать все».</summary>
     enum Issue { BothOn, Conflicts, Dns, Vpn, Update }
+
+    /// <summary>Показать место на странице: окно прокручивает к нему (и раскрывает список DNS). Ссылка не должна «ничего не делать» (UX-аудит 2, п. 2, 4).</summary>
+    public event Action<Spot>? ShowRequested;
 
     void InitHome()
     {
@@ -37,7 +43,12 @@ public sealed partial class MainViewModel
     public bool ShowStrategies
     {
         get => _showStrategies;
-        set { if (Set(ref _showStrategies, value)) Raise(nameof(StrategiesLinkText)); }
+        set
+        {
+            if (!Set(ref _showStrategies, value)) return;
+            Raise(nameof(StrategiesLinkText));
+            if (value) ShowRequested?.Invoke(Spot.Strategies);
+        }
     }
     public string StrategiesLinkText => ShowStrategies ? "Скрыть стратегии" : "Сменить стратегию";
     public ICommand ToggleStrategiesCmd => _toggleStrategiesCmd ??= new RelayCommand(() => ShowStrategies = !ShowStrategies);
@@ -50,7 +61,7 @@ public sealed partial class MainViewModel
 
     /// <summary>По группе: открылось всё — ✓. Строится из строк проверки (адреса — в «Подробнее»).</summary>
     public ObservableCollection<CheckGroupMark> CheckGroups { get; } = [];
-    public bool HasCheck => CheckRows.Count > 0;
+    public bool HasCheck => CheckRows.Count > 0 || Checking;
 
     string _checkedAt = "";
     /// <summary>«в 14:05» — когда проверяли.</summary>
