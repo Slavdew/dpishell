@@ -435,6 +435,64 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.True(vm.Conflicts.Single(c => c.Name == "zapret2").CanStop);
     }
 
+    // ---------- свои адреса роутера пусты (07-router-api §9, 2026-10-17) ----------
+
+    [Fact]
+    public async Task SelectOnlyUser_RouterListEmpty_OffersPcTargets_SendsAndRetries()
+    {
+        using var r = new FakeRouter { UserTargets = [] };
+        var vm = await Connected(r);
+        vm.SelectOptions = () => (["user"], true);
+        vm.PcUserTargets = () => ["example.org", "news.example.net"];
+        string? asked = null;
+        vm.Confirm = q => { asked = q; return true; };
+
+        await vm.StartSelectAsync(deep: false);
+
+        Assert.Contains("пуст", asked);
+        Assert.Contains("Отправить свои адреса с компьютера на роутер", asked);
+        Assert.Equal(2, Count(r, "select_start"));          // отказ, отправка, повтор
+        Assert.Equal(1, Count(r, "targets_set"));
+        Assert.Equal(["https://example.org/", "https://news.example.net/"], r.UserTargets.Select(t => t.Url));
+        Assert.Equal(2, vm.Targets.Count);
+        Assert.StartsWith("Включена на роутере: ", vm.ResultText);
+    }
+
+    [Fact]
+    public async Task SelectOnlyUser_KnownEmpty_AsksBeforeStart_DeclineSendsNothing()
+    {
+        using var r = new FakeRouter { UserTargets = [] };
+        var vm = await Connected(r);
+        await vm.LoadTargetsAsync();                         // список роутера известен: пуст
+        Assert.Empty(vm.Targets);
+        vm.SelectOptions = () => (["user"], true);
+        vm.PcUserTargets = () => ["example.org"];
+        int asks = 0;
+        vm.Confirm = _ => { asks++; return false; };
+
+        await vm.StartSelectAsync(deep: false);
+
+        Assert.Equal(1, asks);
+        Assert.Equal(0, Count(r, "select_start"));           // спросили заранее, без лишнего отказа роутера
+        Assert.Equal(0, Count(r, "targets_set"));
+        Assert.Contains("нет своих адресов", _said[^1]);
+    }
+
+    [Fact]
+    public async Task SelectOnlyUser_EmptyEverywhere_ShowsRouterText()
+    {
+        using var r = new FakeRouter { UserTargets = [] };
+        var vm = await Connected(r);
+        vm.SelectOptions = () => (["user"], true);
+        vm.Confirm = _ => throw new InvalidOperationException("на ПК адресов нет — спрашивать нечего");
+
+        await vm.StartSelectAsync(deep: false);
+
+        Assert.Equal(1, Count(r, "select_start"));
+        Assert.Contains("Список своих адресов на роутере пуст", _said[^1]);
+        Assert.False(vm.Selecting);
+    }
+
     [Fact]
     public async Task Client_FlowOffloadFixAndIpv6Set()
     {

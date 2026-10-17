@@ -176,7 +176,11 @@ public sealed class FakeRouter : IDisposable
             "disable" => Do(() => Enabled = false),
             "strategy_set" => Do(() => Strategy = args["id"]!.GetValue<string>()),
             "check_now" => Do(() => CheckedAt = CheckedAt.AddMinutes(1), """{ "started": true }"""),
+            // §9 (2026-10-17): только «Свои адреса», а их список пуст — invalid, field groups.
+            "select_start" when args["groups"] is System.Text.Json.Nodes.JsonArray g && g.Count == 1 && g[0]!.GetValue<string>() == "user" && UserTargets.Count == 0 =>
+                """{"error":{"code":"invalid","text":"Список своих адресов на роутере пуст — добавьте адреса или выберите другие группы","field":"groups"}}""",
             "select_start" => Step0("""{ "started": true }"""),
+            "targets_set" => Do(() => UserTargets = args["items"]!.AsArray().Select(x => (x!["url"]!.GetValue<string>(), x["important"]?.GetValue<bool>() ?? false)).ToList()),
             "select_cancel" => Do(() => { _cancelled = true; SelectRunningJob = false; }),
             "apply" => Do(() => Strategy = args["id"]!.GetValue<string>()),
             "schedule_set" => Do(() =>
@@ -202,7 +206,7 @@ public sealed class FakeRouter : IDisposable
             "ipv6_set" => Do(() => { Ipv6Enabled = args["enabled"]!.GetValue<bool>(); WarningsJson = "[]"; }),
             "lists_set" => Do(() => Lists[args["name"]!.GetValue<string>()] = args["lines"]!.AsArray().Select(x => x!.GetValue<string>()).ToList()),
             "select_progress" => Progress(),
-            "targets_get" => """{ "items": [ { "url": "https://example.com/", "important": true } ] }""",
+            "targets_get" => System.Text.Json.JsonSerializer.Serialize(new { items = UserTargets.Select(t => new { url = t.Url, important = t.Important }) }),
             "lists_get" => args["name"]?.GetValue<string>() == "exclude"
                 ? """{ "lines": ["gosuslugi.ru"], "editable": false }"""
                 : $$"""{ "lines": {{System.Text.Json.JsonSerializer.Serialize(Lists.GetValueOrDefault(args["name"]!.GetValue<string>()) ?? ["example.com"])}}, "editable": true }""",
@@ -214,6 +218,9 @@ public sealed class FakeRouter : IDisposable
     }
 
     static string Do(Action a, string payload = "{}") { a(); return payload; }
+
+    /// <summary>«Свои адреса» роутера (targets_get/targets_set); по умолчанию — пример §5.1.</summary>
+    public List<(string Url, bool Important)> UserTargets { get; set; } = [("https://example.com/", true)];
 
     /// <summary>Свои списки после lists_set (до него — пример §5.1).</summary>
     public Dictionary<string, List<string>> Lists { get; } = [];

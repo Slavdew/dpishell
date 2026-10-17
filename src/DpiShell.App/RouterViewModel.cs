@@ -939,15 +939,64 @@ public sealed class RouterViewModel : Observable, IDisposable
     public async Task StartSelectAsync(bool deep)
     {
         if (Selecting || SelectOptions() is not { } o) return;
-        if (!await Guard("Запускаю подбор на роутере…", async () =>
+        bool onlyUser = o.Groups.Count == 1 && o.Groups[0] == "user";
+        // Подбор только по своим адресам, а на роутере их нет (07-router-api §9) — предложить свои адреса ПК заранее.
+        if (onlyUser && _targetsLoaded && Targets.Count == 0 && PcUserTargets().Count > 0)
+        {
+            if (!await OfferPcTargetsAsync()) return;
+        }
+        bool emptyOnRouter = false;
+        for (int attempt = 0; ; attempt++)
+        {
+            if (!await Guard("Запускаю подбор на роутере…", async () =>
+                {
+                    Scores.Clear(); SelectedScore = null; ResultText = ""; ResultHint = ""; SetBest(null, false);
+                    SelectProgress = 0; SelectProgressText = "Подготовка…";
+                    try { await Call(c => c.SelectStartAsync(o.Groups, o.Full, deep)); }
+                    catch (RouterException e) when (attempt == 0 && IsEmptyUserTargets(e) && PcUserTargets().Count > 0)
+                    {
+                        // Роутер ответил «Список своих адресов на роутере пуст…» — предложим отправить с ПК и повторим.
+                        emptyOnRouter = true;
+                        SelectProgressText = "";
+                    }
+                }))
             {
-                Scores.Clear(); SelectedScore = null; ResultText = ""; ResultHint = ""; SetBest(null, false);
-                SelectProgress = 0; SelectProgressText = "Подготовка…";
-                await Call(c => c.SelectStartAsync(o.Groups, o.Full, deep));
-            }))
-            return;
+                SelectProgressText = "";
+                return;
+            }
+            if (!emptyOnRouter) break;
+            emptyOnRouter = false;
+            if (!await OfferPcTargetsAsync()) { SelectProgressText = ""; return; }
+        }
         Say("");
         await PollSelectAsync();
+    }
+
+    /// <summary>Отказ подбора: только «Свои адреса», а на роутере их список пуст (07-router-api §9: invalid, field groups).</summary>
+    static bool IsEmptyUserTargets(RouterException e) =>
+        e.AppError is { Code: "invalid", Field: "groups" };
+
+    /// <summary>
+    /// «Отправить свои адреса с компьютера на роутер»: с согласия — свои адреса ПК (до 50) уходят на роутер (targets_set).
+    /// true — отправлены, подбор можно запускать.
+    /// </summary>
+    async Task<bool> OfferPcTargetsAsync()
+    {
+        var pc = PcUserTargets();
+        if (!Confirm($"Список своих адресов на роутере пуст, а на этом компьютере их {pc.Count}.\n\n"
+                     + "Отправить свои адреса с компьютера на роутер и подобрать по ним?"))
+        {
+            Say("Подбор не запущен: на роутере нет своих адресов. Добавьте их на вкладке «Свои адреса» → «На роутере».");
+            return false;
+        }
+        var items = pc.Select(d => new RouterTarget(RouterTexts.ToUrl(d), false))
+            .DistinctBy(t => t.Url, StringComparer.OrdinalIgnoreCase).Take(MaxTargets).ToList();
+        if (!await Guard("Отправляю свои адреса на роутер…", () => Call(c => c.TargetsSetAsync(items)))) return false;
+        Targets.Clear();
+        foreach (var t in items) Targets.Add(new(t.Url, t.Important));
+        _targetsLoaded = true;
+        TargetsMessage = $"Сохранено на роутере: адресов — {items.Count}" + (pc.Count > items.Count ? $" (не поместилось: {pc.Count - items.Count})." : ".");
+        return true;
     }
 
     bool _polling;
