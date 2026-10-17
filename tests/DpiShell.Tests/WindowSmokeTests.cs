@@ -487,22 +487,34 @@ public sealed class WindowSmokeTests
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
 
-    /// <summary>Разделы docs/info-texts.md: заголовок «## …» → текст абзаца (обратные кавычки разметки убраны).</summary>
+    /// <summary>
+    /// Разделы docs/info-texts.md: заголовок «## …» → текст (обратные кавычки разметки убраны). Абзацы — через пустую строку «\n\n»:
+    /// первый — ответ «когда включать» (UX-аудит, п. 25), в карточке он жирный.
+    /// </summary>
     static Dictionary<string, string> DocInfoTexts()
     {
         var root = Directory.GetParent(Repo.Data)!.FullName;
         var map = new Dictionary<string, string>();
         string? head = null;
-        var body = new List<string>();
+        var paragraphs = new List<string>();
+        var lines = new List<string>();
+        void EndParagraph()
+        {
+            if (lines.Count > 0) paragraphs.Add(string.Join(" ", lines));
+            lines.Clear();
+        }
         void Flush()
         {
-            if (head is not null) map[head] = string.Join(" ", body).Replace("`", "").Trim();
-            body.Clear();
+            EndParagraph();
+            if (head is not null) map[head] = string.Join("\n\n", paragraphs).Replace("`", "").Trim();
+            paragraphs.Clear();
         }
         foreach (var line in File.ReadAllLines(Path.Combine(root, "docs", "info-texts.md")))
         {
             if (line.StartsWith("## ")) { Flush(); head = line[3..].Trim(); continue; }
-            if (head is not null && line.Trim().Length > 0) body.Add(line.Trim());
+            if (head is null) continue;
+            if (line.Trim().Length == 0) EndParagraph();
+            else lines.Add(line.Trim());
         }
         Flush();
         return map;
