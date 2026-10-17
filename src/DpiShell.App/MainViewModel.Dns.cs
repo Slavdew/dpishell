@@ -53,7 +53,7 @@ public sealed partial class MainViewModel
     }
 
     public string RecommendedDnsText => "Включить защищённый DNS";
-    public string RecommendedDnsHint => DnsPresets.Find(RecommendedDns)!.Title + ", для Ethernet и Wi-Fi. Вернуть — «Диагностика» → «DNS этого компьютера».";
+    public string RecommendedDnsHint => DnsPresets.Find(RecommendedDns)!.Title + ", для Ethernet и Wi-Fi. Вернуть — кнопкой в сообщении после смены или «Диагностика» → «DNS этого компьютера».";
 
     /// <summary>Что сейчас на адаптерах: у помощника (там же «есть что вернуть») или прочитать самим.</summary>
     public async Task RefreshPcDnsAsync()
@@ -113,6 +113,8 @@ public sealed partial class MainViewModel
         });
         if (r is null) return;
         await AfterDnsChangeAsync(r);
+        // Без подтверждения, но с быстрым путём назад (UX-аудит, «Опасные действия»): тост после проверки — видно, стало ли лучше.
+        if (r.Ok && PcDns.CanRestore) ShowToast($"DNS изменён: {o.Title}. Проверка DNS: {DnsSummary}", "Вернуть", RestorePcDnsAsync);
     }
 
     public async Task RestorePcDnsAsync()

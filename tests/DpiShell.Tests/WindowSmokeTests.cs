@@ -223,7 +223,7 @@ public sealed class WindowSmokeTests
                     if (page == Pages.Home)
                     {
                         AssertHome(w, vm);
-                        if (!vm.Updates.DataAvailable || Find<Button>(Find<TabControl>(w)!, b => b.Content as string == "Обновить" && b.IsVisible) is null)
+                        if (!vm.Updates.DataAvailable || Find<Button>(Find<TabControl>(w)!, b => b.Content as string == "Установить обновление" && b.IsVisible) is null)
                             throw new Exception("На главной нет плашки «Доступно обновление списков» с кнопкой");
                         if (vm.Autostart.Enabled != (theme == ThemeManager.Dark))
                             throw new Exception("Автозапуск по умолчанию: включён без службы, выключен в режиме службы");
@@ -388,7 +388,7 @@ public sealed class WindowSmokeTests
                         throw new Exception("У предупреждения роутера нет «Исправить»");
                     if (page == Pages.Router)
                     {
-                        foreach (var text in new[] { "Для каких сайтов обход", "Сайт не открывается", "DNS для всей сети", "Проверка по расписанию", "Сайт открывается только без обхода" })
+                        foreach (var text in new[] { "Для каких сайтов обход", "Сайт не открывается", "DNS для всей сети", "Проверять сам", "Сайт открывается только без обхода" })
                             if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is null) throw new Exception($"На вкладке «Роутер» нет «{text}»");
                         if (Find<Button>(tabs, b => b.Content as string == "Добавить в исключения" && b.IsVisible) is null) throw new Exception("Нет «Добавить в исключения»");
                         // dns_presets есть — вместо одной кнопки выбор вариантов, как на ПК.

@@ -195,12 +195,15 @@ public sealed class HostsViewModel : Observable
     // ---------- проверка → предпросмотр → запись ----------
 
     string _summary = "";
-    /// <summary>Итог проверки: «Можно записать N» или «Нечего чинить: всё открывается и так».</summary>
+    /// <summary>Итог проверки: «Подходят адресов: N» или «Нечего чинить: всё открывается и так».</summary>
     public string Summary { get => _summary; private set { if (Set(ref _summary, value)) Raise(nameof(HasSummary)); } }
     public bool HasSummary => Summary.Length > 0;
 
     public bool CanWrite => _report is { NothingToFix: false };
-    public string ApplyText => _report is { NothingToFix: false } r ? $"Записать адресов: {r.ToInstall.Count}" : "Записать";
+    /// <summary>Число на кнопке — столько же, сколько строк в «Что изменится» (добавленные и убранные), а не адресов в отчёте.</summary>
+    public string ApplyText => _report is not { NothingToFix: false } r ? "Записать"
+        : _preview is { } p ? (p.Changed ? $"Записать адресов: {p.Added.Count + p.Removed.Count}" : "Записать")
+        : $"Записать адресов: {r.ToInstall.Count}";
 
     public ICommand CheckCmd { get; }
     public ICommand StopCmd { get; }
@@ -245,13 +248,14 @@ public sealed class HostsViewModel : Observable
         foreach (var r in report.Rows.OrderByDescending(r => r.Install).ThenBy(r => r.Host)) Rows.Add(HostsRow.From(r));
         SetReport(report);
         _preview = preview;
+        Raise(nameof(ApplyText));
         PreviewLines.Clear();
         if (report.NothingToFix)
         {
             Summary = "Нечего чинить: всё открывается и так.";
             return;
         }
-        Summary = $"Можно записать адресов: {report.ToInstall.Count}. Остальные не нужны или не прошли проверку.";
+        Summary = $"Подходят адресов: {report.ToInstall.Count}. Остальные не нужны или не прошли проверку.";
         if (preview is not { } p) return;
         foreach (var e in p.Added) PreviewLines.Add($"+ {e.Ip} {e.Host}");
         foreach (var e in p.Removed) PreviewLines.Add($"− {e.Ip} {e.Host}");

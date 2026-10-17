@@ -8,7 +8,8 @@
                    Visibility="{Binding HasNote, Converter={StaticResource Vis}}" />
 
         <WrapPanel Margin="0,10,0,0">
-            <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}" Width="260" VerticalAlignment="Center" Margin="0,0,8,6">
+            <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}" Width="260" VerticalAlignment="Center" Margin="0,0,8,6"
+                      AutomationProperties.Name="Вариант DNS">
                 <ComboBox.ItemTemplate>
                     <DataTemplate>
                         <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
@@ -19,7 +20,7 @@
             <Button Content="Вернуть как было" Command="{Binding RestoreCmd}" Visibility="{Binding CanRestore, Converter={StaticResource Vis}}" />
         </WrapPanel>
         <DockPanel Margin="0,0,0,0">
-            <Button DockPanel.Dock="Right" Content="Удалить" Style="{StaticResource LinkButton}" FontSize="12.5"
+            <Button DockPanel.Dock="Right" Content="Удалить" Style="{StaticResource LinkButton}" FontSize="13"
                     Command="{Binding RemoveCustomCmd}" CommandParameter="{Binding Selected}"
                     Visibility="{Binding Selected.Custom, Converter={StaticResource Vis}, FallbackValue=Collapsed}" />
             <TextBlock Text="{Binding SelectedDetail}" Style="{StaticResource Hint}" TextWrapping="Wrap" />
@@ -28,7 +29,11 @@
                   Visibility="{Binding ShowFallback, Converter={StaticResource Vis}}" />
 
         <Expander Header="Свой вариант" IsExpanded="{Binding Adding}" Margin="0,8,0,0">
+            <!-- Enter в любом поле — «Добавить». -->
             <Grid Margin="0,6,0,0">
+                <Grid.InputBindings>
+                    <KeyBinding Key="Enter" Command="{Binding AddCustomCmd}" />
+                </Grid.InputBindings>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="150" />
                     <ColumnDefinition Width="*" MaxWidth="360" />
@@ -41,11 +46,13 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <TextBlock Text="Название" Style="{StaticResource Hint}" VerticalAlignment="Center" />
-                <TextBox Grid.Column="1" Text="{Binding NewName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+                <TextBox Grid.Column="1" Text="{Binding NewName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" AutomationProperties.Name="Название DNS" />
                 <TextBlock Grid.Row="1" Text="Адреса (1–2)" Style="{StaticResource Hint}" VerticalAlignment="Center" />
-                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding NewIps, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" ToolTip="Например: 94.140.14.14, 94.140.15.15" />
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding NewIps, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" ToolTip="Например: 94.140.14.14, 94.140.15.15"
+                         AutomationProperties.Name="Адреса DNS" />
                 <TextBlock Grid.Row="2" Text="Защищённый (https)" Style="{StaticResource Hint}" VerticalAlignment="Center" />
-                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding NewDoh, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" ToolTip="Необязательно. Например: https://dns.adguard-dns.com/dns-query" />
+                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding NewDoh, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" ToolTip="Необязательно. Например: https://dns.adguard-dns.com/dns-query"
+                         AutomationProperties.Name="Адрес защищённого DNS" />
                 <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding NewError}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,0,0,6"
                            Visibility="{Binding HasNewError, Converter={StaticResource Vis}}" />
                 <Button Grid.Row="4" Grid.Column="1" Content="Добавить" Style="{DynamicResource Small}" Command="{Binding AddCustomCmd}" HorizontalAlignment="Left" />

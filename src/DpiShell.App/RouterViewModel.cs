@@ -474,7 +474,7 @@ public sealed class RouterViewModel : Observable, IDisposable
                 await Call(c => c.ScheduleSetAsync(enabled, hours, autoSelect));
                 await RefreshStatusCoreAsync();
             }))
-            Say(!enabled ? "Проверка по расписанию на роутере выключена."
+            Say(!enabled ? "Роутер больше не проверяет сайты сам."
                 : "Роутер будет проверять сайты " + (ScheduleOptions.FirstOrDefault(o => o.Hours == hours)?.Title ?? $"раз в {hours} ч")
                   + (autoSelect ? ", а если запасные не помогут — подберёт заново." : "."));
         else

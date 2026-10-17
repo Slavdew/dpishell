@@ -8,7 +8,7 @@
     <SolidColorBrush x:Key="Surface" Color="#FFFFFF" />
     <SolidColorBrush x:Key="Line" Color="#E2E4E9" />
     <SolidColorBrush x:Key="Text" Color="#111827" />
-    <SolidColorBrush x:Key="Muted" Color="#6B7280" />
+    <SolidColorBrush x:Key="Muted" Color="#5B6270" /> <!-- 5,6:1 на фоне страницы (было 4,4 — ниже AA) -->
 
     <SolidColorBrush x:Key="Accent" Color="#2563EB" />
     <SolidColorBrush x:Key="AccentHover" Color="#1D4ED8" />
@@ -16,8 +16,8 @@
     <SolidColorBrush x:Key="AccentSoft" Color="#E8EEFD" />
     <SolidColorBrush x:Key="AccentText" Color="#2563EB" />
 
-    <SolidColorBrush x:Key="Ok" Color="#16A34A" />
-    <SolidColorBrush x:Key="Danger" Color="#DC2626" />
+    <SolidColorBrush x:Key="Ok" Color="#15803D" />
+    <SolidColorBrush x:Key="Danger" Color="#C42020" />
     <SolidColorBrush x:Key="DangerLine" Color="#FCA5A5" />
     <SolidColorBrush x:Key="WarnBack" Color="#FFF7E6" />
     <SolidColorBrush x:Key="WarnLine" Color="#F5C46B" />

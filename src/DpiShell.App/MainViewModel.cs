@@ -481,7 +481,7 @@ public sealed partial class MainViewModel : Observable
         {
             Kind = StatusKind.Off; StatusTitle = "Выключено";
             StatusDetail = Router.Found && Router.RouterEnabled ? "Обход делает роутер — на этом ПК включать не нужно"
-                : id is not null ? "Выбрана стратегия: " + StrategyTitle(id) : "Стратегия не выбрана: выберите в списке или нажмите «Подобрать»";
+                : id is not null ? "Выбрана стратегия: " + StrategyTitle(id) : "Нажмите «Включить» — подходящую стратегию подберу сам (2–3 мин)";
         }
         StatusBrush = BrushOf(Kind);
         Raise(nameof(IsRunning));
@@ -500,7 +500,13 @@ public sealed partial class MainViewModel : Observable
 
     string _vpnWarning = "";
     public string VpnWarning { get => _vpnWarning; private set { if (Set(ref _vpnWarning, value)) Raise(nameof(HasVpn)); } }
-    public bool HasVpn => VpnWarning.Length > 0;
+    /// <summary>Плашка VPN на главной: есть VPN и человек не сказал «Понятно» про этот же набор адаптеров.</summary>
+    public bool HasVpn => VpnWarning.Length > 0 && VpnWarning != _vpnDismissed;
+
+    string? _vpnDismissed;
+    /// <summary>«Понятно, не показывать»: до смены набора VPN-адаптеров (в «Диагностике» VPN виден всегда).</summary>
+    public ICommand DismissVpnCmd => _dismissVpnCmd ??= new RelayCommand(() => { _vpnDismissed = VpnWarning; Raise(nameof(HasVpn)); });
+    ICommand? _dismissVpnCmd;
 
     string _conflictWarning = "";
     public string ConflictWarning { get => _conflictWarning; private set { if (Set(ref _conflictWarning, value)) Raise(nameof(HasConflicts)); } }
@@ -587,7 +593,7 @@ public sealed partial class MainViewModel : Observable
     }
 
     public string RunModeHint => ServiceMode
-        ? "Включается вместе с Windows и работает сама по себе — закрытие программы её не выключает"
+        ? "Обход работает и без окна, и после перезагрузки"
         : "Обход работает, пока открыта программа (в окне или в трее)";
 
     async Task SetRunModeAsync(bool service)
@@ -678,8 +684,8 @@ public sealed partial class MainViewModel : Observable
     static string? CoreProblem(CoreState c) => c switch
     {
         CoreState.Ok => null,
-        CoreState.Missing => "Файлы ядра не найдены (антивирус?). Откройте «Диагностику» → «Восстановить ядро».",
-        _ => "Файлы ядра изменены (антивирус?). Откройте «Диагностику» → «Восстановить ядро».",
+        CoreState.Missing => "Файлы обхода не найдены (антивирус?). Откройте «Диагностику» → «Восстановить».",
+        _ => "Файлы обхода повреждены (антивирус?). Откройте «Диагностику» → «Восстановить».",
     };
 
     public async Task EnableAsync()
@@ -1048,6 +1054,7 @@ public sealed partial class MainViewModel : Observable
         var title = StrategyTitle(id);
         if (await ApplyAsync(id))
         {
+            SetBest(null);   // уже в работе — «Применить» не нужна
             ResultText = $"Применена: {title} — обход работает.";
             Message = ResultText;
         }
@@ -1148,7 +1155,7 @@ public sealed partial class MainViewModel : Observable
     bool _diagRefreshing;
     /// <summary>Идёт обновление «Диагностики» — кнопка показывает «Обновляю…» и не нажимается.</summary>
     public bool DiagRefreshing { get => _diagRefreshing; private set { if (Set(ref _diagRefreshing, value)) { Raise(nameof(RefreshButtonText)); CommandManager.InvalidateRequerySuggested(); } } }
-    public string RefreshButtonText => DiagRefreshing ? "Обновляю…" : "Обновить";
+    public string RefreshButtonText => DiagRefreshing ? "Проверяю…" : "Проверить снова";
 
     string _diagUpdated = "";
     public string DiagUpdated { get => _diagUpdated; private set => Set(ref _diagUpdated, value); }

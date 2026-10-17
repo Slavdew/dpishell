@@ -71,7 +71,7 @@ public sealed class NetViewModel : Observable
         CommandManager.InvalidateRequerySuggested();
     }
 
-    static string Title(IpsetMode m) => m switch { IpsetMode.List => "По списку", IpsetMode.Any => "Все адреса", _ => "Выкл" };
+    static string Title(IpsetMode m) => m switch { IpsetMode.List => "Только из списков", IpsetMode.Any => "Все адреса", _ => "Выкл" };
 
     // ---------- режим IP-списка ----------
 
@@ -81,7 +81,7 @@ public sealed class NetViewModel : Observable
 
     public bool AnyActive => _f.Ipset == IpsetMode.Any;
 
-    /// <summary>«Все адреса: осталось 9:41 — потом сам вернётся режим «По списку».»</summary>
+    /// <summary>«Все адреса: осталось 9:41 — потом сам вернётся режим «Только из списков».»</summary>
     public string AnyText
     {
         get
@@ -212,7 +212,7 @@ public sealed class NetViewModel : Observable
 
     public string UserHint => _f.Ipset == IpsetMode.List
         ? "Подсеть на строку, например 203.0.113.0/24 или один адрес. Действуют сразу."
-        : "Подсеть на строку, например 203.0.113.0/24 или один адрес. Действуют в режиме «По списку».";
+        : "Подсеть на строку, например 203.0.113.0/24 или один адрес. Действуют в режиме «Только из списков».";
 
     public ICommand SaveUserCmd { get; }
 
@@ -250,8 +250,8 @@ public sealed class NetViewModel : Observable
         await AfterChange();
         Refresh();
         UserMessage = $"Сохранено: своих подсетей {saved}, исключений {excluded}." + (notes.Count > 0 ? " " + string.Join(" ", notes) : "");
-        // Свои подсети действуют только «По списку»: не заставлять искать переключатель — предложить одной кнопкой.
-        if (saved > 0 && _f.Ipset == IpsetMode.Off && Confirm("Свои подсети действуют только в режиме «По списку». Включить его?"))
+        // Свои подсети действуют только в режиме «Только из списков»: не заставлять искать переключатель — предложить одной кнопкой.
+        if (saved > 0 && _f.Ipset == IpsetMode.Off && Confirm("Свои подсети действуют только в режиме «Только из списков». Включить его?"))
             await SetModeAsync(IpsetMode.List);
     }
 

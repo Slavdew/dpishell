@@ -61,7 +61,7 @@ public sealed class FeatureViewModelTests
         Assert.True(net.AnyActive);
         Assert.False(net.GameCanToggle);   // игры при «Все адреса» не включить
         Assert.Matches("осталось (9|10):[0-5][0-9]", net.AnyText);
-        Assert.Contains("«По списку»", net.AnyText);
+        Assert.Contains("«Только из списков»", net.AnyText);
 
         string? notice = null;
         net.Notify += s => notice = s;
@@ -70,7 +70,7 @@ public sealed class FeatureViewModelTests
 
         Assert.True(net.IpsetList);
         Assert.False(net.AnyActive);
-        Assert.Contains("вернулся режим «По списку»", notice);
+        Assert.Contains("вернулся режим «Только из списков»", notice);
     }
 
     [Fact]
@@ -166,6 +166,7 @@ public sealed class FeatureViewModelTests
         Assert.Contains("не отвечает", vm.Rows[1].Reason);
         Assert.True(vm.CanWrite);
         Assert.Equal(["+ 140.82.121.3 github.com"], vm.PreviewLines);
+        Assert.Equal("Записать адресов: 1", vm.ApplyText);   // число на кнопке = строк в предпросмотре
         Assert.DoesNotContain("DpiShell", File.ReadAllText(hosts));   // предпросмотр не пишет
 
         await vm.ApplyAsync();
