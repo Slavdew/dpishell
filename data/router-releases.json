@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "_comment": "Пакеты DpiShell для роутера по версиям OpenWrt — читает окно ПК (выбор релиза при установке и обновлении). Хеши файлов — в подписанном release.json каждого релиза (release_json), не здесь. Меняется только при выпуске router-vX.Y.Z (router/tools/release.sh).",
+  "feed": {
+    "url": "https://slavdew.github.io/dpishell/feed/packages.adb",
+    "key_url": "https://slavdew.github.io/dpishell/feed/dpishell.pem",
+    "key_sha256": "e3d98812b312b8c1475f7c98c72cb850ea87c90fdcd81bcd803dad7f9f9a1543"
+  },
+  "releases": [
+    {
+      "version": "0.2.0",
+      "tag": "router-v0.2.0",
+      "api": "1.0",
+      "min_app": "1.0.0",
+      "pkg": "apk",
+      "openwrt": { "min": "25.12", "snapshot": true },
+      "packages": ["dpishell", "luci-app-dpishell"],
+      "release_json": "https://github.com/Slavdew/dpishell/releases/download/router-v0.2.0/release.json"
+    }
+  ]
+}
