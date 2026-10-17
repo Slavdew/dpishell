@@ -309,6 +309,22 @@ public sealed class RouterClient : IDisposable
     public Task Ipv6SetAsync(bool enabled, CancellationToken ct = default) => CallAsync("ipv6_set", new JsonObject { ["enabled"] = enabled }, ct);
     public Task<RouterStarted> CoreInstallAsync(CancellationToken ct = default) => CallAsync<RouterStarted>("core_install", null, ct);
 
+    // ---------- ядро договора §5.4: удаление и обновление ----------
+
+    /// <summary>
+    /// Удалить DpiShell (фоново): вернуть изменённое вне своих файлов, удалить пакеты и ядро. keepSettings: false — ещё /etc/dpishell, ключ и строку витрины.
+    /// Объект dpishell по ходу исчезает (дальше — код 4); итог — /tmp/dpishell-uninstall.json, читать <see cref="RouterSsh.ReadUninstallResultAsync"/>.
+    /// </summary>
+    public Task<RouterStarted> UninstallAsync(bool keepSettings, CancellationToken ct = default) =>
+        CallAsync<RouterStarted>("uninstall", new JsonObject { ["keep_settings"] = keepSettings }, ct);
+
+    /// <summary>Обновить DpiShell (фоново, итог — status.update.job). Local — пакеты уже в /tmp/dpishell-update (<see cref="RouterSsh.UploadUpdateAsync"/>).</summary>
+    public Task<RouterStarted> UpdateInstallAsync(RouterUpdateSource from, CancellationToken ct = default) =>
+        CallAsync<RouterStarted>("update_install", new JsonObject { ["from"] = from == RouterUpdateSource.Local ? "local" : "feed" }, ct);
+
+    /// <summary>Проверить новую версию сейчас (итог — status.update).</summary>
+    public Task<RouterStarted> UpdateCheckAsync(CancellationToken ct = default) => CallAsync<RouterStarted>("update_check", null, ct);
+
     static string CheckListName(string name) =>
         name is "user-general" or "user-exclude" ? name : throw new ArgumentException("Список роутера: user-general или user-exclude");
 

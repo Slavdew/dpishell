@@ -73,6 +73,62 @@ public sealed class FakeRouter : IDisposable
     public bool FlowOffloadFixed { get; private set; }
     public bool? Ipv6Enabled { get; private set; }
 
+    // С 0.2.0 (§5.4): api строкой, methods, min_app, update. По умолчанию — как старый роутер 0.1.0 (api: 1, без новых полей).
+    /// <summary>Значение api в status как JSON: 1 (до 0.2.0) или "1.0".</summary>
+    public string StatusApi { get; set; } = "1";
+    public string RouterVersion { get; set; } = "0.1.0";
+    /// <summary>JSON-массив status.methods; null — поля нет.</summary>
+    public string? MethodsJson { get; set; }
+    public string? MinApp { get; set; }
+    /// <summary>Отдавать status.update.</summary>
+    public bool UpdateFieldOn { get; set; }
+    public bool UpdateAvailable { get; set; } = true;
+    public string UpdateVersion { get; set; } = "0.2.1-r1";
+    /// <summary>Пакеты уже положены в /tmp/dpishell-update (иначе update_install local — invalid).</summary>
+    public bool LocalUpdateReady { get; set; }
+    public int UpdateCheckCalls { get; private set; }
+    public bool? UninstallKeepSettings { get; private set; }
+    /// <summary>После uninstall объект dpishell пропадает — все вызовы отвечают 4.</summary>
+    public bool Uninstalled { get; private set; }
+    string? _updateFrom;
+    int _updatePolls;
+    string? _updateJob;
+
+    /// <summary>Как роутер 0.2.0: api "1.0", methods (все, что знает подделка), min_app, update.</summary>
+    public FakeRouter As020()
+    {
+        StatusApi = "\"1.0\""; RouterVersion = "0.2.0-r3"; MinApp = "1.0.0"; UpdateFieldOn = true;
+        MethodsJson = """["apply","check_now","conflict_stop","core_install","diag","disable","dns_analyze","dns_enable","dns_presets","dns_restore","dns_set","dns_status","enable","flow_offload_fix","ipv6_set","lists_get","lists_set","mode_set","report","schedule_set","select_cancel","select_progress","select_start","site_check","site_check_result","status","strategies","strategies_user_set","strategy_set","targets_get","targets_set","uninstall","update_check","update_install"]""";
+        return this;
+    }
+
+    string Contract020() =>
+        (MinApp is null ? "" : $" \"min_app\": \"{MinApp}\",") + (MethodsJson is null ? "" : $" \"methods\": {MethodsJson},");
+
+    /// <summary>Перед каждым status: первый опрос после update_install — задание идёт, второй — готово (версия сменилась).</summary>
+    void AdvanceUpdate()
+    {
+        _updateRunning = false;
+        if (_updateFrom is not { } from) return;
+        if (_updatePolls++ == 0)
+        {
+            _updateRunning = true;
+            _updateJob = $$"""{ "action": "update", "from": "{{from}}", "running": true, "ok": null, "message": "Обновление", "at": null }""";
+            return;
+        }
+        RouterVersion = UpdateVersion; UpdateAvailable = false; _updateFrom = null;
+        _updateJob = $$"""{ "action": "update", "from": "{{from}}", "running": false, "ok": true, "message": "Обновлено до {{UpdateVersion}}", "at": "2026-10-17T14:05:00Z" }""";
+    }
+
+    bool _updateRunning;
+
+    string UpdateField()
+    {
+        if (!UpdateFieldOn) return "";
+        var notes = UpdateAvailable ? """["Глубокий поиск стратегий на самом роутере"]""" : "[]";
+        return $$""", "update": { "available": {{(UpdateAvailable ? "true" : "false")}}, "version": "{{UpdateVersion}}", "notes": {{notes}}, "checked_at": "2026-10-17T14:00:00Z", "job": {{_updateJob ?? "null"}} }""";
+    }
+
     public List<JsonObject> Calls { get; } = [];
     public List<string> RawBodies { get; } = [];
     readonly HashSet<string> _sessions = [];
@@ -145,7 +201,7 @@ public sealed class FakeRouter : IDisposable
                 : Result(6));
             return;
         }
-        if (obj != "dpishell" || MissingMethods.Contains(method)) { await Write(ctx, Result(4)); return; }
+        if (obj != "dpishell" || MissingMethods.Contains(method) || Uninstalled) { await Write(ctx, Result(4)); return; }
         if (InvalidOn is { } inv && inv.Method == method)
         {
             await Write(ctx, Result(0, $$$"""{"error":{"code":"invalid","text":"Неверное значение","field":"{{{inv.Field}}}"}}"""));
@@ -158,18 +214,19 @@ public sealed class FakeRouter : IDisposable
         }
         if (BusyOn == method) { await Write(ctx, Result(0, """{"error":{"code":"busy","text":"Идёт подбор"}}""")); return; }
 
+        if (method == "status") AdvanceUpdate();
         await Write(ctx, Result(0, method switch
         {
             "status" => $$"""
-                { "api": 1, "version": "0.1.0", "engine": "zapret1",
+                { "api": {{StatusApi}}, "version": "{{RouterVersion}}", "engine": "zapret1",{{Contract020()}}
                   "core": { "version": "v72.13", "installed": true, "hash_ok": true },
                   "enabled": {{(Enabled ? "true" : "false")}}, "mode": "{{Mode}}", "strategy": "{{Strategy}}", "backups": ["alt9", "alt13"], "needs_tcp_timestamps": {{(NeedsTcpTimestamps ? "true" : "false")}},
                   "last_check": { "at": "{{CheckedAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture)}}", "source": "timer", "ok": true,
                                   "groups": [ { "id": "youtube", "ok": true }, { "id": "discord", "ok": true } ] },
                   "fail_streak": 0,
                   "schedule": { "enabled": {{(ScheduleEnabled ? "true" : "false")}}, "hours": {{ScheduleHours.ToString(System.Globalization.CultureInfo.InvariantCulture)}}, "auto_select": {{(AutoSelect ? "true" : "false")}} },
-                  "jobs": { "select": {{(SelectRunningJob ? "true" : "false")}}, "check": false, "core_install": false, "dns_analyze": false, "site_check": false, "dns": false },
-                  "warnings": {{WarningsJson}} }
+                  "jobs": { "select": {{(SelectRunningJob ? "true" : "false")}}, "check": false, "core_install": false, "dns_analyze": false, "site_check": false, "dns": false, "update": {{(_updateRunning ? "true" : "false")}} },
+                  "warnings": {{WarningsJson}}{{UpdateField()}} }
                 """,
             "strategies" => StrategiesJson,
             "enable" => Do(() => Enabled = true),
@@ -222,6 +279,14 @@ public sealed class FakeRouter : IDisposable
             "diag" => $$"""{ "conflicts": {{ConflictsJson}}, "flow_offload": {{(FlowOffloadFixed ? "false" : "true")}}, "flowoffload": "{{(FlowOffloadFixed ? "software" : "none")}}","ipv6_wan": true, "dns": { "spoofed": true, "checked_at": "2026-10-16T21:00:00Z" }, "overlay_free_kb": 18000 }""",
             "report" => """{ "text": "отчёт роутера" }""",
             "core_install" => """{ "started": true }""",
+            // Ядро договора §5.4.
+            "uninstall" => Do(() => { UninstallKeepSettings = args["keep_settings"]?.GetValue<bool>(); Uninstalled = true; }, """{ "started": true }"""),
+            "update_install" when args["from"]?.GetValue<string>() is not ("feed" or "local") =>
+                """{"error":{"code":"invalid","text":"from: feed или local","field":"from"}}""",
+            "update_install" when args["from"]!.GetValue<string>() == "local" && !LocalUpdateReady =>
+                """{"error":{"code":"invalid","text":"Нет пакетов в /tmp/dpishell-update","field":"from"}}""",
+            "update_install" => Do(() => { _updateFrom = args["from"]!.GetValue<string>(); _updatePolls = 0; }, """{ "started": true }"""),
+            "update_check" => Do(() => UpdateCheckCalls++, """{ "started": true }"""),
             _ => "{}",
         }));
     }
