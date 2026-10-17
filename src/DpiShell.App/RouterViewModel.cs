@@ -1022,9 +1022,12 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         Requery();
     }
 
-    public async Task StartSelectAsync(bool deep)
+    public Task StartSelectAsync(bool deep) => StartSelectAsync(deep, null);
+
+    /// <summary>Подбор на роутере; options — свои группы и режим вместо выбранных на экране «Подбор».</summary>
+    public async Task StartSelectAsync(bool deep, (IReadOnlyList<string> Groups, bool Full)? options)
     {
-        if (Selecting || SelectOptions() is not { } o) return;
+        if (Selecting || (options ?? SelectOptions()) is not { } o) return;
         bool onlyUser = o.Groups.Count == 1 && o.Groups[0] == "user";
         string? hint = null;
         // Подбор только по своим адресам, а на роутере их нет (router-api §5.2): есть на ПК — предложить их заранее,

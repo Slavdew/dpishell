@@ -107,6 +107,18 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.Equal("secret", RouterSecrets.Unprotect(Settings.RouterPassword));
         Assert.StartsWith("DpiShell 0.2.0-r3 установлен и подключён", i.ResultText);
         Assert.False(vm.Busy);
+
+        // «Подобрать на роутере» — сразу полный подбор по группам по умолчанию, ход — на экране «Подбор».
+        int page = -1;
+        vm.Navigate = p => page = p;
+        vm.SelectOptions = () => (["user"], false);   // выбор экрана не мешает: после установки — по умолчанию
+        await i.SelectNowAsync();
+        Assert.Equal(Pages.Select, page);
+        Assert.True(vm.SelectOnRouter);
+        System.Text.Json.Nodes.JsonNode start;
+        lock (r.Calls) start = r.Calls.Last(c => c["params"]![2]!.GetValue<string>() == "select_start")["params"]![3]!;
+        Assert.Equal(["youtube", "discord"], start["groups"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.Equal("full", start["mode"]!.GetValue<string>());
     }
 
     [Fact]

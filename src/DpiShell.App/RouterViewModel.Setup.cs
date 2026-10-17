@@ -610,6 +610,17 @@ public sealed class RouterInstallViewModel : Observable
         return true;
     }
 
+    /// <summary>
+    /// «Подобрать на роутере» после установки: сразу запустить полный подбор по группам по умолчанию и показать ход
+    /// на экране «Подбор» (пользователь ждёт старта, а не перехода).
+    /// </summary>
+    public Task SelectNowAsync()
+    {
+        _router.SetSelectGroups(RouterViewModel.DefaultSelectGroups);
+        _router.GoSelectCmd.Execute(null);
+        return _router.StartSelectAsync(deep: false, (RouterViewModel.DefaultSelectGroups, true));
+    }
+
     void MarkFailed()
     {
         var running = Steps.LastOrDefault(s => s.State == RouterInstallStep.Running) ?? Steps[0];
