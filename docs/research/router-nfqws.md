@@ -67,7 +67,7 @@
 ## 6. Несколько nfqws и параллельный подбор
 
 - Несколько экземпляров штатно: каждый со своим `--qnum`, пул 65400–65499 (`custom.sh alloc_qnum`); blockcheck сам работает на qnum 59780 в своей таблице параллельно с рабочим zapret (`#L27`, `#L201-L213` проверка доступности очереди).
-- Разнести слоты: curl `--local-port P_k-P_k+99` + правило `tcp sport P_k-P_k+99 ... queue num Q_k` в postrouting и `tcp dport P_k-P_k+99 ct reply packets 1-3` в prerouting для входящих; альтернатива — `meta skuid` (запуск curl под отдельным uid на слот) или `meta mark` (curl ставить марку нечем, нужен `SO_MARK` — не подходит). nft `tcp sport`/`meta skuid` — одна строка, против WinDivert-фильтра из спеки §4.5 проще. Не проверено на железе.
+- Разнести слоты: curl `--local-port P_k-P_k+99` + правило `tcp sport P_k-P_k+99 ... queue num Q_k` в postrouting и `tcp dport P_k-P_k+99 ct reply packets 1-3` в prerouting для входящих; альтернатива — `meta skuid` (запуск curl под отдельным uid на слот) или `meta mark` (curl ставить марку нечем, нужен `SO_MARK` — не подходит). nft `tcp sport`/`meta skuid` — одна строка, против WinDivert-фильтра Windows-варианта проще. Не проверено на железе.
 - Оценка: реалистично для 2–4 слотов на одном роутере; CPU nfqws в простое мал, обрабатываются только первые пакеты. Риск тот же, что у blockcheck `PARALLEL` (`#L2036`): параллельные запросы к одному домену могут вызвать защиту от DDoS и ложный результат. Подбор с роутера — всегда через OUTPUT; транзитный (клиентский) путь в автоподборе не тестируется.
 
 ## 7. Нюансы
@@ -83,7 +83,7 @@
 ## 8. zapret2 (nfqws2, Lua) на OpenWRT
 
 - Релиз v1.0.5.2 от 2026-09-15, ассеты: `zapret2-v1.0.5.2-openwrt-embedded.tar.gz`, `.tar.gz`, `.zip`, `sha256sum.txt` → сборки под роутеры есть; README: «aimed primarily at low-power embedded devices — routers running OpenWrt»; стратегии в Lua (`--lua-desync`), есть `blockcheck2.sh`. Сторонние пакеты: 1andrevich/zapret2-openwrt, luci-app-zapret2.
-- Для DpiShell: синтаксис стратегий другой (Lua-функции вместо `--dpi-desync=...`), каталог не переносится без адаптера `IEngine` (02-spec §4.2). Совместимость опций nfqws2 с каталогом не проверялась. В v1 — nfqws1 v72.13, тот же, что и winws.
+- Для DpiShell: синтаксис стратегий другой (Lua-функции вместо `--dpi-desync=...`), каталог не переносится без адаптера движка (поле `engine` каталога). Совместимость опций nfqws2 с каталогом не проверялась. В v1 — nfqws1 v72.13, тот же, что и winws.
 
 ## Итог
 1. zapret v72.13 ставится на OpenWRT штатно: `openwrt-embedded.tar.gz`, `install_bin.sh`/`install_prereq.sh`/`install_easy.sh`, opkg и apk оба поддерживаются; пакеты `curl nftables kmod-nft-nat kmod-nft-offload kmod-nft-queue`; официального пакета нет.
