@@ -9,7 +9,7 @@ var rest = args.Skip(1).ToArray();
 if (cmd is "help" && args.Length == 0 || cmd == "selftest")
     return await SelfTest();
 // Долгие команды пишут лог рядом с exe и ждут Enter: их запускают ярлыком, окно иначе закроется.
-if (cmd is "select" or "search" or "detect")
+if (cmd is "select" or "search" or "detect" or "hosts-find")
     return await Logged(cmd, () => Run(cmd, rest));
 return await Run(cmd, rest);
 
@@ -156,6 +156,8 @@ static async Task<int> Run(string cmd, string[] rest)
                 var si = shell.InspectService();
                 Console.WriteLine($"Служба DpiShell: {si.State}, наше ядро: {si.OurCore}, стратегия: {si.Strategy?.Title ?? "-"}, файл: {si.ExePath ?? "-"}");
                 break;
+            case "hosts-find":
+                return await HostsFind(rest);
             case "clear-history":
                 Console.WriteLine($"Удалено файлов: {ResultStore.ClearHistory(shell.Paths)}");
                 break;
@@ -177,7 +179,7 @@ static async Task<int> Run(string cmd, string[] rest)
                 foreach (var v in Conflicts.ActiveVpnAdapters()) Console.WriteLine($"VPN: {v}");
                 break;
             default:
-                Console.WriteLine("dpishell-cli [selftest] | prepare | dns | check-core | list | args <id> | dry-run [id] | probe | test <id> | select [--quick] | search [base-id] | detect | clear-history | enable <id> | disable | remove | status");
+                Console.WriteLine("dpishell-cli [selftest] | prepare | dns | check-core | list | args <id> | dry-run [id] | probe | test <id> | select [--quick] | search [base-id] | detect | clear-history | enable <id> | disable | remove | status | hosts-find <файл|-> [--all] [--v4] [--extra] [--dns <файл>]");
                 break;
         }
         return 0;
@@ -186,6 +188,52 @@ static async Task<int> Run(string cmd, string[] rest)
     {
         Console.Error.WriteLine($"Ошибка: {e.Message}");
         return 1;
+    }
+}
+
+// Подбор адресов (ТЗ 12): файл в формате hosts → имена → DNS по очереди → живая проверка адресов. Отчёт и готовые строки — в <файл>.result.txt.
+static async Task<int> HostsFind(string[] rest)
+{
+    string? Opt(string name) => Array.IndexOf(rest, name) is var i and >= 0 && i + 1 < rest.Length ? rest[i + 1] : null;
+    var dnsFile = Opt("--dns");
+    var input = rest.FirstOrDefault(a => !a.StartsWith("--") && a != dnsFile);
+    if (input is null)
+    {
+        Console.WriteLine("hosts-find <файл|-> [--all] [--v4] [--extra] [--dns <файл>]");
+        Console.WriteLine("  файл — строки как в hosts (адреса и комментарии отбрасываются), «-» — из стандартного ввода");
+        Console.WriteLine("  --all — спросить все DNS и подобрать лучший; без него — до первого рабочего адреса");
+        Console.WriteLine("  --extra — добавить сторонние Comss и Xbox-DNS (не проверены);  --v4 — только IPv4;  --dns — свой список DNS: «адрес [имя]», «https://…/dns-query [имя]», «system»");
+        return 2;
+    }
+    var text = input == "-" ? await Console.In.ReadToEndAsync() : await File.ReadAllTextAsync(input);
+    var hosts = HostsInput.ParseHosts(text);
+    if (hosts.Count == 0) { Console.WriteLine("В файле нет ни одного имени сайта."); return 2; }
+
+    var sources = dnsFile is null ? DnsSources.Default(rest.Contains("--extra")) : DnsSources.Parse(await File.ReadAllTextAsync(dnsFile));
+    var all = rest.Contains("--all");
+    Console.WriteLine($"Доменов: {hosts.Count}, DNS: {sources.Count}, режим: {(all ? "все DNS" : "до первого рабочего")}");
+    using var cts = new CancellationTokenSource();
+    ConsoleCancelEventHandler onCancel = (_, e) => { e.Cancel = true; cts.Cancel(); };
+    Console.CancelKeyPress += onCancel;
+    try
+    {
+        var finder = rest.Contains("--v4") ? new HostsFinder(sources, new TlsEndpointProbe()) { IPv4Only = true } : new HostsFinder(sources, new TlsEndpointProbe());
+        var report = await finder.RunAsync(hosts, all, new SyncProgress<HostsFindProgress>(p => Console.WriteLine(p.Message)), cts.Token);
+        var result = HostsFindText.Report(report);
+        Console.WriteLine();
+        Console.Write(result);
+        if (input != "-")
+        {
+            var outFile = Path.ChangeExtension(input, null) + ".result.txt";
+            await File.WriteAllTextAsync(outFile, result, new UTF8Encoding(false));
+            Console.WriteLine($"Сохранено: {outFile}");
+        }
+        return 0;
+    }
+    finally
+    {
+        Console.CancelKeyPress -= onCancel;
+        foreach (var s in sources) (s as IDisposable)?.Dispose();
     }
 }
 
