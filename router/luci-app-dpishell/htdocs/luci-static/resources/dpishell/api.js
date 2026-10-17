@@ -32,6 +32,8 @@ var PARAMS = {
 	conflict_stop: ['name'],
 	flow_offload_fix: [],
 	uninstall: ['keep_settings'],
+	update_install: ['from'],
+	update_check: [],
 	ipv6_set: ['enabled']
 };
 

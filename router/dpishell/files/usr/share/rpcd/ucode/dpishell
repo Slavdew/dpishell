@@ -8,6 +8,7 @@ import * as st from 'dpishell.state';
 import * as core from 'dpishell.core';
 import * as dg from 'dpishell.diag';
 import * as dns from 'dpishell.dns';
+import * as upd from 'dpishell.update';
 
 function err(code, text, field) {
 	let e = { code, text };
@@ -62,6 +63,7 @@ function jobs() {
 		j[n] = st.job_running(n);
 	j.dns = st.job_running('dns');
 	j.dns_analyze = j.dns;   // прежнее имя (07 §5.1), то же значение
+	j.update = st.job_running('update');
 	return j;
 }
 
@@ -87,6 +89,14 @@ function lines_of(v) {
 
 const LIST_LIMIT = 5000;
 
+// status.update (07 §9): { available, version, notes, checked_at, job } — job — последнее задание обновления.
+function update_status() {
+	let u = upd.status();
+	u.job = st.read_json('/tmp/dpishell/update_job.json', null);
+	if (u.job) u.job.at = st.iso(u.job.at);
+	return u;
+}
+
 // status.methods — методы, которые этот роутер реально обрабатывает (07 §9): без заглушек «не реализовано».
 // Таблица методов собирается ниже, поэтому — через реестр (ucode разрешает имена при компиляции).
 const registry = { methods: {}, stubs: {} };
@@ -106,7 +116,7 @@ const methods = {
 				enabled: s.enabled, mode: s.mode, strategy: s.strategy, backups: s.backups,
 				needs_tcp_timestamps: strat ? cat.uses_ts(strat) : false,
 				last_check: lc ? { ...lc, at: st.iso(lc.at) } : null, fail_streak: st.read_json(`${st.P.etc}/fail-streak.json`, 0),
-				schedule: s.schedule, jobs: jobs(), warnings: warnings(s),
+				schedule: s.schedule, jobs: jobs(), warnings: warnings(s), update: update_status(),
 			};
 		}
 	},
@@ -480,6 +490,32 @@ methods.uninstall = {
 		if (r.rc != 0)
 			return err('failed', `Не удалось запустить удаление: ${trim(r.out)}`);
 		sh(`( setsid sh /tmp/dpishell-uninstall.sh ${keep === false ? '--full' : '--keep'} >/dev/null 2>&1 & )`);
+		return { started: true };
+	}
+};
+
+// Обновление (ядро договора, 07 §9): из витрины или из /tmp/dpishell-update (кладёт окно ПК; путь не принимается).
+methods.update_install = {
+	args: { from: 'feed' },
+	call: function(req) {
+		let from = req.args.from ?? 'feed';
+		if (index(['feed', 'local'], from) < 0)
+			return err('invalid', 'from: feed или local', 'from');
+		if (st.job_running('select'))
+			return err('busy', 'Идёт подбор');
+		if (st.job_running('update'))
+			return err('busy', 'Обновление уже идёт');
+		if (from == 'local' && !stat(`${upd.LOCAL_DIR}/SHA256SUMS`))
+			return err('invalid', `Нет пакетов в ${upd.LOCAL_DIR}`, 'from');
+		spawn(`update ${from}`);
+		return { started: true };
+	}
+};
+
+methods.update_check = {
+	call: function() {
+		if (!st.job_running('update'))
+			spawn('update_check');
 		return { started: true };
 	}
 };

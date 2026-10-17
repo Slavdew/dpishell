@@ -42,11 +42,17 @@ def git(*args):
         return ''
 
 
-# Изменения — заголовки коммитов роутерной части с прошлого тега router-v*.
-prev = git('describe', '--tags', '--abbrev=0', '--match', 'router-v*', *(['HEAD^'] if tag else []))
-rng = f'{prev}..HEAD' if prev else 'HEAD'
-log = git('log', '--format=%s', '--no-merges', '-n', '50', rng, '--', 'router', 'data/router-releases.json')
-changes = [l.removeprefix('Роутер: ') for l in log.splitlines() if l]
+# Изменения — из router/release-notes.json (словами пользователя); нет записи — заголовки коммитов с прошлого тега.
+notes = json.loads((ROOT / 'router/release-notes.json').read_text(encoding='utf-8'))
+changes = notes.get(version)
+if not changes:
+    prev = git('describe', '--tags', '--abbrev=0', '--match', 'router-v*', *(['HEAD^'] if tag else []))
+    rng = f'{prev}..HEAD' if prev else 'HEAD'
+    log = git('log', '--format=%s', '--no-merges', '-n', '50', rng, '--', 'router', 'data/router-releases.json')
+    changes = [l.removeprefix('Роутер: ') for l in log.splitlines() if l]
+if tag and not notes.get(version):
+    errors.append(f'нет заметок к {version} в router/release-notes.json — релиз без них не выпускаем')
+    sys.exit('\n'.join(errors))
 
 assets = [{'name': f.name, 'sha256': hashlib.sha256(f.read_bytes()).hexdigest()}
           for f in sorted(out.glob('*.apk'))]

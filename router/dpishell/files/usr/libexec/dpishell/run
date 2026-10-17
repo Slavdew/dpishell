@@ -11,6 +11,7 @@ import * as sel from 'dpishell.select';
 import * as core from 'dpishell.core';
 import * as dg from 'dpishell.diag';
 import * as dns from 'dpishell.dns';
+import * as upd from 'dpishell.update';
 
 const cmd = ARGV[0];
 
@@ -50,6 +51,9 @@ else if (cmd == 'check') {
 else if (cmd == 'watch') {
 	let dw = null;
 	try { dw = dns.watch(); } catch (x) {}
+	// Есть ли новая версия DpiShell — раз в сутки (07 §9, status.update).
+	if (!st.job_running('update'))
+		try { upd.check_daily(); } catch (x) {}
 	if (dw == 'dns_fallback') warn('dns_fallback', 'Защищённый DNS недоступен — временно работает DNS провайдера');
 	else if (dw == 'dns_back') warn('dns_fallback', null);
 	let s = st.settings();
@@ -132,6 +136,22 @@ else if (cmd == 'site_check') {
 	let r;
 	try { r = dg.site_check(ARGV[1]); } catch (e) { r = { running: false, url: ARGV[1], error: `${e}` }; }
 	st.write_atomic('/tmp/dpishell/site_check.json', sprintf('%J\n', r));
+	unlink(l);
+}
+else if (cmd == 'update' || cmd == 'update_check') {
+	// Обновление: пакет заменяет сам себя (и этот файл) — сценарий уже в памяти, итог — в /tmp (07 §9, update_install).
+	let l = lock('update');
+	if (!l) exit(1);
+	let job = '/tmp/dpishell/update_job.json';
+	let from = ARGV[1] == 'local' ? 'local' : 'feed';
+	st.write_atomic(job, sprintf('%J\n', { action: cmd, from, running: true }));
+	let e = null;
+	try {
+		if (cmd == 'update_check') upd.check();
+		else e = upd.install(from);
+	} catch (x) { e = `${x}`; }
+	st.write_atomic(job, sprintf('%J\n', { action: cmd, from, running: false, ok: !e,
+		message: e ?? (cmd == 'update' ? `Обновлено до ${upd.installed_version('dpishell')}` : 'Проверено'), at: time() }));
 	unlink(l);
 }
 else {

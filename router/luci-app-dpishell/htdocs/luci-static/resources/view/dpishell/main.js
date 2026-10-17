@@ -58,6 +58,7 @@ return view.extend({
 				api.info('Эта стратегия требует, чтобы Windows отправляла метки времени в соединениях (TCP timestamps); по умолчанию они выключены. Приложение DpiShell на компьютере включает их само. Вручную — в командной строке от администратора: netsh interface tcp set global timestamps=enabled. Телефоны, ТВ и приставки настраивать не нужно.')
 			]),
 			warnings: E('div'),
+			update: E('div'),
 			lastCheck: E('div', { 'class': 'dps-line dps-muted' }),
 			schedOn: E('input', { type: 'checkbox', change: function() { self.saveSchedule(); } }),
 			schedHours: E('select', { 'class': 'cbi-input-select', change: function() { self.saveSchedule(); } },
@@ -75,6 +76,7 @@ return view.extend({
 		// Порядок — как во вкладке «Роутер» окна ПК (UX-аудит, макет страницы роутера).
 		var view = E('div', {}, [
 			E('h2', {}, 'DpiShell — обход блокировок'),
+			this.el.update,
 			api.card('Обход', [
 				this.el.state,
 				E('div', { 'class': 'dps-actions' }, [this.el.toggle, this.el.check, this.el.select]),
@@ -225,11 +227,71 @@ return view.extend({
 		} else
 			this.el.lastCheck.textContent = '';
 
+		this.renderUpdate(s.update);
+
 		var wj = JSON.stringify(s.warnings || []);
 		if (wj != this.lastWarnJson) {
 			this.lastWarnJson = wj;
 			this.renderWarnings(s.warnings || []);
 		}
+	},
+
+	// Плашка «Доступно обновление» (07 §9): что нового — до трёх строк, кнопка «Обновить».
+	renderUpdate: function(u) {
+		var self = this;
+		var key = JSON.stringify([u && u.available, u && u.version, this.updating]);
+		if (key == this.lastUpdateKey)
+			return;
+		this.lastUpdateKey = key;
+		if (this.updating) {
+			dom.content(this.el.update, E('div', { 'class': 'alert-message notice' }, E('span', { 'class': 'spinning' }, 'Обновляю DpiShell… страница перезагрузится сама')));
+			return;
+		}
+		if (!u || !u.available) {
+			dom.content(this.el.update, []);
+			return;
+		}
+		var notes = (u.notes || []).slice(0, 3);
+		dom.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
+			E('div', { 'class': 'dps-warn' }, [
+				E('span', {}, [E('b', {}, 'Доступно обновление DpiShell ' + (u.version || '').replace(/-r\d+$/, '')),
+					notes.length ? E('ul', { 'style': 'margin:.3em 0 0 1.2em' }, notes.map(function(n) { return E('li', {}, n); })) : '']),
+				api.btn('Обновить', function() { return self.updateInstall(); }, 'cbi-button-apply')
+			])
+		]));
+	},
+
+	updateInstall: function() {
+		var self = this;
+		this.el.err.textContent = '';
+		return api.call('update_install', { from: 'feed' }).then(function() {
+			self.updating = true;
+			self.renderUpdate(self.status.update);
+			poll.stop();
+			// Пакет меняет сам себя и перезапускает rpcd: ошибки ответа во время обновления — пережидаем.
+			var started = Date.now();
+			var timer = window.setInterval(function() {
+				api.safe('status').then(function(s) {
+					if (s.__error && Date.now() - started < 300000)
+						return;
+					if (!s.__error && s.jobs && s.jobs.update)
+						return;
+					window.clearInterval(timer);
+					var job = !s.__error && s.update && s.update.job;
+					if (job && job.ok === false) {
+						self.updating = false;
+						self.status = s;
+						self.el.err.textContent = job.message;
+						self.renderUpdate(s.update);
+						poll.start();
+						return;
+					}
+					window.location.reload();
+				});
+			}, 2000);
+		}, function(e) {
+			self.el.err.textContent = api.text(e);
+		});
 	},
 
 	renderWarnings: function(list) {
