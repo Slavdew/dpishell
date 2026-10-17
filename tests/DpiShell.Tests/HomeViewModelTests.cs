@@ -92,7 +92,7 @@ public sealed class HomeViewModelTests : IDisposable
 
         // Ушли с вкладки — помощник на связи, сохраняем сами и говорим об этом.
         vm.Page = Pages.Home;
-        for (int i = 0; i < 200 && !f.Backend.Calls.Contains("user_targets_set example.com"); i++) await Task.Delay(10);
+        for (int i = 0; i < 300 && !vm.HasToast; i++) await Task.Delay(10);
         Assert.Contains("user_targets_set example.com", f.Backend.Calls);
         Assert.Equal("Свои адреса сохранены.", vm.Toast);
 
@@ -111,6 +111,36 @@ public sealed class HomeViewModelTests : IDisposable
         Assert.False(vm.TargetsDirty);
         vm.StopSelectCmd.Execute(null);
         await select;
+    }
+
+    /// <summary>UX-аудит, п. 46: помощник молчит — через срок заставка говорит «дольше обычного» и даёт «Повторить» / «Открыть без помощника».</summary>
+    [Fact]
+    public async Task Loading_HelperSilent_OffersWayOut()
+    {
+        var link = new HelperLink
+        {
+            Connector = async ct => { await Task.Delay(Timeout.Infinite, ct); throw new OperationCanceledException(); },
+            Setup = new NoSetup(),
+        };
+        var vm = TestWindow.Model(NewShell(), link);
+        vm.LoadSlowAfter = TimeSpan.FromMilliseconds(30);
+        var init = vm.InitializeAsync();
+        Assert.True(vm.IsLoading);
+        Assert.False(vm.ShowLoadActions);
+        for (int i = 0; i < 300 && !vm.LoadSlow; i++) await Task.Delay(10);
+        Assert.True(vm.ShowLoadActions);
+        Assert.StartsWith("Помощник отвечает дольше обычного", vm.LoadingText);
+        Assert.True(vm.RetryCmd.CanExecute(null));
+        Assert.True(vm.OpenWithoutHelperCmd.CanExecute(null));
+        // «Повторить» — заново, с новым сроком; прежнее ожидание отменено и заставку не трогает.
+        var again = vm.InitializeAsync();
+        await init;
+        Assert.True(vm.IsLoading);
+        Assert.False(vm.LoadSlow);
+        Assert.False(vm.LoadFailed);
+        for (int i = 0; i < 300 && !vm.LoadSlow; i++) await Task.Delay(10);
+        Assert.True(vm.LoadSlow);
+        GC.KeepAlive(again);
     }
 
     [Fact]

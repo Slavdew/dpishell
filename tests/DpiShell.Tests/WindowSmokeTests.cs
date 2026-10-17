@@ -213,6 +213,14 @@ public sealed class WindowSmokeTests
                 {
                     Directory.CreateDirectory(snapDir);
                     Snap(w, Path.Combine(snapDir, $"{theme}-loading.png"));
+                    // Помощник молчит дольше 10 с — выход с заставки (UX-аудит, п. 46).
+                    var text = vm.LoadingText;
+                    SetProp(vm, "LoadSlow", true);
+                    SetProp(vm, "LoadingText", "Помощник отвечает дольше обычного. Можно подождать, повторить или открыть окно без него — только для просмотра.");
+                    Pump();
+                    Snap(w, Path.Combine(snapDir, $"{theme}-loading-slow.png"));
+                    SetProp(vm, "LoadSlow", false);
+                    SetProp(vm, "LoadingText", text);
                 }
                 foreach (var (page, name) in AllPages.Append((Pages.Router, "router-none")))
                 {

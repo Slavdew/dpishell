@@ -77,7 +77,8 @@ public sealed partial class MainViewModel : Observable
         };
         Autostart = new Autostart(settings) { Say = s => Message = s };
 
-        RetryCmd = RelayCommand.Async(InitializeAsync, () => LoadFailed);
+        RetryCmd = RelayCommand.Async(InitializeAsync, () => ShowLoadActions);
+        OpenWithoutHelperCmd = RelayCommand.Async(OpenWithoutHelperAsync, () => ShowLoadActions);
         EnableCmd = RelayCommand.Async(EnableAsync, () => !Busy && !IsLoading);
         DisableCmd = RelayCommand.Async(DisableAsync, () => !Busy && !IsLoading);
         GoSelectCmd = new RelayCommand(() => Page = Pages.Select);
@@ -383,10 +384,10 @@ public sealed partial class MainViewModel : Observable
     // ---------- загрузка ----------
 
     bool _isLoading = true;
-    public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { Raise(nameof(ShowOverlay)); CommandManager.InvalidateRequerySuggested(); } } }
+    public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); CommandManager.InvalidateRequerySuggested(); } } }
 
     bool _loadFailed;
-    public bool LoadFailed { get => _loadFailed; private set { if (Set(ref _loadFailed, value)) { Raise(nameof(ShowOverlay)); CommandManager.InvalidateRequerySuggested(); } } }
+    public bool LoadFailed { get => _loadFailed; private set { if (Set(ref _loadFailed, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); CommandManager.InvalidateRequerySuggested(); } } }
 
     public bool ShowOverlay => IsLoading;
 
@@ -399,31 +400,73 @@ public sealed partial class MainViewModel : Observable
     /// </summary>
     public async Task InitializeAsync()
     {
-        IsLoading = true; LoadFailed = false; LoadingText = "Подключаюсь к помощнику…";
+        _loadCts?.Cancel();
+        var cts = _loadCts = new CancellationTokenSource();
+        IsLoading = true; LoadFailed = false; LoadSlow = false; LoadingText = "Подключаюсь к помощнику…";
+        _ = MarkSlowAsync(cts.Token);
         try
         {
-            await Helper.ConnectAsync();
-            IsLoading = false;
-            // Роутер ищем сразу и параллельно: его нет — блок просто не появится.
-            _ = Router.RefreshAsync();
-            if (Helper.Reader is not null) await AfterConnectAsync();
-            else
-            {
-                ApplyHelperData();
-                await RefreshStatusAsync();
-            }
-            _ = CheckDnsAsync();
-            _ = RefreshPcDnsAsync();
-            // «Починить адреса» включено и с прошлой проверки прошли сутки — перепроверить записи (устаревшие уберутся).
-            _ = Hosts.RecheckIfDueAsync();
-            // Обновления данных — раз в день, тихо (architecture.md «Обновления данных»).
-            _ = Updates.CheckIfDueAsync();
+            await Helper.ConnectAsync(cts.Token);
+            if (cts.IsCancellationRequested) return;   // уже повторили или открыли без помощника
+            await OpenAsync();
         }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested) { }
         catch (Exception e)
         {
-            LoadFailed = true;
+            if (cts != _loadCts) return;
+            LoadFailed = true; LoadSlow = false;
             LoadingText = Texts.Friendly(e);
         }
+    }
+
+    CancellationTokenSource? _loadCts;
+
+    /// <summary>Через сколько заставка говорит «дольше обычного» и предлагает выход (UX-аудит, п. 46).</summary>
+    public TimeSpan LoadSlowAfter { get; set; } = TimeSpan.FromSeconds(10);
+
+    bool _loadSlow;
+    /// <summary>Помощник не ответил за <see cref="LoadSlowAfter"/>: на заставке «Повторить» и «Открыть без помощника».</summary>
+    public bool LoadSlow { get => _loadSlow; private set { if (Set(ref _loadSlow, value)) { Raise(nameof(ShowLoadActions)); CommandManager.InvalidateRequerySuggested(); } } }
+
+    /// <summary>Кнопки заставки: подключение не вышло или идёт дольше обычного — не застревать на первом экране.</summary>
+    public bool ShowLoadActions => IsLoading && (LoadFailed || LoadSlow);
+
+    async Task MarkSlowAsync(CancellationToken ct)
+    {
+        try { await Task.Delay(LoadSlowAfter, ct); }
+        catch (OperationCanceledException) { return; }
+        if (!IsLoading || LoadFailed) return;
+        LoadSlow = true;
+        LoadingText = "Помощник отвечает дольше обычного. Можно подождать, повторить или открыть окно без него — только для просмотра.";
+    }
+
+    /// <summary>«Открыть без помощника»: не ждать его — окно в режиме просмотра; помощник подхватится сам, когда ответит (TickAsync).</summary>
+    public async Task OpenWithoutHelperAsync()
+    {
+        _loadCts?.Cancel();
+        LoadFailed = false;
+        try { await OpenAsync(); }
+        catch (Exception e) { Fail(Texts.Friendly(e)); }
+    }
+
+    /// <summary>Снять заставку и наполнить окно: от помощника, если он на связи, иначе — то, что видно без прав.</summary>
+    async Task OpenAsync()
+    {
+        IsLoading = false; LoadSlow = false;
+        // Роутер ищем сразу и параллельно: его нет — блок просто не появится.
+        _ = Router.RefreshAsync();
+        if (Helper.Reader is not null) await AfterConnectAsync();
+        else
+        {
+            ApplyHelperData();
+            await RefreshStatusAsync();
+        }
+        _ = CheckDnsAsync();
+        _ = RefreshPcDnsAsync();
+        // «Починить адреса» включено и с прошлой проверки прошли сутки — перепроверить записи (устаревшие уберутся).
+        _ = Hosts.RecheckIfDueAsync();
+        // Обновления данных — раз в день, тихо (architecture.md «Обновления данных»).
+        _ = Updates.CheckIfDueAsync();
     }
 
     // ---------- главная ----------
@@ -626,6 +669,7 @@ public sealed partial class MainViewModel : Observable
     ICommand? _toggleCmd;
 
     public ICommand RetryCmd { get; }
+    public ICommand OpenWithoutHelperCmd { get; }
     public ICommand EnableCmd { get; }
     public ICommand DisableCmd { get; }
     public ICommand GoSelectCmd { get; }

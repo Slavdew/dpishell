@@ -1377,8 +1377,11 @@
                             </Style>
                         </ProgressBar.Style>
                     </ProgressBar>
-                    <Button Content="Повторить" Style="{StaticResource Primary}" Command="{Binding RetryCmd}" HorizontalAlignment="Left"
-                            Margin="0,4,0,0" Visibility="{Binding LoadFailed, Converter={StaticResource Vis}}" />
+                    <!-- Не ответил или отвечает дольше 10 с — выход с первого экрана (UX-аудит, п. 46). -->
+                    <WrapPanel Margin="0,4,0,0" Visibility="{Binding ShowLoadActions, Converter={StaticResource Vis}}">
+                        <Button Content="Повторить" Style="{StaticResource Primary}" Command="{Binding RetryCmd}" />
+                        <Button Content="Открыть без помощника" Command="{Binding OpenWithoutHelperCmd}" ToolTip="Окно — только для просмотра; помощник подключится сам, когда ответит" />
+                    </WrapPanel>
                 </StackPanel>
             </Border>
         </Grid>
