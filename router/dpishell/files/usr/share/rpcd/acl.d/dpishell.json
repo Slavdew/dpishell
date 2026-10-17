@@ -1,6 +1,6 @@
 {
 	"dpishell": {
-		"description": "DpiShell: управление обходом DPI (только объект dpishell, без exec и записи файлов)",
+		"description": "DpiShell: управление обходом DPI (объект dpishell; из файлов — только загрузка архива ядра через cgi-upload, без exec)",
 		"read": {
 			"ubus": {
 				"dpishell": [ "status", "strategies", "select_progress", "targets_get", "lists_get", "diag", "report",
@@ -8,6 +8,9 @@
 			}
 		},
 		"write": {
+			"file": {
+				"/tmp/dpishell-core.zip": [ "write" ]
+			},
 			"ubus": {
 				"dpishell": [ "enable", "disable", "strategy_set", "mode_set", "check_now", "select_start", "select_cancel", "apply",
 				              "schedule_set", "targets_set", "lists_set", "strategies_user_set", "conflict_stop", "core_install",

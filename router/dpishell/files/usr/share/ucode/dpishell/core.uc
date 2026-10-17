@@ -8,6 +8,7 @@ import * as st from 'dpishell.state';
 
 const TMP = '/tmp/dpishell/core';
 const ZIP = '/tmp/dpishell/core/zapret.zip';
+const UPLOADED = '/tmp/dpishell-core.zip';
 
 function q(s) {
 	return `'${replace(`${s}`, "'", "'\\''")}'`;
@@ -48,6 +49,9 @@ function download(m, progress) {
 	mkdir('/tmp/dpishell', 0o700);
 	mkdir(TMP, 0o700);
 	if (stat(ZIP) && sha256(ZIP) == m.zip_sha256)
+		return null;
+	// Архив, загруженный через веб-вход (cgi-upload пишет только в путь из ACL пакета, router-api.md §5.5).
+	if (stat(UPLOADED) && sha256(UPLOADED) == m.zip_sha256 && sh(`mv -f ${q(UPLOADED)} ${q(ZIP)}`).rc == 0)
 		return null;
 	let tried = [];
 	for (let url in [m.zip_url, ...(m.mirror_urls ?? [])]) {
