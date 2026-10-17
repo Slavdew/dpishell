@@ -25,7 +25,7 @@ public partial class MainWindow : Window
         SourceInitialized += (_, _) => ThemeManager.SetTitleBar(this);
 
         _tray = new Tray(vm);
-        _tray.OpenRequested += ShowFromTray;
+        _tray.OpenRequested += () => ShowFromTray();
         _tray.ExitRequested += () => _ = ExitAsync();
         vm.StatusChanged += () => Icon = Icons.ImageFor(vm.Kind);
 
@@ -119,12 +119,15 @@ public partial class MainWindow : Window
     void OnNetworkChanged(object? sender, EventArgs e) =>
         Dispatcher.BeginInvoke(() => { _netSettle.Stop(); _netSettle.Start(); });
 
-    public void ShowFromTray()
+    /// <summary>Показать окно (из трея, по второму запуску); false — программа уже выходит.</summary>
+    public bool ShowFromTray()
     {
+        if (_exiting) return false;
         Show();
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Activate();
         _ = _vm.TickAsync();
+        return true;
     }
 
     protected override void OnClosing(CancelEventArgs e)
