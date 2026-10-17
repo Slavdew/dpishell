@@ -135,7 +135,9 @@ public partial class MainWindow : Window
             // Крестик — по настройке: в трей или выход из программы (без режима службы выход выключает и обход:
             // winws программы в Job-объекте и завершается вместе с ней; при следующем запуске ResumeIfNeeded вернёт его).
             if (_vm.CloseToTray) { Hide(); ShowTrayHintOnce(); }
-            else _ = ExitAsync();
+            // Выход — после обработки закрытия: Close() внутри Closing бросает InvalidOperationException, и выход обрывался
+            // до Shutdown (значок уже убран, окно закрыто вторым щелчком, процесс жив).
+            else Dispatcher.BeginInvoke(() => _ = ExitAsync());
         }
         base.OnClosing(e);
     }
@@ -150,14 +152,26 @@ public partial class MainWindow : Window
         catch { /* подсказка не важна */ }
     }
 
-    async Task ExitAsync()
+    /// <summary>Выход; подменяется в тестах. Сбой любого шага — в журнал, процесс завершается всё равно (<see cref="AppExit"/>).</summary>
+    internal AppExit Exit { get; set; } = new()
     {
-        if (_exiting) return;
+        Log = App.TryLog,
+        Shutdown = () => Application.Current?.Shutdown(),
+    };
+
+    Task ExitAsync()
+    {
+        if (_exiting) return Task.CompletedTask;
         _exiting = true;
         _timer.Stop();
         _clock.Stop();
         _netSettle.Stop();
         NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
+        return Exit.RunAsync(PrepareExitAsync, _tray.Dispose, _vm.Router.Dispose, Hide);
+    }
+
+    async Task PrepareExitAsync()
+    {
         // «Все адреса» без программы не вернутся сами до следующего запуска — спросить (architecture.md «IP-списки и игровой режим»).
         if (_vm.Net.AnyActive && !_vm.Busy && _vm.Confirm("Сейчас включены «Все адреса». Вернуть обычный режим перед выходом?"))
         {
@@ -174,10 +188,6 @@ public partial class MainWindow : Window
             _vm.Message = "Завершаю текущую операцию…";
             await _vm.WhenIdleAsync(TimeSpan.FromSeconds(20));
         }
-        _tray.Dispose();
-        _vm.Router.Dispose();
-        Close();
-        Application.Current.Shutdown();
     }
 }
 

@@ -117,7 +117,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        ThemeManager.StopListening();
+        try { ThemeManager.StopListening(); }
+        catch (Exception ex) { TryLog(ex); }
         base.OnExit(e);
     }
 
@@ -142,7 +143,7 @@ public partial class App : Application
     /// <summary>Журнал окна — в %LocalAppData%\DpiShell\logs: папка программы окну без прав закрыта.</summary>
     static string ErrorLog => Path.Combine(WindowSettings.DefaultDir, "logs", "app-errors.log");
 
-    static void TryLog(Exception? ex)
+    internal static void TryLog(Exception? ex)
     {
         if (ex is null) return;
         try
