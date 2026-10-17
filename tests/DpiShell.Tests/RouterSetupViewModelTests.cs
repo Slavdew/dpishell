@@ -398,6 +398,102 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.Equal([RouterViewModel.AppReleasesUrl], opened);
     }
 
+    // ---------- 3. обновление ----------
+
+    const string Rel = RouterUpdatePackages.DownloadBase + "router-v0.2.1/";
+
+    /// <summary>Выпуск 0.2.1 на «GitHub»: release.json с подписью и два пакета (+ посторонний файл, который не берётся).</summary>
+    internal static MapHandler ServeRelease(TestSigner signer, string version = "0.2.1", Func<byte[], byte[]>? corrupt = null)
+    {
+        var h = new MapHandler();
+        var assets = new List<string>();
+        foreach (var name in new[] { "dpishell-0.2.1-r1.apk", "luci-app-dpishell-0.2.1-r1.apk", "notes.txt" })
+        {
+            var body = Encoding.UTF8.GetBytes("пакет " + name);
+            assets.Add($$"""{"name":"{{name}}","sha256":"{{Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(body))}}"}""");
+            h.Ok(Rel + name, corrupt?.Invoke(body) ?? body);
+        }
+        var json = Encoding.UTF8.GetBytes($$"""{"schema":1,"version":"{{version}}","tag":"router-v{{version}}","api":"1.0","min_app":"1.0.0","pkg":"apk","changes":["Глубокий поиск"],"assets":[{{string.Join(",", assets)}}]}""");
+        return h.Ok(Rel + "release.json", json).Ok(Rel + "release.json.sig", signer.Sign(json));
+    }
+
+    [Fact]
+    public async Task Update_Available_LineNotesHome_ThenFeedUpdate()
+    {
+        using var r = new FakeRouter().As020();
+        var vm = Make(r, new FakeSshConnector(new FakeSsh()));
+        Assert.True(await vm.ConnectAsync("secret"));
+        Assert.True(vm.UpdateAvailable);
+        Assert.Equal("Доступно обновление 0.2.1-r1", vm.UpdateTitle);
+        Assert.Equal("• Глубокий поиск стратегий на самом роутере", vm.UpdateNotes);
+        Assert.Contains("доступно обновление 0.2.1-r1", vm.HomeDetail);
+
+        Assert.True(await vm.UpdateRouterAsync());
+        Assert.Contains(r.Calls, c => Method(c) == "update_install" && c["params"]![3]!["from"]!.GetValue<string>() == "feed");
+        Assert.False(vm.UpdateAvailable);
+        Assert.Equal("Подключено, DpiShell 0.2.1-r1", vm.ConnectionText);
+        Assert.Contains("Обновлено до 0.2.1-r1", _said);
+        Assert.DoesNotContain("обновление", vm.HomeDetail);
+        Assert.False(vm.Busy);
+    }
+
+    [Fact]
+    public async Task Update_FeedUnreachable_PackagesThroughPc_SignedAndHashed_FromLocal()
+    {
+        using var r = new FakeRouter().As020();
+        r.FeedUnreachable = true;
+        r.LocalUpdateReady = true;
+        var signer = new TestSigner();
+        var ssh = new FakeSsh();
+        var vm = Make(r, new FakeSshConnector(ssh));
+        vm.Http = new HttpClient(ServeRelease(signer));
+        vm.ReleaseKey = signer.PublicKey;
+        Assert.True(await vm.ConnectAsync("secret"));
+
+        Assert.True(await vm.UpdateRouterAsync());
+        Assert.Equal(["/tmp/dpishell-update/dpishell-0.2.1-r1.apk", "/tmp/dpishell-update/luci-app-dpishell-0.2.1-r1.apk", "/tmp/dpishell-update/SHA256SUMS"], ssh.Uploads);
+        var froms = r.Calls.Where(c => Method(c) == "update_install").Select(c => c["params"]![3]!["from"]!.GetValue<string>()).ToList();
+        Assert.Equal(["feed", "local"], froms);
+        Assert.Contains(_said, s => s.StartsWith("Роутер не достал витрину пакетов"));
+        Assert.False(vm.UpdateAvailable);
+    }
+
+    [Theory]
+    [InlineData("sign", "Подпись выпуска для роутера не сошлась")]
+    [InlineData("hash", "не совпал по sha256")]
+    [InlineData("version", "Выпуск 0.2.2 вместо 0.2.1")]
+    public async Task Update_Local_BadReleaseRejected_NothingUploaded(string bad, string text)
+    {
+        using var r = new FakeRouter().As020();
+        r.FeedUnreachable = true;
+        r.LocalUpdateReady = true;
+        var signer = new TestSigner();
+        var ssh = new FakeSsh();
+        var vm = Make(r, new FakeSshConnector(ssh));
+        vm.Http = new HttpClient(ServeRelease(bad == "sign" ? new TestSigner() : signer, bad == "version" ? "0.2.2" : "0.2.1",
+            bad == "hash" ? b => [.. b, 1] : null));
+        vm.ReleaseKey = signer.PublicKey;
+        await vm.ConnectAsync("secret");
+        Assert.False(await vm.UpdateRouterAsync());
+        Assert.Contains(_said, s => s.StartsWith("Обновить через этот компьютер не удалось") && s.Contains(text));
+        Assert.Empty(ssh.Uploads);
+        Assert.DoesNotContain(r.Calls, c => Method(c) == "update_install" && c["params"]![3]!["from"]!.GetValue<string>() == "local");
+    }
+
+    [Fact]
+    public async Task UpdateCheck_Manual_NoUpdate()
+    {
+        using var r = new FakeRouter().As020();
+        r.UpdateAvailable = false;
+        var vm = Make(r, new FakeSshConnector(new FakeSsh()));
+        await vm.ConnectAsync("secret");
+        Assert.False(vm.UpdateAvailable);
+        Assert.True(vm.UpdateCheckCmd.CanExecute(null));
+        await vm.CheckUpdatesAsync();
+        Assert.Equal(1, r.UpdateCheckCalls);
+        Assert.Contains("Обновлений нет — на роутере последняя версия DpiShell", _said);
+    }
+
     sealed class FailingConnector(Exception e) : ISshConnector
     {
         public Task<ISshSession> ConnectAsync(RouterSshTarget target, Func<string> password, CancellationToken ct = default) => throw e;

@@ -84,6 +84,9 @@ public sealed class FakeRouter : IDisposable
     public bool UpdateFieldOn { get; set; }
     public bool UpdateAvailable { get; set; } = true;
     public string UpdateVersion { get; set; } = "0.2.1-r1";
+    public string UpdateCheckedAt { get; set; } = "2026-10-17T14:00:00Z";
+    /// <summary>Роутер не достаёт витрину: update_install feed заканчивается ошибкой.</summary>
+    public bool FeedUnreachable { get; set; }
     /// <summary>Пакеты уже положены в /tmp/dpishell-update (иначе update_install local — invalid).</summary>
     public bool LocalUpdateReady { get; set; }
     public int UpdateCheckCalls { get; private set; }
@@ -130,7 +133,13 @@ public sealed class FakeRouter : IDisposable
             _updateJob = $$"""{ "action": "update", "from": "{{from}}", "running": true, "ok": null, "message": "Обновление", "at": null }""";
             return;
         }
-        RouterVersion = UpdateVersion; UpdateAvailable = false; _updateFrom = null;
+        _updateFrom = null;
+        if (from == "feed" && FeedUnreachable)
+        {
+            _updateJob = $$"""{ "action": "update", "from": "feed", "running": false, "ok": false, "message": "Витрина недоступна", "at": "2026-10-17T14:05:00Z" }""";
+            return;
+        }
+        RouterVersion = UpdateVersion; UpdateAvailable = false;
         _updateJob = $$"""{ "action": "update", "from": "{{from}}", "running": false, "ok": true, "message": "Обновлено до {{UpdateVersion}}", "at": "2026-10-17T14:05:00Z" }""";
     }
 
@@ -140,7 +149,7 @@ public sealed class FakeRouter : IDisposable
     {
         if (!UpdateFieldOn) return "";
         var notes = UpdateAvailable ? """["Глубокий поиск стратегий на самом роутере"]""" : "[]";
-        return $$""", "update": { "available": {{(UpdateAvailable ? "true" : "false")}}, "version": "{{UpdateVersion}}", "notes": {{notes}}, "checked_at": "2026-10-17T14:00:00Z", "job": {{_updateJob ?? "null"}} }""";
+        return $$""", "update": { "available": {{(UpdateAvailable ? "true" : "false")}}, "version": "{{UpdateVersion}}", "notes": {{notes}}, "checked_at": "{{UpdateCheckedAt}}", "job": {{_updateJob ?? "null"}} }""";
     }
 
     public List<JsonObject> Calls { get; } = [];
@@ -300,7 +309,7 @@ public sealed class FakeRouter : IDisposable
             "update_install" when args["from"]!.GetValue<string>() == "local" && !LocalUpdateReady =>
                 """{"error":{"code":"invalid","text":"Нет пакетов в /tmp/dpishell-update","field":"from"}}""",
             "update_install" => Do(() => { _updateFrom = args["from"]!.GetValue<string>(); _updatePolls = 0; }, """{ "started": true }"""),
-            "update_check" => Do(() => UpdateCheckCalls++, """{ "started": true }"""),
+            "update_check" => Do(() => { UpdateCheckCalls++; UpdateCheckedAt = "2026-10-17T15:00:00Z"; }, """{ "started": true }"""),
             _ => "{}",
         }));
     }

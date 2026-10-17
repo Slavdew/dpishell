@@ -115,6 +115,7 @@ public sealed partial class RouterViewModel
         foreach (var n in new[] { nameof(Compat), nameof(Blocked), nameof(HasCompat), nameof(CompatText), nameof(CompatNeedsApp), nameof(CompatNeedsRouter),
                                   nameof(RouterNewer), nameof(MethodsTip), nameof(CanAct), nameof(ScheduleEditable) })
             Raise(n);
+        RaiseUpdate();
         Requery();
     }
 
@@ -148,7 +149,7 @@ public sealed partial class RouterViewModel
     ICommand? _updateCmd;
 
     bool _updating;
-    public bool Updating { get => _updating; private set { if (Set(ref _updating, value)) UpdateHome(); } }
+    public bool Updating { get => _updating; private set { if (Set(ref _updating, value)) { RaiseUpdate(); UpdateHome(); } } }
 
     /// <summary>«Обновить роутер»: update_install из витрины и ждать status.update.job; true — обновлено.</summary>
     public async Task<bool> UpdateRouterAsync()
@@ -162,11 +163,88 @@ public sealed partial class RouterViewModel
         {
             var job = await UpdateFromAsync(RouterUpdateSource.Feed);
             if (job?.Ok == true) return Updated(job);
+            // Роутер не достал витрину — пакеты через этот ПК: скачать, проверить подпись и хеши, положить по SSH, from: "local".
+            if (_status?.Update?.Version is { } version && Compat?.CanCall("update_install") != false)
+            {
+                Say("Роутер не достал витрину пакетов — загружаю обновление через этот компьютер…");
+                job = await UpdateLocalAsync(version);
+                if (job?.Ok == true) return Updated(job);
+            }
             Failed("Обновить DpiShell на роутере не удалось" + (job?.Message is { Length: > 0 } m ? ": " + m : ""));
             return false;
         }
         catch (RouterException e) { Failed(RouterTexts.Friendly(e)); return false; }
+        catch (Exception e) when (e is RouterSshException or HttpRequestException or DpiShell.Core.SecurityException or IOException or UnauthorizedAccessException)
+        {
+            Failed("Обновить через этот компьютер не удалось: " + (e is HttpRequestException ? "не скачались пакеты, проверьте интернет" : SshText(e)));
+            return false;
+        }
         finally { Busy = false; Updating = false; }
+    }
+
+    /// <summary>Проверочный ключ выпусков; null — встроенный (в тестах — тестовый).</summary>
+    public byte[]? ReleaseKey { get; set; }
+
+    RouterReleases? LoadReleases()
+    {
+        try { return (Releases ?? (() => RouterReleases.Load(Path.Combine(_shell.Paths.Seed, "router-releases.json"))))(); }
+        catch (Exception e) when (e is IOException or System.Text.Json.JsonException or InvalidDataException or UnauthorizedAccessException) { return null; }
+    }
+
+    async Task<RouterUpdateJob?> UpdateLocalAsync(string version)
+    {
+        var dir = Path.Combine(Path.GetDirectoryName(_settings.File)!, "router-update");
+        if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        var files = await RouterUpdatePackages.DownloadAsync(Http, LoadReleases(), version, dir, ReleaseKey);
+        var address = SetupAddress() ?? throw new RouterSshException(RouterSshFailure.Unreachable, "Не удалось узнать адрес роутера");
+        var pw = SshPassword(null, false) ?? throw new RouterSshException(RouterSshFailure.AuthFailed, "Нет сохранённого пароля роутера — войдите заново");
+        await using (var ssh = await SshConnector.ConnectAsync(new RouterSshTarget(address), () => pw))
+            await new RouterSsh(ssh).UploadUpdateAsync(files);
+        return await UpdateFromAsync(RouterUpdateSource.Local);
+    }
+
+    // ---------- «Доступно обновление» и «Проверить обновления» ----------
+
+    /// <summary>status.update.available: на вкладке «Роутер» — строка «Доступно обновление X», «Что нового», «Обновить».</summary>
+    public bool UpdateAvailable => _status?.Update is { Available: true } && !Updating;
+    public bool ShowUpdate => UpdateAvailable || Updating;
+    public string UpdateTitle => Updating ? "Обновляю DpiShell на роутере…" : $"Доступно обновление {_status?.Update?.Version}";
+    public string UpdateNotes => string.Join("\n", (_status?.Update?.Notes ?? []).Select(n => "• " + n));
+    public bool HasUpdateNotes => UpdateNotes.Length > 0 && !Updating;
+
+    void RaiseUpdate()
+    {
+        foreach (var n in new[] { nameof(UpdateAvailable), nameof(ShowUpdate), nameof(UpdateTitle), nameof(UpdateNotes), nameof(HasUpdateNotes) }) Raise(n);
+    }
+
+    /// <summary>Ждать итог update_check не дольше.</summary>
+    public TimeSpan UpdateCheckTimeout { get; set; } = TimeSpan.FromMinutes(1);
+
+    public ICommand UpdateCheckCmd => _updateCheckCmd ??= RelayCommand.Async(CheckUpdatesAsync, () => Connected && !Busy && Compat?.CanCall("update_check") != false);
+    ICommand? _updateCheckCmd;
+
+    /// <summary>«Проверить обновления»: update_check и ждать новый status.update.checked_at.</summary>
+    public async Task CheckUpdatesAsync()
+    {
+        if (Busy || !Connected) return;
+        Busy = true;
+        Say("Проверяю обновления DpiShell на роутере…");
+        try
+        {
+            var before = _status?.Update?.CheckedAt;
+            await Call(c => c.UpdateCheckAsync());
+            var started = DateTime.UtcNow;
+            while (DateTime.UtcNow - started < UpdateCheckTimeout)
+            {
+                await Task.Delay(PollInterval);
+                var s = await Call(c => c.StatusAsync());
+                Status = s;
+                if (s.Jobs?.Update != true && s.Update?.CheckedAt != before) break;
+            }
+            Say(_status?.Update is { Available: true } u ? $"Доступно обновление DpiShell для роутера: {u.Version}" : "Обновлений нет — на роутере последняя версия DpiShell");
+        }
+        catch (RouterException e) { Failed(RouterTexts.Friendly(e)); }
+        finally { Busy = false; }
     }
 
     bool Updated(RouterUpdateJob job)
@@ -463,7 +541,7 @@ public sealed class RouterInstallViewModel : Observable
             o = await _router.Flow().InstallAsync(p.Target, () => pw, new SyncProgress(OnProgress), _cts.Token);
         }
         catch (Exception e) when (e is RouterSshException or IOException or HttpRequestException or OperationCanceledException or UnauthorizedAccessException
-                                      or System.Security.SecurityException or InvalidDataException)
+                                      or DpiShell.Core.SecurityException or InvalidDataException)
         {
             MarkFailed();
             Fail(e, p.Target.Host);

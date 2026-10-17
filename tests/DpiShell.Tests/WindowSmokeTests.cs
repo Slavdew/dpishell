@@ -526,8 +526,28 @@ public sealed class WindowSmokeTests
                     Pump();
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-compat-{name}.png"));
                 }
-                fake.StatusApi = "1";
+                // Доступно обновление (status.update): на вкладке — строка, «Что нового», «Обновить»; на главной — коротко.
+                fake.StatusApi = "\"1.0\"";
                 fake.MinApp = null;
+                fake.UpdateFieldOn = true;
+                WaitUi(router.RefreshAsync());
+                Pump();
+                {
+                    var tabs = Find<TabControl>(w)!;
+                    if (Find<Button>(tabs, b => b.Content as string == "Обновить" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Обновить» у доступного обновления");
+                    if (Find<Expander>(tabs, e => e.Header as string == "Что нового" && e.IsVisible) is not { } news) throw new Exception("Нет «Что нового»");
+                    news.IsExpanded = true;
+                    if (Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } usv) usv.ScrollToHome();
+                    Pump();
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-update.png"));
+                    vm.Page = Pages.Home;
+                    Pump();
+                    if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text.Contains("доступно обновление 0.2.1-r1") && t.IsVisible) is null && !router.HomeLine.Contains("предупрежд"))
+                        throw new Exception("На главной нет «доступно обновление»");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-update-home.png"));
+                }
+                fake.UpdateFieldOn = false;
+                fake.StatusApi = "1";
                 SetProp(vm, "IsLoading", true);
                 Close(w);
                 router.Dispose();

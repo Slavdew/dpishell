@@ -594,6 +594,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             if (Checking) parts.Add("проверяю…");
             else if (enabled && at is not null) parts.Add($"проверено в {RouterTexts.Time(at)}" + (ok == false ? " — не всё открывается" : ""));
         }
+        if (Updating) parts.Add("обновляется");
+        else if (_status?.Update is { Available: true, Version: { } uv }) parts.Add("доступно обновление " + uv);
         if (Compat is { Level: not RouterCompatLevel.Ok }) parts.Add(CompatNeedsApp ? "нужна новая версия программы" : "обновите DpiShell на роутере");
         else if (!Connected && _detection?.Found is RouterFound.AppTooOld or RouterFound.RouterTooOld)
             parts.Add(RouterTexts.Found(_detection.Found, null) is var t ? char.ToLowerInvariant(t[0]) + t[1..] : "");
@@ -606,6 +608,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         HomeDetail = string.Join(", ", parts.Where(p => p.Length > 0));
         // Строка на главной: есть что исправить — вместо стратегии и времени (они на вкладке) первое предупреждение (UX-аудит 2, п. 7).
         HomeLine = !Selecting && FirstFix() is { } fix ? fix : HomeDetail;
+        // Обновление для роутера — коротко и первым, даже когда строка занята предупреждением.
+        if (!Selecting && !Updating && _status?.Update is { Available: true, Version: { } upd } && !HomeLine.Contains(upd))
+            HomeLine = $"доступно обновление {upd} · {HomeLine}";
         Warnings = string.Join(" · ", rows.Select(r => r.Text));
         ToggleText = enabled ? "Выключить на роутере" : "Включить на роутере";
         Raise(nameof(RouterEnabled));
