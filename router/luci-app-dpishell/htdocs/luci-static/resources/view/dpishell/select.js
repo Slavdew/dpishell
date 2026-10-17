@@ -138,7 +138,7 @@ return view.extend({
 			parts.push(this.rowsTable(p, cands.slice(-8), false));
 		else
 			parts.push(E('details', { 'class': 'dps-muted', 'style': 'margin-top:.5em' }, [
-				E('summary', {}, 'Проверено приёмов: %d'.format(cands.length)),
+				E('summary', {}, 'Проверено вариантов: %d'.format(cands.length)),
 				this.rowsTable(p, cands, false)
 			]));
 		return E('div', {}, parts);

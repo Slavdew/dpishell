@@ -43,9 +43,15 @@ return view.extend({
 			state: E('div', { 'class': 'dps-state' }),
 			toggle: api.btn('Включить', function() { return self.toggle(); }, 'cbi-button-apply'),
 			select: api.btn('Подобрать', function() { return self.openSelect(); }, 'cbi-button-action'),
-			check: api.btn('Проверить сейчас', function() { return self.checkNow(); }, 'cbi-button-neutral'),
+			check: api.btn('Проверить', function() { return self.checkNow(); }, 'cbi-button-neutral'),
 			err: E('div', { 'class': 'dps-error' }),
-			strategy: E('select', { 'class': 'cbi-input-select', 'style': 'width:100%;max-width:36em', 'change': function(ev) { self.setStrategy(ev.target.value); } }),
+			// Стратегия и режим — не сразу: обход для всей сети перезапускается (UX-аудит п. 50).
+			strategy: E('select', { 'class': 'cbi-input-select', 'style': 'width:100%;max-width:36em', 'change': function(ev) { self.pend('strategy', ev.target.value); } }),
+			apply: E('div', { 'class': 'dps-actions', 'style': 'display:none' }, [
+				api.btn('Применить', function() { return self.applyPending(); }, 'cbi-button-apply'),
+				api.btn('Отмена', function() { self.cancelPending(); }, 'cbi-button-neutral'),
+				E('span', { 'class': 'dps-muted' }, 'Обход для всей сети перезапустится — сайты моргнут на пару секунд.')
+			]),
 			modeAll: null, modeLists: null,
 			ts: E('div', { 'class': 'dps-line', 'style': 'display:none' }, [
 				'Компьютерам на Windows нужна настройка — без неё обход для них не работает',
@@ -62,29 +68,31 @@ return view.extend({
 			siteBtn: api.btn('Проверить', function() { return self.siteCheck(); }, 'cbi-button-action'),
 			siteResult: E('div', { 'class': 'dps-line' })
 		};
-		this.el.modeAll = api.radio('dps-mode', 'all', 'Все сайты, кроме исключений', true, function() { self.setMode('all'); });
-		this.el.modeLists = api.radio('dps-mode', 'lists', 'По спискам', false, function() { self.setMode('lists'); });
+		this.el.modeAll = api.radio('dps-mode', 'all', 'Все сайты', true, function() { self.pend('mode', 'all'); });
+		this.el.modeLists = api.radio('dps-mode', 'lists', 'Только из списков', false, function() { self.pend('mode', 'lists'); });
+		this.pending = {};
 
+		// Порядок — как во вкладке «Роутер» окна ПК (UX-аудит, макет страницы роутера).
 		var view = E('div', {}, [
 			E('h2', {}, 'DpiShell — обход блокировок'),
 			api.card('Обход', [
 				this.el.state,
-				E('div', { 'class': 'dps-actions' }, [this.el.toggle, this.el.select, this.el.check]),
+				E('div', { 'class': 'dps-actions' }, [this.el.toggle, this.el.check, this.el.select]),
 				this.el.err,
 				this.el.lastCheck,
 				this.el.warnings,
 				this.el.ts,
-				api.row(['Стратегия', api.info('Стратегия — способ, которым обход обманывает оборудование провайдера; у разных провайдеров работают разные. Если не знаете, какую выбрать, нажмите «Подобрать» — роутер проверит сам и включит лучшую. При смене стратегии обход перезапускается, открытые соединения на секунду прервутся.')], this.el.strategy),
-				api.row(['Режим', api.info('«Все сайты, кроме исключений» — обход для любого сайта, кроме списка исключений; это основной режим. «По спискам» — только для сайтов из списков (YouTube, Discord, свои). После смены режима роутер сам проверяет, что сайты открываются.')],
-					E('div', {}, [this.el.modeAll, this.el.modeLists]))
-			]),
-			api.card('Проверять автоматически', [
-				E('label', { 'class': 'dps-check' }, [this.el.schedOn, 'Проверять, что обход работает, каждые ', this.el.schedHours]),
-				E('label', { 'class': 'dps-check' }, [this.el.schedAuto, 'Подбирать автоматически',
+				api.row(['Для каких сайтов', api.info('«Все сайты» — обход для любого сайта, кроме исключений; это основной режим. «Только из списков» — только для сайтов из списков (YouTube, Discord, свои). После смены роутер сам проверяет, что сайты открываются.')],
+					E('div', {}, [this.el.modeAll, this.el.modeLists])),
+				api.row(['Стратегия', api.info('Стратегия — способ, которым обход обманывает оборудование провайдера; у разных провайдеров работают разные. Если не знаете, какую выбрать, нажмите «Подобрать» — роутер проверит сам и включит лучшую.')], this.el.strategy),
+				this.el.apply,
+				E('h4', { 'style': 'margin-top:1.2em' }, 'Проверять сам'),
+				E('label', { 'class': 'dps-check' }, [this.el.schedOn, 'Проверять сайты каждые ', this.el.schedHours]),
+				E('label', { 'class': 'dps-check' }, [this.el.schedAuto, 'Если не помогло — подобрать заново',
 					api.info('Если обход перестал работать и запасные стратегии не помогли, роутер сам запустит быстрый подбор и включит найденную — не чаще раза в 6 часов. Пока идёт подбор (2–3 минуты), сайты в сети могут открываться с перебоями в непредсказуемый момент, поэтому по умолчанию выключено.')]),
 				this.el.schedMsg
 			]),
-			api.card('Сайт не открывается с обходом', [
+			api.card('Сайт не открывается', [
 				api.line('Роутер проверит адрес с обходом и без. Если сайт открывается только без обхода — предложит добавить его в исключения.', 'dps-muted'),
 				E('div', { 'class': 'dps-actions' }, [this.el.siteUrl, this.el.siteBtn]),
 				this.el.siteResult
@@ -144,7 +152,7 @@ return view.extend({
 		if (!s.core.installed)
 			return 'Ошибка: ядро обхода не установлено';
 		if (s.core.hash_ok === false)
-			return 'Ошибка: файлы ядра изменены';
+			return 'Ошибка: файлы обхода повреждены — нажмите «Восстановить» в «Диагностике»';
 		var title = this.strategyTitle(s.strategy);
 		if (j.check)
 			return (s.enabled ? 'Работает — ' + title + ', ' : '') + 'идёт проверка…';
@@ -197,10 +205,12 @@ return view.extend({
 		this.el.select.disabled = busy || !s.core.installed;
 		this.el.check.disabled = busy || !s.enabled || j.check;
 		this.el.strategy.disabled = busy;
-		if (document.activeElement != this.el.strategy && this.el.strategy.value != (s.strategy || ''))
+		if (document.activeElement != this.el.strategy && !this.pending.strategy && this.el.strategy.value != (s.strategy || ''))
 			this.fillStrategies();
-		this.el.modeAll.firstChild.checked = s.mode != 'lists';
-		this.el.modeLists.firstChild.checked = s.mode == 'lists';
+		if (!this.pending.mode) {
+			this.el.modeAll.firstChild.checked = s.mode != 'lists';
+			this.el.modeLists.firstChild.checked = s.mode == 'lists';
+		}
 		this.el.modeAll.firstChild.disabled = this.el.modeLists.firstChild.disabled = busy;
 		this.el.ts.style.display = (s.enabled && s.needs_tcp_timestamps) ? '' : 'none';
 
@@ -231,7 +241,8 @@ return view.extend({
 				action = api.btn('Включить защищённый DNS', function() { api.dnsEnableDialog(function() { api.go('dns'); }); }, 'cbi-button-apply');
 				break;
 			case 'conflict':
-				action = api.btn('Остановить', function() { api.go('diag'); }, 'cbi-button-apply');
+				// Останавливает по-настоящему (службы); пакет — только удалить, процесс — разбор в «Диагностике» (п. 49).
+				action = api.btn('Остановить', function() { return self.stopConflicts(); }, 'cbi-button-apply');
 				break;
 			case 'core_missing':
 				action = api.btn('Загрузить ядро', function() { return self.coreInstall(); }, 'cbi-button-apply');
@@ -240,10 +251,10 @@ return view.extend({
 				action = api.btn('Подобрать', function() { return self.openSelect(); }, 'cbi-button-apply');
 				break;
 			case 'flow_offload':
-				action = api.btn('Передать zapret', function() { return self.act('flow_offload_fix'); }, 'cbi-button-apply');
+				action = api.btn('Исправить', function() { return self.act('flow_offload_fix'); }, 'cbi-button-apply');
 				break;
 			case 'ipv6':
-				action = api.btn('Включить обход по IPv6', function() { return self.act('ipv6_set', { enabled: true }); }, 'cbi-button-apply');
+				action = api.btn('Исправить', function() { return self.act('ipv6_set', { enabled: true }); }, 'cbi-button-apply');
 				break;
 			case 'dns_fallback':
 				action = api.btn('Подробнее', function() { api.go('dns'); }, 'cbi-button-neutral');
@@ -282,6 +293,27 @@ return view.extend({
 		});
 	},
 
+	stopConflicts: function() {
+		var self = this;
+		this.el.err.textContent = '';
+		if (!window.confirm('Остановить другую программу обхода? Она выключится и не запустится после перезагрузки роутера; включить её снова можно в её настройках.'))
+			return Promise.resolve();
+		return api.call('diag').then(function(d) {
+			var running = (d.conflicts || []).filter(function(c) { return c.running; });
+			var services = running.filter(function(c) { return c.kind == 'service'; });
+			var other = running.filter(function(c) { return c.kind != 'service'; });
+			return services.reduce(function(p, c) {
+				return p.then(function() { return api.call('conflict_stop', { name: c.name }); });
+			}, Promise.resolve()).then(function() {
+				if (other.length)
+					self.el.err.textContent = other.map(function(c) {
+						return c.kind == 'package' ? 'Удалите пакет ' + c.name + ' (apk del ' + c.name + ')' : 'Работает ' + c.name + ' — подробнее в «Диагностике»';
+					}).join('. ');
+				return self.act('status');
+			});
+		}).catch(function(e) { self.el.err.textContent = api.text(e); });
+	},
+
 	checkNow: function() {
 		return this.act('check_now').catch(function() {});
 	},
@@ -292,24 +324,32 @@ return view.extend({
 		return Promise.resolve();
 	},
 
-	setStrategy: function(id) {
-		var self = this;
-		if (!id)
-			return;
-		this.el.strategy.disabled = true;
-		return this.act('strategy_set', { id: id }).catch(function() {
-			self.el.strategy.value = self.status.strategy || '';
-		}).then(function() { self.el.strategy.disabled = false; });
+	// Выбранное, но не применённое: стратегия и режим (кнопка «Применить»).
+	pend: function(what, value) {
+		var cur = what == 'mode' ? (this.status.mode == 'lists' ? 'lists' : 'all') : (this.status.strategy || '');
+		if (!value || value == cur)
+			delete this.pending[what];
+		else
+			this.pending[what] = value;
+		this.el.apply.style.display = Object.keys(this.pending).length ? '' : 'none';
 	},
 
-	setMode: function(mode) {
-		var self = this;
-		if (mode == this.status.mode)
-			return;
-		return this.act('mode_set', { mode: mode }).catch(function() {
-			self.el.modeAll.firstChild.checked = self.status.mode != 'lists';
-			self.el.modeLists.firstChild.checked = self.status.mode == 'lists';
-		});
+	cancelPending: function() {
+		this.pending = {};
+		this.el.apply.style.display = 'none';
+		this.fillStrategies();
+		this.el.modeAll.firstChild.checked = this.status.mode != 'lists';
+		this.el.modeLists.firstChild.checked = this.status.mode == 'lists';
+	},
+
+	applyPending: function() {
+		var self = this, p = this.pending;
+		var chain = Promise.resolve();
+		if (p.strategy)
+			chain = chain.then(function() { return self.act('strategy_set', { id: p.strategy }); });
+		if (p.mode)
+			chain = chain.then(function() { return self.act('mode_set', { mode: p.mode }); });
+		return chain.then(function() { self.cancelPending(); }, function() { self.cancelPending(); });
 	},
 
 	saveSchedule: function() {

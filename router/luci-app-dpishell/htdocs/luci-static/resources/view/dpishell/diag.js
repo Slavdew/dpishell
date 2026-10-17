@@ -31,7 +31,7 @@ return view.extend({
 		var view = E('div', {}, [
 			E('h2', {}, 'Диагностика'),
 			api.card('Что мешает обходу', [
-				api.line(['Здесь роутер проверяет, что мешает обходу: другие программы обхода, ускорение межсетевого экрана, подмена DNS. Ничего не меняется без вашей кнопки.',
+				api.line(['Здесь роутер проверяет, что мешает обходу: другие программы обхода, ускорение сети, подмена DNS. Ничего не меняется без вашей кнопки.',
 					api.info('Зайдите сюда, если обход «Работает», а сайты не открываются, или перед тем, как писать о проблеме. «Сохранить отчёт» собирает сведения о роутере и обходе в файл — без паролей — его можно прикрепить к вопросу.')], 'dps-muted'),
 				this.el.findings,
 				this.el.err
@@ -94,11 +94,11 @@ return view.extend({
 				api.btn('Остановить', function() { return self.conflictStop(c.name); }, 'cbi-button-remove')));
 		});
 		if (d.flow_offload)
-			kids.push(finding('warning', 'Включено ускорение межсетевого экрана (flow offloading) — с ним обход не работает. Ускорение можно передать zapret: скорость та же, обход работает.',
-				api.btn('Передать zapret', function() { return self.act('flow_offload_fix'); }, 'cbi-button-apply')));
+			kids.push(finding('warning', 'Включено ускорение сети (flow offloading) — с ним обход не работает. «Исправить» передаст ускорение обходу: скорость та же, обход работает.',
+				api.btn('Исправить', function() { return self.act('flow_offload_fix'); }, 'cbi-button-apply')));
 		if (d.ipv6_wan)
-			kids.push(finding('notice', 'У роутера есть адрес IPv6 от провайдера. Обход по IPv6 сейчас выключен — сайты могут открываться в обход него.',
-				api.btn('Включить обход по IPv6', function() { return self.act('ipv6_set', { enabled: true }); }, 'cbi-button-apply')));
+			kids.push(finding('notice', 'У роутера есть IPv6 от провайдера, а обход работает только для IPv4 — часть сайтов может открываться мимо него. «Исправить» включит обход и для IPv6.',
+				api.btn('Исправить', function() { return self.act('ipv6_set', { enabled: true }); }, 'cbi-button-apply')));
 		if (d.dns && d.dns.spoofed)
 			kids.push(finding('warning', 'Провайдер подменяет ответы DNS' + (d.dns.checked_at ? ' (проверено ' + api.time(d.dns.checked_at) + ')' : ''),
 				api.btn('Включить защищённый DNS', function() { api.dnsEnableDialog(function() { self.reload(); }); }, 'cbi-button-apply')));
@@ -121,12 +121,12 @@ return view.extend({
 		else if (!c.installed)
 			kids.push(api.line('Ядро обхода не установлено — без него обход не работает.', 'dps-error'));
 		else if (c.hash_ok === false)
-			kids.push(api.line('Файлы ядра изменены — переустановите.', 'dps-error'));
+			kids.push(api.line('Файлы обхода повреждены — нажмите «Восстановить».', 'dps-error'));
 		else
 			kids.push(api.line('Ядро ' + (c.version || '') + ' установлено, файлы целы', 'dps-ok'));
 		if (!(s.jobs && s.jobs.core_install) && (!c.installed || c.hash_ok === false))
 			kids.push(E('div', { 'class': 'dps-actions' }, [
-				api.btn(c.installed ? 'Переустановить ядро' : 'Загрузить ядро', function() { return self.coreInstall(); }, 'cbi-button-apply')
+				api.btn(c.installed ? 'Восстановить' : 'Загрузить ядро', function() { return self.coreInstall(); }, 'cbi-button-apply')
 			]));
 		dom.content(this.el.core, kids);
 	},

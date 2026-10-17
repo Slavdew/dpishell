@@ -48,9 +48,9 @@ function warnings(s) {
 	if (length(running))
 		push(w, { code: 'conflict', text: `Работает другой обход: ${join(', ', map(running, c => c.name))}` });
 	if (dg.flow_offload())
-		push(w, { code: 'flow_offload', text: 'Включено ускорение межсетевого экрана (flow offloading) — с ним обход не работает' });
+		push(w, { code: 'flow_offload', text: 'Включено ускорение сети (flow offloading) — с ним обход не работает' });
 	if (!s.ipv6 && dg.ipv6_wan())
-		push(w, { code: 'ipv6', text: 'У роутера есть IPv6 от провайдера, а обход по IPv6 выключен' });
+		push(w, { code: 'ipv6', text: 'У роутера есть IPv6 от провайдера, а обход работает только для IPv4' });
 	for (let x in st.read_json(`${st.P.run}/warnings.json`, []))
 		push(w, x);
 	return w;
