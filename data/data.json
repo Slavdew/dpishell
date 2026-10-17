@@ -2,7 +2,7 @@
   "version": "2026-10-17.2",
   "app_version": "1.0.0",
   "min_app_version": "1.0.0",
-  "source": "Flowseal/zapret-discord-youtube@eb16c1419057e36b8a36fbe7c959483450e6ac8b (MIT), проверка — docs/03-vetting.md",
+  "source": "Flowseal/zapret-discord-youtube@eb16c1419057e36b8a36fbe7c959483450e6ac8b (MIT), проверка — docs/vetting.md",
   "files": {
     "core.json": { "sha256": "7c01fa6e4780b03a3943d156cf02a4f63f7c3226af919b86ea3bdbfdcf34e9a1" },
     "strategies.json": { "sha256": "fe02501cd8ad435d1dbef46f1ae5cb5cc5b5123501bfc2f11aae4b2f534cad04" },
