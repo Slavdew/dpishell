@@ -1,27 +1,11 @@
-# Пакет DpiShell для роутера (OpenWRT)
+# Пакет DpiShell для роутера (OpenWrt) — исходники
 
-ТЗ — `docs/06-router-spec.md`, договор с Windows-приложением — `docs/07-router-api.md`.
+Для пользователей: установка, страница `/dpi`, удаление, частые проблемы — [docs/router/README.md](../docs/router/README.md).
+Для разработчиков: устройство — [docs/dev/architecture.md](../docs/dev/architecture.md) («Пакет для роутера»), договор с Windows-приложением — [docs/dev/router-api.md](../docs/dev/router-api.md), сборка, тесты и эмулятор — [docs/dev/building.md](../docs/dev/building.md).
 
 ## Раскладка
-- `dpishell/files/` — файлы пакета как на роутере: модули ucode (`usr/share/ucode/dpishell/`), ubus-объект (`usr/share/rpcd/ucode/dpishell`), ACL, исполнитель фоновых заданий (`usr/libexec/dpishell/run`), init-скрипт, uci по умолчанию, `roles.json`, `core.json`. Данные (`strategies.json`, `targets.json`, списки, фейки) берутся из `data/` при сборке.
+- `dpishell/files/` — файлы пакета как на роутере: модули ucode (`usr/share/ucode/dpishell/`), ubus-объект (`usr/share/rpcd/ucode/dpishell`), ACL, исполнитель фоновых заданий (`usr/libexec/dpishell/run`), init-скрипт, uci по умолчанию, `roles.json`, `core.json`, `dns-presets.json`. Данные (`strategies.json`, `targets.json`, списки, фейки) берутся из `data/` при сборке.
 - `luci-app-dpishell/` — страницы LuCI.
-- `test/` — тесты ucode; `test/golden.json` — эталон сборки из `WinwsArgs.Build` (генератор — `tools/golden/`).
-- `tools/vm-deploy.sh` — разложить файлы в эмулятор; `tools/vm-test.sh` — тесты в эмуляторе (`LIVE=1` — с живыми запросами).
-
-## Эмулятор
-`C:\Dev\owrt-vm`: `run.sh` (QEMU из MSYS2, OpenWRT 25.12.5 x86_64; запуск в фоне), `ssh.sh '<команда>'` (порт 8022, ключ `vmkey`), LuCI — http://127.0.0.1:8080 (root / test). Сеть QEMU `user` пересобирает TCP — действие стратегий в эмуляторе не проверяется.
-
-## Состояние (2026-10-17)
-Готово и проверено в эмуляторе: сборщик config (совпадает с Windows для 20 стратегий), ubus-объект (статус, вкл/выкл, стратегии, режим, расписание, свои адреса/списки/стратегии, вход через /ubus), проверка целей (DoH, тело, редиректы), подбор (без обхода → перебор → автоприменение + запасные; ts глазами Windows), проверка по таймеру с запасными и автоподбором.
-
-Также готово: `core_install` — установка ядра с роутера (наш zip, основной адрес → зеркало, хеши архива и nfqws, шаги install_easy без cron), замки заданий с PID (мёртвый замок не блокирует).
-
-Также готово: `site_check` (адрес временно в nozapret), `diag`/`report`/`conflict_stop`, DNS (анализ подмены: NXDOMAIN/служебные адреса/проверка делом; https-dns-proxy по кнопке; возврат с перезапуском dnsmasq; временный откат при недоступности DoH).
-
-Также готово: страницы LuCI (`luci-app-dpishell`); пакеты собираются в GitHub Actions (`.github/workflows/router.yml`, SDK `openwrt/sdk:x86-64-v25.12.5`); первая сборка поставлена в эмулятор через `apk add --allow-untrusted` — объект ubus, cron, страница на месте. Найдена и исправлена ошибка порядка функций (ucode разрешает имена при компиляции) — проверка `tools/check-order.py` в тестах и в сборке; дымовой тест API — `SMOKE=1 sh router/tools/vm-test.sh`.
-
-Также готово (2026-10-17, вторая сессия): подписанная витрина (пакеты ставятся с https://slavdew.github.io/dpishell/feed/ без `--allow-untrusted`, проверено в эмуляторе); глубокий поиск (`select.uc` + генератор `search.uc` = `CandidateGenerator` ПК, эталон `test/golden-search.json`, «первое улучшение» как `RefineAsync`); `flow_offload_fix` (разгрузку ведёт zapret), `ipv6_set`; предупреждения `flow_offload`/`ipv6`/`conflict`; чужой zapret пакетом (Zapret Manager) — конфликт `kind: package`. Инструкция установки — `INSTALL.md`.
-
-Исправлено: ucode делит целые нацело (доли групп были 0 при частичном успехе, порядок по статистике не работал) — `1.0 *`, проверка в `check-order.py`; после `zapret restart` nfqws поднимается асинхронно (1–2 с) — подбор ждёт новый процесс; busybox `sleep` не понимает дробей — `sleep(мс)` ucode.
-
-Проверка подбора в эмуляторе — имитатор DPI: `/tmp/dpishell/fake-dpi.json` (правила «сайт открывается, если в профиле nfqws есть такие приёмы», пример — `06` §4.5); без файла не действует.
+- `test/` — тесты ucode; `test/golden.json` и `test/golden-search.json` — эталоны сборки config и генератора глубокого поиска из Windows-версии (генератор — `tools/golden/`).
+- `tools/` — `vm-deploy.sh`, `vm-deploy-luci.sh`, `vm-test.sh` (эмулятор), `check-order.py` (порядок объявлений ucode), `offline-bundle.sh`/`offline-install.sh` (офлайн-набор).
+- `keys/` — публичный ключ фида.
