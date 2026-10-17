@@ -15,6 +15,8 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.13" />
     <!-- Хост помощника (служба Windows DpiShellHelper, docs/dev/helper-protocol.md). Версия закреплена. -->
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.13" />
+    <!-- SSH к роутеру: установка/удаление без API, SFTP, проброс -R (docs/vetting.md «SSH.NET»). Версия закреплена. -->
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
   </ItemGroup>
 
 </Project>
