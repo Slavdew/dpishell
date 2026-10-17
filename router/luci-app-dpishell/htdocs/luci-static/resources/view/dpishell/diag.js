@@ -40,7 +40,8 @@ return view.extend({
 			api.card('Отчёт', [
 				api.line('Версии, настройки обхода и DNS, хвост журнала роутера — текстовым файлом.', 'dps-muted'),
 				E('div', { 'class': 'dps-actions' }, [api.btn('Сохранить отчёт', function() { return self.report(); }, 'cbi-button-action')])
-			])
+			]),
+			this.uninstallSection()
 		]);
 
 		this.renderFindings();
@@ -157,6 +158,50 @@ return view.extend({
 		this.el.err.textContent = '';
 		return api.call('conflict_stop', { name: name }).then(function() {
 			return self.reload();
+		}, function(e) {
+			self.el.err.textContent = api.text(e);
+		});
+	},
+
+	// Удаление (07 §9, uninstall): внизу, свёрнуто, спокойная кнопка; подтверждение — словом «удалить».
+	uninstallSection: function() {
+		var self = this;
+		var keep = E('input', { type: 'radio', name: 'dps-uninst', value: 'keep', checked: '' });
+		var full = E('input', { type: 'radio', name: 'dps-uninst', value: 'full' });
+		var word = E('input', { type: 'text', 'class': 'cbi-input-text', placeholder: 'удалить', autocomplete: 'off', style: 'max-width:12em' });
+		var btn = api.btn('Удалить DpiShell', function() { return self.uninstall(!full.checked); }, 'cbi-button-neutral');
+		btn.disabled = true;
+		word.addEventListener('input', function() { btn.disabled = word.value.trim().toLowerCase() != 'удалить'; });
+		this.el.uninstall = E('div', {}, [
+			api.line('Обход выключится, всё, что DpiShell менял в настройках роутера (ускорение сети, DNS, расписание), вернётся как было, пакеты DpiShell и ядро обхода удалятся. Модули ядра и другие пакеты роутера останутся.', 'dps-muted'),
+			E('label', { 'class': 'dps-radio' }, [keep, 'Сохранить настройки — свои адреса, исключения, найденные стратегии; при повторной установке они вернутся']),
+			E('label', { 'class': 'dps-radio' }, [full, 'Удалить полностью, вместе с настройками']),
+			E('div', { 'class': 'dps-actions' }, [E('span', {}, 'Чтобы подтвердить, введите слово «удалить»: '), word, btn])
+		]);
+		return E('details', { 'style': 'margin-top:2em' }, [
+			E('summary', { 'class': 'dps-muted' }, 'Удаление DpiShell'),
+			this.el.uninstall
+		]);
+	},
+
+	uninstall: function(keepSettings) {
+		var self = this;
+		return api.call('uninstall', { keep_settings: keepSettings }).then(function() {
+			dom.content(self.el.uninstall, E('div', { 'class': 'spinning' }, 'Удаляю DpiShell… страницу пока не закрывайте'));
+			poll.stop();
+			// Пакет и объект ubus исчезают по ходу удаления: пропали (или сброшена сессия) — значит, удалён.
+			var tries = 0;
+			var timer = window.setInterval(function() {
+				tries++;
+				api.safe('status').then(function(s) {
+					if (s.__error || tries > 90) {
+						window.clearInterval(timer);
+						dom.content(self.el.uninstall, api.line(s.__error
+							? 'DpiShell удалён' + (keepSettings ? ', настройки сохранены' : '') + '. Страницу можно закрыть.'
+							: 'Удаление идёт дольше обычного — обновите страницу через минуту.', s.__error ? 'dps-ok' : 'dps-muted'));
+					}
+				});
+			}, 2000);
 		}, function(e) {
 			self.el.err.textContent = api.text(e);
 		});

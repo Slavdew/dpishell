@@ -31,6 +31,7 @@ var PARAMS = {
 	strategies_user_set: ['items'],
 	conflict_stop: ['name'],
 	flow_offload_fix: [],
+	uninstall: ['keep_settings'],
 	ipv6_set: ['enabled']
 };
 

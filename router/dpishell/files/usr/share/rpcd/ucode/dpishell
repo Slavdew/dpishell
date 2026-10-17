@@ -468,6 +468,22 @@ methods.dns_status = {
 	}
 };
 
+// Удаление DpiShell (ядро договора, 07 §9): сценарий копируется в /tmp и идёт отвязанно — пакет и этот объект ubus
+// исчезают по ходу. Ход и итог — /tmp/dpishell-uninstall.json; страница ждёт, пока объект dpishell пропадёт.
+methods.uninstall = {
+	args: { keep_settings: true },
+	call: function(req) {
+		let keep = req.args.keep_settings;
+		if (keep != null && type(keep) != 'bool')
+			return err('invalid', 'keep_settings: true/false', 'keep_settings');
+		let r = sh(`cp /usr/libexec/dpishell/uninstall.sh /tmp/dpishell-uninstall.sh && chmod 700 /tmp/dpishell-uninstall.sh`);
+		if (r.rc != 0)
+			return err('failed', `Не удалось запустить удаление: ${trim(r.out)}`);
+		sh(`( setsid sh /tmp/dpishell-uninstall.sh ${keep === false ? '--full' : '--keep'} >/dev/null 2>&1 & )`);
+		return { started: true };
+	}
+};
+
 methods.dns_presets = {
 	call: function() {
 		return { presets: map(dns.presets(), p => ({ id: p.id, title: p.title, note: p.note ?? null,

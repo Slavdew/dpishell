@@ -51,7 +51,7 @@ define Package/dpishell/install
 	$(INSTALL_DATA) ./files/usr/share/rpcd/ucode/dpishell $(1)/usr/share/rpcd/ucode/
 	$(INSTALL_DATA) ./files/usr/share/rpcd/acl.d/dpishell.json $(1)/usr/share/rpcd/acl.d/
 	$(INSTALL_DIR) $(1)/usr/libexec/dpishell
-	$(INSTALL_BIN) ./files/usr/libexec/dpishell/run $(1)/usr/libexec/dpishell/
+	$(INSTALL_BIN) ./files/usr/libexec/dpishell/run ./files/usr/libexec/dpishell/uninstall.sh $(1)/usr/libexec/dpishell/
 	$(INSTALL_DIR) $(1)/etc/init.d $(1)/etc/config
 	$(INSTALL_BIN) ./files/etc/init.d/dpishell $(1)/etc/init.d/
 	$(INSTALL_CONF) ./files/etc/config/dpishell $(1)/etc/config/
@@ -76,18 +76,9 @@ endef
 define Package/dpishell/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/etc/init.d/dpishell stop
-/etc/init.d/dpishell disable
-# Без пакета обход некому вести: выключаем zapret (файлы ядра в /opt/zapret остаются).
-[ -x /etc/init.d/zapret ] && { /etc/init.d/zapret stop; /etc/init.d/zapret disable; }
-# Разгрузку, переданную zapret кнопкой (flow_offload_fix), возвращаем межсетевому экрану.
-prev=$$(uci -q get dpishell.main.fw_offload_prev)
-if [ -n "$$prev" ]; then
-	uci set firewall.@defaults[0].flow_offloading=1
-	[ "$$prev" = hardware ] && uci set firewall.@defaults[0].flow_offloading_hw=1
-	uci commit firewall
-	/etc/init.d/firewall reload
-fi
+# Ручной apk del: та же очистка, что у кнопки «Удалить» (выключить обход, вернуть разгрузку, DNS, cron, убрать ядро
+# из /opt/zapret), без удаления пакетов и с сохранением настроек /etc/dpishell.
+[ -x /usr/libexec/dpishell/uninstall.sh ] && sh /usr/libexec/dpishell/uninstall.sh --keep --from-prerm
 exit 0
 endef
 

@@ -90,7 +90,8 @@ if [ "$MODE" = after ]; then
 		grep -qs zapret /etc/config/firewall && left firewall "/etc/config/firewall: zapret"
 		ls /usr/share/nftables.d/*/*zapret* >/dev/null 2>&1 && left firewall "/usr/share/nftables.d: zapret"
 		grep -qsiE 'dpishell|zapret' /etc/crontabs/root && left cron "$(grep -iE 'dpishell|zapret' /etc/crontabs/root | head -1)"
-		for f in /etc/init.d/dpishell /etc/init.d/zapret /etc/hotplug.d/iface/90-zapret /opt/zapret /www/dpishell /www/dpi /usr/share/dpishell /tmp/dpishell; do
+		for f in /etc/init.d/dpishell /etc/init.d/zapret /etc/hotplug.d/iface/90-zapret /opt/zapret /www/dpishell /www/dpi /usr/share/dpishell \
+			/usr/share/ucode/dpishell /usr/libexec/dpishell /www/luci-static/resources/dpishell /www/luci-static/resources/view/dpishell /tmp/dpishell; do
 			[ -e "$f" ] || [ -L "$f" ] && left file "$f"
 		done
 		grep -qs '127.0.0.1#505' /etc/config/dhcp && left dns "dnsmasq → 127.0.0.1#505x"
