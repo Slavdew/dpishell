@@ -20,7 +20,7 @@ function busy() {
 	return st.job_running('select') ? err('busy', 'Идёт подбор') : null;
 }
 
-// Чужой обход работает — включение и подбор заблокированы (06 §7): два обхода обрабатывали бы одни пакеты.
+// Чужой обход работает — включение и подбор заблокированы (architecture.md «Пакет для роутера»): два обхода обрабатывали бы одни пакеты.
 function conflict() {
 	let running = filter(dg.conflicts(), c => c.running);
 	return length(running) ? err('conflict', `Работает другой обход: ${join(', ', map(running, c => c.name))} — остановите его на вкладке «Диагностика»`) : null;
@@ -74,7 +74,7 @@ function strategy_list() {
 				id: s.id, title: s.title ?? s.id, source: (s.source == 'user' || index(s.id, 'u-') == 0) ? 'user' : 'catalog',
 				runs: stats[s.id]?.runs ?? 0, passed: stats[s.id]?.passed ?? 0,
 			});
-	// Порядок — по статистике (02-spec §9.16): доля удачных, затем число прогонов.
+	// Порядок — по статистике (architecture.md «Порядок по статистике»): доля удачных, затем число прогонов.
 	return sort(items, (a, b) => {
 		let ra = a.runs ? 1.0 * a.passed / a.runs : 0.5, rb = b.runs ? 1.0 * b.passed / b.runs : 0.5;
 		return ra != rb ? (rb - ra) : (b.runs - a.runs);
@@ -114,7 +114,7 @@ const methods = {
 			let b = busy() ?? conflict(); if (b) return b;
 			let s = st.settings();
 			if (!s.strategy) {
-				// Без стратегии — лучшая по статистике (06 §3.2); подбор без статистики — в select.uc.
+				// Без стратегии — лучшая по статистике (architecture.md «Сборка config zapret из стратегии»); подбор без статистики — в select.uc.
 				let best = strategy_list()[0];
 				if (!best?.runs)
 					return err('failed', 'Стратегия не выбрана и подборов ещё не было — запустите подбор');
@@ -181,12 +181,12 @@ const methods = {
 				let z = zapret('restart');
 				if (z) return z;
 			}
-			// Полная проверка с контрольной группой после смены режима — check.uc (06 §3.4).
+			// Полная проверка с контрольной группой после смены режима — check.uc (architecture.md «Режимы роутера»).
 			return { started: false };
 		}
 	},
 
-	// Разгрузка из firewall передаётся zapret: та же скорость, но пакеты для nfqws в обход разгрузки (06 §3.6).
+	// Разгрузка из firewall передаётся zapret: та же скорость, но пакеты для nfqws в обход разгрузки (architecture.md «Диагностика роутера»).
 	flow_offload_fix: {
 		call: function() {
 			let b = busy(); if (b) return b;

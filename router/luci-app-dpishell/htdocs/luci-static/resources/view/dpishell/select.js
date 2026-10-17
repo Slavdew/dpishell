@@ -5,7 +5,7 @@
 'require dom';
 'require dpishell.api as api';
 
-// Вкладка «Подбор» (06-router-spec §3.3): запуск, ход, итог.
+// Вкладка «Подбор» (architecture.md «Подбор на роутере»): запуск, ход, итог.
 
 return view.extend({
 	handleSaveApply: null,

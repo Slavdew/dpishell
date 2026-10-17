@@ -91,7 +91,7 @@ public sealed record IpsetVerdict(
 }
 
 /// <summary>
-/// Проверка IP-списков (09-features-spec §2): один код для подготовки версии (тест на data/) и для загрузки на машине.
+/// Проверка IP-списков (architecture.md «IP-списки и игровой режим»): один код для подготовки версии (тест на data/) и для загрузки на машине.
 /// </summary>
 public static class IpsetValidator
 {

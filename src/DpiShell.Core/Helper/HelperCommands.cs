@@ -105,10 +105,10 @@ public static partial class HelperCommands
         new("choose", true, false, new ArgSpec("strategy", ArgKind.StrategyId, Required: true)),
         // Метки TCP нужны стратегии роутера (router-api §6) — включить на этом ПК, не включая обход.
         new("tcp_timestamps_on", true, false),
-        // Обновление данных по data.json (02-spec §3.6): адреса и хеши помощник берёт сам — из своего списка источников
+        // Обновление данных по data.json (architecture.md «Обновления данных»): адреса и хеши помощник берёт сам — из своего списка источников
         // и скачанного манифеста; окно передаёт только согласие на сильно изменившийся IP-список.
         new("data_update", true, true, new ArgSpec("confirmed", ArgKind.Bool)),
-        // DNS этого компьютера (02-spec решение 24): готовый вариант или свой (адреса + необязательный шаблон DoH).
+        // DNS этого компьютера (architecture.md «DNS этого компьютера»): готовый вариант или свой (адреса + необязательный шаблон DoH).
         // Меняются только физические адаптеры с основным шлюзом; прежние настройки — в закрытой папке помощника.
         new("dns_status", false, false),
         new("dns_set", true, true,

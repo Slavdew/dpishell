@@ -34,7 +34,7 @@
     "fake/tls_clienthello_www_google_com.bin": { "sha256": "936c2bee4cfb80aa3c426b2dcbcc834b3fbcd1adb17172959dc569c73a14275c" },
     "hosts/hosts-candidates.json": {
       "sha256": "11243545a67d55a3e797fc15ff7dd33bdc06ea8c9e6c17410d49b7f12d859974",
-      "source": "кандидаты для «Починить адреса» (ТЗ v2 §3), см. data/hosts/hosts-candidates.sha256"
+      "source": "кандидаты для «Починить адреса» (architecture.md «Починить адреса»), см. data/hosts/hosts-candidates.sha256"
     },
     "hosts/hosts-candidates.sha256": { "sha256": "9aef21432395ba3eed55a96b39bf8dbd8db421a3756d52387a2c33f47897faa4" },
     "licenses/flowseal-MIT.txt": { "sha256": "fe3983a1e91206ad1a530bcfae01fad207020cb61882edd62c1e3cb5f8d5d430" }

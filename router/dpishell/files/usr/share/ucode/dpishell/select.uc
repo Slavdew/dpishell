@@ -1,4 +1,4 @@
-// Цели, оценка стратегий, подбор и проверка (02-spec §4.3–4.4, 06 §3.3, §3.5, §4).
+// Цели, оценка стратегий, подбор и проверка (architecture.md «Подбор стратегии», «Подбор на роутере»).
 'use strict';
 
 import { readfile, writefile, stat, unlink, popen } from 'fs';
@@ -170,7 +170,7 @@ function strategy_order() {
 	for (let c in st.catalogs())
 		for (let s in c.strategies)
 			push(all, s);
-	// Порядок по статистике (02-spec §9.16): стабильные — первыми, новые — между проверенно рабочими и нерабочими.
+	// Порядок по статистике (architecture.md «Порядок по статистике»): стабильные — первыми, новые — между проверенно рабочими и нерабочими.
 	return sort(all, (a, b) => {
 		let ra = stats[a.id]?.runs ? 1.0 * stats[a.id].passed / stats[a.id].runs : 0.5;
 		let rb = stats[b.id]?.runs ? 1.0 * stats[b.id].passed / stats[b.id].runs : 0.5;
@@ -187,7 +187,7 @@ function eval_strategy(strat, groups, items, cache, s, ts_was) {
 		return row;
 	}
 	let uses_ts = cat.uses_ts(strat);
-	// Стратегии с ts оцениваем глазами клиента Windows: без меток времени (06 §4.3).
+	// Стратегии с ts оцениваем глазами клиента Windows: без меток времени (architecture.md «Проверка одной цели»).
 	if (uses_ts) ts_set(0);
 	let sc = score(groups, run_checks(items, cache));
 	if (uses_ts) {
@@ -216,7 +216,7 @@ function baseline_groups(groups, cache) {
 	return filter(groups, g => length(g.targets));
 }
 
-// Итог: лучшая включается сама (02-spec §9.17), до 3 запасных. rows — только полные проверки (не кандидаты поиска).
+// Итог: лучшая включается сама (architecture.md «Автоприменение»), до 3 запасных. rows — только полные проверки (не кандидаты поиска).
 function finish(p, rows, groups, s, ts_was, restore) {
 	let ranked = sort(filter(rows, r => r.error == null && r.group_share > 0), (a, b) => better(a, b) ? -1 : 1);
 	let stats = st.read_json(`${st.P.etc}/stats.json`, {});
@@ -273,7 +273,7 @@ function save_found(list) {
 	st.write_atomic(`${st.P.etc}/found-strategies.json`, sprintf('%J\n', { strategies: all }));
 }
 
-// Глубокий поиск (02-spec §4.7, как StrategySearch.cs): роли google и general подбираются раздельно на обязательных
+// Глубокий поиск (architecture.md «Глубокий поиск», как StrategySearch.cs): роли google и general подбираются раздельно на обязательных
 // целях своих групп (одна попытка, короткие таймауты, обе версии TLS), затем 2 лучших приёма каждой роли собираются
 // в стратегии и вместе с базовой проходят полную проверку. Возвращает { generated, rows, stop, base }.
 function deep_search(p, groups, s, ts_was, cache) {
@@ -517,7 +517,7 @@ function select_run(args) {
 	return p;
 }
 
-// Проверка текущей стратегии. light — для таймера: обязательные цели, одна версия TLS (06 §3.5).
+// Проверка текущей стратегии. light — для таймера: обязательные цели, одна версия TLS (architecture.md «Проверка по таймеру и запасные»).
 function check_run(source, light) {
 	let s = st.settings();
 	if (!s.enabled || !s.strategy)

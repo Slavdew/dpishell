@@ -1,5 +1,5 @@
 ﻿<#
-  Сборка portable-архива DpiShell (02-spec §9, решение 8: без установщика и подписи — portable-zip).
+  Сборка portable-архива DpiShell (без установщика и подписи — portable-zip, docs/dev/building.md).
 
   Что делает:
     1. dotnet publish окна: Release, win-x64, self-contained, single-file (как в DpiShell.App.csproj);

@@ -6,7 +6,7 @@ namespace DpiShell.Core;
 public sealed record DiscordCacheInfo(IReadOnlyList<string> Folders, long Bytes, IReadOnlyList<string> Failed);
 
 /// <summary>
-/// «Очистить кэш Discord» (09-features-spec, решение 5): после смены стратегии Discord держит в кэше неудачные ответы
+/// «Очистить кэш Discord» (architecture.md «Диагностика»): после смены стратегии Discord держит в кэше неудачные ответы
 /// и долго «подключается». Удаляются только Cache, Code Cache и GPUCache в %APPDATA%\discord (и PTB/Canary) —
 /// вход, настройки и сообщения не трогаются. Discord должен быть закрыт: открытые им файлы не удалятся.
 /// </summary>

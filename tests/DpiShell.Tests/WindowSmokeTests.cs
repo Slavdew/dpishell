@@ -198,7 +198,7 @@ public sealed class WindowSmokeTests
                 var shell = new Shell(new AppPaths(tmp.Sub("root-" + theme), Repo.Data));
                 var settings = TestWindow.Settings(shell);
                 settings.Theme = theme;
-                // Обновления (02-spec §3.6): у источника данные новее и вышла новая программа — плашка на главной и карточка в настройках.
+                // Обновления (architecture.md «Обновления данных»): у источника данные новее и вышла новая программа — плашка на главной и карточка в настройках.
                 settings.UpdatesData = "2099-01-01";
                 settings.UpdatesApp = "99.0";
                 settings.UpdatesCheckedAt = settings.UpdatesOkAt = new DateTime(2026, 10, 17, 12, 0, 0);

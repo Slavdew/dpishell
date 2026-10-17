@@ -1,4 +1,4 @@
-// Тесты оценки подбора: контрольная группа «Обычные сайты» (флаг control: true, 06-router-spec §4.1).
+// Тесты оценки подбора: контрольная группа «Обычные сайты» (флаг control: true, architecture.md «Оценка и порядок»).
 // Запуск: ucode -L <ucode-dir> select_test.uc
 'use strict';
 

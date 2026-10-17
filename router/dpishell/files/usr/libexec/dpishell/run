@@ -2,7 +2,7 @@
 // Фоновые задания DpiShell: подбор, проверка, проверка по таймеру.
 //   run select '<json args>'   — подбор (select_start)
 //   run check <manual|app>     — полная проверка текущей стратегии
-//   run watch                  — проверка по таймеру: запасные стратегии, автоподбор (06 §3.5)
+//   run watch                  — проверка по таймеру: запасные стратегии, автоподбор (architecture.md «Проверка по таймеру и запасные»)
 'use strict';
 
 import { writefile, readfile, stat, unlink } from 'fs';
@@ -62,7 +62,7 @@ else if (cmd == 'watch') {
 	let r = sel.check_run('timer', true);
 	unlink(l);
 	if (!r || r.fail_streak < 2) exit(0);
-	// Две неудачи подряд: следующая запасная (02-spec §9.15 — на роутере остаётся).
+	// Две неудачи подряд: следующая запасная (architecture.md «Проверка по таймеру и запасные»).
 	let backups = s.backups;
 	if (length(backups)) {
 		let next = backups[0];

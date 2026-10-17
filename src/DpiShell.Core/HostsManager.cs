@@ -19,7 +19,7 @@ public sealed record HostsStatus(
 public sealed record HostsRecheckResult(IReadOnlyList<HostsEntry> Kept, IReadOnlyList<HostsCheckRow> Removed, HostsWriteResult Write, bool BlockLost);
 
 /// <summary>
-/// «Починить адреса» (ТЗ v2 §3, решение 4): проверить кандидатов → предпросмотр → записать → «Вернуть как было» → перепроверка
+/// «Починить адреса» (architecture.md «Починить адреса»): проверить кандидатов → предпросмотр → записать → «Вернуть как было» → перепроверка
 /// раз в день / при старте. Функция выключена по умолчанию (AppState.HostsFix) — включение и вызовы решает окно.
 /// </summary>
 public sealed class HostsManager

@@ -210,7 +210,7 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <!-- Обновление списков (02-spec §3.6): видно, только когда у источника данные новее. -->
+                                    <!-- Обновление списков (architecture.md «Обновления данных»): видно, только когда у источника данные новее. -->
                                     <Border Style="{StaticResource Card}" Padding="14" DataContext="{Binding Updates}"
                                             Visibility="{Binding DataAvailable, Converter={StaticResource Vis}}">
                                         <StackPanel>
@@ -550,7 +550,7 @@
                     </Grid>
                 </TabItem>
 
-                <!-- ===== Игры и IP-списки (09-features-spec §1–2) =====
+                <!-- ===== Игры и IP-списки (architecture.md «IP-списки и игровой режим») =====
                      Один экран: игровой режим работает только по IP-списку — зависимость видна сразу, и «включил IP-список сам» не сюрприз. -->
                 <TabItem Header="Игры и IP-списки">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -640,7 +640,7 @@
                     </ScrollViewer>
                 </TabItem>
 
-                <!-- ===== Починить адреса (hosts, 09-features-spec §3) ===== -->
+                <!-- ===== Починить адреса (hosts, architecture.md «Починить адреса») ===== -->
                 <TabItem Header="Починить адреса">
                     <Grid DataContext="{Binding Hosts}">
                         <Grid.RowDefinitions>
@@ -706,7 +706,7 @@
                             <DataGrid.RowStyle>
                                 <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
                                     <Style.Triggers>
-                                        <!-- Не записываются — серым «не нужно» (ТЗ v2 §3). -->
+                                        <!-- Не записываются — серым «не нужно» (architecture.md «Починить адреса»). -->
                                         <DataTrigger Binding="{Binding Install}" Value="False">
                                             <Setter Property="Foreground" Value="{DynamicResource Muted}" />
                                         </DataTrigger>
@@ -851,7 +851,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Проверки окружения (09-features-spec §4): только показываем, что мешает и что сделать. -->
+                            <!-- Проверки окружения (architecture.md «Диагностика»): только показываем, что мешает и что сделать. -->
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <TextBlock Text="Что ещё может мешать" Style="{StaticResource H2}" />
@@ -937,7 +937,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- DNS этого компьютера (02-spec решение 24): вариант в один клик, «Вернуть как было». -->
+                            <!-- DNS этого компьютера (architecture.md «DNS этого компьютера»): вариант в один клик, «Вернуть как было». -->
                             <Border x:Name="PcDnsCard" Style="{StaticResource Card}">
                                 <StackPanel>
                                     <TextBlock Text="DNS этого компьютера" Style="{StaticResource H2}" />
@@ -1022,13 +1022,13 @@
                                         <RadioButton Content="Закрывать программу" IsChecked="{Binding CloseExit}" Margin="0,3,24,3" />
                                     </WrapPanel>
                                     <TextBlock Text="{Binding CloseHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" />
-                                    <!-- Автозапуск окна при входе (02-spec §3.8, решение 22): ключ Run пользователя, окно — в трее. -->
+                                    <!-- Автозапуск окна при входе (architecture.md «Автозапуск»): ключ Run пользователя, окно — в трее. -->
                                     <CheckBox Content="Запускать вместе с Windows (в трее)" IsChecked="{Binding Autostart.Enabled}" Margin="0,12,0,0" HorizontalAlignment="Left" />
                                     <TextBlock Text="{Binding Autostart.Hint}" Style="{StaticResource Hint}" Margin="26,2,0,0" />
                                 </StackPanel>
                             </Border>
 
-                            <!-- Обновления данных (02-spec §3.6): проверка раз в день, установка — помощник; программа — ссылкой на релиз. -->
+                            <!-- Обновления данных (architecture.md «Обновления данных»): проверка раз в день, установка — помощник; программа — ссылкой на релиз. -->
                             <Border Style="{StaticResource Card}" DataContext="{Binding Updates}">
                                 <StackPanel>
                                     <TextBlock Text="Обновления" Style="{StaticResource H2}" />

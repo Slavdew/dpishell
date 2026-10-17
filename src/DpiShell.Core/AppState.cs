@@ -11,7 +11,7 @@ public sealed class AppState
     public List<string> Groups { get; set; } = ["youtube", "discord"];
     public Dictionary<string, NetworkMemory> Networks { get; set; } = [];
 
-    /// <summary>Рабочие стратегии по рейтингу последнего подбора (до 3): на них переключается автопроверка (ТЗ §9 п. 15).</summary>
+    /// <summary>Рабочие стратегии по рейтингу последнего подбора (до 3): на них переключается автопроверка (architecture.md «Проверка по таймеру и запасные»).</summary>
     public List<string> Fallbacks { get; set; } = [];
     /// <summary>Когда последний раз была автопроверка (локальное время).</summary>
     public DateTime? WatchCheckedAt { get; set; }
@@ -31,7 +31,7 @@ public sealed class AppState
     public string? RouterAddress { get; set; }
     /// <summary>Пароль роутера, зашифрованный DPAPI (CurrentUser) — см. RouterSecrets. Открытым не хранится.</summary>
     public string? RouterPassword { get; set; }
-    /// <summary>IP-список: "off" (заглушка, по умолчанию), "list" (загруженный + свои), "any" (все адреса, временно) — 09-features-spec §2.</summary>
+    /// <summary>IP-список: "off" (заглушка, по умолчанию), "list" (загруженный + свои), "any" (все адреса, временно) — architecture.md «IP-списки и игровой режим».</summary>
     public string IpsetMode { get; set; } = "off";
     /// <summary>До какого момента (UTC) действует «Все адреса»; позже — считается прежний режим (BuildOptions.From).</summary>
     public DateTime? IpsetAnyUntil { get; set; }
@@ -39,7 +39,7 @@ public sealed class AppState
     public string IpsetModeBeforeAny { get; set; } = "off";
     /// <summary>Игровой режим: "off" (по умолчанию), "all" (TCP+UDP — переключатель окна), "tcp"/"udp" — только отладочная консоль.</summary>
     public string GameMode { get; set; } = "off";
-    /// <summary>«Починить адреса» (hosts, ТЗ v2 §3) включено. По умолчанию выключено.</summary>
+    /// <summary>«Починить адреса» (hosts, architecture.md «Починить адреса») включено. По умолчанию выключено.</summary>
     public bool HostsFix { get; set; }
     /// <summary>Когда последний раз перепроверяли записи hosts (локальное время) — окно делает это раз в сутки и при старте.</summary>
     public DateTime? HostsCheckedAt { get; set; }

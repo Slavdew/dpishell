@@ -40,13 +40,13 @@ public sealed partial class MainViewModel : Observable
     public HelperLink Helper { get; }
     public WindowSettings Settings { get; }
     public RouterViewModel Router { get; }
-    /// <summary>«Игры и IP-списки» (09-features-spec §1–2).</summary>
+    /// <summary>«Игры и IP-списки» (architecture.md «IP-списки и игровой режим»).</summary>
     public NetViewModel Net { get; }
-    /// <summary>«Починить адреса» — hosts (09-features-spec §3).</summary>
+    /// <summary>«Починить адреса» — hosts (architecture.md «Починить адреса»).</summary>
     public HostsViewModel Hosts { get; }
-    /// <summary>Обновления данных (02-spec §3.6).</summary>
+    /// <summary>Обновления данных (architecture.md «Обновления данных»).</summary>
     public UpdatesViewModel Updates { get; }
-    /// <summary>Окно при входе в Windows (02-spec §3.8).</summary>
+    /// <summary>Окно при входе в Windows (architecture.md «Автозапуск»).</summary>
     public Autostart Autostart { get; }
     /// <summary>Уведомление в трей (окно может быть свёрнуто): «Все адреса» закончились, адрес в hosts устарел.</summary>
     public event Action<string>? Notify;
@@ -174,7 +174,7 @@ public sealed partial class MainViewModel : Observable
 
     /// <summary>
     /// Действие с правами: помощник готов — сразу; нет — один вопрос, установка (UAC), подключение,
-    /// и вызывающий продолжает своё действие (02-spec §1: программа сама ведёт к результату). Null — не вышло, причина в строке состояния.
+    /// и вызывающий продолжает своё действие (architecture.md «Принцип»: программа сама ведёт к результату). Null — не вышло, причина в строке состояния.
     /// </summary>
     public async Task<HelperClient?> NeedHelperAsync()
     {
@@ -412,7 +412,7 @@ public sealed partial class MainViewModel : Observable
             _ = RefreshPcDnsAsync();
             // «Починить адреса» включено и с прошлой проверки прошли сутки — перепроверить записи (устаревшие уберутся).
             _ = Hosts.RecheckIfDueAsync();
-            // Обновления данных — раз в день, тихо (02-spec §3.6).
+            // Обновления данных — раз в день, тихо (architecture.md «Обновления данных»).
             _ = Updates.CheckIfDueAsync();
         }
         catch (Exception e)
@@ -760,7 +760,7 @@ public sealed partial class MainViewModel : Observable
     public ObservableCollection<DnsRow> DnsRows { get; } = [];
 
     bool _dnsSpoofed;
-    /// <summary>Системный DNS подменяет адреса проверяемых сайтов (ТЗ §9 п. 11).</summary>
+    /// <summary>Системный DNS подменяет адреса проверяемых сайтов (docs/research/dns.md).</summary>
     public bool DnsSpoofed { get => _dnsSpoofed; private set => Set(ref _dnsSpoofed, value); }
 
     string _dnsSummary = "Ещё не проверялось.";
@@ -927,7 +927,7 @@ public sealed partial class MainViewModel : Observable
 
     public ICommand StartSearchCmd { get; }
 
-    /// <summary>Глубокий поиск (ТЗ §4.7): от лучшей стратегии последнего подбора или от текущей.</summary>
+    /// <summary>Глубокий поиск (architecture.md «Глубокий поиск»): от лучшей стратегии последнего подбора или от текущей.</summary>
     public async Task StartSearchAsync()
     {
         if (Busy) return;
@@ -1040,7 +1040,7 @@ public sealed partial class MainViewModel : Observable
 
     string? _autoApplyId;
 
-    /// <summary>После подбора/поиска: лучшая стратегия — в работу (ТЗ §9 п. 17).</summary>
+    /// <summary>После подбора/поиска: лучшая стратегия — в работу (architecture.md «Автоприменение»).</summary>
     async Task AutoApplyAsync()
     {
         if (_autoApplyId is not { } id) return;
@@ -1233,7 +1233,7 @@ public sealed partial class MainViewModel : Observable
         _ => "не удалось узнать",
     };
 
-    /// <summary>Проверки окружения (09-features-spec §4): ✓ — в порядке, ⚠ — что мешает и что сделать.</summary>
+    /// <summary>Проверки окружения (architecture.md «Диагностика»): ✓ — в порядке, ⚠ — что мешает и что сделать.</summary>
     public ObservableCollection<FindingRow> Findings { get; } = [];
 
     public ICommand ClearDiscordCmd { get; }

@@ -66,7 +66,7 @@ public sealed class Tray : IDisposable
         _enable = new("Включить", null, (_, _) => Run(_vm.EnableCmd));
         _disable = new("Выключить", null, (_, _) => Run(_vm.DisableCmd));
         _select = new("Подобрать", null, (_, _) => { OpenRequested?.Invoke(); _vm.Page = Pages.Select; });
-        // «Вернуть как было» для hosts — всегда под рукой, пока наш блок стоит (ТЗ v2 §3).
+        // «Вернуть как было» для hosts — всегда под рукой, пока наш блок стоит (architecture.md «Починить адреса»).
         _hostsRevert = new("Убрать адреса из hosts", null, (_, _) => Run(_vm.Hosts.RevertCmd)) { Visible = false };
         var open = new Forms.ToolStripMenuItem("Открыть", null, (_, _) => OpenRequested?.Invoke()) { Font = new Drawing.Font(menu.Font, Drawing.FontStyle.Bold) };
         var exit = new Forms.ToolStripMenuItem("Выход", null, (_, _) => ExitRequested?.Invoke());

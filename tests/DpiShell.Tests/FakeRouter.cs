@@ -309,7 +309,7 @@ public sealed class FakeRouter : IDisposable
 
     bool _cancelled;
     public string StartedBy { get; set; } = "app";
-    /// <summary>Подбор сам включил лучшую (06-router-spec §3.3).</summary>
+    /// <summary>Подбор сам включил лучшую (architecture.md «Подбор на роутере»).</summary>
     public bool Applied { get; set; } = true;
     public string BackupsJson { get; set; } = """["alt9", "alt13"]""";
 

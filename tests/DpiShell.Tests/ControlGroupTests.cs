@@ -3,7 +3,7 @@ using DpiShell.Core;
 
 namespace DpiShell.Tests;
 
-/// <summary>Группа «Обычные сайты» (control): условие «не сломать», а не цель подбора — как на роутере (06-router-spec §4.1).</summary>
+/// <summary>Группа «Обычные сайты» (control): условие «не сломать», а не цель подбора — как на роутере (architecture.md «Оценка и порядок»).</summary>
 public sealed class ControlGroupTests
 {
     static readonly Target Yt = new("https://www.youtube.com/");

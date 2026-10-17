@@ -1,5 +1,5 @@
 #
-# dpishell — обход DPI на zapret (nfqws) с автоподбором стратегий. ТЗ: docs/06-router-spec.md.
+# dpishell — обход DPI на zapret (nfqws) с автоподбором стратегий. Устройство: docs/dev/architecture.md.
 # Файлы данных (каталог, цели, списки, фейки) кладёт в files/usr/share/dpishell сценарий сборки из data/ репозитория.
 # Ядро (nfqws и скрипты zapret) в пакет не входит: роутер качает его по files/usr/share/dpishell/core.json.
 #

@@ -114,7 +114,7 @@ function render_config(strategy, roles, opts) {
 		'NFQWS_UDP_PKT_IN=0',
 		`NFQWS_OPT="${join(' ', tokens)}"`,
 		'MODE_FILTER=none',
-		// software/hardware — разгрузку ведёт zapret со своим исключением для пакетов nfqws (06 §3.6), firewall её не включает.
+		// software/hardware — разгрузку ведёт zapret со своим исключением для пакетов nfqws (architecture.md «Диагностика роутера»), firewall её не включает.
 		`FLOWOFFLOAD=${fo}`,
 		'INIT_APPLY_FW=1',
 		`DISABLE_IPV6=${opts.ipv6 ? 0 : 1}`,

@@ -32,7 +32,7 @@ echo "$ARCH" > "$OUT/ARCH"
 CJ=$ROOT/router/dpishell/files/usr/share/dpishell/core.json
 SHA=$(sed -n 's/.*"zip_sha256": *"\([0-9a-f]*\)".*/\1/p' "$CJ")
 ZIPNAME=$(sed -n 's#.*"zip_url": *"[^"]*/\([^"/]*\.zip\)".*#\1#p' "$CJ")
-# Сначала — локальная копия релиза в vendor/ (02-spec §9.10), потом адреса из манифеста.
+# Сначала — локальная копия релиза в vendor/ (architecture.md «Ядро и служба обхода»), потом адреса из манифеста.
 [ -f "$ROOT/vendor/$ZIPNAME" ] && [ "$(sha256sum "$ROOT/vendor/$ZIPNAME" | cut -c1-64)" = "$SHA" ] && cp "$ROOT/vendor/$ZIPNAME" "$OUT/$ZIPNAME"
 [ -f "$OUT/$ZIPNAME" ] || for url in $(sed -n 's#.*"\(https://[^"]*\.zip\)".*#\1#p' "$CJ"); do
 	echo "Ядро: $url"

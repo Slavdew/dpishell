@@ -3,7 +3,7 @@ using DpiShell.Core;
 
 namespace DpiShell.Tests;
 
-/// <summary>Автозапуск окна при входе (02-spec §3.8, решение 22): ключ Run — через подменяемое хранилище, настоящий реестр не трогаем.</summary>
+/// <summary>Автозапуск окна при входе (architecture.md «Автозапуск»): ключ Run — через подменяемое хранилище, настоящий реестр не трогаем.</summary>
 public sealed class AutostartTests
 {
     static (Autostart, MemoryRunKeyStore, WindowSettings) Create(TempDir t)

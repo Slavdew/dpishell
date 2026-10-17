@@ -1,4 +1,4 @@
-// Кандидаты глубокого поиска (02-spec §4.7) — копия CandidateGenerator Windows-версии (StrategySearch.cs):
+// Кандидаты глубокого поиска (architecture.md «Глубокий поиск») — копия CandidateGenerator Windows-версии (StrategySearch.cs):
 // те же грубый проход, соседи и «цена» приёма, чтобы ПК и роутер искали одинаково. Только параметры из roles.json.
 'use strict';
 

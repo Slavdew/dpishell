@@ -7,7 +7,7 @@ namespace DpiShell.Core;
 public sealed record SystemFinding(bool Ok, string Title, string Text);
 
 /// <summary>
-/// Проверки окружения из service.bat Flowseal (09-features-spec §4) — только чтение, ничего не меняют:
+/// Проверки окружения из service.bat Flowseal (architecture.md «Диагностика») — только чтение, ничего не меняют:
 /// служба BFE, системный прокси, Adguard, сетевые службы Killer / Intel Connectivity / Check Point / SmartByte,
 /// путь программы с кириллицей или в OneDrive, строки YouTube в hosts вне блока DpiShell.
 /// </summary>
