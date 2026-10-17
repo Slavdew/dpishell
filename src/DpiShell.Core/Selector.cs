@@ -60,7 +60,7 @@ public sealed class Selector(AppPaths paths, HttpProbe probe)
 
     /// <summary>
     /// Что оставить в подборе по итогам проверки без обхода. Обычная группа — только то, что без обхода НЕ открылось
-    /// (как blockcheck). Контрольная («Обычные сайты», 06-router-spec §4.1) — наоборот, только то, что открылось:
+    /// (как blockcheck). Контрольная («Обычные сайты», architecture.md «Оценка и порядок») — наоборот, только то, что открылось:
     /// стратегия не должна это сломать, а недоступное и без обхода оценить нельзя.
     /// </summary>
     public static IReadOnlyList<TargetGroup> KeepForSelection(IReadOnlyList<TargetGroup> groups, IReadOnlyList<TargetVerdict> baseline) =>
@@ -109,7 +109,7 @@ public sealed class Selector(AppPaths paths, HttpProbe probe)
         return Score(s, groups, verdicts);
     }
 
-    /// <summary>Оценка по проверке. Сломан хоть один «обычный сайт» — ноль с причиной, как на роутере (06-router-spec §4.1).</summary>
+    /// <summary>Оценка по проверке. Сломан хоть один «обычный сайт» — ноль с причиной, как на роутере (architecture.md «Оценка и порядок»).</summary>
     public static StrategyScore Score(Strategy s, IReadOnlyList<TargetGroup> groups, IReadOnlyList<TargetVerdict> verdicts)
     {
         int goals = groups.Count(g => !g.Control);

@@ -5,7 +5,7 @@
 'require dom';
 'require dpishell.api as api';
 
-// Вкладка «Диагностика» (06-router-spec §3.6): чужие обходы, flow offloading, IPv6, DNS, ядро, отчёт.
+// Вкладка «Диагностика» (architecture.md «Диагностика роутера»): чужие обходы, flow offloading, IPv6, DNS, ядро, отчёт.
 
 return view.extend({
 	handleSaveApply: null,

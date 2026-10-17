@@ -12,10 +12,10 @@ public sealed class Shell
     public AppState State { get; private set; }
     public StrategyCatalog Catalog { get; private set; }
     public TargetSet DefaultTargets { get; private set; }
-    /// <summary>«Починить адреса» — системный hosts (ТЗ v2 §3); в тестах — копия во временной папке.</summary>
+    /// <summary>«Починить адреса» — системный hosts (architecture.md «Починить адреса»); в тестах — копия во временной папке.</summary>
     public HostsManager Hosts { get => _hosts ??= new HostsManager(Paths); set => _hosts = value; }
     HostsManager? _hosts;
-    /// <summary>IP-списки (ТЗ v2 §2): общий из data.json, свои подсети, валидатор.</summary>
+    /// <summary>IP-списки (architecture.md «IP-списки и игровой режим»): общий из data.json, свои подсети, валидатор.</summary>
     public IpLists IpLists => _ipLists ??= new IpLists(Paths);
     IpLists? _ipLists;
 
@@ -66,14 +66,14 @@ public sealed class Shell
         await Installer.InstallAsync(http, log, ct);
     }
 
-    /// <summary>Источники обновлений данных — только из поставки (02-spec §9, решение 23).</summary>
+    /// <summary>Источники обновлений данных — только из поставки (architecture.md «Обновления данных»).</summary>
     public UpdateSources UpdateSources => UpdateSources.Load(Path.Combine(Paths.Package, UpdateSources.FileName));
 
     /// <summary>Версия данных в работе (обновлённых или поставки).</summary>
     public string? DataVersion => Paths.SeedManifest?.Version;
 
     /// <summary>
-    /// Поставить обновление данных по data.json с источников из списка (02-spec §3.6). Новое ядро в манифесте —
+    /// Поставить обновление данных по data.json с источников из списка (architecture.md «Обновления данных»). Новое ядро в манифесте —
     /// ставится по нему же до замены данных; затем каталог, цели и списки перечитываются, свои файлы не трогаются.
     /// </summary>
     public async Task<DataUpdateResult> UpdateDataAsync(bool confirmed, Func<CoreManifest, Task>? installCore, IProgress<string>? log = null,
@@ -118,7 +118,7 @@ public sealed class Shell
 
     /// <summary>
     /// Для подбора и поиска: выбранные группы + «Обычные сайты». Контрольную группу не выбирают — это страховка «не сломать»,
-    /// она идёт в каждый подбор (живая проверка 2026-10-17: без этого подбор её не проверял вовсе).
+    /// она идёт в каждый подбор (без этого подбор её не проверял вовсе).
     /// </summary>
     public static IReadOnlyList<TargetGroup> WithControl(IReadOnlyList<TargetGroup> groups, TargetSet all) =>
         [.. groups.Where(g => !g.Control), .. all.Groups.Where(g => g.Control)];
@@ -319,7 +319,7 @@ public sealed class Shell
             return report;
         });
 
-    /// <summary>Глубокий поиск (ТЗ §4.7) от базовой стратегии; найденное, что прошло полную проверку, сохраняется как свои стратегии.</summary>
+    /// <summary>Глубокий поиск (architecture.md «Глубокий поиск») от базовой стратегии; найденное, что прошло полную проверку, сохраняется как свои стратегии.</summary>
     public Task<SearchReport> SearchAsync(string? baseId = null, IReadOnlyList<TargetGroup>? groups = null,
         IProgress<SelectorProgress>? progress = null, CancellationToken ct = default) =>
         WithServicePausedAsync(async () =>
@@ -376,7 +376,7 @@ public sealed class Shell
         return await Task.WhenAll(hosts.Select(h => DnsCheck.CompareAsync(h, doh, ct)));
     }
 
-    // ---------- IP-списки и игровой режим (09-features-spec §1–2) ----------
+    // ---------- IP-списки и игровой режим (architecture.md «IP-списки и игровой режим») ----------
 
     /// <summary>С чем собирается командная строка сейчас. «Все адреса» с истёкшим сроком уже не действует.</summary>
     public BuildOptions CurrentOptions => BuildOptions.From(State, DateTime.UtcNow);

@@ -42,7 +42,7 @@ public partial class MainWindow : Window
 
         // Смена сети — с паузой, пока сеть поднимается.
         _netSettle = new DispatcherTimer { Interval = WatchdogPolicy.NetworkSettle };
-        // Сеть сменилась — и роутер ищем заново: ушли из дома — блок роутера пропадёт (07-router-api §6).
+        // Сеть сменилась — и роутер ищем заново: ушли из дома — блок роутера пропадёт (router-api §6).
         _netSettle.Tick += (_, _) => { _netSettle.Stop(); _ = vm.Router.RefreshAsync(); };
         NetworkChange.NetworkAddressChanged += OnNetworkChanged;
 
@@ -135,7 +135,7 @@ public partial class MainWindow : Window
         _clock.Stop();
         _netSettle.Stop();
         NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
-        // «Все адреса» без программы не вернутся сами до следующего запуска — спросить (ТЗ v2 §2).
+        // «Все адреса» без программы не вернутся сами до следующего запуска — спросить (architecture.md «IP-списки и игровой режим»).
         if (_vm.Net.AnyActive && !_vm.Busy && _vm.Confirm("Сейчас включены «Все адреса». Вернуть обычный режим перед выходом?"))
         {
             // Через помощника: режимы меняет только он (без него «Все адреса» и не включить).

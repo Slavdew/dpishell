@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace DpiShell.Core;
 
-/// <summary>Файл данных в манифесте: хеш обязателен; для IP-списка — ещё адрес источника и счётчики (09-features-spec §2).</summary>
+/// <summary>Файл данных в манифесте: хеш обязателен; для IP-списка — ещё адрес источника и счётчики (architecture.md «IP-списки и игровой режим»).</summary>
 public sealed record DataFile(string Sha256, string? Url = null, int? Lines = null, double? Ipv4Share = null, DateTime? Updated = null, string? Source = null);
 
 /// <summary>
@@ -108,7 +108,7 @@ public sealed record IpsetUpdateResult(bool Applied, IpsetVerdict? Verdict, stri
 }
 
 /// <summary>
-/// IP-списки в %ProgramData%\DpiShell\lists (09-features-spec §2). Режимы не трогают файлы — WinwsArgs.Build подставляет нужный:
+/// IP-списки в %ProgramData%\DpiShell\lists (architecture.md «IP-списки и игровой режим»). Режимы не трогают файлы — WinwsArgs.Build подставляет нужный:
 /// ipset-all.txt + user-ipset.txt («По списку»), ipset-none.txt (заглушка, «Выкл»), ipset-any.txt (пустой, «Все адреса»).
 /// Любое обновление общего списка проходит IpsetValidator; отказ — старый список остаётся.
 /// </summary>

@@ -6,14 +6,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <!-- Проверенные данные (docs/03-vetting.md) едут рядом с exe и раскладываются в %ProgramData% при первом запуске. -->
+  <!-- Проверенные данные (docs/vetting.md) едут рядом с exe и раскладываются в %ProgramData% при первом запуске. -->
   <ItemGroup>
     <None Include="..\..\data\**\*" LinkBase="data" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="System.Management" Version="10.0.13" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.13" />
-    <!-- Хост помощника (служба Windows DpiShellHelper, docs/11-helper-spec.md). Версия закреплена. -->
+    <!-- Хост помощника (служба Windows DpiShellHelper, docs/dev/helper-protocol.md). Версия закреплена. -->
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.13" />
   </ItemGroup>
 

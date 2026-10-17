@@ -12,7 +12,7 @@ public sealed record WatchDecision(WatchAction Action, string? NextId = null)
 }
 
 /// <summary>
-/// Запасные стратегии с автопереключением (ТЗ §9 п. 15): что делать по результату лёгкой проверки.
+/// Запасные стратегии с автопереключением (architecture.md «Проверка по таймеру и запасные»): что делать по результату лёгкой проверки.
 /// Только решения и счётчики в <see cref="AppState"/>; сеть, служба и уведомления — у вызывающего.
 /// </summary>
 public static class WatchdogPolicy

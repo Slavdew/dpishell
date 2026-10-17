@@ -1,4 +1,4 @@
-// DNS для всей сети (06 §3.8): анализ подмены, варианты DNS (от провайдера, Google, Cloudflare, Quad9, Яндекс, свой)
+// DNS для всей сети (architecture.md «DNS для всей сети»): анализ подмены, варианты DNS (от провайдера, Google, Cloudflare, Quad9, Яндекс, свой)
 // по кнопке, возврат как было. DoH — через https-dns-proxy: ставится только по кнопке, при установке сам переключает
 // dnsmasq (проверено в эмуляторе). Вариант только с обычным DNS — серверы dnsmasq, прокси выключен.
 'use strict';
@@ -62,7 +62,7 @@ function net16(ip) {
 	return `${p[0]}.${p[1]}`;
 }
 
-// Совпадает, если пересекаются /16 (CDN отдают разные адреса — 02-spec §10).
+// Совпадает, если пересекаются /16 (CDN отдают разные адреса — docs/research/dns.md).
 function agrees(a, b) {
 	for (let x in a)
 		for (let y in b)
@@ -119,7 +119,7 @@ function mode() {
 	return length(p.resolvers ?? []) ? 'doh' : 'plain';
 }
 
-// Отвечает ли DoH-сервер: запрос по адресу из bootstrap (DNS провайдера подменяет ответы — 02-spec §9.11).
+// Отвечает ли DoH-сервер: запрос по адресу из bootstrap (DNS провайдера подменяет ответы — docs/research/dns.md).
 function doh_check(r) {
 	let host = pr.host_of(r.doh);
 	let ip = filter(r.bootstrap ?? [], x => match(x, /^[0-9.]+$/))[0];
@@ -332,12 +332,12 @@ function apply(id) {
 	return `DNS «${p.title}» не заработал — возвращено как было`;
 }
 
-// Прежняя кнопка «Включить защищённый DNS» (07 §5): Google + Cloudflare.
+// Прежняя кнопка «Включить защищённый DNS» (router-api §5): Google + Cloudflare.
 function enable() {
 	return apply('default');
 }
 
-// Таймер: DoH-серверы текущего варианта пропали — временно DNS провайдера; вернулись — снова защищённый (06 §3.8).
+// Таймер: DoH-серверы текущего варианта пропали — временно DNS провайдера; вернулись — снова защищённый (architecture.md «DNS для всей сети»).
 function watch() {
 	let p = preset_of(current_id());
 	if (!p || !length(p.resolvers ?? []) || (!proxy_enabled() && !stat('/tmp/dpishell/dns-fallback')))

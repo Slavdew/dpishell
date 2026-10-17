@@ -3,7 +3,7 @@
 'require rpc';
 'require ui';
 
-// Общее для страниц DpiShell: вызовы ubus-объекта dpishell (docs/07-router-api.md §4–5),
+// Общее для страниц DpiShell: вызовы ubus-объекта dpishell (docs/dev/router-api.md §4–5),
 // тексты ошибок, мелкие элементы вёрстки, общие диалоги (подбор, защищённый DNS).
 
 var UBUS_TEXT = {
@@ -212,7 +212,7 @@ return baseclass.extend({
 		window.location.href = this.url(tab);
 	},
 
-	// Диалог запуска подбора (06-router-spec §3.3). onStarted() — после успешного select_start.
+	// Диалог запуска подбора (architecture.md «Подбор на роутере»). onStarted() — после успешного select_start.
 	selectDialog: function(status, onStarted) {
 		var self = this;
 		var groups = {
@@ -272,7 +272,7 @@ return baseclass.extend({
 		]);
 	},
 
-	// Последствия защищённого DNS — показываются до нажатия (06-router-spec §3.8).
+	// Последствия защищённого DNS — показываются до нажатия (architecture.md «DNS для всей сети»).
 	dnsConsequences: function() {
 		return E('ul', { 'class': 'dps-list' }, [
 			E('li', {}, 'Запросы DNS уйдут к Google и Cloudflare в зашифрованном виде; провайдер не сможет их подменять.'),

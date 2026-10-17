@@ -52,7 +52,7 @@ public sealed class MapHandler : HttpMessageHandler
     }
 }
 
-/// <summary>Обновление данных по data.json (02-spec §3.6): порядок источников, зеркало, хеши, свои файлы, команда помощника.</summary>
+/// <summary>Обновление данных по data.json (architecture.md «Обновления данных»): порядок источников, зеркало, хеши, свои файлы, команда помощника.</summary>
 public sealed class DataUpdateTests
 {
     const string A = "https://primary.example/data/";

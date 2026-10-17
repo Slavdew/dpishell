@@ -27,7 +27,7 @@ public sealed record StrategyCatalog(string Engine, int Version, string Source, 
 }
 
 /// <summary>
-/// Что сверх стратегии включено пользователем: режим IP-списка и игровой режим (09-features-spec §1–2).
+/// Что сверх стратегии включено пользователем: режим IP-списка и игровой режим (architecture.md «IP-списки и игровой режим»).
 /// Default — как при подборе: IP-список выключен (заглушка), игровой режим выключен.
 /// </summary>
 public sealed record BuildOptions(IpsetMode Ipset = IpsetMode.Off, GameMode Game = GameMode.Off)
@@ -68,7 +68,7 @@ public static class WinwsArgs
     // Порядок ролей = порядок профилей: winws берёт первый подходящий профиль. Игровые — последними (general.bat:24-25).
     public static readonly string[] RoleOrder = ["quic", "discord_udp", "discord_media", "google", "general", "ipset_udp", "ipset_tcp", "game_tcp", "game_udp"];
 
-    // Разрешённые параметры десинхронизации: всё, что встречается в проверенном каталоге (docs/03-vetting.md).
+    // Разрешённые параметры десинхронизации: всё, что встречается в проверенном каталоге (docs/vetting.md).
     static readonly HashSet<string> AllowedOptions =
     [
         "--dpi-desync", "--dpi-desync-repeats", "--dpi-desync-fooling", "--dpi-desync-split-pos", "--dpi-desync-split-seqovl",
@@ -80,7 +80,7 @@ public static class WinwsArgs
         "--dup-autottl", "--dup-ttl", "--dpi-desync-fakedsplit-mod", "--dpi-desync-start", "--dpi-desync-badack-increment",
     ];
 
-    // Только в ролях game_* (09 §1): десинк любого протокола, ограниченный первыми пакетами, и фейки неизвестных протоколов.
+    // Только в ролях game_* (architecture.md «IP-списки и игровой режим»): десинк любого протокола, ограниченный первыми пакетами, и фейки неизвестных протоколов.
     // Имена сверены с nfq/nfqws.c и docs/readme.md zapret v72.13.
     static readonly HashSet<string> GameOnlyOptions =
         ["--dpi-desync-any-protocol", "--dpi-desync-cutoff", "--dpi-desync-fake-unknown-udp", "--dpi-desync-fake-unknown"];

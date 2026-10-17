@@ -1,4 +1,4 @@
-// Кандидаты глубокого поиска (02-spec §4.7) — копия CandidateGenerator Windows-версии (StrategySearch.cs):
+// Кандидаты глубокого поиска (architecture.md «Глубокий поиск») — копия CandidateGenerator Windows-версии (StrategySearch.cs):
 // те же грубый проход, соседи и «цена» приёма, чтобы ПК и роутер искали одинаково. Только параметры из roles.json.
 'use strict';
 
@@ -119,7 +119,7 @@ function cost(desync) {
 
 const ROLE_TITLES = { google: 'YouTube', general: 'Discord и свои' };
 
-// Короткое описание кандидата для таблицы подбора: «fake + multisplit, ts — YouTube» (07-router-api §8, вопрос 8).
+// Короткое описание кандидата для таблицы подбора: «fake + multisplit, ts — YouTube» (router-api §5.1).
 function describe(desync, role) {
 	let t = parse(desync);
 	let parts = [join(' + ', split(get(t, '--dpi-desync') ?? '?', ','))];

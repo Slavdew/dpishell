@@ -5,7 +5,7 @@
 'require dom';
 'require dpishell.api as api';
 
-// Вкладка «Обход» — главный экран (06-router-spec §3.1, §3.4, §3.5).
+// Вкладка «Обход» — главный экран (architecture.md «Страница роутера»).
 
 var HOURS = [[0.5, '30 мин'], [1, '1 ч'], [3, '3 ч'], [6, '6 ч'], [12, '12 ч'], [24, '24 ч']];
 
@@ -349,7 +349,7 @@ return view.extend({
 		if (this.status.enabled)
 			return this.act('disable').catch(function() {});
 		return this.act('enable').catch(function(e) {
-			// Без стратегии и статистики «Включить» = подобрать (06-router-spec §1).
+			// Без стратегии и статистики «Включить» = подобрать (architecture.md «Принцип»).
 			if (!self.status.strategy && e.code != 'busy' && e.code != 'not_installed')
 				self.openSelect();
 		});

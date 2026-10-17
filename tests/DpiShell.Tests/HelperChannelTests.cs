@@ -9,7 +9,7 @@ namespace DpiShell.Tests;
 
 /// <summary>
 /// Сервер канала помощника в процессе теста (своё имя канала, фейковый backend): команды и ответы, ход и отмена,
-/// одна операция за раз, отказы, доступ по DACL, отключение окна (11-helper-spec §5).
+/// одна операция за раз, отказы, доступ по DACL, отключение окна (helper-protocol §5).
 /// </summary>
 public class HelperChannelTests
 {

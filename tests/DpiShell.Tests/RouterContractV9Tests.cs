@@ -3,7 +3,7 @@ using DpiShell.Core.Router;
 
 namespace DpiShell.Tests;
 
-/// <summary>Дополнения договора 07-router-api §5/§9 (2026-10-16…17) на фейковом роутере.</summary>
+/// <summary>Дополнения договора router-api §5 на фейковом роутере.</summary>
 public sealed class RouterContractV9Tests
 {
     static async Task<RouterClient> LoggedIn(FakeRouter r)

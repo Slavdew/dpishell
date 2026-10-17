@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 
 namespace DpiShell.Core;
 
-/// <summary>Кандидат для «Починить адреса» (ТЗ v2 §3): домен и адреса, которые могут его чинить, и чьи это адреса по RDAP.</summary>
+/// <summary>Кандидат для «Починить адреса» (architecture.md «Починить адреса»): домен и адреса, которые могут его чинить, и чьи это адреса по RDAP.</summary>
 public sealed record HostsCandidate(
     string Host,
     List<string> Ips,
@@ -27,7 +27,7 @@ public sealed record HostsEntry(string Host, string Ip)
 /// <summary>Какие домены и адреса вообще допустимы в нашем блоке hosts.</summary>
 public static class HostsRules
 {
-    /// <summary>Белый список ТЗ v2 §3. «*.x» — только поддомены x. Домен вне списка не попадает в hosts ни при каких данных.</summary>
+    /// <summary>Белый список architecture.md «Починить адреса». «*.x» — только поддомены x. Домен вне списка не попадает в hosts ни при каких данных.</summary>
     public static readonly IReadOnlyList<string> Whitelist =
     [
         "github.com", "*.githubusercontent.com",

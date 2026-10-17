@@ -5,7 +5,7 @@ using System.Text;
 
 namespace DpiShell.Core;
 
-/// <summary>Строка hosts вне нашего блока, которая касается домена из белого списка: она сработает раньше нашей (ТЗ v2 §3 п. 6).</summary>
+/// <summary>Строка hosts вне нашего блока, которая касается домена из белого списка: она сработает раньше нашей (architecture.md «Починить адреса»).</summary>
 public sealed record HostsConflict(int Line, string Host, string Ip, string Text);
 
 /// <summary>Наш блок в файле: даты/версия из строки begin, записи, повреждён ли (begin без end, лишний end, несколько блоков).</summary>

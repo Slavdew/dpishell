@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 namespace DpiShell.Tests;
 
 /// <summary>
-/// Роутер с DpiShell в памяти — по docs/07-router-api.md (API 1). Ответы — примеры из §3–5 дословно;
+/// Роутер с DpiShell в памяти — по docs/dev/router-api.md (API 1). Ответы — примеры из §3–5 дословно;
 /// поведение для случаев §7 включается полями. HttpListener на localhost работает без прав администратора.
 /// </summary>
 public sealed class FakeRouter : IDisposable
@@ -309,7 +309,7 @@ public sealed class FakeRouter : IDisposable
 
     bool _cancelled;
     public string StartedBy { get; set; } = "app";
-    /// <summary>Подбор сам включил лучшую (06-router-spec §3.3).</summary>
+    /// <summary>Подбор сам включил лучшую (architecture.md «Подбор на роутере»).</summary>
     public bool Applied { get; set; } = true;
     public string BackupsJson { get; set; } = """["alt9", "alt13"]""";
 

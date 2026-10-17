@@ -4,7 +4,7 @@ using DpiShell.Core.Router;
 
 namespace DpiShell.Tests;
 
-/// <summary>Логика окна для роутера (07-router-api §6) на фейковом роутере: вход, пароль, подбор, стратегия с ПК, busy.</summary>
+/// <summary>Логика окна для роутера (router-api §6) на фейковом роутере: вход, пароль, подбор, стратегия с ПК, busy.</summary>
 public sealed class RouterViewModelTests : IDisposable
 {
     readonly TempDir _tmp = new();

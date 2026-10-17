@@ -6,7 +6,7 @@ using DpiShell.Core.Helper;
 namespace DpiShell.App;
 
 /// <summary>
-/// Экран «Игры и IP-списки» (09-features-spec §1–2): игровой режим одним переключателем (решение 1), режим IP-списка
+/// Экран «Игры и IP-списки» (architecture.md «IP-списки и игровой режим»): игровой режим одним переключателем (решение 1), режим IP-списка
 /// с «Все адреса — 10 минут» и обратным отсчётом, сведения о списке, обновление, свои подсети.
 /// Окно без прав: состояние — из status помощника, все изменения — командами помощника под Guard главной модели
 /// (одна операция за раз). Помощника нет — <see cref="Need"/> предложит установку и действие продолжится.
@@ -164,7 +164,7 @@ public sealed class NetViewModel : Observable
     /// <summary>По манифесту из поставки: сильно изменившийся список — вопрос «Применить?» и повтор с подтверждением.</summary>
     Task UpdateFromManifestAsync() => UpdateAsync("Обновляю IP-список…", (c, confirmed) => c.UpdateIpsetFromManifestAsync(confirmed, new Progress<string>(Say)));
 
-    /// <summary>Файл читает окно (он у пользователя), помощник получает содержимое и прогоняет валидатор — путей не принимает.</summary>
+    /// <summary>Файл читает окно (он в профиле пользователя), помощник получает содержимое и прогоняет валидатор — путей не принимает.</summary>
     Task UpdateFromFileAsync()
     {
         if (PickFile() is not { } file) return Task.CompletedTask;

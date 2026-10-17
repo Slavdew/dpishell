@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace DpiShell.Core.Helper;
 
 /// <summary>
-/// Протокол канала окно ↔ помощник (docs/11-helper-spec.md §3). Одна строка UTF-8 = один JSON-объект, конец строки — '\n'.
+/// Протокол канала окно ↔ помощник (docs/dev/helper-protocol.md §3). Одна строка UTF-8 = один JSON-объект, конец строки — '\n'.
 /// <list type="bullet">
 /// <item>Запрос: <c>{"id":1,"cmd":"enable","args":{"strategy":"alt9"}}</c>; отмена: <c>{"id":2,"cmd":"cancel","target":1}</c>.</item>
 /// <item>Ответ: <c>{"id":1,"ok":true,"result":…}</c> или <c>{"id":1,"ok":false,"error":{"code":"invalid","message":"…"}}</c>.</item>

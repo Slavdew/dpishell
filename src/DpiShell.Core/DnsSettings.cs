@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace DpiShell.Core;
 
-/// <summary>Готовый вариант DNS этого компьютера (02-spec §9, решение 24).</summary>
+/// <summary>Готовый вариант DNS этого компьютера (architecture.md «DNS этого компьютера»).</summary>
 /// <param name="Ips">Адреса серверов: IPv4, затем IPv6 (до 4, уже в нормальной записи).</param>
 /// <param name="Doh">Шаблон защищённого DNS (DoH); null — только обычный DNS.</param>
 public sealed record DnsPreset(string Id, string Title, IReadOnlyList<string> Ips, string? Doh, string? Note = null);
@@ -133,7 +133,7 @@ public sealed record DnsStatusInfo(string Current, bool Encrypted, bool Fallback
 public sealed record DnsSetResult(bool Ok, string Message, DnsStatusInfo Status);
 
 /// <summary>
-/// DNS этого компьютера в один клик (02-spec §9, решение 24). Меняет только активные физические адаптеры с основным шлюзом
+/// DNS этого компьютера в один клик (architecture.md «DNS этого компьютера»). Меняет только активные физические адаптеры с основным шлюзом
 /// (Ethernet, Wi-Fi); VPN и виртуальные не трогает. Перед первым изменением сохраняет прежние настройки каждого адаптера
 /// в закрытой папке помощника — «Вернуть как было» возвращает их дословно. После переключения проверяет, что DNS отвечает;
 /// нет — возвращает то, что было до переключения.
@@ -145,7 +145,7 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
     /// тексту (прочитано из реестра после настройки руками: 0x11 + DohTemplate). Документации у значения нет.
     /// </summary>
     public const ulong DohOn = 0x11;
-    /// <summary>«Разрешить обычный DNS, если защищённый не отвечает» — бит 0x4 (не задокументирован, см. 02-spec решение 24).</summary>
+    /// <summary>«Разрешить обычный DNS, если защищённый не отвечает» — бит 0x4 (не задокументирован, см. architecture.md «DNS этого компьютера»).</summary>
     public const ulong DohFallbackBit = 0x4;
 
     /// <summary>Сколько раз и с какой паузой проверять, что DNS отвечает после переключения (DoH поднимается не сразу).</summary>

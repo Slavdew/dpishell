@@ -198,7 +198,7 @@ public sealed class WindowSmokeTests
                 var shell = new Shell(new AppPaths(tmp.Sub("root-" + theme), Repo.Data));
                 var settings = TestWindow.Settings(shell);
                 settings.Theme = theme;
-                // Обновления (02-spec §3.6): у источника данные новее и вышла новая программа — плашка на главной и карточка в настройках.
+                // Обновления (architecture.md «Обновления данных»): у источника данные новее и вышла новая программа — плашка на главной и карточка в настройках.
                 settings.UpdatesData = "2099-01-01";
                 settings.UpdatesApp = "99.0";
                 settings.UpdatesCheckedAt = settings.UpdatesOkAt = new DateTime(2026, 10, 17, 12, 0, 0);
@@ -436,7 +436,7 @@ public sealed class WindowSmokeTests
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
 
-    /// <summary>Разделы docs/10-info-texts.md: заголовок «## …» → текст абзаца (обратные кавычки разметки убраны).</summary>
+    /// <summary>Разделы docs/info-texts.md: заголовок «## …» → текст абзаца (обратные кавычки разметки убраны).</summary>
     static Dictionary<string, string> DocInfoTexts()
     {
         var root = Directory.GetParent(Repo.Data)!.FullName;
@@ -448,7 +448,7 @@ public sealed class WindowSmokeTests
             if (head is not null) map[head] = string.Join(" ", body).Replace("`", "").Trim();
             body.Clear();
         }
-        foreach (var line in File.ReadAllLines(Path.Combine(root, "docs", "10-info-texts.md")))
+        foreach (var line in File.ReadAllLines(Path.Combine(root, "docs", "info-texts.md")))
         {
             if (line.StartsWith("## ")) { Flush(); head = line[3..].Trim(); continue; }
             if (head is not null && line.Trim().Length > 0) body.Add(line.Trim());
@@ -457,7 +457,7 @@ public sealed class WindowSmokeTests
         return map;
     }
 
-    /// <summary>У каждого раздела из 10-info-texts.md в окне есть «(i)», и её текст — дословно из документа.</summary>
+    /// <summary>У каждого раздела из info-texts.md в окне есть «(i)», и её текст — дословно из документа.</summary>
     [Fact]
     public void InfoButtons_EveryDocSection_HasButton_WithDocText()
     {

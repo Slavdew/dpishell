@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace DpiShell.Core;
 
 /// <summary>
-/// Кандидаты для глубокого поиска (ТЗ §4.7). Только параметры из белого списка <see cref="WinwsArgs"/>;
+/// Кандидаты для глубокого поиска (architecture.md «Глубокий поиск»). Только параметры из белого списка <see cref="WinwsArgs"/>;
 /// значения сверены с docs zapret v72.13 (readme.md, раздел nfqws).
 /// </summary>
 public static class CandidateGenerator

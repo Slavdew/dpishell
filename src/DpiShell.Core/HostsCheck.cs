@@ -23,7 +23,7 @@ public interface IEndpointProbe
 /// <summary>
 /// TCP к адресу (имя не разрешается), TLS с SNI = домен, обычная проверка цепочки и имени .NET (колбэк лишь запоминает
 /// причину отказа и принимает только SslPolicyErrors.None — ровно как проверка по умолчанию), HEAD / с кодом &lt; 500.
-/// Это доказывает, что узел по этому адресу законно обслуживает домен (ТЗ v2 §3 п. 3).
+/// Это доказывает, что узел по этому адресу законно обслуживает домен (architecture.md «Починить адреса»).
 /// </summary>
 public sealed class TlsEndpointProbe : IEndpointProbe
 {
@@ -188,7 +188,7 @@ public sealed record HostsCheckReport(IReadOnlyList<HostsCheckRow> Rows, DateTim
 }
 
 /// <summary>
-/// Проверка кандидатов по ТЗ v2 §3: белый список и публичный адрес → живая проверка адреса → RDAP-владелец (вторичный признак:
+/// Проверка кандидатов по architecture.md «Починить адреса»: белый список и публичный адрес → живая проверка адреса → RDAP-владелец (вторичный признак:
 /// недоступен — не мешает) → сравнение с адресами из DoH: ставим, только если через DNS домен не работает.
 /// </summary>
 public sealed class HostsVerifier(IEndpointProbe probe, IHostsDns dns, IRdapClient? rdap, int parallel = 12)

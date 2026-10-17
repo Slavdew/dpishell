@@ -11,13 +11,13 @@ public sealed class AppPaths
     public string Results => Path.Combine(Root, "results");
     public string StateFile => Path.Combine(Root, "state.json");
     public string Winws => Path.Combine(Core, "winws.exe");
-    /// <summary>Прежние настройки DNS адаптеров до первой смены (02-spec решение 24) — для «Вернуть как было».</summary>
+    /// <summary>Прежние настройки DNS адаптеров до первой смены (architecture.md «DNS этого компьютера») — для «Вернуть как было».</summary>
     public string DnsBackup => Path.Combine(Root, "dns-backup.json");
 
     /// <summary>Данные, приехавшие вместе с программой (data\ рядом с exe).</summary>
     public string Package { get; }
 
-    /// <summary>Обновлённые данные (ставит помощник по data.json, 02-spec §3.6) — в закрытой папке программы.</summary>
+    /// <summary>Обновлённые данные (ставит помощник по data.json, architecture.md «Обновления данных») — в закрытой папке программы.</summary>
     public string Updates => Path.Combine(Root, "data");
 
     /// <summary>

@@ -5,7 +5,7 @@
 'require dom';
 'require dpishell.api as api';
 
-// Вкладка «DNS» (06-router-spec §3.8): анализ подмены, защищённый DNS для всей сети, возврат.
+// Вкладка «DNS» (architecture.md «DNS для всей сети»): анализ подмены, защищённый DNS для всей сети, возврат.
 
 return view.extend({
 	handleSaveApply: null,

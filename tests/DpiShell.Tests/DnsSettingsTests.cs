@@ -4,7 +4,7 @@ using DpiShell.Core.Helper;
 namespace DpiShell.Tests;
 
 /// <summary>
-/// DNS этого компьютера (02-spec решение 24): какие адаптеры меняем, сохранение и «Вернуть как было», откат, если DNS
+/// DNS этого компьютера (architecture.md «DNS этого компьютера»): какие адаптеры меняем, сохранение и «Вернуть как было», откат, если DNS
 /// не ответил, и строгая проверка команд помощника. Сеть и реестр — <see cref="FakeDnsSystem"/>.
 /// </summary>
 public sealed class DnsSettingsTests : IDisposable

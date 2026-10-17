@@ -9,7 +9,7 @@ namespace DpiShell.Core;
 /// <summary>Цель проверки. handshake_only — достаточно TLS и заголовков ответа (у адреса нет стабильного большого тела).</summary>
 public sealed record Target(string Url, int MinBytes = 0, bool HandshakeOnly = false, bool Required = true);
 
-/// <summary>Control — «Обычные сайты»: не цель подбора, а условие «стратегия их не ломает» (06-router-spec §4.1).</summary>
+/// <summary>Control — «Обычные сайты»: не цель подбора, а условие «стратегия их не ломает» (architecture.md «Оценка и порядок»).</summary>
 public sealed record TargetGroup(string Id, string Title, List<Target> Targets, bool Control = false);
 
 public sealed record TargetSet(List<TargetGroup> Groups)
@@ -43,7 +43,7 @@ public sealed class HttpProbe
     public int MaxBytes { get; init; } = 1 << 20;
     public int Attempts { get; init; } = 2;
 
-    /// <summary>Если задан — адреса целей берутся из DoH, а не из DNS системы (см. ТЗ §9 п. 11). Не нашёл — системный DNS.</summary>
+    /// <summary>Если задан — адреса целей берутся из DoH, а не из DNS системы (см. docs/research/dns.md). Не нашёл — системный DNS.</summary>
     public DohResolver? Resolver { get; init; }
 
     public static readonly SslProtocols[] DefaultTls = [SslProtocols.Tls13, SslProtocols.Tls12];

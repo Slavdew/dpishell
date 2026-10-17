@@ -1,5 +1,5 @@
 ﻿<#
-  Сборка portable-архива DpiShell (02-spec §9, решение 8: без установщика и подписи — portable-zip).
+  Сборка portable-архива DpiShell (без установщика и подписи — portable-zip, docs/dev/building.md).
 
   Что делает:
     1. dotnet publish окна: Release, win-x64, self-contained, single-file (как в DpiShell.App.csproj);
@@ -62,7 +62,7 @@ Copy-Item (Join-Path $PSScriptRoot 'README.txt') $stage
 Copy-Item (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.txt') $stage
 $license = Join-Path $repo 'LICENSE'
 if (Test-Path $license) { Copy-Item $license (Join-Path $stage 'LICENSE.txt') }
-else { Write-Warning 'В корне репозитория нет LICENSE: лицензия DpiShell не выбрана (docs/owner-questions.md, вопрос 4) — архив без неё.' }
+else { Write-Warning 'В корне репозитория нет LICENSE: лицензия DpiShell (MIT) должна лежать там — архив без неё.' }
 
 # 4. Архив: внутри — папка DpiShell\.
 $version = (Get-Item $exe).VersionInfo.ProductVersion

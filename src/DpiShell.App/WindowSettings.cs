@@ -6,7 +6,7 @@ using DpiShell.Core.Router;
 namespace DpiShell.App;
 
 /// <summary>
-/// Настройки окна — %LocalAppData%\DpiShell\window.json (11-helper-spec §4): принадлежат пользователю, права не нужны.
+/// Настройки окна — %LocalAppData%\DpiShell\window.json (helper-protocol §4): принадлежат пользователю, права не нужны.
 /// Тема, крестик, адрес и пароль роутера (пароль — DPAPI CurrentUser, см. RouterSecrets). Обходные настройки — у помощника.
 /// </summary>
 public sealed class WindowSettings
@@ -21,7 +21,7 @@ public sealed class WindowSettings
     public string? RouterPassword { get; set; }
     /// <summary>Подсказку «свернулась в трей» уже показывали.</summary>
     public bool TrayHintShown { get; set; }
-    /// <summary>Окно при входе в Windows (в трее). Null — не выбирали: по режиму работы (решение 22 в 02-spec §9).</summary>
+    /// <summary>Окно при входе в Windows (в трее). Null — не выбирали: по режиму работы (architecture.md «Автозапуск»).</summary>
     public bool? Autostart { get; set; }
     /// <summary>Последняя попытка проверить обновления (раз в день при запуске окна).</summary>
     public DateTime? UpdatesCheckedAt { get; set; }
@@ -31,7 +31,7 @@ public sealed class WindowSettings
     public string? UpdatesData { get; set; }
     /// <summary>Новая версия программы у источника.</summary>
     public string? UpdatesApp { get; set; }
-    /// <summary>Свои варианты DNS — одни и те же для этого компьютера и для роутера (02-spec решение 24).</summary>
+    /// <summary>Свои варианты DNS — одни и те же для этого компьютера и для роутера (architecture.md «DNS этого компьютера»).</summary>
     public List<DnsCustomEntry> DnsCustom { get; set; } = [];
     /// <summary>Защищённый DNS не отвечает — разрешить обычный (по умолчанию нет: только защищённый).</summary>
     public bool DnsFallback { get; set; }

@@ -2,7 +2,7 @@ using DpiShell.Core.Helper;
 
 namespace DpiShell.Tests;
 
-/// <summary>Белый список команд помощника и строгая проверка аргументов (11-helper-spec §3, §5) — без канала.</summary>
+/// <summary>Белый список команд помощника и строгая проверка аргументов (helper-protocol §3, §5) — без канала.</summary>
 public class HelperProtocolTests
 {
     static readonly FakeHelperBackend Catalog = new();
@@ -106,8 +106,8 @@ public class HelperProtocolTests
             "details", "choose", "tcp_timestamps_on", "data_update", "dns_status", "dns_set", "dns_restore",
         ];
         Assert.Equal(spec.Order(), HelperCommands.Specs.Keys.Order());
-        // Команды DNS описаны в 11-helper-spec §3 (часть старых там записана сокращённо: hosts_check/preview/…).
-        var doc = File.ReadAllText(Path.Combine(Path.GetDirectoryName(Repo.Data)!, "docs", "11-helper-spec.md"));
+        // Команды DNS описаны в helper-protocol §3 (часть старых там записана сокращённо: hosts_check/preview/…).
+        var doc = File.ReadAllText(Path.Combine(Path.GetDirectoryName(Repo.Data)!, "docs", "dev", "helper-protocol.md"));
         Assert.All(["dns_status", "dns_set {preset, ips?, doh?, fallback?}", "dns_restore"], cmd => Assert.Contains("`" + cmd + "`", doc));
         // Только чтение — не занимает «одну операцию за раз».
         Assert.Equal(["cancel", "details", "dns_status", "hosts_preview", "read_results", "status"],

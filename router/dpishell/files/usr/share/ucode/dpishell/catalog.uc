@@ -28,7 +28,7 @@ function role_ids(roles) {
 }
 
 // Ошибка проверки — строка вида "<поле>: <текст>", null — всё в порядке.
-// field — путь для ответа ubus (07-router-api §4: items[3].roles.google).
+// field — путь для ответа ubus (router-api §4: items[3].roles.google).
 function validate(strategy, roles, field) {
 	field ??= strategy.id;
 	if (type(strategy.roles) != 'object' || !length(strategy.roles))
@@ -114,7 +114,7 @@ function render_config(strategy, roles, opts) {
 		'NFQWS_UDP_PKT_IN=0',
 		`NFQWS_OPT="${join(' ', tokens)}"`,
 		'MODE_FILTER=none',
-		// software/hardware — разгрузку ведёт zapret со своим исключением для пакетов nfqws (06 §3.6), firewall её не включает.
+		// software/hardware — разгрузку ведёт zapret со своим исключением для пакетов nfqws (architecture.md «Диагностика роутера»), firewall её не включает.
 		`FLOWOFFLOAD=${fo}`,
 		'INIT_APPLY_FW=1',
 		`DISABLE_IPV6=${opts.ipv6 ? 0 : 1}`,

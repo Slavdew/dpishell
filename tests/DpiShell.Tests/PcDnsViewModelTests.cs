@@ -4,7 +4,7 @@ using DpiShell.Core;
 namespace DpiShell.Tests;
 
 /// <summary>
-/// «DNS этого компьютера» в модели окна (02-spec решение 24): варианты, переключение через помощника, свои варианты
+/// «DNS этого компьютера» в модели окна (architecture.md «DNS этого компьютера»): варианты, переключение через помощника, свои варианты
 /// в window.json, кнопка на плашке и повторная проверка. Помощник — фейк по каналу или настоящий над <see cref="FakeDnsSystem"/>.
 /// </summary>
 public sealed class PcDnsViewModelTests : IDisposable

@@ -73,7 +73,7 @@
             </Setter>
         </Style>
 
-        <!-- Действие с правами (11-helper-spec §1): помощника нет — перед текстом кнопки значок щита.
+        <!-- Действие с правами (helper-protocol §1): помощника нет — перед текстом кнопки значок щита.
              Content кнопки остаётся строкой; щит виден, пока у модели окна NeedsHelper. -->
         <DataTemplate x:Key="Shield">
             <StackPanel Orientation="Horizontal">

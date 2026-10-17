@@ -1,4 +1,4 @@
-// Установка ядра zapret на роутер (06 §2.1, §6): наш zip по манифесту, проверка хешей, шаги install_easy.sh для OpenWRT
+// Установка ядра zapret на роутер (architecture.md «Ядро на роутере»): наш zip по манифесту, проверка хешей, шаги install_easy.sh для OpenWRT
 // без его вопросов и без cron-загрузки списков со сторонних адресов. Проверено вручную в эмуляторе 2026-10-17.
 'use strict';
 
@@ -117,7 +117,7 @@ function install(progress) {
 		unlink('/etc/hotplug.d/iface/90-zapret');
 		symlink(`${Z}/init.d/openwrt/90-zapret`, '/etc/hotplug.d/iface/90-zapret');
 	}
-	// Системный flow offloading несовместим с nfqws (05-router-audit §2) — как делает install_easy.sh.
+	// Системный flow offloading несовместим с nfqws (research/router-openwrt.md §2) — как делает install_easy.sh.
 	sh("[ \"$(uci -q get firewall.@defaults[0].flow_offloading)\" = 1 ] && uci set firewall.@defaults[0].flow_offloading=0 && uci commit firewall && /etc/init.d/firewall reload");
 	writefile(`${st.P.etc}/core-installed.json`, sprintf('%J\n', { version: m.version, arch: a, nfqws_sha256: m.nfqws[a], at: time() }));
 	unlink(ZIP);

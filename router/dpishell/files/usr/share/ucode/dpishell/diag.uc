@@ -1,4 +1,4 @@
-// Диагностика, отчёт, чужие обходы, проверка одного сайта (06 §3.4, §3.6; 07 §5).
+// Диагностика, отчёт, чужие обходы, проверка одного сайта (architecture.md «Режимы роутера», «Диагностика роутера»; router-api §5).
 'use strict';
 
 import { readfile, stat, popen, lsdir, readlink } from 'fs';
@@ -6,7 +6,7 @@ import * as st from 'dpishell.state';
 import * as pr from 'dpishell.probe';
 import * as core from 'dpishell.core';
 
-// Чужие обходы, которые мешают нашему (06 §3.6). Имя — init-скрипт в /etc/init.d.
+// Чужие обходы, которые мешают нашему (architecture.md «Диагностика роутера»). Имя — init-скрипт в /etc/init.d.
 const CONFLICTS = ['zapret2', 'youtubeUnblock', 'b4', 'zapret-manager', 'zapret-manager-beam', 'byedpi', 'podkop'];
 
 function sh(cmd) {
@@ -24,7 +24,7 @@ function conflicts() {
 	for (let n in CONFLICTS)
 		if (stat(`/etc/init.d/${n}`))
 			push(out, { kind: 'service', name: n, running: sh(`/etc/init.d/${n} running`).rc == 0 });
-	// Пакеты другого zapret: остановить их нельзя — только удалить (07 §5.1, kind: package).
+	// Пакеты другого zapret: остановить их нельзя — только удалить (router-api §5.1, kind: package).
 	for (let n in core.foreign_packages())
 		push(out, { kind: 'package', name: n, running: true });
 	// nfqws/nfqws2 не из нашего ядра.
@@ -72,7 +72,7 @@ function diag() {
 	};
 }
 
-// Свои адреса пользователя в отчёте — «свой адрес №N», как в истории ПК (02-spec §9.21): отчёт уходит людям.
+// Свои адреса пользователя в отчёте — «свой адрес №N», как в истории ПК (architecture.md «Папки и права»): отчёт уходит людям.
 // Номер — по порядку в «Своих адресах», затем строки своих списков; URL и имя хоста одного адреса — один номер.
 function redactor() {
 	let subs = [], n = 0;
