@@ -90,6 +90,20 @@ public sealed class FakeRouter : IDisposable
     public bool? UninstallKeepSettings { get; private set; }
     /// <summary>После uninstall объект dpishell пропадает — все вызовы отвечают 4.</summary>
     public bool Uninstalled { get; private set; }
+    /// <summary>После uninstall (через API) — тест убирает status.json и кладёт итог в /tmp/dpishell-uninstall.json подделки SSH.</summary>
+    public Action? OnUninstall { get; set; }
+
+    /// <summary>Пакет удалили: status.json пропал, объект dpishell не отвечает (как после uninstall.sh по SSH).</summary>
+    public void Remove() { Uninstalled = true; StatusJson = null; }
+
+    /// <summary>Пакет поставили заново (dpishell-install.sh): status.json и объект dpishell снова есть.</summary>
+    public void Reinstall(string? statusJson = null)
+    {
+        Uninstalled = false;
+        StatusJson = statusJson ?? $$"""{ "product": "dpishell-router", "api": {{StatusApi}}, "version": "{{RouterVersion}}", "engine": "zapret1", "core": "v72.13", "enabled": false, "strategy": "alt10", "catalog_version": 3 }""";
+        Enabled = false;
+    }
+
     string? _updateFrom;
     int _updatePolls;
     string? _updateJob;
@@ -280,7 +294,7 @@ public sealed class FakeRouter : IDisposable
             "report" => """{ "text": "отчёт роутера" }""",
             "core_install" => """{ "started": true }""",
             // Ядро договора §5.4.
-            "uninstall" => Do(() => { UninstallKeepSettings = args["keep_settings"]?.GetValue<bool>(); Uninstalled = true; }, """{ "started": true }"""),
+            "uninstall" => Do(() => { UninstallKeepSettings = args["keep_settings"]?.GetValue<bool>(); Uninstalled = true; OnUninstall?.Invoke(); }, """{ "started": true }"""),
             "update_install" when args["from"]?.GetValue<string>() is not ("feed" or "local") =>
                 """{"error":{"code":"invalid","text":"from: feed или local","field":"from"}}""",
             "update_install" when args["from"]!.GetValue<string>() == "local" && !LocalUpdateReady =>

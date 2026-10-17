@@ -109,7 +109,7 @@ public static class RouterTexts
 /// Все запросы к роутеру — по одному (семафор), асинхронно; действия пользователя — по одному (Busy).
 /// Пароль: из поля — только на время входа, на диске — только зашифрованным и только после успешного входа.
 /// </summary>
-public sealed class RouterViewModel : Observable, IDisposable
+public sealed partial class RouterViewModel : Observable, IDisposable
 {
     readonly Shell _shell;
     readonly WindowSettings _settings;
@@ -125,6 +125,7 @@ public sealed class RouterViewModel : Observable, IDisposable
         _custom = settings.RouterAddress ?? "";
 
         LoginCmd = new RelayCommand(() => LoginRequested?.Invoke());
+        InstallCmd = new RelayCommand(() => InstallRequested?.Invoke(), () => !Busy);
         FindCmd = RelayCommand.Async(() => ConnectAsync(null), () => CanConnect);
         ToggleCmd = RelayCommand.Async(ToggleAsync, () => CanAct);
         CheckCmd = RelayCommand.Async(CheckAsync, () => CanAct);
@@ -161,7 +162,7 @@ public sealed class RouterViewModel : Observable, IDisposable
     public Action<string> Say { get; set; } = _ => { };
     /// <summary>Ошибка действия: окно показывает её тостом, а не только в строке состояния (UX-аудит 2, п. 16). По умолчанию — как <see cref="Say"/>.</summary>
     public Action<string>? Fail { get; set; }
-    void Failed(string text) => (Fail ?? Say)(text);
+    internal void Failed(string text) => (Fail ?? Say)(text);
     /// <summary>Стратегии, найденные глубоким поиском на ПК (их хранит помощник).</summary>
     public Func<IReadOnlyList<Strategy>> FoundStrategies { get; set; } = () => [];
     /// <summary>Свои адреса этого ПК (сохранены у помощника).</summary>
@@ -354,7 +355,7 @@ public sealed class RouterViewModel : Observable, IDisposable
     {
         _detection = d;
         if (d is null || d.Found == RouterFound.NotFound) { Status = null; Connected = false; }
-        Raise(nameof(Detection)); Raise(nameof(Found)); Raise(nameof(NeedLogin));
+        Raise(nameof(Detection)); Raise(nameof(Found)); Raise(nameof(NeedLogin)); Raise(nameof(InstallText));
         UpdateHome();
     }
 

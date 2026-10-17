@@ -1043,7 +1043,7 @@
                                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,8,0,0"
                                                Text="OpenWrt ли у вас: откройте в браузере адрес роутера (обычно 192.168.1.1) — у OpenWrt страница входа называется LuCI." />
                                     <WrapPanel Margin="-4,10,0,0">
-                                        <!-- Установка из окна по SSH (router-api §5.4): кнопка появится, когда окно задаст Router.InstallCmd. -->
+                                        <!-- Установка из окна по SSH (router-api §5.4, RouterInstallDialog). -->
                                         <Button Content="Установить на роутер" Style="{StaticResource Primary}" Command="{Binding InstallCmd}" Margin="4,0,8,0"
                                                 Visibility="{Binding CanInstall, Converter={StaticResource Vis}}" />
                                         <Button Content="Как поставить на роутер ↗" Style="{StaticResource LinkButton}" Command="{Binding GuideCmd}" VerticalAlignment="Center"
@@ -1231,6 +1231,8 @@
                                         <Button Content="Найти" Command="{Binding FindCmd}" />
                                         <Button Content="Войти…" Style="{StaticResource Primary}" Command="{Binding LoginCmd}" Visibility="{Binding NeedLogin, Converter={StaticResource Vis}}" />
                                         <Button Content="Сменить пароль…" Command="{Binding LoginCmd}" Visibility="{Binding Connected, Converter={StaticResource Vis}}" />
+                                        <!-- Установка по SSH: пакета нет — «Установить на роутер», есть — «Установить заново» (починить сломанную установку). -->
+                                        <Button Content="{Binding InstallText}" Command="{Binding InstallCmd}" />
                                     </WrapPanel>
                                     <TextBlock Text="{Binding ConnectionText}" FontWeight="SemiBold" Margin="0,4,0,0" TextWrapping="Wrap"
                                                Visibility="{Binding Searched, Converter={StaticResource Vis}}">

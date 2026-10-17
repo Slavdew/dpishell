@@ -511,6 +511,84 @@ public sealed class WindowSmokeTests
     }
 
     /// <summary>
+    /// Установка и удаление на роутере (FakeRouter + FakeSsh): диалоги строятся без ошибок привязок в обеих темах; кнопки на месте.
+    /// Снимки: &lt;тема&gt;-setup-&lt;состояние&gt;.png.
+    /// </summary>
+    [Fact]
+    public void RouterSetup_Dialogs_BindAndSnap()
+    {
+        using var tmp = new TempDir();
+        var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
+        var errors = WithBindingErrors(() =>
+        {
+            foreach (var theme in new[] { ThemeManager.Light, ThemeManager.Dark })
+            {
+                ThemeManager.Apply(theme);
+                using var fake = new FakeRouter().As020();
+                fake.Remove();
+                var shell = new Shell(new AppPaths(tmp.Sub("setup-" + theme), Repo.Data));
+                var settings = TestWindow.Settings(shell);
+                var offline = RouterSshScenarioTests.PreflightOk.Replace("\"net\":{\"feed\":true,\"fw_feed\":true,\"github\":true}", "\"net\":{\"feed\":false,\"fw_feed\":true,\"github\":false}");
+                var bad = RouterSshScenarioTests.PreflightOk.Replace("\"foreign\":[]", "\"foreign\":[{\"kind\":\"package\",\"name\":\"zapret\"}]")
+                    .Replace("\"tmp_free_kb\":221000", "\"tmp_free_kb\":9000");
+                var failed = "# Ключ витрины DpiShell\n# Витрина пакетов\n# Пакеты DpiShell и зависимости\n"
+                             + "{\"schema\":1,\"ok\":false,\"step\":\"packages\",\"message\":\"ERROR: unable to select packages:\\n  dpishell (no such package):\\n    required by: world[dpishell]\",\"version\":null,\"api\":null,\"core\":null}\n";
+                var router = new RouterViewModel(shell, settings)
+                {
+                    AddressAuto = false, CustomAddress = fake.Address, PollInterval = TimeSpan.FromMilliseconds(10), Gateway = () => "192.168.1.1",
+                    PcTimestamps = () => true, Http = new HttpClient(new RouterSetupViewModelTests.NoNetwork()), CoreCandidates = [RouterSetupViewModelTests.Vendor],
+                };
+
+                Window Show(Window d)
+                {
+                    d.WindowStartupLocation = WindowStartupLocation.Manual;
+                    d.Left = d.Top = -20000;
+                    d.ShowActivated = false;
+                    d.Show();
+                    Pump();
+                    return d;
+                }
+                void Shot(Window d, string name)
+                {
+                    Pump();
+                    if (snapDir is null) return;
+                    Directory.CreateDirectory(snapDir);
+                    Snap(d, Path.Combine(snapDir, $"{theme}-setup-{name}.png"));
+                }
+
+                // Установка: начало → роутер не подходит → подходит, через этот ПК → сбой пакетов с «Подробнее» → готово.
+                var i = router.NewInstall();
+                var d = Show(RouterInstallDialog.Create(i, null));
+                if (Find<Button>(d, b => b.Content as string == "Проверить роутер" && b.IsVisible) is null || Find<PasswordBox>(d) is null
+                    || Find<CheckBox>(d, c => c.Content as string == "Пароль не задан (свежая OpenWrt)") is null)
+                    throw new Exception("В диалоге установки нет пароля, «Пароль не задан» или «Проверить роутер»");
+                Shot(d, "install-start");
+                router.SshConnector = new FakeSshConnector(RouterSetupViewModelTests.Ssh(fake, bad));
+                Task.Run(() => i.CheckAsync("secret")).GetAwaiter().GetResult();
+                Shot(d, "install-unsuitable");
+                router.SshConnector = new FakeSshConnector(RouterSetupViewModelTests.Ssh(fake, offline, failed));
+                Task.Run(() => i.CheckAsync("secret")).GetAwaiter().GetResult();
+                Pump();
+                if (Find<Button>(d, b => b.Content as string == "Установить" && b.IsEnabled) is null) throw new Exception("Роутер подходит, а «Установить» неактивна");
+                Shot(d, "install-checked");
+                Task.Run(() => i.InstallAsync("secret")).GetAwaiter().GetResult();
+                Pump();
+                if (Find<Expander>(d, e => e.Header as string == "Подробнее" && e.IsVisible) is not { } more) throw new Exception("У ошибки установки нет «Подробнее»");
+                more.IsExpanded = true;
+                Shot(d, "install-failed");
+                router.SshConnector = new FakeSshConnector(RouterSetupViewModelTests.Ssh(fake));
+                Task.Run(async () => { await i.CheckAsync("secret"); await i.InstallAsync("secret"); }).GetAwaiter().GetResult();
+                Pump();
+                if (Find<Button>(d, b => b.Content as string == "Подобрать на роутере" && b.IsVisible) is null) throw new Exception("После установки нет «Подобрать на роутере»");
+                Shot(d, "install-done");
+                d.Close();
+                router.Dispose();
+            }
+        });
+        Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
+    }
+
+    /// <summary>
     /// Разделы docs/info-texts.md: заголовок «## …» → текст (обратные кавычки разметки убраны). Абзацы — через пустую строку «\n\n»:
     /// первый — ответ «когда включать» (UX-аудит, п. 25), в карточке он жирный.
     /// </summary>

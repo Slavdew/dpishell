@@ -46,6 +46,18 @@ public sealed class WindowSettings
     public string File { get; private set; } = Path.Combine(DefaultDir, "window.json");
 
     /// <summary>
+    /// Отпечатки ключей SSH роутеров (установка и удаление по SSH) — router-hostkeys.json рядом с window.json:
+    /// первое подключение запоминает ключ, смена — вопрос «Доверять новому» (переустановили прошивку).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IRouterHostKeyStore HostKeys => _hostKeys ??= new FileHostKeyStore(Path.Combine(Path.GetDirectoryName(File)!, "router-hostkeys.json"));
+    IRouterHostKeyStore? _hostKeys;
+
+    /// <summary>Кэш архива ядра для роутера (тот же zip, что у ПК; проверяется по хешу) — рядом с window.json.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string RouterCoreCache => Path.Combine(Path.GetDirectoryName(File)!, "router-core");
+
+    /// <summary>
     /// Прочитать; файла нет — перенести тему, крестик и роутер из прежнего state.json, если он читается
     /// (до помощника программа работала с правами и хранила всё в %ProgramData%).
     /// </summary>
