@@ -20,7 +20,7 @@ const VERSION = '0.2.0';
 // api — «мажор.минор» (router-api.md §5): минор растёт при добавлениях без поломок, мажор — при несовместимости.
 const API = '1.0';
 // Минимальная версия окна ПК, которую понимает этот роутер.
-const MIN_APP = '1.0.0';
+const MIN_APP = '0.9.0';
 const MODES = ['all', 'lists'];
 const HOURS = [0.5, 1, 3, 6, 12, 24];
 const USER_LISTS = ['user-general', 'user-exclude', 'user-ipset', 'user-ipset-exclude'];

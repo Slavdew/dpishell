@@ -45,7 +45,7 @@
 
 **`status`** `{}` →
 ```json
-{ "api": "1.0", "version": "0.2.0", "min_app": "1.0.0", "methods": ["apply", "check_now", "…", "uninstall", "update_install"], "engine": "zapret1",
+{ "api": "1.0", "version": "0.2.0", "min_app": "0.9.0", "methods": ["apply", "check_now", "…", "uninstall", "update_install"], "engine": "zapret1",
   "core": { "version": "v72.13", "installed": true, "hash_ok": true },
   "enabled": true, "mode": "all", "strategy": "alt10", "backups": ["alt9", "alt13"], "needs_tcp_timestamps": true,
   "last_check": { "at": "2026-10-16T21:00:00Z", "source": "timer", "ok": true,
