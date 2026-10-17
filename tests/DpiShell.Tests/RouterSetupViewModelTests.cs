@@ -107,6 +107,18 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.Equal("secret", RouterSecrets.Unprotect(Settings.RouterPassword));
         Assert.StartsWith("DpiShell 0.2.0-r3 установлен и подключён", i.ResultText);
         Assert.False(vm.Busy);
+
+        // «Подобрать на роутере» — сразу полный подбор по группам по умолчанию, ход — на экране «Подбор».
+        int page = -1;
+        vm.Navigate = p => page = p;
+        vm.SelectOptions = () => (["user"], false);   // выбор экрана не мешает: после установки — по умолчанию
+        await i.SelectNowAsync();
+        Assert.Equal(Pages.Select, page);
+        Assert.True(vm.SelectOnRouter);
+        System.Text.Json.Nodes.JsonNode start;
+        lock (r.Calls) start = r.Calls.Last(c => c["params"]![2]!.GetValue<string>() == "select_start")["params"]![3]!;
+        Assert.Equal(["youtube", "discord"], start["groups"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.Equal("full", start["mode"]!.GetValue<string>());
     }
 
     [Fact]
@@ -233,6 +245,8 @@ public sealed class RouterSetupViewModelTests : IDisposable
         // Прошлое удаление оставило итог — он не должен приняться за новый.
         ssh.Files[RouterSsh.UninstallResultPath] = Encoding.UTF8.GetBytes("""{"running":false,"ok":false,"keep_settings":true,"message":"старое","at":1}""");
         var vm = Make(r, new FakeSshConnector(ssh));
+        int resets = 0;
+        vm.SetSelectGroups = g => { Assert.Equal(["youtube", "discord"], g); resets++; };
         Assert.True(await vm.ConnectAsync("secret"));
         Assert.True(vm.UninstallCmd.CanExecute(null));
 
@@ -257,6 +271,7 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.Equal("DpiShell с роутера удалён", vm.EmptyTitle);
         Assert.Equal("Установить на роутер…", vm.InstallText);
         Assert.False(vm.Busy);
+        Assert.Equal(1, resets);   // выбор групп подбора — снова по умолчанию
 
         // Поставить заново: поле пароля пустое — сохранённый.
         var i = vm.NewInstall();
@@ -266,6 +281,7 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.True(vm.Found);
         Assert.NotEqual("DpiShell с роутера удалён", vm.EmptyTitle);
         Assert.Contains("Подключено", vm.ConnectionText);
+        Assert.Equal(2, resets);
     }
 
     [Fact]

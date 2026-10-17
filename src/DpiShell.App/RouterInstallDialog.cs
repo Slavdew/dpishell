@@ -180,7 +180,13 @@ public static class RouterInstallDialog
         }
         check.Click += async (_, _) => await Run(vm.CheckAsync);
         install.Click += async (_, _) => { await Run(vm.InstallAsync); if (vm.IsDone) password.Clear(); };
-        select.Click += (_, _) => { vm.Router.GoSelectCmd.Execute(null); w.Close(); };
+        select.Click += (_, _) =>
+        {
+            w.Close();
+            // Ход — на экране «Подбор»; ошибку старта скажет сам подбор (Guard), здесь — только неожиданное.
+            _ = vm.SelectNowAsync().ContinueWith(t => vm.Router.Say(Texts.Friendly(t.Exception!.GetBaseException())),
+                CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.FromCurrentSynchronizationContext());
+        };
         close.Click += (_, _) => w.Close();
         w.Closing += (_, e) =>
         {

@@ -176,7 +176,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     };
     public Action<int> Navigate { get; set; } = _ => { };
     /// <summary>Что подбирать (группы и режим — с экрана «Подбор»); null — нечего, причина уже сказана.</summary>
-    public Func<(IReadOnlyList<string> Groups, bool Full)?> SelectOptions { get; set; } = () => (["youtube", "discord"], true);
+    public Func<(IReadOnlyList<string> Groups, bool Full)?> SelectOptions { get; set; } = () => (DefaultSelectGroups, true);
+    /// <summary>Группы подбора по умолчанию — как у самого роутера: YouTube и Discord.</summary>
+    public static readonly IReadOnlyList<string> DefaultSelectGroups = ["youtube", "discord"];
+    /// <summary>Отметить группы подбора на экране «Подбор» (выбор общий с ПК, держит окно).</summary>
+    public Action<IReadOnlyList<string>> SetSelectGroups { get; set; } = _ => { };
     public Func<string?> Gateway { get; set; } = RouterClient.DefaultGateway;
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(1);
     public TimeSpan CheckTimeout { get; set; } = TimeSpan.FromMinutes(3);
@@ -1018,27 +1022,36 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         Requery();
     }
 
-    public async Task StartSelectAsync(bool deep)
+    public Task StartSelectAsync(bool deep) => StartSelectAsync(deep, null);
+
+    /// <summary>Подбор на роутере; options — свои группы и режим вместо выбранных на экране «Подбор».</summary>
+    public async Task StartSelectAsync(bool deep, (IReadOnlyList<string> Groups, bool Full)? options)
     {
-        if (Selecting || SelectOptions() is not { } o) return;
+        if (Selecting || (options ?? SelectOptions()) is not { } o) return;
         bool onlyUser = o.Groups.Count == 1 && o.Groups[0] == "user";
-        // Подбор только по своим адресам, а на роутере их нет (router-api §5.2) — предложить свои адреса ПК заранее.
-        if (onlyUser && _targetsLoaded && Targets.Count == 0 && PcUserTargets().Count > 0)
+        string? hint = null;
+        // Подбор только по своим адресам, а на роутере их нет (router-api §5.2): есть на ПК — предложить их заранее,
+        // нет нигде — снять «Свои адреса» (выбор мог остаться от прежней установки роутера).
+        if (onlyUser && _targetsLoaded && Targets.Count == 0)
         {
-            if (!await OfferPcTargetsAsync()) return;
+            if (PcUserTargets().Count == 0) o = WithoutUser(o, out hint);
+            else if (!await OfferPcTargetsAsync()) return;
         }
-        bool emptyOnRouter = false;
+        bool emptyOnRouter = false, dropUser = false;
         for (int attempt = 0; ; attempt++)
         {
+            if (dropUser) { o = WithoutUser(o, out hint); dropUser = false; }
             if (!await Guard("Запускаю подбор на роутере…", async () =>
                 {
                     Scores.Clear(); SelectedScore = null; ResultText = ""; ResultHint = ""; SetBest(null, false);
                     SelectProgress = 0; SelectProgressText = "Подготовка…";
                     try { await Call(c => c.SelectStartAsync(o.Groups, o.Full, deep)); }
-                    catch (RouterException e) when (attempt == 0 && IsEmptyUserTargets(e) && PcUserTargets().Count > 0)
+                    catch (RouterException e) when (attempt == 0 && IsEmptyUserTargets(e))
                     {
-                        // Роутер ответил «Список своих адресов на роутере пуст…» — предложим отправить с ПК и повторим.
-                        emptyOnRouter = true;
+                        // Роутер ответил «Список своих адресов на роутере пуст…» — предложим отправить с ПК и повторим;
+                        // на ПК их тоже нет — повторим без «Своих адресов».
+                        Targets.Clear(); _targetsLoaded = true;
+                        if (PcUserTargets().Count > 0) emptyOnRouter = true; else dropUser = true;
                         SelectProgressText = "";
                     }
                 }))
@@ -1046,12 +1059,34 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 SelectProgressText = "";
                 return;
             }
+            if (dropUser) continue;
             if (!emptyOnRouter) break;
             emptyOnRouter = false;
             if (!await OfferPcTargetsAsync()) { SelectProgressText = ""; return; }
         }
-        Say("");
+        Say(hint ?? "");
         await PollSelectAsync();
+    }
+
+    /// <summary>Выбор без «Своих адресов» (на роутере их нет); ничего не осталось — группы по умолчанию. Экран «Подбор» — следом.</summary>
+    (IReadOnlyList<string> Groups, bool Full) WithoutUser((IReadOnlyList<string> Groups, bool Full) o, out string hint)
+    {
+        var rest = o.Groups.Where(g => g != "user").ToList();
+        IReadOnlyList<string> groups = rest.Count > 0 ? rest : DefaultSelectGroups;
+        SetSelectGroups(groups);
+        hint = "На роутере нет своих адресов — подбираю без них. Отправить их с ПК: «Свои адреса» → «На роутере» → «Скопировать с ПК».";
+        return (groups, o.Full);
+    }
+
+    /// <summary>
+    /// DpiShell на роутере поставлен заново или удалён: прежние свои адреса и выбор групп к нему не относятся —
+    /// забыть их и вернуть группы подбора по умолчанию (иначе «только Свои адреса» на свежем роутере не подбирает ничего).
+    /// </summary>
+    public void ForgetRouterSetup()
+    {
+        Targets.Clear();
+        _targetsLoaded = _listsLoaded = false;
+        SetSelectGroups(DefaultSelectGroups);
     }
 
     /// <summary>Отказ подбора: только «Свои адреса», а на роутере их список пуст (router-api §5.2: invalid, field groups).</summary>

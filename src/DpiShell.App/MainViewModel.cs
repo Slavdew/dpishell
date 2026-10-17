@@ -109,6 +109,7 @@ public sealed partial class MainViewModel : Observable
             Fail = Fail,
             Navigate = p => Page = p,
             SelectOptions = RouterSelectOptions,
+            SetSelectGroups = ids => { var want = ids.ToHashSet(); foreach (var g in Groups) g.IsChecked = want.Contains(g.Id); },
             FoundStrategies = () => Helper.Details?.Found ?? [],
             PcUserTargets = () => Helper.Status?.UserTargets ?? [],
         };

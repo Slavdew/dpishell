@@ -10,6 +10,7 @@ public partial class App : Application
 {
     Mutex? _single;
     EventWaitHandle? _showSignal;
+    EventWaitHandle? _shownSignal;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -26,12 +27,14 @@ public partial class App : Application
             return;
         }
 
-        // Одна копия: повторный запуск показывает окно уже работающей (она могла быть свёрнута в трей) и выходит.
+        // Одна копия: повторный запуск показывает окно уже работающей (она могла быть свёрнута в трей) и выходит;
+        // не ответила за 3 с — предложить завершить её (SingleInstance).
         bool first;
         try
         {
             _single = new Mutex(true, @"Global\DpiShell.App", out first);
             _showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Global\DpiShell.App.Show");
+            _shownSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Global\DpiShell.App.Shown");
         }
         catch (UnauthorizedAccessException)
         {
@@ -41,16 +44,30 @@ public partial class App : Application
             Shutdown(0);
             return;
         }
-        if (!first)
+        var gate = new SingleInstance
         {
-            _showSignal.Set();
+            Acquire = () => first || TakeOver(),
+            SignalShow = () => { _shownSignal.Reset(); _showSignal.Set(); },
+            WaitShown = t => _shownSignal.WaitOne(t),
+            Ask = q => MessageBox.Show(q, "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.Yes) == MessageBoxResult.Yes,
+            KillOld = SingleInstance.KillOtherWindows,
+            Tell = s => MessageBox.Show(s, "DpiShell", MessageBoxButton.OK, MessageBoxImage.Error),
+        };
+        if (!gate.ShouldRun())
+        {
             Shutdown(0);
             return;
         }
+        _showSignal.Reset();   // просьба, оставшаяся от завершённой копии, — не к нам
         var listener = new Thread(() =>
         {
+            // Подтверждение — только когда окно правда показано: поток окна завис или окна нет — второй запуск это увидит.
             while (_showSignal.WaitOne())
-                Dispatcher.BeginInvoke(() => (MainWindow as MainWindow)?.ShowFromTray());
+                Dispatcher.BeginInvoke(() =>
+                {
+                    try { if (MainWindow is MainWindow w && w.ShowFromTray()) _shownSignal.Set(); }
+                    catch (Exception ex) { TryLog(ex); }
+                });
         }) { IsBackground = true, Name = "DpiShell show signal" };
         listener.Start();
 
@@ -97,6 +114,13 @@ public partial class App : Application
         _ = vm.InitializeAsync();
     }
 
+    /// <summary>Прежняя копия завершена — взять мьютекс (брошенный мертвым процессом — тоже наш).</summary>
+    bool TakeOver()
+    {
+        try { return _single!.WaitOne(TimeSpan.FromSeconds(3)); }
+        catch (AbandonedMutexException) { return true; }
+    }
+
     /// <summary>
     /// --helper (служба, вызывает SCM), --install-helper [SID] и --uninstall-helper (окно запускает их с runas).
     /// Null — обычный запуск окна. Ход установки — в журнал помощника (logs\helper.log), окно показывает код выхода.
@@ -117,7 +141,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        ThemeManager.StopListening();
+        try { ThemeManager.StopListening(); }
+        catch (Exception ex) { TryLog(ex); }
         base.OnExit(e);
     }
 
@@ -142,7 +167,7 @@ public partial class App : Application
     /// <summary>Журнал окна — в %LocalAppData%\DpiShell\logs: папка программы окну без прав закрыта.</summary>
     static string ErrorLog => Path.Combine(WindowSettings.DefaultDir, "logs", "app-errors.log");
 
-    static void TryLog(Exception? ex)
+    internal static void TryLog(Exception? ex)
     {
         if (ex is null) return;
         try

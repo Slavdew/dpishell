@@ -103,6 +103,7 @@ public sealed partial class RouterViewModel
     internal async Task<bool> ConnectAfterInstallAsync(string password)
     {
         ClearRemoved();
+        ForgetRouterSetup();
         for (int i = 0; i < 4; i++)
         {
             if (i > 0) await Task.Delay(PollInterval * 2);
@@ -356,6 +357,7 @@ public sealed partial class RouterViewModel
         Connected = false;
         Status = null;
         Strategies.Clear();
+        ForgetRouterSetup();
         _removed = true;
         try { await DetectAsync(); }
         catch (RouterException) { SetDetection(null); }
@@ -606,6 +608,17 @@ public sealed class RouterInstallViewModel : Observable
         Raise(nameof(CanGoSelect));
         _router.Say(connected ? "DpiShell установлен на роутер и подключён." : "DpiShell установлен на роутер.");
         return true;
+    }
+
+    /// <summary>
+    /// «Подобрать на роутере» после установки: сразу запустить полный подбор по группам по умолчанию и показать ход
+    /// на экране «Подбор» (пользователь ждёт старта, а не перехода).
+    /// </summary>
+    public Task SelectNowAsync()
+    {
+        _router.SetSelectGroups(RouterViewModel.DefaultSelectGroups);
+        _router.GoSelectCmd.Execute(null);
+        return _router.StartSelectAsync(deep: false, (RouterViewModel.DefaultSelectGroups, true));
     }
 
     void MarkFailed()
