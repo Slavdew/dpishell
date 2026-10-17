@@ -87,13 +87,21 @@ function lines_of(v) {
 
 const LIST_LIMIT = 5000;
 
+// status.methods — методы, которые этот роутер реально обрабатывает (07 §9): без заглушек «не реализовано».
+// Таблица методов собирается ниже, поэтому — через реестр (ucode разрешает имена при компиляции).
+const registry = { methods: {}, stubs: {} };
+
+function implemented() {
+	return sort(filter(keys(registry.methods), n => !registry.stubs[n]));
+}
+
 const methods = {
 	status: {
 		call: function() {
 			let s = st.settings(), lc = st.last_check();
 			let strat = s.strategy ? cat.find(st.catalogs(), s.strategy) : null;
 			return {
-				api: st.API, version: st.VERSION, engine: 'zapret1',
+				api: st.API, version: st.VERSION, min_app: st.MIN_APP, methods: implemented(), engine: 'zapret1',
 				core: { version: 'v72.13', installed: st.core_installed(), hash_ok: st.core_installed() && core.verify() },
 				enabled: s.enabled, mode: s.mode, strategy: s.strategy, backups: s.backups,
 				needs_tcp_timestamps: strat ? cat.uses_ts(strat) : false,
@@ -545,6 +553,10 @@ for (let name in ['dns_analyze', 'dns_enable', 'dns_restore'])
 // Методы, которые появятся с подбором, проверкой, DNS и диагностикой: пока отвечают «не готово».
 for (let name in ['check_now', 'select_start', 'select_cancel', 'select_progress', 'apply', 'dns_status', 'dns_analyze',
                   'dns_enable', 'dns_restore', 'site_check', 'site_check_result', 'diag', 'report', 'conflict_stop', 'core_install'])
-	methods[name] ??= { call: function() { return err('failed', 'Ещё не реализовано в этой версии пакета'); } };
+	if (!methods[name]) {
+		registry.stubs[name] = true;
+		methods[name] = { call: function() { return err('failed', 'Ещё не реализовано в этой версии пакета'); } };
+	}
+registry.methods = methods;
 
 return { dpishell: methods };

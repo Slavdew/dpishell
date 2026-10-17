@@ -16,8 +16,11 @@ const P = {
 	status_json: '/www/dpishell/status.json',
 };
 
-const VERSION = '0.1.0';
-const API = 1;
+const VERSION = '0.2.0';
+// api — «мажор.минор» (07 §9): минор растёт при добавлениях без поломок, мажор — при несовместимости.
+const API = '1.0';
+// Минимальная версия окна ПК, которую понимает этот роутер.
+const MIN_APP = '1.0.0';
 const MODES = ['all', 'lists'];
 const HOURS = [0.5, 1, 3, 6, 12, 24];
 const USER_LISTS = ['user-general', 'user-exclude', 'user-ipset', 'user-ipset-exclude'];
@@ -151,7 +154,7 @@ function iso(t) {
 function write_status_json() {
 	let s = settings(), lc = last_check();
 	let pub = {
-		product: 'dpishell-router', api: API, version: VERSION, engine: 'zapret1', core: 'v72.13',
+		product: 'dpishell-router', api: API, min_app: MIN_APP, version: VERSION, engine: 'zapret1', core: 'v72.13',
 		enabled: s.enabled, strategy: s.strategy, catalog_version: catalog().version,
 		checked_at: iso(lc?.at), last_check_ok: lc?.ok,
 	};
@@ -180,7 +183,7 @@ function valid_subnet_line(l) {
 }
 
 export {
-	P, VERSION, API, MODES, HOURS, USER_LISTS,
+	P, VERSION, API, MIN_APP, MODES, HOURS, USER_LISTS,
 	ensure_dirs, write_atomic, read_json, uci_set, settings, roles, catalog, user_catalog, found_catalog, catalogs,
 	write_zapret_config, write_zapret_config_for, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running, iso
 };
