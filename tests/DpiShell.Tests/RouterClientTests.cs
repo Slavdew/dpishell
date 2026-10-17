@@ -67,6 +67,23 @@ public sealed class RouterClientTests
         Assert.Equal(RouterFound.AppTooOld, (await c.DetectAsync()).Found);
     }
 
+    /// <summary>Роутеры до 0.2.0 отдают api числом, новые — строкой «мажор.минор»; совместимость решает мажор.</summary>
+    [Theory]
+    [InlineData("1", RouterFound.Ok)]
+    [InlineData("\"1.0\"", RouterFound.Ok)]
+    [InlineData("\"1.7\"", RouterFound.Ok)]
+    [InlineData("\"2.0\"", RouterFound.AppTooOld)]
+    [InlineData("\"0.9\"", RouterFound.RouterTooOld)]
+    [InlineData("\"abc\"", RouterFound.NotFound)]
+    public async Task Detect_ApiNumberOrString_ByMajor(string api, RouterFound expected)
+    {
+        using var r = new FakeRouter { StatusJson = $$"""{ "product": "dpishell-router", "api": {{api}}, "enabled": true, "min_app": "1.0.0" }""" };
+        using var c = new RouterClient(r.Address);
+        var d = await c.DetectAsync();
+        Assert.Equal(expected, d.Found);
+        if (expected == RouterFound.Ok) Assert.Equal("1.0.0", d.Status!.MinApp);
+    }
+
     [Theory]
     [InlineData("http://192.168.1.1")]
     [InlineData("192.168.1.1/cgi-bin")]
@@ -132,7 +149,7 @@ public sealed class RouterClientTests
         using var r = new FakeRouter();
         using var c = await LoggedIn(r);
         var s = await c.StatusAsync();
-        Assert.Equal(1, s.Api);
+        Assert.Equal(new ApiVersion(1, 0), s.Api);
         Assert.True(s.Core!.HashOk);
         Assert.Equal(["alt9", "alt13"], s.Backups);
         Assert.Equal("timer", s.LastCheck!.Source);

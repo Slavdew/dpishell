@@ -5,8 +5,10 @@ namespace DpiShell.Core.Router;
 // Форматы — docs/07-router-api.md (API 1). Имена полей — snake_case, как в договоре.
 
 public sealed record RouterPublicStatus(
-    string? Product, int? Api, string? Version, string? Engine, string? Core,
-    bool Enabled, string? Strategy, int? CatalogVersion, DateTime? CheckedAt, bool? LastCheckOk);
+    string? Product, ApiVersion? Api, string? Version, string? Engine, string? Core,
+    bool Enabled, string? Strategy, int? CatalogVersion, DateTime? CheckedAt, bool? LastCheckOk,
+    // С 0.2.0: минимальная версия окна ПК, которую понимает этот роутер.
+    string? MinApp = null);
 
 public enum RouterFound
 {
@@ -35,11 +37,13 @@ public sealed record RouterJobs(bool Select, bool Check, bool CoreInstall, bool 
 public sealed record RouterWarning(string Code, string? Text);
 
 public sealed record RouterStatus(
-    int Api, string? Version, string? Engine, RouterCore? Core, bool Enabled, string? Strategy, List<string>? Backups,
+    ApiVersion Api, string? Version, string? Engine, RouterCore? Core, bool Enabled, string? Strategy, List<string>? Backups,
     RouterLastCheck? LastCheck, int FailStreak, RouterSchedule? Schedule, RouterJobs? Jobs, List<RouterWarning>? Warnings,
     // mode: "all" — «Все сайты, кроме исключений» (по умолчанию на роутере), "lists" — «По спискам».
     // needs_tcp_timestamps: стратегия роутера работает только у устройств с метками TCP — ПК включает их сам (§6).
-    string? Mode = null, bool NeedsTcpTimestamps = false);
+    string? Mode = null, bool NeedsTcpTimestamps = false,
+    // С 0.2.0: методы, которые роутер реально обрабатывает (null — старый роутер, считаем «все из API 1.0»), и min_app.
+    List<string>? Methods = null, string? MinApp = null);
 
 /// <summary>source: catalog | user; у user id «u-…» — присланные с ПК (strategies_user_set), «r-…» — найденные глубоким поиском на роутере (§9).</summary>
 public sealed record RouterStrategyItem(string Id, string Title, string Source, int Runs, int Passed)

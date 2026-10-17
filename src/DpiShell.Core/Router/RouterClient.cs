@@ -14,7 +14,8 @@ namespace DpiShell.Core.Router;
 /// </summary>
 public sealed class RouterClient : IDisposable
 {
-    public const int SupportedApi = 1;
+    /// <summary>Мажор договора, который понимает приложение; минор — сколько добавлений оно знает (разница — предупреждение, не запрет).</summary>
+    public static readonly ApiVersion SupportedApi = new(1, 0);
     const string NullSession = "00000000000000000000000000000000";
 
     static readonly JsonSerializerOptions Json = new()
@@ -81,8 +82,9 @@ public sealed class RouterClient : IDisposable
             var st = await resp.Content.ReadFromJsonAsync<RouterPublicStatus>(Json, cts.Token);
             if (st?.Product != "dpishell-router") return new(Address, RouterFound.NotFound, null);
             // Без поля api — пакет старше договора (вопрос 1 в 07-router-api.md).
-            var found = st.Api is not { } api || api < SupportedApi ? RouterFound.RouterTooOld
-                      : api > SupportedApi ? RouterFound.AppTooOld : RouterFound.Ok;
+            // Совместимость решает мажор; минор только для предупреждения и списка методов.
+            var found = st.Api is not { } api || api.Major < SupportedApi.Major ? RouterFound.RouterTooOld
+                      : api.Major > SupportedApi.Major ? RouterFound.AppTooOld : RouterFound.Ok;
             return new(Address, found, st);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException && !ct.IsCancellationRequested)
