@@ -127,32 +127,32 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         LoginCmd = new RelayCommand(() => LoginRequested?.Invoke());
         InstallCmd = new RelayCommand(() => InstallRequested?.Invoke(), () => !Busy);
         FindCmd = RelayCommand.Async(() => ConnectAsync(null), () => CanConnect);
-        ToggleCmd = RelayCommand.Async(ToggleAsync, () => CanAct);
-        CheckCmd = RelayCommand.Async(CheckAsync, () => CanAct);
-        GoSelectCmd = new RelayCommand(() => { SelectOnRouter = true; Navigate(Pages.Select); }, () => Connected);
-        StartSelectCmd = RelayCommand.Async(() => StartSelectAsync(false), () => CanAct && !Selecting);
-        StartDeepCmd = RelayCommand.Async(() => StartSelectAsync(true), () => CanAct && !Selecting);
+        ToggleCmd = RelayCommand.Async(ToggleAsync, () => Can(RouterEnabled ? "disable" : "enable"));
+        CheckCmd = RelayCommand.Async(CheckAsync, () => Can("check_now"));
+        GoSelectCmd = new RelayCommand(() => { SelectOnRouter = true; Navigate(Pages.Select); }, () => Connected && !Blocked);
+        StartSelectCmd = RelayCommand.Async(() => StartSelectAsync(false), () => Can("select_start") && !Selecting);
+        StartDeepCmd = RelayCommand.Async(() => StartSelectAsync(true), () => Can("select_start") && !Selecting);
         StopSelectCmd = RelayCommand.Async(CancelSelectAsync, () => Connected && Selecting && !Busy);
-        ApplyCmd = RelayCommand.Async(() => ApplyAsync(_best!), () => CanAct && HasBest);
+        ApplyCmd = RelayCommand.Async(() => ApplyAsync(_best!), () => Can("apply") && HasBest);
         ApplySelectedCmd = RelayCommand.Async(() => ApplyAsync(SelectedScore!.Id),
-            () => CanAct && !Selecting && SelectedScore is { Usable: true } s && s.Id != CurrentStrategyId);
-        SendStrategyCmd = new RelayCommand(p => { if (p is string id) _ = SendStrategyAsync(id); }, _ => CanAct);
+            () => Can("apply") && !Selecting && SelectedScore is { Usable: true } s && s.Id != CurrentStrategyId);
+        SendStrategyCmd = new RelayCommand(p => { if (p is string id) _ = SendStrategyAsync(id); }, _ => Can("strategies_user_set"));
         AddTargetCmd = new RelayCommand(AddTarget, () => Connected);
         RemoveTargetCmd = new RelayCommand(p => { if (p is RouterTargetRow r) Targets.Remove(r); });
         CopyFromPcCmd = new RelayCommand(CopyFromPc, () => Connected);
-        SaveTargetsCmd = RelayCommand.Async(SaveTargetsAsync, () => CanAct);
-        RefreshDiagCmd = RelayCommand.Async(RefreshDiagAsync, () => CanAct);
-        StopConflictCmd = new RelayCommand(p => { if (p is string name) _ = StopConflictAsync(name); }, _ => CanAct);
-        SaveReportCmd = RelayCommand.Async(SaveReportAsync, () => CanAct);
-        SiteCheckCmd = RelayCommand.Async(SiteCheckAsync, () => CanAct);
-        AddExcludeCmd = RelayCommand.Async(AddSiteToExcludeAsync, () => CanAct && SiteSuggestExclude);
-        DnsCheckCmd = RelayCommand.Async(DnsAnalyzeAsync, () => CanAct);
-        DnsEnableCmd = RelayCommand.Async(DnsEnableAsync, () => CanAct && !DnsProtected);
-        DnsRestoreCmd = RelayCommand.Async(DnsRestoreAsync, () => CanAct && DnsProtected);
-        DnsPick = new DnsPicker(settings) { Apply = DnsApplyAsync, Restore = DnsRestoreAsync, Enabled = () => CanAct };
-        FixWarningCmd = new RelayCommand(p => { if (p is string code) _ = FixWarningAsync(code); }, _ => CanAct);
+        SaveTargetsCmd = RelayCommand.Async(SaveTargetsAsync, () => Can("targets_set"));
+        RefreshDiagCmd = RelayCommand.Async(RefreshDiagAsync, () => Can("diag"));
+        StopConflictCmd = new RelayCommand(p => { if (p is string name) _ = StopConflictAsync(name); }, _ => Can("conflict_stop"));
+        SaveReportCmd = RelayCommand.Async(SaveReportAsync, () => Can("report"));
+        SiteCheckCmd = RelayCommand.Async(SiteCheckAsync, () => Can("site_check"));
+        AddExcludeCmd = RelayCommand.Async(AddSiteToExcludeAsync, () => Can("lists_set") && SiteSuggestExclude);
+        DnsCheckCmd = RelayCommand.Async(DnsAnalyzeAsync, () => Can("dns_analyze"));
+        DnsEnableCmd = RelayCommand.Async(DnsEnableAsync, () => Can("dns_enable") && !DnsProtected);
+        DnsRestoreCmd = RelayCommand.Async(DnsRestoreAsync, () => Can("dns_restore") && DnsProtected);
+        DnsPick = new DnsPicker(settings) { Apply = DnsApplyAsync, Restore = DnsRestoreAsync, Enabled = () => Can("dns_set") };
+        FixWarningCmd = new RelayCommand(p => { if (p is string code) _ = FixWarningAsync(code); }, p => Can(p as string == "ipv6" ? "ipv6_set" : "flow_offload_fix"));
         StopPcCmd = RelayCommand.Async(StopPcForRouterAsync, () => !Busy);
-        StopRouterCmd = RelayCommand.Async(async () => { if (await DisableAsync()) Say("Обход на роутере выключен — работает этот ПК."); }, () => CanAct);
+        StopRouterCmd = RelayCommand.Async(async () => { if (await DisableAsync()) Say("Обход на роутере выключен — работает этот ПК."); }, () => Can("disable"));
         EnableTimestampsCmd = RelayCommand.Async(() => CheckTimestampsAsync(ask: true), () => !Busy);
     }
 
@@ -254,7 +254,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         private set
         {
             if (!Set(ref _connected, value)) return;
-            Raise(nameof(NeedLogin)); Raise(nameof(CanAct)); Raise(nameof(ScheduleEditable)); Raise(nameof(SelectOnRouterVisible)); Raise(nameof(SelectOnPcVisible));
+            Raise(nameof(NeedLogin)); Raise(nameof(CanAct)); Raise(nameof(ScheduleEditable)); RaiseCompat(); Raise(nameof(SelectOnRouterVisible)); Raise(nameof(SelectOnPcVisible));
             Raise(nameof(TargetsOnRouterVisible)); Raise(nameof(TargetsOnPcVisible));
             if (!value) { Selecting = false; DiagLoaded = false; DnsPresetsAvailable = false; }
             Raise(nameof(DiagHint));
@@ -263,8 +263,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     }
 
     /// <summary>Роутер найден, но управлять нельзя: нет входа (или версия не та — тогда кнопка «Войти» не поможет).</summary>
-    public bool NeedLogin => Found && !Connected && _detection?.Found == RouterFound.Ok;
-    public bool CanAct => Connected && !Busy;
+    public bool NeedLogin => Found && !Connected;
+    public bool CanAct => Connected && !Busy && !Blocked;
     public bool CanConnect => !Busy;
 
     string _connectionText = "Не проверялось";
@@ -309,11 +309,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             _settings.RouterAddress = AddressAuto ? null : CustomAddress.Trim();
             try { _settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say(Texts.Friendly(e)); }
             if (!await DetectAsync()) return false;
-            if (_detection!.Found != RouterFound.Ok) return false;
             var typed = noPassword ? "" : string.IsNullOrEmpty(password) ? null : password;
             if (typed is null && !HasSavedPassword)
             {
-                SetConnection(RouterTexts.Found(RouterFound.Ok, _detection.Status?.Version));
+                SetConnection(RouterTexts.Found(_detection!.Found, _detection.Status?.Version));
                 return false;
             }
             return await LoginAsync(typed);
@@ -342,12 +341,14 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (ClientFor(address) is null) { SetDetection(null); return false; }
         var d = await Call(c => c.DetectAsync());
         SetDetection(d);
-        if (d.Found != RouterFound.Ok)
+        if (d.Found == RouterFound.NotFound)
         {
             Connected = false;
             SetConnection(RouterTexts.Found(d.Found, d.Status?.Version));
-            return d.Found != RouterFound.NotFound;
+            return false;
         }
+        // Другая версия договора: войти всё равно можно — доступны состояние, обновление и удаление (§5.4).
+        if (d.Found != RouterFound.Ok && !Connected) SetConnection(RouterTexts.Found(d.Found, d.Status?.Version));
         return true;
     }
 
@@ -400,8 +401,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (SelectOnRouterChosen is null) SelectOnRouter = true;   // роутер подключён — подбирать по умолчанию на нём
         try
         {
-            await LoadStrategiesAsync();
             await RefreshStatusCoreAsync();
+            if (Compat?.CanCall("strategies") != false) await LoadStrategiesAsync();
         }
         catch (RouterException e) { Say(RouterTexts.Friendly(e)); }
         return true;
@@ -424,10 +425,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         _refreshedAt = DateTime.Now;
         try
         {
-            if (!await DetectAsync() || _detection!.Found != RouterFound.Ok) return;
+            if (!await DetectAsync()) return;
             if (_client!.LoggedIn && Connected) await RefreshStatusCoreAsync();
             else if (HasSavedPassword) await LoginAsync(null);
-            else SetConnection(RouterTexts.Found(RouterFound.Ok, _detection.Status?.Version));
+            else if (_detection!.Found == RouterFound.Ok) SetConnection(RouterTexts.Found(RouterFound.Ok, _detection.Status?.Version));
         }
         catch (RouterException e)
         {
@@ -459,6 +460,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 Raise(nameof(ScheduleEnabled)); Raise(nameof(ScheduleHours)); Raise(nameof(ScheduleEditable)); Raise(nameof(AutoSelect));
             }
             Raise(nameof(ModeAll)); Raise(nameof(ModeLists)); Raise(nameof(ModeHint));
+            RaiseCompat();
             UpdateHome();
         }
     }
@@ -592,7 +594,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             if (Checking) parts.Add("проверяю…");
             else if (enabled && at is not null) parts.Add($"проверено в {RouterTexts.Time(at)}" + (ok == false ? " — не всё открывается" : ""));
         }
-        if (_detection?.Found is RouterFound.AppTooOld or RouterFound.RouterTooOld) parts.Add(ConnectionText.ToLowerInvariant()[..1] + ConnectionText[1..]);
+        if (Compat is { Level: not RouterCompatLevel.Ok }) parts.Add(CompatNeedsApp ? "нужна новая версия программы" : "обновите DpiShell на роутере");
+        else if (!Connected && _detection?.Found is RouterFound.AppTooOld or RouterFound.RouterTooOld)
+            parts.Add(RouterTexts.Found(_detection.Found, null) is var t ? char.ToLowerInvariant(t[0]) + t[1..] : "");
         var rows = (_status?.Warnings ?? []).Select(RouterTexts.Warning).ToList();
         if (!rows.SequenceEqual(WarningRows))
         {
@@ -752,7 +756,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     async Task RefreshStatusCoreAsync(bool resumeSelect = true)
     {
         Status = await Call(c => c.StatusAsync());
-        if (resumeSelect && _status?.Jobs?.Select == true && !_polling) _ = PollSelectAsync();
+        if (resumeSelect && _status?.Jobs?.Select == true && !_polling && !Blocked) _ = PollSelectAsync();
         await CheckTimestampsAsync();
     }
 
@@ -788,10 +792,12 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     }
 
     /// <summary>Одно действие за раз; ошибки роутера — коротким текстом в строку состояния.</summary>
-    async Task<bool> Guard(string text, Func<Task> work)
+    async Task<bool> Guard(string text, Func<Task> work, bool changes = true)
     {
         if (Busy) { Say("Подождите: роутер ещё выполняет прошлую команду"); return false; }
         if (!Connected) { Say("Сначала подключитесь к роутеру"); return false; }
+        if (Blocked) { Failed(Compat!.Text ?? "Версия DpiShell на роутере не подходит к программе"); return false; }
+        if (changes && !RiskAccepted()) return false;
         Busy = true;
         Say(text);
         try
@@ -861,7 +867,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task CheckAsync()
     {
         string? result = null;
-        if (await Guard("Роутер проверяет сайты…", async () => result = await CheckCoreAsync()))
+        if (await Guard("Роутер проверяет сайты…", async () => result = await CheckCoreAsync(), changes: false))
             Say(result ?? "");
     }
 
@@ -1235,7 +1241,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             ListExcludeText = string.Join(Environment.NewLine, (await Call(c => c.ListsGetAsync("user-exclude"))).Lines);
             _listsLoaded = true;
             TargetsMessage = $"На роутере адресов: {Targets.Count} из {MaxTargets}.";
-        });
+        }, changes: false);
         Say("");
     }
 
@@ -1308,7 +1314,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         {
             await LoadDnsPresetsAsync();
             ShowDns(await Call(c => c.DnsStatusAsync()));
-        });
+        }, changes: false);
         Say("");
     }
 
@@ -1353,7 +1359,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                     }
                 }
                 finally { SiteChecking = false; }
-            }))
+            }, changes: false))
         {
             if (SiteResult.StartsWith("Проверяю")) SiteResult = "";
             return;
@@ -1598,7 +1604,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 SpaceText = $"{d.OverlayFreeKb / 1024.0:0.#} МБ" + (d.OverlayFreeKb < 2048 ? " — мало, обновления могут не поместиться" : "");
                 DiagLoaded = true;
                 DiagUpdated = $"обновлено в {DateTime.Now:HH:mm:ss}";
-            }))
+            }, changes: false))
             Say("");
     }
 
@@ -1620,7 +1626,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 var text = (await Call(c => c.ReportAsync())).Text;
                 path = AskReportPath();
                 if (path is not null) await File.WriteAllTextAsync(path, text);
-            }))
+            }, changes: false))
             Say(path is null ? "" : "Отчёт роутера сохранён: " + path);
     }
 

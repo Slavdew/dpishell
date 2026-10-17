@@ -85,6 +85,118 @@ public sealed partial class RouterViewModel
 
     internal void SetBusy(bool busy) => Busy = busy;
 
+    // ---------- совместимость окна и роутера (router-api §5.4) ----------
+
+    /// <summary>Версия этой программы (в тестах подменяется).</summary>
+    public Version AppVersion { get; set; } = RouterCompatibility.ParseVersion(AppRelease.CurrentVersion) ?? new Version(0, 0, 0);
+
+    /// <summary>Совместимость по status (api, methods, min_app); null — состояния ещё нет.</summary>
+    public RouterCompatibility? Compat => _status is { } s ? RouterCompatibility.FromStatus(s, AppVersion) : null;
+    /// <summary>Другой мажор или min_app новее: доступны только состояние, обновление и удаление.</summary>
+    public bool Blocked => Compat?.Level == RouterCompatLevel.Blocked;
+    public bool HasCompat => Compat is { Level: not RouterCompatLevel.Ok };
+    public string CompatText => Compat?.Text ?? "";
+    /// <summary>Несовместимость лечится новой программой (роутер новее или требует новее), а не обновлением роутера.</summary>
+    public bool CompatNeedsApp => _status is { } s && HasCompat
+        && (s.Api.Major > RouterClient.SupportedApi.Major
+            || s.Api.Major == RouterClient.SupportedApi.Major && s.Api.Minor > RouterClient.SupportedApi.Minor
+            || RouterCompatibility.ParseVersion(s.MinApp) is { } need && need > AppVersion);
+    public bool CompatNeedsRouter => HasCompat && !CompatNeedsApp;
+    /// <summary>Роутер новее программы (минор): действия, меняющие настройки, — с подтверждением «под вашу ответственность».</summary>
+    public bool RouterNewer => Compat?.Level == RouterCompatLevel.Warning && CompatNeedsApp;
+    /// <summary>Подсказка у неактивных кнопок: роутер не умеет этого метода (нет в status.methods).</summary>
+    public string? MethodsTip => Compat is { Level: RouterCompatLevel.Warning, Methods: not null } ? "Неактивно: DpiShell на роутере этого не умеет — обновите его" : null;
+
+    /// <summary>Кнопка метода: вошли, не заняты и роутер этот метод умеет.</summary>
+    bool Can(string method) => CanAct && (Compat?.CanCall(method) ?? true);
+
+    void RaiseCompat()
+    {
+        foreach (var n in new[] { nameof(Compat), nameof(Blocked), nameof(HasCompat), nameof(CompatText), nameof(CompatNeedsApp), nameof(CompatNeedsRouter),
+                                  nameof(RouterNewer), nameof(MethodsTip), nameof(CanAct), nameof(ScheduleEditable) })
+            Raise(n);
+        Requery();
+    }
+
+    public const string RiskText = "DpiShell на роутере новее этой программы. Менять его настройки отсюда можно, но под вашу ответственность: программа может не знать его новых правил. Продолжить?";
+    bool _riskAccepted;
+
+    /// <summary>Роутер новее — один раз за сеанс спросить «под вашу ответственность».</summary>
+    bool RiskAccepted()
+    {
+        if (!RouterNewer || _riskAccepted) return true;
+        if (!Confirm(RiskText)) return false;
+        _riskAccepted = true;
+        return true;
+    }
+
+    /// <summary>Страница выпусков программы — «Обновить программу» (само обновление программы — отдельно, в «Настройках»).</summary>
+    public const string AppReleasesUrl = "https://github.com/Slavdew/dpishell/releases/latest";
+    public ICommand OpenAppReleasesCmd => _openAppCmd ??= new RelayCommand(() =>
+    {
+        try { OpenUrl(AppReleasesUrl); }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Failed("Не удалось открыть браузер: " + e.Message); }
+    });
+    ICommand? _openAppCmd;
+
+    // ---------- обновление DpiShell на роутере (ядро договора §5.4) ----------
+
+    /// <summary>Ждать итог обновления не дольше (apk upgrade и перезапуск rpcd).</summary>
+    public TimeSpan UpdateTimeout { get; set; } = TimeSpan.FromMinutes(5);
+
+    public ICommand UpdateCmd => _updateCmd ??= RelayCommand.Async(() => UpdateRouterAsync(), () => Connected && !Busy && (Compat?.CanCall("update_install") ?? true));
+    ICommand? _updateCmd;
+
+    bool _updating;
+    public bool Updating { get => _updating; private set { if (Set(ref _updating, value)) UpdateHome(); } }
+
+    /// <summary>«Обновить роутер»: update_install из витрины и ждать status.update.job; true — обновлено.</summary>
+    public async Task<bool> UpdateRouterAsync()
+    {
+        if (Busy) { Say("Подождите: роутер ещё выполняет прошлую команду"); return false; }
+        if (!Connected) { Say("Сначала подключитесь к роутеру"); return false; }
+        Busy = true;
+        Updating = true;
+        Say("Обновляю DpiShell на роутере…");
+        try
+        {
+            var job = await UpdateFromAsync(RouterUpdateSource.Feed);
+            if (job?.Ok == true) return Updated(job);
+            Failed("Обновить DpiShell на роутере не удалось" + (job?.Message is { Length: > 0 } m ? ": " + m : ""));
+            return false;
+        }
+        catch (RouterException e) { Failed(RouterTexts.Friendly(e)); return false; }
+        finally { Busy = false; Updating = false; }
+    }
+
+    bool Updated(RouterUpdateJob job)
+    {
+        SetConnection($"Подключено, DpiShell {_status?.Version}", ok: true);
+        Say(job.Message is { Length: > 0 } m ? m : $"DpiShell на роутере обновлён до {_status?.Version}");
+        return true;
+    }
+
+    /// <summary>update_install и ждать новое задание до конца. Пока rpcd перезапускается, роутер может не отвечать — ждём дальше.</summary>
+    async Task<RouterUpdateJob?> UpdateFromAsync(RouterUpdateSource from)
+    {
+        var before = _status?.Update?.Job;
+        await Call(c => c.UpdateInstallAsync(from));
+        var started = DateTime.UtcNow;
+        bool sawRunning = false;
+        while (DateTime.UtcNow - started < UpdateTimeout)
+        {
+            await Task.Delay(PollInterval);
+            RouterStatus s;
+            try { s = await Call(c => c.StatusAsync()); }
+            catch (RouterException e) when (e.Failure is RouterFailure.Unreachable or RouterFailure.NoResponse) { continue; }
+            Status = s;
+            var job = s.Update?.Job;
+            if (s.Jobs?.Update == true || job?.Running == true) { sawRunning = true; continue; }
+            if (job is not null && (sawRunning || job != before)) return job;
+        }
+        throw new RouterException(RouterFailure.NoResponse, "Обновление на роутере идёт дольше обычного — проверьте позже");
+    }
+
     // ---------- «Удалить DpiShell с роутера» ----------
 
     /// <summary>Окно показывает диалог удаления (с подтверждением).</summary>

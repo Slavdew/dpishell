@@ -89,6 +89,15 @@ public sealed class WindowSmokeTests
         return null;
     }
 
+    /// <summary>Дождаться задачи на потоке окна, прокачивая очередь (её продолжения идут через Dispatcher).</summary>
+    static void WaitUi(Task t)
+    {
+        var frame = new DispatcherFrame();
+        t.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
+        Dispatcher.PushFrame(frame);
+        t.GetAwaiter().GetResult();
+    }
+
     static void Pump() => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
 
     /// <summary>Окно за экраном, без активации и панели задач. Таймеры окна остановлены: они ходят в sc.exe.</summary>
@@ -501,6 +510,24 @@ public sealed class WindowSmokeTests
                         rsv.ScrollToHome();
                     }
                 }
+                // Совместимость (§5.4): роутер новее программы — плашка и «Обновить программу»; требует программу новее — Blocked, команды неактивны.
+                foreach (var (api, minApp, name) in new[] { ("\"1.3\"", (string?)null, "warning"), ("\"1.0\"", "99.0.0", "blocked") })
+                {
+                    fake.StatusApi = api;
+                    fake.MinApp = minApp;
+                    WaitUi(router.RefreshAsync());   // на потоке окна: меняет списки, привязанные к окну
+                    vm.Page = Pages.Router;
+                    Pump();
+                    var tabs = Find<TabControl>(w)!;
+                    if (Find<Button>(tabs, b => b.Content as string == "Обновить программу ↗" && b.IsVisible) is null) throw new Exception($"Нет плашки совместимости ({name})");
+                    if (name == "blocked" && Find<Button>(tabs, b => b.Content as string == "Проверить" && b.IsVisible && b.IsEnabled) is not null)
+                        throw new Exception("При несовместимости «Проверить» активна");
+                    if (Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } csv) csv.ScrollToHome();
+                    Pump();
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-compat-{name}.png"));
+                }
+                fake.StatusApi = "1";
+                fake.MinApp = null;
                 SetProp(vm, "IsLoading", true);
                 Close(w);
                 router.Dispose();

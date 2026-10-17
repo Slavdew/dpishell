@@ -113,20 +113,37 @@ public sealed class RouterViewModelTests : IDisposable
     }
 
     [Theory]
-    [InlineData("""{ "product": "dpishell-router", "version": "0.0.9", "enabled": true, "strategy": "alt10" }""", "Обновите пакет на роутере")]
-    [InlineData("""{ "product": "dpishell-router", "api": 2, "enabled": true, "strategy": "alt10" }""", "Обновите приложение: роутер новее")]
-    public async Task Connect_OtherApi_OnlyStatus(string statusJson, string text)
+    [InlineData("""{ "product": "dpishell-router", "version": "0.0.9", "enabled": true, "strategy": "alt10" }""", "\"0.9\"", "Обновите пакет на роутере", "устарел", false)]
+    [InlineData("""{ "product": "dpishell-router", "api": 2, "enabled": true, "strategy": "alt10" }""", "\"2.0\"", "Обновите приложение: роутер новее", "новее этого приложения", true)]
+    public async Task Connect_OtherApi_LoginOnlyForStatusUpdateUninstall(string statusJson, string rpcApi, string text, string compat, bool needsApp)
     {
-        using var r = new FakeRouter { StatusJson = statusJson };
+        using var r = new FakeRouter { StatusJson = statusJson, StatusApi = rpcApi };
         var (vm, _) = Make(r);
-        Assert.False(await vm.ConnectAsync("secret"));
+        // Без пароля — только поиск: блок на главной со статусом из status.json, «Войти» есть (обновить и удалить можно только после входа).
+        Assert.False(await vm.ConnectAsync(""));
         Assert.Equal(text, vm.ConnectionText);
-        Assert.True(vm.Found);       // блок на главной — со статусом из status.json
-        Assert.False(vm.Connected);
-        Assert.False(vm.NeedLogin);  // «Войти» не поможет
+        Assert.True(vm.Found);
+        Assert.True(vm.NeedLogin);
         Assert.Equal("Обход делает роутер", vm.HomeTitle);
         Assert.Contains(text.ToLowerInvariant()[..10], vm.HomeDetail);
         Assert.Equal(0, r.Logins);
+
+        // Вход: совместимость Blocked (§5.4) — доступны состояние, обновление, удаление; остальные команды неактивны.
+        Assert.True(await vm.ConnectAsync("secret"));
+        Assert.True(vm.Connected);
+        Assert.True(vm.Blocked);
+        Assert.False(vm.CanAct);
+        Assert.Contains(compat, vm.CompatText);
+        Assert.Equal(needsApp, vm.CompatNeedsApp);
+        Assert.Equal(!needsApp, vm.CompatNeedsRouter);
+        Assert.False(vm.ToggleCmd.CanExecute(null));
+        Assert.False(vm.CheckCmd.CanExecute(null));
+        Assert.True(vm.UpdateCmd.CanExecute(null));
+        Assert.True(vm.UninstallCmd.CanExecute(null));
+        Assert.Equal(["status"], r.Calls.Where(c => Method(c) != "login").Select(Method).Distinct());
+        Assert.Contains(needsApp ? "нужна новая версия программы" : "обновите DpiShell на роутере", vm.HomeDetail);
+        await vm.ToggleAsync();
+        Assert.DoesNotContain(r.Calls, c => Method(c) is "enable" or "disable");
     }
 
     [Fact]

@@ -1033,6 +1033,20 @@
                         <StackPanel>
                             <TextBlock Text="Роутер" Style="{StaticResource H1}" />
 
+                            <!-- Совместимость (router-api §5.4): другая версия на роутере — что не так и что сделать. Обновление программы — отдельно (ссылка на выпуски). -->
+                            <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,12"
+                                    Visibility="{Binding HasCompat, Converter={StaticResource Vis}}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding CompatText}" TextWrapping="Wrap" />
+                                    <WrapPanel Margin="-4,8,0,0">
+                                        <Button Content="Обновить роутер" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}" Margin="4,0,8,0"
+                                                Visibility="{Binding CompatNeedsRouter, Converter={StaticResource Vis}}" />
+                                        <Button Content="Обновить программу ↗" Style="{StaticResource LinkButton}" Command="{Binding OpenAppReleasesCmd}" VerticalAlignment="Center" Margin="4,0,8,0"
+                                                ToolTip="Страница выпусков DpiShell" Visibility="{Binding CompatNeedsApp, Converter={StaticResource Vis}}" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+
                             <!-- Пустое состояние: DpiShell на роутере не найден. -->
                             <!-- Пока не искали — «не проверялся» (UX-аудит 2, п. 10); как поставить — ссылка на инструкцию и место под «Установить на роутер» (п. 9). -->
                             <Border Style="{StaticResource Card}" Visibility="{Binding Found, Converter={StaticResource InvVis}}">
@@ -1106,9 +1120,9 @@
                                         <TextBlock Text="{Binding TimestampsNote}" Style="{StaticResource Hint}" FontSize="13" Margin="0,6,0,0" TextWrapping="Wrap"
                                                    ToolTip="{x:Static local:RouterViewModel.TimestampsTerm}" Visibility="{Binding TimestampsDone, Converter={StaticResource Vis}}" />
                                         <WrapPanel Margin="0,12,0,0" Visibility="{Binding Connected, Converter={StaticResource Vis}}">
-                                            <Button Content="{Binding ToggleText}" Command="{Binding ToggleCmd}" />
-                                            <Button Content="Проверить" Command="{Binding CheckCmd}" />
-                                            <Button Content="Подобрать на роутере" Command="{Binding GoSelectCmd}" />
+                                            <Button Content="{Binding ToggleText}" Command="{Binding ToggleCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True" />
+                                            <Button Content="Проверить" Command="{Binding CheckCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True" />
+                                            <Button Content="Подобрать на роутере" Command="{Binding GoSelectCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True" />
                                             <Button Click="RouterStrategy_Click" IsEnabled="{Binding CanAct}" ToolTip="Стратегия на роутере" AutomationProperties.Name="Стратегия на роутере">
                                                 <TextBlock><Run Text="Стратегия" /><Run Text=" ▾" Foreground="{DynamicResource Muted}" /></TextBlock>
                                             </Button>

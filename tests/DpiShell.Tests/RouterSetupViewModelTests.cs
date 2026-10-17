@@ -216,7 +216,7 @@ public sealed class RouterSetupViewModelTests : IDisposable
     // ---------- 2. удаление и полный цикл ----------
 
     /// <summary>Удаление через API: итог роутер пишет в /tmp/dpishell-uninstall.json, status.json пропадает.</summary>
-    public static void UninstallWritesResult(FakeRouter r, FakeSsh ssh) => r.OnUninstall = () =>
+    internal static void UninstallWritesResult(FakeRouter r, FakeSsh ssh) => r.OnUninstall = () =>
     {
         r.Remove();
         ssh.Files[RouterSsh.UninstallResultPath] = Encoding.UTF8.GetBytes(
@@ -328,6 +328,74 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.Equal("Удаление запущено", u.ResultTitle);
         Assert.Contains("не отвечает по SSH", u.LeftText);
         Assert.False(vm.Found);
+    }
+
+    // ---------- 4. совместимость ----------
+
+    static string Method(System.Text.Json.Nodes.JsonObject call) => call["params"]![2]!.GetValue<string>();
+
+    [Fact]
+    public async Task Compat_Ok_NoPlate()
+    {
+        using var r = new FakeRouter().As020();
+        var vm = Make(r, new FakeSshConnector(new FakeSsh()));
+        Assert.True(await vm.ConnectAsync("secret"));
+        Assert.Equal(RouterCompatLevel.Ok, vm.Compat!.Level);
+        Assert.False(vm.HasCompat);
+        Assert.False(vm.Blocked);
+        Assert.Null(vm.MethodsTip);
+        Assert.True(vm.CheckCmd.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Compat_RouterNewerMinor_Warning_MissingMethodsInactive_RiskConfirmOncePerSession()
+    {
+        using var r = new FakeRouter().As020();
+        r.StatusApi = "\"1.3\"";
+        r.MethodsJson = r.MethodsJson!.Replace("\"check_now\",", "");
+        var vm = Make(r, new FakeSshConnector(new FakeSsh()));
+        var asked = new List<string>();
+        var answer = false;
+        vm.Confirm = t => { asked.Add(t); return answer; };
+        Assert.True(await vm.ConnectAsync("secret"));
+        Assert.Equal(RouterCompatLevel.Warning, vm.Compat!.Level);
+        Assert.True(vm.HasCompat);
+        Assert.True(vm.CompatNeedsApp);
+        Assert.True(vm.RouterNewer);
+        Assert.False(vm.CheckCmd.CanExecute(null));          // check_now нет в methods — неактивна, с подсказкой
+        Assert.NotNull(vm.MethodsTip);
+        Assert.True(vm.ToggleCmd.CanExecute(null));
+
+        // Меняет настройки — «под вашу ответственность»; отказ — ничего не зовём.
+        await vm.ToggleAsync();
+        Assert.Equal([RouterViewModel.RiskText], asked);
+        Assert.DoesNotContain(r.Calls, c => Method(c) is "enable" or "disable");
+        answer = true;
+        await vm.ToggleAsync();
+        Assert.Contains(r.Calls, c => Method(c) == "disable");
+        await vm.ToggleAsync();
+        Assert.Equal(2, asked.Count);   // согласие — на весь сеанс
+        Assert.Contains(r.Calls, c => Method(c) == "enable");
+    }
+
+    [Fact]
+    public async Task Compat_MinAppNewer_Blocked_OnlyUpdateAndUninstall()
+    {
+        using var r = new FakeRouter().As020();
+        r.MinApp = "99.0.0";
+        var vm = Make(r, new FakeSshConnector(new FakeSsh()));
+        Assert.True(await vm.ConnectAsync("secret"));
+        Assert.True(vm.Blocked);
+        Assert.Contains("Роутеру нужно приложение 99.0.0", vm.CompatText);
+        Assert.True(vm.CompatNeedsApp);
+        Assert.False(vm.CanAct);
+        Assert.False(vm.GoSelectCmd.CanExecute(null));
+        Assert.True(vm.UninstallCmd.CanExecute(null));
+        Assert.True(vm.UpdateCmd.CanExecute(null));
+        var opened = new List<string>();
+        vm.OpenUrl = opened.Add;
+        vm.OpenAppReleasesCmd.Execute(null);
+        Assert.Equal([RouterViewModel.AppReleasesUrl], opened);
     }
 
     sealed class FailingConnector(Exception e) : ISshConnector
