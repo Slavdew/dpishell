@@ -122,7 +122,14 @@ DPI_API=
 
 printf '{"schema":1,"mode":"check"'
 printf ',"openwrt":{"release":%s,"revision":%s,"arch":%s,"target":%s}' "$(jn "$(rel DISTRIB_RELEASE)")" "$(jn "$(rel DISTRIB_REVISION)")" "$(jn "$(rel DISTRIB_ARCH)")" "$(jn "$(rel DISTRIB_TARGET)")"
-printf ',"pkg":%s' "$(jn "$PKG")"
+# Сборки на основе OpenWrt пишут в DISTRIB_RELEASE свою версию — признаки основы отдельно: /etc/os-release
+# (тоже может быть переписан) и версия пакетного менеджера (apk 3 — OpenWrt 25.12+/snapshot; opkg — 24.10 и старше).
+osr() { sed -n "s/^$1=\"\{0,1\}\([^\"]*\)\"\{0,1\}$/\1/p" /etc/os-release 2>/dev/null | head -1; }
+PKG_TOOL=
+[ "$PKG" = apk ] && PKG_TOOL=$(apk --version 2>/dev/null | sed -n 's/^apk-tools \([0-9][^ ,]*\).*/\1/p')
+[ "$PKG" = opkg ] && PKG_TOOL=$(opkg --version 2>/dev/null | sed -n 's/.*version \([^ ]*\).*/\1/p' | head -1)
+printf ',"os_release":{"version_id":%s,"build_id":%s,"openwrt_release":%s}' "$(jn "$(osr VERSION_ID)")" "$(jn "$(osr BUILD_ID)")" "$(jn "$(osr OPENWRT_RELEASE)")"
+printf ',"pkg":%s,"pkg_tool_version":%s,"updated":%s' "$(jn "$PKG")" "$(jn "$PKG_TOOL")" "$(jb "$UPDATE")"
 printf ',"fw4":%s,"nft":%s' "$(jb "$([ -x /sbin/fw4 ] && echo 1)")" "$(jb "$(command -v nft >/dev/null 2>&1 && echo 1)")"
 printf ',"kernel":%s' "$(js "$KERNEL")"
 printf ',"kmod_nft_queue":{"installed":%s,"available":%s,"version":%s,"matches_kernel":%s}' \
