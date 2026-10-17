@@ -53,7 +53,7 @@ public sealed class MapHandler : HttpMessageHandler
 }
 
 /// <summary>Обновление данных по data.json (architecture.md «Обновления данных»): порядок источников, зеркало, хеши, свои файлы, команда помощника.</summary>
-public sealed class DataUpdateTests
+public sealed partial class DataUpdateTests
 {
     const string A = "https://primary.example/data/";
     const string B = "https://mirror.example/data/";
@@ -123,7 +123,7 @@ public sealed class DataUpdateTests
         var r = await Client(h, A, B).FetchManifestAsync();
         Assert.Equal(A, r.Result!.Source);
         Assert.Equal("2026-12-01", r.Result.Manifest.Version);
-        Assert.Equal([A + "data.json"], h.Requests);
+        Assert.Equal([A + "data.json", A + "data.json.sig"], h.Requests);
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public sealed class DataUpdateTests
         var h = Serve(new MapHandler().Fail(A + "data.json"), B, Remote(Repo.Data, "2026-12-01"));
         var r = await Client(h, A, B).FetchManifestAsync();
         Assert.Equal(B, r.Result!.Source);
-        Assert.Equal([A + "data.json", B + "data.json"], h.Requests);
+        Assert.Equal([A + "data.json", B + "data.json", B + "data.json.sig"], h.Requests);
         Assert.Contains(r.Errors, e => e.Contains("primary.example"));
     }
 
@@ -249,7 +249,7 @@ public sealed class DataUpdateTests
         Assert.Equal(userBefore, File.ReadAllText(Path.Combine(paths.Lists, DataStore.UserGeneral)));
         Assert.Equal(ipsetBefore, File.ReadAllText(Path.Combine(paths.Lists, IpLists.UserFile)));
         // Скачан только изменившийся файл — остальное взято из текущих данных.
-        Assert.Equal([A + "data.json", B + "data.json", B + "lists/general.txt"], h.Requests);
+        Assert.Equal([A + "data.json", B + "data.json", B + "data.json.sig", B + "lists/general.txt"], h.Requests);
         // Список источников — из поставки, не из скачанного.
         Assert.Equal(File.ReadAllText(Path.Combine(pkg, UpdateSources.FileName)), File.ReadAllText(Path.Combine(paths.Updates, UpdateSources.FileName)));
         Assert.False(Directory.Exists(paths.Updates + ".new"));
@@ -283,7 +283,7 @@ public sealed class DataUpdateTests
         var r = await new DataUpdater(paths, Client(h, A)).InstallAsync(false);
         Assert.True(r.UpToDate);
         Assert.False(r.Applied);
-        Assert.Single(h.Requests);
+        Assert.Equal(2, h.Requests.Count);   // data.json и data.json.sig — файлов не качали
     }
 
     [Fact]
@@ -383,7 +383,9 @@ public sealed class DataUpdateTests
         Assert.Equal(files, m.Files.Keys.Order().ToList());
         Assert.Empty(m.Mismatches(Repo.Data));
         var s = UpdateSources.Load(Path.Combine(Repo.Data, UpdateSources.FileName));
-        Assert.StartsWith("https://raw.githubusercontent.com/Slavdew/dpishell/", s.Sources[0]);
+        // Первый — подписанная копия на Pages (job site в router.yml), запасной — raw без подписи.
+        Assert.Equal("https://slavdew.github.io/dpishell/data/", s.Sources[0]);
+        Assert.StartsWith("https://raw.githubusercontent.com/Slavdew/dpishell/", s.Sources[1]);
         Assert.NotNull(s.ReleasePage);
     }
 

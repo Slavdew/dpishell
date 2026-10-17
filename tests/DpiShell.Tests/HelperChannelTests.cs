@@ -38,6 +38,20 @@ public class HelperChannelTests
         Assert.Contains("set_run_mode False", f.Backend.Calls);
     }
 
+    /// <summary>Версия протокола и список команд (helper-protocol §6): в hello и status, список — белый список помощника.</summary>
+    [Fact]
+    public async Task Status_carries_api_and_commands_from_whitelist()
+    {
+        await using var f = new HelperFixture();
+        await using var c = await f.ConnectAsync();
+        Assert.Equal(HelperProtocol.Api, c.HelperApi);
+        var st = await c.StatusAsync();
+        Assert.Equal(HelperProtocol.Api, st.Api);
+        Assert.Equal(HelperCommands.Specs.Keys.Order(StringComparer.Ordinal), st.Commands);
+        Assert.Equal(HelperCompatLevel.Ok, c.Compat.Level);
+        Assert.Null(c.Compat.Message);
+    }
+
     [Fact]
     public async Task Every_whitelisted_command_reaches_backend()
     {

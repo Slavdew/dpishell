@@ -1,9 +1,18 @@
 {
   // Откуда помощник качает обновления данных (architecture.md «Обновления данных»): по очереди, 5 с на адрес.
-  // Адрес — папка data/ нашего репозитория: манифест {адрес}data.json, файлы {адрес}<ключ из манифеста>.
+  // Адрес — папка data/ нашего репозитория: манифест {адрес}data.json, подпись {адрес}data.json.sig, файлы {адрес}<ключ из манифеста>.
+  // Первый — GitHub Pages: CI выкладывает data/ из master вместе с подписью одной сборкой (building.md «Подписи»).
+  // raw.githubusercontent.com — запасной, без подписи (переходный период: принимается с пометкой «не подписан»).
   // Зеркало — ещё одна строка (https, тот же состав папки). Каждый файл сверяется с sha256 манифеста.
   "sources": [
+    "https://slavdew.github.io/dpishell/data/",
     "https://raw.githubusercontent.com/Slavdew/dpishell/master/data/"
   ],
-  "release_page": "https://github.com/Slavdew/dpishell/releases/latest"
+  "release_page": "https://github.com/Slavdew/dpishell/releases/latest",
+  // Выпуски программы (architecture.md «Обновление программы»): {адрес}release.json + release.json.sig (подпись обязательна),
+  // {адрес}DpiShell-X.Y.Z-portable.zip по sha256 из release.json. «latest» репозитория — всегда выпуск windows-v*
+  // (релизы роутера публикуются с --latest=false). Зеркало — ещё одна строка с тем же составом файлов.
+  "app_sources": [
+    "https://github.com/Slavdew/dpishell/releases/latest/download/"
+  ]
 }

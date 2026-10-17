@@ -1,0 +1,103 @@
+# Выпуск программы для Windows (architecture.md «Обновление программы», docs/dev/building.md «Публикация»).
+# Тег windows-vX.Y.Z (X.Y.Z = <Version> в Directory.Build.props, заметки — packaging/release-notes.json) →
+# сборка и тесты на windows-latest, portable-архив packaging/make-portable.ps1, release.json (packaging/release-json.py),
+# release.json.sig — ed25519 над байтами release.json ключом из секрета RELEASE_SIGNING_KEY, релиз GitHub (latest).
+# Программы берут обновление с releases/latest/download/ — поэтому релизы роутера публикуются с --latest=false.
+# workflow_dispatch — только сборка и артефакт, без релиза.
+name: windows-release
+
+on:
+  push:
+    tags: [ 'windows-v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      TAG: ${{ startsWith(github.ref, 'refs/tags/windows-v') && github.ref_name || '' }}
+      PYTHONUTF8: 1
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Версия, тег и заметки
+        shell: pwsh
+        run: python packaging/release-json.py check "$env:TAG"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Сборка (0 предупреждений) и тесты
+        shell: pwsh
+        run: |
+          dotnet build DpiShell.sln -c Release -warnaserror -nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test tests/DpiShell.Tests -c Release --no-build -nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Portable-архив
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File packaging\make-portable.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: release.json
+        shell: pwsh
+        run: python packaging/release-json.py write publish "$env:TAG"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable
+          path: |
+            publish/DpiShell-*-portable.zip
+            publish/release.json
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/windows-v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: packaging/keys
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-portable
+          path: out
+
+      - name: Подпись release.json
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          # Программа принимает выпуск только с верной подписью — без секрета релиз не выпускаем.
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then echo 'нет секрета RELEASE_SIGNING_KEY — выпуск без подписи программа не примет'; exit 1; fi
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > key.pem
+          chmod 600 key.pem
+          # Секрет должен соответствовать проверочному ключу, зашитому в программу (packaging/keys/release-ed25519.pem).
+          openssl pkey -in key.pem -pubout > secret.pub
+          openssl pkey -pubin -in packaging/keys/release-ed25519.pem -pubout | cmp -s - secret.pub \
+            || { rm -f key.pem; echo 'ключ в секрете не соответствует packaging/keys/release-ed25519.pem'; exit 1; }
+          openssl pkeyutl -sign -inkey key.pem -rawin -in out/release.json | base64 -w0 > out/release.json.sig
+          rm -f key.pem secret.pub
+          base64 -d out/release.json.sig > sig.bin
+          openssl pkeyutl -verify -pubin -inkey packaging/keys/release-ed25519.pem -rawin -in out/release.json -sigfile sig.bin \
+            || { echo 'подпись release.json не прошла проверку'; exit 1; }
+          rm -f sig.bin
+          # Хеш архива в release.json — тот же, что у загружаемого файла.
+          (cd out && python3 -c "import json,hashlib,sys;d=json.load(open('release.json',encoding='utf-8'));[sys.exit('sha256 '+a['name']+' не совпал') for a in d['assets'] if hashlib.sha256(open(a['name'],'rb').read()).hexdigest()!=a['sha256']]")
+
+      - name: Релиз GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -c "import json;d=json.load(open('out/release.json',encoding='utf-8'));print(chr(10).join('- '+c for c in d['changes']))" > notes.md
+          gh release create "$GITHUB_REF_NAME" out/DpiShell-*-portable.zip out/release.json out/release.json.sig \
+            --repo "$GITHUB_REPOSITORY" --latest --title "DpiShell для Windows ${GITHUB_REF_NAME#windows-v}" --notes-file notes.md
