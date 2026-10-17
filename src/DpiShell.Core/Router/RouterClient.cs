@@ -255,6 +255,36 @@ public sealed class RouterClient : IDisposable
     public Task<RouterStarted> DnsEnableAsync(CancellationToken ct = default) => CallAsync<RouterStarted>("dns_enable", null, ct);
     public Task<RouterStarted> DnsRestoreAsync(CancellationToken ct = default) => CallAsync<RouterStarted>("dns_restore", null, ct);
 
+    /// <summary>Варианты DNS для всей сети (§5.1, §9 2026-10-17).</summary>
+    public Task<RouterDnsPresets> DnsPresetsAsync(CancellationToken ct = default) => CallAsync<RouterDnsPresets>("dns_presets", null, ct);
+
+    /// <summary>Включить готовый вариант (фоново, итог — dns_status.job с action dns_set; не заработал — роутер вернёт прежний).</summary>
+    public Task<RouterStarted> DnsSetAsync(string preset, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(preset) || preset.Length > 32 || !preset.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_'))
+            throw new ArgumentException("Нет такого варианта DNS");
+        return CallAsync<RouterStarted>("dns_set", new JsonObject { ["preset"] = preset }, ct);
+    }
+
+    /// <summary>Свой вариант: с шаблоном DoH адреса уходят как bootstrap, без него — как обычный DNS (plain).</summary>
+    public Task<RouterStarted> DnsSetCustomAsync(RouterDnsCustom custom, CancellationToken ct = default)
+    {
+        if (!DnsValues.IsTitle(custom.Title)) throw new ArgumentException("Название варианта — до 40 символов, без кавычек");
+        if (custom.Doh is not null && !DnsValues.IsDohTemplate(custom.Doh)) throw new ArgumentException("Защищённый DNS — адрес вида https://сервер/путь");
+        static JsonArray? Ips(List<string>? l)
+        {
+            if (l is null || l.Count == 0) return null;
+            if (l.Count > DnsValues.MaxServers) throw new ArgumentException("Не больше 4 адресов");
+            return new JsonArray(l.Select(ip => (JsonNode)(DnsValues.NormalizeIp(ip) ?? throw new ArgumentException($"«{ip}» — не адрес IPv4/IPv6"))).ToArray());
+        }
+        var c = new JsonObject { ["title"] = custom.Title.Trim() };
+        if (custom.Doh is { } d) c["doh"] = d;
+        if (Ips(custom.Bootstrap) is { } b) c["bootstrap"] = b;
+        if (Ips(custom.Plain) is { } p) c["plain"] = p;
+        if (custom.Doh is null && c["plain"] is null) throw new ArgumentException("Нужен защищённый DNS или адреса");
+        return CallAsync<RouterStarted>("dns_set", new JsonObject { ["custom"] = c }, ct);
+    }
+
     public Task TargetsSetAsync(IReadOnlyList<RouterTarget> items, CancellationToken ct = default)
     {
         if (items.Count > 50) throw new ArgumentException("На роутере — не больше 50 своих адресов");

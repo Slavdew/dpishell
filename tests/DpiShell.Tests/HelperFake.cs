@@ -187,6 +187,29 @@ public sealed class FakeHelperBackend : IHelperBackend
         Call("clients_gone");
         ClientsGone.TrySetResult();
     }
+
+    /// <summary>Что отвечает dns_status (dns_set/dns_restore меняют Current).</summary>
+    public DnsStatusInfo DnsValue { get; set; } = new("auto", false, false, true, false,
+        [new DnsAdapterInfo("Ethernet", "ethernet", true, [], false)], ["Radmin VPN"]);
+    /// <summary>dns_set отвечает «не заработало».</summary>
+    public bool DnsSetFails { get; set; }
+
+    public DnsStatusInfo DnsStatus() { Call("dns_status"); return DnsValue; }
+
+    public Task<DnsSetResult> DnsSetAsync(string preset, IReadOnlyList<string>? ips, string? doh, bool fallback, CancellationToken ct)
+    {
+        Call($"dns_set {preset} {string.Join(",", ips ?? [])} {doh} {fallback}");
+        if (DnsSetFails) return Task.FromResult(new DnsSetResult(false, "Защищённый DNS не ответил — вернул прежние настройки.", DnsValue));
+        DnsValue = DnsValue with { Current = preset, Encrypted = preset != "auto", CanRestore = true };
+        return Task.FromResult(new DnsSetResult(true, "Google, защищённый — Ethernet.", DnsValue));
+    }
+
+    public Task<DnsSetResult> DnsRestoreAsync(CancellationToken ct)
+    {
+        Call("dns_restore");
+        DnsValue = DnsValue with { Current = "auto", Encrypted = false, CanRestore = false };
+        return Task.FromResult(new DnsSetResult(true, "DNS — как было: Ethernet.", DnsValue));
+    }
 }
 
 /// <summary>Сервер на своём имени канала + фейк. Разрешённый пользователь — текущий.</summary>
@@ -278,6 +301,7 @@ public static class PcHelper
         InspectService = () => new ServiceInfo(SvcState.NotInstalled, null, null, false),
         IsActive = () => false,
         FindForeign = () => [],
+        DnsSystem = new FakeDnsSystem(),
     };
 }
 

@@ -75,11 +75,22 @@ public sealed record RouterSiteCheckSide(bool Ok, string? Detail);
 /// <summary>«Сайт не открывается с обходом» (§5.1): suggest_exclude — открывается только без обхода, предложить в исключения.</summary>
 public sealed record RouterSiteCheckResult(bool Running, string? Url, RouterSiteCheckSide? WithBypass, RouterSiteCheckSide? WithoutBypass, bool SuggestExclude);
 
-public sealed record RouterDnsServer(string Name, bool DohOk, int? Ms);
-/// <summary>Последнее DNS-задание (dns_enable/dns_restore/dns_analyze — фоновые).</summary>
+/// <param name="Id">Вариант из dns_presets с одним сервером (§9, 2026-10-17).</param>
+public sealed record RouterDnsServer(string Name, bool DohOk, int? Ms, string? Id = null);
+/// <summary>Последнее DNS-задание (dns_enable/dns_restore/dns_analyze/dns_set — фоновые).</summary>
 public sealed record RouterDnsJob(string? Action, bool Running, bool? Ok, string? Message, DateTime? At = null);
-/// <summary>DNS для всей сети: mode provider|doh; fallback_active — оба DoH пропали, временно DNS провайдера.</summary>
-public sealed record RouterDnsStatus(string? Mode, bool Spoofed, DateTime? CheckedAt, List<RouterDnsServer>? Servers, bool FallbackActive, RouterDnsJob? Job);
+/// <summary>DNS для всей сети: mode provider|doh|plain; fallback_active — оба DoH пропали, временно DNS провайдера.</summary>
+/// <param name="Preset">Включённый вариант (dns_presets); Custom — последний свой (null — не задавался).</param>
+public sealed record RouterDnsStatus(string? Mode, bool Spoofed, DateTime? CheckedAt, List<RouterDnsServer>? Servers, bool FallbackActive, RouterDnsJob? Job,
+    string? Preset = null, RouterDnsCustom? Custom = null);
+
+/// <summary>Сервер DoH варианта: шаблон и адреса для его имени.</summary>
+public sealed record RouterDnsResolver(string Doh, List<string>? Bootstrap);
+/// <summary>Вариант DNS для всей сети (§5.1 dns_presets): provider, default, google, cloudflare, quad9, yandex.</summary>
+public sealed record RouterDnsPreset(string Id, string Title, string? Note, List<RouterDnsResolver>? Resolvers, List<string>? Plain);
+/// <summary>Свой вариант (dns_set custom): title до 40 символов; doh https://…, bootstrap/plain — до 4 адресов; нужен doh или plain.</summary>
+public sealed record RouterDnsCustom(string Title, string? Doh = null, List<string>? Bootstrap = null, List<string>? Plain = null);
+public sealed record RouterDnsPresets(List<RouterDnsPreset> Presets, string? Current, RouterDnsCustom? Custom);
 
 /// <summary>kind: service | package (§9: zapret, luci-app-zapret, zapret-manager-beam, zapret2 — conflict_stop их не останавливает, только удаление).</summary>
 public sealed record RouterConflict(string Kind, string Name, bool Running);

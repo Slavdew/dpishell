@@ -55,6 +55,7 @@ public class HelperChannelTests
             ["ipset_update"] = new { from = "manifest" },
             ["user_ipset_set"] = new { lines = new[] { "10.0.0.0/8" } },
             ["user_targets_set"] = new { lines = new[] { "example.com" } },
+            ["dns_set"] = new { preset = "google" },
         };
         foreach (var cmd in HelperCommands.Specs.Keys.Where(k => k != "cancel"))
             await c.CallAsync(cmd, args.GetValueOrDefault(cmd));

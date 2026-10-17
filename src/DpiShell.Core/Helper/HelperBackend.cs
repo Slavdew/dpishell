@@ -43,6 +43,12 @@ public interface IHelperBackend : IHelperCatalog
     bool TcpTimestampsOn();
     /// <summary>Обновление данных по data.json с источников помощника (02-spec §3.6).</summary>
     Task<DataUpdateResult> UpdateDataAsync(bool confirmed, IProgress<string> log, CancellationToken ct);
+    /// <summary>DNS этого компьютера: вариант на физических адаптерах, защищён ли, есть ли что вернуть (02-spec решение 24).</summary>
+    DnsStatusInfo DnsStatus();
+    /// <summary>Включить вариант DNS; ips/doh — только для preset = custom (уже проверены).</summary>
+    Task<DnsSetResult> DnsSetAsync(string preset, IReadOnlyList<string>? ips, string? doh, bool fallback, CancellationToken ct);
+    /// <summary>«Вернуть как было» — прежние настройки DNS адаптеров.</summary>
+    Task<DnsSetResult> DnsRestoreAsync(CancellationToken ct);
     /// <summary>Все окна отключились от канала: в режиме без службы winws гасится.</summary>
     void OnClientsGone();
 }
@@ -369,4 +375,19 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
     {
         if (!shell.ServiceMode) shell.StopOwnProcess();
     }
+
+    /// <summary>Смена DNS в системе; в тестах — подмена в памяти (реестр и сеть машины не трогаются).</summary>
+    public IDnsSystem DnsSystem { get; init; } = new WindowsDnsSystem();
+    DnsManager? _dns;
+    DnsManager Dns => _dns ??= new DnsManager(DnsSystem, shell.Paths.DnsBackup);
+
+    public DnsStatusInfo DnsStatus() => Dns.Status();
+
+    public Task<DnsSetResult> DnsSetAsync(string preset, IReadOnlyList<string>? ips, string? doh, bool fallback, CancellationToken ct)
+    {
+        shell.Paths.EnsureDirectories();
+        return Dns.SetAsync(preset, ips, doh, fallback, ct);
+    }
+
+    public Task<DnsSetResult> DnsRestoreAsync(CancellationToken ct) => Dns.RestoreAsync(ct);
 }

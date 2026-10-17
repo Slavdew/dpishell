@@ -190,8 +190,11 @@
                                     <Border Style="{StaticResource Warn}" Visibility="{Binding DnsSpoofed, Converter={StaticResource Vis}}">
                                         <StackPanel>
                                             <TextBlock Text="DNS провайдера подменяет адреса сайтов. В браузере сайты могут работать, а Discord и другие программы — нет." />
-                                            <Button Content="Подробнее" Style="{StaticResource LinkButton}" Command="{Binding GoDiagCmd}" HorizontalAlignment="Left" Margin="0,8,0,0" />
-                                            <Expander Header="Как исправить (Windows 11)" Margin="0,8,0,0">
+                                            <WrapPanel Margin="0,8,0,0">
+                                                <Button ContentTemplate="{StaticResource Shield}" Content="{Binding RecommendedDnsText}" Command="{Binding FixDnsCmd}" ToolTip="{Binding RecommendedDnsHint}" />
+                                                <Button Content="Другой DNS" Style="{StaticResource LinkButton}" Command="{Binding ChooseDnsCmd}" VerticalAlignment="Center" />
+                                            </WrapPanel>
+                                            <Expander Header="Подробнее: вручную (Windows 11)" Margin="0,8,0,0">
                                                 <TextBlock Margin="0,6,0,0">
                                                     <Run Text="1. Параметры → Сеть и Интернет → ваше подключение (Wi-Fi → свойства сети, или Ethernet)." />
                                                     <LineBreak />
@@ -930,7 +933,15 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
-                                               Text="Подбор и проверка берут адреса через защищённый DNS, поэтому подмена на их результат не влияет. Как исправить для программ — на «Главной»." />
+                                               Text="Подбор и проверка берут адреса через защищённый DNS, поэтому подмена на их результат не влияет. Для программ — выберите DNS ниже." />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- DNS этого компьютера (02-spec решение 24): вариант в один клик, «Вернуть как было». -->
+                            <Border x:Name="PcDnsCard" Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="DNS этого компьютера" Style="{StaticResource H2}" />
+                                    <local:DnsPickerView DataContext="{Binding PcDns}" />
                                 </StackPanel>
                             </Border>
 
@@ -1157,11 +1168,17 @@
                                         </StackPanel>
                                         <WrapPanel Margin="0,10,0,0">
                                             <Button Content="Проверить" Command="{Binding DnsCheckCmd}" />
-                                            <Button Content="Включить защищённый DNS" Style="{StaticResource Primary}" Command="{Binding DnsEnableCmd}"
-                                                    Visibility="{Binding DnsCanEnable, Converter={StaticResource Vis}}" />
-                                            <Button Content="Вернуть как было" Command="{Binding DnsRestoreCmd}"
-                                                    Visibility="{Binding DnsProtected, Converter={StaticResource Vis}}" />
+                                            <!-- Старый пакет на роутере (без dns_presets) — одна кнопка, как раньше. -->
+                                            <StackPanel Orientation="Horizontal" Visibility="{Binding DnsSingleButton, Converter={StaticResource Vis}}">
+                                                <Button Content="Включить защищённый DNS" Style="{StaticResource Primary}" Command="{Binding DnsEnableCmd}"
+                                                        Visibility="{Binding DnsCanEnable, Converter={StaticResource Vis}}" />
+                                                <Button Content="Вернуть как было" Command="{Binding DnsRestoreCmd}"
+                                                        Visibility="{Binding DnsProtected, Converter={StaticResource Vis}}" />
+                                            </StackPanel>
                                         </WrapPanel>
+                                        <!-- Варианты для всей сети — тот же выбор, что для этого компьютера (свои — общие). -->
+                                        <local:DnsPickerView x:Name="RouterDnsPicker" DataContext="{Binding DnsPick}" Margin="0,10,0,0"
+                                                             Visibility="{Binding DataContext.DnsPresetsAvailable, RelativeSource={RelativeSource AncestorType=Border}, Converter={StaticResource Vis}}" />
                                         <Expander Header="Подробнее" Visibility="{Binding DnsServers.Count, Converter={StaticResource NonZero}}">
                                             <ItemsControl ItemsSource="{Binding DnsServers}" Margin="0,4,0,0">
                                                 <ItemsControl.ItemTemplate>

@@ -197,6 +197,15 @@ public sealed class FakeRouter : IDisposable
                   "suggest_exclude": {{(!SiteWithBypassOk && SiteWithoutBypassOk ? "true" : "false")}} }
                 """,
             "dns_status" => DnsStatus(),
+            "dns_presets" => $$"""
+                { "presets": [
+                    { "id": "provider", "title": "Как у провайдера", "note": null, "resolvers": [], "plain": [] },
+                    { "id": "default", "title": "Google + Cloudflare", "note": null, "resolvers": [ { "doh": "https://dns.google/dns-query", "bootstrap": ["8.8.8.8", "8.8.4.4"] }, { "doh": "https://cloudflare-dns.com/dns-query", "bootstrap": ["1.1.1.1", "1.0.0.1"] } ], "plain": [] },
+                    { "id": "google", "title": "Google", "note": null, "resolvers": [ { "doh": "https://dns.google/dns-query", "bootstrap": ["8.8.8.8", "8.8.4.4"] } ], "plain": [] },
+                    { "id": "yandex", "title": "Яндекс", "note": "российский: применяет реестр блокировок", "resolvers": [ { "doh": "https://common.dot.dns.yandex.net/dns-query", "bootstrap": ["77.88.8.8", "77.88.8.1"] } ], "plain": ["77.88.8.8", "77.88.8.1"] } ],
+                  "current": "{{DnsPreset}}", "custom": {{DnsCustomJson ?? "null"}} }
+                """,
+            "dns_set" => DnsSet(args),
             "dns_analyze" or "dns_enable" or "dns_restore" => Do(() =>
             {
                 _dnsAction = method; _dnsPolls = 0; _dnsAt = _dnsAt.AddMinutes(1);
@@ -225,15 +234,47 @@ public sealed class FakeRouter : IDisposable
     /// <summary>Свои списки после lists_set (до него — пример §5.1).</summary>
     public Dictionary<string, List<string>> Lists { get; } = [];
 
+    // Варианты DNS (§5.1 dns_presets/dns_set, §9 2026-10-17).
+    public string DnsPreset { get; set; } = "provider";
+    public string? DnsCustomJson { get; set; }
+    string? _presetTarget, _customTarget;
+    static readonly string[] PresetIds = ["provider", "default", "google", "yandex"];
+
+    string DnsSet(JsonObject args)
+    {
+        static string Invalid(string field, string text) =>
+            new JsonObject { ["error"] = new JsonObject { ["code"] = "invalid", ["text"] = text, ["field"] = field } }.ToJsonString();
+        if (args["custom"] is JsonObject c)
+        {
+            if (c["title"] is null || (c["doh"] is null && c["plain"] is null)) return Invalid("custom", "Нужен doh или plain");
+            _presetTarget = "custom"; _customTarget = c.ToJsonString();
+            _dnsTarget = c["doh"] is null ? "plain" : "doh";
+        }
+        else if (args["preset"]?.GetValue<string>() is { } p && (PresetIds.Contains(p) || p == "custom" && DnsCustomJson is not null))
+        {
+            _presetTarget = p; _customTarget = DnsCustomJson;
+            _dnsTarget = p == "provider" ? "provider" : "doh";
+        }
+        else return Invalid("preset", "Нет такого варианта");
+        _dnsAction = "dns_set"; _dnsPolls = 0; _dnsAt = _dnsAt.AddMinutes(1);
+        return """{ "started": true }""";
+    }
+
     string DnsStatus()
     {
         bool running = _dnsPolls < DnsJobRunningPolls;
         if (_dnsPolls != int.MaxValue) _dnsPolls++;
-        if (!running && _dnsTarget is { } m && DnsJobOk) { DnsMode = m; _dnsTarget = null; }
+        if (!running && _dnsTarget is { } m && DnsJobOk)
+        {
+            DnsMode = m; _dnsTarget = null;
+            DnsPreset = _presetTarget ?? (m == "provider" ? "provider" : "default");
+            if (_presetTarget == "custom") DnsCustomJson = _customTarget;
+            _presetTarget = null;
+        }
         var at = DnsJobAt ? $", \"at\": \"{_dnsAt:yyyy-MM-dd'T'HH:mm:ss'Z'}\"" : "";
         return $$"""
-            { "mode": "{{DnsMode}}", "spoofed": {{(DnsSpoofed ? "true" : "false")}}, "checked_at": "2026-10-17T10:00:00Z",
-              "servers": [ { "name": "Google", "doh_ok": true, "ms": 38 }, { "name": "Cloudflare", "doh_ok": true, "ms": 41 } ],
+            { "mode": "{{DnsMode}}", "preset": "{{DnsPreset}}", "custom": {{DnsCustomJson ?? "null"}}, "spoofed": {{(DnsSpoofed ? "true" : "false")}}, "checked_at": "2026-10-17T10:00:00Z",
+              "servers": [ { "id": "google", "name": "Google", "doh_ok": true, "ms": 38 }, { "id": "cloudflare", "name": "Cloudflare", "doh_ok": true, "ms": 41 } ],
               "fallback_active": false,
               "job": { "action": "{{_dnsAction}}", "running": {{(running ? "true" : "false")}}, "ok": {{(running ? "null" : DnsJobOk ? "true" : "false")}}, "message": "{{(running ? "" : DnsJobOk ? "Готово" : "Не удалось установить пакет")}}"{{at}} } }
             """;

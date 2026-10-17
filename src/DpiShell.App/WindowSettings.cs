@@ -31,6 +31,10 @@ public sealed class WindowSettings
     public string? UpdatesData { get; set; }
     /// <summary>Новая версия программы у источника.</summary>
     public string? UpdatesApp { get; set; }
+    /// <summary>Свои варианты DNS — одни и те же для этого компьютера и для роутера (02-spec решение 24).</summary>
+    public List<DnsCustomEntry> DnsCustom { get; set; } = [];
+    /// <summary>Защищённый DNS не отвечает — разрешить обычный (по умолчанию нет: только защищённый).</summary>
+    public bool DnsFallback { get; set; }
 
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
@@ -84,3 +88,6 @@ public sealed class WindowSettings
         System.IO.File.Move(tmp, File, overwrite: true);
     }
 }
+
+/// <summary>Свой вариант DNS: имя, 1–2 адреса и необязательный шаблон защищённого DNS (https).</summary>
+public sealed record DnsCustomEntry(string Name, List<string> Ips, string? Doh = null);

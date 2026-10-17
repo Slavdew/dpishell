@@ -103,11 +103,14 @@ public class HelperProtocolTests
             "status", "enable", "disable", "set_run_mode", "select", "search", "cancel", "ipset_mode", "all_addresses_start",
             "all_addresses_stop", "game_mode", "ipset_update", "user_ipset_set", "user_targets_set", "hosts_check", "hosts_preview",
             "hosts_apply", "hosts_revert", "hosts_recheck", "stop_foreign", "core_repair", "remove_all", "clear_history", "read_results",
-            "details", "choose", "tcp_timestamps_on", "data_update",
+            "details", "choose", "tcp_timestamps_on", "data_update", "dns_status", "dns_set", "dns_restore",
         ];
         Assert.Equal(spec.Order(), HelperCommands.Specs.Keys.Order());
+        // Команды DNS описаны в 11-helper-spec §3 (часть старых там записана сокращённо: hosts_check/preview/…).
+        var doc = File.ReadAllText(Path.Combine(Path.GetDirectoryName(Repo.Data)!, "docs", "11-helper-spec.md"));
+        Assert.All(["dns_status", "dns_set {preset, ips?, doh?, fallback?}", "dns_restore"], cmd => Assert.Contains("`" + cmd + "`", doc));
         // Только чтение — не занимает «одну операцию за раз».
-        Assert.Equal(["cancel", "details", "hosts_preview", "read_results", "status"],
+        Assert.Equal(["cancel", "details", "dns_status", "hosts_preview", "read_results", "status"],
             HelperCommands.Specs.Values.Where(s => !s.Exclusive).Select(s => s.Name).Order());
     }
 

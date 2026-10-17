@@ -322,4 +322,12 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     /// <summary>Включить метки TCP (нужны стратегии роутера); true — включены.</summary>
     public async Task<bool> TcpTimestampsOnAsync(CancellationToken ct = default) =>
         (await CallAsync("tcp_timestamps_on", null, null, ct)).GetProperty("enabled").GetBoolean();
+
+    public Task<DnsStatusInfo> DnsStatusAsync(CancellationToken ct = default) => CallAsync<DnsStatusInfo>("dns_status", null, null, ct);
+
+    /// <summary>Вариант DNS этого компьютера; ips и doh — только для своего (preset = custom).</summary>
+    public Task<DnsSetResult> DnsSetAsync(string preset, IReadOnlyList<string>? ips = null, string? doh = null, bool fallback = false, CancellationToken ct = default) =>
+        CallAsync<DnsSetResult>("dns_set", new { preset, ips, doh, fallback }, null, ct);
+
+    public Task<DnsSetResult> DnsRestoreAsync(CancellationToken ct = default) => CallAsync<DnsSetResult>("dns_restore", null, null, ct);
 }

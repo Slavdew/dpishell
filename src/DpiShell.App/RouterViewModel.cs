@@ -147,6 +147,7 @@ public sealed class RouterViewModel : Observable, IDisposable
         DnsCheckCmd = RelayCommand.Async(DnsAnalyzeAsync, () => CanAct);
         DnsEnableCmd = RelayCommand.Async(DnsEnableAsync, () => CanAct && !DnsProtected);
         DnsRestoreCmd = RelayCommand.Async(DnsRestoreAsync, () => CanAct && DnsProtected);
+        DnsPick = new DnsPicker(settings) { Apply = DnsApplyAsync, Restore = DnsRestoreAsync, Enabled = () => CanAct };
         FixWarningCmd = new RelayCommand(p => { if (p is string code) _ = FixWarningAsync(code); }, _ => CanAct);
         StopPcCmd = RelayCommand.Async(StopPcForRouterAsync, () => !Busy);
         StopRouterCmd = RelayCommand.Async(async () => { if (await DisableAsync()) Say("Обход на роутере выключен — работает этот ПК."); }, () => CanAct);
@@ -228,7 +229,7 @@ public sealed class RouterViewModel : Observable, IDisposable
             if (!Set(ref _connected, value)) return;
             Raise(nameof(NeedLogin)); Raise(nameof(CanAct)); Raise(nameof(ScheduleEditable)); Raise(nameof(SelectOnRouterVisible)); Raise(nameof(SelectOnPcVisible));
             Raise(nameof(TargetsOnRouterVisible)); Raise(nameof(TargetsOnPcVisible));
-            if (!value) { Selecting = false; DiagLoaded = false; }
+            if (!value) { Selecting = false; DiagLoaded = false; DnsPresetsAvailable = false; }
             Raise(nameof(DiagHint));
             Requery();
         }
@@ -1231,7 +1232,11 @@ public sealed class RouterViewModel : Observable, IDisposable
     public async Task RefreshRouterPageAsync()
     {
         if (!Connected || Busy) return;
-        await Guard("Читаю DNS роутера…", async () => ShowDns(await Call(c => c.DnsStatusAsync())));
+        await Guard("Читаю DNS роутера…", async () =>
+        {
+            await LoadDnsPresetsAsync();
+            ShowDns(await Call(c => c.DnsStatusAsync()));
+        });
         Say("");
     }
 
@@ -1363,12 +1368,66 @@ public sealed class RouterViewModel : Observable, IDisposable
             { Ok: false } j => JobTitle(j.Action) + ": не получилось" + (j.Message is { Length: > 0 } m ? $" — {m}" : ""),
             _ => "",
         };
+        // Выбор вариантов (dns_presets): включённый, «Вернуть как было» — когда DNS не как у провайдера.
+        if (d.Preset == "custom" && d.Custom is { } own) DnsPick.CurrentId = DnsPicker.CustomId(own.Title);
+        else if (d.Preset is { } p) DnsPick.CurrentId = p;
+        DnsPick.CanRestore = d.Mode is "doh" or "plain" || d.Preset is { } q && q != "provider";
+        var title = d.Preset == "custom" ? d.Custom?.Title ?? "свой" : DnsPick.Options.FirstOrDefault(o => o.Id == d.Preset)?.Title;
+        DnsPick.CurrentText = title is null ? "" : "Сейчас: " + title + (d.Mode switch { "doh" => ", защищённый", "plain" => ", без шифрования", _ => "" });
         Raise(nameof(DnsLoaded)); Raise(nameof(DnsProtected)); Raise(nameof(DnsCanEnable));
         Requery();
     }
 
+    // ---------- варианты DNS для всей сети (dns_presets / dns_set, §9 2026-10-17) ----------
+
+    /// <summary>Выбор DNS — тот же, что для этого компьютера: готовые с роутера + свои из window.json.</summary>
+    public DnsPicker DnsPick { get; }
+
+    bool _dnsPresets;
+    /// <summary>Роутер знает dns_presets: выбор вариантов вместо одной кнопки «Включить защищённый DNS».</summary>
+    public bool DnsPresetsAvailable { get => _dnsPresets; private set { if (Set(ref _dnsPresets, value)) Raise(nameof(DnsSingleButton)); } }
+    public bool DnsSingleButton => !DnsPresetsAvailable;
+
+    async Task LoadDnsPresetsAsync()
+    {
+        if (DnsPresetsAvailable) return;
+        RouterDnsPresets p;
+        try { p = await Call(c => c.DnsPresetsAsync()); }
+        catch (RouterException e) when (e.Failure is RouterFailure.NotSupported) { return; }   // старый пакет на роутере — одна кнопка
+        if (p.Presets is not { Count: > 0 } list) return;
+        DnsPick.SetPresets(list.Select(ToOption).ToList());
+        DnsPresetsAvailable = true;
+    }
+
+    static DnsOption ToOption(RouterDnsPreset p)
+    {
+        var ips = p.Resolvers is { Count: > 0 } r ? r.SelectMany(x => x.Bootstrap ?? []).Distinct().ToList() : p.Plain ?? [];
+        var detail = p.Id == "provider" ? "адреса DNS — от провайдера"
+            : p.Resolvers is { Count: > 0 } ? "защищённый" + (p.Resolvers.Count > 1 ? $" · серверов: {p.Resolvers.Count}" : "")
+            : string.Join(", ", ips) + " · без шифрования";
+        if (p.Note is { Length: > 0 } n) detail += " · " + n;
+        return new DnsOption(p.Id, p.Title, detail, false, ips, p.Resolvers?.FirstOrDefault()?.Doh);
+    }
+
+    /// <summary>«Применить» в выборе DNS роутера: готовый — dns_set preset, свой — dns_set custom (адреса — bootstrap при DoH, иначе plain).</summary>
+    public async Task DnsApplyAsync(DnsOption o)
+    {
+        if (o.Id != "provider" && !Confirm($"Включить DNS «{o.Title}» для всей сети?\n\n"
+                + "Все устройства дома будут брать адреса сайтов у него. Фильтры провайдера перестанут действовать. "
+                + "Не заработает — роутер вернёт прежний вариант; «Вернуть как было» — DNS провайдера."))
+            return;
+        var done = $"DNS для всей сети: {o.Title}.";
+        if (o.Custom)
+        {
+            var custom = new RouterDnsCustom(o.Title, o.Doh, o.Doh is null ? null : [.. o.Ips], o.Doh is null ? [.. o.Ips] : null);
+            await DnsJobAsync("dns_set", c => c.DnsSetCustomAsync(custom), done);
+        }
+        else await DnsJobAsync("dns_set", c => c.DnsSetAsync(o.Id), done);
+    }
+
     static string JobTitle(string? action) => action switch
     {
+        "dns_set" => "Включаю выбранный DNS",
         "dns_enable" => "Включаю защищённый DNS",
         "dns_restore" => "Возвращаю DNS как было",
         _ => "Проверяю DNS",
@@ -1395,6 +1454,7 @@ public sealed class RouterViewModel : Observable, IDisposable
         if (!await Guard(JobTitle(action) + " на роутере…", async () =>
             {
                 DnsRunning = true;
+                DnsPick.Working = true;
                 try
                 {
                     var before = _dnsStatus?.Job;
@@ -1418,7 +1478,7 @@ public sealed class RouterViewModel : Observable, IDisposable
                     }
                     DnsJobText = JobTitle(action) + " — роутер ещё не закончил, итог появится здесь позже.";
                 }
-                finally { DnsRunning = false; }
+                finally { DnsRunning = false; DnsPick.Working = false; }
             }))
             return;
         if (job is null) { Say(DnsJobText); return; }

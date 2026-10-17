@@ -11,6 +11,8 @@ public sealed class AppPaths
     public string Results => Path.Combine(Root, "results");
     public string StateFile => Path.Combine(Root, "state.json");
     public string Winws => Path.Combine(Core, "winws.exe");
+    /// <summary>Прежние настройки DNS адаптеров до первой смены (02-spec решение 24) — для «Вернуть как было».</summary>
+    public string DnsBackup => Path.Combine(Root, "dns-backup.json");
 
     /// <summary>Данные, приехавшие вместе с программой (data\ рядом с exe).</summary>
     public string Package { get; }

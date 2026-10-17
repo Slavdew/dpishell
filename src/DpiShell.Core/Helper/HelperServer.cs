@@ -335,6 +335,10 @@ public sealed class HelperServer : IAsyncDisposable
             case "choose": await Task.Run(() => b.Choose(c.Str("strategy")!), ct); return null;
             case "tcp_timestamps_on": return new { enabled = await Task.Run(b.TcpTimestampsOn, ct) };
             case "data_update": return await Task.Run(() => b.UpdateDataAsync(c.Bool("confirmed"), log, ct), ct);
+            case "dns_status": return await Task.Run(b.DnsStatus, ct);
+            case "dns_set":
+                return await Task.Run(() => b.DnsSetAsync(c.Str("preset")!, c.List("ips"), c.Str("doh"), c.Bool("fallback"), ct), ct);
+            case "dns_restore": return await Task.Run(() => b.DnsRestoreAsync(ct), ct);
         }
         // Белый список и диспетчер должны совпадать — тест проверяет, что сюда не попасть.
         throw new HelperRequestException(c.Id, $"Команда «{c.Cmd}» не поддерживается.");

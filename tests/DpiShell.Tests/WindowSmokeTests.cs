@@ -256,6 +256,13 @@ public sealed class WindowSmokeTests
                         sv.ScrollToVerticalOffset(settingsCard.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-diag-updates.png"));
+                        // DNS: проверка подмены и «DNS этого компьютера» (свой вариант раскрыт).
+                        var dnsCard = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "DNS этого компьютера")!;
+                        if (Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Свой вариант") is { } own) own.IsExpanded = true;
+                        Pump();
+                        sv.ScrollToVerticalOffset(dnsCard.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-diag-dns.png"));
                         sv.ScrollToHome();
                     }
                     if (page == Pages.Net && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } nv)
@@ -384,7 +391,10 @@ public sealed class WindowSmokeTests
                         foreach (var text in new[] { "Для каких сайтов обход", "Сайт не открывается", "DNS для всей сети", "Проверка по расписанию", "Сайт открывается только без обхода" })
                             if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is null) throw new Exception($"На вкладке «Роутер» нет «{text}»");
                         if (Find<Button>(tabs, b => b.Content as string == "Добавить в исключения" && b.IsVisible) is null) throw new Exception("Нет «Добавить в исключения»");
-                        if (Find<Button>(tabs, b => b.Content as string == "Включить защищённый DNS" && b.IsVisible) is null) throw new Exception("Нет «Включить защищённый DNS»");
+                        // dns_presets есть — вместо одной кнопки выбор вариантов, как на ПК.
+                        if (Find<Button>(tabs, b => b.Content as string == "Включить защищённый DNS" && b.IsVisible) is not null) throw new Exception("Осталась одна кнопка «Включить защищённый DNS»");
+                        if (Find<DnsPickerView>(tabs, p => p.IsVisible) is not { } rp || Find<ComboBox>(rp, c => c.Items.Count >= 4) is null)
+                            throw new Exception("На вкладке «Роутер» нет выбора DNS");
                     }
                     if (snapDir is null) continue;
                     Directory.CreateDirectory(snapDir);
@@ -410,6 +420,10 @@ public sealed class WindowSmokeTests
                         rsv.ScrollToEnd();
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-router-tab-end.png"));
+                        var dnsHead = Find<TextBlock>(tabs, t => t.Text == "DNS для всей сети")!;
+                        rsv.ScrollToVerticalOffset(dnsHead.TranslatePoint(new Point(0, 0), (UIElement)rsv.Content).Y - 30);
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-router-dns.png"));
                         rsv.ScrollToHome();
                     }
                 }
@@ -514,6 +528,12 @@ public sealed class WindowSmokeTests
 
         SetProp(vm, "VpnWarning", "Включён VPN (WireGuard Tunnel). С ним обход обычно не нужен, а подбор может показать неверный результат.");
         SetProp(vm, "DnsSpoofed", true);
+        // DNS этого компьютера: свой вариант в списке, включён Google (защищённый), есть что вернуть, VPN не трогаем.
+        vm.PcDns.NewName = "AdGuard"; vm.PcDns.NewIps = "94.140.14.14, 94.140.15.15"; vm.PcDns.NewDoh = "https://dns.adguard-dns.com/dns-query";
+        vm.PcDns.AddCustom();
+        vm.ShowPcDns(new DnsStatusInfo("google", true, false, true, true,
+            [new DnsAdapterInfo("Ethernet", "ethernet", false, ["8.8.8.8", "8.8.4.4"], true), new DnsAdapterInfo("Wi-Fi", "wifi", false, ["8.8.8.8", "8.8.4.4"], true)],
+            ["Radmin VPN", "vEthernet (Default Switch)"]));
         SetProp(vm, "CheckSummary", "Открывается 3 из 4");
         vm.CheckRows.Add(new(true, "YouTube", "https://www.youtube.com/", "0.4 с"));
         vm.CheckRows.Add(new(true, "YouTube", "https://rr1---sn-4g5e6nsz.googlevideo.com/", "0.7 с"));

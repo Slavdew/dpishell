@@ -26,6 +26,10 @@ public enum ArgKind
     Lines,
     /// <summary>Содержимое IP-списка — одна большая строка; дальше её прогоняет валидатор.</summary>
     Content,
+    /// <summary>Адреса DNS-серверов: 1–4 настоящих IPv4/IPv6 без повторов (приводятся к нормальной записи).</summary>
+    IpAddresses,
+    /// <summary>Шаблон защищённого DNS: только https://сервер[:порт]/путь.</summary>
+    DohTemplate,
 }
 
 public sealed record ArgSpec(string Name, ArgKind Kind, bool Required = false, string[]? Choices = null, int MaxItems = 0);
@@ -104,6 +108,15 @@ public static partial class HelperCommands
         // Обновление данных по data.json (02-spec §3.6): адреса и хеши помощник берёт сам — из своего списка источников
         // и скачанного манифеста; окно передаёт только согласие на сильно изменившийся IP-список.
         new("data_update", true, true, new ArgSpec("confirmed", ArgKind.Bool)),
+        // DNS этого компьютера (02-spec решение 24): готовый вариант или свой (адреса + необязательный шаблон DoH).
+        // Меняются только физические адаптеры с основным шлюзом; прежние настройки — в закрытой папке помощника.
+        new("dns_status", false, false),
+        new("dns_set", true, true,
+            new ArgSpec("preset", ArgKind.Choice, Required: true, Choices: DnsPresets.Choices),
+            new ArgSpec("ips", ArgKind.IpAddresses, MaxItems: DnsValues.MaxServers),
+            new ArgSpec("doh", ArgKind.DohTemplate),
+            new ArgSpec("fallback", ArgKind.Bool)),
+        new("dns_restore", true, true),
     ];
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);
@@ -166,6 +179,14 @@ public static partial class HelperCommands
             bool fromContent = (string)args["from"] == "content";
             if (fromContent != args.ContainsKey("content"))
                 throw new HelperRequestException(id, fromContent ? "ipset_update: нет содержимого списка." : "ipset_update: content — только при from = content.");
+        }
+        // dns_set: адреса и шаблон — только у своего варианта, и тогда адреса обязательны.
+        if (spec.Name == "dns_set")
+        {
+            bool custom = (string)args["preset"] == DnsPresets.Custom;
+            if (custom && !args.ContainsKey("ips")) throw new HelperRequestException(id, "dns_set: у своего варианта нужны адреса.");
+            if (!custom && (args.ContainsKey("ips") || args.ContainsKey("doh")))
+                throw new HelperRequestException(id, "dns_set: ips и doh — только при preset = custom.");
         }
         return new HelperCall(id, spec, args);
     }
@@ -230,6 +251,28 @@ public static partial class HelperCommands
             {
                 var str = String(id, Where(), v, MaxContentChars);
                 if (str.Contains('\0')) throw new HelperRequestException(id, $"{Where()}: недопустимые символы.");
+                return str;
+            }
+
+            case ArgKind.IpAddresses:
+            {
+                if (v is not JsonArray arr || arr.Count == 0 || arr.Count > s.MaxItems)
+                    throw new HelperRequestException(id, $"{Where()}: нужно от 1 до {s.MaxItems} адресов.");
+                var list = new List<string>();
+                foreach (var item in arr)
+                {
+                    var raw = item is null ? "" : String(id, Where(), item, 45);
+                    var ip = DnsValues.NormalizeIp(raw) ?? throw new HelperRequestException(id, $"{Where()}: «{Short(raw)}» — не адрес IPv4/IPv6.");
+                    if (list.Contains(ip)) throw new HelperRequestException(id, $"{Where()}: адрес указан дважды.");
+                    list.Add(ip);
+                }
+                return list;
+            }
+
+            case ArgKind.DohTemplate:
+            {
+                var str = String(id, Where(), v, DnsValues.MaxTemplate);
+                if (!DnsValues.IsDohTemplate(str)) throw new HelperRequestException(id, $"{Where()}: нужен адрес вида https://сервер/путь.");
                 return str;
             }
         }

@@ -112,6 +112,7 @@ public sealed partial class MainViewModel : Observable
         };
         Router.Changed += UpdateStatus;
         WireRouterPc();   // обход ПК и роутера вместе не работают (07-router-api §6) — MainViewModel.Router.cs
+        InitPcDns();      // DNS этого компьютера — MainViewModel.Dns.cs
 
         Net = new NetViewModel(helper)
         {
@@ -408,6 +409,7 @@ public sealed partial class MainViewModel : Observable
                 await RefreshStatusAsync();
             }
             _ = CheckDnsAsync();
+            _ = RefreshPcDnsAsync();
             // «Починить адреса» включено и с прошлой проверки прошли сутки — перепроверить записи (устаревшие уберутся).
             _ = Hosts.RecheckIfDueAsync();
             // Обновления данных — раз в день, тихо (02-spec §3.6).
@@ -1158,6 +1160,7 @@ public sealed partial class MainViewModel : Observable
         try
         {
             await FetchAsync(full: true);
+            _ = RefreshPcDnsAsync();
             var st = Live;
             var d = Helper.Reader is null ? null : Helper.Details;
             var (svc, local, drv, conflicts, vpn) = await Task.Run(() =>

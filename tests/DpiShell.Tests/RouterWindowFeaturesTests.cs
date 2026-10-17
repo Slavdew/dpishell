@@ -160,6 +160,105 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.Equal(vm.DnsJobText, _said[^1]);
     }
 
+    // ---------- 3а. варианты DNS для всей сети (dns_presets / dns_set, §9 2026-10-17) ----------
+
+    [Fact]
+    public async Task DnsPresets_ChoosePreset_ThenRestore()
+    {
+        using var r = new FakeRouter();
+        var vm = await Connected(r);
+        await vm.RefreshRouterPageAsync();
+        Assert.True(vm.DnsPresetsAvailable);
+        Assert.False(vm.DnsSingleButton);
+        Assert.Equal(["provider", "default", "google", "yandex"], vm.DnsPick.Options.Select(o => o.Id));
+        Assert.Equal("provider", vm.DnsPick.Selected!.Id);
+        Assert.False(vm.DnsPick.CanRestore);
+        Assert.Contains("реестр блокировок", vm.DnsPick.Options.Single(o => o.Id == "yandex").Detail);
+
+        string? asked = null;
+        vm.Confirm = q => { asked = q; return true; };
+        vm.DnsPick.Selected = vm.DnsPick.Options.Single(o => o.Id == "yandex");
+        await vm.DnsApplyAsync(vm.DnsPick.Selected);
+        Assert.Contains("«Яндекс»", asked);
+        Assert.Equal("yandex", Args(r, "dns_set")["preset"]!.GetValue<string>());
+        Assert.Equal("yandex", r.DnsPreset);
+        Assert.Equal("Сейчас: Яндекс, защищённый", vm.DnsPick.CurrentText);
+        Assert.True(vm.DnsPick.CanRestore);
+        Assert.Equal("DNS для всей сети: Яндекс.", _said[^1]);
+
+        await vm.DnsRestoreAsync();
+        Assert.Equal("provider", r.DnsPreset);
+        Assert.False(vm.DnsPick.CanRestore);
+    }
+
+    [Fact]
+    public async Task DnsPresets_CustomFromWindowJson_SentAsCustom()
+    {
+        using var r = new FakeRouter();
+        var vm = await Connected(r);
+        await vm.RefreshRouterPageAsync();
+        var pick = vm.DnsPick;
+        pick.NewName = "AdGuard"; pick.NewIps = "94.140.14.14, 94.140.15.15"; pick.NewDoh = "https://dns.adguard-dns.com/dns-query";
+        pick.AddCustom();
+        Assert.Equal("", pick.NewError);
+        Assert.Equal("my:AdGuard", pick.Selected!.Id);
+        // Свой вариант — в window.json.
+        var saved = WindowSettings.Load(Path.Combine(_tmp.Sub("window"), "window.json"));
+        Assert.Equal("AdGuard", saved.DnsCustom.Single().Name);
+
+        vm.Confirm = _ => true;
+        await vm.DnsApplyAsync(pick.Selected);
+        var custom = Args(r, "dns_set")["custom"]!;
+        Assert.Equal("AdGuard", custom["title"]!.GetValue<string>());
+        Assert.Equal("https://dns.adguard-dns.com/dns-query", custom["doh"]!.GetValue<string>());
+        Assert.Equal(["94.140.14.14", "94.140.15.15"], custom["bootstrap"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.Null(custom["plain"]);
+        Assert.Equal("custom", r.DnsPreset);
+        Assert.Equal("my:AdGuard", pick.CurrentId);
+        Assert.Equal("Сейчас: AdGuard, защищённый", pick.CurrentText);
+
+        // Без шаблона — обычный DNS (plain).
+        pick.NewName = "Свой"; pick.NewIps = "10.0.0.53"; pick.NewDoh = "";
+        pick.AddCustom();
+        await vm.DnsApplyAsync(pick.Selected!);
+        Assert.Equal(["10.0.0.53"], Args(r, "dns_set")["custom"]!["plain"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.Equal("Сейчас: Свой, без шифрования", pick.CurrentText);
+    }
+
+    [Fact]
+    public async Task DnsPresets_OldRouter_SingleButton()
+    {
+        using var r = new FakeRouter();
+        r.MissingMethods.Add("dns_presets");
+        var vm = await Connected(r);
+        await vm.RefreshRouterPageAsync();
+        Assert.False(vm.DnsPresetsAvailable);
+        Assert.True(vm.DnsSingleButton);
+        Assert.True(vm.DnsLoaded);
+    }
+
+    [Theory]
+    [InlineData("", "1.1.1.1", "", "Название")]
+    [InlineData("A\"b", "1.1.1.1", "", "Название")]
+    [InlineData("Мой", "", "", "один или два")]
+    [InlineData("Мой", "1.1.1.1 1.0.0.1 8.8.8.8", "", "один или два")]
+    [InlineData("Мой", "dns.google", "", "не адрес IPv4")]
+    [InlineData("Мой", "2001:db8::1", "", "не адрес IPv4")]
+    [InlineData("Мой", "1.1.1.1", "http://x.example/q", "https://")]
+    [InlineData("Google", "1.1.1.1", "", "уже есть")]
+    public async Task DnsPicker_CustomRejected(string name, string ips, string doh, string error)
+    {
+        using var r = new FakeRouter();
+        var vm = await Connected(r);
+        await vm.RefreshRouterPageAsync();
+        var pick = vm.DnsPick;
+        int before = pick.Options.Count;
+        pick.NewName = name; pick.NewIps = ips; pick.NewDoh = doh;
+        pick.AddCustom();
+        Assert.Contains(error, pick.NewError);
+        Assert.Equal(before, pick.Options.Count);
+    }
+
     // ---------- 4. автоподбор по расписанию ----------
 
     [Fact]
