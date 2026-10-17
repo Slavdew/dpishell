@@ -48,15 +48,20 @@ public sealed record UpdateSources(IReadOnlyList<string> Sources, string? Releas
 
 /// <summary>Манифест, полученный с одного из источников.</summary>
 /// <param name="Bytes">Как пришёл — кладётся в обновлённую папку данных без пересборки.</param>
-public sealed record FetchedManifest(DataManifest Manifest, string Source, byte[] Bytes);
+/// <param name="Signed">Рядом лежал data.json.sig и подпись верна. False — у источника подписи нет вовсе (переходный период:
+/// манифест принят, окно показывает «не подписан»). Неверная подпись сюда не доходит — источник отброшен.</param>
+/// <param name="Signature">Содержимое data.json.sig (кладётся рядом с манифестом в обновлённых данных).</param>
+public sealed record FetchedManifest(DataManifest Manifest, string Source, byte[] Bytes, bool Signed = false, byte[]? Signature = null);
 
 /// <summary>Итог проверки: манифест (null — ни один источник не дал годного) и что не так с остальными.</summary>
 public sealed record ManifestFetch(FetchedManifest? Result, IReadOnlyList<string> Errors);
 
 /// <summary>
 /// Скачивание по списку источников: по очереди, на каждый — 5 с до ответа сервера (заблокированный адрес
-/// не держит проверку). Манифест доверенный, только если пришёл с адреса из списка; файл — только если его sha256
-/// совпал с манифестом, иначе он отбрасывается и берётся следующий источник.
+/// не держит проверку). Манифест доверенный, только если пришёл с адреса из списка и его подпись <c>data.json.sig</c>
+/// (ed25519, <see cref="ReleaseSignature"/>) верна; подписи у источника нет (404) — принимается с пометкой «не подписан»,
+/// пока не включён <see cref="RequireSignature"/>. Подпись есть, но неверна — источник отброшен. Файл — только если
+/// его sha256 совпал с манифестом, иначе он отбрасывается и берётся следующий источник.
 /// </summary>
 public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
 {
@@ -65,8 +70,16 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
     /// <summary>Сколько ждать тело файла после ответа (IP-список ~0,6 МБ).</summary>
     public TimeSpan BodyTimeout { get; init; } = TimeSpan.FromSeconds(60);
 
+    /// <summary>Проверочный ключ подписи манифеста; в тестах — тестовый.</summary>
+    public byte[] SigningKey { get; init; } = ReleaseSignature.ReleaseKey;
+    /// <summary>Манифест без подписи не принимать (конец переходного периода).</summary>
+    public bool RequireSignature { get; init; }
+
     public const int MaxManifestBytes = 256 * 1024;
     public const int MaxFileBytes = 8 * 1024 * 1024;
+
+    /// <summary>Подпись манифеста рядом с ним: <c>{адрес}data.json.sig</c>.</summary>
+    public const string SignatureName = DataManifest.FileName + ReleaseSignature.Extension;
 
     public UpdateSources Sources => sources;
 
@@ -85,6 +98,25 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
                 errors.Add($"{Host(src)}: {Reason(e)}");
                 continue;
             }
+            // Подпись — до разбора манифеста.
+            byte[]? sig;
+            try { sig = await GetAsync(src + SignatureName, ReleaseSignature.MaxSignatureFileBytes, ct); }
+            catch (HttpRequestException e) when (e.StatusCode == System.Net.HttpStatusCode.NotFound) { sig = null; }
+            catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException or InvalidDataException && !ct.IsCancellationRequested)
+            {
+                errors.Add($"{Host(src)}: подпись манифеста не получена — {Reason(e)}");
+                continue;
+            }
+            if (sig is null && RequireSignature)
+            {
+                errors.Add($"{Host(src)}: манифест без подписи — отброшен");
+                continue;
+            }
+            if (sig is not null && !ReleaseSignature.Verify(bytes, sig, SigningKey))
+            {
+                errors.Add($"{Host(src)}: подпись манифеста не совпала — источник отброшен");
+                continue;
+            }
             DataManifest m;
             try { m = DataManifest.Parse(bytes); }
             catch (Exception e) when (e is JsonException or InvalidDataException)
@@ -97,7 +129,7 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
                 errors.Add($"{Host(src)}: манифест не прошёл проверку ({p[0]})");
                 continue;
             }
-            return new(new(m, src, bytes), errors);
+            return new(new(m, src, bytes, sig is not null, sig), errors);
         }
         return new(null, errors);
     }
@@ -187,7 +219,9 @@ public sealed record DataUpdateCheck(string? DataVersion, bool DataNewer, bool N
 /// <param name="UpToDate">Установлено то же или новее — делать нечего.</param>
 /// <param name="NeedsConfirm">IP-список сильно изменился: повторить с confirmed после вопроса пользователю.</param>
 /// <param name="CoreUpdated">Вместе с данными обновилось ядро (core.json в манифесте).</param>
-public sealed record DataUpdateResult(bool Applied, bool UpToDate, bool NeedsConfirm, string Message, string? Version = null, bool CoreUpdated = false, string? Source = null);
+/// <param name="Signed">Манифест был с верной подписью (false — у источника подписи нет, переходный период).</param>
+public sealed record DataUpdateResult(bool Applied, bool UpToDate, bool NeedsConfirm, string Message, string? Version = null, bool CoreUpdated = false, string? Source = null,
+    bool Signed = false);
 
 /// <summary>
 /// Установка обновления данных (делает помощник): манифест — с источников из списка, каждый файл — по sha256 манифеста,
@@ -213,7 +247,7 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
         var m = got.Manifest;
         var current = paths.SeedManifest;
         if (current is not null && DataManifest.CompareVersions(m.Version, current.Version) <= 0)
-            return new(false, true, false, $"Данные уже последней версии ({current.Version}).", current.Version, false, got.Source);
+            return new(false, true, false, $"Данные уже последней версии ({current.Version}).", current.Version, false, got.Source, got.Signed);
         if (m.MinAppVersion is { } min && DataUpdateCheck.IsOlder(AppVersion, min))
             return new(false, false, false, $"Данные {m.Version} требуют новую версию программы ({min}) — скачайте её со страницы релизов.");
 
@@ -234,11 +268,15 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
                 downloaded++;
             }
             await File.WriteAllBytesAsync(Path.Combine(staged, DataManifest.FileName), got.Bytes, ct);
+            // Подпись — рядом с тем манифестом, к которому относится; от прежних данных не остаётся.
+            var sigFile = Path.Combine(staged, DataUpdateClient.SignatureName);
+            if (got.Signature is { } sig) await File.WriteAllBytesAsync(sigFile, sig, ct);
+            else if (File.Exists(sigFile)) File.Delete(sigFile);
             // Список источников — только из поставки (его не меняет и не может поменять зеркало).
             var srcFile = Path.Combine(paths.Package, UpdateSources.FileName);
             if (File.Exists(srcFile)) File.Copy(srcFile, Path.Combine(staged, UpdateSources.FileName), overwrite: true);
 
-            if (Validate(staged, m, confirmed) is { } problem) return problem;
+            if (Validate(staged, m, confirmed, got.Signed) is { } problem) return problem;
 
             bool coreChanged = CoreChanged(staged);
             if (coreChanged && InstallCore is { } install)
@@ -251,7 +289,7 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
             paths.ResetSeed();
             log?.Report($"Данные обновлены до {m.Version}.");
             var note = downloaded == 0 ? "" : $" Скачано файлов: {downloaded}.";
-            return new(true, false, false, $"Данные обновлены до {m.Version}.{note}" + (coreChanged ? " Ядро обновлено." : ""), m.Version, coreChanged, got.Source);
+            return new(true, false, false, $"Данные обновлены до {m.Version}.{note}" + (coreChanged ? " Ядро обновлено." : ""), m.Version, coreChanged, got.Source, got.Signed);
         }
         catch (Exception e) when (e is SecurityException or IOException or UnauthorizedAccessException or InvalidDataException or JsonException or HttpRequestException)
         {
@@ -264,7 +302,8 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
     }
 
     /// <summary>Проверить собранное целиком тем же кодом, что читает данные при работе. Null — всё в порядке.</summary>
-    DataUpdateResult? Validate(string staged, DataManifest m, bool confirmed)
+    /// <param name="signed">Манифест подписан: новое ядро принимается с любого https-адреса (хеши закреплены подписанным core.json).</param>
+    DataUpdateResult? Validate(string staged, DataManifest m, bool confirmed, bool signed)
     {
         if (m.Mismatches(staged) is { Count: > 0 } bad)
             throw new SecurityException("не совпали хеши: " + string.Join(", ", bad));
@@ -280,9 +319,9 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
             throw new InvalidDataException("новые данные не прошли проверку: " + e.Message);
         }
         var packageCore = Path.Combine(paths.Package, "core.json");
-        if (CoreChanged(staged) && !(File.Exists(packageCore) && DataManifest.Sha256(packageCore) == DataManifest.Sha256(Path.Combine(staged, "core.json"))))
+        if (!signed && CoreChanged(staged) && !(File.Exists(packageCore) && DataManifest.Sha256(packageCore) == DataManifest.Sha256(Path.Combine(staged, "core.json"))))
         {
-            // Манифест без подписи: новое ядро — только официальный релиз bol-van и без запасных адресов.
+            // Манифест без подписи (переходный период): новое ядро — только официальный релиз bol-van и без запасных адресов.
             // Подменивший наш репозиторий может выбрать лишь настоящий релиз zapret, но не свой архив.
             var core = CoreManifest.Load(Path.Combine(staged, "core.json"));
             if (!core.ZipUrl.StartsWith(OfficialCoreReleases, StringComparison.Ordinal) || !UpdateSources.IsSafeHttps(core.ZipUrl) || core.ZipUrl.Contains("..")
@@ -337,7 +376,7 @@ public static partial class DataKeys
 {
     /// <summary>
     /// Ключ файла в манифесте: «имя» в корне data\ или «lists|fake|hosts|licenses/имя». Без «..», подпапок глубже,
-    /// пробелов и слешей другого вида; data.json, update-sources.json и пользовательские user-* — никогда.
+    /// пробелов и слешей другого вида; data.json, data.json.sig, update-sources.json и пользовательские user-* — никогда.
     /// </summary>
     public static bool IsAllowed(string key)
     {
@@ -345,6 +384,7 @@ public static partial class DataKeys
         var name = key[(key.LastIndexOf('/') + 1)..];
         if (name.StartsWith("user-", StringComparison.OrdinalIgnoreCase)) return false;
         return !string.Equals(key, DataManifest.FileName, StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(key, DataUpdateClient.SignatureName, StringComparison.OrdinalIgnoreCase)
                && !string.Equals(key, UpdateSources.FileName, StringComparison.OrdinalIgnoreCase);
     }
 

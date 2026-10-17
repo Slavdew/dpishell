@@ -3,6 +3,9 @@
 # Подпись: SDK подписывает индекс packages.adb ключом из секрета APK_SIGNING_KEY; открытый ключ — router/keys/dpishell.pem.
 # Релиз: тег router-vX.Y.Z (версия = PKG_VERSION = VERSION в state.uc) → релиз GitHub с пакетами и release.json;
 # release.json.sig — ed25519 над байтами release.json, ключ из секрета RELEASE_SIGNING_KEY (router-api.md §5).
+# Тот же сайт Pages раздаёт данные программы для Windows: site/data/ = data/ из master + data.json.sig
+# (подпись манифеста тем же ключом, docs/dev/building.md «Подписи»). Pages — один сайт на репозиторий,
+# поэтому фид и данные выкладываются одной сборкой (job site), атомарно: data.json и подпись не расходятся.
 name: router-packages
 
 on:
@@ -10,7 +13,7 @@ on:
     branches: [ master ]
     tags: [ 'router-v*' ]
     # Для тегов фильтр путей GitHub не применяет — релиз собирается всегда.
-    paths: [ 'router/**', 'data/**', '.github/workflows/router.yml' ]
+    paths: [ 'router/**', 'data/**', 'packaging/keys/**', '.github/workflows/router.yml' ]
   workflow_dispatch:
 
 permissions:
@@ -91,14 +94,47 @@ jobs:
           name: router-packages
           path: site/feed/
 
+  # Сайт Pages: фид пакетов из build + данные программы для Windows с подписью манифеста.
+  site:
+    if: github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: router-packages
+          path: site/feed
+
+      - name: Данные и подпись data.json
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          mkdir -p site/data
+          cp -r data/. site/data/
+          rm -f site/data/data.json.sig
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then echo '::warning::нет секрета RELEASE_SIGNING_KEY — данные без data.json.sig'; exit 0; fi
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > key.pem
+          chmod 600 key.pem
+          # Секрет должен соответствовать проверочному ключу, зашитому в программу (packaging/keys/release-ed25519.pem).
+          openssl pkey -in key.pem -pubout > secret.pub
+          openssl pkey -pubin -in packaging/keys/release-ed25519.pem -pubout | cmp -s - secret.pub \
+            || { rm -f key.pem; echo 'ключ в секрете не соответствует packaging/keys/release-ed25519.pem'; exit 1; }
+          openssl pkeyutl -sign -inkey key.pem -rawin -in site/data/data.json | base64 -w0 > site/data/data.json.sig
+          rm -f key.pem secret.pub
+          base64 -d site/data/data.json.sig > sig.bin
+          openssl pkeyutl -verify -pubin -inkey packaging/keys/release-ed25519.pem -rawin -in site/data/data.json -sigfile sig.bin \
+            || { echo 'подпись data.json не прошла проверку'; exit 1; }
+          rm -f sig.bin
+
       - uses: actions/upload-pages-artifact@v3
-        if: github.ref == 'refs/heads/master'
         with:
           path: site/
 
   pages:
     if: github.ref == 'refs/heads/master'
-    needs: build
+    needs: site
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -114,6 +150,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: packaging/keys
+
       - uses: actions/download-artifact@v4
         with:
           name: router-packages
@@ -125,8 +165,13 @@ jobs:
         run: |
           if [ -z "$RELEASE_SIGNING_KEY" ]; then echo '::warning::нет секрета RELEASE_SIGNING_KEY — релиз без release.json.sig'; exit 0; fi
           printf '%s\n' "$RELEASE_SIGNING_KEY" > key.pem
+          chmod 600 key.pem
+          # Секрет должен соответствовать проверочному ключу программы (packaging/keys/release-ed25519.pem).
+          openssl pkey -in key.pem -pubout > secret.pub
+          openssl pkey -pubin -in packaging/keys/release-ed25519.pem -pubout | cmp -s - secret.pub \
+            || { rm -f key.pem; echo 'ключ в секрете не соответствует packaging/keys/release-ed25519.pem'; exit 1; }
           openssl pkeyutl -sign -inkey key.pem -rawin -in feed/release.json | base64 -w0 > feed/release.json.sig
-          rm -f key.pem
+          rm -f key.pem secret.pub
 
       - name: Релиз GitHub
         env:
@@ -135,4 +180,5 @@ jobs:
           python3 -c "import json;d=json.load(open('feed/release.json',encoding='utf-8'));print(chr(10).join('- '+c for c in d['changes']) or '-')" > notes.md
           files="feed/*.apk feed/release.json feed/dpishell.pem"
           [ -f feed/release.json.sig ] && files="$files feed/release.json.sig"
-          gh release create "$GITHUB_REF_NAME" $files --repo "$GITHUB_REPOSITORY" --title "DpiShell для роутера ${GITHUB_REF_NAME#router-v}" --notes-file notes.md
+          # --latest=false: «последний» релиз репозитория — всегда программы для Windows (releases/latest/download/ — её источник обновлений).
+          gh release create "$GITHUB_REF_NAME" $files --repo "$GITHUB_REPOSITORY" --latest=false --title "DpiShell для роутера ${GITHUB_REF_NAME#router-v}" --notes-file notes.md
