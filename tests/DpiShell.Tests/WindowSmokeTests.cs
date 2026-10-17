@@ -281,9 +281,32 @@ public sealed class WindowSmokeTests
                         vm.ShowAllIssues = false;
                         vm.ShowStrategies = false;
                         Pump();
+                        // Идёт «Проверить сейчас» (сама после «Включить», UX-аудит 2, п. 1): в карточке «Проверяю…», прежних отметок нет.
+                        var rows = vm.CheckRows.ToList();
+                        var summary = vm.CheckSummary;
+                        vm.CheckRows.Clear();
+                        SetProp(vm, "CheckSummary", "Проверяю…");
+                        SetProp(vm, "Checking", true);
+                        Pump();
+                        if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Проверяю…" && t.IsVisible) is null) throw new Exception("Нет «Проверяю…» в карточке");
+                        Snap(w, Path.Combine(snapDir, $"{theme}-home-checking.png"));
+                        SetProp(vm, "Checking", false);
+                        SetProp(vm, "CheckSummary", summary);
+                        foreach (var r in rows) vm.CheckRows.Add(r);
+                        Pump();
                     }
                     if (page == Pages.Diag && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } sv)
                     {
+                        // «Другой DNS» с главной (UX-аудит 2, п. 4): к выбору DNS этого компьютера, список вариантов раскрыт.
+                        w.ShowSpot(Spot.PcDns);
+                        Pump();
+                        var picker = Find<DnsPickerView>(Find<TabControl>(w)!, v => v.IsVisible && v.DataContext == vm.PcDns)!;
+                        var combo = Find<ComboBox>(picker)!;
+                        if (!combo.IsDropDownOpen || sv.VerticalOffset == 0) throw new Exception("«Другой DNS» не привёл к выбору DNS");
+                        Snap(w, Path.Combine(snapDir, $"{theme}-diag-choose-dns.png"));
+                        combo.IsDropDownOpen = false;
+                        sv.ScrollToHome();
+                        Pump();
                         sv.ScrollToEnd();
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-diag-end.png"));

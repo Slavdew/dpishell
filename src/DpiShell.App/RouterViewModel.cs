@@ -557,6 +557,9 @@ public sealed class RouterViewModel : Observable, IDisposable
     string _homeTitle = "", _homeDetail = "", _warnings = "", _toggleText = "Включить на роутере";
     public string HomeTitle { get => _homeTitle; private set => Set(ref _homeTitle, value); }
     public string HomeDetail { get => _homeDetail; private set => Set(ref _homeDetail, value); }
+    string _homeLine = "";
+    /// <summary>Пояснение в строке роутера на главной: первое предупреждение, если есть, иначе <see cref="HomeDetail"/>.</summary>
+    public string HomeLine { get => _homeLine; private set => Set(ref _homeLine, value); }
     public string Warnings { get => _warnings; private set { if (Set(ref _warnings, value)) Raise(nameof(HasWarnings)); } }
     public bool HasWarnings => Warnings.Length > 0;
     public string ToggleText { get => _toggleText; private set => Set(ref _toggleText, value); }
@@ -594,8 +597,9 @@ public sealed class RouterViewModel : Observable, IDisposable
             WarningRows.Clear();
             foreach (var r in rows) WarningRows.Add(r);
         }
-        // Есть что исправить — вместо стратегии и времени (они на вкладке) первое предупреждение: видно, что не так (UX-аудит 2, п. 7).
-        HomeDetail = !Selecting && FirstFix() is { } fix ? fix : string.Join(", ", parts.Where(p => p.Length > 0));
+        HomeDetail = string.Join(", ", parts.Where(p => p.Length > 0));
+        // Строка на главной: есть что исправить — вместо стратегии и времени (они на вкладке) первое предупреждение (UX-аудит 2, п. 7).
+        HomeLine = !Selecting && FirstFix() is { } fix ? fix : HomeDetail;
         Warnings = string.Join(" · ", rows.Select(r => r.Text));
         ToggleText = enabled ? "Выключить на роутере" : "Включить на роутере";
         Raise(nameof(RouterEnabled));

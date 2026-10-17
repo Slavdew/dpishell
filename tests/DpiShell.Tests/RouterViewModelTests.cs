@@ -59,7 +59,8 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.Equal("Обход делает роутер", vm.HomeTitle);
         // Есть предупреждение — на главной число и его текст вместо стратегии и времени (UX-аудит 2, п. 7).
         Assert.Equal("· 1 предупреждение", vm.HomeFixText);
-        Assert.Equal("Ускорение сети на роутере мешает обходу", vm.HomeDetail);
+        Assert.Equal("Ускорение сети на роутере мешает обходу", vm.HomeLine);
+        Assert.StartsWith("Стратегия general (ALT10), проверено в ", vm.HomeDetail);   // на вкладке — как было
         Assert.Equal("Ускорение сети на роутере мешает обходу", vm.Warnings);
         Assert.Equal("Исправить", Assert.Single(vm.WarningRows).Fix);
         Assert.Single(vm.Strategies);

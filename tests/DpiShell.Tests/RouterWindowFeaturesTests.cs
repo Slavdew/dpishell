@@ -309,7 +309,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         // Простыми словами, без «временных меток» (п. 8); на главной — число и текст первого предупреждения (п. 7).
         Assert.Equal(RouterViewModel.TimestampsNeed, vm.TimestampsNote);
         Assert.Equal("· 2 предупреждения", vm.HomeFixText);   // и ускорение сети у фейкового роутера
-        Assert.Equal("Ускорение сети на роутере мешает обходу", vm.HomeDetail);
+        Assert.Equal("Ускорение сети на роутере мешает обходу", vm.HomeLine);
         await vm.CheckTimestampsAsync(ask: true);   // кнопка «Включить»
         Assert.True(helper);
         Assert.False(vm.TimestampsNeedAction);

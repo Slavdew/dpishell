@@ -71,7 +71,7 @@
                                             </ItemsControl>
                                             <TextBlock Text="{Binding CheckedAt}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                         </WrapPanel>
-                                        <Expander Header="Подробнее" Margin="0,6,0,0">
+                                        <Expander Header="Подробнее" Margin="0,6,0,0" Visibility="{Binding CheckRows.Count, Converter={StaticResource NonZero}}">
                                             <ItemsControl ItemsSource="{Binding CheckRows}" Margin="0,4,0,0">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
@@ -140,8 +140,8 @@
                                 <TextBlock Text="{Binding HomeTitle}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="NoWrap" Margin="0,0,10,0" />
                                 <TextBlock Text="{Binding HomeFixText}" Foreground="{DynamicResource Danger}" VerticalAlignment="Center" TextWrapping="NoWrap" Margin="0,0,10,0"
                                            Visibility="{Binding HasHomeFix, Converter={StaticResource Vis}}" />
-                                <TextBlock Text="{Binding HomeDetail}" Style="{StaticResource Hint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
-                                           ToolTip="{Binding HomeDetail}" />
+                                <TextBlock Text="{Binding HomeLine}" Style="{StaticResource Hint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                                           ToolTip="{Binding HomeLine}" />
                             </DockPanel>
                         </Border>
 

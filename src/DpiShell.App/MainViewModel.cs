@@ -1226,7 +1226,12 @@ public sealed partial class MainViewModel : Observable
 
     string _targetsText = "";
     /// <summary>Черновик до «Сохранить»: сохраняет помощник.</summary>
-    public string TargetsText { get => _targetsText; set { if (Set(ref _targetsText, value)) Raise(nameof(TargetsDirty)); } }
+    public string TargetsText
+    {
+        get => _targetsText;
+        // Правка после «Сохранено адресов: N» — прежний итог уже не про то, что в поле.
+        set { if (Set(ref _targetsText, value)) { TargetsMessage = ""; Raise(nameof(TargetsDirty)); } }
+    }
 
     /// <summary>
     /// В поле не то, что сохранено (UX-аудит 2, п. 15; п. 33 первого круга): подбор берёт сохранённое у помощника,
