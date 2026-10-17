@@ -582,19 +582,57 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.Contains("нет своих адресов", _said[^1]);
     }
 
+    /// <summary>Выбор «только Свои адреса» остался от прежней установки, а адресов нет нигде — снять их и подобрать по умолчанию.</summary>
     [Fact]
-    public async Task SelectOnlyUser_EmptyEverywhere_ShowsRouterText()
+    public async Task SelectOnlyUser_EmptyEverywhere_DropsUser_SelectsDefaults()
     {
         using var r = new FakeRouter { UserTargets = [] };
         var vm = await Connected(r);
         vm.SelectOptions = () => (["user"], true);
+        IReadOnlyList<string>? marked = null;
+        vm.SetSelectGroups = g => marked = g;
         vm.Confirm = _ => throw new InvalidOperationException("на ПК адресов нет — спрашивать нечего");
 
         await vm.StartSelectAsync(deep: false);
 
-        Assert.Equal(1, Count(r, "select_start"));
-        Assert.Contains("Список своих адресов на роутере пуст", _said[^1]);
-        Assert.False(vm.Selecting);
+        Assert.Equal(2, Count(r, "select_start"));          // отказ роутера, повтор без «Своих адресов»
+        Assert.Equal(["youtube", "discord"], Args(r, "select_start")["groups"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.Equal(["youtube", "discord"], marked);
+        Assert.Contains(_said, s => s.Contains("Скопировать с ПК"));
+        Assert.StartsWith("Включена на роутере: ", vm.ResultText);
+    }
+
+    [Fact]
+    public async Task SelectOnlyUser_KnownEmptyEverywhere_DropsUserBeforeStart()
+    {
+        using var r = new FakeRouter { UserTargets = [] };
+        var vm = await Connected(r);
+        await vm.LoadTargetsAsync();
+        vm.SelectOptions = () => (["user"], true);
+        IReadOnlyList<string>? marked = null;
+        vm.SetSelectGroups = g => marked = g;
+
+        await vm.StartSelectAsync(deep: false);
+
+        Assert.Equal(1, Count(r, "select_start"));          // без лишнего отказа роутера
+        Assert.Equal(["youtube", "discord"], marked);
+    }
+
+    /// <summary>Удалили DpiShell с роутера и поставили заново — выбор групп и свои адреса прежнего роутера забыты.</summary>
+    [Fact]
+    public async Task ForgetRouterSetup_ResetsGroupsAndTargets()
+    {
+        using var r = new FakeRouter();
+        var vm = await Connected(r);
+        await vm.LoadTargetsAsync();
+        Assert.NotEmpty(vm.Targets);
+        IReadOnlyList<string>? marked = null;
+        vm.SetSelectGroups = g => marked = g;
+
+        vm.ForgetRouterSetup();
+
+        Assert.Empty(vm.Targets);
+        Assert.Equal(["youtube", "discord"], marked);
     }
 
     [Fact]

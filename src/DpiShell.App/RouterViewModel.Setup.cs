@@ -103,6 +103,7 @@ public sealed partial class RouterViewModel
     internal async Task<bool> ConnectAfterInstallAsync(string password)
     {
         ClearRemoved();
+        ForgetRouterSetup();
         for (int i = 0; i < 4; i++)
         {
             if (i > 0) await Task.Delay(PollInterval * 2);
@@ -356,6 +357,7 @@ public sealed partial class RouterViewModel
         Connected = false;
         Status = null;
         Strategies.Clear();
+        ForgetRouterSetup();
         _removed = true;
         try { await DetectAsync(); }
         catch (RouterException) { SetDetection(null); }
