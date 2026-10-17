@@ -3,7 +3,7 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- Окно без прав (docs/11-helper-spec.md): всё, что их требует, делает служба-помощник DpiShellHelper.
+        <!-- Окно без прав (docs/dev/helper-protocol.md): всё, что их требует, делает служба-помощник DpiShellHelper.
              Права запрашиваются один раз — при установке помощника (DpiShell.exe -install-helper через runas). -->
         <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>

@@ -6,7 +6,7 @@ using DpiShell.Core.Router;
 namespace DpiShell.App;
 
 /// <summary>
-/// Настройки окна — %LocalAppData%\DpiShell\window.json (11-helper-spec §4): принадлежат пользователю, права не нужны.
+/// Настройки окна — %LocalAppData%\DpiShell\window.json (helper-protocol §4): принадлежат пользователю, права не нужны.
 /// Тема, крестик, адрес и пароль роутера (пароль — DPAPI CurrentUser, см. RouterSecrets). Обходные настройки — у помощника.
 /// </summary>
 public sealed class WindowSettings

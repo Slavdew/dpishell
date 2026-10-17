@@ -16,7 +16,7 @@ public sealed class InfoButton : Button
     public static readonly DependencyProperty TopicProperty =
         DependencyProperty.Register(nameof(Topic), typeof(string), typeof(InfoButton), new PropertyMetadata(null));
 
-    /// <summary>Ключ раздела в <see cref="InfoTexts"/> (заголовок из docs/10-info-texts.md).</summary>
+    /// <summary>Ключ раздела в <see cref="InfoTexts"/> (заголовок из docs/info-texts.md).</summary>
     public string? Topic { get => (string?)GetValue(TopicProperty); set => SetValue(TopicProperty, value); }
 
     /// <summary>Что покажет карточка.</summary>

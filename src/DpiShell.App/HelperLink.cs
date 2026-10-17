@@ -38,7 +38,7 @@ public interface IHelperSetup
     Task<SetupOutcome> RunElevatedAsync(string arguments);
 }
 
-/// <summary>Сам DpiShell.exe через ShellExecute «runas» — единственный запрос прав (11-helper-spec §2).</summary>
+/// <summary>Сам DpiShell.exe через ShellExecute «runas» — единственный запрос прав (helper-protocol §2).</summary>
 public sealed class ElevatedSelf : IHelperSetup
 {
     const int ErrorCancelled = 1223;

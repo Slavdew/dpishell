@@ -3,7 +3,7 @@ using System.Security.Principal;
 namespace DpiShell.Core.Helper;
 
 /// <summary>
-/// Установка помощника (11-helper-spec §2): копия программы и data\ в закрытую %ProgramData%\DpiShell\helper\,
+/// Установка помощника (helper-protocol §2): копия программы и data\ в закрытую %ProgramData%\DpiShell\helper\,
 /// служба DpiShellHelper (LocalSystem, автозапуск, перезапуск при сбое), SID пользователя окна — там же.
 /// Работает только с правами администратора. Сборка аргументов sc и путей — чистые функции (их проверяют тесты).
 /// </summary>

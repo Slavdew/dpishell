@@ -19,7 +19,7 @@ public partial class App : Application
         TaskScheduler.UnobservedTaskException += (_, a) => a.SetObserved();
         AppDomain.CurrentDomain.UnhandledException += (_, a) => TryLog(a.ExceptionObject as Exception);
 
-        // Тот же DpiShell.exe — и помощник (11-helper-spec §2): служба и её установка/удаление окна не открывают.
+        // Тот же DpiShell.exe — и помощник (helper-protocol §2): служба и её установка/удаление окна не открывают.
         if (HelperMode(e.Args) is { } code)
         {
             Shutdown(code);
