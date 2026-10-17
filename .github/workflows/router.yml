@@ -163,7 +163,8 @@ jobs:
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
-          if [ -z "$RELEASE_SIGNING_KEY" ]; then echo '::warning::нет секрета RELEASE_SIGNING_KEY — релиз без release.json.sig'; exit 0; fi
+          # Окно ПК принимает выпуск только с верной подписью — без секрета релиз не выпускаем.
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then echo 'нет секрета RELEASE_SIGNING_KEY — выпуск без подписи окно не примет'; exit 1; fi
           printf '%s\n' "$RELEASE_SIGNING_KEY" > key.pem
           chmod 600 key.pem
           # Секрет должен соответствовать проверочному ключу программы (packaging/keys/release-ed25519.pem).
@@ -172,13 +173,18 @@ jobs:
             || { rm -f key.pem; echo 'ключ в секрете не соответствует packaging/keys/release-ed25519.pem'; exit 1; }
           openssl pkeyutl -sign -inkey key.pem -rawin -in feed/release.json | base64 -w0 > feed/release.json.sig
           rm -f key.pem secret.pub
+          base64 -d feed/release.json.sig > sig.bin
+          openssl pkeyutl -verify -pubin -inkey packaging/keys/release-ed25519.pem -rawin -in feed/release.json -sigfile sig.bin \
+            || { echo 'подпись release.json не прошла проверку'; exit 1; }
+          rm -f sig.bin
+          # Хеши пакетов в release.json — те же, что у загружаемых файлов.
+          (cd feed && python3 -c "import json,hashlib,sys;d=json.load(open('release.json',encoding='utf-8'));[sys.exit('sha256 '+a['name']+' не совпал') for a in d['assets'] if hashlib.sha256(open(a['name'],'rb').read()).hexdigest()!=a['sha256']]")
 
       - name: Релиз GitHub
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 -c "import json;d=json.load(open('feed/release.json',encoding='utf-8'));print(chr(10).join('- '+c for c in d['changes']) or '-')" > notes.md
-          files="feed/*.apk feed/release.json feed/dpishell.pem"
-          [ -f feed/release.json.sig ] && files="$files feed/release.json.sig"
+          files="feed/*.apk feed/release.json feed/release.json.sig feed/dpishell.pem"
           # --latest=false: «последний» релиз репозитория — всегда программы для Windows (releases/latest/download/ — её источник обновлений).
           gh release create "$GITHUB_REF_NAME" $files --repo "$GITHUB_REPOSITORY" --latest=false --title "DpiShell для роутера ${GITHUB_REF_NAME#router-v}" --notes-file notes.md
