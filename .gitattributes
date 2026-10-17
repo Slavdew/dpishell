@@ -6,3 +6,8 @@
 
 # Файлы для роутера (sh, ucode, json): только LF, иначе скрипты на OpenWRT не запустятся
 router/** text eol=lf
+
+# Данные: хеши в data/data.json считаются по байтам с LF — CRLF при выгрузке на Windows их ломает
+data/**/*.json text eol=lf
+data/**/*.txt text eol=lf
+data/*.json text eol=lf
