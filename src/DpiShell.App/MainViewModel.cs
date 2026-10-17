@@ -543,7 +543,7 @@ public sealed partial class MainViewModel : Observable
         Raise(nameof(CanChoose)); Raise(nameof(TargetsDirty));
         Router.PcChanged();
         Raise(nameof(StrategyHeader));
-        Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint));
+        Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint)); Raise(nameof(HasCloseHint));
         // Автозапуск по умолчанию следует за режимом — когда режим известен (помощник ответил).
         if (Live is not null) Autostart.OnRunMode(ServiceMode);
         Updates.Refresh();
@@ -653,13 +653,13 @@ public sealed partial class MainViewModel : Observable
 
     async Task SetRunModeAsync(bool service)
     {
-        await WithHelper(service ? "Перехожу в режим службы…" : "Перехожу на работу из программы…", async c =>
+        await WithHelper(service ? "Перехожу на работу без окна…" : "Перехожу на работу из программы…", async c =>
         {
             await c.SetRunModeAsync(service);
             await FetchAsync(full: false);
         });
         // И при отказе (идёт другая операция, нет помощника) — галочка показывает настоящий режим.
-        Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint));
+        Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint)); Raise(nameof(HasCloseHint));
         await RefreshStatusAsync();
     }
 
@@ -1482,9 +1482,9 @@ public sealed partial class MainViewModel : Observable
         Raise(nameof(CloseTray)); Raise(nameof(CloseExit));
     }
 
-    public string CloseHint => ServiceMode
-        ? "Обход работает и без окна: его выключает только кнопка «Выключить»."
-        : "Без режима службы закрытие программы выключает и обход.";
+    /// <summary>Только без «Работать, даже когда окно закрыто» (UX-аудит 2, п. 12): с ней подсказка под галочкой уже всё сказала.</summary>
+    public string CloseHint => ServiceMode ? "" : "Закрытие программы выключит обход.";
+    public bool HasCloseHint => CloseHint.Length > 0;
 
     /// <summary>Восстановить ядро — помощник останавливает обход, ставит файлы заново и возвращает как было.</summary>
     Task RepairCoreAsync() => WithHelper("Восстанавливаю ядро…", async c =>

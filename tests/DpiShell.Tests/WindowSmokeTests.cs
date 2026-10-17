@@ -548,7 +548,7 @@ public sealed class WindowSmokeTests
 
     /// <summary>
     /// Главная (UX-аудит): одна главная кнопка, стратегии свёрнуты под «Сменить стратегию» (раскрываются — список с выбранной),
-    /// помехи — строкой «Нашлось N помех», раскрыта одна самая важная, остальные — по «Показать все».
+    /// помехи — строкой «Нашлось N помех», раскрыта одна самая важная, остальные — по «Ещё N».
     /// </summary>
     static void AssertHome(Window w, MainViewModel vm)
     {
@@ -566,16 +566,19 @@ public sealed class WindowSmokeTests
         if ((list.SelectedItem as StrategyChoice)?.Id != vm.ChosenStrategyId) throw new Exception("В списке не выделена выбранная стратегия");
         vm.ShowStrategies = false;
 
-        // Наполнение: подмена DNS, VPN и обновление списков — видна только первая (DNS), заголовок считает помехи.
-        if (Find<TextBlock>(tabs, t => string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text)) == "⚠ Нашлось 2 помехи · есть обновление списков" && t.IsVisible) is null)
+        // Наполнение: подмена DNS и VPN — видна только первая (DNS), заголовок и «Ещё 1» считают одно и то же (UX-аудит 2, п. 6).
+        // Обновление списков — не помеха: видно всегда, не под ⚠.
+        if (Find<TextBlock>(tabs, t => string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text)) == "⚠ Нашлось 2 помехи" && t.IsVisible) is null)
             throw new Exception($"Нет строки «Нашлось 2 помехи»: «{vm.IssuesTitle}», видна: {vm.HasIssuesHeader}");
         Button? Visible(string text) => Find<Button>(tabs, b => b.Content as string == text && b.IsVisible);
+        if (Visible("Ещё 1") is null) throw new Exception("Нет «Ещё 1»: " + vm.IssuesToggleText);
         if (Visible("Включить защищённый DNS") is null) throw new Exception("Не видна самая важная помеха (DNS)");
-        if (Visible("Установить обновление") is not null || Visible("Понятно, не показывать") is not null) throw new Exception("Свёрнутые помехи видны");
+        if (!vm.Updates.DataAvailable || Visible("Обновить списки") is null) throw new Exception("Обновление списков спрятано вместе с помехами");
+        if (Visible("Понятно, не показывать") is not null) throw new Exception("Свёрнутые помехи видны");
         vm.ShowAllIssues = true;
         Pump();
-        if (!vm.Updates.DataAvailable || Visible("Установить обновление") is null || Visible("Понятно, не показывать") is null)
-            throw new Exception("«Показать все» не раскрыл помехи (обновление списков, VPN)");
+        if (Visible("Понятно, не показывать") is null)
+            throw new Exception("«Ещё 1» не раскрыл помехи (VPN)");
         vm.ShowAllIssues = false;
         Pump();
     }

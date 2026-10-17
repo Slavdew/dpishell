@@ -180,7 +180,7 @@
                                     </ListBox>
                                 </StackPanel>
 
-                                <!-- Помехи: «Нашлось N помех», раскрыта самая важная, остальные — по «Показать все». -->
+                                <!-- Помехи: «Нашлось N помех», раскрыта самая важная, остальные — по «Ещё N». Обновление списков — не помеха, карточкой ниже. -->
                                 <DockPanel Margin="0,0,0,8" Visibility="{Binding HasIssuesHeader, Converter={StaticResource Vis}}">
                                     <Button DockPanel.Dock="Right" Content="{Binding IssuesToggleText}" Style="{StaticResource LinkButton}" Command="{Binding ToggleIssuesCmd}" VerticalAlignment="Center" />
                                     <TextBlock Style="{StaticResource H2}" Margin="0" VerticalAlignment="Center"><Run Text="⚠ " Foreground="{DynamicResource WarnLine}" /><Run Text="{Binding IssuesTitle, Mode=OneWay}" /></TextBlock>
@@ -224,7 +224,7 @@
                                 <!-- Обновление списков (architecture.md «Обновления данных»): видно, только когда у источника данные новее. -->
                                 <Border Style="{StaticResource Card}" Padding="14" Visibility="{Binding ShowUpdate, Converter={StaticResource Vis}}">
                                     <DockPanel DataContext="{Binding Updates}">
-                                        <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="Установить обновление" Command="{Binding InstallCmd}"
+                                        <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="Обновить списки" Command="{Binding InstallCmd}"
                                                 VerticalAlignment="Center" Margin="12,0,0,0" />
                                         <TextBlock Text="{Binding AvailableText}" VerticalAlignment="Center" TextWrapping="Wrap" />
                                     </DockPanel>
@@ -1286,7 +1286,7 @@
                                         <RadioButton Content="Сворачивать в трей" IsChecked="{Binding CloseTray}" Margin="0,3,24,3" />
                                         <RadioButton Content="Закрывать программу" IsChecked="{Binding CloseExit}" Margin="0,3,24,3" />
                                     </WrapPanel>
-                                    <TextBlock Text="{Binding CloseHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" />
+                                    <TextBlock Text="{Binding CloseHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" Visibility="{Binding HasCloseHint, Converter={StaticResource Vis}}" />
                                 </StackPanel>
                             </Border>
 
@@ -1311,9 +1311,10 @@
                                     <TextBlock Text="{Binding AppText}" Margin="0,8,0,0" TextWrapping="Wrap"
                                                Visibility="{Binding AppAvailable, Converter={StaticResource Vis}}" />
                                     <WrapPanel Margin="0,10,0,0">
-                                        <Button ContentTemplate="{StaticResource Shield}" Content="Установить обновление" Style="{StaticResource Primary}" Command="{Binding InstallCmd}"
+                                        <!-- Списки и программа — разными словами (UX-аудит 2, п. 13). -->
+                                        <Button ContentTemplate="{StaticResource Shield}" Content="Обновить списки" Style="{StaticResource Primary}" Command="{Binding InstallCmd}"
                                                 Visibility="{Binding DataAvailable, Converter={StaticResource Vis}}" />
-                                        <Button Content="Скачать новую версию" Command="{Binding OpenReleaseCmd}"
+                                        <Button Content="{Binding AppButtonText}" Command="{Binding OpenReleaseCmd}"
                                                 Visibility="{Binding AppAvailable, Converter={StaticResource Vis}}" />
                                         <Button Content="Проверить обновления" Command="{Binding CheckCmd}" />
                                     </WrapPanel>
