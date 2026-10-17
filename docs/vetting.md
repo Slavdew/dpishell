@@ -8,7 +8,7 @@
 - Стратегии Flowseal: `.bat` не исполняем и в репозиторий не кладём — из них вручную выписываются только аргументы winws, каждый сверяется с `winws --help` закреплённой версии; аргументы, запускающие внешние программы или указывающие на файлы вне наших `lists/`/`fake/`, отбрасываются. Разрешённые параметры — белый список в `Strategies.cs` (`WinwsArgs`) и `router/dpishell/files/usr/share/dpishell/roles.json`.
 - Списки: только строки-домены/подсети, проверка регулярным выражением при загрузке; всё прочее отбрасывается.
 - Фейки `.bin`: проверяем, что это то, чем назван файл (TLS ClientHello / QUIC Initial / STUN), и размер в разумных пределах.
-- Код чужих проектов не копируем; NuGet-пакеты — только широко известные, с закреплённой версией.
+- Код чужих проектов не копируем; NuGet-пакеты — только широко известные, с закреплённой версией, не моложе двух недель, с живым сопровождением и без открытых уязвимостей (раздел «Библиотеки NuGet»).
 - На машине пользователя: хеши ядра проверяются перед каждым запуском; данные ставятся только при совпадении sha256 с манифестом `data/data.json`; IP-список проходит валидатор; hosts-кандидаты — белый список доменов и живая проверка сертификата.
 
 ## Ядро: bol-van/zapret v72.13
@@ -46,6 +46,16 @@
 - Пустой include-лист в режиме «Все адреса»: по исходнику `nfq/ipset.c` v72.13 (`IpsetCheck_`, «all include lists are empty means check passes») — проверка проходит для любого адреса; поэтому в этом режиме подставляется **только** пустой `ipset-any.txt`, без `user-ipset.txt`.
 - Манифест `data/data.json` перечисляет все файлы `data/` (кроме самого манифеста и `update-sources.json`) с sha256 — по нему помощник ставит обновления. Тест `PackageManifest_CoversEveryDataFile_AndPassesUpdateRules` ловит файл, не попавший в манифест, и несовпавший хеш: правишь данные — правь и `data.json` (и `version`).
 
+## Библиотеки NuGet
+
+### BouncyCastle.Cryptography 2.7.0 (проверка подписей ed25519)
+- Зачем: в .NET 10 нет ed25519, а подписи выпусков (`release.json.sig`) и манифеста данных (`data.json.sig`) — ed25519 (`openssl pkeyutl -sign -rawin` в CI). Используется только проверка (`ReleaseSignature`), закрытого ключа в программе нет.
+- Выбор: управляемый код без нативных библиотек — single-file exe не распаковывает лишнюю DLL рядом (антивирусы, права). NSec.Cryptography 26.4.0 (MIT) отклонена: тянет нативный libsodium.
+- Пакет: `BouncyCastle.Cryptography` 2.7.0, опубликован на nuget.org 2026-07-30 (старше двух недель), MIT, без зависимостей (`net6.0`, `netstandard2.0`, `net461`); nuspec ссылается на `bcgit/bc-csharp`, ветка `release/v2.7`, коммит `4007498b`. sha256 `.nupkg` `f091ffcc…6241`.
+- `BouncyCastle.Cryptography.dll` (5,2 МБ, версия файла 2.7.0.16391) подписан Authenticode: Legion of the Bouncy Castle Inc. (Get-AuthenticodeSignature — Valid).
+- Сопровождение: репозиторий не в архиве, последние правки 2026-09, ~1,9 тыс. звёзд, выпуски 2.6.0–2.7.0 в 2025–2026. Известные уязвимости (GitHub Advisory, NuGet) — только `< 2.3.1` (бесконечный цикл на подписи/ключе, Marvin RSA, разбор сертификатов), в 2.7.0 исправлены.
+- Совместимость с CI: тест `Openssl_signature_verifies` проверяет подпись, сделанную `openssl pkeyutl -rawin` (OpenSSL 3.5), тем же кодом.
+
 ## Лицензии в portable-архиве
 
-`packaging/THIRD-PARTY-NOTICES.txt` — откуда что и полные тексты: zapret — MIT (`zapret-v72.13/docs/LICENSE.txt` из архива релиза в `vendor/`); Flowseal — MIT (`data/licenses/flowseal-MIT.txt`); WinDivert — по выбору LGPL v3 или GPL v2 (GitHub API: `NOASSERTION`, условия — reqrypt.org/windivert.html); cygwin1.dll — LGPL v3; .NET 10 (Microsoft.NETCore.App и WindowsDesktop) — MIT + THIRD-PARTY-NOTICES пакета среды. Тексты GPL v2/v3 и LGPL v3 — канонические файлы FSF (sha256 LGPL v3 `a853c2ff…9d1c`, GPL v3 `8ceb4b9e…b903`, GPL v2 `8177f975…0643`). **IP-список V3nilla/IPSets-For-Bypass-in-Russia: лицензия у источника не объявлена** (GitHub API `license: null`) — перечень адресов сетей, идёт через Flowseal; отмечено в уведомлениях. DpiShell — MIT (`LICENSE`).
+`packaging/THIRD-PARTY-NOTICES.txt` — откуда что и полные тексты: zapret — MIT (`zapret-v72.13/docs/LICENSE.txt` из архива релиза в `vendor/`); Flowseal — MIT (`data/licenses/flowseal-MIT.txt`); WinDivert — по выбору LGPL v3 или GPL v2 (GitHub API: `NOASSERTION`, условия — reqrypt.org/windivert.html); cygwin1.dll — LGPL v3; .NET 10 (Microsoft.NETCore.App и WindowsDesktop) — MIT + THIRD-PARTY-NOTICES пакета среды; BouncyCastle.Cryptography — MIT (`LICENSE.md` пакета). Тексты GPL v2/v3 и LGPL v3 — канонические файлы FSF (sha256 LGPL v3 `a853c2ff…9d1c`, GPL v3 `8ceb4b9e…b903`, GPL v2 `8177f975…0643`). **IP-список V3nilla/IPSets-For-Bypass-in-Russia: лицензия у источника не объявлена** (GitHub API `license: null`) — перечень адресов сетей, идёт через Flowseal; отмечено в уведомлениях. DpiShell — MIT (`LICENSE`).

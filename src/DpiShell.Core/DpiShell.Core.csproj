@@ -15,6 +15,9 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.13" />
     <!-- Хост помощника (служба Windows DpiShellHelper, docs/dev/helper-protocol.md). Версия закреплена. -->
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.13" />
+    <!-- Проверка подписей ed25519 выпусков и манифеста данных (ReleaseSignature). Управляемый код, без нативных библиотек;
+         проверка — docs/vetting.md «Библиотеки». Версия закреплена. -->
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
   </ItemGroup>
 
 </Project>
