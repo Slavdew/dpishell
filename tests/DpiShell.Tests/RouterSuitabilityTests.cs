@@ -164,7 +164,10 @@ public class RouterSuitabilityTests
     [InlineData("apk", "25.12-SNAPSHOT", "0.2.0")]
     [InlineData("apk", "24.10.2", null)]
     [InlineData("opkg", "24.10.2", null)]
-    [InlineData("apk", "непонятно", null)]
+    // Сборка на основе OpenWrt со своей версией вместо версии OpenWrt — выбор по пакетному менеджеру (живой роутер 2026-10-17).
+    [InlineData("apk", "1.4.8", "0.2.0")]
+    [InlineData("apk", "непонятно", "0.2.0")]
+    [InlineData("opkg", "1.4.8", null)]
     [InlineData(null, "25.12.0", null)]
     public void ChooseRelease(string? pkg, string release, string? expected) => Assert.Equal(expected, Releases.Choose(pkg, release)?.Version);
 

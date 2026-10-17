@@ -95,10 +95,14 @@ public sealed record RouterReleases(int Schema, RouterFeedInfo Feed, List<Router
         if (pkg is null || openwrtRelease is null) return null;
         var mainSnapshot = string.Equals(openwrtRelease.Trim(), "SNAPSHOT", StringComparison.OrdinalIgnoreCase);
         var ver = mainSnapshot ? null : OpenWrtVersion.Parse(openwrtRelease);
-        if (!mainSnapshot && ver is null) return null;
+        // Сборки на основе OpenWrt пишут в DISTRIB_RELEASE свою версию («1.4.8»), а не версию OpenWrt (год.месяц, 18.06 и новее) —
+        // найдено на живом роутере 2026-10-17. Тогда версию основы не знаем и выбираем по пакетному менеджеру: apk — только с OpenWrt 25.
+        var ownVersion = !mainSnapshot && (ver is null || ver.Major < 18);
         return Releases
             .Where(r => r.Pkg == pkg)
-            .Where(r => mainSnapshot ? r.Openwrt.Snapshot : OpenWrtVersion.Parse(r.Openwrt.Min) is { } min && ver!.CompareTo(min) >= 0)
+            .Where(r => ownVersion ? true
+                      : mainSnapshot ? r.Openwrt.Snapshot
+                      : OpenWrtVersion.Parse(r.Openwrt.Min) is { } min && ver!.CompareTo(min) >= 0)
             .OrderByDescending(r => OpenWrtVersion.Parse(r.Version) ?? new Version(0, 0))
             .FirstOrDefault();
     }
