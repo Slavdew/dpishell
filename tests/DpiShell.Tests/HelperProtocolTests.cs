@@ -109,6 +109,9 @@ public class HelperProtocolTests
         // Команды DNS описаны в helper-protocol §3 (часть старых там записана сокращённо: hosts_check/preview/…).
         var doc = File.ReadAllText(Path.Combine(Path.GetDirectoryName(Repo.Data)!, "docs", "dev", "helper-protocol.md"));
         Assert.All(["dns_status", "dns_set {preset, ips?, doh?, fallback?}", "dns_restore"], cmd => Assert.Contains("`" + cmd + "`", doc));
+        // Список команд в status — тот же белый список; версия протокола — та, что записана в helper-protocol §6.
+        Assert.Equal(HelperCommands.Specs.Keys.Order(StringComparer.Ordinal), HelperCommands.Names);
+        Assert.Contains($"Текущая версия — `{HelperProtocol.Api}`", doc);
         // Только чтение — не занимает «одну операцию за раз».
         Assert.Equal(["cancel", "details", "dns_status", "hosts_preview", "read_results", "status"],
             HelperCommands.Specs.Values.Where(s => !s.Exclusive).Select(s => s.Name).Order());
@@ -117,9 +120,60 @@ public class HelperProtocolTests
     [Fact]
     public void Error_texts_are_russian_and_distinct()
     {
-        string[] codes = [HelperErrors.Invalid, HelperErrors.Busy, HelperErrors.Conflict, HelperErrors.Failed, HelperErrors.Denied, HelperErrors.Cancelled];
+        string[] codes = [HelperErrors.Invalid, HelperErrors.Busy, HelperErrors.Conflict, HelperErrors.Failed, HelperErrors.Denied, HelperErrors.Cancelled, HelperErrors.Incompatible];
         var texts = codes.Select(HelperErrors.Text).ToList();
         Assert.Equal(codes.Length, texts.Distinct().Count());
         Assert.All(texts, t => Assert.Matches("[а-яА-Я]", t));
+    }
+
+    // ---------- совместимость окна и помощника (helper-protocol §6) ----------
+
+    [Theory]
+    [InlineData("1.1", HelperCompatLevel.Ok)]
+    [InlineData(null, HelperCompatLevel.MinorDiffers)]      // помощник до 1.1 не присылает api — «1.0»
+    [InlineData("1.0", HelperCompatLevel.MinorDiffers)]
+    [InlineData("1.7", HelperCompatLevel.MinorDiffers)]
+    [InlineData("2.0", HelperCompatLevel.Incompatible)]
+    [InlineData("0.9", HelperCompatLevel.Incompatible)]
+    [InlineData("мусор", HelperCompatLevel.Incompatible)]
+    public void Compat_levels(string? helperApi, HelperCompatLevel level)
+    {
+        var c = HelperCompat.Evaluate(helperApi, null, "1.0.0.0", windowApi: "1.1", windowVersion: "1.0.0.0");
+        Assert.Equal(level, c.Level);
+        Assert.Equal(level == HelperCompatLevel.Ok, c.Message is null);
+    }
+
+    [Fact]
+    public void Compat_incompatible_allows_only_status_and_asks_reinstall()
+    {
+        var c = HelperCompat.Evaluate("2.0", ["status", "enable"], "1.0.0.0", "1.1", "1.0.0.0");
+        Assert.True(c.Allows("status"));
+        Assert.False(c.Allows("enable"));
+        Assert.False(c.Supports("enable"));
+        Assert.True(c.NeedsReinstall);
+        Assert.Contains("переустановите", c.Message);
+    }
+
+    [Fact]
+    public void Compat_minor_disables_unknown_commands_only()
+    {
+        var c = HelperCompat.Evaluate("1.0", ["status", "enable"], "1.0.0.0", "1.1", "1.0.0.0");
+        Assert.True(c.Allows("dns_set"));            // отправить можно — помощник сам ответит invalid
+        Assert.False(c.Supports("dns_set"));         // но кнопка неактивна
+        Assert.True(c.Supports("enable"));
+        Assert.Contains("Обновите помощника", c.Message);
+        // Список неизвестен (помощник до 1.1) — не ограничиваем.
+        Assert.True(HelperCompat.Evaluate(null, null, "1.0.0.0", "1.1", "1.0.0.0").Supports("dns_set"));
+    }
+
+    [Fact]
+    public void Compat_older_helper_program_asks_update()
+    {
+        var c = HelperCompat.Evaluate("1.1", null, "1.0.0.0", "1.1", "1.2.0.0");
+        Assert.Equal(HelperCompatLevel.Ok, c.Level);
+        Assert.True(c.HelperOutdated);
+        Assert.True(c.NeedsReinstall);
+        Assert.Contains("обновите", c.Message);
+        Assert.False(HelperCompat.Evaluate("1.1", null, "1.2.0.0", "1.1", "1.2.0").HelperOutdated);
     }
 }

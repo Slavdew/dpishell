@@ -61,7 +61,12 @@ public sealed record HelperStatus(
     IReadOnlyList<StrategyInfo> Strategies, IReadOnlyList<GroupInfo> Groups,
     IReadOnlyList<string> SelectedGroups, IReadOnlyList<string> UserTargets, IReadOnlyList<string> Fallbacks,
     bool TimestampsEnabledByUs, bool HostsFix, IReadOnlyList<Conflict> Foreign,
-    string HelperVersion, string? DataVersion = null);
+    string HelperVersion, string? DataVersion = null,
+    string? Api = null, IReadOnlyList<string>? Commands = null)
+{
+    // Api — версия протокола «мажор.минор», Commands — белый список этого помощника (helper-protocol §6). Заполняет сервер;
+    // помощник до 1.1 их не присылает (null = «1.0», список неизвестен).
+}
 
 public sealed record StrategyInfo(string Id, string Title, string Source);
 public sealed record GroupInfo(string Id, string Title, int Targets);

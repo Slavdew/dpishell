@@ -38,6 +38,13 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     /// <summary>Версия программы помощника (из hello): окно новее — пора обновить помощника.</summary>
     public string HelperVersion { get; private set; } = "";
     public int Protocol { get; private set; }
+    /// <summary>Версия протокола помощника «мажор.минор» (из hello; помощник до 1.1 её не шлёт — «1.0»).</summary>
+    public string HelperApi { get; private set; } = HelperCompat.LegacyApi;
+    /// <summary>
+    /// Совместимость с помощником: после подключения — по hello, после <see cref="StatusAsync"/> — ещё и по списку команд.
+    /// Мажор другой — <see cref="CallAsync"/> отказывает сам (код <c>incompatible</c>), кроме status и cancel.
+    /// </summary>
+    public HelperCompat Compat { get; private set; } = HelperCompat.Evaluate(null, null, null);
     public bool IsConnected => !_closed.IsCancellationRequested && _pipe.IsConnected;
     /// <summary>Связь оборвалась (помощник остановлен, перезапущен) — окно переподключается или показывает «не отвечает».</summary>
     public event EventHandler? Disconnected;
@@ -119,6 +126,8 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
         {
             Protocol = hello.TryGetProperty("protocol", out var p) && p.TryGetInt32(out var pv) ? pv : 0;
             HelperVersion = hello.TryGetProperty("version", out var v) ? v.GetString() ?? "" : "";
+            HelperApi = hello.TryGetProperty("api", out var a) && a.ValueKind == JsonValueKind.String ? a.GetString()! : HelperCompat.LegacyApi;
+            Compat = HelperCompat.Evaluate(HelperApi, null, HelperVersion);
             return;
         }
         throw ToException(root);
@@ -131,6 +140,7 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public async Task<JsonElement> CallAsync(string cmd, object? args = null, IProgress<JsonElement>? progress = null, CancellationToken ct = default)
     {
         if (!IsConnected) throw new HelperUnavailableException(HelperUnavailableReason.Disconnected);
+        if (!Compat.Allows(cmd)) throw new HelperException(HelperErrors.Incompatible, Compat.Message ?? HelperErrors.Text(HelperErrors.Incompatible));
         long id = Interlocked.Increment(ref _nextId);
         var pending = new Pending(progress);
         _pending[id] = pending;
@@ -260,7 +270,12 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
 
     sealed class Relay(Action<JsonElement> a) : IProgress<JsonElement> { public void Report(JsonElement v) => a(v); }
 
-    public Task<HelperStatus> StatusAsync(CancellationToken ct = default) => CallAsync<HelperStatus>("status", null, null, ct);
+    public async Task<HelperStatus> StatusAsync(CancellationToken ct = default)
+    {
+        var s = await CallAsync<HelperStatus>("status", null, null, ct);
+        Compat = HelperCompat.Evaluate(s.Api ?? HelperApi, s.Commands, s.HelperVersion);
+        return s;
+    }
     public Task EnableAsync(string strategyId, CancellationToken ct = default) => CallAsync("enable", new { strategy = strategyId }, null, ct);
     public Task DisableAsync(CancellationToken ct = default) => CallAsync("disable", null, null, ct);
     public Task SetRunModeAsync(bool service, CancellationToken ct = default) => CallAsync("set_run_mode", new { service }, null, ct);

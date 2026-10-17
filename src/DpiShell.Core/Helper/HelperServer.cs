@@ -299,7 +299,8 @@ public sealed class HelperServer : IAsyncDisposable
         var log = new SyncProgress<string>(m => progress(new { message = m }));
         switch (c.Cmd)
         {
-            case "status": return await Task.Run(b.Status, ct);
+            // Версия протокола и список команд — из белого списка этого помощника, а не от бэкенда (helper-protocol §6).
+            case "status": return (await Task.Run(b.Status, ct)) with { Api = HelperProtocol.Api, Commands = HelperCommands.Names };
             case "enable": await Task.Run(() => b.Enable(c.Str("strategy")!), ct); return null;
             case "disable": await Task.Run(b.Disable, ct); return null;
             case "set_run_mode": await Task.Run(() => b.SetRunMode(c.Bool("service")), ct); return null;

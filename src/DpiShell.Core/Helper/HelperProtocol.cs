@@ -11,7 +11,7 @@ namespace DpiShell.Core.Helper;
 /// <item>Запрос: <c>{"id":1,"cmd":"enable","args":{"strategy":"alt9"}}</c>; отмена: <c>{"id":2,"cmd":"cancel","target":1}</c>.</item>
 /// <item>Ответ: <c>{"id":1,"ok":true,"result":…}</c> или <c>{"id":1,"ok":false,"error":{"code":"invalid","message":"…"}}</c>.</item>
 /// <item>Ход долгой операции: <c>{"id":1,"progress":{…}}</c> — сколько угодно раз до финального ответа.</item>
-/// <item>После подключения помощник первым шлёт <c>{"hello":{"protocol":1,"version":"…"}}</c> или отказ <c>denied</c> с id 0.</item>
+/// <item>После подключения помощник первым шлёт <c>{"hello":{"protocol":1,"api":"1.1","version":"…"}}</c> или отказ <c>denied</c> с id 0.</item>
 /// </list>
 /// </summary>
 public static class HelperProtocol
@@ -20,6 +20,12 @@ public static class HelperProtocol
     public const string PipeName = "DpiShell.Helper";
     public const string ServiceName = "DpiShellHelper";
     public const int Version = 1;
+
+    /// <summary>
+    /// Версия протокола «мажор.минор» (helper-protocol §6): минор — добавления без поломок (команды, поля), мажор — несовместимые
+    /// изменения. В hello и status; помощник без поля — «1.0». Сравнение — <see cref="HelperCompat"/>.
+    /// </summary>
+    public const string Api = "1.1";
 
     /// <summary>Предел строки: IP-список (до 4 МБ) с запасом на экранирование JSON. Длиннее — соединение рвётся.</summary>
     public const int MaxLineBytes = 12 * 1024 * 1024;
@@ -38,7 +44,7 @@ public static class HelperProtocol
 
     public static string Hello() => Line(new JsonObject
     {
-        ["hello"] = new JsonObject { ["protocol"] = Version, ["version"] = AppVersion },
+        ["hello"] = new JsonObject { ["protocol"] = Version, ["api"] = Api, ["version"] = AppVersion },
     });
 
     public static string Ok(long id, object? result) => Line(new JsonObject
@@ -79,6 +85,8 @@ public static class HelperErrors
     public const string Denied = "denied";
     /// <summary>Операцию отменили.</summary>
     public const string Cancelled = "cancelled";
+    /// <summary>Окно само не отправило команду: мажор протокола помощника другой — только переустановка (<see cref="HelperCompat"/>).</summary>
+    public const string Incompatible = "incompatible";
 
     public static string Text(string code) => code switch
     {
@@ -88,6 +96,7 @@ public static class HelperErrors
         Failed => "Помощник не смог выполнить действие.",
         Denied => "Помощник установлен для другого пользователя этого компьютера.",
         Cancelled => "Операция отменена.",
+        Incompatible => "Помощник несовместим с этой версией программы — переустановите его.",
         _ => "Ошибка помощника.",
     };
 }

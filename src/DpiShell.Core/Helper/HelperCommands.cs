@@ -121,6 +121,9 @@ public static partial class HelperCommands
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);
 
+    /// <summary>Имена команд белого списка по алфавиту — поле <c>commands</c> в ответе status (helper-protocol §6).</summary>
+    public static IReadOnlyList<string> Names { get; } = [.. All.Select(c => c.Name).Order(StringComparer.Ordinal)];
+
     static readonly HashSet<string> TopLevel = ["id", "cmd", "args", "target"];
 
     /// <summary>Разобрать и проверить строку запроса. Любое отступление — <see cref="HelperRequestException"/>.</summary>
