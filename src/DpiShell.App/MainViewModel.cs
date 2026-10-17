@@ -13,11 +13,11 @@ public enum StatusKind { Off, On, Busy, Error }
 
 public static class Pages
 {
-    public const int Home = 0, Select = 1, Targets = 2, Net = 3, Hosts = 4, Diag = 5, Router = 6;
+    public const int Home = 0, Select = 1, Targets = 2, Net = 3, Hosts = 4, Diag = 5, Router = 6, Settings = 7;
 }
 
 /// <summary>
-/// Всё состояние окна. Окно работает без прав администратора (docs/dev/helper-protocol.md): читает само (проверка сайтов, DNS, службы,
+/// Всё состояние окна. Окно работает без прав администратора (helper-protocol): читает само (проверка сайтов, DNS, службы,
 /// роутер), а всё, что меняет систему, — через помощника (<see cref="HelperLink"/>). Помощника нет — значок щита на кнопках,
 /// нажатие предлагает установку (один запрос прав), и действие продолжается само.
 /// </summary>
@@ -40,13 +40,13 @@ public sealed partial class MainViewModel : Observable
     public HelperLink Helper { get; }
     public WindowSettings Settings { get; }
     public RouterViewModel Router { get; }
-    /// <summary>«Игры и IP-списки» (architecture.md «IP-списки и игровой режим»).</summary>
+    /// <summary>«Игры и IP-списки» (09-features-spec §1–2).</summary>
     public NetViewModel Net { get; }
-    /// <summary>«Починить адреса» — hosts (architecture.md «Починить адреса»).</summary>
+    /// <summary>«Починить адреса» — hosts (09-features-spec §3).</summary>
     public HostsViewModel Hosts { get; }
     /// <summary>Обновления данных (architecture.md «Обновления данных»).</summary>
     public UpdatesViewModel Updates { get; }
-    /// <summary>Окно при входе в Windows (architecture.md «Автозапуск»).</summary>
+    /// <summary>Окно при входе в Windows (architecture.md «Окно, трей, автозапуск»).</summary>
     public Autostart Autostart { get; }
     /// <summary>Уведомление в трей (окно может быть свёрнуто): «Все адреса» закончились, адрес в hosts устарел.</summary>
     public event Action<string>? Notify;
@@ -136,6 +136,7 @@ public sealed partial class MainViewModel : Observable
         var chosen = new AppState().Groups.ToHashSet();
         foreach (var g in _shell.DefaultTargets.Groups.Where(g => !g.Control)) Groups.Add(new(g.Id, g.Title, chosen.Contains(g.Id)));
         Groups.Add(new("user", "Свои адреса", chosen.Contains("user")));
+        InitHome();       // главная: помехи, итог проверки — MainViewModel.Home.cs
         UpdateStatus();
     }
 
@@ -149,7 +150,7 @@ public sealed partial class MainViewModel : Observable
     public bool HasHelperProblem => HelperProblem.Length > 0;
     public string FixHelperText => Helper.State == HelperState.Outdated ? "Обновить помощника" : "Переустановить помощника";
 
-    /// <summary>Строка «Помощник» на «Диагностике».</summary>
+    /// <summary>Состояние помощника — в «Настройках» → «О программе».</summary>
     public string HelperText => Helper.State switch
     {
         HelperState.Connected => "работает" + (Helper.Reader?.HelperVersion is { Length: > 0 } v ? $" (версия {v})" : ""),
@@ -167,7 +168,7 @@ public sealed partial class MainViewModel : Observable
 
     void OnHelperChanged()
     {
-        foreach (var p in new[] { nameof(NeedsHelper), nameof(HelperProblem), nameof(HasHelperProblem), nameof(FixHelperText), nameof(HelperText), nameof(CanUninstallHelper) })
+        foreach (var p in new[] { nameof(NeedsHelper), nameof(HelperProblem), nameof(HasHelperProblem), nameof(FixHelperText), nameof(HelperText), nameof(CanUninstallHelper), nameof(AboutText) })
             Raise(p);
         CommandManager.InvalidateRequerySuggested();
     }
@@ -481,11 +482,11 @@ public sealed partial class MainViewModel : Observable
         {
             Kind = StatusKind.Off; StatusTitle = "Выключено";
             StatusDetail = Router.Found && Router.RouterEnabled ? "Обход делает роутер — на этом ПК включать не нужно"
-                : id is not null ? "Выбрана стратегия: " + StrategyTitle(id) : "Стратегия не выбрана: выберите в списке или нажмите «Подобрать»";
+                : id is not null ? "Выбрана стратегия: " + StrategyTitle(id) : "Нажмите «Включить» — подходящую стратегию подберу сам (2–3 мин)";
         }
         StatusBrush = BrushOf(Kind);
         Raise(nameof(IsRunning));
-        Raise(nameof(ToggleText));
+        Raise(nameof(ToggleText)); Raise(nameof(PcSecondary)); Raise(nameof(PcPrimary));
         Raise(nameof(CanChoose));
         Router.PcChanged();
         Raise(nameof(StrategyHeader));
@@ -493,17 +494,24 @@ public sealed partial class MainViewModel : Observable
         // Автозапуск по умолчанию следует за режимом — когда режим известен (помощник ответил).
         if (Live is not null) Autostart.OnRunMode(ServiceMode);
         Updates.Refresh();
+        RaiseIssues();
         // Стратегию могли сменить с «Подбора» или автопереключением — список показывает текущую, не вызывая перезапуск.
         if (_chosen != id) { _chosen = id; Raise(nameof(ChosenStrategyId)); }
         StatusChanged?.Invoke();
     }
 
     string _vpnWarning = "";
-    public string VpnWarning { get => _vpnWarning; private set { if (Set(ref _vpnWarning, value)) Raise(nameof(HasVpn)); } }
-    public bool HasVpn => VpnWarning.Length > 0;
+    public string VpnWarning { get => _vpnWarning; private set { if (Set(ref _vpnWarning, value)) { Raise(nameof(HasVpn)); RaiseIssues(); } } }
+    /// <summary>Плашка VPN на главной: есть VPN и человек не сказал «Понятно» про этот же набор адаптеров.</summary>
+    public bool HasVpn => VpnWarning.Length > 0 && VpnWarning != _vpnDismissed;
+
+    string? _vpnDismissed;
+    /// <summary>«Понятно, не показывать»: до смены набора VPN-адаптеров (в «Диагностике» VPN виден всегда).</summary>
+    public ICommand DismissVpnCmd => _dismissVpnCmd ??= new RelayCommand(() => { _vpnDismissed = VpnWarning; Raise(nameof(HasVpn)); RaiseIssues(); });
+    ICommand? _dismissVpnCmd;
 
     string _conflictWarning = "";
-    public string ConflictWarning { get => _conflictWarning; private set { if (Set(ref _conflictWarning, value)) Raise(nameof(HasConflicts)); } }
+    public string ConflictWarning { get => _conflictWarning; private set { if (Set(ref _conflictWarning, value)) { Raise(nameof(HasConflicts)); RaiseIssues(); } } }
     public bool HasConflicts => ConflictWarning.Length > 0;
 
     public ObservableCollection<CheckRow> CheckRows { get; } = [];
@@ -587,7 +595,7 @@ public sealed partial class MainViewModel : Observable
     }
 
     public string RunModeHint => ServiceMode
-        ? "Включается вместе с Windows и работает сама по себе — закрытие программы её не выключает"
+        ? "Обход работает и без окна, и после перезагрузки"
         : "Обход работает, пока открыта программа (в окне или в трее)";
 
     async Task SetRunModeAsync(bool service)
@@ -602,7 +610,7 @@ public sealed partial class MainViewModel : Observable
         await RefreshStatusAsync();
     }
 
-    public string ToggleText => IsRunning ? "Выключить" : "Включить";
+    public string ToggleText => IsRunning ? "Выключить" : PcSecondary ? "Включить и на этом ПК" : "Включить";
     public bool CanChoose => !Busy && !IsLoading && !Selecting;
     public ICommand ToggleCmd => _toggleCmd ??= RelayCommand.Async(() => IsRunning ? DisableAsync() : EnableAsync(), () => !Busy && !IsLoading);
     ICommand? _toggleCmd;
@@ -678,8 +686,8 @@ public sealed partial class MainViewModel : Observable
     static string? CoreProblem(CoreState c) => c switch
     {
         CoreState.Ok => null,
-        CoreState.Missing => "Файлы ядра не найдены (антивирус?). Откройте «Диагностику» → «Восстановить ядро».",
-        _ => "Файлы ядра изменены (антивирус?). Откройте «Диагностику» → «Восстановить ядро».",
+        CoreState.Missing => "Файлы обхода не найдены (антивирус?). Откройте «Диагностику» → «Восстановить».",
+        _ => "Файлы обхода повреждены (антивирус?). Откройте «Диагностику» → «Восстановить».",
     };
 
     public async Task EnableAsync()
@@ -734,6 +742,7 @@ public sealed partial class MainViewModel : Observable
             });
             foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, GroupTitle));
             CheckSummary = $"Открывается {verdicts.Count(v => v.Ok)} из {verdicts.Count}";
+            CheckedAt = $"в {DateTime.Now:HH:mm}";
             await dns;
             await RefreshStatusAsync();
         });
@@ -761,7 +770,7 @@ public sealed partial class MainViewModel : Observable
 
     bool _dnsSpoofed;
     /// <summary>Системный DNS подменяет адреса проверяемых сайтов (docs/research/dns.md).</summary>
-    public bool DnsSpoofed { get => _dnsSpoofed; private set => Set(ref _dnsSpoofed, value); }
+    public bool DnsSpoofed { get => _dnsSpoofed; private set { if (Set(ref _dnsSpoofed, value)) RaiseIssues(); } }
 
     string _dnsSummary = "Ещё не проверялось.";
     public string DnsSummary { get => _dnsSummary; private set => Set(ref _dnsSummary, value); }
@@ -1040,7 +1049,7 @@ public sealed partial class MainViewModel : Observable
 
     string? _autoApplyId;
 
-    /// <summary>После подбора/поиска: лучшая стратегия — в работу (architecture.md «Автоприменение»).</summary>
+    /// <summary>После подбора/поиска: лучшая стратегия — в работу (architecture.md «Оценка и порядок»).</summary>
     async Task AutoApplyAsync()
     {
         if (_autoApplyId is not { } id) return;
@@ -1048,6 +1057,7 @@ public sealed partial class MainViewModel : Observable
         var title = StrategyTitle(id);
         if (await ApplyAsync(id))
         {
+            SetBest(null);   // уже в работе — «Применить» не нужна
             ResultText = $"Применена: {title} — обход работает.";
             Message = ResultText;
         }
@@ -1139,6 +1149,25 @@ public sealed partial class MainViewModel : Observable
 
     public string CoreFolder => _shell.Paths.Core;
 
+    /// <summary>Путь для исключения Защитника — не переписывать руками (п. 16 аудита).</summary>
+    public ICommand CopyCoreFolderCmd => _copyCoreFolderCmd ??= new RelayCommand(() =>
+    {
+        try { Clipboard.SetText(CoreFolder); Message = "Путь скопирован: " + CoreFolder; }
+        catch (System.Runtime.InteropServices.ExternalException) { Message = "Не удалось скопировать — буфер обмена занят другой программой."; }
+    });
+    ICommand? _copyCoreFolderCmd;
+
+    /// <summary>«Безопасность Windows» → параметры защиты от вирусов (там «Исключения»).</summary>
+    public ICommand OpenDefenderCmd => _openDefenderCmd ??= new RelayCommand(() =>
+    {
+        try { Process.Start(new ProcessStartInfo("windowsdefender://threatsettings") { UseShellExecute = true }); }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Message = "Не удалось открыть «Безопасность Windows»: " + e.Message; }
+    });
+    ICommand? _openDefenderCmd;
+
+    /// <summary>«Настройки» → «О программе»: версия окна и состояние помощника.</summary>
+    public string AboutText => $"DpiShell {typeof(MainViewModel).Assembly.GetName().Version?.ToString(3)} · помощник: {HelperText}";
+
     public ICommand RefreshDiagCmd { get; }
     public ICommand RepairCoreCmd { get; }
     public ICommand OpenLogsCmd { get; }
@@ -1146,9 +1175,9 @@ public sealed partial class MainViewModel : Observable
     public ICommand RemoveServiceCmd { get; }
 
     bool _diagRefreshing;
-    /// <summary>Идёт обновление «Диагностики» — кнопка показывает «Обновляю…» и не нажимается.</summary>
+    /// <summary>Идёт обновление «Диагностики» — кнопка показывает «Проверяю…» и не нажимается.</summary>
     public bool DiagRefreshing { get => _diagRefreshing; private set { if (Set(ref _diagRefreshing, value)) { Raise(nameof(RefreshButtonText)); CommandManager.InvalidateRequerySuggested(); } } }
-    public string RefreshButtonText => DiagRefreshing ? "Обновляю…" : "Обновить";
+    public string RefreshButtonText => DiagRefreshing ? "Проверяю…" : "Проверить снова";
 
     string _diagUpdated = "";
     public string DiagUpdated { get => _diagUpdated; private set => Set(ref _diagUpdated, value); }
@@ -1233,7 +1262,7 @@ public sealed partial class MainViewModel : Observable
         _ => "не удалось узнать",
     };
 
-    /// <summary>Проверки окружения (architecture.md «Диагностика»): ✓ — в порядке, ⚠ — что мешает и что сделать.</summary>
+    /// <summary>Проверки окружения (09-features-spec §4): ✓ — в порядке, ⚠ — что мешает и что сделать.</summary>
     public ObservableCollection<FindingRow> Findings { get; } = [];
 
     public ICommand ClearDiscordCmd { get; }

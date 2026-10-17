@@ -14,7 +14,9 @@ namespace DpiShell.App;
 public sealed class InfoButton : Button
 {
     public static readonly DependencyProperty TopicProperty =
-        DependencyProperty.Register(nameof(Topic), typeof(string), typeof(InfoButton), new PropertyMetadata(null));
+        DependencyProperty.Register(nameof(Topic), typeof(string), typeof(InfoButton), new PropertyMetadata(null,
+            // Экранный диктор читает не «Кнопка», а о чём пояснение.
+            (d, e) => AutomationProperties.SetName(d, e.NewValue is string t ? "Пояснение: " + t : "Пояснение")));
 
     /// <summary>Ключ раздела в <see cref="InfoTexts"/> (заголовок из docs/info-texts.md).</summary>
     public string? Topic { get => (string?)GetValue(TopicProperty); set => SetValue(TopicProperty, value); }

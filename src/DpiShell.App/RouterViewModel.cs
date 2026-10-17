@@ -28,7 +28,7 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title) : Observab
     public string Title { get; } = title;
     /// <summary>Вариант глубокого поиска (candidate): в списке стратегий роутера его нет — только посмотреть, применить нельзя.</summary>
     public bool IsCandidate => Row.Candidate;
-    public string Kind => IsCandidate ? "вариант поиска" : "";
+    public string Kind => IsCandidate ? "проверяется в поиске" : "";
     public string Groups => IsCandidate ? "—" : $"{Row.GroupShare * 100:0} %";
     /// <summary>У варианта поиска — сколько обязательных адресов его части открылось (ok из total).</summary>
     public string Share => IsCandidate && Row.Total is > 0 ? $"{Row.Ok ?? 0} из {Row.Total}" : $"{Row.TargetShare * 100:0} %";
@@ -59,7 +59,7 @@ public static class RouterTexts
         _ => e.Message,
     };
 
-    public const string Conflict = "На роутере работает другая программа обхода — остановите или удалите её: «Диагностика» → «Роутер».";
+    public const string Conflict = "На роутере работает другая программа обхода — остановите или удалите её: «Диагностика» → «Роутер: что мешает».";
 
     /// <summary>Предупреждение status.warnings → строка главной. flow_offload и ipv6 роутер исправляет сам (§9).</summary>
     public static RouterWarningRow Warning(RouterWarning w) => w.Code switch
@@ -124,7 +124,8 @@ public sealed class RouterViewModel : Observable, IDisposable
         _auto = string.IsNullOrWhiteSpace(settings.RouterAddress);
         _custom = settings.RouterAddress ?? "";
 
-        LoginCmd = new RelayCommand(() => { Navigate(Pages.Diag); LoginRequested?.Invoke(); });
+        LoginCmd = new RelayCommand(() => LoginRequested?.Invoke());
+        FindCmd = RelayCommand.Async(() => ConnectAsync(null), () => CanConnect);
         ToggleCmd = RelayCommand.Async(ToggleAsync, () => CanAct);
         CheckCmd = RelayCommand.Async(CheckAsync, () => CanAct);
         GoSelectCmd = new RelayCommand(() => { SelectOnRouter = true; Navigate(Pages.Select); }, () => Connected);
@@ -190,7 +191,7 @@ public sealed class RouterViewModel : Observable, IDisposable
 
     /// <summary>Поменялось то, что видно на главной (найден ли роутер, включён ли на нём обход).</summary>
     public event Action? Changed;
-    /// <summary>«Войти» на главной — окно показывает карточку «Роутер» и ставит курсор в пароль.</summary>
+    /// <summary>«Войти» — окно показывает на месте небольшой диалог входа (UX-аудит п. 14).</summary>
     public event Action? LoginRequested;
 
     // ---------- адрес и вход ----------
@@ -474,7 +475,7 @@ public sealed class RouterViewModel : Observable, IDisposable
                 await Call(c => c.ScheduleSetAsync(enabled, hours, autoSelect));
                 await RefreshStatusCoreAsync();
             }))
-            Say(!enabled ? "Проверка по расписанию на роутере выключена."
+            Say(!enabled ? "Роутер больше не проверяет сайты сам."
                 : "Роутер будет проверять сайты " + (ScheduleOptions.FirstOrDefault(o => o.Hours == hours)?.Title ?? $"раз в {hours} ч")
                   + (autoSelect ? ", а если запасные не помогут — подберёт заново." : "."));
         else
@@ -617,7 +618,11 @@ public sealed class RouterViewModel : Observable, IDisposable
     /// <summary>Окно сообщает, что обход на ПК включился или выключился.</summary>
     public void PcChanged() => RaisePc();
 
-    void RaisePc() { Raise(nameof(BothOn)); Raise(nameof(TimestampsNote)); Raise(nameof(HasTimestampsNote)); Raise(nameof(TimestampsNeedAction)); }
+    void RaisePc() { Raise(nameof(BothOn)); Raise(nameof(TimestampsNote)); Raise(nameof(HasTimestampsNote)); Raise(nameof(TimestampsNeedAction)); Raise(nameof(HomeFixText)); Raise(nameof(HasHomeFix)); }
+
+    /// <summary>Главная — одной строкой: сколько у роутера того, что можно исправить (сами предупреждения — на вкладке «Роутер»).</summary>
+    public string HomeFixText => (WarningRows.Count + (TimestampsNeedAction ? 1 : 0)) is var n && n > 0 ? $"требует внимания: {n}" : "";
+    public bool HasHomeFix => HomeFixText.Length > 0;
 
     async Task StopPcForRouterAsync()
     {
@@ -710,6 +715,8 @@ public sealed class RouterViewModel : Observable, IDisposable
     public string? CurrentStrategyId => _status?.Strategy ?? _detection?.Status?.Strategy;
 
     public ICommand LoginCmd { get; }
+    /// <summary>«Найти»: поиск роутера по адресу из настроек; есть сохранённый пароль — и вход.</summary>
+    public ICommand FindCmd { get; }
     public ICommand ToggleCmd { get; }
     public ICommand CheckCmd { get; }
     public ICommand GoSelectCmd { get; }
@@ -1499,7 +1506,7 @@ public sealed class RouterViewModel : Observable, IDisposable
     bool _diagLoaded;
     public bool DiagLoaded { get => _diagLoaded; private set { if (Set(ref _diagLoaded, value)) { Raise(nameof(ShowDiagHint)); Raise(nameof(DiagHint)); } } }
     public bool ShowDiagHint => !DiagLoaded;
-    public string DiagHint => Connected ? "Нажмите «Обновить»." : NeedLogin ? "Войдите на роутер (карточка «Роутер» ниже), чтобы увидеть его состояние." : ConnectionText + ".";
+    public string DiagHint => Connected ? "Нажмите «Проверить снова»." : NeedLogin ? "Войдите на роутер (вкладка «Роутер» → «Войти»), чтобы увидеть его состояние." : ConnectionText + ".";
 
     public ICommand RefreshDiagCmd { get; }
     public ICommand StopConflictCmd { get; }

@@ -38,8 +38,13 @@ public sealed class PcDnsViewModelTests : IDisposable
         Assert.StartsWith("Сейчас: Quad9, защищённый", vm.PcDns.CurrentText);
         Assert.True(vm.PcDns.CanRestore);
         Assert.Contains("Проверка DNS", vm.Message);
+        // Смена без подтверждения, но с тостом «Вернуть» (UX-аудит, «Опасные действия»); он и возвращает.
+        Assert.StartsWith("DNS изменён: Quad9", vm.Toast);
+        Assert.Equal("Вернуть", vm.ToastAction);
 
-        await vm.RestorePcDnsAsync();
+        vm.ToastCmd.Execute(null);
+        for (int i = 0; i < 200 && vm.PcDns.CanRestore; i++) await Task.Delay(10);
+        Assert.False(vm.HasToast);
         Assert.Contains("dns_restore", f.Backend.Calls);
         Assert.False(vm.PcDns.CanRestore);
         Assert.Equal(2, rechecks);
@@ -56,6 +61,7 @@ public sealed class PcDnsViewModelTests : IDisposable
         await vm.ApplyPcDnsAsync(vm.PcDns.Options.Single(o => o.Id == "google"));
         Assert.Equal(0, rechecks);
         Assert.Contains("вернул прежние настройки", vm.Message);
+        Assert.False(vm.HasToast);   // не сменилось — и «Вернуть» не предлагаем
     }
 
     [Fact]

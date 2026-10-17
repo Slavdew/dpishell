@@ -46,27 +46,8 @@ public partial class MainWindow : Window
         _netSettle.Tick += (_, _) => { _netSettle.Stop(); _ = vm.Router.RefreshAsync(); };
         NetworkChange.NetworkAddressChanged += OnNetworkChanged;
 
-        vm.Router.LoginRequested += () => Dispatcher.BeginInvoke(() =>
-        {
-            RouterSettings.BringIntoView();
-            RouterPassword.Focus();
-        }, DispatcherPriority.Loaded);
-    }
-
-    /// <summary>Пароль берётся из PasswordBox только в момент входа и сразу стирается из поля.</summary>
-    async void ConnectRouter_Click(object sender, RoutedEventArgs e)
-    {
-        var password = RouterPassword.Password;
-        RouterPassword.Clear();
-        try { await _vm.Router.ConnectAsync(password); }
-        catch (Exception ex) { _vm.Message = Texts.Friendly(ex); }
-    }
-
-    void RouterPassword_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-    {
-        if (e.Key != System.Windows.Input.Key.Enter || !_vm.Router.CanConnect) return;
-        e.Handled = true;
-        ConnectRouter_Click(sender, e);
+        // «Войти» — небольшой диалог на месте, без перехода на другую вкладку (UX-аудит п. 14).
+        vm.Router.LoginRequested += () => Dispatcher.BeginInvoke(() => RouterLoginDialog.Show(vm.Router, this), DispatcherPriority.Loaded);
     }
 
     /// <summary>«Стратегия ▾» в блоке роутера: меню из strategies, текущая отмечена.</summary>
@@ -88,6 +69,17 @@ public partial class MainWindow : Window
         }
         if (menu.Items.Count == 0) menu.Items.Add(new System.Windows.Controls.MenuItem { Header = "Список стратегий роутера пуст", IsEnabled = false });
         menu.IsOpen = true;
+    }
+
+    /// <summary>
+    /// Список внутри прокручиваемой страницы (стратегии на главной): свой ScrollViewer списка съедает колесо, даже когда
+    /// прокручивать ему нечего, — отдаём колесо странице.
+    /// </summary>
+    void PassWheelToPage(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        if (e.Handled || sender is not FrameworkElement { Parent: UIElement parent }) return;
+        e.Handled = true;
+        parent.RaiseEvent(new System.Windows.Input.MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta) { RoutedEvent = MouseWheelEvent, Source = sender });
     }
 
     readonly DispatcherTimer _netSettle;
@@ -156,6 +148,15 @@ public partial class MainWindow : Window
         Close();
         Application.Current.Shutdown();
     }
+}
+
+/// <summary>false → Visible, true → Collapsed: пустое состояние («роутер не найден»).</summary>
+public sealed class FalseToVisible : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is true ? Visibility.Collapsed : Visibility.Visible;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
 /// <summary>0 → Visible, иначе Collapsed: «ничего не найдено». Invert — наоборот (заголовок таблицы, когда есть строки).</summary>

@@ -472,7 +472,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         await vm.StartSelectAsync(deep: true);
         var cand = vm.Scores.Single(s => s.Id == "c-3");
         Assert.True(cand.IsCandidate);
-        Assert.Equal("вариант поиска", cand.Kind);
+        Assert.Equal("проверяется в поиске", cand.Kind);
         Assert.Equal("3 из 4", cand.Share);
         Assert.False(cand.Usable);   // применить вариант нельзя — его нет в strategies
         Assert.Equal("c-3", vm.Scores[^1].Id);   // варианты — после стратегий

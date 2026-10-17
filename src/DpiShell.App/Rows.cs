@@ -30,7 +30,7 @@ public sealed class ScoreRow(StrategyScore s) : Observable
     public StrategyScore Score { get; } = s;
     public string Id => Score.Strategy.Id;
     public string Title => Score.Strategy.Title;
-    public string Groups => $"{Score.GroupsPassed}/{Score.GroupsTotal}";
+    public string Groups => $"{Score.GroupsPassed} из {Score.GroupsTotal}";
     public string Share => $"{Score.TargetShare * 100:0} %";
     public string Avg => Score.Verdicts.Any(v => v.Ok) ? $"{Score.AvgSeconds:0.00} с" : "—";
     public string Error => Score.Error is null ? "" : Score.Error.Length > 80 ? Score.Error[..80] + "…" : Score.Error;

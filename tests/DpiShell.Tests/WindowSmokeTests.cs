@@ -134,7 +134,7 @@ public sealed class WindowSmokeTests
     }).GetAwaiter().GetResult();
 
     static readonly (int Page, string Name)[] AllPages =
-        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Targets, "targets"), (Pages.Net, "net"), (Pages.Hosts, "hosts"), (Pages.Diag, "diag")];
+        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Targets, "targets"), (Pages.Net, "net"), (Pages.Hosts, "hosts"), (Pages.Diag, "diag"), (Pages.Settings, "settings")];
 
     [Fact]
     public void MainWindow_OpensAndAllPagesBind_WithoutErrors()
@@ -146,7 +146,7 @@ public sealed class WindowSmokeTests
             var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
             var w = Open(vm);
             var tabs = Find<TabControl>(w)!;
-            foreach (var page in new[] { Pages.Select, Pages.Targets, Pages.Net, Pages.Hosts, Pages.Diag, Pages.Home })
+            foreach (var page in new[] { Pages.Select, Pages.Targets, Pages.Net, Pages.Hosts, Pages.Diag, Pages.Router, Pages.Settings, Pages.Home })
             {
                 vm.Page = page;
                 Pump();
@@ -214,7 +214,7 @@ public sealed class WindowSmokeTests
                     Directory.CreateDirectory(snapDir);
                     Snap(w, Path.Combine(snapDir, $"{theme}-loading.png"));
                 }
-                foreach (var (page, name) in AllPages)
+                foreach (var (page, name) in AllPages.Append((Pages.Router, "router-none")))
                 {
                     // Пока «загрузка» — смена вкладки не запускает проверку службы (sc.exe); потом снять заставку для снимка.
                     SetProp(vm, "IsLoading", true);
@@ -223,23 +223,49 @@ public sealed class WindowSmokeTests
                     if (page == Pages.Home)
                     {
                         AssertHome(w, vm);
-                        if (!vm.Updates.DataAvailable || Find<Button>(Find<TabControl>(w)!, b => b.Content as string == "Обновить" && b.IsVisible) is null)
-                            throw new Exception("На главной нет плашки «Доступно обновление списков» с кнопкой");
                         if (vm.Autostart.Enabled != (theme == ThemeManager.Dark))
                             throw new Exception("Автозапуск по умолчанию: включён без службы, выключен в режиме службы");
+                    }
+                    if (page == Pages.Settings) AssertServiceMode(w, vm);
+                    // Роутера нет — вкладка всё равно есть: пустое состояние и адрес (UX-аудит п. 47).
+                    if (page == Pages.Router && Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Роутер с DpiShell не найден" && t.IsVisible) is null)
+                        throw new Exception("На вкладке «Роутер» без роутера нет пустого состояния");
+                    // Вход на роутер — небольшое окно на месте (п. 14): Enter — «Войти», Esc — «Отмена».
+                    if (page == Pages.Router)
+                    {
+                        var login = RouterLoginDialog.Create(vm.Router, null);
+                        login.WindowStartupLocation = WindowStartupLocation.Manual;
+                        login.Left = login.Top = -20000;
+                        login.ShowActivated = false;
+                        login.Show();
+                        Pump();
+                        if (Find<Button>(login, b => b.IsDefault && b.Content as string == "Войти") is null || Find<Button>(login, b => b.IsCancel) is null || Find<PasswordBox>(login) is null)
+                            throw new Exception("В окне входа нет пароля, «Войти» по Enter или «Отмена» по Esc");
+                        if (snapDir is not null) Snap(login, Path.Combine(snapDir, $"{theme}-router-login.png"));
+                        login.Close();
                     }
                     if (snapDir is null) continue;
                     SetProp(vm, "IsLoading", false);
                     typeof(MainViewModel).GetMethod("UpdateStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
                     Pump();
                     Snap(w, Path.Combine(snapDir, $"{theme}-{name}.png"));
-                    // Главная: правая колонка (плашки и «Проверить сейчас») прокручена до конца.
-                    if (page == Pages.Home && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } hv)
+                    // Главная раскрыта: все помехи и список стратегий; затем прокручена до конца.
+                    if (page == Pages.Home)
                     {
-                        hv.ScrollToEnd();
+                        vm.ShowAllIssues = true;
+                        vm.ShowStrategies = true;
                         Pump();
-                        Snap(w, Path.Combine(snapDir, $"{theme}-home-end.png"));
-                        hv.ScrollToHome();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-home-open.png"));
+                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } hv)
+                        {
+                            hv.ScrollToEnd();
+                            Pump();
+                            Snap(w, Path.Combine(snapDir, $"{theme}-home-end.png"));
+                            hv.ScrollToHome();
+                        }
+                        vm.ShowAllIssues = false;
+                        vm.ShowStrategies = false;
+                        Pump();
                     }
                     if (page == Pages.Diag && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } sv)
                     {
@@ -251,19 +277,23 @@ public sealed class WindowSmokeTests
                         sv.ScrollToVerticalOffset(card.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-diag-checks.png"));
-                        // Настройки (автозапуск) и «Обновления».
-                        var settingsCard = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Настройки")!;
-                        sv.ScrollToVerticalOffset(settingsCard.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
-                        Pump();
-                        Snap(w, Path.Combine(snapDir, $"{theme}-diag-updates.png"));
-                        // DNS: проверка подмены и «DNS этого компьютера» (свой вариант раскрыт).
-                        var dnsCard = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "DNS этого компьютера")!;
+                        // DNS — одна карточка: вывод проверки, таблица в «Подробнее» (раскрыта) и «DNS этого компьютера» (свой вариант раскрыт).
+                        var dnsCard = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "DNS" && t.IsVisible)!;
                         if (Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Свой вариант") is { } own) own.IsExpanded = true;
+                        if (Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Подробнее: ответы DNS") is { } answers) answers.IsExpanded = true;
                         Pump();
                         sv.ScrollToVerticalOffset(dnsCard.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-diag-dns.png"));
                         sv.ScrollToHome();
+                    }
+                    // Настройки: конец — «О программе» и «Очистка и удаление».
+                    if (page == Pages.Settings && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } stv)
+                    {
+                        stv.ScrollToEnd();
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-settings-end.png"));
+                        stv.ScrollToHome();
                     }
                     if (page == Pages.Net && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } nv)
                     {
@@ -374,9 +404,15 @@ public sealed class WindowSmokeTests
                     var tabs = Find<TabControl>(w)!;
                     if (page == Pages.Home)
                     {
-                        if (Find<TextBlock>(tabs, t => t.Text == "Обход делает роутер" && t.IsVisible) is null) throw new Exception("На главной нет блока роутера");
-                        if (Find<Button>(tabs, b => b.Content as string == "Отправить на роутер" && b.IsVisible) is null) throw new Exception("У найденной стратегии нет «Отправить на роутер»");
+                        // Роутер — одной строкой со ссылкой на вкладку; обход делает он — кнопка ПК второстепенная.
+                        if (Find<TextBlock>(tabs, t => t.Text == "Обход делает роутер" && t.IsVisible) is null) throw new Exception("На главной нет строки роутера");
+                        if (Find<Button>(tabs, b => b.Content as string == "Подробнее →" && b.IsVisible) is null) throw new Exception("У строки роутера нет ссылки на вкладку");
+                        if (Find<Button>(tabs, b => b.Content as string == "Включить и на этом ПК" && b.IsVisible && b.Style != (Style)w.FindResource("Primary")) is null)
+                            throw new Exception("При обходе на роутере кнопка ПК должна быть второстепенной «Включить и на этом ПК»");
                         if (Find<ComboBox>(tabs) is not null) throw new Exception("На главной появился выпадающий список");
+                        vm.ShowStrategies = true;
+                        Pump();
+                        if (Find<Button>(tabs, b => b.Content as string == "Отправить на роутер" && b.IsVisible) is null) throw new Exception("У найденной стратегии нет «Отправить на роутер»");
                     }
                     // Роутер сам включил лучшую (редакция §9) — итог «Включена на роутере», другую можно выбрать в таблице.
                     if (page == Pages.Select && (Find<TextBlock>(tabs, t => t.Text.StartsWith("Включена на роутере") && t.IsVisible) is null
@@ -384,11 +420,11 @@ public sealed class WindowSmokeTests
                         throw new Exception("На «Подборе» нет итога роутера или «Применить выбранную»");
                     if (page == Pages.Diag && Find<Button>(tabs, b => b.Content as string == "Остановить" && b.IsVisible) is null)
                         throw new Exception("В диагностике роутера нет «Остановить» у конфликта");
-                    if (page == Pages.Home && Find<Button>(tabs, b => b.Content as string == "Исправить" && b.IsVisible) is null)
+                    if (page == Pages.Router && Find<Button>(tabs, b => b.Content as string == "Исправить" && b.IsVisible) is null)
                         throw new Exception("У предупреждения роутера нет «Исправить»");
                     if (page == Pages.Router)
                     {
-                        foreach (var text in new[] { "Для каких сайтов обход", "Сайт не открывается", "DNS для всей сети", "Проверка по расписанию", "Сайт открывается только без обхода" })
+                        foreach (var text in new[] { "Для каких сайтов обход", "Сайт не открывается", "DNS для всей сети", "Проверять сам", "Сайт открывается только без обхода" })
                             if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is null) throw new Exception($"На вкладке «Роутер» нет «{text}»");
                         if (Find<Button>(tabs, b => b.Content as string == "Добавить в исключения" && b.IsVisible) is null) throw new Exception("Нет «Добавить в исключения»");
                         // dns_presets есть — вместо одной кнопки выбор вариантов, как на ПК.
@@ -495,16 +531,45 @@ public sealed class WindowSmokeTests
         Assert.Empty(seen.Keys.Except(doc.Keys));
     }
 
-    /// <summary>Главная: выпадающего списка нет, стратегии — списком с выбранной, галочка режима показывает режим ядра.</summary>
+    /// <summary>
+    /// Главная (UX-аудит): одна главная кнопка, стратегии свёрнуты под «Сменить стратегию» (раскрываются — список с выбранной),
+    /// помехи — строкой «Нашлось N помех», раскрыта одна самая важная, остальные — по «Показать все».
+    /// </summary>
     static void AssertHome(Window w, MainViewModel vm)
     {
         var tabs = Find<TabControl>(w)!;
         if (Find<ComboBox>(tabs) is not null) throw new Exception("На главной остался выпадающий список");
+        var primary = new List<Button>();
+        Collect(tabs, primary);
+        if (primary.Count(b => b.IsVisible && b.Style == (Style)w.FindResource("Primary")) != 1) throw new Exception("На главной должна быть одна главная кнопка");
         var list = Find<ListBox>(tabs) ?? throw new Exception("На главной нет списка стратегий");
+        if (list.IsVisible) throw new Exception("Список стратегий должен быть свёрнут до «Сменить стратегию»");
+        vm.ShowStrategies = true;
+        Pump();
+        if (!list.IsVisible) throw new Exception("«Сменить стратегию» не раскрыл список");
         if (list.Items.Count != vm.StrategyChoices.Count || list.Items.Count == 0) throw new Exception($"В списке {list.Items.Count} строк, ждали {vm.StrategyChoices.Count}");
         if ((list.SelectedItem as StrategyChoice)?.Id != vm.ChosenStrategyId) throw new Exception("В списке не выделена выбранная стратегия");
-        var mode = Find<CheckBox>(tabs, c => BindingOperations.GetBinding(c, ToggleButton.IsCheckedProperty)?.Path.Path == "ServiceMode")
-            ?? throw new Exception("Нет галочки «Режим службы»");
+        vm.ShowStrategies = false;
+
+        // Наполнение: подмена DNS, VPN и обновление списков — видна только первая (DNS), заголовок считает помехи.
+        if (Find<TextBlock>(tabs, t => string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text)) == "⚠ Нашлось 2 помехи · есть обновление списков" && t.IsVisible) is null)
+            throw new Exception($"Нет строки «Нашлось 2 помехи»: «{vm.IssuesTitle}», видна: {vm.HasIssuesHeader}");
+        Button? Visible(string text) => Find<Button>(tabs, b => b.Content as string == text && b.IsVisible);
+        if (Visible("Включить защищённый DNS") is null) throw new Exception("Не видна самая важная помеха (DNS)");
+        if (Visible("Установить обновление") is not null || Visible("Понятно, не показывать") is not null) throw new Exception("Свёрнутые помехи видны");
+        vm.ShowAllIssues = true;
+        Pump();
+        if (!vm.Updates.DataAvailable || Visible("Установить обновление") is null || Visible("Понятно, не показывать") is null)
+            throw new Exception("«Показать все» не раскрыл помехи (обновление списков, VPN)");
+        vm.ShowAllIssues = false;
+        Pump();
+    }
+
+    /// <summary>Галочка «Работать, даже когда окно закрыто» показывает режим помощника.</summary>
+    static void AssertServiceMode(Window w, MainViewModel vm)
+    {
+        var mode = Find<CheckBox>(Find<TabControl>(w)!, c => BindingOperations.GetBinding(c, ToggleButton.IsCheckedProperty)?.Path.Path == "ServiceMode")
+            ?? throw new Exception("Нет галочки «Работать, даже когда окно закрыто»");
         if (mode.IsChecked != (vm.Helper.Status?.RunMode != "process")) throw new Exception("Галочка режима не совпадает с режимом помощника");
     }
 
