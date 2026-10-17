@@ -1,5 +1,6 @@
-// DNS для всей сети (06 §3.8): анализ подмены, защищённый DNS (https-dns-proxy) по кнопке, возврат как было.
-// https-dns-proxy ставится только по кнопке: при установке он сам переключает dnsmasq (проверено в эмуляторе).
+// DNS для всей сети (06 §3.8): анализ подмены, варианты DNS (от провайдера, Google, Cloudflare, Quad9, Яндекс, свой)
+// по кнопке, возврат как было. DoH — через https-dns-proxy: ставится только по кнопке, при установке сам переключает
+// dnsmasq (проверено в эмуляторе). Вариант только с обычным DNS — серверы dnsmasq, прокси выключен.
 'use strict';
 
 import { readfile, stat, popen } from 'fs';
@@ -9,7 +10,11 @@ import * as pr from 'dpishell.probe';
 
 const STATUS = '/etc/dpishell/dns-status.json';
 const BACKUP = '/etc/dpishell/dns-backup.json';
+const CUSTOM = '/etc/dpishell/dns-custom.json';
 const NEUTRAL = ['example.com', 'wikipedia.org'];
+// Запрос A example.com в формате RFC 8484 (GET ?dns=): понимают все DoH-серверы, в отличие от JSON.
+const PROBE_QUERY = 'AAABAAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE';
+const FIRST_PORT = 5053;
 
 function sh(cmd) {
 	let p = popen(`${cmd} 2>&1`);
@@ -78,19 +83,62 @@ function hosts_to_check() {
 	return uniq([...hosts, ...NEUTRAL]);
 }
 
-function doh_timing() {
-	let out = [];
-	for (let d in [{ name: 'Google', url: 'https://8.8.8.8/resolve?type=A&name=example.com' },
-	               { name: 'Cloudflare', url: 'https://1.1.1.1/dns-query?type=A&name=example.com', accept: 'application/dns-json' }]) {
-		let r = sh(`curl -sS -o /dev/null --max-time 4 -w '%{http_code} %{time_total}' ${d.accept ? '-H ' + q('accept: ' + d.accept) : ''} ${q(d.url)}`);
-		let w = split(trim(r.out), ' ');
-		push(out, { name: d.name, doh_ok: w[0] == '200', ms: w[0] == '200' ? int(+w[1] * 1000) : null });
+// Варианты DNS: файл пакета + свой (последний заданный из приложения или страницы).
+function presets() {
+	return st.read_json(`${st.P.share}/dns-presets.json`, { presets: [] }).presets;
+}
+
+function custom() {
+	return st.read_json(CUSTOM, null);
+}
+
+function preset_of(id) {
+	if (id == 'custom') {
+		let c = custom();
+		return c ? { ...c, id: 'custom' } : null;
 	}
-	return out;
+	return filter(presets(), p => p.id == id)[0];
+}
+
+function proxy_enabled() {
+	return !!stat('/etc/init.d/https-dns-proxy') && sh('/etc/init.d/https-dns-proxy enabled').rc == 0;
+}
+
+// Текущий вариант; до появления вариантов «защищённый DNS» = default (Google + Cloudflare).
+function current_id() {
+	let id = trim(sh('uci -q get dpishell.main.dns_preset').out);
+	if (length(id) && preset_of(id))
+		return id;
+	return proxy_enabled() ? 'default' : 'provider';
 }
 
 function mode() {
-	return stat('/etc/init.d/https-dns-proxy') && sh('/etc/init.d/https-dns-proxy enabled').rc == 0 ? 'doh' : 'provider';
+	let p = preset_of(current_id());
+	if (!p || p.id == 'provider')
+		return 'provider';
+	return length(p.resolvers ?? []) ? 'doh' : 'plain';
+}
+
+// Отвечает ли DoH-сервер: запрос по адресу из bootstrap (DNS провайдера подменяет ответы — 02-spec §9.11).
+function doh_check(r) {
+	let host = pr.host_of(r.doh);
+	let ip = filter(r.bootstrap ?? [], x => match(x, /^[0-9.]+$/))[0];
+	let res = ip ? `--resolve ${q(`${host}:443:${ip}`)}` : '';
+	let out = sh(`curl -sS -o /dev/null --max-time 4 -w '%{http_code} %{time_total}' ${res} -H 'accept: application/dns-message' ${q(`${r.doh}?dns=${PROBE_QUERY}`)}`);
+	let w = split(trim(out.out), ' ');
+	let ok = w[0] == '200';
+	return { ok, ms: ok ? int(+w[1] * 1000) : null };
+}
+
+// Доступность и скорость DoH-серверов всех вариантов (для выбора) или заданного списка.
+function doh_timing(list) {
+	let out = [];
+	for (let p in list ?? filter(presets(), p => length(p.resolvers ?? []) == 1))
+		for (let r in p.resolvers ?? []) {
+			let c = doh_check(r);
+			push(out, { id: p.id, name: p.title, doh_ok: c.ok, ms: c.ms });
+		}
+	return out;
 }
 
 function analyze() {
@@ -120,7 +168,8 @@ function analyze() {
 function status() {
 	let s = st.read_json(STATUS, {});
 	return {
-		mode: mode(), spoofed: s.spoofed ?? null, checked_at: s.checked_at ?? null,
+		mode: mode(), preset: current_id(), custom: custom(),
+		spoofed: s.spoofed ?? null, checked_at: s.checked_at ?? null,
 		servers: s.servers ?? [], fallback_active: !!stat('/tmp/dpishell/dns-fallback'),
 	};
 }
@@ -135,8 +184,33 @@ function pkg(action, name) {
 	return sh(`opkg ${action == 'install' ? 'update >/dev/null; opkg install' : 'remove'} ${q(name)}`);
 }
 
+function dnsmasq_restart_checked() {
+	sh('/etc/init.d/dnsmasq restart');
+	sh('sleep 2');
+	if (!resolves_locally()) {
+		sh('/etc/init.d/dnsmasq restart');
+		sh('sleep 2');
+	}
+	return resolves_locally();
+}
+
+// Копия могла быть снята, когда https-dns-proxy уже стоял (поставлен вручную): его адреса 127.0.0.1#505x
+// и «канарейки» /mask.icloud.com/… — не настройки пользователя, а следы прокси. Без них — и noresolv прокси.
+function clean_backup(b) {
+	if (!b)
+		return b;
+	let srv = b.server == null ? null : (type(b.server) == 'array' ? b.server : [b.server]);
+	if (srv) {
+		let kept = filter(srv, s => !match(s, /^127\.0\.0\.1#50[0-9][0-9]$/) && !match(s, /^\/(mask\.icloud\.com|mask-h2\.icloud\.com|use-application-dns\.net)\/$/));
+		if (length(kept) != length(srv))
+			b = { ...b, noresolv: null };
+		b = { ...b, server: length(kept) ? kept : null };
+	}
+	return b;
+}
+
 function restore() {
-	let b = st.read_json(BACKUP, null);
+	let b = clean_backup(st.read_json(BACKUP, null));
 	if (stat('/etc/init.d/https-dns-proxy'))
 		sh('/etc/init.d/https-dns-proxy stop; /etc/init.d/https-dns-proxy disable');
 	pkg('remove', 'https-dns-proxy');
@@ -151,51 +225,124 @@ function restore() {
 		if (b.peerdns != null) { c.set('network', 'wan', 'peerdns', b.peerdns); c.commit('network'); }
 	}
 	// После удаления пакета dnsmasq сам не перезапускается — DNS роутера пропадает (проверено в эмуляторе).
-	sh('/etc/init.d/dnsmasq restart');
-	sh('sleep 2');
-	if (!resolves_locally()) {
-		sh('/etc/init.d/dnsmasq restart');
-		sh('sleep 2');
-	}
+	let ok = dnsmasq_restart_checked();
 	sh('rm -f /tmp/dpishell/dns-fallback');
-	if (resolves_locally()) {
+	if (ok) {
 		sh(`rm -f ${q(BACKUP)}`);
+		st.uci_set({ dns_preset: 'provider' });
 		return null;
 	}
 	return 'DNS роутера не отвечает после возврата — перезагрузите роутер';
 }
 
-function enable() {
-	let t = doh_timing();
-	if (!length(filter(t, x => x.doh_ok)))
-		return 'Серверы защищённого DNS недоступны — включать нельзя, сеть останется без DNS';
-	if (!stat(BACKUP)) {
-		let c = cursor();
-		let sec = c.get_first('dhcp', 'dnsmasq');
-		st.write_atomic(BACKUP, sprintf('%J\n', {
-			at: time(), section: sec,
-			noresolv: c.get('dhcp', sec, 'noresolv'), server: c.get('dhcp', sec, 'server'),
-			peerdns: c.get('network', 'wan', 'peerdns'),
-		}));
-	}
-	let r = pkg('install', 'https-dns-proxy');
-	if (r.rc != 0 && !stat('/etc/init.d/https-dns-proxy'))
-		return `Не удалось установить https-dns-proxy: ${trim(r.out)}`;
-	sh('/etc/init.d/https-dns-proxy enable; /etc/init.d/https-dns-proxy restart');
-	sh('sleep 2');
-	if (!resolves_locally()) {
-		restore();
-		return 'Защищённый DNS не заработал — всё возвращено как было';
-	}
-	return null;
+// Прежние настройки dnsmasq — один раз, до первого изменения (возврат — restore()).
+function backup() {
+	if (stat(BACKUP))
+		return;
+	let c = cursor();
+	let sec = c.get_first('dhcp', 'dnsmasq');
+	st.write_atomic(BACKUP, sprintf('%J\n', {
+		at: time(), section: sec,
+		noresolv: c.get('dhcp', sec, 'noresolv'), server: c.get('dhcp', sec, 'server'),
+		peerdns: c.get('network', 'wan', 'peerdns'),
+	}));
 }
 
+// Обычные DNS-серверы для dnsmasq (вариант без DoH) или возврат к прежним (null).
+function set_plain(list) {
+	let b = clean_backup(st.read_json(BACKUP, {}));
+	let c = cursor();
+	let sec = b.section ?? c.get_first('dhcp', 'dnsmasq');
+	c.delete('dhcp', sec, 'noresolv');
+	c.delete('dhcp', sec, 'server');
+	if (list) {
+		c.set('dhcp', sec, 'noresolv', '1');
+		c.set('dhcp', sec, 'server', list);
+	} else {
+		if (b.noresolv != null) c.set('dhcp', sec, 'noresolv', b.noresolv);
+		if (b.server != null) c.set('dhcp', sec, 'server', b.server);
+	}
+	c.commit('dhcp');
+}
 
-// Таймер: оба DoH-сервера пропали — временно DNS провайдера; вернулись — снова защищённый (06 §3.8).
-function watch() {
-	if (mode() != 'doh' && !stat('/tmp/dpishell/dns-fallback'))
+// Резолверы https-dns-proxy: свои секции вместо прежних, порты 5053, 5054…
+function set_resolvers(list) {
+	let c = cursor();
+	c.load('https-dns-proxy');
+	let old = [];
+	c.foreach('https-dns-proxy', 'https-dns-proxy', s => { push(old, s['.name']); });
+	for (let n in old)
+		c.delete('https-dns-proxy', n);
+	for (let i = 0; i < length(list); i++) {
+		let n = c.add('https-dns-proxy', 'https-dns-proxy');
+		c.set('https-dns-proxy', n, 'resolver_url', list[i].doh);
+		// С одним адресом bootstrap прокси падает в цикле (c-ares: «needed more IO event handler, than the number
+		// of provided nameservers: 1», проверено в эмуляторе) — тот же адрес дважды, чужой сервер не подставляем.
+		let boot = list[i].bootstrap ?? [];
+		if (length(boot) == 1)
+			boot = [boot[0], boot[0]];
+		if (length(boot))
+			c.set('https-dns-proxy', n, 'bootstrap_dns', join(',', boot));
+		c.set('https-dns-proxy', n, 'listen_port', `${FIRST_PORT + i}`);
+	}
+	c.commit('https-dns-proxy');
+}
+
+// Включить вариант DNS. Не заработал — вернуть предыдущий (или как было у провайдера). null — успех.
+function apply(id) {
+	let p = preset_of(id);
+	if (!p)
+		return 'Нет такого варианта DNS';
+	if (id == 'provider')
+		return restore();
+	let prev = current_id();
+	let res = p.resolvers ?? [];
+	if (length(res) && !length(filter(res, r => doh_check(r).ok)))
+		return `Серверы «${p.title}» не отвечают — включать нельзя, сеть останется без DNS`;
+	backup();
+	if (length(res)) {
+		if (!stat('/etc/init.d/https-dns-proxy')) {
+			let r = pkg('install', 'https-dns-proxy');
+			if (r.rc != 0 && !stat('/etc/init.d/https-dns-proxy'))
+				return `Не удалось установить https-dns-proxy: ${trim(r.out)}`;
+		}
+		// Сначала прокси останавливаем (он возвращает dnsmasq как было), затем — свои резолверы и запуск.
+		sh('/etc/init.d/https-dns-proxy stop');
+		set_plain(null);
+		set_resolvers(res);
+		sh('/etc/init.d/https-dns-proxy enable; /etc/init.d/https-dns-proxy restart');
+		// Прокси поднимает соединение с сервером не сразу (свой вариант после обычного DNS — до ~10 с).
+		for (let i = 0; i < 15 && !resolves_locally(); i++)
+			sleep(1000);
+	} else {
+		if (stat('/etc/init.d/https-dns-proxy'))
+			sh('/etc/init.d/https-dns-proxy stop; /etc/init.d/https-dns-proxy disable');
+		set_plain(p.plain);
+		dnsmasq_restart_checked();
+	}
+	sh('rm -f /tmp/dpishell/dns-fallback');
+	if (resolves_locally()) {
+		st.uci_set({ dns_preset: id });
 		return null;
-	let up = length(filter(doh_timing(), x => x.doh_ok)) > 0;
+	}
+	if (prev != id && prev != 'provider')
+		apply(prev);
+	else
+		restore();
+	return `DNS «${p.title}» не заработал — возвращено как было`;
+}
+
+// Прежняя кнопка «Включить защищённый DNS» (07 §5): Google + Cloudflare.
+function enable() {
+	return apply('default');
+}
+
+// Таймер: DoH-серверы текущего варианта пропали — временно DNS провайдера; вернулись — снова защищённый (06 §3.8).
+function watch() {
+	let p = preset_of(current_id());
+	if (!p || !length(p.resolvers ?? []) || (!proxy_enabled() && !stat('/tmp/dpishell/dns-fallback')))
+		return null;
+	let up = length(filter(p.resolvers, r => doh_check(r).ok)) > 0;
 	if (!stat('/tmp/dpishell/dns-fallback') && !resolves_locally() && !up) {
 		sh('/etc/init.d/https-dns-proxy stop; touch /tmp/dpishell/dns-fallback');
 		return 'dns_fallback';
@@ -207,4 +354,4 @@ function watch() {
 	return null;
 }
 
-export { analyze, status, enable, restore, watch };
+export { analyze, status, enable, restore, watch, apply, presets, current_id, CUSTOM };

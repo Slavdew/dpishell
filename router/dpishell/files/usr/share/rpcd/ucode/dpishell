@@ -460,6 +460,78 @@ methods.dns_status = {
 	}
 };
 
+methods.dns_presets = {
+	call: function() {
+		return { presets: map(dns.presets(), p => ({ id: p.id, title: p.title, note: p.note ?? null,
+			resolvers: p.resolvers ?? [], plain: p.plain ?? [] })), current: dns.current_id(), custom: st.read_json(dns.CUSTOM, null) };
+	}
+};
+
+function pr_host(url) {
+	let m = match(url, /^https:\/\/([^\/:]+)/);
+	return m ? m[1] : '';
+}
+
+function valid_ip(s) {
+	return type(s) == 'string' && length(s) <= 39 && match(s, /^[0-9a-fA-F.:]+$/) && iptoarr(s) != null;
+}
+
+function ip_list(v, field) {
+	if (v == null)
+		return [];
+	if (type(v) != 'array' || length(v) > 4 || length(filter(v, x => !valid_ip(x))))
+		return err('invalid', 'До 4 адресов IPv4/IPv6', field);
+	return v;
+}
+
+// Свой вариант: только https, без кавычек и пробелов; адреса — настоящие IPv4/IPv6, до 4.
+function custom_of(c) {
+	if (type(c) != 'object')
+		return err('invalid', 'custom: объект', 'custom');
+	// Управляющие символы — классом [[:cntrl:]]: \x00 в регулярном выражении ucode ломает разбор.
+	if (type(c.title) != 'string' || !length(c.title) || length(c.title) > 120 || match(c.title, /[[:cntrl:]"'`\\$<>]/))
+		return err('invalid', 'Название до 40 символов', 'custom.title');
+	let doh = c.doh;
+	if (doh != null && (type(doh) != 'string' || length(doh) > 200 || !match(doh, /^https:\/\/[A-Za-z0-9.-]+(:[0-9]{1,5})?(\/[A-Za-z0-9._~\/-]*)?$/)))
+		return err('invalid', 'Адрес DoH вида https://сервер/dns-query', 'custom.doh');
+	let boot = ip_list(c.bootstrap, 'custom.bootstrap');
+	if (type(boot) == 'object') return boot;
+	let plain = ip_list(c.plain, 'custom.plain');
+	if (type(plain) == 'object') return plain;
+	if (doh == null && !length(plain))
+		return err('invalid', 'Нужен адрес DoH или обычные адреса DNS', 'custom');
+	// Имя сервера DoH нечем узнать, кроме DNS провайдера (он подменяет ответы) — нужны его адреса.
+	if (doh != null && !valid_ip(trim(pr_host(doh), '[]')) && !length(boot))
+		return err('invalid', 'Укажите адреса сервера DoH (bootstrap)', 'custom.bootstrap');
+	return { title: c.title, resolvers: doh != null ? [ { doh, bootstrap: boot } ] : [], plain };
+}
+
+methods.dns_set = {
+	args: { preset: 'preset', custom: {} },
+	call: function(req) {
+		let b = busy(); if (b) return b;
+		if (st.job_running('dns'))
+			return err('busy', 'Идёт настройка DNS');
+		let a = req.args, id;
+		if (a.custom != null && length(a.custom)) {
+			let c = custom_of(a.custom);
+			if (c.error) return c;
+			st.ensure_dirs();
+			st.write_atomic(dns.CUSTOM, sprintf('%J\n', c));
+			id = 'custom';
+		} else {
+			id = a.preset;
+			// «custom» без нового описания — последний заданный свой вариант.
+			if (id == 'custom' && st.read_json(dns.CUSTOM, null)) {}
+			else if (type(id) != 'string' || !length(filter(dns.presets(), p => p.id == id)))
+				return err('invalid', `Вариант: ${join(', ', map(dns.presets(), p => p.id))}`, 'preset');
+		}
+		st.write_atomic('/tmp/dpishell/dns_set.json', sprintf('%J\n', { preset: id }));
+		spawn('dns_set');
+		return { started: true };
+	}
+};
+
 for (let name in ['dns_analyze', 'dns_enable', 'dns_restore'])
 	methods[name] = ((n) => ({
 		call: function() {

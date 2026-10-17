@@ -105,7 +105,7 @@ else if (cmd == 'core_install') {
 	st.write_status_json();
 	unlink(l);
 }
-else if (cmd == 'dns_analyze' || cmd == 'dns_enable' || cmd == 'dns_restore') {
+else if (cmd == 'dns_analyze' || cmd == 'dns_enable' || cmd == 'dns_restore' || cmd == 'dns_set') {
 	let l = lock('dns');
 	if (!l) exit(1);
 	let job = '/tmp/dpishell/dns_job.json';
@@ -115,6 +115,8 @@ else if (cmd == 'dns_analyze' || cmd == 'dns_enable' || cmd == 'dns_restore') {
 	try {
 		if (cmd == 'dns_analyze') dns.analyze();
 		else if (cmd == 'dns_enable') { e = dns.enable(); if (!e) dns.analyze(); }
+		// Вариант уже проверен rpcd и записан им (свой — в dns-custom.json), здесь только id.
+		else if (cmd == 'dns_set') { e = dns.apply(st.read_json('/tmp/dpishell/dns_set.json', {}).preset); if (!e) dns.analyze(); }
 		else e = dns.restore();
 	} catch (x) { e = `${x}`; }
 	st.write_atomic(job, sprintf('%J
