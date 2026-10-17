@@ -936,6 +936,10 @@ public sealed class RouterViewModel : Observable, IDisposable
 
     public ICommand StartSelectCmd { get; }
     public ICommand StartDeepCmd { get; }
+
+    bool _offerDeep;
+    /// <summary>Подбор на роутере ничего не нашёл — в итоге предложить глубокий поиск.</summary>
+    public bool OfferDeep { get => _offerDeep; private set => Set(ref _offerDeep, value); }
     public ICommand StopSelectCmd { get; }
     public ICommand ApplyCmd { get; }
     public ICommand ApplySelectedCmd { get; }
@@ -1101,8 +1105,10 @@ public sealed class RouterViewModel : Observable, IDisposable
         {
             SetBest(null, false);
             ResultText = "Ни одна стратегия не помогла.";
-            ResultHint = "Проверьте свои адреса роутера или запустите полный подбор.";
+            ResultHint = "Проверьте свои адреса роутера или поищите глубже — роутер придумает новые стратегии.";
         }
+        // «Искать глубже» — только когда готовые не помогли (UX-аудит, п. 30), а не равной кнопкой рядом с «Начать подбор».
+        OfferDeep = !p.Cancelled && p.Best is null;
     }
 
     public async Task CancelSelectAsync()

@@ -46,6 +46,29 @@ public sealed class FeatureViewModelTests
         Assert.Contains(said, s => s.Contains("Игровой режим выключен"));
     }
 
+    /// <summary>UX-аудит, п. 34: «Все адреса» — не переключатель, а «Проверить, поможет ли обход» с подтверждением.</summary>
+    [Fact]
+    public async Task AllAddresses_OnlyAfterConfirm()
+    {
+        using var t = new TempDir();
+        var shell = new Shell(Make.Paths(t));
+        var (f, link) = await Helper(shell);
+        await using var _ = f;
+        string? asked = null;
+        bool answer = false;
+        var net = new NetViewModel(link) { Confirm = q => { asked = q; return answer; } };
+        await net.SetModeAsync(IpsetMode.List);
+
+        await net.TryAnyAsync();
+        Assert.Equal(NetViewModel.TryAnyQuestion, asked);
+        Assert.False(net.AnyActive);   // «Нет» — ничего не включилось
+
+        answer = true;
+        await net.TryAnyAsync();
+        Assert.True(net.AnyActive);
+        Assert.False(net.TryAnyCmd.CanExecute(null));   // уже идёт — второй раз не предлагаем
+    }
+
     [Fact]
     public async Task AllAddresses_CountsDown_AndRevertsWithNotice()
     {

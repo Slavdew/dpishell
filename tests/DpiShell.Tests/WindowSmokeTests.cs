@@ -631,6 +631,7 @@ public sealed class WindowSmokeTests
         SetProp(vm, "SelectProgressText", "Проверено 6 из 10");
         SetProp(vm, "ResultText", "Подходит: " + strategies[0].Title);
         SetProp(vm, "ResultHint", "без обхода не открывалось: YouTube, Discord.");
+        SetProp(vm, "OfferDeep", true);   // «Искать глубже» — в итоге, не рядом с «Начать подбор» (п. 30)
         typeof(MainViewModel).GetMethod("SetBest", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .Invoke(vm, [strategies[0].Id]);
 

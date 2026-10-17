@@ -978,10 +978,17 @@ public sealed partial class MainViewModel : Observable
         return (ids, Full);
     }
 
+    bool _offerDeep;
+    /// <summary>
+    /// «Искать глубже» — только после подбора, который не нашёл стратегию для всего (UX-аудит, п. 30): рядом с «Начать подбор»
+    /// равной кнопкой её нажимали по ошибке и ждали 15 минут.
+    /// </summary>
+    public bool OfferDeep { get => _offerDeep; private set => Set(ref _offerDeep, value); }
+
     void ResetResults()
     {
         Scores.Clear(); SelectedScore = null;
-        ResultText = ""; ResultHint = ""; SetBest(null);
+        ResultText = ""; ResultHint = ""; SetBest(null); OfferDeep = false;
         SelectProgress = 0; SelectIndeterminate = false;
         SelectProgressText = "Подготовка…";
     }
@@ -1189,6 +1196,8 @@ public sealed partial class MainViewModel : Observable
         // Новая статистика и найденные стратегии — в список на главной; запасные помощник запомнил сам.
         _ = ReloadChoicesAsync();
 
+        // Готовые не помогли (или помогли не со всем), подбор дошёл до конца — предложить глубокий поиск; после него — уже нет.
+        OfferDeep = !r.Cancelled && !r.NothingBlocked && !_searching && best is not { Perfect: true };
         if (r.NothingBlocked)
         {
             ResultText = "Без обхода всё открывается: блокировок нет или включён VPN.";
