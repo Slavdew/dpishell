@@ -21,7 +21,7 @@ public class RouterUpdateUninstallTests
         using var c = await Login(r);
         var s = await c.StatusAsync();
         Assert.Equal(new ApiVersion(1, 0), s.Api);
-        Assert.Equal("1.0.0", s.MinApp);
+        Assert.Equal("0.9.0", s.MinApp);
         Assert.Contains("update_install", s.Methods!);
         Assert.True(s.Update!.Available);
         Assert.Equal("0.2.1-r1", s.Update.Version);

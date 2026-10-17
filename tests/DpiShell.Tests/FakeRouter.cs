@@ -114,7 +114,7 @@ public sealed class FakeRouter : IDisposable
     /// <summary>Как роутер 0.2.0: api "1.0", methods (все, что знает подделка), min_app, update.</summary>
     public FakeRouter As020()
     {
-        StatusApi = "\"1.0\""; RouterVersion = "0.2.0-r3"; MinApp = "1.0.0"; UpdateFieldOn = true;
+        StatusApi = "\"1.0\""; RouterVersion = "0.2.0-r3"; MinApp = "0.9.0"; UpdateFieldOn = true;
         MethodsJson = """["apply","check_now","conflict_stop","core_install","diag","disable","dns_analyze","dns_enable","dns_presets","dns_restore","dns_set","dns_status","enable","flow_offload_fix","ipv6_set","lists_get","lists_set","mode_set","report","schedule_set","select_cancel","select_progress","select_start","site_check","site_check_result","status","strategies","strategies_user_set","strategy_set","targets_get","targets_set","uninstall","update_check","update_install"]""";
         return this;
     }

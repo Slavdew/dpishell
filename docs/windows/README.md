@@ -34,14 +34,7 @@
 
 ## Как выглядит
 
-Снимки экрана (появятся после правок интерфейса):
-
-- Главная — [светлая тема](../screenshots/main-light.png), [тёмная тема](../screenshots/main-dark.png)
-- [Подбор стратегии](../screenshots/select.png)
-- [Роутер](../screenshots/router.png)
-- [DNS](../screenshots/dns.png)
-- [«Починить адреса»](../screenshots/hosts.png)
-- [Настройки](../screenshots/settings.png)
+Снимки экрана появятся в следующих версиях.
 
 ## Удаление полностью
 

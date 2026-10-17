@@ -11,9 +11,13 @@
 
 Они видят друг друга по [договору](docs/dev/router-api.md); каждый работает и сам по себе. Установка самой OpenWrt — под ответственность пользователя.
 
-## Как выглядит
+## Скачать (бета)
 
-Снимки экрана Windows-приложения (появятся после правок интерфейса): [главная, светлая](docs/screenshots/main-light.png) · [главная, тёмная](docs/screenshots/main-dark.png) · [подбор](docs/screenshots/select.png) · [роутер](docs/screenshots/router.png) · [DNS](docs/screenshots/dns.png) · [«Починить адреса»](docs/screenshots/hosts.png) · [настройки](docs/screenshots/settings.png).
+1. Откройте [страницу последнего выпуска](https://github.com/Slavdew/dpishell/releases/latest) и скачайте `DpiShell-<версия>-portable.zip`.
+2. Распакуйте в любую папку и запустите `DpiShell.exe`. Программа не подписана — Windows SmartScreen может предупредить: «Подробнее» → «Выполнить в любом случае».
+3. Нажмите «Включить». Подробно — [docs/windows/README.md](docs/windows/README.md).
+
+Это бета: если что-то не работает, [напишите](https://github.com/Slavdew/dpishell/issues), что видели (лучше со снимком экрана). Снимки экрана программы появятся в следующих версиях.
 
 ## Разработчикам
 
