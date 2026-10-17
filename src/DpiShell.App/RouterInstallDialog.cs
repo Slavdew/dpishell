@@ -194,3 +194,94 @@ public static class RouterInstallDialog
         return w;
     }
 }
+
+/// <summary>
+/// «Удалить DpiShell с роутера»: что произойдёт, выбор «сохранить настройки / удалить полностью», галочка-подтверждение,
+/// «Отмена» — по умолчанию (Enter и Esc). После — «что осталось» и «Установить заново».
+/// </summary>
+public static class RouterUninstallDialog
+{
+    public static void Show(RouterUninstallViewModel vm, Window? owner) => Create(vm, owner).ShowDialog();
+
+    public static Window Create(RouterUninstallViewModel vm, Window? owner)
+    {
+        vm.Router.RefreshGateway();
+        var w = DialogKit.Window("Удаление DpiShell с роутера", vm, owner);
+        var panel = new StackPanel { Margin = new Thickness(24, 20, 24, 18), Width = 460 };
+
+        var confirm = new StackPanel().Show(nameof(RouterUninstallViewModel.IsConfirm)).Enable(nameof(RouterUninstallViewModel.IsConfirm));
+        confirm.Children.Add(new TextBlock
+        {
+            Text = "Обход на роутере перестанет работать для всех устройств дома. Что DpiShell менял в настройках роутера (DNS, ускорение сети, расписание), вернётся как было; ядро обхода и пакеты удалятся.",
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12),
+        });
+        var keep = new RadioButton { Content = "Сохранить настройки — чтобы поставить заново с ними", Margin = new Thickness(0, 2, 0, 2), HorizontalAlignment = HorizontalAlignment.Left };
+        keep.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, nameof(RouterUninstallViewModel.KeepSettings));
+        var full = new RadioButton { Content = "Удалить полностью — вместе с настройками", Margin = new Thickness(0, 2, 0, 10), HorizontalAlignment = HorizontalAlignment.Left };
+        full.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, nameof(RouterUninstallViewModel.Full));
+        confirm.Children.Add(keep);
+        confirm.Children.Add(full);
+
+        // Не вошли на роутер — удаление по SSH, нужен пароль.
+        var pwBlock = new StackPanel().Show(nameof(RouterUninstallViewModel.ShowPassword));
+        pwBlock.Children.Add(new TextBlock { Text = "Пароль роутера (удаление пойдёт по SSH):", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) });
+        var password = new PasswordBox { Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 0, 0, 6) };
+        AutomationProperties.SetName(password, "Пароль роутера");
+        pwBlock.Children.Add(password);
+        var noPassword = new CheckBox { Content = "Пароль не задан (свежая OpenWrt)", Margin = new Thickness(0, 2, 0, 6), HorizontalAlignment = HorizontalAlignment.Left };
+        noPassword.Checked += (_, _) => { password.Clear(); password.IsEnabled = false; };
+        noPassword.Unchecked += (_, _) => password.IsEnabled = true;
+        pwBlock.Children.Add(noPassword);
+        if (vm.Router.HasSavedPassword) pwBlock.Children.Add(DialogKit.Hint("Поле пустое — сохранённый пароль.", new Thickness(0, 0, 0, 6)));
+        confirm.Children.Add(pwBlock);
+
+        var sure = new CheckBox { Content = "Да, удалить DpiShell с роутера", Margin = new Thickness(0, 6, 0, 4), HorizontalAlignment = HorizontalAlignment.Left, FontWeight = FontWeights.SemiBold };
+        sure.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, nameof(RouterUninstallViewModel.Understood));
+        confirm.Children.Add(sure);
+        panel.Children.Add(confirm);
+
+        var progress = DialogKit.Text(nameof(RouterUninstallViewModel.ProgressText), new Thickness(0, 8, 0, 8));
+        if (Application.Current?.TryFindResource("Hint") is Style hint) progress.Style = hint;
+        panel.Children.Add(progress.Show(nameof(RouterUninstallViewModel.Working)));
+
+        var done = new StackPanel().Show(nameof(RouterUninstallViewModel.IsDone));
+        var title = DialogKit.Text(nameof(RouterUninstallViewModel.ResultTitle), new Thickness(0, 0, 0, 6), bold: true);
+        title.FontSize = 16;
+        done.Children.Add(title);
+        done.Children.Add(DialogKit.Text(nameof(RouterUninstallViewModel.LeftText), new Thickness(0, 0, 0, 6)).Show(nameof(RouterUninstallViewModel.HasLeft)));
+        done.Children.Add(DialogKit.Hint("Поставить DpiShell снова можно в любой момент — «Установить на роутер».", new Thickness(0, 4, 0, 0)));
+        panel.Children.Add(done);
+
+        panel.Children.Add(DialogKit.Text(nameof(RouterUninstallViewModel.ErrorText), new Thickness(0, 8, 0, 4), "Danger").Show(nameof(RouterUninstallViewModel.HasError)));
+        panel.Children.Add(DialogKit.Details(nameof(RouterUninstallViewModel.Details), nameof(RouterUninstallViewModel.HasDetails)));
+
+        var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+        var remove = DialogKit.Button("Удалить").Enable(nameof(RouterUninstallViewModel.CanRemove)).Show(nameof(RouterUninstallViewModel.IsConfirm));
+        if (Application.Current?.TryFindResource("DangerButton") is Style danger) remove.Style = danger;
+        var reinstall = DialogKit.Button("Установить заново", primary: true).Show(nameof(RouterUninstallViewModel.IsDone));
+        var cancel = DialogKit.Button("Отмена", cancel: true).Show(nameof(RouterUninstallViewModel.IsConfirm));
+        cancel.IsDefault = true;   // Enter — отмена: удаление не в один клик
+        var close = DialogKit.Button("Закрыть").Show(nameof(RouterUninstallViewModel.IsDone));
+        foreach (var b in new[] { remove, reinstall, cancel, close }) buttons.Children.Add(b);
+        panel.Children.Add(buttons);
+        w.Content = panel;
+
+        remove.Click += async (_, _) =>
+        {
+            try { await vm.UninstallAsync(password.Password, noPassword.IsChecked == true); }
+            catch (Exception ex) { vm.Router.Say(Texts.Friendly(ex)); }
+            password.Clear();
+        };
+        reinstall.Click += (_, _) => { w.Close(); vm.Router.InstallCmd?.Execute(null); };
+        close.Click += (_, _) => w.Close();
+        cancel.Click += (_, _) => w.Close();
+        w.Closing += (_, e) =>
+        {
+            if (!vm.Working) return;
+            e.Cancel = true;
+            vm.Router.Say("Подождите: удаление ещё идёт");
+        };
+        w.Closed += (_, _) => password.Clear();
+        return w;
+    }
+}

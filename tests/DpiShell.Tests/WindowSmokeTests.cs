@@ -525,7 +525,6 @@ public sealed class WindowSmokeTests
             {
                 ThemeManager.Apply(theme);
                 using var fake = new FakeRouter().As020();
-                fake.Remove();
                 var shell = new Shell(new AppPaths(tmp.Sub("setup-" + theme), Repo.Data));
                 var settings = TestWindow.Settings(shell);
                 var offline = RouterSshScenarioTests.PreflightOk.Replace("\"net\":{\"feed\":true,\"fw_feed\":true,\"github\":true}", "\"net\":{\"feed\":false,\"fw_feed\":true,\"github\":false}");
@@ -555,6 +554,33 @@ public sealed class WindowSmokeTests
                     Directory.CreateDirectory(snapDir);
                     Snap(d, Path.Combine(snapDir, $"{theme}-setup-{name}.png"));
                 }
+
+                // Удаление: подтверждение (не в один клик, «Отмена» по умолчанию) → итог «Ничего не осталось» и «Установить заново».
+                var uninstallSsh = RouterSetupViewModelTests.Ssh(fake);
+                RouterSetupViewModelTests.UninstallWritesResult(fake, uninstallSsh);
+                router.SshConnector = new FakeSshConnector(uninstallSsh);
+                Task.Run(() => router.ConnectAsync("secret")).GetAwaiter().GetResult();
+                var u = router.NewUninstall();
+                var ud = Show(RouterUninstallDialog.Create(u, null));
+                if (Find<Button>(ud, b => b.Content as string == "Удалить" && !b.IsEnabled) is null) throw new Exception("«Удалить» активна без подтверждения");
+                if (Find<Button>(ud, b => b.Content as string == "Отмена" && b.IsDefault && b.IsCancel) is null) throw new Exception("«Отмена» не по умолчанию");
+                Shot(ud, "uninstall-confirm");
+                u.Understood = true;
+                Task.Run(() => u.UninstallAsync()).GetAwaiter().GetResult();
+                Pump();
+                if (Find<Button>(ud, b => b.Content as string == "Установить заново" && b.IsVisible) is null) throw new Exception("После удаления нет «Установить заново»");
+                Shot(ud, "uninstall-done");
+                ud.Close();
+                // Без входа — по SSH, с паролем.
+                fake.Reinstall();
+                settings.RouterPassword = null;
+                Task.Run(() => router.ConnectAsync("")).GetAwaiter().GetResult();
+                var u2 = router.NewUninstall();
+                var ud2 = Show(RouterUninstallDialog.Create(u2, null));
+                if (Find<PasswordBox>(ud2, p => p.IsVisible) is null) throw new Exception("Без входа удаление не спрашивает пароль");
+                Shot(ud2, "uninstall-ssh");
+                ud2.Close();
+                fake.Remove();
 
                 // Установка: начало → роутер не подходит → подходит, через этот ПК → сбой пакетов с «Подробнее» → готово.
                 var i = router.NewInstall();

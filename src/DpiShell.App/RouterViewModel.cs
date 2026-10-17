@@ -227,7 +227,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     bool _searched;
     /// <summary>Роутер уже искали (хоть раз): до того пустое состояние — «не проверялся», а не «не найден» (UX-аудит 2, п. 10).</summary>
     public bool Searched { get => _searched; private set { if (Set(ref _searched, value)) Raise(nameof(EmptyTitle)); } }
-    public string EmptyTitle => Searched ? "Роутер с DpiShell не найден" : "Роутер не проверялся";
+    public string EmptyTitle => Removed ? "DpiShell с роутера удалён" : Searched ? "Роутер с DpiShell не найден" : "Роутер не проверялся";
 
     /// <summary>Инструкция «Как поставить DpiShell на роутер» (п. 9).</summary>
     public const string GuideUrl = "https://github.com/Slavdew/dpishell/blob/master/docs/router/README.md";
@@ -355,6 +355,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     {
         _detection = d;
         if (d is null || d.Found == RouterFound.NotFound) { Status = null; Connected = false; }
+        else ClearRemoved();
         Raise(nameof(Detection)); Raise(nameof(Found)); Raise(nameof(NeedLogin)); Raise(nameof(InstallText));
         UpdateHome();
     }

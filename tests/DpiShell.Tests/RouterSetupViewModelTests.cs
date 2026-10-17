@@ -213,6 +213,123 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.Contains("Администрирование", i.ErrorText);
     }
 
+    // ---------- 2. удаление и полный цикл ----------
+
+    /// <summary>Удаление через API: итог роутер пишет в /tmp/dpishell-uninstall.json, status.json пропадает.</summary>
+    public static void UninstallWritesResult(FakeRouter r, FakeSsh ssh) => r.OnUninstall = () =>
+    {
+        r.Remove();
+        ssh.Files[RouterSsh.UninstallResultPath] = Encoding.UTF8.GetBytes(
+            $$"""{"running":false,"ok":true,"keep_settings":{{(r.UninstallKeepSettings == true ? "true" : "false")}},"message":"DpiShell удалён","at":2}""");
+    };
+
+    /// <summary>Главный сценарий владельца: удалить из окна → поставить заново из окна → снова подключено.</summary>
+    [Fact]
+    public async Task FullCycle_UninstallViaApi_ThenInstallAgain_Connected()
+    {
+        using var r = new FakeRouter().As020();
+        var ssh = Ssh(r);
+        UninstallWritesResult(r, ssh);
+        // Прошлое удаление оставило итог — он не должен приняться за новый.
+        ssh.Files[RouterSsh.UninstallResultPath] = Encoding.UTF8.GetBytes("""{"running":false,"ok":false,"keep_settings":true,"message":"старое","at":1}""");
+        var vm = Make(r, new FakeSshConnector(ssh));
+        Assert.True(await vm.ConnectAsync("secret"));
+        Assert.True(vm.UninstallCmd.CanExecute(null));
+
+        var u = vm.NewUninstall();
+        Assert.False(u.NeedsPassword);   // вошли — через API, пароль сохранённый
+        Assert.True(u.KeepSettings);     // по умолчанию — сохранить настройки
+        Assert.False(u.CanRemove);       // не в один клик: сначала «Да, удалить»
+        Assert.False(await u.UninstallAsync());
+        Assert.Null(r.UninstallKeepSettings);
+
+        u.Full = true;
+        u.Understood = true;
+        Assert.True(await u.UninstallAsync());
+        Assert.False(r.UninstallKeepSettings);
+        Assert.True(u.Clean);
+        Assert.Equal("DpiShell удалён. Ничего не осталось.", u.ResultTitle);
+        var cmds = ssh.Runs.Select(x => x.Command).ToList();
+        Assert.True(cmds.IndexOf("rm -f /tmp/dpishell-uninstall.json") < cmds.IndexOf("sh -s -- --after-uninstall"));
+        // Вкладка — в пустом состоянии с «Установить на роутер».
+        Assert.False(vm.Found);
+        Assert.False(vm.Connected);
+        Assert.Equal("DpiShell с роутера удалён", vm.EmptyTitle);
+        Assert.Equal("Установить на роутер…", vm.InstallText);
+        Assert.False(vm.Busy);
+
+        // Поставить заново: поле пароля пустое — сохранённый.
+        var i = vm.NewInstall();
+        Assert.True(await i.CheckAsync(""));
+        Assert.True(await i.InstallAsync(""));
+        Assert.True(vm.Connected);
+        Assert.True(vm.Found);
+        Assert.NotEqual("DpiShell с роутера удалён", vm.EmptyTitle);
+        Assert.Contains("Подключено", vm.ConnectionText);
+    }
+
+    [Fact]
+    public async Task Uninstall_NotLoggedIn_BySsh_WithPassword()
+    {
+        using var r = new FakeRouter().As020();
+        var ssh = Ssh(r);
+        var conn = new FakeSshConnector(ssh);
+        var vm = Make(r, conn);
+        await vm.ConnectAsync("");   // найден, но без входа
+        Assert.True(vm.Found);
+        var u = vm.NewUninstall();
+        Assert.True(u.NeedsPassword);
+        u.Understood = true;
+        Assert.False(await u.UninstallAsync(""));
+        Assert.Equal("Введите пароль роутера или отметьте «Пароль не задан»", u.ErrorText);
+        Assert.True(await u.UninstallAsync("secret"));
+        Assert.Equal("secret", conn.LastPassword);
+        Assert.Equal("sh -s -- --keep", ssh.Runs[0].Command);
+        Assert.Null(r.UninstallKeepSettings);   // API не звали
+        Assert.True(u.Clean);
+        Assert.False(vm.Found);
+    }
+
+    [Fact]
+    public async Task Uninstall_SomethingLeft_Listed()
+    {
+        using var r = new FakeRouter().As020();
+        var ssh = new FakeSsh
+        {
+            OnScript = (cmd, _) => cmd.EndsWith("--after-uninstall")
+                ? """{"schema":1,"mode":"after-uninstall","left":[{"what":"Папка /opt/zapret","detail":"занята процессом"}],"kept":{"settings":true,"https_dns_proxy":true}}"""
+                : "",
+        };
+        UninstallWritesResult(r, ssh);
+        var vm = Make(r, new FakeSshConnector(ssh));
+        await vm.ConnectAsync("secret");
+        var u = vm.NewUninstall();
+        u.Understood = true;
+        Assert.True(await u.UninstallAsync());
+        Assert.True(r.UninstallKeepSettings);
+        Assert.False(u.Clean);
+        Assert.Equal("DpiShell удалён", u.ResultTitle);
+        Assert.Contains("Осталось на роутере:\n• Папка /opt/zapret — занята процессом", u.LeftText);
+        Assert.Contains("Настройки сохранены", u.LeftText);
+        Assert.Contains("Пакет защищённого DNS оставлен", u.LeftText);
+    }
+
+    [Fact]
+    public async Task Uninstall_ApiStarted_SshUnavailable_SaysCouldNotCheck()
+    {
+        using var r = new FakeRouter().As020();
+        r.OnUninstall = r.Remove;
+        var vm = Make(r, new FailingConnector(new RouterSshException(RouterSshFailure.Unreachable, "нет")));
+        await vm.ConnectAsync("secret");
+        var u = vm.NewUninstall();
+        u.Understood = true;
+        Assert.True(await u.UninstallAsync());
+        Assert.True(r.UninstallKeepSettings);
+        Assert.Equal("Удаление запущено", u.ResultTitle);
+        Assert.Contains("не отвечает по SSH", u.LeftText);
+        Assert.False(vm.Found);
+    }
+
     sealed class FailingConnector(Exception e) : ISshConnector
     {
         public Task<ISshSession> ConnectAsync(RouterSshTarget target, Func<string> password, CancellationToken ct = default) => throw e;

@@ -73,6 +73,7 @@ public sealed partial class RouterViewModel
     /// <summary>После установки: войти тем же паролем (сохраняется как при обычном входе). Пакет только что поднялся — несколько попыток.</summary>
     internal async Task<bool> ConnectAfterInstallAsync(string password)
     {
+        ClearRemoved();
         for (int i = 0; i < 4; i++)
         {
             if (i > 0) await Task.Delay(PollInterval * 2);
@@ -84,6 +85,69 @@ public sealed partial class RouterViewModel
 
     internal void SetBusy(bool busy) => Busy = busy;
 
+    // ---------- «Удалить DpiShell с роутера» ----------
+
+    /// <summary>Окно показывает диалог удаления (с подтверждением).</summary>
+    public event Action? UninstallRequested;
+    public ICommand UninstallCmd => _uninstallCmd ??= new RelayCommand(() => UninstallRequested?.Invoke(), () => Found && !Busy);
+    ICommand? _uninstallCmd;
+
+    public RouterUninstallViewModel NewUninstall() => new(this);
+
+    /// <summary>Удаление идёт дольше этого — итог не ждём, сообщаем «идёт дольше обычного».</summary>
+    public TimeSpan UninstallTimeout { get; set; } = TimeSpan.FromMinutes(3);
+
+    /// <summary>Через API можно: вошли (uninstall — ядро договора, доступно при любой совместимости).</summary>
+    internal bool UninstallViaApi => Connected && _client is { LoggedIn: true };
+
+    internal Task<RouterStarted> CallUninstallAsync(bool keepSettings) => Call(c => c.UninstallAsync(keepSettings));
+
+    /// <summary>
+    /// Через API: сначала SSH (стереть прошлый итог — иначе он примется за новый), потом uninstall, ждать итог и проверить «что осталось».
+    /// SSH не вышел — удаление всё равно запускается, итог — «проверить не удалось» (sshError).
+    /// </summary>
+    internal async Task<(RouterUninstallOutcome? Outcome, Exception? SshError)> UninstallViaApiAsync(RouterSshTarget target, string password, bool keepSettings, CancellationToken ct)
+    {
+        ISshSession? ssh = null;
+        Exception? sshError = null;
+        try { ssh = await SshConnector.ConnectAsync(target, () => password, ct); }
+        catch (RouterSshException e) when (e.Failure != RouterSshFailure.HostKeyChanged) { sshError = e; }
+        try
+        {
+            var r = ssh is null ? null : new RouterSsh(ssh);
+            if (ssh is not null) await ssh.RunAsync($"rm -f {RouterSsh.UninstallResultPath}", null, null, ct);
+            await CallUninstallAsync(keepSettings);
+            if (r is null) return (null, sshError);
+            var started = DateTime.UtcNow;
+            while (true)
+            {
+                if (await r.ReadUninstallResultAsync(ct) is { Running: false } res)
+                    return (new RouterUninstallOutcome(res, await r.AfterUninstallAsync(ct)), null);
+                if (DateTime.UtcNow - started > UninstallTimeout)
+                    throw new RouterSshException(RouterSshFailure.Failed, "Удаление идёт дольше обычного — посмотрите позже: если DpiShell пропал с роутера, всё в порядке");
+                await Task.Delay(PollInterval, ct);
+            }
+        }
+        finally { if (ssh is not null) await ssh.DisposeAsync(); }
+    }
+
+    /// <summary>После удаления: входа больше нет, ищем заново — вкладка переходит в пустое состояние с «Установить на роутер».</summary>
+    internal async Task AfterUninstallAsync()
+    {
+        Connected = false;
+        Status = null;
+        Strategies.Clear();
+        _removed = true;
+        try { await DetectAsync(); }
+        catch (RouterException) { SetDetection(null); }
+        if (!Found) SetConnection("DpiShell с роутера удалён");
+        Raise(nameof(EmptyTitle));
+    }
+
+    bool _removed;
+    /// <summary>Пустое состояние после удаления из окна — «удалён», а не «не найден».</summary>
+    internal bool Removed => _removed;
+    internal void ClearRemoved() { if (_removed) { _removed = false; Raise(nameof(EmptyTitle)); } }
 }
 
 /// <summary>Шаг установки в диалоге: ждёт, идёт, готово, сбой.</summary>
@@ -346,4 +410,149 @@ public sealed class RouterInstallViewModel : Observable
     {
         public void Report(string value) => report(value);
     }
+}
+
+public enum RouterUninstallStage { Confirm, Working, Done, Failed }
+
+/// <summary>
+/// Диалог «Удалить DpiShell с роутера»: что произойдёт, «сохранить настройки / удалить полностью», подтверждение галочкой (не в один клик),
+/// «Отмена» по умолчанию. Через API, если роутер отвечает; иначе — по SSH. После — «что осталось».
+/// </summary>
+public sealed class RouterUninstallViewModel(RouterViewModel router) : Observable
+{
+    readonly List<string> _log = [];
+    CancellationTokenSource? _cts;
+
+    public RouterViewModel Router => router;
+
+    bool _keep = true;
+    /// <summary>Сохранить настройки (стратегию, свои адреса, расписание) — для установки заново.</summary>
+    public bool KeepSettings { get => _keep; set { if (Set(ref _keep, value)) Raise(nameof(Full)); } }
+    public bool Full { get => !_keep; set => KeepSettings = !value; }
+
+    bool _understood;
+    public bool Understood { get => _understood; set { if (Set(ref _understood, value)) Raise(nameof(CanRemove)); } }
+
+    /// <summary>Через API не выйдет (не вошли) — нужен пароль для SSH.</summary>
+    public bool NeedsPassword { get; } = !router.UninstallViaApi;
+
+    RouterUninstallStage _stage;
+    public RouterUninstallStage Stage
+    {
+        get => _stage;
+        private set
+        {
+            if (!Set(ref _stage, value)) return;
+            foreach (var n in new[] { nameof(Working), nameof(CanRemove), nameof(IsConfirm), nameof(IsDone), nameof(ShowPassword) }) Raise(n);
+        }
+    }
+
+    public bool Working => Stage == RouterUninstallStage.Working;
+    public bool IsConfirm => Stage is RouterUninstallStage.Confirm or RouterUninstallStage.Failed;
+    public bool IsDone => Stage == RouterUninstallStage.Done;
+    public bool ShowPassword => NeedsPassword && IsConfirm;
+    public bool CanRemove => Understood && IsConfirm;
+
+    string _result = "";
+    public string ResultTitle { get => _result; private set => Set(ref _result, value); }
+    string _left = "";
+    /// <summary>Что осталось на роутере и что сохранено — по строке.</summary>
+    public string LeftText { get => _left; private set { if (Set(ref _left, value)) Raise(nameof(HasLeft)); } }
+    public bool HasLeft => LeftText.Length > 0;
+    bool _clean;
+    public bool Clean { get => _clean; private set => Set(ref _clean, value); }
+    string _error = "";
+    public string ErrorText { get => _error; private set { if (Set(ref _error, value)) Raise(nameof(HasError)); } }
+    public bool HasError => ErrorText.Length > 0;
+    string _details = "";
+    public string Details { get => _details; private set { if (Set(ref _details, value)) Raise(nameof(HasDetails)); } }
+    public bool HasDetails => Details.Length > 0 && HasError;
+    string _progress = "";
+    public string ProgressText { get => _progress; private set => Set(ref _progress, value); }
+
+    void Log(string line) { lock (_log) { _log.Add(line); Details = string.Join("\n", _log.TakeLast(40)); } }
+
+    public async Task<bool> UninstallAsync(string? password = null, bool noPassword = false)
+    {
+        if (!CanRemove) return false;
+        ErrorText = "";
+        var address = router.SetupAddress();
+        if (address is null) { ErrorText = "Не удалось узнать адрес роутера — укажите его в «Дополнительно»"; return false; }
+        if (router.SshPassword(password, noPassword) is not { } pw)
+        {
+            ErrorText = "Введите пароль роутера или отметьте «Пароль не задан»";
+            return false;
+        }
+        var target = new RouterSshTarget(address);
+        Stage = RouterUninstallStage.Working;
+        ProgressText = "Удаляю DpiShell с роутера…";
+        _cts = new();
+        router.SetBusy(true);
+        RouterUninstallOutcome? o = null;
+        Exception? sshError = null;
+        try
+        {
+            bool viaApi = false;
+            if (router.UninstallViaApi)
+            {
+                Log($"Удаление через API ({(KeepSettings ? "с сохранением настроек" : "полностью")})");
+                try { (o, sshError) = await router.UninstallViaApiAsync(target, pw, KeepSettings, _cts.Token); viaApi = true; }
+                catch (RouterException e) { Log("API: " + e.Message + " — удаляю по SSH"); }
+            }
+            if (!viaApi)
+            {
+                Log($"Удаление по SSH ({target.Host})");
+                o = await router.Flow().UninstallAsync(target, () => pw, KeepSettings, _cts.Token);
+            }
+        }
+        catch (Exception e) when (e is RouterSshException or IOException or OperationCanceledException)
+        {
+            Log("Ошибка: " + e.Message);
+            router.SetBusy(false);
+            ProgressText = "";
+            Stage = RouterUninstallStage.Failed;
+            ErrorText = e is OperationCanceledException ? "Прервано." : RouterViewModel.SshText(e, target.Host);
+            Raise(nameof(HasDetails));
+            return false;
+        }
+        router.SetBusy(false);
+        ProgressText = "";
+
+        if (o is null)
+        {
+            // Удаление запущено через API, а по SSH не зайти — итог не проверить.
+            Log("SSH: " + sshError?.Message);
+            ResultTitle = "Удаление запущено";
+            LeftText = "Проверить, что осталось, не удалось: " + RouterViewModel.SshText(sshError!, target.Host);
+            Clean = false;
+        }
+        else if (o.Result.Ok != true)
+        {
+            Log(o.Result.Message ?? "Удаление не удалось");
+            Stage = RouterUninstallStage.Failed;
+            ErrorText = "Удалить не получилось: " + (o.Result.Message ?? "роутер не сообщил причину");
+            Raise(nameof(HasDetails));
+            await router.AfterUninstallAsync();
+            return false;
+        }
+        else
+        {
+            Log(o.Result.Message ?? "Удалено");
+            var left = o.Left?.Left ?? [];
+            Clean = o.Left?.Clean == true;
+            ResultTitle = Clean ? "DpiShell удалён. Ничего не осталось." : "DpiShell удалён";
+            var lines = left.Select(l => "• " + l.What + (string.IsNullOrEmpty(l.Detail) ? "" : " — " + l.Detail)).ToList();
+            if (lines.Count > 0) lines.Insert(0, "Осталось на роутере:");
+            if (o.Left?.Kept?.Settings == true) lines.Add("Настройки сохранены — вернутся при установке заново.");
+            if (o.Left?.Kept?.HttpsDnsProxy == true) lines.Add("Пакет защищённого DNS оставлен: его ставили не через DpiShell.");
+            if (o.Left is null) lines.Add("Проверить, что осталось, не удалось.");
+            LeftText = string.Join("\n", lines);
+        }
+        Stage = RouterUninstallStage.Done;
+        await router.AfterUninstallAsync();
+        router.Say(ResultTitle);
+        return true;
+    }
+
+    public void Cancel() => _cts?.Cancel();
 }
