@@ -72,6 +72,31 @@ function diag() {
 	};
 }
 
+// Свои адреса пользователя в отчёте — «свой адрес №N», как в истории ПК (02-spec §9.21): отчёт уходит людям.
+// Номер — по порядку в «Своих адресах», затем строки своих списков; URL и имя хоста одного адреса — один номер.
+function redactor() {
+	let subs = [], n = 0;
+	let add = (s, label) => { if (s && length(s) >= 3) push(subs, [s, label]); };
+	for (let u in st.read_json(`${st.P.etc}/user-targets.json`, [])) {
+		let label = `свой адрес №${++n}`;
+		add(u.url, label);
+		add(pr.host_of(u.url), label);
+	}
+	for (let l in ['user-general', 'user-exclude', 'user-ipset', 'user-ipset-exclude'])
+		for (let line in split(readfile(`${st.P.lists}/${l}.txt`) ?? '', '\n')) {
+			line = trim(line);
+			if (length(line) && substr(line, 0, 1) != '#')
+				add(line, `свой адрес №${++n}`);
+		}
+	// Длинные — первыми: URL раньше своего хоста, поддомен раньше домена.
+	subs = sort(subs, (a, b) => length(b[0]) - length(a[0]));
+	return text => {
+		for (let s in subs)
+			text = replace(text, s[0], s[1]);
+		return text;
+	};
+}
+
 function report() {
 	let parts = [];
 	let add = (title, text) => push(parts, `== ${title} ==\n${trim(text ?? '')}\n`);
@@ -84,7 +109,7 @@ function report() {
 	add('Последняя проверка', readfile(`${st.P.etc}/last-check.json`));
 	add('Последний подбор', readfile('/tmp/dpishell/select.json'));
 	add('Журнал', sh("logread | grep -iE 'zapret|nfqws|dpishell' | tail -n 80").out);
-	return join('\n', parts);
+	return redactor()(join('\n', parts));
 }
 
 // «Сайт не открывается с обходом»: с обходом и без (адрес временно в наборе nozapret zapret — остальная сеть не затронута).

@@ -360,6 +360,9 @@ methods.select_start = {
 		let groups = a.groups ?? GROUPS;
 		if (type(groups) != 'array' || !length(groups) || length(filter(groups, g => index(GROUPS, g) < 0)))
 			return err('invalid', 'Группы: youtube, discord, user', 'groups');
+		// Только «Свои адреса», а список пуст — иначе подбор честно ответил бы «блокировки не обнаружено».
+		if (length(groups) == 1 && groups[0] == 'user' && !length(st.read_json(`${st.P.etc}/user-targets.json`, [])))
+			return err('invalid', 'Список своих адресов на роутере пуст — добавьте адреса или выберите другие группы', 'groups');
 		if (index(['full', 'quick'], a.mode ?? 'full') < 0) return err('invalid', 'Режим: full или quick', 'mode');
 		if (index(['main', 'deep'], a.depth ?? 'main') < 0) return err('invalid', 'Глубина: main или deep', 'depth');
 		spawn(`select ${q(sprintf('%J', { groups, mode: a.mode ?? 'full', depth: a.depth ?? 'main', started_by: a.started_by == 'page' ? 'page' : 'app' }))}`);
