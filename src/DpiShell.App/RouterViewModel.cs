@@ -617,7 +617,11 @@ public sealed class RouterViewModel : Observable, IDisposable
     /// <summary>Окно сообщает, что обход на ПК включился или выключился.</summary>
     public void PcChanged() => RaisePc();
 
-    void RaisePc() { Raise(nameof(BothOn)); Raise(nameof(TimestampsNote)); Raise(nameof(HasTimestampsNote)); Raise(nameof(TimestampsNeedAction)); }
+    void RaisePc() { Raise(nameof(BothOn)); Raise(nameof(TimestampsNote)); Raise(nameof(HasTimestampsNote)); Raise(nameof(TimestampsNeedAction)); Raise(nameof(HomeFixText)); Raise(nameof(HasHomeFix)); }
+
+    /// <summary>Главная — одной строкой: сколько у роутера того, что можно исправить (сами предупреждения — на вкладке «Роутер»).</summary>
+    public string HomeFixText => (WarningRows.Count + (TimestampsNeedAction ? 1 : 0)) is var n && n > 0 ? $"требует внимания: {n}" : "";
+    public bool HasHomeFix => HomeFixText.Length > 0;
 
     async Task StopPcForRouterAsync()
     {

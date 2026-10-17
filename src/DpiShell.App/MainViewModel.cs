@@ -136,6 +136,7 @@ public sealed partial class MainViewModel : Observable
         var chosen = new AppState().Groups.ToHashSet();
         foreach (var g in _shell.DefaultTargets.Groups.Where(g => !g.Control)) Groups.Add(new(g.Id, g.Title, chosen.Contains(g.Id)));
         Groups.Add(new("user", "Свои адреса", chosen.Contains("user")));
+        InitHome();       // главная: помехи, итог проверки — MainViewModel.Home.cs
         UpdateStatus();
     }
 
@@ -485,7 +486,7 @@ public sealed partial class MainViewModel : Observable
         }
         StatusBrush = BrushOf(Kind);
         Raise(nameof(IsRunning));
-        Raise(nameof(ToggleText));
+        Raise(nameof(ToggleText)); Raise(nameof(PcSecondary)); Raise(nameof(PcPrimary));
         Raise(nameof(CanChoose));
         Router.PcChanged();
         Raise(nameof(StrategyHeader));
@@ -493,23 +494,24 @@ public sealed partial class MainViewModel : Observable
         // Автозапуск по умолчанию следует за режимом — когда режим известен (помощник ответил).
         if (Live is not null) Autostart.OnRunMode(ServiceMode);
         Updates.Refresh();
+        RaiseIssues();
         // Стратегию могли сменить с «Подбора» или автопереключением — список показывает текущую, не вызывая перезапуск.
         if (_chosen != id) { _chosen = id; Raise(nameof(ChosenStrategyId)); }
         StatusChanged?.Invoke();
     }
 
     string _vpnWarning = "";
-    public string VpnWarning { get => _vpnWarning; private set { if (Set(ref _vpnWarning, value)) Raise(nameof(HasVpn)); } }
+    public string VpnWarning { get => _vpnWarning; private set { if (Set(ref _vpnWarning, value)) { Raise(nameof(HasVpn)); RaiseIssues(); } } }
     /// <summary>Плашка VPN на главной: есть VPN и человек не сказал «Понятно» про этот же набор адаптеров.</summary>
     public bool HasVpn => VpnWarning.Length > 0 && VpnWarning != _vpnDismissed;
 
     string? _vpnDismissed;
     /// <summary>«Понятно, не показывать»: до смены набора VPN-адаптеров (в «Диагностике» VPN виден всегда).</summary>
-    public ICommand DismissVpnCmd => _dismissVpnCmd ??= new RelayCommand(() => { _vpnDismissed = VpnWarning; Raise(nameof(HasVpn)); });
+    public ICommand DismissVpnCmd => _dismissVpnCmd ??= new RelayCommand(() => { _vpnDismissed = VpnWarning; Raise(nameof(HasVpn)); RaiseIssues(); });
     ICommand? _dismissVpnCmd;
 
     string _conflictWarning = "";
-    public string ConflictWarning { get => _conflictWarning; private set { if (Set(ref _conflictWarning, value)) Raise(nameof(HasConflicts)); } }
+    public string ConflictWarning { get => _conflictWarning; private set { if (Set(ref _conflictWarning, value)) { Raise(nameof(HasConflicts)); RaiseIssues(); } } }
     public bool HasConflicts => ConflictWarning.Length > 0;
 
     public ObservableCollection<CheckRow> CheckRows { get; } = [];
@@ -608,7 +610,7 @@ public sealed partial class MainViewModel : Observable
         await RefreshStatusAsync();
     }
 
-    public string ToggleText => IsRunning ? "Выключить" : "Включить";
+    public string ToggleText => IsRunning ? "Выключить" : PcSecondary ? "Включить и на этом ПК" : "Включить";
     public bool CanChoose => !Busy && !IsLoading && !Selecting;
     public ICommand ToggleCmd => _toggleCmd ??= RelayCommand.Async(() => IsRunning ? DisableAsync() : EnableAsync(), () => !Busy && !IsLoading);
     ICommand? _toggleCmd;
@@ -740,6 +742,7 @@ public sealed partial class MainViewModel : Observable
             });
             foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, GroupTitle));
             CheckSummary = $"Открывается {verdicts.Count(v => v.Ok)} из {verdicts.Count}";
+            CheckedAt = $"в {DateTime.Now:HH:mm}";
             await dns;
             await RefreshStatusAsync();
         });
@@ -767,7 +770,7 @@ public sealed partial class MainViewModel : Observable
 
     bool _dnsSpoofed;
     /// <summary>Системный DNS подменяет адреса проверяемых сайтов (ТЗ §9 п. 11).</summary>
-    public bool DnsSpoofed { get => _dnsSpoofed; private set => Set(ref _dnsSpoofed, value); }
+    public bool DnsSpoofed { get => _dnsSpoofed; private set { if (Set(ref _dnsSpoofed, value)) RaiseIssues(); } }
 
     string _dnsSummary = "Ещё не проверялось.";
     public string DnsSummary { get => _dnsSummary; private set => Set(ref _dnsSummary, value); }

@@ -90,6 +90,17 @@ public partial class MainWindow : Window
         menu.IsOpen = true;
     }
 
+    /// <summary>
+    /// Список внутри прокручиваемой страницы (стратегии на главной): свой ScrollViewer списка съедает колесо, даже когда
+    /// прокручивать ему нечего, — отдаём колесо странице.
+    /// </summary>
+    void PassWheelToPage(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        if (e.Handled || sender is not FrameworkElement { Parent: UIElement parent }) return;
+        e.Handled = true;
+        parent.RaiseEvent(new System.Windows.Input.MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta) { RoutedEvent = MouseWheelEvent, Source = sender });
+    }
+
     readonly DispatcherTimer _netSettle;
 
     /// <summary>Событие приходит из чужого потока и пачкой — перезапускаем отсчёт на потоке окна.</summary>
