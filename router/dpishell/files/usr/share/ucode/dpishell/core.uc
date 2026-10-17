@@ -58,7 +58,7 @@ function download(m, progress) {
 		push(tried, `${url}: ${r.rc == 0 ? 'хеш не совпал' : trim(r.out)}`);
 		unlink(ZIP);
 	}
-	return `Не удалось скачать ядро:\n${join('\n', tried)}`;
+	return `Не удалось скачать ядро:\n${join('\n', tried)}\nЕсли GitHub с роутера недоступен — положите ${split(m.zip_url, '/')[-1]} в ${ZIP} (scp) или поставьте офлайн-набором (router/tools/offline-bundle.sh).`;
 }
 
 // Разложить zapret в /opt/zapret. Свой config пишет state.write_zapret_config.

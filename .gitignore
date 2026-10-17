@@ -4,3 +4,4 @@ obj/
 .vs/
 publish/
 live/
+router/offline-bundle/
