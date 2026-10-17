@@ -163,7 +163,7 @@ return view.extend({
 		});
 	},
 
-	// Удаление (07 §9, uninstall): внизу, свёрнуто, спокойная кнопка; подтверждение — словом «удалить».
+	// Удаление (router-api.md §5, uninstall): внизу, свёрнуто, спокойная кнопка; подтверждение — словом «удалить».
 	uninstallSection: function() {
 		var self = this;
 		var keep = E('input', { type: 'radio', name: 'dps-uninst', value: 'keep', checked: '' });

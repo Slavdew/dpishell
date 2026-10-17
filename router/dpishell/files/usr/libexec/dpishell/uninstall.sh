@@ -1,5 +1,5 @@
 #!/bin/sh
-# Удаление DpiShell с возвратом всего, что он менял вне своих файлов (07 §9).
+# Удаление DpiShell с возвратом всего, что он менял вне своих файлов (router-api.md §5).
 #   sh uninstall.sh --keep      — удалить, настройки (/etc/dpishell: свои адреса, списки, стратегии, расписание) оставить
 #   sh uninstall.sh --full      — удалить полностью, вместе с настройками, ключом и строкой витрины
 #   sh uninstall.sh --from-prerm — только очистка, без удаления пакетов (зовёт prerm пакета при ручном apk del)
@@ -38,7 +38,7 @@ if [ -x /etc/init.d/zapret ]; then
 fi
 nft delete table inet zapret 2>/dev/null
 
-# 3. Метки TCP: подбор временно выключает их для стратегий с ts (06 §4.3) — вернуть умолчание.
+# 3. Метки TCP: подбор временно выключает их для стратегий с ts (architecture.md «Временные метки TCP») — вернуть умолчание.
 [ "$(cat /proc/sys/net/ipv4/tcp_timestamps 2>/dev/null)" = 0 ] && ! grep -qs tcp_timestamps /etc/sysctl.conf /etc/sysctl.d/*.conf &&
 	echo 1 > /proc/sys/net/ipv4/tcp_timestamps
 

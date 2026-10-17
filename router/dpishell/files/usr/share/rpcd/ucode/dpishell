@@ -89,7 +89,7 @@ function lines_of(v) {
 
 const LIST_LIMIT = 5000;
 
-// status.update (07 §9): { available, version, notes, checked_at, job } — job — последнее задание обновления.
+// status.update (router-api.md §5): { available, version, notes, checked_at, job } — job — последнее задание обновления.
 function update_status() {
 	let u = upd.status();
 	u.job = st.read_json('/tmp/dpishell/update_job.json', null);
@@ -97,7 +97,7 @@ function update_status() {
 	return u;
 }
 
-// status.methods — методы, которые этот роутер реально обрабатывает (07 §9): без заглушек «не реализовано».
+// status.methods — методы, которые этот роутер реально обрабатывает (router-api.md §5): без заглушек «не реализовано».
 // Таблица методов собирается ниже, поэтому — через реестр (ucode разрешает имена при компиляции).
 const registry = { methods: {}, stubs: {} };
 
@@ -478,7 +478,7 @@ methods.dns_status = {
 	}
 };
 
-// Удаление DpiShell (ядро договора, 07 §9): сценарий копируется в /tmp и идёт отвязанно — пакет и этот объект ubus
+// Удаление DpiShell (ядро договора, router-api.md §5): сценарий копируется в /tmp и идёт отвязанно — пакет и этот объект ubus
 // исчезают по ходу. Ход и итог — /tmp/dpishell-uninstall.json; страница ждёт, пока объект dpishell пропадёт.
 methods.uninstall = {
 	args: { keep_settings: true },
@@ -494,7 +494,7 @@ methods.uninstall = {
 	}
 };
 
-// Обновление (ядро договора, 07 §9): из витрины или из /tmp/dpishell-update (кладёт окно ПК; путь не принимается).
+// Обновление (ядро договора, router-api.md §5): из витрины или из /tmp/dpishell-update (кладёт окно ПК; путь не принимается).
 methods.update_install = {
 	args: { from: 'feed' },
 	call: function(req) {

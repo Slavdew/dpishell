@@ -51,7 +51,7 @@ else if (cmd == 'check') {
 else if (cmd == 'watch') {
 	let dw = null;
 	try { dw = dns.watch(); } catch (x) {}
-	// Есть ли новая версия DpiShell — раз в сутки (07 §9, status.update).
+	// Есть ли новая версия DpiShell — раз в сутки (router-api.md §5, status.update).
 	if (!st.job_running('update'))
 		try { upd.check_daily(); } catch (x) {}
 	if (dw == 'dns_fallback') warn('dns_fallback', 'Защищённый DNS недоступен — временно работает DNS провайдера');
@@ -139,7 +139,7 @@ else if (cmd == 'site_check') {
 	unlink(l);
 }
 else if (cmd == 'update' || cmd == 'update_check') {
-	// Обновление: пакет заменяет сам себя (и этот файл) — сценарий уже в памяти, итог — в /tmp (07 §9, update_install).
+	// Обновление: пакет заменяет сам себя (и этот файл) — сценарий уже в памяти, итог — в /tmp (router-api.md §5, update_install).
 	let l = lock('update');
 	if (!l) exit(1);
 	let job = '/tmp/dpishell/update_job.json';

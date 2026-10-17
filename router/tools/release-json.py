@@ -1,4 +1,4 @@
-"""release.json пакетов роутера: версия, api, min_app, изменения, файлы с sha256 (07 §9).
+"""release.json пакетов роутера: версия, api, min_app, изменения, файлы с sha256 (router-api.md §5).
 
 Запуск в CI после сборки: python3 router/tools/release-json.py <папка с .apk> [<тег>]
 Пишет <папка>/release.json. Заодно сверяет версии: PKG_VERSION обоих Makefile, VERSION в state.uc и тег

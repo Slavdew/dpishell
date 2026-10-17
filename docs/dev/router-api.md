@@ -45,17 +45,21 @@
 
 **`status`** `{}` →
 ```json
-{ "api": 1, "version": "0.1.0", "engine": "zapret1",
+{ "api": "1.0", "version": "0.2.0", "min_app": "1.0.0", "methods": ["apply", "check_now", "…", "uninstall", "update_install"], "engine": "zapret1",
   "core": { "version": "v72.13", "installed": true, "hash_ok": true },
   "enabled": true, "mode": "all", "strategy": "alt10", "backups": ["alt9", "alt13"], "needs_tcp_timestamps": true,
   "last_check": { "at": "2026-10-16T21:00:00Z", "source": "timer", "ok": true,
                   "groups": [ { "id": "youtube", "ok": true }, { "id": "discord", "ok": true } ] },
   "fail_streak": 0,
   "schedule": { "enabled": true, "hours": 1, "auto_select": false },
-  "jobs": { "select": false, "check": false, "core_install": false, "dns": false, "dns_analyze": false, "site_check": false },
-  "warnings": [ { "code": "flow_offload", "text": "Включён flow offloading" } ] }
+  "jobs": { "select": false, "check": false, "core_install": false, "dns": false, "dns_analyze": false, "site_check": false, "update": false },
+  "warnings": [ { "code": "flow_offload", "text": "Включено ускорение сети (flow offloading) — с ним обход не работает" } ],
+  "update": { "available": true, "version": "0.2.1-r1", "notes": ["Глубокий поиск стратегий на самом роутере"], "checked_at": "2026-10-17T14:00:00Z",
+              "job": { "action": "update", "from": "feed", "running": false, "ok": true, "message": "Обновлено до 0.2.0-r1", "at": "…" } } }
 ```
 `source`: `manual` | `timer` | `app`. `jobs.dns` — идёт любое DNS-задание (`dns_analyze` — прежнее имя, то же значение). Коды `warnings`: `flow_offload`, `ipv6`, `dns_spoofed`, `conflict`, `core_missing`, `switched_backup` (сработала запасная стратегия, в `text` — какая), `auto_selected` (автоподбор нашёл и включил стратегию, в `text` — какую), `auto_select_failed` (автоподбор ничего не нашёл, оставлена прежняя), `dns_fallback` (защищённый DNS недоступен, временно DNS провайдера). `needs_tcp_timestamps` — включённая стратегия работает только у устройств с временными метками TCP (нужно только компьютерам на Windows: у Android, iOS, macOS и Linux они включены по умолчанию).
+
+`api` — «мажор.минор» (§5.4); роутеры до 0.2.0 отдают число `1` (= «1.0»). `methods` — методы, которые этот роутер реально обрабатывает (заглушки «не реализовано» не входят); `min_app` — минимальная версия окна ПК, которую он понимает. `update` — есть ли в витрине версия новее установленной (проверка раз в сутки и по `update_check`), `notes` — что нового (до 15 строк, `router/release-notes.json`), `job` — последнее задание обновления (`null` — не было).
 
 **`strategies`** `{}` → `{ "catalog_version": 3, "items": [ { "id": "alt10", "title": "general (ALT10)", "source": "catalog|user", "runs": 7, "passed": 6 } ] }` — порядок как в списке выбора (по статистике). `source: user` — присланные с ПК (`u-…`) и найденные глубоким поиском на роутере (`r-…`, последние 20).
 
@@ -88,7 +92,7 @@
 |---|---|---|---|
 | `enable` | `{}` | включает обход с текущей стратегией; при работающем чужом обходе — `error: conflict` | `{}` или `error` |
 | `disable` | `{}` | выключает | `{}` |
-| `mode_set` | `{ "mode": "all" \| "lists" }` | «Все сайты, кроме исключений» / «По спискам»; перезапуск zapret и полная проверка с контрольной группой | `{ "started": true }` |
+| `mode_set` | `{ "mode": "all" \| "lists" }` | «Все сайты» / «Только из списков»; перезапуск zapret и полная проверка с контрольной группой | `{ "started": true }` |
 | `site_check` | `{ "url": "https://example.com/" }` (голое имя `example.com` → `https://example.com/`) | «Сайт не открывается с обходом»: проверка с обходом и без; ход — `status.jobs.site_check`, итог — `site_check_result` | `{ "started": true }` |
 | `strategy_set` | `{ "id": "alt9" }` | выбор стратегии; при включённом обходе — перезапуск | `{}` |
 | `check_now` | `{}` | запускает проверку (результат — в `status.last_check`, `source: app`) | `{ "started": true }` |
@@ -107,12 +111,28 @@
 | `flow_offload_fix` | `{}` | разгрузку из межсетевого экрана передать zapret (`FLOWOFFLOAD=software`, при аппаратной — `hardware`): та же скорость, пакеты для nfqws — в обход разгрузки; при удалении пакета разгрузка возвращается межсетевому экрану | `{ "changed": true, "flowoffload": "software" }` |
 | `ipv6_set` | `{ "enabled": true }` | обход по IPv6 (`DISABLE_IPV6=0`); перезапуск zapret, если включён | `{}` |
 | `core_install` | `{}` | загрузить ядро по манифесту | `{ "started": true }` |
+| `uninstall` | `{ "keep_settings": true }` | удалить DpiShell (фоново, ядро договора §5.4): выключить обход, вернуть всё изменённое вне своих файлов (разгрузку, DNS, метки TCP, cron), удалить пакеты и ядро `/opt/zapret`; модули ядра и зависимости остаются. `keep_settings: false` — ещё `/etc/dpishell`, ключ и строку витрины. Объект `dpishell` по ходу исчезает; итог — `/tmp/dpishell-uninstall.json` `{ running, ok, keep_settings, message, at }` (по SSH) | `{ "started": true }` |
+| `update_install` | `{ "from": "feed" \| "local" }` | обновить DpiShell (фоново, ядро договора §5.4): `feed` — из витрины (`apk update && apk upgrade`); `local` — из `/tmp/dpishell-update/` (кладёт окно ПК: только `dpishell-*.apk`/`luci-app-dpishell-*.apk` и `SHA256SUMS`, путь не принимается). Итог — `status.update.job`; rpcd перезапускается | `{ "started": true }` |
+| `update_check` | `{}` | проверить новую версию сейчас (итог — `status.update`) | `{ "started": true }` |
 
 Роутер проверяет всё сам: стратегии — по `options.json`/`roles.json`, домены — по шаблону, длины — по лимитам. Командной строки и путей от клиента не принимает.
 
 ### 5.3 Запись стратегии
 - Набор ролей **не фиксирован**: он растёт (игровые профили, обновляемый ipset). Роутер принимает роли, которые знает его каталог (`strategies.json` той версии, что в пакете; `catalog_version` в `strategies`). Сейчас это `quic`, `discord_udp`, `discord_media`, `google`, `general`, `ipset_udp`, `ipset_tcp`. Роль, неизвестная роутеру, — `invalid` с `field` на неё; приложение не отбрасывает роли само, а при таком ответе предлагает обновить пакет на роутере.
 - Значения — как в `strategies.json`: `{fake}/<файл>.bin` (набор файлов `fake/` у роутера тот же), `0x…`, `!`. Подстановку `{fake}` роутер разворачивает сам. Файл, которого нет в его `fake/`, — `invalid`.
+
+### 5.4 Ядро договора и совместимость
+- `status.api` — «мажор.минор». Минор растёт при добавлениях без поломок (новые методы и поля), мажор — только при несовместимых изменениях.
+- Приложение сравнивает с поддерживаемым: мажор другой — команды запрещены, доступны только состояние, «Обновить» и «Удалить»; минор другой — предупреждение, кнопки методов, которых нет в `status.methods`, неактивны; `min_app` новее приложения — «обновите приложение».
+- **Ядро договора** — `status` (поля `product`, `api`, `version`, `methods`, `min_app`, `update`), `update_install`, `uninstall`: остаются совместимыми при любом мажоре — по ним пользователь выбирается из несовместимости. Аргументы и ответы ядра только расширяются.
+- Выпуски: тег `router-vX.Y.Z`, в релизе — пакеты, `release.json` `{ schema, version, tag, api, min_app, pkg, changes, assets: [{ name, sha256 }] }` и `release.json.sig` — base64 подписи ed25519 над точными байтами `release.json` (проверочный ключ — в приложении). Тот же `release.json` без подписи — в витрине (`feed/release.json`) для заметок к обновлению. Какой выпуск под какую OpenWrt — `data/router-releases.json` (`schema 1`: `feed { url, key_url, key_sha256 }`, `releases [{ version, tag, api, min_app, pkg, openwrt { min, snapshot }, packages, release_json }]`).
+
+### 5.5 Сценарии по SSH (когда API нет или пакета ещё нет)
+Окно передаёт сценарий через stdin, на роутер его не кладёт: `ssh root@<роутер> 'sh -s -- <аргументы>' < файл`. Последняя строка ответа — JSON.
+- `router/tools/dpishell-preflight.sh` — пригодность роутера: `{ schema: 1, mode: "check", openwrt { release, revision, arch, target }, pkg, fw4, nft, kernel, kmod_nft_queue { installed, available, version, matches_kernel }, net { feed, fw_feed, github }, space { overlay_free_kb, tmp_free_kb }, foreign [{ kind, name }], dpishell { version, api } | null, luci }`; `--update` — сначала обновить индексы; `--after-uninstall` — что осталось: `{ schema: 1, mode: "after-uninstall", left: [{ what, detail }], kept { settings, https_dns_proxy } }`.
+- `router/tools/dpishell-install.sh` — установка: ключ витрины (встроен, sha256) → строка витрины → `apk add dpishell luci-app-dpishell` → ядро → проверка. Ход — строки `# …`, итог `{ schema: 1, ok, step, message, version, api, core }`. Архив ядра окно кладёт заранее по SFTP в `/tmp/dpishell/core/zapret.zip` — тогда сеть для ядра не нужна.
+- `router/dpishell/files/usr/libexec/dpishell/uninstall.sh` — удаление без API: `--keep` | `--full`, итог — `/tmp/dpishell-uninstall.json`.
+- **Роутер без доступа к GitHub** — через ПК: `ssh -R <порт>:127.0.0.1:<порт>` к локальному HTTP-прокси окна и `https_proxy=http://127.0.0.1:<порт>` в команде. apk шлёт запросы в абсолютной форме (`GET https://…`, TLS к серверу делает прокси), curl — `CONNECT`; прокси должен уметь оба. Подлинность не страдает: apk проверяет подпись индекса и хеши, участок роутер—ПК идёт внутри SSH. Проверено в эмуляторе с закрытым GitHub.
 
 ## 6. Что приложение делает с этим (для Windows-стороны)
 
@@ -136,10 +156,8 @@
 
 ## 8. Планируется (в договор ещё не внесено)
 
-- **Совместимость версий**: `status.api` в виде «мажор.минор», `status.methods` (список команд роутера), `status.min_app`. Разный мажор — команды запрещены, видно только состояние плюс «Обновить» и «Удалить»; разный минор — предупреждение, кнопки отсутствующих в `methods` команд неактивны; роутер новее приложения и действие меняет настройки — подтверждение раз за сеанс. То же — для окна и помощника.
-- **Удаление с роутера**: `uninstall { keep_settings }` — фоновое задание, возвращает всё изменённое вне своих файлов (обход, правила nft, разгрузку, DNS, IPv6, ядро в `/opt/zapret`; модули ядра остаются), итог в JSON. Если API не отвечает — по SSH из приложения.
-- **Обновления**: `status.update` (автопроверка раз в сутки), `update_install` (в том числе офлайн: приложение кладёт `.apk` и вызывает тот же метод). Выпуски подписаны (ed25519, ключ в программе), тем же ключом — манифест данных.
-- **Выбор пакета под OpenWrt**: файл совместимости `data/router-releases.json` (какой выпуск `router-vX.Y.Z` и вид пакета — `apk`/`opkg` — под какую версию OpenWrt из `/etc/openwrt_release`); приложение читает его перед автоустановкой по SSH.
+- Пакеты под `opkg` (OpenWrt 24.10): те же методы, сборка в SDK 24.10, записи `pkg: "opkg"` в `data/router-releases.json`.
+- Ключ подписи выпусков (`RELEASE_SIGNING_KEY` в Actions, проверочный — в приложении); до него выпуски без `release.json.sig`.
 
 ## 9. История договора
 
@@ -152,3 +170,5 @@ API 1 (до первого выпуска роутерного пакета пр
 - Глубокий поиск на роутере (`depth: deep`, `candidate`, `ok`/`total`, стратегии `r-…`); дробные доли в `rows`.
 - `flow_offload_fix`, `ipv6_set`; предупреждения `flow_offload`/`ipv6`/`conflict` в `status.warnings`; `enable`/`select_start` при чужом обходе — `conflict`; `kind: package` в `diag.conflicts`; поле `flowoffload` в `diag`.
 - `select_start` только с группой `user` при пустых своих адресах — `invalid`/`groups`; свои адреса в `report` скрыты.
+
+API 1.0 (первый выпуск пакета, 0.2.0): `api` строкой «мажор.минор», `methods`, `min_app`, `update`, `jobs.update`; `uninstall`, `update_install`, `update_check`; ядро договора (§5.4); сценарии по SSH (§5.5); `mode_set` — «Все сайты» / «Только из списков».

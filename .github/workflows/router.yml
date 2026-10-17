@@ -2,7 +2,7 @@
 # Пакеты не зависят от архитектуры (PKGARCH:=all) — один SDK x86-64 собирает их для любого роутера.
 # Подпись: SDK подписывает индекс packages.adb ключом из секрета APK_SIGNING_KEY; открытый ключ — router/keys/dpishell.pem.
 # Релиз: тег router-vX.Y.Z (версия = PKG_VERSION = VERSION в state.uc) → релиз GitHub с пакетами и release.json;
-# release.json.sig — ed25519 над байтами release.json, ключ из секрета RELEASE_SIGNING_KEY (07 §9).
+# release.json.sig — ed25519 над байтами release.json, ключ из секрета RELEASE_SIGNING_KEY (router-api.md §5).
 name: router-packages
 
 on:

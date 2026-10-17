@@ -1,6 +1,6 @@
 #!/bin/sh
 # Предпроверка роутера для установки DpiShell (окно ПК передаёт скрипт по SSH: ssh root@<роутер> 'sh -s' < dpishell-preflight.sh).
-# Ничего не меняет. Ответ — одна строка JSON (schema 1, 07 §9).
+# Ничего не меняет. Ответ — одна строка JSON (schema 1, router-api.md §5).
 #   sh -s                     — годится ли роутер: OpenWrt, пакетный менеджер, fw4/nftables, ядро и kmod-nft-queue, сеть, место, чужой обход
 #   sh -s -- --update         — то же, но сначала обновить индексы пакетов (apk update / opkg update; можно через https_proxy)
 #   sh -s -- --after-uninstall — что осталось после удаления DpiShell (left: [] — ничего)

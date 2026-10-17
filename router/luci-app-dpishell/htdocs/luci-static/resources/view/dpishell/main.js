@@ -236,7 +236,7 @@ return view.extend({
 		}
 	},
 
-	// Плашка «Доступно обновление» (07 §9): что нового — до трёх строк, кнопка «Обновить».
+	// Плашка «Доступно обновление» (router-api.md §5): что нового — до трёх строк, кнопка «Обновить».
 	renderUpdate: function(u) {
 		var self = this;
 		var key = JSON.stringify([u && u.available, u && u.version, this.updating]);

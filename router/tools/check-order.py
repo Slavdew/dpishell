@@ -40,5 +40,16 @@ for f in ROOT.rglob('*'):
         if re.search(rb'[\x00-\x08\x0b-\x1f]', line.rstrip(b'\r').replace(b'\t', b'')):
             print(f'{f.relative_to(ROOT)}:{i + 1}: управляющий символ — потерянный обратный слеш?')
             bad += 1
+# Ключ витрины, встроенный в установщик окна ПК, — тот же, что в router/keys (иначе установка откажет по sha256).
+key = (ROOT / 'keys/dpishell.pem').read_text(encoding='utf-8').strip()
+inst = (ROOT / 'tools/dpishell-install.sh').read_text(encoding='utf-8')
+if key not in inst:
+    print('tools/dpishell-install.sh: встроенный ключ не совпадает с keys/dpishell.pem')
+    bad += 1
+import hashlib
+sha = hashlib.sha256((ROOT / 'keys/dpishell.pem').read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+if f'KEY_SHA={sha}' not in inst:
+    print(f'tools/dpishell-install.sh: KEY_SHA не равен sha256 keys/dpishell.pem ({sha})')
+    bad += 1
 print(f'{len(files)} файлов, нарушений: {bad}')
 sys.exit(1 if bad else 0)
