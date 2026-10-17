@@ -159,6 +159,9 @@ public sealed class RouterViewModel : Observable, IDisposable
 
     /// <summary>Строка состояния окна.</summary>
     public Action<string> Say { get; set; } = _ => { };
+    /// <summary>Ошибка действия: окно показывает её тостом, а не только в строке состояния (UX-аудит 2, п. 16). По умолчанию — как <see cref="Say"/>.</summary>
+    public Action<string>? Fail { get; set; }
+    void Failed(string text) => (Fail ?? Say)(text);
     /// <summary>Стратегии, найденные глубоким поиском на ПК (их хранит помощник).</summary>
     public Func<IReadOnlyList<Strategy>> FoundStrategies { get; set; } = () => [];
     /// <summary>Свои адреса этого ПК (сохранены у помощника).</summary>
@@ -204,7 +207,7 @@ public sealed class RouterViewModel : Observable, IDisposable
     public string CustomAddress { get => _custom; set => Set(ref _custom, value); }
 
     string? _gateway;
-    public string AutoAddressText => "Автоматически — основной шлюз" + (_gateway is { } g ? $" ({g})" : "");
+    public string AutoAddressText => "Автоматически" + (_gateway is { } g ? $" ({g})" : "");
 
     string? EffectiveAddress()
     {
@@ -219,6 +222,28 @@ public sealed class RouterViewModel : Observable, IDisposable
 
     /// <summary>DpiShell на роутере найден (любой версии) — на главной есть блок роутера.</summary>
     public bool Found => _detection is { Found: not RouterFound.NotFound };
+
+    bool _searched;
+    /// <summary>Роутер уже искали (хоть раз): до того пустое состояние — «не проверялся», а не «не найден» (UX-аудит 2, п. 10).</summary>
+    public bool Searched { get => _searched; private set { if (Set(ref _searched, value)) Raise(nameof(EmptyTitle)); } }
+    public string EmptyTitle => Searched ? "Роутер с DpiShell не найден" : "Роутер не проверялся";
+
+    /// <summary>Инструкция «Как поставить DpiShell на роутер» (п. 9).</summary>
+    public const string GuideUrl = "https://github.com/Slavdew/dpishell/blob/master/docs/router/README.md";
+    public Action<string> OpenUrl { get; set; } = url => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+    public ICommand GuideCmd => _guideCmd ??= new RelayCommand(() =>
+    {
+        try { OpenUrl(GuideUrl); }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Failed("Не удалось открыть браузер: " + e.Message); }
+    });
+    ICommand? _guideCmd;
+
+    ICommand? _installCmd;
+    /// <summary>
+    /// «Установить на роутер» (установка по SSH, router-api §5.4) — место в пустом состоянии готово; кнопка видна, когда окно задаст команду.
+    /// </summary>
+    public ICommand? InstallCmd { get => _installCmd; set { if (Set(ref _installCmd, value)) Raise(nameof(CanInstall)); } }
+    public bool CanInstall => InstallCmd is not null;
 
     bool _connected;
     /// <summary>Вошли и API совместим: можно управлять.</summary>
@@ -269,8 +294,11 @@ public sealed class RouterViewModel : Observable, IDisposable
 
     Task Call(Func<RouterClient, Task> f) => Call(async c => { await f(c); return true; });
 
-    /// <summary>«Подключиться»: адрес из настроек, поиск, вход. Пусто в поле пароля — сохранённый; его нет — только поиск (status.json).</summary>
-    public async Task<bool> ConnectAsync(string? password)
+    /// <summary>
+    /// «Подключиться»: адрес из настроек, поиск, вход. Пусто в поле пароля — сохранённый; его нет — только поиск (status.json).
+    /// <paramref name="noPassword"/> — «Пароль не задан» (у свежей OpenWrt пароль root пустой, UX-аудит 2, п. 11): вход с пустым паролем.
+    /// </summary>
+    public async Task<bool> ConnectAsync(string? password, bool noPassword = false)
     {
         if (Busy) return false;
         Busy = true;
@@ -281,7 +309,7 @@ public sealed class RouterViewModel : Observable, IDisposable
             try { _settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say(Texts.Friendly(e)); }
             if (!await DetectAsync()) return false;
             if (_detection!.Found != RouterFound.Ok) return false;
-            var typed = string.IsNullOrEmpty(password) ? null : password;
+            var typed = noPassword ? "" : string.IsNullOrEmpty(password) ? null : password;
             if (typed is null && !HasSavedPassword)
             {
                 SetConnection(RouterTexts.Found(RouterFound.Ok, _detection.Status?.Version));
@@ -296,16 +324,18 @@ public sealed class RouterViewModel : Observable, IDisposable
         }
     }
 
-    bool HasSavedPassword => RouterSecrets.Unprotect(_settings.RouterPassword) is not null;
+    /// <summary>Есть сохранённый пароль (и пустой — «пароль не задан»): пустое поле в окне входа значит «взять его».</summary>
+    public bool HasSavedPassword => RouterSecrets.Unprotect(_settings.RouterPassword) is not null;
 
     /// <summary>status.json без входа. false — роутера нет (блок на главной пропадает).</summary>
     async Task<bool> DetectAsync()
     {
+        Searched = true;
         var address = EffectiveAddress();
         if (address is null)
         {
             SetDetection(null);
-            SetConnection(AddressAuto ? "Основной шлюз не найден — укажите адрес роутера" : "Укажите адрес роутера");
+            SetConnection(AddressAuto ? "Не удалось узнать адрес роутера — укажите его в «Дополнительно»" : "Укажите адрес роутера");
             return false;
         }
         if (ClientFor(address) is null) { SetDetection(null); return false; }
@@ -347,7 +377,7 @@ public sealed class RouterViewModel : Observable, IDisposable
                 _settings.RouterPassword = null;
                 TrySave();
             }
-            SetConnection("Неверный пароль");
+            SetConnection(typed == "" ? "У роутера есть пароль — введите его" : "Неверный пароль");
             return false;
         }
         catch (RouterException e)
@@ -378,7 +408,7 @@ public sealed class RouterViewModel : Observable, IDisposable
     void TrySave()
     {
         try { _settings.Save(); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say(Texts.Friendly(e)); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Failed(Texts.Friendly(e)); }
     }
 
     bool _refreshing;
@@ -527,6 +557,9 @@ public sealed class RouterViewModel : Observable, IDisposable
     string _homeTitle = "", _homeDetail = "", _warnings = "", _toggleText = "Включить на роутере";
     public string HomeTitle { get => _homeTitle; private set => Set(ref _homeTitle, value); }
     public string HomeDetail { get => _homeDetail; private set => Set(ref _homeDetail, value); }
+    string _homeLine = "";
+    /// <summary>Пояснение в строке роутера на главной: первое предупреждение, если есть, иначе <see cref="HomeDetail"/>.</summary>
+    public string HomeLine { get => _homeLine; private set => Set(ref _homeLine, value); }
     public string Warnings { get => _warnings; private set { if (Set(ref _warnings, value)) Raise(nameof(HasWarnings)); } }
     public bool HasWarnings => Warnings.Length > 0;
     public string ToggleText { get => _toggleText; private set => Set(ref _toggleText, value); }
@@ -558,13 +591,15 @@ public sealed class RouterViewModel : Observable, IDisposable
             else if (enabled && at is not null) parts.Add($"проверено в {RouterTexts.Time(at)}" + (ok == false ? " — не всё открывается" : ""));
         }
         if (_detection?.Found is RouterFound.AppTooOld or RouterFound.RouterTooOld) parts.Add(ConnectionText.ToLowerInvariant()[..1] + ConnectionText[1..]);
-        HomeDetail = string.Join(", ", parts.Where(p => p.Length > 0));
         var rows = (_status?.Warnings ?? []).Select(RouterTexts.Warning).ToList();
         if (!rows.SequenceEqual(WarningRows))
         {
             WarningRows.Clear();
             foreach (var r in rows) WarningRows.Add(r);
         }
+        HomeDetail = string.Join(", ", parts.Where(p => p.Length > 0));
+        // Строка на главной: есть что исправить — вместо стратегии и времени (они на вкладке) первое предупреждение (UX-аудит 2, п. 7).
+        HomeLine = !Selecting && FirstFix() is { } fix ? fix : HomeDetail;
         Warnings = string.Join(" · ", rows.Select(r => r.Text));
         ToggleText = enabled ? "Выключить на роутере" : "Включить на роутере";
         Raise(nameof(RouterEnabled));
@@ -618,11 +653,25 @@ public sealed class RouterViewModel : Observable, IDisposable
     /// <summary>Окно сообщает, что обход на ПК включился или выключился.</summary>
     public void PcChanged() => RaisePc();
 
-    void RaisePc() { Raise(nameof(BothOn)); Raise(nameof(TimestampsNote)); Raise(nameof(HasTimestampsNote)); Raise(nameof(TimestampsNeedAction)); Raise(nameof(HomeFixText)); Raise(nameof(HasHomeFix)); }
+    void RaisePc()
+    {
+        Raise(nameof(BothOn)); Raise(nameof(TimestampsNote)); Raise(nameof(HasTimestampsNote)); Raise(nameof(TimestampsNeedAction)); Raise(nameof(TimestampsDone));
+        Raise(nameof(HomeFixText)); Raise(nameof(HasHomeFix));
+    }
 
     /// <summary>Главная — одной строкой: сколько у роутера того, что можно исправить (сами предупреждения — на вкладке «Роутер»).</summary>
-    public string HomeFixText => (WarningRows.Count + (TimestampsNeedAction ? 1 : 0)) is var n && n > 0 ? $"требует внимания: {n}" : "";
+    public string HomeFixText => FixCount is var n && n > 0 ? "· " + WarningsCount(n) : "";
     public bool HasHomeFix => HomeFixText.Length > 0;
+    int FixCount => WarningRows.Count + (TimestampsNeedAction ? 1 : 0);
+    string? FirstFix() => WarningRows.FirstOrDefault()?.Text ?? (TimestampsNeedAction ? TimestampsNeed : null);
+
+    /// <summary>«1 предупреждение», «2 предупреждения», «5 предупреждений».</summary>
+    public static string WarningsCount(int n)
+    {
+        int d = n % 10, h = n % 100;
+        var word = d == 1 && h != 11 ? "предупреждение" : d is >= 2 and <= 4 && h is < 12 or > 14 ? "предупреждения" : "предупреждений";
+        return $"{n} {word}";
+    }
 
     async Task StopPcForRouterAsync()
     {
@@ -657,12 +706,20 @@ public sealed class RouterViewModel : Observable, IDisposable
     bool? _pcTimestamps;
     bool _timestampsTried, _timestampsByRouter;
 
-    /// <summary>Стратегия роутера работает только с метками TCP: включили сами — одна строка; не смогли — подсказка и кнопка.</summary>
+    /// <summary>
+    /// Стратегия роутера работает только с временными метками TCP (настройка Windows): включили сами — одна строка;
+    /// не смогли — плашка как у предупреждений роутера и «Включить» со щитом (UX-аудит 2, п. 8). Термин — только в подсказке.
+    /// </summary>
     public string TimestampsNote => !NeedsTimestamps ? ""
-        : _pcTimestamps == false ? "Стратегии роутера нужны временные метки TCP — на этом ПК они выключены, часть сайтов может не открываться."
-        : _timestampsByRouter ? "Включены временные метки TCP — нужны стратегии роутера."
+        : _pcTimestamps == false ? TimestampsNeed
+        : _timestampsByRouter ? TimestampsOn
         : "";
+    public const string TimestampsNeed = "Для стратегии роутера этому ПК нужна одна настройка Windows";
+    public const string TimestampsOn = "На этом ПК включена настройка Windows, нужная стратегии роутера.";
+    public const string TimestampsTerm = "Настройка — временные метки TCP (TCP timestamps). Без неё часть сайтов с этого ПК может не открываться. Включается одной командой, вернуть — «Диагностика».";
     public bool HasTimestampsNote => TimestampsNote.Length > 0;
+    /// <summary>Включили сами — серой строкой (плашка — только когда нужно действие).</summary>
+    public bool TimestampsDone => HasTimestampsNote && !TimestampsNeedAction;
     public bool TimestampsNeedAction => NeedsTimestamps && _pcTimestamps == false;
     public ICommand EnableTimestampsCmd { get; }
     bool NeedsTimestamps => _status is { NeedsTcpTimestamps: true, Enabled: true };
@@ -682,11 +739,11 @@ public sealed class RouterViewModel : Observable, IDisposable
             {
                 _pcTimestamps = true;
                 _timestampsByRouter = true;
-                Say("Включены временные метки TCP — нужны стратегии роутера.");
+                Say(TimestampsOn);
             }
-            else if (ask) Say("Не удалось включить метки TCP на этом ПК.");
+            else if (ask) Failed("Не удалось включить настройку Windows для роутера. Попробуйте ещё раз или перезагрузите компьютер.");
         }
-        RaisePc();
+        UpdateHome();   // число предупреждений и первое из них на главной
     }
 
     /// <param name="resumeSelect">Подбор уже идёт (запущен не нами или до запуска программы) — показать его ход.</param>
@@ -742,7 +799,7 @@ public sealed class RouterViewModel : Observable, IDisposable
         }
         catch (RouterException e)
         {
-            Say(RouterTexts.Friendly(e));
+            Failed(RouterTexts.Friendly(e));
             if (e.Failure == RouterFailure.AccessDenied)
             {
                 Connected = false;
@@ -755,7 +812,7 @@ public sealed class RouterViewModel : Observable, IDisposable
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            Say(Texts.Friendly(e));
+            Failed(Texts.Friendly(e));
             return false;
         }
         finally { Busy = false; }
@@ -775,7 +832,7 @@ public sealed class RouterViewModel : Observable, IDisposable
         {
             if (!Confirm("На этом ПК обход включён. Вместе с роутером он не работает: трафик обрабатывается дважды, и сайты перестают открываться.\n\n"
                          + "Выключить обход на этом ПК и включить на роутере?")) return;
-            if (!await StopPc()) { Say("Не удалось выключить обход на этом ПК — на роутере не включаю."); return; }
+            if (!await StopPc()) { Failed("Не удалось выключить обход на этом ПК — на роутере не включаю."); return; }
         }
         if (await Guard(enable ? "Включаю обход на роутере…" : "Выключаю обход на роутере…", async () =>
             {
@@ -933,6 +990,10 @@ public sealed class RouterViewModel : Observable, IDisposable
 
     public ICommand StartSelectCmd { get; }
     public ICommand StartDeepCmd { get; }
+
+    bool _offerDeep;
+    /// <summary>Подбор на роутере ничего не нашёл — в итоге предложить глубокий поиск.</summary>
+    public bool OfferDeep { get => _offerDeep; private set => Set(ref _offerDeep, value); }
     public ICommand StopSelectCmd { get; }
     public ICommand ApplyCmd { get; }
     public ICommand ApplySelectedCmd { get; }
@@ -1098,8 +1159,10 @@ public sealed class RouterViewModel : Observable, IDisposable
         {
             SetBest(null, false);
             ResultText = "Ни одна стратегия не помогла.";
-            ResultHint = "Проверьте свои адреса роутера или запустите полный подбор.";
+            ResultHint = "Проверьте свои адреса роутера или поищите глубже — роутер придумает новые стратегии.";
         }
+        // «Искать глубже» — только когда готовые не помогли (UX-аудит, п. 30), а не равной кнопкой рядом с «Начать подбор».
+        OfferDeep = !p.Cancelled && p.Best is null;
     }
 
     public async Task CancelSelectAsync()

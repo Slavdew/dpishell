@@ -289,7 +289,8 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         vm.EnablePcTimestamps = ask => { asks.Add(ask); return Task.FromResult(true); };
         await vm.ConnectAsync("secret");
         Assert.Equal(new[] { false }, asks);   // сам, без вопроса об установке помощника
-        Assert.Equal("Включены временные метки TCP — нужны стратегии роутера.", vm.TimestampsNote);
+        Assert.Equal(RouterViewModel.TimestampsOn, vm.TimestampsNote);
+        Assert.True(vm.TimestampsDone);
         Assert.False(vm.TimestampsNeedAction);
         await vm.RefreshAsync();
         Assert.Single(asks);
@@ -305,11 +306,15 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         vm.EnablePcTimestamps = ask => Task.FromResult(ask && (helper = true));
         await vm.ConnectAsync("secret");
         Assert.True(vm.TimestampsNeedAction);
-        Assert.StartsWith("Стратегии роутера нужны временные метки TCP", vm.TimestampsNote);
+        // Простыми словами, без «временных меток» (п. 8); на главной — число и текст первого предупреждения (п. 7).
+        Assert.Equal(RouterViewModel.TimestampsNeed, vm.TimestampsNote);
+        Assert.Equal("· 2 предупреждения", vm.HomeFixText);   // и ускорение сети у фейкового роутера
+        Assert.Equal("Ускорение сети на роутере мешает обходу", vm.HomeLine);
         await vm.CheckTimestampsAsync(ask: true);   // кнопка «Включить»
         Assert.True(helper);
         Assert.False(vm.TimestampsNeedAction);
-        Assert.Equal("Включены временные метки TCP — нужны стратегии роутера.", vm.TimestampsNote);
+        Assert.Equal("· 1 предупреждение", vm.HomeFixText);   // счётчик на главной снимается
+        Assert.Equal(RouterViewModel.TimestampsOn, vm.TimestampsNote);
     }
 
     [Fact]

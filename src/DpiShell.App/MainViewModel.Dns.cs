@@ -39,7 +39,8 @@ public sealed partial class MainViewModel
         };
         PcDns.SetPresets(DnsPresets.All.Select(p => new DnsOption(p.Id, p.Title, PresetDetail(p), false, p.Ips, p.Doh)).ToList());
         FixDnsCmd = RelayCommand.Async(() => ApplyPcDnsAsync(PcDns.Options.First(o => o.Id == RecommendedDns)), () => !Busy && !IsLoading);
-        ChooseDnsCmd = new RelayCommand(() => Page = Pages.Diag);
+        // «Другой DNS» — сразу к выбору, а не в начало «Диагностики» (UX-аудит 2, п. 4): окно прокручивает к карточке и раскрывает список.
+        ChooseDnsCmd = new RelayCommand(() => { Page = Pages.Diag; ShowRequested?.Invoke(Spot.PcDns); });
         // Свои варианты одни на ПК и роутер.
         PcDns.CustomChanged += Router.DnsPick.Reload;
         Router.DnsPick.CustomChanged += PcDns.Reload;
@@ -112,9 +113,11 @@ public sealed partial class MainViewModel
             finally { PcDns.Working = false; }
         });
         if (r is null) return;
+        // Без подтверждения, но с быстрым путём назад (UX-аудит, «Опасные действия»). Тост — сразу (UX-аудит 2, п. 14):
+        // «Вернуть» доступен, пока идёт проверка; её итог дописывается в тот же тост.
+        int? toast = r.Ok && PcDns.CanRestore ? ShowToast($"DNS изменён: {o.Title} · проверяю…", "Вернуть", RestorePcDnsAsync) : null;
         await AfterDnsChangeAsync(r);
-        // Без подтверждения, но с быстрым путём назад (UX-аудит, «Опасные действия»): тост после проверки — видно, стало ли лучше.
-        if (r.Ok && PcDns.CanRestore) ShowToast($"DNS изменён: {o.Title}. Проверка DNS: {DnsSummary}", "Вернуть", RestorePcDnsAsync);
+        if (toast is { } id) UpdateToast(id, $"DNS изменён: {o.Title}. Проверка DNS: {DnsSummary}");
     }
 
     public async Task RestorePcDnsAsync()

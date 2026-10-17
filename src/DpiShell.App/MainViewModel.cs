@@ -77,12 +77,13 @@ public sealed partial class MainViewModel : Observable
         };
         Autostart = new Autostart(settings) { Say = s => Message = s };
 
-        RetryCmd = RelayCommand.Async(InitializeAsync, () => LoadFailed);
+        RetryCmd = RelayCommand.Async(InitializeAsync, () => ShowLoadActions);
+        OpenWithoutHelperCmd = RelayCommand.Async(OpenWithoutHelperAsync, () => ShowLoadActions);
         EnableCmd = RelayCommand.Async(EnableAsync, () => !Busy && !IsLoading);
         DisableCmd = RelayCommand.Async(DisableAsync, () => !Busy && !IsLoading);
         GoSelectCmd = new RelayCommand(() => Page = Pages.Select);
         GoDiagCmd = new RelayCommand(() => Page = Pages.Diag);
-        CheckNowCmd = RelayCommand.Async(CheckNowAsync, () => !Busy && !IsLoading);
+        CheckNowCmd = RelayCommand.Async(CheckNowAsync, () => !Busy && !IsLoading && !Checking);
 
         StartSelectCmd = RelayCommand.Async(StartSelectAsync, () => !Busy && !IsLoading);
         StartSearchCmd = RelayCommand.Async(StartSearchAsync, () => !Busy && !IsLoading);
@@ -105,6 +106,7 @@ public sealed partial class MainViewModel : Observable
         Router = new RouterViewModel(shell, settings)
         {
             Say = s => Message = s,
+            Fail = Fail,
             Navigate = p => Page = p,
             SelectOptions = RouterSelectOptions,
             FoundStrategies = () => Helper.Details?.Found ?? [],
@@ -218,10 +220,10 @@ public sealed partial class MainViewModel : Observable
         switch (r.Result)
         {
             case SetupResult.Declined:
-                Message = "Права не выданы. " + ViewOnly;
+                Fail("Права не выданы. " + ViewOnly);
                 return false;
             case SetupResult.Failed:
-                Message = "Помощник не установился: " + r.Error;
+                Fail("Помощник не установился: " + r.Error);
                 return false;
         }
         Message = "";
@@ -262,7 +264,7 @@ public sealed partial class MainViewModel : Observable
         if (Helper.Client is { } c && Helper.Status is { RunMode: "process", Enabled: true, Active: false, StrategyId: { } id })
         {
             try { await c.EnableAsync(id); }
-            catch (Exception e) when (e is HelperException or HelperUnavailableException) { _error = Texts.Friendly(e); Message = _error; }
+            catch (Exception e) when (e is HelperException or HelperUnavailableException) { _error = Texts.Friendly(e); Fail(_error); }
             await FetchAsync(full: false);
         }
         await RefreshStatusAsync();
@@ -305,7 +307,9 @@ public sealed partial class MainViewModel : Observable
         get => _page;
         set
         {
+            int was = _page;
             if (!Set(ref _page, value) || IsLoading) return;
+            if (was == Pages.Targets) _ = SaveDraftOnLeaveAsync();
             if (value == Pages.Net) _ = RefreshNetAsync();
             if (value == Pages.Hosts) _ = Hosts.RefreshAsync();
             if (value == Pages.Router) _ = Router.RefreshRouterPageAsync();
@@ -349,7 +353,7 @@ public sealed partial class MainViewModel : Observable
         {
             if (e is HelperUnavailableException u) Helper.MarkLost(u);
             _error = Texts.Friendly(e);
-            Message = _error;
+            Fail(_error);
             // Чужие программы обхода: что именно мешает — на «Диагностике».
             if (e is ConflictException or HelperException { Code: HelperErrors.Conflict }) Page = Pages.Diag;
             return false;
@@ -380,10 +384,10 @@ public sealed partial class MainViewModel : Observable
     // ---------- загрузка ----------
 
     bool _isLoading = true;
-    public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { Raise(nameof(ShowOverlay)); CommandManager.InvalidateRequerySuggested(); } } }
+    public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); CommandManager.InvalidateRequerySuggested(); } } }
 
     bool _loadFailed;
-    public bool LoadFailed { get => _loadFailed; private set { if (Set(ref _loadFailed, value)) { Raise(nameof(ShowOverlay)); CommandManager.InvalidateRequerySuggested(); } } }
+    public bool LoadFailed { get => _loadFailed; private set { if (Set(ref _loadFailed, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); CommandManager.InvalidateRequerySuggested(); } } }
 
     public bool ShowOverlay => IsLoading;
 
@@ -396,31 +400,73 @@ public sealed partial class MainViewModel : Observable
     /// </summary>
     public async Task InitializeAsync()
     {
-        IsLoading = true; LoadFailed = false; LoadingText = "Подключаюсь к помощнику…";
+        _loadCts?.Cancel();
+        var cts = _loadCts = new CancellationTokenSource();
+        IsLoading = true; LoadFailed = false; LoadSlow = false; LoadingText = "Подключаюсь к помощнику…";
+        _ = MarkSlowAsync(cts.Token);
         try
         {
-            await Helper.ConnectAsync();
-            IsLoading = false;
-            // Роутер ищем сразу и параллельно: его нет — блок просто не появится.
-            _ = Router.RefreshAsync();
-            if (Helper.Reader is not null) await AfterConnectAsync();
-            else
-            {
-                ApplyHelperData();
-                await RefreshStatusAsync();
-            }
-            _ = CheckDnsAsync();
-            _ = RefreshPcDnsAsync();
-            // «Починить адреса» включено и с прошлой проверки прошли сутки — перепроверить записи (устаревшие уберутся).
-            _ = Hosts.RecheckIfDueAsync();
-            // Обновления данных — раз в день, тихо (architecture.md «Обновления данных»).
-            _ = Updates.CheckIfDueAsync();
+            await Helper.ConnectAsync(cts.Token);
+            if (cts.IsCancellationRequested) return;   // уже повторили или открыли без помощника
+            await OpenAsync();
         }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested) { }
         catch (Exception e)
         {
-            LoadFailed = true;
+            if (cts != _loadCts) return;
+            LoadFailed = true; LoadSlow = false;
             LoadingText = Texts.Friendly(e);
         }
+    }
+
+    CancellationTokenSource? _loadCts;
+
+    /// <summary>Через сколько заставка говорит «дольше обычного» и предлагает выход (UX-аудит, п. 46).</summary>
+    public TimeSpan LoadSlowAfter { get; set; } = TimeSpan.FromSeconds(10);
+
+    bool _loadSlow;
+    /// <summary>Помощник не ответил за <see cref="LoadSlowAfter"/>: на заставке «Повторить» и «Открыть без помощника».</summary>
+    public bool LoadSlow { get => _loadSlow; private set { if (Set(ref _loadSlow, value)) { Raise(nameof(ShowLoadActions)); CommandManager.InvalidateRequerySuggested(); } } }
+
+    /// <summary>Кнопки заставки: подключение не вышло или идёт дольше обычного — не застревать на первом экране.</summary>
+    public bool ShowLoadActions => IsLoading && (LoadFailed || LoadSlow);
+
+    async Task MarkSlowAsync(CancellationToken ct)
+    {
+        try { await Task.Delay(LoadSlowAfter, ct); }
+        catch (OperationCanceledException) { return; }
+        if (!IsLoading || LoadFailed) return;
+        LoadingText = "Помощник отвечает дольше обычного. Можно подождать, повторить или открыть окно без него — только для просмотра.";
+        LoadSlow = true;
+    }
+
+    /// <summary>«Открыть без помощника»: не ждать его — окно в режиме просмотра; помощник подхватится сам, когда ответит (TickAsync).</summary>
+    public async Task OpenWithoutHelperAsync()
+    {
+        _loadCts?.Cancel();
+        LoadFailed = false;
+        try { await OpenAsync(); }
+        catch (Exception e) { Fail(Texts.Friendly(e)); }
+    }
+
+    /// <summary>Снять заставку и наполнить окно: от помощника, если он на связи, иначе — то, что видно без прав.</summary>
+    async Task OpenAsync()
+    {
+        IsLoading = false; LoadSlow = false;
+        // Роутер ищем сразу и параллельно: его нет — блок просто не появится.
+        _ = Router.RefreshAsync();
+        if (Helper.Reader is not null) await AfterConnectAsync();
+        else
+        {
+            ApplyHelperData();
+            await RefreshStatusAsync();
+        }
+        _ = CheckDnsAsync();
+        _ = RefreshPcDnsAsync();
+        // «Починить адреса» включено и с прошлой проверки прошли сутки — перепроверить записи (устаревшие уберутся).
+        _ = Hosts.RecheckIfDueAsync();
+        // Обновления данных — раз в день, тихо (architecture.md «Обновления данных»).
+        _ = Updates.CheckIfDueAsync();
     }
 
     // ---------- главная ----------
@@ -478,19 +524,26 @@ public sealed partial class MainViewModel : Observable
         else if (err is not null) { Kind = StatusKind.Error; StatusTitle = "Ошибка"; StatusDetail = err; }
         else if (_active) { Kind = StatusKind.On; StatusTitle = "Работает"; StatusDetail = id is null ? "" : "Стратегия: " + StrategyTitle(id); }
         else if (ServiceMode && _svc == SvcState.StartPending) { Kind = StatusKind.Busy; StatusTitle = "Запускается…"; StatusDetail = ""; }
+        else if (Router.Found && Router.RouterEnabled)
+        {
+            // Обход делает роутер — для этого ПК тоже: не «Выключено» (читается как «не работает», UX-аудит 2, п. 3).
+            Kind = StatusKind.Off; StatusTitle = "Работает через роутер";
+            StatusDetail = "На этом ПК включать не нужно";
+        }
         else
         {
             Kind = StatusKind.Off; StatusTitle = "Выключено";
-            StatusDetail = Router.Found && Router.RouterEnabled ? "Обход делает роутер — на этом ПК включать не нужно"
-                : id is not null ? "Выбрана стратегия: " + StrategyTitle(id) : "Нажмите «Включить» — подходящую стратегию подберу сам (2–3 мин)";
+            StatusDetail = id is not null ? "Выбрана стратегия: " + StrategyTitle(id) : "Нажмите «Включить» — подходящую стратегию подберу сам (2–3 мин)";
         }
-        StatusBrush = BrushOf(Kind);
+        // Через роутер — зелёный кружок: обход работает, хоть и не на этом ПК (значок в трее — про этот ПК).
+        StatusBrush = BrushOf(Kind == StatusKind.Off && Router.Found && Router.RouterEnabled ? StatusKind.On : Kind);
+        DropStaleCheck();
         Raise(nameof(IsRunning));
         Raise(nameof(ToggleText)); Raise(nameof(PcSecondary)); Raise(nameof(PcPrimary));
-        Raise(nameof(CanChoose));
+        Raise(nameof(CanChoose)); Raise(nameof(TargetsDirty));
         Router.PcChanged();
         Raise(nameof(StrategyHeader));
-        Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint));
+        Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint)); Raise(nameof(HasCloseHint));
         // Автозапуск по умолчанию следует за режимом — когда режим известен (помощник ответил).
         if (Live is not null) Autostart.OnRunMode(ServiceMode);
         Updates.Refresh();
@@ -579,7 +632,7 @@ public sealed partial class MainViewModel : Observable
             await FetchAsync(full: false);
             if (Live?.StrategyId == id) _draftStrategy = null;
         }
-        catch (Exception e) when (e is HelperException or HelperUnavailableException) { Message = Texts.Friendly(e); }
+        catch (Exception e) when (e is HelperException or HelperUnavailableException) { Fail(Texts.Friendly(e)); }
         UpdateStatus();
     }
 
@@ -600,13 +653,13 @@ public sealed partial class MainViewModel : Observable
 
     async Task SetRunModeAsync(bool service)
     {
-        await WithHelper(service ? "Перехожу в режим службы…" : "Перехожу на работу из программы…", async c =>
+        await WithHelper(service ? "Перехожу на работу без окна…" : "Перехожу на работу из программы…", async c =>
         {
             await c.SetRunModeAsync(service);
             await FetchAsync(full: false);
         });
         // И при отказе (идёт другая операция, нет помощника) — галочка показывает настоящий режим.
-        Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint));
+        Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint)); Raise(nameof(HasCloseHint));
         await RefreshStatusAsync();
     }
 
@@ -616,6 +669,7 @@ public sealed partial class MainViewModel : Observable
     ICommand? _toggleCmd;
 
     public ICommand RetryCmd { get; }
+    public ICommand OpenWithoutHelperCmd { get; }
     public ICommand EnableCmd { get; }
     public ICommand DisableCmd { get; }
     public ICommand GoSelectCmd { get; }
@@ -717,45 +771,96 @@ public sealed partial class MainViewModel : Observable
         await RefreshStatusAsync();
     });
 
-    Task<bool> ApplyAsync(string id) => WithHelper("Включаю…", async c =>
+    /// <summary>Включить на стратегии; включилось — сразу «Проверить сейчас» (UX-аудит 2, п. 1): итог в карточке — про новое состояние.</summary>
+    async Task<bool> ApplyAsync(string id)
     {
-        // Выбранная руками — первая в запасных: это делает помощник вместе с включением.
-        await c.EnableAsync(id);
-        _draftStrategy = null;
-        await RefreshStatusAsync();
-        Page = Pages.Home;
-    });
+        bool ok = await WithHelper("Включаю…", async c =>
+        {
+            // Выбранная руками — первая в запасных: это делает помощник вместе с включением.
+            await c.EnableAsync(id);
+            _draftStrategy = null;
+            await RefreshStatusAsync();
+            Page = Pages.Home;
+        });
+        if (ok && IsRunning && CheckedGroups().Count > 0) await CheckNowAsync();
+        return ok;
+    }
 
-    /// <summary>«Проверить сейчас» — без прав: HTTPS-проверка целей с DoH, winws не нужен.</summary>
-    Task CheckNowAsync()
+    /// <summary>Проверка сайтов (в тестах — подмена без сети). Null — настоящая: HTTPS с DoH.</summary>
+    public Func<IReadOnlyList<TargetGroup>, Task<IReadOnlyList<TargetVerdict>>>? ProbeGroups { get; set; }
+
+    bool _checking;
+    /// <summary>Идёт «Проверить сейчас»: в карточке «Проверяю…».</summary>
+    public bool Checking
+    {
+        get => _checking;
+        private set { if (Set(ref _checking, value)) { Raise(nameof(HasCheck)); CommandManager.InvalidateRequerySuggested(); } }
+    }
+
+    /// <summary>Для какого состояния обхода (включён, стратегия) сделана проверка; другое состояние — итог устарел.</summary>
+    (bool Active, string? Strategy)? _checkFor;
+    int _checkGen;
+
+    (bool, string?) CheckState() => (_active, _active ? CurrentStrategyId : null);
+
+    /// <summary>Обход включили, выключили или сменили стратегию — прежний итог не про то, что сейчас: убрать.</summary>
+    void DropStaleCheck()
+    {
+        if (_checkFor is not { } f || f == CheckState()) return;
+        _checkGen++;
+        _checkFor = null;
+        CheckRows.Clear(); CheckSummary = ""; CheckedAt = "";
+        Checking = false;
+    }
+
+    /// <summary>«Проверить сейчас» — без прав: HTTPS-проверка целей с DoH, winws не нужен. Не занимает окно: идёт рядом с другими действиями.</summary>
+    public async Task CheckNowAsync()
     {
         var groups = CheckedGroups();
-        if (groups.Count == 0) { Message = "Нечего проверять: отметьте группы на вкладке «Подбор»."; return Task.CompletedTask; }
-        return Guard("Проверяю…", async () =>
+        if (groups.Count == 0) { Message = "Нечего проверять: отметьте группы на вкладке «Подбор»."; return; }
+        if (Checking) return;
+        int gen = ++_checkGen;
+        _checkFor = CheckState();
+        CheckRows.Clear(); CheckedAt = "";
+        CheckSummary = "Проверяю…";
+        Checking = true;
+        try
         {
-            CheckRows.Clear(); CheckSummary = "";
-            var dns = CheckDnsAsync();
-            var verdicts = await Task.Run(async () =>
+            var dns = ProbeGroups is null ? CheckDnsAsync() : Task.CompletedTask;   // подмена проверки — и DNS без сети не трогаем
+            var verdicts = ProbeGroups is { } probe ? await probe(groups) : await Task.Run(async () =>
             {
                 using var doh = new DohResolver();
                 return await new Selector(_shell.Paths, Shell.NewProbe(doh)).CheckGroupsAsync(groups, CancellationToken.None);
             });
-            foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, GroupTitle));
-            CheckSummary = $"Открывается {verdicts.Count(v => v.Ok)} из {verdicts.Count}";
-            CheckedAt = $"в {DateTime.Now:HH:mm}";
             await dns;
-            await RefreshStatusAsync();
-        });
+            if (gen != _checkGen) return;   // пока проверяли, обход включили или выключили — итог уже не про это
+            foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, GroupTitle));
+            // В тех же единицах, что и отметки рядом (п. 5): группы, а не адреса; адреса — в «Подробнее».
+            CheckSummary = $"Открывается {CheckGroups.Count(g => g.Ok)} из {CheckGroups.Count}";
+            CheckedAt = $"в {DateTime.Now:HH:mm}";
+        }
+        catch (Exception e)
+        {
+            if (gen != _checkGen) return;
+            CheckSummary = "";
+            Fail("Проверка не удалась: " + Texts.Friendly(e));
+        }
+        finally
+        {
+            if (gen == _checkGen) Checking = false;
+        }
+        await RefreshStatusAsync();
     }
 
-    /// <summary>Отмеченные группы целей. Свои адреса — сохранённые у помощника, иначе черновик из «Свои адреса».</summary>
+    /// <summary>Отмеченные группы целей. Свои адреса — из поля «Свои адреса», как на экране.</summary>
     IReadOnlyList<TargetGroup> CheckedGroups()
     {
         var want = Groups.Where(g => g.IsChecked).Select(g => g.Id).ToHashSet();
         var groups = _shell.DefaultTargets.Groups.Where(g => want.Contains(g.Id)).ToList();
         if (want.Contains("user"))
         {
-            var mine = UserTargets.Count > 0 ? UserTargets : DraftTargets();
+            // То, что в поле «Свои адреса», — как видит человек, сохранено оно или нет.
+            var mine = DraftTargets();
             if (mine.Count > 0) groups.Add(TargetSet.UserGroup(mine));
         }
         return groups;
@@ -873,10 +978,17 @@ public sealed partial class MainViewModel : Observable
         return (ids, Full);
     }
 
+    bool _offerDeep;
+    /// <summary>
+    /// «Искать глубже» — только после подбора, который не нашёл стратегию для всего (UX-аудит, п. 30): рядом с «Начать подбор»
+    /// равной кнопкой её нажимали по ошибке и ждали 15 минут.
+    /// </summary>
+    public bool OfferDeep { get => _offerDeep; private set => Set(ref _offerDeep, value); }
+
     void ResetResults()
     {
         Scores.Clear(); SelectedScore = null;
-        ResultText = ""; ResultHint = ""; SetBest(null);
+        ResultText = ""; ResultHint = ""; SetBest(null); OfferDeep = false;
         SelectProgress = 0; SelectIndeterminate = false;
         SelectProgressText = "Подготовка…";
     }
@@ -888,6 +1000,7 @@ public sealed partial class MainViewModel : Observable
         if (!AnyChecked()) return;
         if (await NeedHelperAsync() is not { } c) return;
         // Свои адреса проверяем после подключения: до установки их у помощника ещё нет.
+        if (!await SaveDraftBeforeSelectAsync()) return;
         if (TakeGroups() is not { } ids) return;
         if (!ConfirmPauseIfRunning()) return;
         // Обход на роутере: подбор на ПК при нём неверен (router-api §6) — подобрать там или выключить там на время подбора.
@@ -942,6 +1055,7 @@ public sealed partial class MainViewModel : Observable
         if (Busy) return;
         if (!AnyChecked()) return;
         if (await NeedHelperAsync() is not { } c) return;
+        if (!await SaveDraftBeforeSelectAsync()) return;
         if (TakeGroups() is not { } ids) return;
         if (!ConfirmPauseIfRunning()) return;
         // Обход на роутере: подбор на ПК при нём неверен (router-api §6) — подобрать там или выключить там на время подбора.
@@ -1082,6 +1196,8 @@ public sealed partial class MainViewModel : Observable
         // Новая статистика и найденные стратегии — в список на главной; запасные помощник запомнил сам.
         _ = ReloadChoicesAsync();
 
+        // Готовые не помогли (или помогли не со всем), подбор дошёл до конца — предложить глубокий поиск; после него — уже нет.
+        OfferDeep = !r.Cancelled && !r.NothingBlocked && !_searching && best is not { Perfect: true };
         if (r.NothingBlocked)
         {
             ResultText = "Без обхода всё открывается: блокировок нет или включён VPN.";
@@ -1110,14 +1226,53 @@ public sealed partial class MainViewModel : Observable
 
     string _targetsText = "";
     /// <summary>Черновик до «Сохранить»: сохраняет помощник.</summary>
-    public string TargetsText { get => _targetsText; set => Set(ref _targetsText, value); }
+    public string TargetsText
+    {
+        get => _targetsText;
+        // Правка после «Сохранено адресов: N» — прежний итог уже не про то, что в поле.
+        set { if (Set(ref _targetsText, value)) { TargetsMessage = ""; Raise(nameof(TargetsDirty)); } }
+    }
+
+    /// <summary>
+    /// В поле не то, что сохранено (UX-аудит 2, п. 15; п. 33 первого круга): подбор берёт сохранённое у помощника,
+    /// поэтому перед подбором и при уходе с вкладки черновик сохраняется (или об этом говорит тост).
+    /// </summary>
+    public bool TargetsDirty
+    {
+        get
+        {
+            var saved = UserTargets.Select(DataStore.NormalizeDomain).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return !saved.SetEquals(DraftTargets());
+        }
+    }
+
+    /// <summary>Ушли с «Своих адресов», не сохранив: с помощником — сохранить сами (прав не спросит), без него — тост «Сохранить».</summary>
+    async Task SaveDraftOnLeaveAsync()
+    {
+        if (!TargetsDirty || Busy) return;
+        if (Helper.Ready)
+        {
+            if (await SaveTargetsAsync()) ShowToast("Свои адреса сохранены.");
+            return;
+        }
+        ShowToast("Свои адреса не сохранены — подбор и обход их не учтут.", "Сохранить", async () => await SaveTargetsAsync());
+    }
+
+    /// <summary>Перед подбором: несохранённые свои адреса — сохранить (помощник уже подключён), иначе подбор их молча не учтёт.</summary>
+    async Task<bool> SaveDraftBeforeSelectAsync()
+    {
+        if (!TargetsDirty) return true;
+        if (!await SaveTargetsAsync()) return false;
+        Message = "Свои адреса сохранены — подбор их учтёт.";
+        return true;
+    }
 
     string _targetsMessage = "";
     public string TargetsMessage { get => _targetsMessage; private set => Set(ref _targetsMessage, value); }
 
     public ICommand SaveTargetsCmd { get; }
 
-    async Task SaveTargetsAsync()
+    async Task<bool> SaveTargetsAsync()
     {
         var lines = TargetsText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
         UserTargetsResult? r = null;
@@ -1126,12 +1281,14 @@ public sealed partial class MainViewModel : Observable
                 r = await c.SetUserTargetsAsync(lines);
                 await FetchAsync(full: false);
             }) || r is null)
-            return;
+            return false;
         if (r.Saved.Count > 0 && Groups.FirstOrDefault(g => g.Id == "user") is { } ug) ug.IsChecked = true;
         TargetsText = string.Join(Environment.NewLine, r.Saved);
         TargetsMessage = r.Rejected.Count == 0
             ? $"Сохранено адресов: {r.Saved.Count}."
             : $"Сохранено адресов: {r.Saved.Count}. Не распознаны и убраны: {string.Join(", ", r.Rejected)}.";
+        Raise(nameof(TargetsDirty));
+        return true;
     }
 
     // ---------- диагностика ----------
@@ -1153,7 +1310,7 @@ public sealed partial class MainViewModel : Observable
     public ICommand CopyCoreFolderCmd => _copyCoreFolderCmd ??= new RelayCommand(() =>
     {
         try { Clipboard.SetText(CoreFolder); Message = "Путь скопирован: " + CoreFolder; }
-        catch (System.Runtime.InteropServices.ExternalException) { Message = "Не удалось скопировать — буфер обмена занят другой программой."; }
+        catch (System.Runtime.InteropServices.ExternalException) { Fail("Не удалось скопировать — буфер обмена занят другой программой."); }
     });
     ICommand? _copyCoreFolderCmd;
 
@@ -1161,7 +1318,7 @@ public sealed partial class MainViewModel : Observable
     public ICommand OpenDefenderCmd => _openDefenderCmd ??= new RelayCommand(() =>
     {
         try { Process.Start(new ProcessStartInfo("windowsdefender://threatsettings") { UseShellExecute = true }); }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Message = "Не удалось открыть «Безопасность Windows»: " + e.Message; }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Fail("Не удалось открыть «Безопасность Windows»: " + e.Message); }
     });
     ICommand? _openDefenderCmd;
 
@@ -1247,7 +1404,7 @@ public sealed partial class MainViewModel : Observable
             OnHelperChanged();
             DiagUpdated = $"обновлено в {DateTime.Now:HH:mm:ss}";
         }
-        catch (Exception e) { Message = Texts.Friendly(e); }
+        catch (Exception e) { Fail(Texts.Friendly(e)); }
         finally { DiagRefreshing = false; }
     }
 
@@ -1292,7 +1449,7 @@ public sealed partial class MainViewModel : Observable
 
     void SaveSettings()
     {
-        try { Settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Message = Texts.Friendly(e); }
+        try { Settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Fail(Texts.Friendly(e)); }
     }
 
     /// <summary>"system" / "light" / "dark" — в window.json, применяется сразу.</summary>
@@ -1330,9 +1487,9 @@ public sealed partial class MainViewModel : Observable
         Raise(nameof(CloseTray)); Raise(nameof(CloseExit));
     }
 
-    public string CloseHint => ServiceMode
-        ? "Обход работает и без окна: его выключает только кнопка «Выключить»."
-        : "Без режима службы закрытие программы выключает и обход.";
+    /// <summary>Только без «Работать, даже когда окно закрыто» (UX-аудит 2, п. 12): с ней подсказка под галочкой уже всё сказала.</summary>
+    public string CloseHint => ServiceMode ? "" : "Закрытие программы выключит обход.";
+    public bool HasCloseHint => CloseHint.Length > 0;
 
     /// <summary>Восстановить ядро — помощник останавливает обход, ставит файлы заново и возвращает как было.</summary>
     Task RepairCoreAsync() => WithHelper("Восстанавливаю ядро…", async c =>
@@ -1394,7 +1551,7 @@ public sealed partial class MainViewModel : Observable
                 { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
             }
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Message = Texts.Friendly(e); return; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Fail(Texts.Friendly(e)); return; }
         if (r.Results.Count == 0) Message = "Подборов ещё не было.";
         OpenFolder(dir);
     }
@@ -1406,6 +1563,6 @@ public sealed partial class MainViewModel : Observable
             Directory.CreateDirectory(path);
             Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true });
         }
-        catch (Exception e) { Message = Texts.Friendly(e); }
+        catch (Exception e) { Fail(Texts.Friendly(e)); }
     }
 }

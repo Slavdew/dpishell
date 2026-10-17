@@ -57,7 +57,10 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.True(vm.Found);
         Assert.True(vm.RouterEnabled);
         Assert.Equal("Обход делает роутер", vm.HomeTitle);
-        Assert.StartsWith("Стратегия general (ALT10), проверено в ", vm.HomeDetail);
+        // Есть предупреждение — на главной число и его текст вместо стратегии и времени (UX-аудит 2, п. 7).
+        Assert.Equal("· 1 предупреждение", vm.HomeFixText);
+        Assert.Equal("Ускорение сети на роутере мешает обходу", vm.HomeLine);
+        Assert.StartsWith("Стратегия general (ALT10), проверено в ", vm.HomeDetail);   // на вкладке — как было
         Assert.Equal("Ускорение сети на роутере мешает обходу", vm.Warnings);
         Assert.Equal("Исправить", Assert.Single(vm.WarningRows).Fix);
         Assert.Single(vm.Strategies);
@@ -137,6 +140,31 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.Equal("DpiShell 0.1.0 найден — введите пароль роутера", vm.ConnectionText);
         Assert.Equal(0, r.Logins);
         Assert.Empty(r.Calls);
+    }
+
+    /// <summary>UX-аудит 2, п. 11: у свежей OpenWrt пароль root пустой — «Пароль не задан» входит с пустым, не путая с «взять сохранённый».</summary>
+    [Fact]
+    public async Task Connect_NoPasswordSet_FreshOpenWrt()
+    {
+        using var r = new FakeRouter { Password = "" };
+        var (vm, _) = Make(r);
+        Assert.False(vm.HasSavedPassword);
+        Assert.False(await vm.ConnectAsync(""));   // пустое поле без выбора — только поиск, как раньше
+        Assert.Equal(0, r.Logins);
+
+        Assert.True(await vm.ConnectAsync(null, noPassword: true));
+        Assert.True(vm.Connected);
+        Assert.Equal(1, r.Logins);
+        // Запомнили «пароль не задан»: в следующий раз пустое поле — вход с ним.
+        Assert.True(vm.HasSavedPassword);
+        Assert.Equal("", RouterSecrets.Unprotect(Settings.RouterPassword));
+
+        // Пароль на роутере всё же есть — говорим прямо, а не «неверный пароль».
+        using var r2 = new FakeRouter();
+        var (vm2, _) = Make(r2);
+        Assert.False(await vm2.ConnectAsync(null, noPassword: true));
+        Assert.False(vm2.Connected);
+        Assert.Equal("У роутера есть пароль — введите его", vm2.ConnectionText);
     }
 
     [Fact]
@@ -351,7 +379,9 @@ public sealed class RouterViewModelTests : IDisposable
         vm.Router.AddressAuto = false;
         vm.Router.CustomAddress = r.Address;
         await vm.Router.ConnectAsync("secret");
-        Assert.Equal("Обход делает роутер — на этом ПК включать не нужно", vm.StatusDetail);
+        // Не «Выключено» — обход работает, только через роутер (UX-аудит 2, п. 3).
+        Assert.Equal("Работает через роутер", vm.StatusTitle);
+        Assert.Equal("На этом ПК включать не нужно", vm.StatusDetail);
         string? asked = null;
         vm.Choose = (t, _) => { asked = t; return -1; };   // «Отмена» — на ПК ничего не включаем (и не трогаем sc.exe)
         await vm.EnableAsync();

@@ -9,14 +9,20 @@ public sealed record CheckGroupMark(string Title, bool Ok)
     public string Mark => Ok ? "✓" : "✗";
 }
 
+/// <summary>Место в окне, куда прокрутить по ссылке (<see cref="MainViewModel.ShowRequested"/>).</summary>
+public enum Spot { Strategies, PcDns }
+
 /// <summary>
 /// Главная по UX-аудиту («Главная»): одно главное действие — выключатель; итог проверки — в карточке состояния;
 /// стратегии — под «Сменить стратегию»; помехи — одной строкой «Нашлось N помех», раскрыта только самая важная.
 /// </summary>
 public sealed partial class MainViewModel
 {
-    /// <summary>Помехи на главной в порядке важности: показывается первая, остальные — по «Показать все».</summary>
-    enum Issue { BothOn, Conflicts, Dns, Vpn, Update }
+    /// <summary>Помехи на главной в порядке важности: показывается первая, остальные — по «Ещё N». Обновление списков — не помеха (UX-аудит 2, п. 6).</summary>
+    enum Issue { BothOn, Conflicts, Dns, Vpn }
+
+    /// <summary>Показать место на странице: окно прокручивает к нему (и раскрывает список DNS). Ссылка не должна «ничего не делать» (UX-аудит 2, п. 2, 4).</summary>
+    public event Action<Spot>? ShowRequested;
 
     void InitHome()
     {
@@ -37,7 +43,12 @@ public sealed partial class MainViewModel
     public bool ShowStrategies
     {
         get => _showStrategies;
-        set { if (Set(ref _showStrategies, value)) Raise(nameof(StrategiesLinkText)); }
+        set
+        {
+            if (!Set(ref _showStrategies, value)) return;
+            Raise(nameof(StrategiesLinkText));
+            if (value) ShowRequested?.Invoke(Spot.Strategies);
+        }
     }
     public string StrategiesLinkText => ShowStrategies ? "Скрыть стратегии" : "Сменить стратегию";
     public ICommand ToggleStrategiesCmd => _toggleStrategiesCmd ??= new RelayCommand(() => ShowStrategies = !ShowStrategies);
@@ -50,7 +61,7 @@ public sealed partial class MainViewModel
 
     /// <summary>По группе: открылось всё — ✓. Строится из строк проверки (адреса — в «Подробнее»).</summary>
     public ObservableCollection<CheckGroupMark> CheckGroups { get; } = [];
-    public bool HasCheck => CheckRows.Count > 0;
+    public bool HasCheck => CheckRows.Count > 0 || Checking;
 
     string _checkedAt = "";
     /// <summary>«в 14:05» — когда проверяли.</summary>
@@ -72,7 +83,6 @@ public sealed partial class MainViewModel
         if (HasConflicts) list.Add(Issue.Conflicts);
         if (DnsSpoofed) list.Add(Issue.Dns);
         if (HasVpn) list.Add(Issue.Vpn);
-        if (Updates.DataAvailable) list.Add(Issue.Update);
         return list;
     }
 
@@ -95,23 +105,16 @@ public sealed partial class MainViewModel
     public bool ShowConflicts => Shown(Issue.Conflicts);
     public bool ShowDns => Shown(Issue.Dns);
     public bool ShowVpn => Shown(Issue.Vpn);
-    public bool ShowUpdate => Shown(Issue.Update);
+    /// <summary>Обновление списков — отдельной карточкой, всегда видно и не под ⚠.</summary>
+    public bool ShowUpdate => Updates.DataAvailable;
 
     /// <summary>Строка «Нашлось N помех» — когда плашек больше одной (одна — видна и так).</summary>
     public bool HasIssuesHeader => Issues().Count > 1;
 
-    public string IssuesTitle
-    {
-        get
-        {
-            var list = Issues();
-            int n = list.Count(i => i != Issue.Update);
-            var update = list.Contains(Issue.Update) ? (n > 0 ? " · есть обновление списков" : "Есть обновление списков") : "";
-            return n == 0 ? update : Plural(n) + update;
-        }
-    }
+    public string IssuesTitle => Plural(Issues().Count);
 
-    public string IssuesToggleText => ShowAllIssues ? "Свернуть" : $"Показать все ({Issues().Count})";
+    /// <summary>«Ещё 2» — сколько скрыто (одна уже видна): числа сходятся с заголовком.</summary>
+    public string IssuesToggleText => ShowAllIssues ? "Свернуть" : $"Ещё {Issues().Count - 1}";
 
     /// <summary>«Нашлась 1 помеха», «Нашлось 3 помехи», «Нашлось 5 помех».</summary>
     public static string Plural(int n)

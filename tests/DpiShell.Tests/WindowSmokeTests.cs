@@ -213,6 +213,14 @@ public sealed class WindowSmokeTests
                 {
                     Directory.CreateDirectory(snapDir);
                     Snap(w, Path.Combine(snapDir, $"{theme}-loading.png"));
+                    // Помощник молчит дольше 10 с — выход с заставки (UX-аудит, п. 46).
+                    var text = vm.LoadingText;
+                    SetProp(vm, "LoadSlow", true);
+                    SetProp(vm, "LoadingText", "Помощник отвечает дольше обычного. Можно подождать, повторить или открыть окно без него — только для просмотра.");
+                    Pump();
+                    Snap(w, Path.Combine(snapDir, $"{theme}-loading-slow.png"));
+                    SetProp(vm, "LoadSlow", false);
+                    SetProp(vm, "LoadingText", text);
                 }
                 foreach (var (page, name) in AllPages.Append((Pages.Router, "router-none")))
                 {
@@ -227,9 +235,11 @@ public sealed class WindowSmokeTests
                             throw new Exception("Автозапуск по умолчанию: включён без службы, выключен в режиме службы");
                     }
                     if (page == Pages.Settings) AssertServiceMode(w, vm);
-                    // Роутера нет — вкладка всё равно есть: пустое состояние и адрес (UX-аудит п. 47).
-                    if (page == Pages.Router && Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Роутер с DpiShell не найден" && t.IsVisible) is null)
-                        throw new Exception("На вкладке «Роутер» без роутера нет пустого состояния");
+                    // Роутера нет — вкладка всё равно есть: пустое состояние и адрес (UX-аудит п. 47). Ещё не искали — «не проверялся» (UX-аудит 2, п. 10),
+                    // и как поставить — ссылка на инструкцию (п. 9).
+                    if (page == Pages.Router && (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Роутер не проверялся" && t.IsVisible) is null
+                                                 || Find<Button>(Find<TabControl>(w)!, b => b.Content as string == "Как поставить на роутер ↗" && b.IsVisible) is null))
+                        throw new Exception("На вкладке «Роутер» без роутера нет пустого состояния или ссылки «Как поставить»");
                     // Вход на роутер — небольшое окно на месте (п. 14): Enter — «Войти», Esc — «Отмена».
                     if (page == Pages.Router)
                     {
@@ -241,6 +251,11 @@ public sealed class WindowSmokeTests
                         Pump();
                         if (Find<Button>(login, b => b.IsDefault && b.Content as string == "Войти") is null || Find<Button>(login, b => b.IsCancel) is null || Find<PasswordBox>(login) is null)
                             throw new Exception("В окне входа нет пароля, «Войти» по Enter или «Отмена» по Esc");
+                        // Пароль не задан — явный выбор (п. 11); «пустое — с сохранённым» — только когда сохранённый есть (здесь его нет).
+                        if (Find<CheckBox>(login, c => c.Content as string == "Пароль не задан (свежая OpenWrt)") is null)
+                            throw new Exception("В окне входа нет «Пароль не задан»");
+                        if (Find<TextBlock>(login, t => t.Text.Contains("вход с сохранённым")) is not null)
+                            throw new Exception("Подсказка про сохранённый пароль — а сохранённого нет");
                         if (snapDir is not null) Snap(login, Path.Combine(snapDir, $"{theme}-router-login.png"));
                         login.Close();
                     }
@@ -266,9 +281,32 @@ public sealed class WindowSmokeTests
                         vm.ShowAllIssues = false;
                         vm.ShowStrategies = false;
                         Pump();
+                        // Идёт «Проверить сейчас» (сама после «Включить», UX-аудит 2, п. 1): в карточке «Проверяю…», прежних отметок нет.
+                        var rows = vm.CheckRows.ToList();
+                        var summary = vm.CheckSummary;
+                        vm.CheckRows.Clear();
+                        SetProp(vm, "CheckSummary", "Проверяю…");
+                        SetProp(vm, "Checking", true);
+                        Pump();
+                        if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Проверяю…" && t.IsVisible) is null) throw new Exception("Нет «Проверяю…» в карточке");
+                        Snap(w, Path.Combine(snapDir, $"{theme}-home-checking.png"));
+                        SetProp(vm, "Checking", false);
+                        SetProp(vm, "CheckSummary", summary);
+                        foreach (var r in rows) vm.CheckRows.Add(r);
+                        Pump();
                     }
                     if (page == Pages.Diag && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } sv)
                     {
+                        // «Другой DNS» с главной (UX-аудит 2, п. 4): к выбору DNS этого компьютера, список вариантов раскрыт.
+                        w.ShowSpot(Spot.PcDns);
+                        Pump();
+                        var picker = Find<DnsPickerView>(Find<TabControl>(w)!, v => v.IsVisible && v.DataContext == vm.PcDns)!;
+                        var combo = Find<ComboBox>(picker)!;
+                        if (!combo.IsDropDownOpen || sv.VerticalOffset == 0) throw new Exception("«Другой DNS» не привёл к выбору DNS");
+                        Snap(w, Path.Combine(snapDir, $"{theme}-diag-choose-dns.png"));
+                        combo.IsDropDownOpen = false;
+                        sv.ScrollToHome();
+                        Pump();
                         sv.ScrollToEnd();
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-diag-end.png"));
@@ -472,22 +510,34 @@ public sealed class WindowSmokeTests
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
 
-    /// <summary>Разделы docs/info-texts.md: заголовок «## …» → текст абзаца (обратные кавычки разметки убраны).</summary>
+    /// <summary>
+    /// Разделы docs/info-texts.md: заголовок «## …» → текст (обратные кавычки разметки убраны). Абзацы — через пустую строку «\n\n»:
+    /// первый — ответ «когда включать» (UX-аудит, п. 25), в карточке он жирный.
+    /// </summary>
     static Dictionary<string, string> DocInfoTexts()
     {
         var root = Directory.GetParent(Repo.Data)!.FullName;
         var map = new Dictionary<string, string>();
         string? head = null;
-        var body = new List<string>();
+        var paragraphs = new List<string>();
+        var lines = new List<string>();
+        void EndParagraph()
+        {
+            if (lines.Count > 0) paragraphs.Add(string.Join(" ", lines));
+            lines.Clear();
+        }
         void Flush()
         {
-            if (head is not null) map[head] = string.Join(" ", body).Replace("`", "").Trim();
-            body.Clear();
+            EndParagraph();
+            if (head is not null) map[head] = string.Join("\n\n", paragraphs).Replace("`", "").Trim();
+            paragraphs.Clear();
         }
         foreach (var line in File.ReadAllLines(Path.Combine(root, "docs", "info-texts.md")))
         {
             if (line.StartsWith("## ")) { Flush(); head = line[3..].Trim(); continue; }
-            if (head is not null && line.Trim().Length > 0) body.Add(line.Trim());
+            if (head is null) continue;
+            if (line.Trim().Length == 0) EndParagraph();
+            else lines.Add(line.Trim());
         }
         Flush();
         return map;
@@ -533,7 +583,7 @@ public sealed class WindowSmokeTests
 
     /// <summary>
     /// Главная (UX-аудит): одна главная кнопка, стратегии свёрнуты под «Сменить стратегию» (раскрываются — список с выбранной),
-    /// помехи — строкой «Нашлось N помех», раскрыта одна самая важная, остальные — по «Показать все».
+    /// помехи — строкой «Нашлось N помех», раскрыта одна самая важная, остальные — по «Ещё N».
     /// </summary>
     static void AssertHome(Window w, MainViewModel vm)
     {
@@ -551,16 +601,19 @@ public sealed class WindowSmokeTests
         if ((list.SelectedItem as StrategyChoice)?.Id != vm.ChosenStrategyId) throw new Exception("В списке не выделена выбранная стратегия");
         vm.ShowStrategies = false;
 
-        // Наполнение: подмена DNS, VPN и обновление списков — видна только первая (DNS), заголовок считает помехи.
-        if (Find<TextBlock>(tabs, t => string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text)) == "⚠ Нашлось 2 помехи · есть обновление списков" && t.IsVisible) is null)
+        // Наполнение: подмена DNS и VPN — видна только первая (DNS), заголовок и «Ещё 1» считают одно и то же (UX-аудит 2, п. 6).
+        // Обновление списков — не помеха: видно всегда, не под ⚠.
+        if (Find<TextBlock>(tabs, t => string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text)) == "⚠ Нашлось 2 помехи" && t.IsVisible) is null)
             throw new Exception($"Нет строки «Нашлось 2 помехи»: «{vm.IssuesTitle}», видна: {vm.HasIssuesHeader}");
         Button? Visible(string text) => Find<Button>(tabs, b => b.Content as string == text && b.IsVisible);
+        if (Visible("Ещё 1") is null) throw new Exception("Нет «Ещё 1»: " + vm.IssuesToggleText);
         if (Visible("Включить защищённый DNS") is null) throw new Exception("Не видна самая важная помеха (DNS)");
-        if (Visible("Установить обновление") is not null || Visible("Понятно, не показывать") is not null) throw new Exception("Свёрнутые помехи видны");
+        if (!vm.Updates.DataAvailable || Visible("Обновить списки") is null) throw new Exception("Обновление списков спрятано вместе с помехами");
+        if (Visible("Понятно, не показывать") is not null) throw new Exception("Свёрнутые помехи видны");
         vm.ShowAllIssues = true;
         Pump();
-        if (!vm.Updates.DataAvailable || Visible("Установить обновление") is null || Visible("Понятно, не показывать") is null)
-            throw new Exception("«Показать все» не раскрыл помехи (обновление списков, VPN)");
+        if (Visible("Понятно, не показывать") is null)
+            throw new Exception("«Ещё 1» не раскрыл помехи (VPN)");
         vm.ShowAllIssues = false;
         Pump();
     }
@@ -599,7 +652,7 @@ public sealed class WindowSmokeTests
         vm.ShowPcDns(new DnsStatusInfo("google", true, false, true, true,
             [new DnsAdapterInfo("Ethernet", "ethernet", false, ["8.8.8.8", "8.8.4.4"], true), new DnsAdapterInfo("Wi-Fi", "wifi", false, ["8.8.8.8", "8.8.4.4"], true)],
             ["Radmin VPN", "vEthernet (Default Switch)"]));
-        SetProp(vm, "CheckSummary", "Открывается 3 из 4");
+        SetProp(vm, "CheckSummary", "Открывается 1 из 2");
         vm.CheckRows.Add(new(true, "YouTube", "https://www.youtube.com/", "0.4 с"));
         vm.CheckRows.Add(new(true, "YouTube", "https://rr1---sn-4g5e6nsz.googlevideo.com/", "0.7 с"));
         vm.CheckRows.Add(new(true, "Discord", "https://discord.com/", "0.5 с"));
@@ -623,6 +676,7 @@ public sealed class WindowSmokeTests
         SetProp(vm, "SelectProgressText", "Проверено 6 из 10");
         SetProp(vm, "ResultText", "Подходит: " + strategies[0].Title);
         SetProp(vm, "ResultHint", "без обхода не открывалось: YouTube, Discord.");
+        SetProp(vm, "OfferDeep", true);   // «Искать глубже» — в итоге, не рядом с «Начать подбор» (п. 30)
         typeof(MainViewModel).GetMethod("SetBest", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .Invoke(vm, [strategies[0].Id]);
 

@@ -77,7 +77,7 @@ public partial class App : Application
         vm.LocalDns = new WindowsDnsSystem();   // только чтение DNS адаптеров без помощника; меняет помощник
         vm.Updates.Http = () => new System.Net.Http.HttpClient(new System.Net.Http.SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(5) })
             { Timeout = Timeout.InfiniteTimeSpan };
-        RelayCommand.OnError = ex => { TryLog(ex); vm.Message = Texts.Friendly(ex); };
+        RelayCommand.OnError = ex => { TryLog(ex); vm.Fail(Texts.Friendly(ex)); };
         try
         {
             var window = new MainWindow(vm);

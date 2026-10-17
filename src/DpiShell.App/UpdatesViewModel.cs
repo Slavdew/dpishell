@@ -60,6 +60,8 @@ public sealed class UpdatesViewModel : Observable
 
     public bool AppAvailable => _s.UpdatesApp is { } a && DataUpdateCheck.IsOlder(AppVersion, a);
     public string AppText => AppAvailable ? $"Вышла версия программы {_s.UpdatesApp} — скачайте её со страницы релизов." : "";
+    /// <summary>«Скачать программу 99.0» — рядом с «Обновить списки» видно, что это разные вещи (UX-аудит 2, п. 13).</summary>
+    public string AppButtonText => $"Скачать программу {_s.UpdatesApp}";
 
     public string StatusText
     {
@@ -76,7 +78,7 @@ public sealed class UpdatesViewModel : Observable
     /// <summary>Пересчитать строки (помощник ответил, версия данных у него поменялась).</summary>
     public void Refresh()
     {
-        foreach (var p in new[] { nameof(CurrentVersion), nameof(DataAvailable), nameof(AvailableText), nameof(AppAvailable), nameof(AppText), nameof(StatusText) })
+        foreach (var p in new[] { nameof(CurrentVersion), nameof(DataAvailable), nameof(AvailableText), nameof(AppAvailable), nameof(AppText), nameof(AppButtonText), nameof(StatusText) })
             Raise(p);
         CommandManager.InvalidateRequerySuggested();
     }

@@ -55,7 +55,16 @@ public sealed class InfoButton : Button
     protected override void OnClick()
     {
         base.OnClick();
-        _text.Text = Text;
+        // Первый абзац — ответ «когда включать» (UX-аудит, п. 25): жирным, остальное — как было.
+        var parts = Text.Split("\n\n", 2);
+        _text.Inlines.Clear();
+        _text.Inlines.Add(new System.Windows.Documents.Run(parts[0]) { FontWeight = FontWeights.SemiBold });
+        if (parts.Length > 1)
+        {
+            _text.Inlines.Add(new System.Windows.Documents.LineBreak());
+            _text.Inlines.Add(new System.Windows.Documents.LineBreak());
+            _text.Inlines.Add(new System.Windows.Documents.Run(parts[1]));
+        }
         _popup.IsOpen = true;
     }
 }

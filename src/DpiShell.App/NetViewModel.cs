@@ -45,6 +45,7 @@ public sealed class NetViewModel : Observable
         UpdateListCmd = RelayCommand.Async(UpdateFromManifestAsync, () => !_busy);
         LoadFileCmd = RelayCommand.Async(UpdateFromFileAsync, () => !_busy);
         StopAnyCmd = RelayCommand.Async(StopAnyAsync, () => !_busy && AnyActive);
+        TryAnyCmd = RelayCommand.Async(TryAnyAsync, () => !_busy && !AnyActive);
         SaveUserCmd = RelayCommand.Async(SaveUserAsync, () => !_busy);
         Refresh();
     }
@@ -94,6 +95,21 @@ public sealed class NetViewModel : Observable
     }
 
     public ICommand StopAnyCmd { get; }
+    public ICommand TryAnyCmd { get; }
+
+    public const string TryAnyQuestion =
+        "На 10 минут обход включится для любого соединения — так видно, поможет ли он вообще. "
+        + "Многие сайты в это время могут работать с ошибками; потом режим вернётся сам. Включить?";
+
+    /// <summary>
+    /// «Все адреса» — не третий режим наравне с рабочими, а проверка «поможет ли обход» с подтверждением (UX-аудит, п. 34):
+    /// одним щелчком по переключателю ломались сайты на 10 минут.
+    /// </summary>
+    public async Task TryAnyAsync()
+    {
+        if (AnyActive || !Confirm(TryAnyQuestion)) return;
+        await StartAnyAsync();
+    }
 
     public Task SetModeAsync(IpsetMode mode)
     {

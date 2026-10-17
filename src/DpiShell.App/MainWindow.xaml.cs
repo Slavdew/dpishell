@@ -48,6 +48,34 @@ public partial class MainWindow : Window
 
         // «Войти» — небольшой диалог на месте, без перехода на другую вкладку (UX-аудит п. 14).
         vm.Router.LoginRequested += () => Dispatcher.BeginInvoke(() => RouterLoginDialog.Show(vm.Router, this), DispatcherPriority.Loaded);
+
+        // Ссылка ведёт к месту, а не в начало вкладки (UX-аудит 2, п. 2, 4): прокрутить, когда вкладка построится.
+        vm.ShowRequested += spot => Dispatcher.BeginInvoke(() => ShowSpot(spot), DispatcherPriority.ContextIdle);
+    }
+
+    void Toast_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) => _vm.ToastHovered = true;
+    void Toast_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e) => _vm.ToastHovered = false;
+
+    /// <summary>Прокрутить страницу к месту; к выбору DNS — ещё и раскрыть список вариантов.</summary>
+    public void ShowSpot(Spot spot)
+    {
+        FrameworkElement target = spot == Spot.PcDns ? PcDnsPicker : StrategiesBlock;
+        if (!target.IsVisible) return;
+        UpdateLayout();
+        DependencyObject? up = target;
+        while (up is not null and not System.Windows.Controls.ScrollViewer) up = System.Windows.Media.VisualTreeHelper.GetParent(up);
+        if (up is System.Windows.Controls.ScrollViewer { Content: UIElement content } sv)
+            sv.ScrollToVerticalOffset(Math.Max(0, target.TranslatePoint(new Point(0, 0), content).Y - 12));
+        else target.BringIntoView();
+        if (spot == Spot.PcDns && FindChild<System.Windows.Controls.ComboBox>(target) is { } list) list.IsDropDownOpen = true;
+    }
+
+    static T? FindChild<T>(DependencyObject root) where T : DependencyObject
+    {
+        if (root is T t) return t;
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+            if (FindChild<T>(System.Windows.Media.VisualTreeHelper.GetChild(root, i)) is { } found) return found;
+        return null;
     }
 
     /// <summary>«Стратегия ▾» в блоке роутера: меню из strategies, текущая отмечена.</summary>
