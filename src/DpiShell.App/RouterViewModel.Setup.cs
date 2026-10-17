@@ -16,6 +16,35 @@ public sealed partial class RouterViewModel
     ISshConnector? _ssh;
     /// <summary>Подключение по SSH; по умолчанию — SSH.NET с отпечатками ключей из папки настроек окна.</summary>
     public ISshConnector SshConnector { get => _ssh ??= new SshNetConnector(_settings.HostKeys); set => _ssh = value; }
+
+    /// <summary>Подключение с вопросом «Ключ роутера изменился»: «Доверять новому» — забыть старый отпечаток и войти ещё раз.</summary>
+    ISshConnector Ssh => new HostKeyAware(this);
+
+    /// <summary>
+    /// Ключ роутера изменился (переустановили прошивку?) — спросить. true — доверять новому. По умолчанию — диалог, «Отмена» в нём главная.
+    /// </summary>
+    public Func<string, bool> TrustNewKey { get; set; } = text =>
+        System.Windows.Application.Current?.Dispatcher is { } d ? d.Invoke(() => HostKeyDialog.Ask(text)) : false;
+
+    public const string HostKeyText =
+        "Ключ роутера изменился. Так бывает после переустановки прошивки (OpenWrt).\n\n"
+        + "Если вы переустанавливали прошивку — нажмите «Доверять новому». Если нет — нажмите «Отмена»: кто-то может подменять роутер.";
+
+    sealed class HostKeyAware(RouterViewModel vm) : ISshConnector
+    {
+        public async Task<ISshSession> ConnectAsync(RouterSshTarget target, Func<string> password, CancellationToken ct = default)
+        {
+            try { return await vm.SshConnector.ConnectAsync(target, password, ct); }
+            catch (RouterSshException e) when (e.Failure == RouterSshFailure.HostKeyChanged)
+            {
+                if (!vm.TrustNewKey(HostKeyText))
+                    throw new RouterSshException(RouterSshFailure.HostKeyChanged, "Ключ роутера изменился — подключение отменено. Если прошивку переустанавливали, повторите и нажмите «Доверять новому».", e);
+                vm._settings.HostKeys.Remove(target.HostKeyId);
+                vm.Say("Новый ключ роутера принят");
+                return await vm.SshConnector.ConnectAsync(target, password, ct);
+            }
+        }
+    }
     static readonly Lazy<HttpClient> SharedHttp = new(() => new HttpClient { Timeout = TimeSpan.FromMinutes(5) });
     /// <summary>Загрузка ядра обхода и пакетов обновления на этот ПК.</summary>
     public HttpClient Http { get; set; } = SharedHttp.Value;
@@ -25,7 +54,7 @@ public sealed partial class RouterViewModel
     public Func<RouterReleases>? Releases { get; set; }
 
     internal RouterInstallFlow Flow() =>
-        new(SshConnector, (Releases ?? (() => RouterReleases.Load(Path.Combine(_shell.Paths.Seed, "router-releases.json"))))(), new RouterCoreArchive(RouterCoreManifest.Embedded(), _settings.RouterCoreCache), Http) { LocalCoreCandidates = CoreCandidates };
+        new(Ssh, (Releases ?? (() => RouterReleases.Load(Path.Combine(_shell.Paths.Seed, "router-releases.json"))))(), new RouterCoreArchive(RouterCoreManifest.Embedded(), _settings.RouterCoreCache), Http) { LocalCoreCandidates = CoreCandidates };
 
     /// <summary>Адрес роутера для SSH — тот же, что для входа (шлюз или свой из «Дополнительно»).</summary>
     internal string? SetupAddress()
@@ -54,7 +83,7 @@ public sealed partial class RouterViewModel
         RouterSshException { Failure: RouterSshFailure.Unreachable } =>
             $"Роутер{(host is null ? "" : " " + host)} не отвечает по SSH. Проверьте адрес; в настройках роутера (LuCI) — «Система» → «Администрирование» → SSH должен быть включён.",
         RouterSshException { Failure: RouterSshFailure.AuthFailed } => "Неверный пароль роутера",
-        RouterSshException { Failure: RouterSshFailure.HostKeyChanged } => HostKeyCheck.ChangedText,
+        RouterSshException { Failure: RouterSshFailure.HostKeyChanged } s => s.InnerException is RouterSshException ? s.Message : HostKeyCheck.ChangedText,
         RouterSshException s => s.Message,
         HttpRequestException => "Не удалось скачать ядро обхода на этот компьютер. Проверьте интернет и повторите.",
         _ => Texts.Friendly(e),
@@ -198,7 +227,7 @@ public sealed partial class RouterViewModel
         var files = await RouterUpdatePackages.DownloadAsync(Http, LoadReleases(), version, dir, ReleaseKey);
         var address = SetupAddress() ?? throw new RouterSshException(RouterSshFailure.Unreachable, "Не удалось узнать адрес роутера");
         var pw = SshPassword(null, false) ?? throw new RouterSshException(RouterSshFailure.AuthFailed, "Нет сохранённого пароля роутера — войдите заново");
-        await using (var ssh = await SshConnector.ConnectAsync(new RouterSshTarget(address), () => pw))
+        await using (var ssh = await Ssh.ConnectAsync(new RouterSshTarget(address), () => pw))
             await new RouterSsh(ssh).UploadUpdateAsync(files);
         return await UpdateFromAsync(RouterUpdateSource.Local);
     }
@@ -300,7 +329,7 @@ public sealed partial class RouterViewModel
     {
         ISshSession? ssh = null;
         Exception? sshError = null;
-        try { ssh = await SshConnector.ConnectAsync(target, () => password, ct); }
+        try { ssh = await Ssh.ConnectAsync(target, () => password, ct); }
         catch (RouterSshException e) when (e.Failure != RouterSshFailure.HostKeyChanged) { sshError = e; }
         try
         {

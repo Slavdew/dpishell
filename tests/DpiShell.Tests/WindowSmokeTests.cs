@@ -655,6 +655,14 @@ public sealed class WindowSmokeTests
                 if (Find<Button>(d, b => b.Content as string == "Подобрать на роутере" && b.IsVisible) is null) throw new Exception("После установки нет «Подобрать на роутере»");
                 Shot(d, "install-done");
                 d.Close();
+
+                // Ключ роутера изменился: «Отмена» — главная и по умолчанию, «Доверять новому» — только явно.
+                var (hk, _) = HostKeyDialog.Create(RouterViewModel.HostKeyText, null);
+                Show(hk);
+                if (Find<Button>(hk, b => b.Content as string == "Отмена" && b.IsDefault && b.IsCancel) is null || Find<Button>(hk, b => b.Content as string == "Доверять новому") is null)
+                    throw new Exception("В вопросе о ключе роутера «Отмена» не по умолчанию или нет «Доверять новому»");
+                Shot(hk, "hostkey");
+                hk.Close();
                 router.Dispose();
             }
         });

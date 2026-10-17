@@ -494,6 +494,60 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.Contains("Обновлений нет — на роутере последняя версия DpiShell", _said);
     }
 
+    // ---------- 5. ключ роутера изменился ----------
+
+    /// <summary>Как SshNetConnector: первый ключ запоминается в хранилище окна, другой — HostKeyChanged.</summary>
+    sealed class KeyedConnector(IRouterHostKeyStore store, string fingerprint, FakeSsh ssh) : ISshConnector
+    {
+        public int Attempts { get; private set; }
+        public Task<ISshSession> ConnectAsync(RouterSshTarget target, Func<string> password, CancellationToken ct = default)
+        {
+            Attempts++;
+            var stored = store.Get(target.HostKeyId);
+            if (HostKeyCheck.Decide(stored, fingerprint) == HostKeyVerdict.Changed)
+                throw new RouterSshException(RouterSshFailure.HostKeyChanged, HostKeyCheck.ChangedText);
+            if (stored is null) store.Set(target.HostKeyId, fingerprint);
+            return Task.FromResult<ISshSession>(ssh);
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HostKeyChanged_AskTrustNew_ElseCancel(bool trust)
+    {
+        using var r = new FakeRouter().As020();
+        r.Remove();
+        var vm = Make(r, null!);
+        var id = new RouterSshTarget(r.Address).HostKeyId;
+        Settings.HostKeys.Set(id, "ssh-ed25519 SHA256:old");   // ключ от прежней прошивки
+        var conn = new KeyedConnector(Settings.HostKeys, "ssh-ed25519 SHA256:new", Ssh(r));
+        vm.SshConnector = conn;
+        var asked = new List<string>();
+        vm.TrustNewKey = t => { asked.Add(t); return trust; };
+
+        var i = vm.NewInstall();
+        Assert.Equal(trust, await i.CheckAsync("secret"));
+        Assert.Equal([RouterViewModel.HostKeyText], asked);
+        if (trust)
+        {
+            Assert.Equal("ssh-ed25519 SHA256:new", Settings.HostKeys.Get(id));
+            Assert.Equal(2, conn.Attempts);
+            Assert.True(i.VerdictOk);
+            // Дальше — без вопросов: новый ключ запомнен.
+            Assert.True(await i.InstallAsync("secret"));
+            Assert.Single(asked);
+        }
+        else
+        {
+            Assert.Equal("ssh-ed25519 SHA256:old", Settings.HostKeys.Get(id));
+            Assert.Equal(1, conn.Attempts);
+            Assert.StartsWith("Ключ роутера изменился — подключение отменено", i.ErrorText);
+        }
+        // Хранилище — рядом с window.json.
+        Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(Settings.File)!, "router-hostkeys.json")));
+    }
+
     sealed class FailingConnector(Exception e) : ISshConnector
     {
         public Task<ISshSession> ConnectAsync(RouterSshTarget target, Func<string> password, CancellationToken ct = default) => throw e;

@@ -285,3 +285,34 @@ public static class RouterUninstallDialog
         return w;
     }
 }
+
+/// <summary>«Ключ роутера изменился»: «Доверять новому» — только осознанно, по умолчанию (Enter, Esc) — «Отмена».</summary>
+public static class HostKeyDialog
+{
+    public static bool Ask(string text)
+    {
+        var owner = Application.Current?.MainWindow is { IsVisible: true } m ? m : null;
+        var (w, result) = Create(text, owner);
+        w.ShowDialog();
+        return result();
+    }
+
+    public static (Window Window, Func<bool> Trusted) Create(string text, Window? owner)
+    {
+        bool trusted = false;
+        var w = DialogKit.Window("Ключ роутера изменился", text, owner);
+        var panel = new StackPanel { Margin = new Thickness(24, 20, 24, 18), Width = 440 };
+        panel.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 16) });
+        var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        var trust = DialogKit.Button("Доверять новому");
+        var cancel = DialogKit.Button("Отмена", primary: true, cancel: true);
+        cancel.IsDefault = true;
+        trust.Click += (_, _) => { trusted = true; w.Close(); };
+        cancel.Click += (_, _) => w.Close();
+        buttons.Children.Add(trust);
+        buttons.Children.Add(cancel);
+        panel.Children.Add(buttons);
+        w.Content = panel;
+        return (w, () => trusted);
+    }
+}
