@@ -89,6 +89,13 @@ public sealed class WindowSmokeTests
         return null;
     }
 
+    static IEnumerable<T> FindAll<T>(DependencyObject root, Func<T, bool>? match = null) where T : DependencyObject
+    {
+        if (root is T t && (match is null || match(t))) yield return t;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            foreach (var f in FindAll(VisualTreeHelper.GetChild(root, i), match)) yield return f;
+    }
+
     /// <summary>Дождаться задачи на потоке окна, прокачивая очередь (её продолжения идут через Dispatcher).</summary>
     static void WaitUi(Task t)
     {
@@ -933,19 +940,17 @@ public sealed class WindowSmokeTests
 
         // Наполнение: подмена DNS и VPN — видна только первая (DNS), заголовок и «Ещё 1» считают одно и то же (UX-аудит 2, п. 6).
         // Обновление списков — не помеха: видно всегда, не под ⚠.
-        if (Find<TextBlock>(tabs, t => string.Concat(t.Inlines.OfType<System.Windows.Documents.Run>().Select(r => r.Text)) == "⚠ Нашлось 2 помехи" && t.IsVisible) is null)
-            throw new Exception($"Нет строки «Нашлось 2 помехи»: «{vm.IssuesTitle}», видна: {vm.HasIssuesHeader}");
+        // Кнопка DNS уже в карточке состояния: плашки DNS и счёта помех нет, остаётся одна плашка VPN без заголовка «Нашлось».
+        if (Find<TextBlock>(tabs, t => t.Text.StartsWith("⚠ Нашл") && t.IsVisible) is not null || vm.HasIssuesHeader)
+            throw new Exception($"Заголовок «Нашлось…» при одной помехе: «{vm.IssuesTitle}»");
         Button? Visible(string text) => Find<Button>(tabs, b => b.Content as string == text && b.IsVisible);
-        if (Visible("Ещё 1") is null) throw new Exception("Нет «Ещё 1»: " + vm.IssuesToggleText);
-        if (Visible("Включить защищённый DNS") is null) throw new Exception("Не видна самая важная помеха (DNS)");
+        if (Visible("Ещё 1") is not null) throw new Exception("«Ещё 1» при одной помехе");
+        if (Visible("Включить защищённый DNS") is null) throw new Exception("Нет кнопки DNS в карточке состояния");
+        int dnsButtons = 0;
+        foreach (var b in FindAll<Button>(tabs, b => b.Content as string == "Включить защищённый DNS" && b.IsVisible)) dnsButtons++;
+        if (dnsButtons != 1) throw new Exception($"Кнопок «Включить защищённый DNS» на главной: {dnsButtons}, ждали 1");
         if (!vm.Updates.DataAvailable || Visible("Обновить списки") is null) throw new Exception("Обновление списков спрятано вместе с помехами");
-        if (Visible("Понятно, не показывать") is not null) throw new Exception("Свёрнутые помехи видны");
-        vm.ShowAllIssues = true;
-        Pump();
-        if (Visible("Понятно, не показывать") is null)
-            throw new Exception("«Ещё 1» не раскрыл помехи (VPN)");
-        vm.ShowAllIssues = false;
-        Pump();
+        if (Visible("Понятно, не показывать") is null) throw new Exception("Плашка VPN не видна");
     }
 
     /// <summary>Строка таблицы подбора: отметка провала видна без раскрытия; стрелка раскрывает строки по всем адресам.</summary>

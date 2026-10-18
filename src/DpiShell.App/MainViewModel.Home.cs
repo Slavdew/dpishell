@@ -76,6 +76,7 @@ public sealed partial class MainViewModel
         foreach (var g in CheckRows.GroupBy(r => r.Group)) CheckGroups.Add(new(g.Key, g.All(r => r.Ok || !r.Alert), g.Any(r => r.HasBrowser)));
         Raise(nameof(HasCheck));
         Raise(nameof(BrowserWarning)); Raise(nameof(HasBrowserWarning)); Raise(nameof(ShowBrowserDnsFix));
+        RaiseIssues();
     }
 
     /// <summary>«⚠ В браузере не откроется: YouTube — DNS провайдера подменяет адрес.» Пусто — браузер открывает то же, что программа.</summary>
@@ -105,7 +106,8 @@ public sealed partial class MainViewModel
         var list = new List<Issue>();
         if (Router.BothOn) list.Add(Issue.BothOn);
         if (HasConflicts) list.Add(Issue.Conflicts);
-        if (DnsSpoofed) list.Add(Issue.Dns);
+        // Кнопка DNS уже в карточке состояния — второй такой же плашкой и помехой в счёте она не нужна.
+        if (DnsSpoofed && !ShowBrowserDnsFix) list.Add(Issue.Dns);
         if (HasVpn) list.Add(Issue.Vpn);
         return list;
     }
