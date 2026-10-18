@@ -45,12 +45,12 @@ public sealed class VerdictDetailTests
         var r = CheckRow.From(bad, Names);
         Assert.False(r.Ok);
         Assert.Equal("TLS 1.3: загрузка обрывается, 200, получено 16384 из 500000 · TLS 1.2: HTTP 200, 488 КБ", r.Detail);
-        Assert.Equal("обязательный", r.Note);
-        Assert.True(r.Alert);
+        Assert.Equal("важный", r.Note);
+        Assert.True(r.Alert && r.Required);
         Assert.Equal($"{6.2:0.0} с", r.Time);
 
         var optional = CheckRow.From(V("youtube", "https://yt3.ggpht.com/", false, (SslProtocols.Tls13, ProbeOutcome.Reset, "", 0.1)), Names);
-        Assert.Equal(("необязательный", false), (optional.Note, optional.Alert));
+        Assert.Equal(("", false), (optional.Note, optional.Alert));   // метка только у важных
         Assert.Equal("TLS 1.3: соединение сброшено", optional.Detail);
 
         var control = CheckRow.From(V("control", "https://vk.com/", true, (SslProtocols.Tls13, ProbeOutcome.Blocked, "451: недоступно по требованию закона", 0.2)), Names);

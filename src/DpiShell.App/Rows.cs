@@ -168,7 +168,7 @@ public sealed class GroupNames
 /// исход и подробности по обеим версиям TLS (код, байты, цепочка редиректов), время. Alert — провал, который решает исход:
 /// обязательный адрес или сломанный «обычный сайт».
 /// </summary>
-public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, string Time = "", string Note = "", bool Alert = false, string Browser = "")
+public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, string Time = "", string Note = "", bool Alert = false, string Browser = "", bool Required = false)
 {
     /// <summary>⚠ — программа открывает, браузер (DNS системы) — нет; причина — в <see cref="Browser"/>.</summary>
     public string Mark => !Ok ? "✗" : HasBrowser ? "⚠" : "✓";
@@ -178,7 +178,7 @@ public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, 
     public static CheckRow From(TargetVerdict v, Func<string, string> groupTitle, bool control = false)
     {
         var note = v.BrowserFails ? (v.Browser!.Reason == BrowserPath.WindowsOnlyReason ? "✓ по защищённому DNS, ✗ по DNS Windows" : "✓ для программы, ✗ для браузера")
-            : v.Ok ? "" : control ? "ломает обычный сайт" : v.Target.Required ? "обязательный" : "необязательный";
+            : v.Ok ? "" : control ? "ломает обычный сайт" : v.Target.Required ? "важный" : "";
         var seconds = v.Ok ? v.BestSeconds : v.Probes.Select(p => p.Seconds).DefaultIfEmpty(0).Max();
         var detail = Texts.ProbeDetail(v.Probes);
         // Адреса разошлись — оба пути с адресами: программа (DoH) и браузер (DNS системы, с hosts).
@@ -186,7 +186,7 @@ public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, 
             detail = $"Программа (защищённый DNS: {Ips(b.Doh)}): {detail}\nЧерез Windows ({(b.FromHosts ? "hosts" : "DNS Windows")}: {(b.System.Length > 0 ? Ips(b.System) : "имени нет")}): "
                 + (b.Probes.Count > 0 ? Texts.ProbeDetail(b.Probes) : "не открыть") + (b.Ok ? "" : " — " + b.Reason);
         return new(v.Ok, groupTitle(v.GroupId), v.Target.Url, detail, $"{seconds:0.0} с", note, !v.Ok && (control || v.Target.Required),
-            v.BrowserFails ? v.Browser!.Reason : "");
+            v.BrowserFails ? v.Browser!.Reason : "", Required: !v.Ok && !control && v.Target.Required);
     }
 
     static string Ips(IPAddress[] a) => string.Join(", ", a.Take(2)) + (a.Length > 2 ? " …" : "");
@@ -200,7 +200,7 @@ public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, 
     /// <summary>«не открылось: YouTube, Discord» — группы, где не открылся обязательный адрес (видно в строке таблицы, без раскрытия).</summary>
     public static string Missed(IEnumerable<CheckRow> rows)
     {
-        var bad = rows.Where(r => r.Alert && r.Note == "обязательный").Select(r => r.Group).Distinct().ToList();
+        var bad = rows.Where(r => r.Alert && r.Required).Select(r => r.Group).Distinct().ToList();
         return bad.Count == 0 ? "" : "не открылось: " + string.Join(", ", bad);
     }
 }
