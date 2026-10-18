@@ -167,6 +167,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     {
         _shell = shell;
         _settings = settings;
+        settings.StrategySortChanged += () => { Raise(nameof(SortByName)); Raise(nameof(SortByResult)); ResortScores(); };
         _auto = string.IsNullOrWhiteSpace(settings.RouterAddress);
         _custom = settings.RouterAddress ?? "";
 
@@ -1285,10 +1286,27 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         }
     }
 
+    /// <summary>Порядок списков стратегий (общий с ПК, window.json): по имени / по результату.</summary>
+    public bool SortByName { get => _settings.SortByName; set { if (value != _settings.SortByName) _settings.SetStrategySort(value); } }
+    public bool SortByResult { get => !_settings.SortByName; set { if (value == _settings.SortByName) _settings.SetStrategySort(!value); } }
+
+    List<RouterScoreRow> InOrder(IEnumerable<RouterScoreRow> rows) => _settings.SortByName
+        ? StrategyOrder.SortByName(rows, s => s.Title).ToList()
+        : rows.OrderByDescending(s => s.Usable).ThenByDescending(s => s.Row.GroupShare).ThenByDescending(s => s.Row.TargetShare).ThenBy(s => s.Row.AvgS).ToList();
+
+    void ResortScores()
+    {
+        if (Scores.Count < 2 || Selecting) return;
+        var sel = SelectedScore;
+        var ordered = InOrder(Scores);
+        Scores.Clear();
+        foreach (var s in ordered) Scores.Add(s);
+        SelectedScore = sel;
+    }
+
     void Finish(RouterSelectProgress p)
     {
-        var ordered = Scores.OrderByDescending(s => s.Usable).ThenByDescending(s => s.Row.GroupShare).ThenByDescending(s => s.Row.TargetShare)
-            .ThenBy(s => s.Row.AvgS).ToList();
+        var ordered = InOrder(Scores);
         Scores.Clear();
         foreach (var s in ordered) { s.IsBest = s.Id == p.Best; Scores.Add(s); }
         SelectProgress = SelectProgressMax;

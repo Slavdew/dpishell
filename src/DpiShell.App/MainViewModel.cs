@@ -66,6 +66,7 @@ public sealed partial class MainViewModel : Observable
         _shell = shell;
         Helper = helper;
         Settings = settings;
+        settings.StrategySortChanged += OnSortChanged;
         Helper.Changed += OnHelperChanged;
         Updates = new UpdatesViewModel(helper, shell, settings)
         {
@@ -577,6 +578,30 @@ public sealed partial class MainViewModel : Observable
 
     public ObservableCollection<StrategyChoice> StrategyChoices { get; } = [];
 
+    /// <summary>Порядок списков стратегий (общий с роутером, хранится в window.json): по имени / по результату.</summary>
+    public bool SortByName { get => Settings.SortByName; set { if (value != Settings.SortByName) Settings.SetStrategySort(value); } }
+    public bool SortByResult { get => !Settings.SortByName; set { if (value == Settings.SortByName) Settings.SetStrategySort(!value); } }
+
+    void OnSortChanged()
+    {
+        Raise(nameof(SortByName)); Raise(nameof(SortByResult));
+        ReloadChoices();
+        ResortScores();
+    }
+
+    /// <summary>Таблица подбора в выбранном порядке (по результату — как её собрал подбор).</summary>
+    void ResortScores()
+    {
+        if (Scores.Count < 2) return;
+        var sel = SelectedScore;
+        var rows = Scores.ToList();
+        var ordered = Settings.SortByName ? StrategyOrder.SortByName(rows, r => r.Title)
+            : rows.OrderByDescending(r => r.Score.GroupShare).ThenByDescending(r => r.Score.TargetShare).ThenBy(r => r.Score.AvgSeconds).ToList();
+        Scores.Clear();
+        foreach (var r in ordered) Scores.Add(r);
+        SelectedScore = sel;
+    }
+
     /// <summary>Перечитать у помощника и обновить список (после подбора: новая статистика и найденные).</summary>
     public async Task ReloadChoicesAsync()
     {
@@ -592,19 +617,22 @@ public sealed partial class MainViewModel : Observable
     {
         var list = Helper.Status?.Strategies ?? _shell.Catalog.Strategies.Select(s => new StrategyInfo(s.Id, s.Title, s.Source)).ToList();
         var stats = Helper.Results?.Stats ?? new Dictionary<string, StrategyStats.Stat>();
-        StrategyChoices.Clear();
         // Порядок — тот же, что у подбора: обязательные группы, доля своих адресов, время.
+        var choices = new List<StrategyChoice>();
         foreach (var s in StrategyStats.Order(list, x => x.Id, stats))
         {
             // По группам, а не «открыла всё»: один нестабильный свой сайт не роняет всю строку.
             if (stats.TryGetValue(s.Id, out var st) && st.Runs > 0)
             {
                 var (note, warning) = StrategyChoice.Describe(st, Names);
-                StrategyChoices.Add(new(s.Id, s.Title, note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names)));
+                choices.Add(new(s.Id, s.Title, note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names)) { Opened = StrategyOrder.Opened(st) });
             }
-            else StrategyChoices.Add(new(s.Id, s.Title,
+            else choices.Add(new(s.Id, s.Title,
                 stats.Count == 0 ? "статистика появится после первого подбора" : "в подборах ещё не участвовала", s.Source == "search"));
         }
+        StrategyChoices.Clear();
+        foreach (var c in Settings.SortByName ? StrategyOrder.SortByName(choices, c => c.Title) : StrategyOrder.SortByOpened(choices, c => c.Opened))
+            StrategyChoices.Add(c);
         _chosen = CurrentStrategyId;
         Raise(nameof(ChosenStrategyId));
     }
@@ -1213,6 +1241,7 @@ public sealed partial class MainViewModel : Observable
         var best = r.Best;
         Scores.Clear();
         foreach (var s in ordered) Scores.Add(new ScoreRow(s, Names) { IsBest = best is not null && s.Strategy.Id == best.Strategy.Id });
+        ResortScores();
         SelectProgress = SelectProgressMax;
         // Новая статистика и найденные стратегии — в список на главной; запасные помощник запомнил сам.
         _ = ReloadChoicesAsync();

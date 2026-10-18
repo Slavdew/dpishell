@@ -156,6 +156,11 @@
                                      Прокручивается вместе со страницей (колесо мыши — странице). -->
                                 <StackPanel x:Name="StrategiesBlock" Visibility="{Binding ShowStrategies, Converter={StaticResource Vis}}">
                                     <TextBlock Text="{Binding StrategyHeader}" Style="{StaticResource H2}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding StrategyHeader}" />
+                                    <WrapPanel Margin="0,0,0,6" AutomationProperties.Name="Порядок стратегий">
+                                        <TextBlock Text="Порядок:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                        <RadioButton GroupName="SortHome" Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" ToolTip="Сначала те, что открыли больше сайтов в последнем прогоне" />
+                                        <RadioButton GroupName="SortHome" Content="по имени" IsChecked="{Binding SortByName}" ToolTip="ALT2, ALT3 … ALT10, ALT11" />
+                                    </WrapPanel>
                                     <ListBox ItemsSource="{Binding StrategyChoices}" SelectedValue="{Binding ChosenStrategyId}" SelectedValuePath="Id"
                                              IsEnabled="{Binding CanChoose}" Margin="0,0,0,10" PreviewMouseWheel="PassWheelToPage" AutomationProperties.Name="Стратегии">
                                         <ListBox.ItemTemplate>
@@ -309,6 +314,11 @@
                                 <Button ContentTemplate="{StaticResource Shield}" Content="Начать подбор" Style="{StaticResource Primary}" Command="{Binding StartSelectCmd}" />
                                 <Button Content="Стоп" Command="{Binding StopSelectCmd}" />
                             </WrapPanel>
+                            <WrapPanel Margin="0,0,0,6" AutomationProperties.Name="Порядок стратегий">
+                                <TextBlock Text="Порядок:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <RadioButton GroupName="SortPc" Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
+                                <RadioButton GroupName="SortPc" Content="по имени" IsChecked="{Binding SortByName}" />
+                            </WrapPanel>
                             <!-- Ход — только во время подбора: пустая полоса без подбора выглядела незавершённой операцией. -->
                             <StackPanel Visibility="{Binding Selecting, Converter={StaticResource Vis}}">
                                 <ProgressBar Height="8" Maximum="{Binding SelectProgressMax}" Value="{Binding SelectProgress, Mode=OneWay}" IsIndeterminate="{Binding SelectIndeterminate}" Margin="0,2,0,4" />
@@ -410,6 +420,11 @@
                                     <Button Content="Стоп" Command="{Binding StopSelectCmd}" />
                                 </WrapPanel>
                                 <TextBlock Text="Подбор идёт на самом роутере — программу можно закрыть. Лучшую стратегию роутер включит сам." Style="{StaticResource Hint}" Margin="0,0,0,6" />
+                                <WrapPanel Margin="0,0,0,6" AutomationProperties.Name="Порядок стратегий">
+                                    <TextBlock Text="Порядок:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <RadioButton GroupName="SortRouter" Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
+                                    <RadioButton GroupName="SortRouter" Content="по имени" IsChecked="{Binding SortByName}" />
+                                </WrapPanel>
                                 <StackPanel Visibility="{Binding Selecting, Converter={StaticResource Vis}}">
                                     <ProgressBar Height="8" Maximum="{Binding SelectProgressMax}" Value="{Binding SelectProgress, Mode=OneWay}" Margin="0,2,0,4" />
                                     <TextBlock Text="{Binding SelectProgressText}" Style="{StaticResource Hint}" Margin="0,0,0,8" />

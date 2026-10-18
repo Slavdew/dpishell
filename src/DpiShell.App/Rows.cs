@@ -24,6 +24,8 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
     public string Stats { get; } = stats;
     public bool Found { get; } = found;
     public string Warning { get; } = warning;
+    /// <summary>Сколько сайтов открылось в последнем прогоне; null — прогона не было.</summary>
+    public int? Opened { get; init; }
     public bool HasWarning => Warning.Length > 0;
     public IReadOnlyList<CheckRow> Details { get; } = details ?? [];
     public bool HasDetails => Details.Count > 0;
