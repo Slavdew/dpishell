@@ -924,7 +924,9 @@
                                     <TextBlock Text="Не найдены." Style="{StaticResource Hint}" Visibility="{Binding ConflictList.Count, Converter={StaticResource Zero}}" />
                                     <ItemsControl ItemsSource="{Binding ConflictList}" />
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
-                                               Text="Они перехватывают тот же трафик. Закройте или удалите их, иначе обход работать не будет." />
+                                               Text="Перехватывают тот же трафик — обход с ними не работает." />
+                                    <Button ContentTemplate="{StaticResource Shield}" Content="Остановить" Command="{Binding StopConflictsCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                            Visibility="{Binding ConflictList.Count, Converter={StaticResource NonZero}}" />
                                 </StackPanel>
                             </Border>
 

@@ -375,6 +375,8 @@ public sealed class WindowSmokeTests
                         foreach (var r in rows) vm.CheckRows.Add(r);
                         Pump();
                     }
+                    if (page == Pages.Diag && Find<Button>(Find<TabControl>(w)!, b => b.Content as string == "Остановить" && b.IsVisible) is null)
+                        throw new Exception("В диагностике ПК у «Других программ обхода» нет «Остановить»");
                     if (page == Pages.Diag && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } sv)
                     {
                         // «Другой DNS» с главной (UX-аудит 2, п. 4): к выбору DNS этого компьютера, список вариантов раскрыт.

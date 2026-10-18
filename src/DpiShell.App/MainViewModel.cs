@@ -1372,7 +1372,8 @@ public sealed partial class MainViewModel : Observable
                 await FetchAsync(full: false);
             }) || r is null)
             return false;
-        if (r.Saved.Count > 0 && Groups.FirstOrDefault(g => g.Id == "user") is { } ug) ug.IsChecked = true;
+        // Свои адреса сохранены — подбор их проверяет (галочка группы сама); список пуст — галочка снимается.
+        if (Groups.FirstOrDefault(g => g.Id == "user") is { } ug) ug.IsChecked = r.Saved.Count > 0;
         TargetsText = string.Join(Environment.NewLine, r.Saved);
         TargetsMessage = r.Rejected.Count == 0
             ? $"Сохранено адресов: {r.Saved.Count}."
