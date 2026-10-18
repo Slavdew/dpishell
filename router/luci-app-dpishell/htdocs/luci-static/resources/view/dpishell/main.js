@@ -392,9 +392,8 @@ return view.extend({
 			case 'watchdog_off':
 			case 'button_off':
 			case 'confirm_reverted':
-				action = E('span', { 'class': 'dps-actions', 'style': 'margin:0' }, [
-					api.btn('Включить снова', function() { return self.toggle(); }, 'cbi-button-positive'),
-					api.btn('Подобрать другую', function() { return self.openSelect(); }, 'cbi-button-neutral')]);
+				// «Включить» — главная кнопка панели выше; здесь только другой путь.
+				action = api.btn('Подобрать другую стратегию', function() { return self.openSelect(); }, 'cbi-button-neutral');
 				break;
 			}
 			return E('div', { 'class': 'alert-message ' + (WARN_CLASS[w.code] || 'warning') },

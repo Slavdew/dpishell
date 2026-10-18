@@ -90,6 +90,8 @@ function injectStyle() {
 		'.dps-dot{width:14px;height:14px;border-radius:50%;flex:none;background:#888}',
 		'.dps-dot-ok{background:var(--success-color-high,#2a2)}.dps-dot-err{background:var(--error-color-high,#c33)}.dps-dot-busy{background:var(--warn-color-high,#d90)}',
 		'.btn.dps-big{padding:.6em 1.8em;font-size:1.1em;margin:0}',
+		// Главная кнопка — залитая: в тёмной теме LuCI cbi-button-positive только контур (ux-audit-web круг 2).
+		'.btn.dps-big.cbi-button-positive{background:var(--success-color-high,#2a7);border-color:transparent;color:#fff}',
 		'@media (max-width:600px){.btn.dps-big{flex:1 1 100%}}',
 		'.dps-verdicts{display:flex;flex-wrap:wrap;gap:14px;font-weight:600}',
 		'.dps-v-ok{color:var(--success-color-high,#080)}.dps-v-bad{color:var(--error-color-high,#c00)}',
@@ -98,7 +100,7 @@ function injectStyle() {
 		'.dps-radio input[type=radio],.dps-check input[type=checkbox]{margin:0 .6em 0 0 !important;vertical-align:middle}',
 		'.dps-check{display:block;margin:.4em 0}',
 		'.dps-info-text{font-weight:400;text-align:left;white-space:normal}',
-		'ul.tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap}ul.tabs>li{flex:none}',
+		'ul.tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;scrollbar-width:none}ul.tabs::-webkit-scrollbar{display:none}ul.tabs>li{flex:none}',
 		'@media (prefers-color-scheme:dark){.dps-muted{color:inherit;opacity:.75}}',
 		'[data-darkmode="true"] .dps-muted{color:inherit;opacity:.75}',
 		'.dps-danger{border:1px solid var(--error-color-high,#c33);border-radius:8px;padding:12px 16px}',
