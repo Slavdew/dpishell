@@ -9,7 +9,7 @@ namespace DpiShell.Core;
 /// Резолв через DNS-over-HTTPS по IP-адресу сервера (сертификаты dns.google и 1.1.1.1 выписаны и на IP).
 /// Нужен, чтобы проверка стратегий не зависела от DNS системы: провайдер подменяет даже ответы 8.8.8.8 по UDP.
 /// </summary>
-public sealed class DohResolver : IDisposable
+public sealed class DohResolver : IAddressResolver, IDisposable
 {
     static readonly string[] Endpoints =
     [

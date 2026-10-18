@@ -47,7 +47,7 @@ public sealed class HttpProbe
     public int MaxRedirects { get; init; } = 5;
 
     /// <summary>Если задан — адреса целей берутся из DoH, а не из DNS системы (см. docs/research/dns.md). Не нашёл — системный DNS.</summary>
-    public DohResolver? Resolver { get; init; }
+    public IAddressResolver? Resolver { get; init; }
 
     public static readonly SslProtocols[] DefaultTls = [SslProtocols.Tls13, SslProtocols.Tls12];
 
@@ -166,7 +166,7 @@ public sealed class HttpProbe
     static string Short(Uri next, Uri from) =>
         next.Host.Equals(from.Host, StringComparison.OrdinalIgnoreCase) && next.Scheme == from.Scheme ? next.PathAndQuery : next.Host + next.PathAndQuery;
 
-    static async ValueTask<Stream> ConnectAsync(DohResolver resolver, DnsEndPoint ep, CancellationToken ct)
+    static async ValueTask<Stream> ConnectAsync(IAddressResolver resolver, DnsEndPoint ep, CancellationToken ct)
     {
         IPAddress[] addrs = IPAddress.TryParse(ep.Host, out var literal) ? [literal]
             : ep.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ? [IPAddress.Loopback]

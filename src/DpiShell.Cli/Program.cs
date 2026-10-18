@@ -240,8 +240,12 @@ static async Task<int> HostsFind(string[] rest)
 static Strategy Need(Shell shell, string[] rest) =>
     rest.Length > 0 && shell.FindStrategy(rest[0]) is { } s ? s : throw new ArgumentException("Укажите id стратегии (dpishell-cli list)");
 
-static void Print(TargetVerdict v) =>
-    Console.WriteLine($"  {(v.Ok ? "OK " : "-- ")} {v.Target.Url,-55} {string.Join(" | ", v.Probes.Select(p => $"{p.Tls}: {p.Outcome} {p.Detail}"))}");
+static void Print(TargetVerdict v)
+{
+    Console.WriteLine($"  {(v.BrowserFails ? "OK!" : v.Ok ? "OK " : "-- ")} {v.Target.Url,-55} {string.Join(" | ", v.Probes.Select(p => $"{p.Tls}: {p.Outcome} {p.Detail}"))}");
+    if (v.Browser is { } b)
+        Console.WriteLine($"       браузер ({string.Join(", ", b.System.Select(a => a.ToString()))}): {(b.Ok ? "OK" : "-- " + b.Reason)} {string.Join(" | ", b.Probes.Select(p => $"{p.Tls}: {p.Outcome} {p.Detail}"))}");
+}
 
 /// <summary>Progress без пересылки в пул потоков: строки лога идут по порядку.</summary>
 sealed class SyncProgress<T>(Action<T> report) : IProgress<T>

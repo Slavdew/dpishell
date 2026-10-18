@@ -75,6 +75,9 @@ public sealed class HostsText
 
     public byte[] Encode() => Encode(_lines);
 
+    /// <summary>Все записи файла по порядку строк (и наши, и чужие).</summary>
+    public IEnumerable<HostsEntry> Entries() => _lines.SelectMany(l => ParseLine(l.Text));
+
     byte[] Encode(IEnumerable<(string Text, string Eol)> lines)
     {
         var sb = new StringBuilder();

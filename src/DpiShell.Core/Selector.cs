@@ -2,7 +2,12 @@ using System.Security.Authentication;
 
 namespace DpiShell.Core;
 
-public sealed record TargetVerdict(string GroupId, Target Target, bool Ok, double BestSeconds, IReadOnlyList<ProbeResult> Probes);
+/// <summary>Ok — по DoH (честно для стратегии). Browser — проверка по DNS системы, если адреса разошлись (<see cref="BrowserCheck"/>).</summary>
+public sealed record TargetVerdict(string GroupId, Target Target, bool Ok, double BestSeconds, IReadOnlyList<ProbeResult> Probes, BrowserPath? Browser = null)
+{
+    /// <summary>Программа открывает, а браузер (DNS системы) — нет.</summary>
+    public bool BrowserFails => Ok && Browser is { Ok: false };
+}
 
 public sealed record StrategyScore(Strategy Strategy, IReadOnlyList<TargetVerdict> Verdicts, int GroupsPassed, int GroupsTotal, string? Error = null)
 {
