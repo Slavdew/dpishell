@@ -38,7 +38,12 @@ check('сброс', c('000 0 56 0.2 ', '', 'Recv failure: Connection reset by pe
 check('TLS', c('000 0 35 0.2 ', '', 'SSL connect error').outcome == 'tls_failed');
 check('таймаут', c('000 0 28 9.0 ', '').outcome == 'timeout');
 check('чужой редирект', c('302 0 0 0.2 http://warning.rt.ru/', 'HTTP/1.1 302\r\nlocation: http://warning.rt.ru/\r\n').outcome == 'foreign_redirect');
-check('свой редирект', c('301 0 0 0.2 https://m.youtube.com/', 'HTTP/1.1 301\r\n').ok);
+let rd = c('301 0 0 0.2 https://m.youtube.com/', 'HTTP/1.1 301\r\n');
+check('свой редирект — идти дальше', rd.outcome == 'redirect' && rd.next == 'https://m.youtube.com/', rd);
+check('чужой от исходного сайта на 2-м шаге', c('302 0 0 0.2 http://warning.rt.ru/', '', '', { url: 'https://m.youtube.com/', site: 'youtube.com' }).outcome == 'foreign_redirect');
+check('451 — блокировка', c('451 3000 0 0.2 ', 'HTTP/1.1 451\r\n').outcome == 'blocked');
+check('403 с телом', c('403 30000 0 0.2 ', 'HTTP/1.1 403\r\n').outcome == 'bad_status');
+check('404 с телом', c('404 30000 0 0.2 ', 'HTTP/1.1 404\r\n').outcome == 'bad_status');
 check('400', c('400 100 0 0.2 ', 'HTTP/1.1 400\r\n').outcome == 'bad_status');
 check('503', c('503 100 0 0.2 ', 'HTTP/1.1 503\r\n').outcome == 'bad_status');
 check('рукопожатие: 404 ок', c('404 0 0 0.2 ', '', '', { url: 'https://gateway.discord.gg/', handshake_only: true }).ok);
@@ -53,10 +58,12 @@ if (ARGV[0] == 'live') {
 		{ target: { url: 'https://example.com/', handshake_only: false }, tls: '1.3' },
 		{ target: { url: 'https://example.com/', handshake_only: false }, tls: '1.2' },
 		{ target: { url: 'https://nonexistent.invalid/' }, tls: '1.3' },
-	], { parallel: 3 });
+		{ target: { url: 'https://google.com/', min_bytes: 2048 }, tls: '1.3' },
+	], { parallel: 4 });
 	check('example.com TLS1.3', r[0].ok, r[0]);
 	check('example.com TLS1.2', r[1].ok, r[1]);
 	check('несуществующий — не ок', !r[2].ok, r[2]);
+	check('google.com → www: по конечной', r[3].ok && index(r[3].final_url ?? '', 'www.google.') >= 0 && r[3].bytes >= 2048, r[3]);
 	print(sprintf('%.3J\n', r));
 }
 

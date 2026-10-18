@@ -5,7 +5,7 @@
 import { readfile, writefile, popen, mkdir, stat, unlink, lsdir } from 'fs';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36';
-const CONNECT_S = 3, READ_S = 6, MAX_BYTES = 1048576;
+const CONNECT_S = 3, READ_S = 6, MAX_BYTES = 1048576, MAX_REDIRECTS = 5;
 let batch_seq = 0;
 
 const DOH_IPS = ['8.8.8.8', '1.1.1.1'];
@@ -148,10 +148,18 @@ function classify(t, out_prefix) {
 	if (t.handshake_only)
 		return res('ok', `HTTP ${code}`);
 	if (code >= 300 && code < 400) {
-		let to = host_of(redir) ?? host_of(header_value(headers, 'location') ?? '') ?? host_of(t.url);
-		return same_site(host_of(t.url), to) ? res('ok', `HTTP ${code} → ${to}`) : res('foreign_redirect', `редирект на ${to}`);
+		let loc = redir || (header_value(headers, 'location') ?? '');
+		let to = host_of(loc) ?? host_of(t.url);
+		if (!same_site(t.site ?? host_of(t.url), to))
+			return res('foreign_redirect', `редирект на ${to}`);
+		// Свой редирект: check_batch идёт по нему до конечной страницы (до MAX_REDIRECTS) и судит по ней.
+		let r = res('redirect', `HTTP ${code} → ${to}`);
+		r.next = match(loc, /^https?:\/\//) ? loc : null;
+		return r;
 	}
-	if (code == 400 || code >= 500)
+	if (code == 451)
+		return res('blocked', 'HTTP 451 — доступ ограничен');
+	if (code == 400 || code == 403 || code == 404 || code >= 500)
 		return res('bad_status', `HTTP ${code}`);
 	let expected = header_value(headers, 'content-length');
 	let full = bytes >= MAX_BYTES;
@@ -220,11 +228,49 @@ function check_batch(items, opts) {
 	}
 	// Пачками по parallel: фоновые процессы и wait.
 	let par = opts.parallel ?? 8;
-	for (let i = 0; i < length(cmds); i += par)
-		run(`( ${join(' & ', slice(cmds, i, i + par))} & wait ) 2>/dev/null`);
-	let results = [];
+	let run_all = list => {
+		for (let i = 0; i < length(list); i += par)
+			run(`( ${join(' & ', slice(list, i, i + par))} & wait ) 2>/dev/null`);
+	};
+	run_all(cmds);
+	let res = [];
 	for (let i = 0; i < length(items); i++)
-		push(results, { ...classify(items[i].target, `${dir}/${i}`), url: items[i].target.url, tls: items[i].tls, dns: items[i].dns });
+		push(res, classify(items[i].target, `${dir}/${i}`));
+	// Свои редиректы — до конечной страницы, как на ПК: новое имя тоже через DoH, MinBytes и обрыв — по конечной.
+	let cur = map(items, it => it.target);
+	let hops = map(items, () => 0);
+	for (let hop = 1; hop <= MAX_REDIRECTS; hop++) {
+		let idx = [];
+		for (let i = 0; i < length(res); i++)
+			if (res[i].outcome == 'redirect' && res[i].next)
+				push(idx, i);
+		if (!length(idx))
+			break;
+		let hc = [];
+		for (let i in idx) {
+			cur[i] = { ...cur[i], url: res[i].next, site: cur[i].site ?? host_of(items[i].target.url) };
+			let ip = opts.use_doh !== false ? doh_resolve(host_of(cur[i].url), cache)[0] : null;
+			push(hc, curl_cmd(cur[i], items[i].tls, ip, `${dir}/${i}-${hop}`, opts));
+		}
+		run_all(hc);
+		for (let i in idx) {
+			let r = classify(cur[i], `${dir}/${i}-${hop}`);
+			r.seconds += res[i].seconds;
+			res[i] = r;
+			hops[i] = hop;
+		}
+	}
+	let results = [];
+	for (let i = 0; i < length(items); i++) {
+		let r = res[i];
+		// Больше MAX_REDIRECTS своих редиректов (или без адреса): ответы HTTP шли — соединение не режется.
+		if (r.outcome == 'redirect')
+			r = { ...r, outcome: 'ok', ok: true, detail: hops[i] ? `${r.detail}, больше ${MAX_REDIRECTS} редиректов` : r.detail };
+		delete r.next;
+		if (hops[i])
+			r = { ...r, final_url: cur[i].url, detail: `${r.detail} (после ${hops[i]} редир.)` };
+		push(results, { ...r, url: items[i].target.url, tls: items[i].tls, dns: items[i].dns });
+	}
 	for (let f in lsdir(dir) ?? [])
 		unlink(`${dir}/${f}`);
 	run(`rmdir ${q(dir)}`);
