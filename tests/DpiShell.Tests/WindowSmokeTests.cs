@@ -273,13 +273,56 @@ public sealed class WindowSmokeTests
                     typeof(MainViewModel).GetMethod("UpdateStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
                     Pump();
                     Snap(w, Path.Combine(snapDir, $"{theme}-{name}.png"));
+                    // Подбор: строка раскрыта — результаты по всем адресам (обязательные провалы — первыми, отмечены).
+                    if (page == Pages.Select)
+                    {
+                        AssertScoreDetails(w, vm.Scores[2], "не открылось: Discord");
+                        Snap(w, Path.Combine(snapDir, $"{theme}-select-detail.png"));
+                        vm.Scores[2].Expanded = false;
+                        vm.Scores[3].Expanded = true;
+                        Pump();
+                        {
+                            var g = Find<DataGrid>(Find<TabControl>(w)!, x => x.IsVisible && x.Items.Contains(vm.Scores[3]))!;
+                            ScrollRowToTop(g, (DataGridRow)g.ItemContainerGenerator.ContainerFromItem(vm.Scores[3]));
+                        }
+                        Snap(w, Path.Combine(snapDir, $"{theme}-select-detail-control.png"));
+                        vm.Scores[3].Expanded = false;
+                        Pump();
+                    }
                     // Главная раскрыта: все помехи и список стратегий; затем прокручена до конца.
                     if (page == Pages.Home)
                     {
+                        // «Проверить сейчас» → «Подробнее»: те же строки по адресам.
+                        var more = Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Подробнее" && e.IsVisible)!;
+                        more.IsExpanded = true;
+                        Pump();
+                        if (Find<TextBlock>(more, t => t.Text.StartsWith("TLS 1.3 и TLS 1.2: 301 → ") && t.IsVisible) is null) throw new Exception("В «Подробнее» проверки нет подробностей по TLS");
+                        Snap(w, Path.Combine(snapDir, $"{theme}-home-check-detail.png"));
+                        more.IsExpanded = false;
+                        Pump();
                         vm.ShowAllIssues = true;
                         vm.ShowStrategies = true;
+                        var detailed = vm.StrategyChoices.First(c => c.HasWarning);
+                        if (!detailed.Stats.StartsWith("YouTube 3/3 · Discord 2/3 · свои сайты 7 из 9") || !detailed.HasDetails)
+                            throw new Exception("Подпись стратегии не по группам: " + detailed.Stats);
+                        detailed.Expanded = true;
                         Pump();
+                        // Щелчок по раскрытым адресам не выбирает стратегию (выбор её включает).
+                        var chosen = vm.ChosenStrategyId;
+                        var addr = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "свой адрес №1" && t.IsVisible) ?? throw new Exception("Раскрытая стратегия без адресов");
+                        addr.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+                            { RoutedEvent = UIElement.MouseLeftButtonDownEvent });
+                        Pump();
+                        if (vm.ChosenStrategyId != chosen || detailed.Id == chosen) throw new Exception("Щелчок по подробностям сменил выбор стратегии");
+                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } top
+                            && Find<ListBox>(Find<TabControl>(w)!) is { } lb)
+                        {
+                            top.ScrollToVerticalOffset(lb.TranslatePoint(new Point(0, 0), (UIElement)top.Content).Y - 40);
+                            Pump();
+                        }
                         Snap(w, Path.Combine(snapDir, $"{theme}-home-open.png"));
+                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } top2) top2.ScrollToHome();
+                        detailed.Expanded = false;
                         if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } hv)
                         {
                             hv.ScrollToEnd();
@@ -399,7 +442,11 @@ public sealed class WindowSmokeTests
             ConflictsJson = """[ { "kind": "service", "name": "zapret2", "running": true }, { "kind": "package", "name": "zapret-manager-beam", "running": true } ]""",
             SelectRowsJson = """
                 [ { "id": "alt", "group_share": 1.0, "target_share": 0.88, "avg_s": 0.74, "error": null },
-                  { "id": "alt9", "group_share": 1.0, "target_share": 0.80, "avg_s": 0.61, "error": null },
+                  { "id": "alt9", "group_share": 1.0, "target_share": 0.80, "avg_s": 0.61, "error": null,
+                    "verdicts": [ { "group": "youtube", "url": "https://www.youtube.com/", "ok": true, "detail": "TLS 1.3 и TLS 1.2: 200, 512 КБ", "seconds": 0.52 },
+                                  { "group": "discord", "url": "https://discord.com/", "ok": true, "detail": "TLS 1.3 и TLS 1.2: 200, 160 КБ", "seconds": 0.61 },
+                                  { "group": "discord", "url": "https://gateway.discord.gg/", "ok": false, "detail": "TLS 1.2: поток оборвался на 16384 байтах", "seconds": 0.12 },
+                                  { "group": "control", "url": "https://vk.com/", "ok": true, "detail": "200, 96 КБ", "seconds": 0.2 } ] },
                   { "id": "alt10", "group_share": 0.5, "target_share": 0.5, "avg_s": 0.92, "error": null },
                   { "id": "d-17", "title": "fake + multisplit, ts — YouTube", "group_share": 0.5, "target_share": 0.62, "avg_s": 0.83, "error": null, "candidate": true, "ok": 3, "total": 4 },
                   { "id": "alt2", "group_share": 0.0, "target_share": 0.0, "avg_s": 0, "error": "не открылось ни одной группы" } ]
@@ -482,6 +529,25 @@ public sealed class WindowSmokeTests
                     if (snapDir is null) continue;
                     Directory.CreateDirectory(snapDir);
                     Snap(w, Path.Combine(snapDir, $"{theme}-router-{name}.png"));
+                    // Подбор на роутере: строка с разбивкой по адресам раскрывается; без неё — подсказка про обновление роутера.
+                    if (page == Pages.Select)
+                    {
+                        var withVerdicts = router.Scores.First(x => x.Id == "alt9");
+                        var without = router.Scores.First(x => x.Id == "alt");
+                        if (!withVerdicts.HasDetails || without.HasDetails) throw new Exception("Разбивка по адресам роутера не разобрана");
+                        withVerdicts.Expanded = without.Expanded = true;
+                        Pump();
+                        if (Find<TextBlock>(tabs, t => t.Text == "https://gateway.discord.gg/" && t.IsVisible) is null
+                            || Find<TextBlock>(tabs, t => t.Text == without.NoDetailsHint && t.IsVisible) is null)
+                            throw new Exception("Раскрытые строки роутера: нет адресов или подсказки");
+                        {
+                            var g = Find<DataGrid>(tabs, x => x.IsVisible && x.Items.Contains(withVerdicts))!;
+                            ScrollRowToTop(g, (DataGridRow)g.ItemContainerGenerator.ContainerFromItem(withVerdicts));
+                        }
+                        Snap(w, Path.Combine(snapDir, $"{theme}-router-select-detail.png"));
+                        withVerdicts.Expanded = without.Expanded = false;
+                        Pump();
+                    }
                     if (page == Pages.Diag && Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } sv)
                     {
                         // Карточки роутера — в середине и в конце страницы.
@@ -777,6 +843,32 @@ public sealed class WindowSmokeTests
         Pump();
     }
 
+    /// <summary>Строка таблицы подбора: отметка провала видна без раскрытия; стрелка раскрывает строки по всем адресам.</summary>
+    static void AssertScoreDetails(Window w, ScoreRow row, string missed)
+    {
+        var tabs = Find<TabControl>(w)!;
+        if (Find<TextBlock>(tabs, t => t.Text == missed && t.IsVisible) is null) throw new Exception($"В строке не видно «{missed}»");
+        var grid = Find<DataGrid>(tabs, g => g.IsVisible && g.Items.Contains(row))!;
+        grid.ScrollIntoView(row);
+        Pump();
+        var dgRow = (DataGridRow)grid.ItemContainerGenerator.ContainerFromItem(row);
+        var toggle = Find<ToggleButton>(dgRow, b => b.Style == (Style)w.FindResource("RowToggle"))
+            ?? throw new Exception("У строки подбора нет стрелки «Подробнее»");
+        toggle.IsChecked = true;
+        Pump();
+        if (!row.Expanded || dgRow.DetailsVisibility != Visibility.Visible) throw new Exception("Стрелка не раскрыла строку");
+        if (Find<TextBlock>(dgRow, t => t.Text == row.Details[0].Url && t.IsVisible) is null) throw new Exception("В раскрытой строке нет адресов");
+        ScrollRowToTop(grid, dgRow);
+    }
+
+    /// <summary>Для снимка: раскрытая строка — вверху таблицы (прокрутка по пикселям).</summary>
+    static void ScrollRowToTop(DataGrid grid, DataGridRow row)
+    {
+        var sv = Find<ScrollViewer>(grid)!;
+        sv.ScrollToVerticalOffset(sv.VerticalOffset + row.TranslatePoint(new Point(0, 0), sv).Y - 30);
+        Pump();
+    }
+
     /// <summary>Галочка «Работать, даже когда окно закрыто» показывает режим помощника.</summary>
     static void AssertServiceMode(Window w, MainViewModel vm)
     {
@@ -796,11 +888,11 @@ public sealed class WindowSmokeTests
     /// <summary>Наполнение: строки таблиц и плашки — для проверки главной и для снимков. В памяти и во временной папке.</summary>
     static void Fill(MainViewModel vm, Shell shell)
     {
-        FillPc(vm, shell);
         var strategies = shell.Catalog.Strategies.Take(6).ToList();
-        vm.StrategyChoices.Add(new("found-1", "Найденная: fake + split2", "открыла всё в 2 из 2 подборов (100 %)", true));
-        foreach (var (s, i) in strategies.Select((s, i) => (s, i)))
-            vm.StrategyChoices.Add(new(s.Id, s.Title, i < 4 ? $"открыла всё в {4 - i} из 4 подборов ({(4 - i) * 25} %)" : "в подборах ещё не участвовала", false));
+        // Статистика — настоящими файлами подборов: помощник отдаёт её окну (read_results), список строит само окно.
+        SeedResults(shell, strategies);
+        FillPc(vm, shell);
+        vm.StrategyChoices.Insert(0, new("found-1", "Найденная: fake + split2", "YouTube 2/2 · Discord 2/2", true));
         vm.ChosenStrategyId = strategies[0].Id;
 
         SetProp(vm, "VpnWarning", "Включён VPN (WireGuard Tunnel). С ним обход обычно не нужен, а подбор может показать неверный результат.");
@@ -811,21 +903,36 @@ public sealed class WindowSmokeTests
         vm.ShowPcDns(new DnsStatusInfo("google", true, false, true, true,
             [new DnsAdapterInfo("Ethernet", "ethernet", false, ["8.8.8.8", "8.8.4.4"], true), new DnsAdapterInfo("Wi-Fi", "wifi", false, ["8.8.8.8", "8.8.4.4"], true)],
             ["Radmin VPN", "vEthernet (Default Switch)"]));
+        // «Сравнить» без сети: время ответа рядом с названиями (и у роутера — тот же выбор).
+        foreach (var picker in new[] { vm.PcDns, vm.Router.DnsPick })
+        {
+            picker.Measure = (doh, _) => Task.FromResult<double?>(doh.Contains("quad9") ? null : doh.Contains("google") ? 38 : 52);
+            picker.CompareAsync().GetAwaiter().GetResult();
+        }
         SetProp(vm, "CheckSummary", "Открывается 1 из 2");
-        vm.CheckRows.Add(new(true, "YouTube", "https://www.youtube.com/", "0.4 с"));
-        vm.CheckRows.Add(new(true, "YouTube", "https://rr1---sn-4g5e6nsz.googlevideo.com/", "0.7 с"));
-        vm.CheckRows.Add(new(true, "Discord", "https://discord.com/", "0.5 с"));
-        vm.CheckRows.Add(new(false, "Discord", "https://gateway.discord.gg/", "соединение сброшено"));
+        // «Проверить сейчас» и таблица подбора — те же строки по адресам, что строит окно из проверки (CheckRow.From).
+        static TargetVerdict V(string group, string url, bool required, ProbeOutcome o13, string d13, ProbeOutcome o12, string d12, double s)
+        {
+            var t = new Target(url, Required: required);
+            var p = new List<ProbeResult> { new(t, SslProtocols.Tls13, o13, s, 0, d13), new(t, SslProtocols.Tls12, o12, s * 1.3, 0, d12) };
+            bool ok = p.All(x => x.Ok);
+            return new(group, t, ok, ok ? s * 1.3 : 0, p);
+        }
+        var yt = V("youtube", "https://www.youtube.com/", true, ProbeOutcome.Ok, "301 → /?gl=RU → 200, 512 КБ", ProbeOutcome.Ok, "301 → /?gl=RU → 200, 512 КБ", 0.4);
+        var img = V("youtube", "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg", true, ProbeOutcome.Ok, "HTTP 200, 118 КБ", ProbeOutcome.Ok, "HTTP 200, 118 КБ", 0.3);
+        var ggpht = V("youtube", "https://yt3.ggpht.com/", false, ProbeOutcome.Ok, "HTTP 404", ProbeOutcome.Timeout, "таймаут", 0.2);
+        var dc = V("discord", "https://discord.com/", true, ProbeOutcome.Ok, "HTTP 200, 160 КБ", ProbeOutcome.Ok, "HTTP 200, 160 КБ", 0.5);
+        var gw = V("discord", "https://gateway.discord.gg/", true, ProbeOutcome.Reset, "соединение сброшено удалённой стороной", ProbeOutcome.Reset, "соединение сброшено удалённой стороной", 0.1);
+        var vk = V("control", "https://vk.com/", true, ProbeOutcome.Ok, "HTTP 200, 96 КБ", ProbeOutcome.Ok, "HTTP 200, 96 КБ", 0.2);
+        var rbc = V("control", "https://www.rbc.ru/", true, ProbeOutcome.Truncated, "200, получено 16384 из 402113", ProbeOutcome.Truncated, "200, получено 16384 из 402113", 6);
+        foreach (var v in new[] { yt, img, ggpht, dc, gw }) vm.CheckRows.Add(CheckRow.From(v, vm.Names));
 
-        var t = new Target("https://www.youtube.com/");
-        var ok = new TargetVerdict("youtube", t, true, 0.4, [new ProbeResult(t, SslProtocols.Tls13, ProbeOutcome.Ok, 0.4, 1000, "")]);
-        var bad = new TargetVerdict("discord", t, false, 0, [new ProbeResult(t, SslProtocols.Tls13, ProbeOutcome.Reset, 0, 0, "")]);
         var rows = new List<ScoreRow>
         {
-            new(new StrategyScore(strategies[0], [ok, ok], 2, 2)) { IsBest = true },
-            new(new StrategyScore(new Strategy("found-1", "Найденная: fake + split2", "search", []), [ok, bad], 1, 2)),
-            new(new StrategyScore(strategies[1], [ok, bad], 1, 2)),
-            new(new StrategyScore(strategies[2], [bad, bad], 0, 2)),
+            new(new StrategyScore(strategies[0], [yt, img, ggpht, dc, gw with { Ok = true, BestSeconds = 0.4, Probes = dc.Probes }, vk], 2, 2), vm.Names) { IsBest = true },
+            new(new StrategyScore(new Strategy("found-1", "Найденная: fake + split2", "search", []), [yt, img, dc, gw, vk], 1, 2), vm.Names),
+            new(new StrategyScore(strategies[1], [yt, img, ggpht, dc, gw, vk], 1, 2), vm.Names),
+            new(new StrategyScore(strategies[2], [yt, img, dc, gw, vk, rbc], 0, 2, "ломает обычные сайты: www.rbc.ru"), vm.Names),
             new(new StrategyScore(strategies[3], [], 0, 2, "winws завершился: WinDivert: не удалось открыть драйвер (код 5)")),
         };
         foreach (var r in rows) vm.Scores.Add(r);
@@ -860,6 +967,37 @@ public sealed class WindowSmokeTests
         vm.Findings.Add(new(true, "Папка программы", "в порядке"));
 
         vm.Message = "Готово.";
+    }
+
+    /// <summary>
+    /// Три подбора в results: у второй стратегии свои сайты открываются не все и однажды сломались обычные сайты —
+    /// в списке подпись по группам, предупреждение и адреса последнего подбора.
+    /// </summary>
+    static void SeedResults(Shell shell, IReadOnlyList<Strategy> strategies)
+    {
+        var groups = new List<TargetGroup>(shell.DefaultTargets.Groups.Where(g => g.Id is "youtube" or "discord" or "control"))
+            { TargetSet.UserGroup(Enumerable.Range(1, 9).Select(i => $"site{i}.example")) };
+        StrategyScore Run(Strategy st, double seconds, params string[] failed)
+        {
+            var verdicts = groups.SelectMany(g => g.Targets.Select(t =>
+            {
+                bool ok = !failed.Contains(t.Url);
+                var ps = new[] { SslProtocols.Tls13, SslProtocols.Tls12 }.Select(v => new ProbeResult(t, v, ok ? ProbeOutcome.Ok : ProbeOutcome.Truncated, seconds, 0,
+                    ok ? (t.HandshakeOnly ? "HTTP 404" : t.Url.Contains("youtube") ? "301 → /?gl=RU → 200, 512 КБ" : "HTTP 200, 96 КБ") : "200, получено 16384 из 90000")).ToList();
+                return new TargetVerdict(g.Id, t, ok, ok ? seconds : 0, ps);
+            })).ToList();
+            return DpiShell.Core.Selector.Score(st, groups, verdicts);
+        }
+        for (int run = 0; run < 3; run++)
+        {
+            var file = ResultStore.Save(shell.Paths, new SelectionReport([], groups,
+            [
+                Run(strategies[0], 0.4),
+                Run(strategies[1], 0.5, run == 0 ? ["https://www.rbc.ru/"] : run == 1 ? ["https://discord.com/"] : ["https://site2.example/", "https://site5.example/"]),
+                Run(strategies[2], 0.6, "https://www.youtube.com/"),
+            ], false));
+            File.Move(file, Path.Combine(shell.Paths.Results, $"2026-10-1{5 + run}_10-00-00.json"), overwrite: true);
+        }
     }
 
     /// <summary>Состояние ПК (его хранит помощник): режимы IP-списка и игр, копия hosts — во временной папке.</summary>

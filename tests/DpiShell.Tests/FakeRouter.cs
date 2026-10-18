@@ -23,6 +23,10 @@ public sealed class FakeRouter : IDisposable
     public bool ExpireSessionOnce { get; set; }
     public bool UseRpcAccessDeniedError { get; set; }
     public HashSet<string> MissingMethods { get; } = [];
+    /// <summary>rpcd перезапускается после установки/обновления: столько следующих вызовов dpishell — «объекта нет» (ubus 4).</summary>
+    public int RpcdRestartCalls { get; set; }
+    /// <summary>Столько вызовов dpishell «объекта нет» сразу после успешного обновления.</summary>
+    public int RpcdRestartAfterUpdate { get; set; }
     public string? BusyOn { get; set; }
     /// <summary>Метод → error.field для ответа invalid (§4).</summary>
     public (string Method, string Field)? InvalidOn { get; set; }
@@ -140,6 +144,7 @@ public sealed class FakeRouter : IDisposable
             return;
         }
         RouterVersion = UpdateVersion; UpdateAvailable = false;
+        RpcdRestartCalls = RpcdRestartAfterUpdate;   // после обновления rpcd перезапускается — dpishell ненадолго пропадает
         _updateJob = $$"""{ "action": "update", "from": "{{from}}", "running": false, "ok": true, "message": "Обновлено до {{UpdateVersion}}", "at": "2026-10-17T14:05:00Z" }""";
     }
 
@@ -224,7 +229,9 @@ public sealed class FakeRouter : IDisposable
                 : Result(6));
             return;
         }
-        if (obj != "dpishell" || MissingMethods.Contains(method) || Uninstalled) { await Write(ctx, Result(4)); return; }
+        bool restarting = false;
+        if (obj == "dpishell") lock (_sessions) if (RpcdRestartCalls > 0) { RpcdRestartCalls--; restarting = true; }
+        if (obj != "dpishell" || MissingMethods.Contains(method) || Uninstalled || restarting) { await Write(ctx, Result(4)); return; }
         if (InvalidOn is { } inv && inv.Method == method)
         {
             await Write(ctx, Result(0, $$$"""{"error":{"code":"invalid","text":"Неверное значение","field":"{{{inv.Field}}}"}}"""));

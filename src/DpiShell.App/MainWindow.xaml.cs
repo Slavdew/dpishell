@@ -113,6 +113,9 @@ public partial class MainWindow : Window
         parent.RaiseEvent(new System.Windows.Input.MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta) { RoutedEvent = MouseWheelEvent, Source = sender });
     }
 
+    /// <summary>Щелчок по подробностям в списке стратегий не выбирает стратегию (выбор там же включает её).</summary>
+    void KeepSelection(object sender, System.Windows.Input.MouseButtonEventArgs e) => e.Handled = true;
+
     readonly DispatcherTimer _netSettle;
 
     /// <summary>Событие приходит из чужого потока и пачкой — перезапускаем отсчёт на потоке окна.</summary>

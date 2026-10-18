@@ -174,6 +174,12 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.Equal("provider", vm.DnsPick.Selected!.Id);
         Assert.False(vm.DnsPick.CanRestore);
         Assert.Contains("реестр блокировок", vm.DnsPick.Options.Single(o => o.Id == "yandex").Detail);
+        // Описание варианта роутера: оба шаблона у «Google + Cloudflare», кто держит — по id из пресетов ПК, «рекомендуем» у Google.
+        var both = vm.DnsPick.Options.Single(o => o.Id == "default");
+        Assert.Equal(["https://dns.google/dns-query", "https://cloudflare-dns.com/dns-query"], both.DohAll);
+        Assert.Contains(both.Info, l => l.Label == "Кто держит" && l.Value == "Google и Cloudflare (США)");
+        Assert.Contains(vm.DnsPick.Options.Single(o => o.Id == "yandex").Info, l => l.Label == "Кто держит" && l.Value == "Яндекс (Россия)");
+        Assert.StartsWith("рекомендуем", vm.DnsPick.Options.Single(o => o.Id == "google").Note);
 
         string? asked = null;
         vm.Confirm = q => { asked = q; return true; };

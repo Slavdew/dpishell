@@ -96,7 +96,10 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.True(i.CanInstall);
         Assert.Empty(ssh.Uploads);    // проверка ничего не кладёт
 
+        r.RpcdRestartCalls = 3;   // после установки rpcd перезапускается: вход проходит, а объекта dpishell ещё нет
         Assert.True(await i.InstallAsync("secret"));
+        Assert.Equal(0, r.RpcdRestartCalls);
+        Assert.StartsWith("Подключено", vm.ConnectionText);   // дождались, ошибку не показали
         Assert.Equal(RouterInstallStage.Done, i.Stage);
         Assert.All(i.Steps, s => Assert.Equal(RouterInstallStep.Done, s.State));
         Assert.Equal("secret", conn.LastPassword);
@@ -444,7 +447,9 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.Equal("• Глубокий поиск стратегий на самом роутере", vm.UpdateNotes);
         Assert.Contains("доступно обновление 0.2.1-r1", vm.HomeDetail);
 
+        r.RpcdRestartAfterUpdate = 3;   // rpcd перезапускается после обновления — окно ждёт dpishell, а не падает
         Assert.True(await vm.UpdateRouterAsync());
+        Assert.Equal(0, r.RpcdRestartCalls);
         Assert.Contains(r.Calls, c => Method(c) == "update_install" && c["params"]![3]!["from"]!.GetValue<string>() == "feed");
         Assert.False(vm.UpdateAvailable);
         Assert.Equal("Подключено, DpiShell 0.2.1-r1", vm.ConnectionText);

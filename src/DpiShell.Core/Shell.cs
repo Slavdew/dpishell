@@ -314,7 +314,7 @@ public sealed class Shell
         {
             using var doh = new DohResolver();
             var report = await new Selector(Paths, NewProbe(doh)).RunAsync(
-                StrategyStats.Order(AllStrategies, StrategyStats.Load(Paths)), WithControl(groups ?? SelectedGroups(), DefaultTargets), quick, progress, ct);
+                StrategyStats.Order(AllStrategies, StrategyStats.LoadDetailed(Paths)), WithControl(groups ?? SelectedGroups(), DefaultTargets), quick, progress, ct);
             ResultStore.Save(Paths, report);
             return report;
         });

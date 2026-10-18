@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Net.Http;
 using System.Windows.Input;
 using DpiShell.Core;
 
@@ -8,10 +9,42 @@ namespace DpiShell.App;
 /// <summary>Вариант DNS в списке: готовый (с ПК или с роутера) или свой из window.json.</summary>
 /// <param name="Ips">Адреса (для своего — то, что ввёл человек; для готовых — для подписи).</param>
 /// <param name="Doh">Шаблон защищённого DNS; null — только обычный.</param>
-public sealed record DnsOption(string Id, string Title, string Detail, bool Custom, IReadOnlyList<string> Ips, string? Doh)
+/// <param name="MoreDoh">Ещё шаблоны, если серверов несколько (роутер: «Google + Cloudflare»).</param>
+/// <param name="Owner">Кто держит сервер.</param>
+/// <param name="Note">Заметка: фильтрация, реестр блокировок, «рекомендуем».</param>
+/// <param name="Ping">Время ответа с этого ПК после «Сравнить»: «38 мс», «нет ответа»; пусто — не мерили.</param>
+public sealed record DnsOption(string Id, string Title, string Detail, bool Custom, IReadOnlyList<string> Ips, string? Doh,
+    IReadOnlyList<string>? MoreDoh = null, string? Owner = null, string? Note = null, string Ping = "")
 {
     public override string ToString() => Title;
+
+    IEnumerable<string> V4 => Ips.Where(ip => !DnsValues.IsIpv6(ip));
+    IEnumerable<string> V6 => Ips.Where(DnsValues.IsIpv6);
+    public IReadOnlyList<string> DohAll => Doh is null ? [] : [Doh, .. (MoreDoh ?? []).Where(d => d != Doh)];
+
+    /// <summary>Описание варианта строками «что — значение»: адреса, защищённый DNS, кто держит, заметка, время ответа.</summary>
+    public IReadOnlyList<DnsInfoLine> Info
+    {
+        get
+        {
+            var lines = new List<DnsInfoLine>();
+            if (V4.Any()) lines.Add(new("IPv4", string.Join(", ", V4)));
+            if (V6.Any()) lines.Add(new("IPv6", string.Join(", ", V6)));
+            if (DohAll.Count > 0) lines.Add(new("Защищённый DNS", string.Join(Environment.NewLine, DohAll)));
+            if (Owner is { Length: > 0 }) lines.Add(new("Кто держит", Owner));
+            if (Note is { Length: > 0 }) lines.Add(new("Заметка", Note));
+            if (Ping.Length > 0) lines.Add(new("Ответ с этого ПК", Ping));
+            return lines;
+        }
+    }
+
+    /// <summary>Для буфера обмена: адреса по одному в строке (IPv4, затем IPv6) — вставлять в Windows, телефон, роутер.</summary>
+    public string CopyIps => string.Join(Environment.NewLine, Ips);
+    public string CopyDoh => string.Join(Environment.NewLine, DohAll);
 }
+
+/// <summary>Строка описания варианта DNS.</summary>
+public sealed record DnsInfoLine(string Label, string Value);
 
 /// <summary>
 /// Выбор DNS — общий для этого компьютера и роутера (одинаковые вид и поведение): список готовых и своих вариантов,
@@ -29,6 +62,9 @@ public sealed class DnsPicker : Observable
         ApplyCmd = RelayCommand.Async(() => Selected is { } o ? Apply(o) : Task.CompletedTask, () => !Working && Selected is not null && Enabled());
         RestoreCmd = RelayCommand.Async(() => Restore(), () => !Working && CanRestore && Enabled());
         AddCustomCmd = new RelayCommand(AddCustom);
+        CopyIpsCmd = new RelayCommand(() => { if (Selected is { } o) Copy(o.CopyIps, "Адреса"); }, () => Selected is { Ips.Count: > 0 });
+        CopyDohCmd = new RelayCommand(() => { if (Selected is { } o) Copy(o.CopyDoh, "Адрес защищённого DNS"); }, () => Selected is { Doh: not null });
+        CompareCmd = RelayCommand.Async(() => CompareAsync(), () => !Comparing && Options.Any(o => o.Doh is not null));
         RemoveCustomCmd = new RelayCommand(p => RemoveCustom(p as DnsOption), p => p is DnsOption { Custom: true });
         Rebuild();
     }
@@ -50,9 +86,67 @@ public sealed class DnsPicker : Observable
     public DnsOption? Selected
     {
         get => _selected;
-        set { if (Set(ref _selected, value)) { Raise(nameof(SelectedDetail)); CommandManager.InvalidateRequerySuggested(); } }
+        set
+        {
+            if (!Set(ref _selected, value)) return;
+            Raise(nameof(SelectedDetail)); Raise(nameof(SelectedInfo)); Raise(nameof(HasSelectedDetail));
+            Copied = "";
+            CommandManager.InvalidateRequerySuggested();
+        }
     }
     public string SelectedDetail => Selected?.Detail ?? "";
+    /// <summary>Строка-сводка — когда описания нет (вариант «как у провайдера»).</summary>
+    public bool HasSelectedDetail => SelectedInfo.Count == 0 && SelectedDetail.Length > 0;
+    public IReadOnlyList<DnsInfoLine> SelectedInfo => Selected?.Info ?? [];
+
+    // ---------- копирование и «Сравнить» ----------
+
+    /// <summary>Положить текст в буфер обмена (в тестах — подмена).</summary>
+    public Action<string> CopyText { get; set; } = text => System.Windows.Clipboard.SetText(text);
+
+    /// <summary>Время ответа защищённого DNS с этого ПК, мс; null — не ответил (в тестах — подмена без сети).</summary>
+    public Func<string, CancellationToken, Task<double?>> Measure { get; set; } = (doh, ct) => DohPing.MeasureAsync(doh, null, ct);
+
+    string _copied = "";
+    /// <summary>«Скопировано: 8.8.8.8, 8.8.4.4» — под кнопками, до смены варианта.</summary>
+    public string Copied { get => _copied; private set { if (Set(ref _copied, value)) Raise(nameof(HasCopied)); } }
+    public bool HasCopied => Copied.Length > 0;
+
+    public ICommand CopyIpsCmd { get; }
+    public ICommand CopyDohCmd { get; }
+    public ICommand CompareCmd { get; }
+
+    void Copy(string text, string what)
+    {
+        try { CopyText(text); Copied = what + " — в буфере обмена"; }
+        catch (Exception e) when (e is System.Runtime.InteropServices.COMException or System.Runtime.InteropServices.ExternalException) { Copied = "Буфер обмена занят — повторите"; }
+    }
+
+    readonly Dictionary<string, string> _ping = [];
+    bool _comparing;
+    public bool Comparing { get => _comparing; private set { if (Set(ref _comparing, value)) { Raise(nameof(CompareText)); CommandManager.InvalidateRequerySuggested(); } } }
+    public string CompareText => Comparing ? "Сравниваю…" : "Сравнить скорость";
+
+    /// <summary>«Сравнить»: время ответа защищённого DNS каждого варианта с этого ПК (все сразу); итог — рядом с названием.</summary>
+    public async Task CompareAsync(CancellationToken ct = default)
+    {
+        if (Comparing) return;
+        Comparing = true;
+        try
+        {
+            var jobs = Options.Where(o => o.Doh is not null).GroupBy(o => o.Doh!).Select(async g =>
+            {
+                double? ms;
+                try { ms = await Measure(g.Key, ct); }
+                catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidOperationException or UriFormatException) { ms = null; }
+                return (g, ms);
+            }).ToList();
+            foreach (var (g, ms) in await Task.WhenAll(jobs))
+                foreach (var o in g) _ping[o.Id] = ms is { } v ? $"{v:0} мс" : "нет ответа";
+            Rebuild();
+        }
+        finally { Comparing = false; }
+    }
 
     string _current = "";
     /// <summary>«Сейчас: Google, защищённый · Ethernet, Wi-Fi».</summary>
@@ -112,12 +206,14 @@ public sealed class DnsPicker : Observable
     {
         var keep = Selected?.Id;
         Options.Clear();
-        foreach (var p in _presets) Options.Add(p);
+        foreach (var p in _presets) Options.Add(WithPing(p));
         foreach (var c in _s.DnsCustom)
-            Options.Add(new DnsOption(CustomId(c.Name), c.Name, string.Join(", ", c.Ips) + (c.Doh is null ? " · без шифрования" : " · защищённый"), true, c.Ips, c.Doh));
+            Options.Add(WithPing(new DnsOption(CustomId(c.Name), c.Name, string.Join(", ", c.Ips) + (c.Doh is null ? " · без шифрования" : " · защищённый"), true, c.Ips, c.Doh)));
         Selected = Options.FirstOrDefault(o => o.Id == (keep ?? CurrentId)) ?? Options.FirstOrDefault(o => o.Id == CurrentId);
         Raise(nameof(HasCustom));
     }
+
+    DnsOption WithPing(DnsOption o) => _ping.TryGetValue(o.Id, out var ms) ? o with { Ping = ms } : o;
 
     public bool HasCustom => _s.DnsCustom.Count > 0;
 

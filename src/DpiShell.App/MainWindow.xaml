@@ -72,29 +72,7 @@
                                             <TextBlock Text="{Binding CheckedAt}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                         </WrapPanel>
                                         <Expander Header="Подробнее" Margin="0,6,0,0" Visibility="{Binding CheckRows.Count, Converter={StaticResource NonZero}}">
-                                            <ItemsControl ItemsSource="{Binding CheckRows}" Margin="0,4,0,0">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Grid Margin="0,2">
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="22" />
-                                                                <ColumnDefinition Width="Auto" />
-                                                                <ColumnDefinition Width="*" />
-                                                            </Grid.ColumnDefinitions>
-                                                            <TextBlock x:Name="M" Text="{Binding Mark}" FontWeight="Bold" Foreground="{DynamicResource Ok}" />
-                                                            <TextBlock Grid.Column="1" TextWrapping="NoWrap" Margin="0,0,10,0">
-                                                                <Run Text="{Binding Group, Mode=OneWay}" /><Run Text=" · " Foreground="{DynamicResource Muted}" /><Run Text="{Binding Detail, Mode=OneWay}" Foreground="{DynamicResource Muted}" />
-                                                            </TextBlock>
-                                                            <TextBlock Grid.Column="2" Text="{Binding Url}" Style="{StaticResource Hint}" FontSize="13" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Url}" />
-                                                        </Grid>
-                                                        <DataTemplate.Triggers>
-                                                            <DataTrigger Binding="{Binding Ok}" Value="False">
-                                                                <Setter TargetName="M" Property="Foreground" Value="{DynamicResource Danger}" />
-                                                            </DataTrigger>
-                                                        </DataTemplate.Triggers>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
+                                            <ItemsControl ItemsSource="{Binding CheckRows}" ItemTemplate="{StaticResource VerdictRow}" Margin="0,4,0,0" />
                                         </Expander>
                                     </StackPanel>
                                     <!-- Второстепенные действия — ссылками. -->
@@ -172,8 +150,17 @@
                                                                     Command="{Binding DataContext.Router.SendStrategyCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding Id}"
                                                                     Visibility="{Binding Found, Converter={StaticResource Vis}}" ToolTip="Отправить на роутер, включить там и проверить" />
                                                         </Border>
+                                                        <!-- Стрелка — адреса последнего подбора (как в таблице подбора); щелчок по ней и по адресам стратегию не выбирает. -->
+                                                        <ToggleButton DockPanel.Dock="Left" Style="{StaticResource RowToggle}" IsChecked="{Binding Expanded}" Margin="-4,0,2,0"
+                                                                      Visibility="{Binding HasDetails, Converter={StaticResource Vis}}" ToolTip="Подробнее: адреса последнего подбора" />
                                                         <TextBlock Text="{Binding Stats}" Style="{StaticResource Hint}" FontSize="13" VerticalAlignment="Center" />
                                                     </DockPanel>
+                                                    <TextBlock Text="{Binding Warning}" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,1,0,0"
+                                                               Visibility="{Binding HasWarning, Converter={StaticResource Vis}}" />
+                                                    <Border Background="Transparent" Margin="18,4,0,4" MouseLeftButtonDown="KeepSelection"
+                                                            Visibility="{Binding Expanded, Converter={StaticResource Vis}}">
+                                                        <ItemsControl ItemsSource="{Binding Details}" ItemTemplate="{StaticResource VerdictRow}" />
+                                                    </Border>
                                                 </StackPanel>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
@@ -322,8 +309,27 @@
                         <DataGrid Grid.Row="2" ItemsSource="{Binding Scores}" SelectedItem="{Binding SelectedScore}"
                                   AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" HeadersVisibility="Column"
                                   CanUserAddRows="False" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource Line}"
-                                  RowHeaderWidth="0" MinHeight="120">
+                                  RowHeaderWidth="0" MinHeight="120" ScrollViewer.CanContentScroll="False">
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                    <Setter Property="DetailsVisibility" Value="{Binding Expanded, Converter={StaticResource Vis}}" />
+                                </Style>
+                            </DataGrid.RowStyle>
+                            <DataGrid.RowDetailsTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="38,0,12,10">
+                                        <ItemsControl ItemsSource="{Binding Details}" ItemTemplate="{StaticResource VerdictRow}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGrid.RowDetailsTemplate>
                             <DataGrid.Columns>
+                                <DataGridTemplateColumn Width="30" CanUserResize="False">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ToggleButton Style="{StaticResource RowToggle}" IsChecked="{Binding Expanded, UpdateSourceTrigger=PropertyChanged}" Visibility="{Binding HasDetails, Converter={StaticResource Vis}}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                                 <DataGridTemplateColumn Header="Стратегия" Width="2*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
@@ -346,7 +352,7 @@
                                 <DataGridTextColumn Header="Группы" Binding="{Binding Groups}" Width="70" />
                                 <DataGridTextColumn Header="Открылось" Binding="{Binding Share}" Width="90" />
                                 <DataGridTextColumn Header="Время" Binding="{Binding Avg}" Width="80" />
-                                <DataGridTemplateColumn Header="Ошибка" Width="2*">
+                                <DataGridTemplateColumn Header="Что не так" Width="2*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding Error}" ToolTip="{Binding ErrorFull}" Foreground="{DynamicResource Danger}"
@@ -398,8 +404,29 @@
 
                             <DataGrid Grid.Row="2" ItemsSource="{Binding Scores}" SelectedItem="{Binding SelectedScore}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
                                       HeadersVisibility="Column" CanUserAddRows="False" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource Line}"
-                                      RowHeaderWidth="0" MinHeight="120">
+                                      RowHeaderWidth="0" MinHeight="120" ScrollViewer.CanContentScroll="False">
+                                <DataGrid.RowStyle>
+                                    <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                        <Setter Property="DetailsVisibility" Value="{Binding Expanded, Converter={StaticResource Vis}}" />
+                                    </Style>
+                                </DataGrid.RowStyle>
+                                <DataGrid.RowDetailsTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="38,0,12,10">
+                                            <ItemsControl ItemsSource="{Binding Details}" ItemTemplate="{StaticResource VerdictRow}" />
+                                            <TextBlock Text="{Binding NoDetailsHint}" Style="{StaticResource Hint}" FontSize="13" Visibility="{Binding NoDetails, Converter={StaticResource Vis}}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGrid.RowDetailsTemplate>
                                 <DataGrid.Columns>
+                                    <DataGridTemplateColumn Width="30" CanUserResize="False">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <ToggleButton Style="{StaticResource RowToggle}" IsChecked="{Binding Expanded, UpdateSourceTrigger=PropertyChanged}"
+                                                              Visibility="{Binding CanExpand, Converter={StaticResource Vis}}" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
                                     <DataGridTemplateColumn Header="Стратегия" Width="2*">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
