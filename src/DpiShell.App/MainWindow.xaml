@@ -1182,8 +1182,10 @@
                                         <Button Content="Как поставить на роутер ↗" Style="{StaticResource LinkButton}" Command="{Binding GuideCmd}" VerticalAlignment="Center"
                                                 ToolTip="Инструкция на GitHub: docs/router/README.md" />
                                     </WrapPanel>
-                                    <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,8,0,0"
-                                               Text="DpiShell на роутере уже стоит? Нажмите «Найти» ниже." />
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center" Text="DpiShell на роутере уже стоит?" />
+                                        <Button Content="Найти" Style="{StaticResource LinkButton}" Command="{Binding FindCmd}" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
 
@@ -1405,7 +1407,7 @@
                                         <Button Content="Войти…" Style="{StaticResource Primary}" Command="{Binding LoginCmd}" Visibility="{Binding NeedLogin, Converter={StaticResource Vis}}" />
                                         <Button Content="Сменить пароль…" Command="{Binding LoginCmd}" Visibility="{Binding Connected, Converter={StaticResource Vis}}" />
                                         <!-- Установка по SSH: пакета нет — «Установить на роутер», есть — «Установить заново» (починить сломанную установку). -->
-                                        <Button Content="{Binding InstallText}" Command="{Binding InstallCmd}" />
+                                        <Button Content="{Binding InstallText}" Command="{Binding InstallCmd}" Visibility="{Binding Found, Converter={StaticResource Vis}}" />
                                     </WrapPanel>
                                     <TextBlock Text="{Binding ConnectionText}" FontWeight="SemiBold" Margin="0,4,0,0" TextWrapping="Wrap"
                                                Visibility="{Binding Searched, Converter={StaticResource Vis}}">

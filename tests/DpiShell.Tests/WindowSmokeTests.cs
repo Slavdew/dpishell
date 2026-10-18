@@ -256,6 +256,15 @@ public sealed class WindowSmokeTests
                     if (page == Pages.Router && (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Роутер не проверялся" && t.IsVisible) is null
                                                  || Find<Button>(Find<TabControl>(w)!, b => b.Content as string == "Как поставить на роутер ↗" && b.IsVisible) is null))
                         throw new Exception("На вкладке «Роутер» без роутера нет пустого состояния или ссылки «Как поставить»");
+                    // Пока роутер не найден: одна «Установить на роутер», в «Подключении» — только «Найти»; «Найти» ещё и ссылкой в пустом состоянии.
+                    if (page == Pages.Router)
+                    {
+                        var tabsNone = Find<TabControl>(w)!;
+                        int installs = FindAll<Button>(tabsNone, b => (b.Content as string ?? "").StartsWith("Установить") && b.IsVisible).Count();
+                        int finds = FindAll<Button>(tabsNone, b => b.Content as string == "Найти" && b.IsVisible).Count();
+                        if (installs != 1 || finds != 2) throw new Exception($"Без роутера кнопок установки {installs} (ждали 1), «Найти» {finds} (ждали 2)");
+                        if (Find<TextBlock>(tabsNone, t => t.Text.Contains("«Найти» ниже")) is not null) throw new Exception("Осталась фраза «Нажмите «Найти» ниже»");
+                    }
                     // Вход на роутер — небольшое окно на месте (п. 14): Enter — «Войти», Esc — «Отмена».
                     if (page == Pages.Router)
                     {
