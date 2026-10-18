@@ -46,7 +46,10 @@ check('403 с телом', c('403 30000 0 0.2 ', 'HTTP/1.1 403\r\n').outcome == 
 check('404 с телом', c('404 30000 0 0.2 ', 'HTTP/1.1 404\r\n').outcome == 'bad_status');
 check('400', c('400 100 0 0.2 ', 'HTTP/1.1 400\r\n').outcome == 'bad_status');
 check('503', c('503 100 0 0.2 ', 'HTTP/1.1 503\r\n').outcome == 'bad_status');
-check('рукопожатие: 404 ок', c('404 0 0 0.2 ', '', '', { url: 'https://gateway.discord.gg/', handshake_only: true }).ok);
+let hs = c('404 0 0 0.2 ', '', '', { url: 'https://gateway.discord.gg/', handshake_only: true });
+check('рукопожатие: 404 ок, текст', hs.ok && hs.detail == 'соединение есть (страницы у адреса нет — это нормально)', hs);
+let ab = c('498 0 0 0.2 ', 'HTTP/1.1 498\r\n', '', { url: 'https://example.com/' });
+check('антибот 498 без min_bytes — ок, текст', ab.ok && index(ab.detail, 'сервер отвечает') == 0, ab);
 check('рукопожатие: сброс', !c('000 0 56 0.2 ', '', '', { url: 'https://gateway.discord.gg/', handshake_only: true }).ok);
 check('1 МБ и таймаут = ок', c('200 1048576 28 9.0 ', 'HTTP/2 200\r\ncontent-length: 9000000\r\n').ok);
 

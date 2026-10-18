@@ -81,6 +81,9 @@ function injectStyle() {
 		'.dps-check{display:block;margin:.3em 0}',
 		'.dps-check input{margin-right:.5em}',
 		'.dps-list{margin:.3em 0 .3em 1.2em;padding:0}',
+		// Индикатор опроса LuCI («Обновление» вверху справа): наши страницы опрашивают роутер постоянно, он горит всегда,
+		// и его принимали за незаконченное обновление DpiShell. Ход заданий страницы показывают сами.
+		'span[data-indicator="poll-status"]{display:none}',
 		'.dps-preset{padding:.4em 0;border-bottom:1px solid var(--border-color-low,#e5e5e5)}',
 		'.dps-preset .dps-radio{display:inline-block;font-weight:600;margin-right:.5em}',
 		'.dps-preset .btn{padding:0 .6em;font-size:.9em}',

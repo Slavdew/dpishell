@@ -145,8 +145,9 @@ function classify(t, out_prefix) {
 			return res('connect_failed', errtext);
 		return res('error', errtext || `curl ${exitcode}`);
 	}
+	// Тексты исходов — те же, что на ПК: служебный адрес без страницы и антибот-ответ — не «HTTP 404» голым кодом.
 	if (t.handshake_only)
-		return res('ok', `HTTP ${code}`);
+		return res('ok', code >= 200 && code < 300 ? 'соединение есть' : 'соединение есть (страницы у адреса нет — это нормально)');
 	if (code >= 300 && code < 400) {
 		let loc = redir || (header_value(headers, 'location') ?? '');
 		let to = host_of(loc) ?? host_of(t.url);
@@ -173,6 +174,8 @@ function classify(t, out_prefix) {
 		return res('truncated', `получено ${bytes} из ${expected}`);
 	if (bytes < (t.min_bytes ?? 0))
 		return res('truncated', `получено ${bytes}, нужно ≥ ${t.min_bytes}`);
+	if ((code < 200 || code >= 300) && !(t.min_bytes > 0))
+		return res('ok', `сервер отвечает (для проверки достаточно), HTTP ${code}`);
 	return res('ok', `HTTP ${code}, ${int(bytes / 1024)} КБ`);
 }
 
@@ -269,7 +272,7 @@ function check_batch(items, opts) {
 		if (r.outcome == 'redirect' && hops[i] && (items[i].target.min_bytes ?? 0) > 0)
 			r = { ...r, outcome: 'truncated', ok: false, detail: `не дошли до страницы: больше ${MAX_REDIRECTS} перенаправлений` };
 		else if (r.outcome == 'redirect')
-			r = { ...r, outcome: 'ok', ok: true, detail: hops[i] ? `${r.detail}, больше ${MAX_REDIRECTS} редиректов` : r.detail };
+			r = { ...r, outcome: 'ok', ok: true, detail: 'сервер отвечает (для проверки достаточно)' };
 		delete r.next;
 		if (hops[i])
 			r = { ...r, final_url: cur[i].url, detail: `${r.detail} (после ${hops[i]} редир.)` };
