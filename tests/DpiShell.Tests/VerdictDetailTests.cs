@@ -121,31 +121,67 @@ public sealed class VerdictDetailTests
     // ---------- список стратегий: подпись по группам и адреса последнего подбора ----------
 
     [Fact]
-    public void StrategyChoice_Describe_ByGroups_UserShare_ControlAsWarning()
+    public void StrategyChoice_Describe_OnlyNewestRun()
     {
         var names = new GroupNames([new("youtube", "YouTube", []), new("discord", "Discord", []), new("control", "Обычные сайты", [], Control: true)]);
-        var st = new StrategyStats.Stat(0.9, 5, 3, 0.8, 7, 9, 0.5, 1,
-            [new("youtube", 5, 5), new("discord", 5, 4)],
-            new("2026-10-17_10-00-00.json", [
-                new("youtube", "https://www.youtube.com/", true, true, false, 0.4, [new("Tls13", "Ok", "301 → /?gl=RU → 200, 512 КБ", 0.4), new("Tls12", "Ok", "301 → /?gl=RU → 200, 512 КБ", 0.5)]),
-                new("user", "свой адрес №2", false, true, false, 6, [new("Tls13", "Truncated", "200, получено 16384 из 90000", 6)]),
-            ]));
+        var last = new StrategyStats.LastRun("2026-10-17_14-30-00.json", [
+            new("youtube", "https://www.youtube.com/", true, true, false, 0.4, [new("Tls13", "Ok", "301 → /?gl=RU → 200, 512 КБ", 0.4), new("Tls12", "Ok", "301 → /?gl=RU → 200, 512 КБ", 0.5)]),
+            new("discord", "https://discord.com/", false, true, false, 6, [new("Tls13", "Reset", "", 6)]),
+            new("user", "свой адрес №1", true, true, false, 0.3, []),
+            new("user", "свой адрес №2", false, true, false, 6, [new("Tls13", "Truncated", "200, получено 16384 из 90000", 6)]),
+            new("control", "https://vk.com/", true, true, true, 0.2, []),
+        ]);
+        // История (5 прогонов, ломала обычные сайты в одном из старых) не видна: только последний прогон.
+        var st = new StrategyStats.Stat(0.9, 5, 3, 0.8, 1, 2, 0.5, 1, [new("youtube", 5, 5), new("discord", 5, 4)], last,
+            new("2026-10-17_14-30-00.json", 1, 2, false), 0);
         var (stats, warning) = StrategyChoice.Describe(st, names);
-        Assert.Equal("YouTube 5/5 · Discord 4/5 · свои сайты 7 из 9", stats);
-        Assert.Equal("ломала обычные сайты: 1 из 5 подборов", warning);
+        Assert.Equal("YouTube ✓ · Discord ✗ · свои 1 из 2 · проверено 17.10 в 14:30", stats);
+        Assert.Equal("", warning);
+
+        // Ломает обычные сайты в последнем прогоне — предупреждение.
+        Assert.Equal("ломает обычные сайты", StrategyChoice.Describe(st with { Newest = st.Newest! with { ControlBroken = true } }, names).Warning);
 
         var details = StrategyChoice.LastDetails(st, names);
-        Assert.Equal(["свой адрес №2", "https://www.youtube.com/"], details.Select(d => d.Url));   // провал своего адреса — первым
-        Assert.Equal(("Свои адреса", "обязательный"), (details[0].Group, details[0].Note));
-        Assert.Equal("TLS 1.3: загрузка обрывается, 200, получено 16384 из 90000", details[0].Detail);
-        Assert.Equal("TLS 1.3 и TLS 1.2: 301 → /?gl=RU → 200, 512 КБ", details[1].Detail);
+        Assert.Equal(["https://discord.com/", "свой адрес №2"], details.Take(2).Select(d => d.Url));   // провалы обязательных — первыми
+        Assert.Equal("TLS 1.3: загрузка обрывается, 200, получено 16384 из 90000", details[1].Detail);
 
         var row = new StrategyChoice("a", "A", stats, false, warning, details);
-        Assert.True(row.HasWarning && row.HasDetails && !row.Expanded);
+        Assert.True(!row.HasWarning && row.HasDetails && !row.Expanded);
 
-        // Старая статистика (без групп) — общие числа, как раньше; раскрывать нечего.
-        var old = new StrategyStats.Stat(0.8, 5, 4);
-        Assert.Equal(("открыла всё в 4 из 5 подборов (80 %)", ""), StrategyChoice.Describe(old, names));
-        Assert.Empty(StrategyChoice.LastDetails(old, names));
+        // Самый свежий прогон — старого формата (без адресов): только итог, без адресов прошлого.
+        var oldNewest = st with { Newest = new("2026-10-18_09-05-00.json", 1, 2, false) };
+        Assert.Equal(("открыла 1 из 2 групп · проверено 18.10 в 09:05", ""), StrategyChoice.Describe(oldNewest, names));
+        Assert.Equal(("открыла всё · проверено 18.10 в 09:05", ""),
+            StrategyChoice.Describe(new StrategyStats.Stat(0.8, 5, 4, Newest: new("2026-10-18_09-05-00.json", 2, 2, false)), names));
+        // Старый помощник (без Newest и адресов) — «ещё не проверялась» вместо истории.
+        Assert.Equal(("ещё не проверялась", ""), StrategyChoice.Describe(new StrategyStats.Stat(0.8, 5, 4), names));
+        Assert.Empty(StrategyChoice.LastDetails(new StrategyStats.Stat(0.8, 5, 4), names));
+    }
+
+    [Fact]
+    public void StrategyChoice_Regression_AfterStreak_NotForOldRecords()
+    {
+        var yt = new TargetGroup("youtube", "YouTube", [new("https://www.youtube.com/", 20480)]);
+        var dc = new TargetGroup("discord", "Discord", [new("https://discord.com/", 20480)]);
+        var names = new GroupNames([yt, dc]);
+        StrategyScore Run(string id, params string[] failed)
+        {
+            var verdicts = new[] { yt, dc }.SelectMany(g => g.Targets.Select(t =>
+                new TargetVerdict(g.Id, t, !failed.Contains(t.Url), 0.3, [new ProbeResult(t, SslProtocols.Tls13, failed.Contains(t.Url) ? ProbeOutcome.Reset : ProbeOutcome.Ok, 0.3, 0, "")]))).ToList();
+            return DpiShell.Core.Selector.Score(new Strategy(id, "general (" + id + ")", "test", new() { ["general"] = "--dpi-desync=fake" }), [yt, dc], verdicts);
+        }
+        var report = new SelectionReport([], [yt, dc], [Run("alt", "https://discord.com/"), Run("alt2"), Run("old", "https://discord.com/")], false);
+        var before = new Dictionary<string, StrategyStats.Stat>
+        {
+            ["alt"] = new(1, 5, 5, Streak: 5),
+            ["alt2"] = new(1, 5, 5, Streak: 7),   // прошла и сейчас — подсказки нет
+            ["old"] = new(1, 9, 9),               // старые записи без групп: серии нет
+        };
+        Assert.Equal("Стратегия «general (alt)», работавшая последние 5 раз, сейчас не открывает Discord — похоже, провайдер изменил правила или сеть сбоит. Можно поискать новые.",
+            StrategyChoice.Regression(before, report, "alt2", names));
+        Assert.Contains("последние 3 раза", StrategyChoice.Regression(new Dictionary<string, StrategyStats.Stat> { ["alt"] = new(1, 3, 3, Streak: 3) }, report, null, names));
+        Assert.Equal("", StrategyChoice.Regression(new Dictionary<string, StrategyStats.Stat> { ["alt"] = new(1, 2, 2, Streak: 2) }, report, null, names));
+        Assert.Equal("", StrategyChoice.Regression(before.Where(kv => kv.Key != "alt").ToDictionary(), report, null, names));
+        Assert.Equal("", StrategyChoice.Regression(null, report, null, names));
     }
 }

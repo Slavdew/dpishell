@@ -13,8 +13,8 @@ public sealed class GroupOption(string id, string title, bool isChecked) : Obser
 }
 
 /// <summary>
-/// Строка списка стратегий на главной: название, статистика подборов по группам, найдена ли поиском.
-/// Warning — «ломала обычные сайты»; Details — адреса последнего прогона (раскрываются).
+/// Строка списка стратегий на главной: название, итог последнего прогона по группам, найдена ли поиском.
+/// Warning — «ломает обычные сайты» (в последнем прогоне); Details — адреса последнего прогона (раскрываются).
 /// </summary>
 public sealed class StrategyChoice(string id, string title, string stats, bool found, string warning = "", IReadOnlyList<CheckRow>? details = null) : Observable
 {
@@ -30,17 +30,71 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
     public bool Expanded { get => _expanded; set => Set(ref _expanded, value); }
 
     /// <summary>
-    /// Подпись по статистике: «YouTube 5/5 · Discord 4/5 · свои сайты 7 из 9» — группы каталога (открылась в N из M прогонов),
-    /// свои адреса — сколько открылось в последнем прогоне. Старая статистика (без групп) — «открыла всё в N из M подборов».
+    /// Подпись — только последний прогон: «YouTube ✓ · Discord ✗ · свои 7 из 9 · проверено 18.10 в 14:30». История прошлых подборов
+    /// о сегодняшней сети не говорит (провайдер меняет правила, сеть сбоит), она нужна только порядку перебора и подсказке
+    /// <see cref="Regression"/>. Warning — «ломает обычные сайты», если в последнем прогоне. Старый формат (без групп) — «открыла всё» / «N из M групп».
     /// </summary>
     public static (string Stats, string Warning) Describe(StrategyStats.Stat st, GroupNames names)
     {
-        var parts = (st.Groups ?? []).Select(g => $"{names.Title(g.Id)} {g.Ok}/{g.Runs}").ToList();
-        if (st.UserTotal > 0) parts.Add($"свои сайты {st.UserOk} из {st.UserTotal}");
-        var stats = parts.Count > 0 ? string.Join(" · ", parts)
-            : $"открыла всё в {st.FullOk} из {st.Runs} подборов ({(double)st.FullOk / st.Runs:P0})";
-        var warning = st.ControlBroken > 0 ? $"ломала обычные сайты: {st.ControlBroken} из {st.Runs} подборов" : "";
-        return (stats, warning);
+        var newest = st.Newest;
+        var parts = new List<string>();
+        bool broken;
+        // Last — свежий прогон с адресами; старый помощник не отдаёт Newest — тогда Last и есть последний.
+        if (st.Last is { } last && (newest is null || newest.File == last.File))
+        {
+            foreach (var g in last.Targets.Where(t => t.GroupId != "user" && !t.Control).GroupBy(t => t.GroupId))
+                parts.Add($"{names.Title(g.Key)} {(g.Where(t => t.Required).All(t => t.Ok) && g.Any(t => t.Ok) ? "✓" : "✗")}");
+            var mine = last.Targets.Where(t => t.GroupId == "user").ToList();
+            if (mine.Count > 0) parts.Add($"свои {mine.Count(t => t.Ok)} из {mine.Count}");
+            broken = newest?.ControlBroken ?? last.Targets.Any(t => t.Control && !t.Ok);
+        }
+        else if (newest is not null)
+        {
+            parts.Add(newest.ControlBroken || newest.Passed == newest.Total ? "открыла всё" : $"открыла {newest.Passed} из {newest.Total} групп");
+            broken = newest.ControlBroken;
+        }
+        else return ("ещё не проверялась", "");
+        if (Checked(newest?.File ?? st.Last!.File) is { } at) parts.Add($"проверено {at:dd.MM} в {at:HH:mm}");
+        return (string.Join(" · ", parts), broken ? "ломает обычные сайты" : "");
+    }
+
+    /// <summary>Время подбора из имени файла результатов (yyyy-MM-dd_HH-mm-ss.json).</summary>
+    static DateTime? Checked(string file) =>
+        DateTime.TryParseExact(System.IO.Path.GetFileNameWithoutExtension(file), "yyyy-MM-dd_HH-mm-ss", System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var at) ? at : null;
+
+    /// <summary>Сколько прогонов подряд должна была открывать всё стратегия, чтобы её провал сейчас стоил подсказки.</summary>
+    public const int RegressionRuns = 3;
+
+    /// <summary>
+    /// Подсказка после подбора: стратегия, открывавшая всё в последних N (≥ <see cref="RegressionRuns"/>) прогонах, сейчас не прошла —
+    /// скорее провайдер изменил правила или сеть сбоит. before — статистика до этого подбора; сначала текущая стратегия,
+    /// затем с самой длинной серией. Старые записи (без групп) серии не дают — подсказки нет.
+    /// </summary>
+    public static string Regression(IReadOnlyDictionary<string, StrategyStats.Stat>? before, SelectionReport r, string? currentId, GroupNames names)
+    {
+        if (before is null || r.NothingBlocked) return "";
+        var hit = r.Scores
+            .Where(s => s.Error is null || s.Error.StartsWith("ломает обычные сайты", StringComparison.Ordinal))
+            .Select(s => (s, streak: before.GetValueOrDefault(s.Strategy.Id)?.Streak ?? 0))
+            .Where(x => x.streak >= RegressionRuns && Failed(x.s, names) is { Length: > 0 })
+            .OrderByDescending(x => x.s.Strategy.Id == currentId).ThenByDescending(x => x.streak)
+            .FirstOrDefault();
+        if (hit.s is null) return "";
+        return $"Стратегия «{hit.s.Strategy.Title}», работавшая последние {hit.streak} {Times(hit.streak)}, сейчас {Failed(hit.s, names)} — "
+            + "похоже, провайдер изменил правила или сеть сбоит. Можно поискать новые.";
+    }
+
+    static string Times(int n) => n % 10 is >= 2 and <= 4 && n % 100 is < 12 or > 14 ? "раза" : "раз";
+
+    /// <summary>«не открывает Discord» / «ломает обычные сайты» / «не открывает свои сайты»; пусто — прошла.</summary>
+    static string Failed(StrategyScore s, GroupNames names)
+    {
+        if (s.Verdicts.Any(v => names.Control(v.GroupId) && !v.Ok)) return "ломает обычные сайты";
+        var bad = s.Verdicts.Where(v => !names.Control(v.GroupId)).GroupBy(v => v.GroupId)
+            .Where(g => !(g.Where(v => v.Target.Required).All(v => v.Ok) && g.Any(v => v.Ok)))
+            .Select(g => g.Key == "user" ? "свои сайты" : names.Title(g.Key)).ToList();
+        return bad.Count == 0 ? "" : "не открывает " + string.Join(", ", bad);
     }
 
     /// <summary>Адреса последнего прогона — те же строки, что в таблице подбора.</summary>

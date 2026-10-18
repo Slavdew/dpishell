@@ -839,10 +839,26 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         foreach (var s in list.Items)
         {
             _titles[s.Id] = s.Title;
-            var origin = s.FoundOnRouter ? "найдена на роутере" : s.FromPc ? "с ПК" : "";
-            var stats = s.Runs > 0 ? $"удачных проверок: {s.Passed} из {s.Runs}" : "";
-            Strategies.Add(new(s.Id, s.Title, string.Join(" · ", new[] { origin, stats }.Where(x => x.Length > 0))));
+            Strategies.Add(new(s.Id, s.Title, StrategyNote(s)));
         }
+    }
+
+    /// <summary>
+    /// «найдена на роутере · ✓ проверено 18.10 в 14:30» — только последняя проверка (если роутер её отдаёт), без истории
+    /// «удачных N из M»: прошлые прогоны о сегодняшней сети не говорят.
+    /// </summary>
+    public static string StrategyNote(RouterStrategyItem s)
+    {
+        var parts = new List<string>();
+        if (s.FoundOnRouter) parts.Add("найдена на роутере");
+        else if (s.FromPc) parts.Add("с ПК");
+        if (s.Last is { } last)
+        {
+            var at = last.At is { } t ? $" {t.ToLocalTime():dd.MM} в {t.ToLocalTime():HH:mm}" : "";
+            parts.Add(last.Ok ? $"✓ проверено{at}"
+                : $"✗ проверено{at}" + (last.Failed is { Count: > 0 } f ? ", не открылось: " + string.Join(", ", f) : ""));
+        }
+        return string.Join(" · ", parts);
     }
 
     public string? CurrentStrategyId => _status?.Strategy ?? _detection?.Status?.Strategy;

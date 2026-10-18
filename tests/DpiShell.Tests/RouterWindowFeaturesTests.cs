@@ -475,7 +475,8 @@ public sealed class RouterWindowFeaturesTests : IDisposable
                 """,
             StrategiesJson = """
                 { "catalog_version": 3, "items": [ { "id": "alt10", "title": "general (ALT10)", "source": "catalog", "runs": 7, "passed": 6 },
-                  { "id": "r-261017-1", "title": "fake + multisplit, ts", "source": "user", "runs": 1, "passed": 1 },
+                  { "id": "r-261017-1", "title": "fake + multisplit, ts", "source": "user", "runs": 1, "passed": 1,
+                    "last": { "at": "2026-10-17T11:30:00Z", "ok": false, "failed": ["Discord"] } },
                   { "id": "u-found-1", "title": "С ПК", "source": "user", "runs": 0, "passed": 0 } ] }
                 """,
         };
@@ -488,7 +489,10 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.False(cand.Usable);   // применить вариант нельзя — его нет в strategies
         Assert.Equal("c-3", vm.Scores[^1].Id);   // варианты — после стратегий
         Assert.Equal("Включена на роутере: fake + multisplit, ts", vm.ResultText);
-        Assert.Equal("найдена на роутере · удачных проверок: 1 из 1", vm.Strategies.Single(s => s.Id == "r-261017-1").Stats);
+        // Только последняя проверка, без истории «удачных N из M»; без last — ничего о проверках.
+        var at = new DateTime(2026, 10, 17, 11, 30, 0, DateTimeKind.Utc).ToLocalTime();
+        Assert.Equal($"найдена на роутере · ✗ проверено {at:dd.MM} в {at:HH:mm}, не открылось: Discord", vm.Strategies.Single(s => s.Id == "r-261017-1").Stats);
+        Assert.Equal("", vm.Strategies.Single(s => s.Id == "alt10").Stats);
         Assert.Equal("с ПК", vm.Strategies.Single(s => s.Id == "u-found-1").Stats);
         vm.SelectedScore = cand;
         Assert.False(vm.ApplySelectedCmd.CanExecute(null));

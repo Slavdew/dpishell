@@ -306,8 +306,9 @@ public sealed class WindowSmokeTests
                         vm.ShowAllIssues = true;
                         vm.ShowStrategies = true;
                         var detailed = vm.StrategyChoices.First(c => c.HasWarning);
-                        if (!detailed.Stats.StartsWith("YouTube 3/3 · Discord 2/3 · свои сайты 7 из 9") || !detailed.HasDetails)
-                            throw new Exception("Подпись стратегии не по группам: " + detailed.Stats);
+                        // Только последний прогон (17.10): прошлые подборы о сегодняшней сети не говорят.
+                        if (detailed.Stats != "YouTube ✓ · Discord ✓ · свои 7 из 9 · проверено 17.10 в 10:00" || detailed.Warning != "ломает обычные сайты" || !detailed.HasDetails)
+                            throw new Exception("Подпись стратегии не по последнему прогону: " + detailed.Stats);
                         detailed.Expanded = true;
                         Pump();
                         // Щелчок по раскрытым адресам не выбирает стратегию (выбор её включает).
@@ -940,7 +941,7 @@ public sealed class WindowSmokeTests
         // Статистика — настоящими файлами подборов: помощник отдаёт её окну (read_results), список строит само окно.
         SeedResults(shell, strategies);
         FillPc(vm, shell);
-        vm.StrategyChoices.Insert(0, new("found-1", "Найденная: fake + split2", "YouTube 2/2 · Discord 2/2", true));
+        vm.StrategyChoices.Insert(0, new("found-1", "Найденная: fake + split2", "YouTube ✓ · Discord ✓ · проверено 17.10 в 09:40", true));
         vm.ChosenStrategyId = strategies[0].Id;
 
         SetProp(vm, "VpnWarning", "Включён VPN (WireGuard Tunnel). С ним обход обычно не нужен, а подбор может показать неверный результат.");
@@ -1045,7 +1046,7 @@ public sealed class WindowSmokeTests
             var file = ResultStore.Save(shell.Paths, new SelectionReport([], groups,
             [
                 Run(strategies[0], 0.4),
-                Run(strategies[1], 0.5, run == 0 ? ["https://www.rbc.ru/"] : run == 1 ? ["https://discord.com/"] : ["https://site2.example/", "https://site5.example/"]),
+                Run(strategies[1], 0.5, run == 0 ? ["https://discord.com/"] : run == 1 ? ["https://site1.example/"] : ["https://www.rbc.ru/", "https://site2.example/", "https://site5.example/"]),
                 Run(strategies[2], 0.6, "https://www.youtube.com/"),
             ], false));
             File.Move(file, Path.Combine(shell.Paths.Results, $"2026-10-1{5 + run}_10-00-00.json"), overwrite: true);

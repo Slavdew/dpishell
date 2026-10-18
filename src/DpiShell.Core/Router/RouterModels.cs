@@ -79,13 +79,21 @@ public sealed record RouterStatus(
     // Аварийный выключатель (§5.1): включение ждёт confirm, последнее выключение без человека, состояние сторожа. Старый роутер — null.
     RouterPendingConfirm? PendingConfirm = null, RouterLastOff? LastOff = null, RouterWatchdog? Watchdog = null);
 
-/// <summary>source: catalog | user; у user id «u-…» — присланные с ПК (strategies_user_set), «r-…» — найденные глубоким поиском на роутере (§9).</summary>
-public sealed record RouterStrategyItem(string Id, string Title, string Source, int Runs, int Passed)
+/// <summary>
+/// source: catalog | user; у user id «u-…» — присланные с ПК (strategies_user_set), «r-…» — найденные глубоким поиском на роутере (§9).
+/// Runs/Passed — история: окно её не показывает (о сегодняшней сети не говорит). Last — последняя проверка, Roles — параметры по ролям
+/// (необязательные поля, предложение окна; старый роутер — null: тогда в окне ни того, ни другого).
+/// </summary>
+public sealed record RouterStrategyItem(string Id, string Title, string Source, int Runs, int Passed,
+    RouterStrategyLast? Last = null, Dictionary<string, string>? Roles = null)
 {
     public bool FoundOnRouter => Source == "user" && Id.StartsWith("r-", StringComparison.Ordinal);
     public bool FromPc => Source == "user" && Id.StartsWith("u-", StringComparison.Ordinal);
 }
 public sealed record RouterStrategies(int CatalogVersion, List<RouterStrategyItem> Items);
+
+/// <summary>Последняя проверка стратегии на роутере: когда и открыла ли всё; failed — названия групп, что не открылись.</summary>
+public sealed record RouterStrategyLast(DateTime? At, bool Ok, List<string>? Failed = null);
 
 /// <summary>
 /// Строка хода подбора; title — название из каталога или описание кандидата глубокого поиска (редакция §9, 2026-10-17).

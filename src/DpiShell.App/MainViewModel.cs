@@ -596,14 +596,13 @@ public sealed partial class MainViewModel : Observable
         // Порядок — тот же, что у подбора: обязательные группы, доля своих адресов, время.
         foreach (var s in StrategyStats.Order(list, x => x.Id, stats))
         {
-            // По группам, а не «открыла всё»: один нестабильный свой сайт не роняет всю строку.
+            // Только последний прогон: прошлые подборы о сегодняшней сети не говорят.
             if (stats.TryGetValue(s.Id, out var st) && st.Runs > 0)
             {
                 var (note, warning) = StrategyChoice.Describe(st, Names);
                 StrategyChoices.Add(new(s.Id, s.Title, note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names)));
             }
-            else StrategyChoices.Add(new(s.Id, s.Title,
-                stats.Count == 0 ? "статистика появится после первого подбора" : "в подборах ещё не участвовала", s.Source == "search"));
+            else StrategyChoices.Add(new(s.Id, s.Title, "ещё не проверялась", s.Source == "search"));
         }
         _chosen = CurrentStrategyId;
         Raise(nameof(ChosenStrategyId));
@@ -1214,6 +1213,8 @@ public sealed partial class MainViewModel : Observable
         Scores.Clear();
         foreach (var s in ordered) Scores.Add(new ScoreRow(s, Names) { IsBest = best is not null && s.Strategy.Id == best.Strategy.Id });
         SelectProgress = SelectProgressMax;
+        // Статистика до этого подбора — для подсказки «работала N раз подряд, сейчас нет»; перечитывается ниже.
+        var regression = StrategyChoice.Regression(Helper.Results?.Stats, r, CurrentStrategyId, Names);
         // Новая статистика и найденные стратегии — в список на главной; запасные помощник запомнил сам.
         _ = ReloadChoicesAsync();
 
@@ -1228,7 +1229,9 @@ public sealed partial class MainViewModel : Observable
         {
             ResultText = r.Cancelled ? "Подбор остановлен, подходящей стратегии пока нет." : "Ни одна стратегия не помогла.";
             if (!r.Cancelled)
-                ResultHint = "Проверьте, что свои адреса набраны верно и открываются хотя бы через VPN, или добавьте другие адреса этих сайтов и запустите полный подбор.";
+                ResultHint = (regression.Length > 0 ? regression + " " : "")
+                    + "Проверьте, что свои адреса набраны верно и открываются хотя бы через VPN, или добавьте другие адреса этих сайтов и запустите полный подбор.";
+            else ResultHint = regression;
             return;
         }
         SetBest(best.Strategy.Id);
@@ -1240,7 +1243,7 @@ public sealed partial class MainViewModel : Observable
         if (r.Cancelled) notes.Add("подбор остановлен, проверены не все стратегии");
         var blocked = string.Join(", ", r.TestedGroups.Select(g => g.Title));
         notes.Add("без обхода не открывалось: " + blocked);
-        ResultHint = string.Join("; ", notes) + ".";
+        ResultHint = string.Join("; ", notes) + "." + (regression.Length > 0 ? " " + regression : "");
     }
 
     // ---------- свои адреса ----------
