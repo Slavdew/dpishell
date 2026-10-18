@@ -445,7 +445,7 @@ public sealed class WindowSmokeTests
                   { "id": "alt9", "group_share": 1.0, "target_share": 0.80, "avg_s": 0.61, "error": null,
                     "verdicts": [ { "group": "youtube", "url": "https://www.youtube.com/", "ok": true, "detail": "TLS 1.3 и TLS 1.2: 200, 512 КБ", "seconds": 0.52 },
                                   { "group": "discord", "url": "https://discord.com/", "ok": true, "detail": "TLS 1.3 и TLS 1.2: 200, 160 КБ", "seconds": 0.61 },
-                                  { "group": "discord", "url": "https://gateway.discord.gg/", "ok": false, "detail": "TLS 1.3: соединение сброшено", "seconds": 0.12 },
+                                  { "group": "discord", "url": "https://gateway.discord.gg/", "ok": false, "detail": "TLS 1.2: поток оборвался на 16384 байтах", "seconds": 0.12 },
                                   { "group": "control", "url": "https://vk.com/", "ok": true, "detail": "200, 96 КБ", "seconds": 0.2 } ] },
                   { "id": "alt10", "group_share": 0.5, "target_share": 0.5, "avg_s": 0.92, "error": null },
                   { "id": "d-17", "title": "fake + multisplit, ts — YouTube", "group_share": 0.5, "target_share": 0.62, "avg_s": 0.83, "error": null, "candidate": true, "ok": 3, "total": 4 },

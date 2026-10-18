@@ -159,12 +159,14 @@ public sealed class HttpProbeTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Redirect_FiveHopsOk_SixFail()
+    public async Task Redirect_FiveHopsOk_SixFail_OnlyWhenBodyNeeded()
     {
         Assert.Equal(ProbeOutcome.Ok, (await Once("/hop/5", 20_480)).Outcome);
         var r = await Once("/hop/6", 20_480);
         Assert.Equal(ProbeOutcome.BadStatus, r.Outcome);
-        Assert.Contains("больше 5 переходов", r.Detail);
+        Assert.EndsWith("не дошли до страницы: больше 5 перенаправлений", r.Detail);
+        // Тело не нужно (MinBytes = 0) — сайт отвечает, этого достаточно (как на роутере).
+        Assert.Equal(ProbeOutcome.Ok, (await Once("/hop/6")).Outcome);
     }
 
     [Fact]

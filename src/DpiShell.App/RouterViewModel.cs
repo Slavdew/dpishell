@@ -48,7 +48,10 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames
             !v.Ok && control ? "ломает обычный сайт" : "", !v.Ok && control);
     }).OrderByDescending(r => r.Alert).ToList();
     public bool HasDetails => Row.Verdicts is { Count: > 0 };
-    public bool NoDetails => !HasDetails;
+    /// <summary>Подсказка про обновление — только у полных проверок: у кандидатов поиска роутер разбивку не присылает.</summary>
+    public bool NoDetails => !HasDetails && !IsCandidate;
+    /// <summary>Стрелка: есть что раскрыть — разбивка или подсказка.</summary>
+    public bool CanExpand => HasDetails || NoDetails;
     public string NoDetailsHint => "Подробности по адресам появятся после обновления роутера.";
     public bool Expanded { get => _expanded; set => Set(ref _expanded, value); }
 

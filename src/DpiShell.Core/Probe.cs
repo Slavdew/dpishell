@@ -117,8 +117,11 @@ public sealed class HttpProbe
                     if (next is null || !SameSite(host, next.Host))
                         return new(t, tls, ProbeOutcome.ForeignRedirect, sw.Elapsed.TotalSeconds, 0, Chain($"{code}: редирект на {next?.Host ?? "?"}"));
                     chain.Add($"{code} → {Short(next, url)}");
+                    // Как на роутере: до страницы не дошли — провал, только если нужно тело (MinBytes); иначе сайт отвечает — Ok.
                     if (hop + 1 > MaxRedirects)
-                        return new(t, tls, ProbeOutcome.BadStatus, sw.Elapsed.TotalSeconds, 0, Chain($"больше {MaxRedirects} переходов"));
+                        return t.MinBytes > 0
+                            ? new(t, tls, ProbeOutcome.BadStatus, sw.Elapsed.TotalSeconds, 0, Chain($"не дошли до страницы: больше {MaxRedirects} перенаправлений"))
+                            : new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, 0, Chain($"больше {MaxRedirects} перенаправлений"));
                     url = next;
                     continue;
                 }

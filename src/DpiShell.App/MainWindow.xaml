@@ -422,7 +422,8 @@
                                     <DataGridTemplateColumn Width="30" CanUserResize="False">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
-                                                <ToggleButton Style="{StaticResource RowToggle}" IsChecked="{Binding Expanded, UpdateSourceTrigger=PropertyChanged}" />
+                                                <ToggleButton Style="{StaticResource RowToggle}" IsChecked="{Binding Expanded, UpdateSourceTrigger=PropertyChanged}"
+                                                              Visibility="{Binding CanExpand, Converter={StaticResource Vis}}" />
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>

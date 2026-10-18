@@ -107,6 +107,11 @@ public sealed class VerdictDetailTests
         Assert.True(old.NoDetails);
         Assert.Contains("после обновления роутера", old.NoDetailsHint);
 
+        // Кандидат глубокого поиска: разбивки нет по договору — ни стрелки, ни подсказки.
+        var cand = new RouterScoreRow(p.Rows[1] with { Candidate = true }, "d-1", Names);
+        Assert.False(cand.CanExpand);
+        Assert.True(old.CanExpand && withDetails.CanExpand);
+
         // Опрос хода: та же строка с новым списком — не пересоздаём (раскрытие не сбрасывается).
         var again = Parse("""[ { "id": "alt", "group_share": 1.0, "target_share": 0.5, "avg_s": 0.7, "error": null, "verdicts": [ {"group":"youtube","url":"u","ok":true}, {"group":"youtube","url":"v","ok":true} ] } ]""");
         Assert.True(withDetails.Same(again.Rows![0]));
