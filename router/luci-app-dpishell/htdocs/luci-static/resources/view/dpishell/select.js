@@ -144,6 +144,23 @@ return view.extend({
 		return E('div', {}, parts);
 	},
 
+	// «Подробнее» — исход по каждой цели (select_progress rows[].verdicts); раскрытое не сворачивается при опросе.
+	details: function(r) {
+		var self = this;
+		if (!r.verdicts || !r.verdicts.length)
+			return '';
+		this.openDetails = this.openDetails || {};
+		var d = E('details', { 'class': 'dps-details', open: this.openDetails[r.id] ? '' : null, toggle: function() { self.openDetails[r.id] = d.open; } }, [
+			E('summary', {}, 'Подробнее'),
+			E('ul', { 'class': 'dps-list' }, r.verdicts.slice().sort(function(a, b) { return a.ok - b.ok; }).map(function(v) {
+				var host = (v.url.match(/^https?:\/\/([^\/]+)/) || [])[1] || v.url;
+				return E('li', { 'class': v.ok ? '' : 'dps-error' }, (v.ok ? 'да' : 'нет') + ' — ' + host + ': ' + v.detail +
+					(v.seconds ? ', ' + v.seconds.toFixed(1) + ' с' : ''));
+			}))
+		]);
+		return d;
+	},
+
 	rowsTable: function(p, rows, withApply) {
 		var self = this;
 		if (!rows.length)
@@ -171,7 +188,8 @@ return view.extend({
 			t.appendChild(E('tr', { 'class': 'tr' }, [
 				E('td', { 'class': 'td', 'data-title': 'Стратегия' }, [
 					isBest ? E('b', {}, r.title || r.id) : (r.title || r.id),
-					r.needs_ts ? E('div', { 'class': 'dps-muted', 'style': 'font-size:.85em' }, 'компьютерам на Windows нужна настройка') : ''
+					r.needs_ts ? E('div', { 'class': 'dps-muted', 'style': 'font-size:.85em' }, 'компьютерам на Windows нужна настройка') : '',
+					self.details(r)
 				]),
 				E('td', { 'class': 'td', 'data-title': 'Группы' }, api.percent(r.group_share)),
 				E('td', { 'class': 'td', 'data-title': 'Сайты' }, api.percent(r.target_share)),
