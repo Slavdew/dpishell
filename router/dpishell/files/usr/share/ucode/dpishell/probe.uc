@@ -263,8 +263,11 @@ function check_batch(items, opts) {
 	let results = [];
 	for (let i = 0; i < length(items); i++) {
 		let r = res[i];
-		// Больше MAX_REDIRECTS своих редиректов (или без адреса): ответы HTTP шли — соединение не режется.
-		if (r.outcome == 'redirect')
+		// Больше MAX_REDIRECTS своих редиректов (или без адреса): ответы HTTP шли — соединение не режется; но если нужно тело
+		// (min_bytes), содержимое не проверено — провал (как на ПК).
+		if (r.outcome == 'redirect' && hops[i] && (items[i].target.min_bytes ?? 0) > 0)
+			r = { ...r, outcome: 'truncated', ok: false, detail: `не дошли до страницы: больше ${MAX_REDIRECTS} перенаправлений` };
+		else if (r.outcome == 'redirect')
 			r = { ...r, outcome: 'ok', ok: true, detail: hops[i] ? `${r.detail}, больше ${MAX_REDIRECTS} редиректов` : r.detail };
 		delete r.next;
 		if (hops[i])
