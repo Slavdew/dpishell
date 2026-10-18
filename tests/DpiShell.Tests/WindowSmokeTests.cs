@@ -306,8 +306,9 @@ public sealed class WindowSmokeTests
                         vm.ShowAllIssues = true;
                         vm.ShowStrategies = true;
                         var detailed = vm.StrategyChoices.First(c => c.HasWarning);
-                        if (!detailed.Stats.StartsWith("YouTube 3/3 · Discord 2/3 · свои сайты 7 из 9") || !detailed.HasDetails)
-                            throw new Exception("Подпись стратегии не по группам: " + detailed.Stats);
+                        // Только последний прогон (17.10): прошлые подборы о сегодняшней сети не говорят.
+                        if (detailed.Stats != "YouTube ✓ · Discord ✓ · свои 7 из 9 · проверено 17.10 в 10:00" || detailed.Warning != "ломает обычные сайты" || !detailed.HasDetails)
+                            throw new Exception("Подпись стратегии не по последнему прогону: " + detailed.Stats);
                         detailed.Expanded = true;
                         Pump();
                         // Щелчок по раскрытым адресам не выбирает стратегию (выбор её включает).
@@ -324,8 +325,25 @@ public sealed class WindowSmokeTests
                             Pump();
                         }
                         Snap(w, Path.Combine(snapDir, $"{theme}-home-open.png"));
-                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } top2) top2.ScrollToHome();
+                        // «Параметры»: роли и командная строка winws; «Скопировать параметры» — в буфер (подмена).
                         detailed.Expanded = false;
+                        detailed.ShowParams = true;
+                        Pump();
+                        if (Find<TextBox>(Find<TabControl>(w)!, t => t.Text.Contains("general: --dpi-desync=") && t.Text.Contains("winws.exe --wf-tcp=") && t.IsVisible) is null)
+                            throw new Exception("В «Параметры» нет ролей или командной строки");
+                        string? copied = null;
+                        vm.CopyText = t => copied = t;
+                        vm.CopyParamsCmd.Execute(detailed);
+                        if (copied is null || !copied.StartsWith(detailed.Title + "\n") || !copied.Contains("{fake}/")) throw new Exception("«Скопировать параметры» скопировал не то: " + copied);
+                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } pv
+                            && Find<ListBox>(Find<TabControl>(w)!)?.ItemContainerGenerator.ContainerFromItem(detailed) is FrameworkElement item)
+                        {
+                            pv.ScrollToVerticalOffset(item.TranslatePoint(new Point(0, 0), (UIElement)pv.Content).Y - 20);
+                            Pump();
+                        }
+                        Snap(w, Path.Combine(snapDir, $"{theme}-home-params.png"));
+                        detailed.ShowParams = false;
+                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } top2) top2.ScrollToHome();
                         if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } hv)
                         {
                             hv.ScrollToEnd();
@@ -609,6 +627,27 @@ public sealed class WindowSmokeTests
                     if (Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } usv) usv.ScrollToHome();
                     Pump();
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-update.png"));
+                    // Идёт обновление: шаги (status.update.job.step), прошедшее время, «Подробнее» — хвост журнала.
+                    void Field(string name, object? value) => typeof(RouterViewModel).GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(router, value);
+                    Field("_updateStep", "install");
+                    Field("_updateStarted", DateTime.UtcNow - TimeSpan.FromSeconds(83));
+                    router.GetType().GetProperty("UpdateLog")!.SetValue(router, "# download: dpishell-0.2.1-r1.apk\n# install: apk add --upgrade dpishell luci-app-dpishell");
+                    SetProp(router, "Updating", true);
+                    Pump();
+                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Обновляю DpiShell на роутере… 1:2") && t.IsVisible) is null) throw new Exception("Нет «Обновляю…» с прошедшим временем");
+                    if (Find<Expander>(tabs, e => e.Header as string == "Подробнее" && e.IsVisible && e.DataContext == router) is not { } log) throw new Exception("Нет «Подробнее» с журналом обновления");
+                    log.IsExpanded = true;
+                    Pump();
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-updating.png"));
+                    // Не завершилось (running висит, версия прежняя) — так и сказано, кнопка «Повторить».
+                    Field("_updateFailed", true);
+                    SetProp(router, "Updating", false);
+                    Pump();
+                    if (Find<Button>(tabs, b => b.Content as string == "Повторить" && b.IsVisible) is null) throw new Exception("Нет «Повторить» у незавершённого обновления");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-update-failed.png"));
+                    Field("_updateFailed", false);
+                    Field("_updateStep", null);
+                    router.GetType().GetProperty("UpdateLog")!.SetValue(router, "");
                     vm.Page = Pages.Home;
                     Pump();
                     if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text.Contains("доступно обновление 0.2.1-r1") && t.IsVisible) is null && !router.HomeLine.Contains("предупрежд"))
@@ -940,7 +979,7 @@ public sealed class WindowSmokeTests
         // Статистика — настоящими файлами подборов: помощник отдаёт её окну (read_results), список строит само окно.
         SeedResults(shell, strategies);
         FillPc(vm, shell);
-        vm.StrategyChoices.Insert(0, new("found-1", "Найденная: fake + split2", "YouTube 2/2 · Discord 2/2", true));
+        vm.StrategyChoices.Insert(0, new("found-1", "Найденная: fake + split2", "YouTube ✓ · Discord ✓ · проверено 17.10 в 09:40", true));
         vm.ChosenStrategyId = strategies[0].Id;
 
         SetProp(vm, "VpnWarning", "Включён VPN (WireGuard Tunnel). С ним обход обычно не нужен, а подбор может показать неверный результат.");
@@ -1045,7 +1084,7 @@ public sealed class WindowSmokeTests
             var file = ResultStore.Save(shell.Paths, new SelectionReport([], groups,
             [
                 Run(strategies[0], 0.4),
-                Run(strategies[1], 0.5, run == 0 ? ["https://www.rbc.ru/"] : run == 1 ? ["https://discord.com/"] : ["https://site2.example/", "https://site5.example/"]),
+                Run(strategies[1], 0.5, run == 0 ? ["https://discord.com/"] : run == 1 ? ["https://site1.example/"] : ["https://www.rbc.ru/", "https://site2.example/", "https://site5.example/"]),
                 Run(strategies[2], 0.6, "https://www.youtube.com/"),
             ], false));
             File.Move(file, Path.Combine(shell.Paths.Results, $"2026-10-1{5 + run}_10-00-00.json"), overwrite: true);

@@ -16,8 +16,17 @@ public sealed class RouterTargetRow(string url, bool important) : Observable
     public bool Important { get => _important; set => Set(ref _important, value); }
 }
 
-/// <summary>Стратегия роутера в меню выбора.</summary>
-public sealed record RouterStrategyRow(string Id, string Title, string Stats);
+/// <summary>Шаг обновления DpiShell на роутере: Current — идёт сейчас (выделен), Done — пройден, Last — без стрелки после.</summary>
+public sealed record UpdateStepRow(string Title, bool Current, bool Done, bool Last)
+{
+    public string Arrow => Last ? "" : "  →  ";
+}
+
+/// <summary>Стратегия роутера в меню выбора. Params — роли, если роутер их отдаёт (strategies.items[].roles), иначе пусто и не показываются.</summary>
+public sealed record RouterStrategyRow(string Id, string Title, string Stats, string Params = "")
+{
+    public bool HasParams => Params.Length > 0;
+}
 
 /// <summary>Строка таблицы подбора на роутере (select_progress.rows).</summary>
 public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames? names = null) : Observable
@@ -425,10 +434,12 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         {
             plain = null;
             Connected = false;
+            // Сохранённый перестал подходить (сменили пароль, переставили прошивку) — стереть, иначе каждый поиск ошибался бы им.
             if (typed is null && _settings.RouterPassword is not null)
             {
                 _settings.RouterPassword = null;
                 TrySave();
+                RaisePassword();
             }
             SetConnection(typed == "" ? "У роутера есть пароль — введите его" : "Неверный пароль");
             return false;
@@ -440,11 +451,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             SetConnection(RouterTexts.Friendly(e));
             return false;
         }
-        if (typed is not null)
-        {
-            _settings.RouterPassword = RouterSecrets.Protect(typed);
-            TrySave();
-        }
+        if (typed is not null) RememberPassword(typed);
         plain = null;
         Connected = true;
         SetConnection($"Подключено, DpiShell {_detection?.Status?.Version}", ok: true);
@@ -685,6 +692,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         Raise(nameof(RouterEnabled));
         Raise(nameof(FlowOffloadFixable)); Raise(nameof(Ipv6Fixable));
         RaisePc();
+        RememberBypass();
         Changed?.Invoke();
     }
 
@@ -839,13 +847,40 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         foreach (var s in list.Items)
         {
             _titles[s.Id] = s.Title;
-            var origin = s.FoundOnRouter ? "найдена на роутере" : s.FromPc ? "с ПК" : "";
-            var stats = s.Runs > 0 ? $"удачных проверок: {s.Passed} из {s.Runs}" : "";
-            Strategies.Add(new(s.Id, s.Title, string.Join(" · ", new[] { origin, stats }.Where(x => x.Length > 0))));
+            Strategies.Add(new(s.Id, s.Title, StrategyNote(s), s.Roles is { Count: > 0 } roles ? "Параметры по ролям:\n" + StrategyParams.Roles(roles) : ""));
         }
     }
 
+    /// <summary>
+    /// «найдена на роутере · ✓ проверено 18.10 в 14:30» — только последняя проверка (если роутер её отдаёт), без истории
+    /// «удачных N из M»: прошлые прогоны о сегодняшней сети не говорят.
+    /// </summary>
+    public static string StrategyNote(RouterStrategyItem s)
+    {
+        var parts = new List<string>();
+        if (s.FoundOnRouter) parts.Add("найдена на роутере");
+        else if (s.FromPc) parts.Add("с ПК");
+        if (s.Last is { } last)
+        {
+            var at = last.At is { } t ? $" {t.ToLocalTime():dd.MM} в {t.ToLocalTime():HH:mm}" : "";
+            parts.Add(last.Ok ? $"✓ проверено{at}"
+                : $"✗ проверено{at}" + (last.Failed is { Count: > 0 } f ? ", не открылось: " + string.Join(", ", f) : ""));
+        }
+        return string.Join(" · ", parts);
+    }
+
     public string? CurrentStrategyId => _status?.Strategy ?? _detection?.Status?.Strategy;
+
+    /// <summary>Положить текст в буфер обмена (в тестах — подмена).</summary>
+    public Action<string> CopyText { get; set; } = text => System.Windows.Clipboard.SetText(text);
+
+    /// <summary>«Скопировать параметры» стратегии роутера (только если роутер отдал роли).</summary>
+    public void CopyParams(RouterStrategyRow s)
+    {
+        if (!s.HasParams) return;
+        try { CopyText($"{s.Title}\n{s.Params}"); Say("Параметры скопированы: " + s.Title); }
+        catch (System.Runtime.InteropServices.ExternalException) { Failed("Не удалось скопировать — буфер обмена занят другой программой."); }
+    }
 
     public ICommand LoginCmd { get; }
     /// <summary>«Найти»: поиск роутера по адресу из настроек; есть сохранённый пароль — и вход.</summary>

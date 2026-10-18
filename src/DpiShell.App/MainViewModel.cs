@@ -262,7 +262,10 @@ public sealed partial class MainViewModel : Observable
     {
         await FetchAsync(full: true);
         ApplyHelperData();
-        if (Helper.Client is { } c && Helper.Status is { RunMode: "process", Enabled: true, Active: false, StrategyId: { } id })
+        // Обход «живёт» на роутере — не включать его здесь, пока не узнаем, где мы (ReconcileRouterPcAsync).
+        if (Router.BypassRemembered && Helper.Status is { RunMode: "process", Enabled: true, Active: false, StrategyId: { } deferred })
+            _resumeDeferred = deferred;
+        else if (Helper.Client is { } c && Helper.Status is { RunMode: "process", Enabled: true, Active: false, StrategyId: { } id })
         {
             try { await c.EnableAsync(id); }
             catch (Exception e) when (e is HelperException or HelperUnavailableException) { _error = Texts.Friendly(e); Fail(_error); }
@@ -455,13 +458,14 @@ public sealed partial class MainViewModel : Observable
     {
         IsLoading = false; LoadSlow = false;
         // Роутер ищем сразу и параллельно: его нет — блок просто не появится.
-        _ = Router.RefreshAsync();
+        var router = Router.RefreshAsync();
         if (Helper.Reader is not null) await AfterConnectAsync();
         else
         {
             ApplyHelperData();
             await RefreshStatusAsync();
         }
+        _ = ReconcileRouterPcAsync(router);
         _ = CheckDnsAsync();
         _ = RefreshPcDnsAsync();
         // «Починить адреса» включено и с прошлой проверки прошли сутки — перепроверить записи (устаревшие уберутся).
@@ -596,18 +600,40 @@ public sealed partial class MainViewModel : Observable
         // Порядок — тот же, что у подбора: обязательные группы, доля своих адресов, время.
         foreach (var s in StrategyStats.Order(list, x => x.Id, stats))
         {
-            // По группам, а не «открыла всё»: один нестабильный свой сайт не роняет всю строку.
+            // Только последний прогон: прошлые подборы о сегодняшней сети не говорят.
             if (stats.TryGetValue(s.Id, out var st) && st.Runs > 0)
             {
                 var (note, warning) = StrategyChoice.Describe(st, Names);
-                StrategyChoices.Add(new(s.Id, s.Title, note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names)));
+                StrategyChoices.Add(new(s.Id, s.Title, note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names), ParamsOf(s.Id)));
             }
-            else StrategyChoices.Add(new(s.Id, s.Title,
-                stats.Count == 0 ? "статистика появится после первого подбора" : "в подборах ещё не участвовала", s.Source == "search"));
+            else StrategyChoices.Add(new(s.Id, s.Title, "ещё не проверялась", s.Source == "search", parameters: ParamsOf(s.Id)));
         }
         _chosen = CurrentStrategyId;
         Raise(nameof(ChosenStrategyId));
     }
+
+    /// <summary>Роли стратегии и командная строка winws с режимами, что сейчас у помощника; найденные поиском — от помощника.</summary>
+    string ParamsOf(string id)
+    {
+        var s = Helper.Details?.Found.FirstOrDefault(x => x.Id == id) ?? _shell.Catalog.Find(id);
+        if (s is null) return "";
+        var f = Helper.Status?.Features;
+        return StrategyParams.Full(s, _shell.Paths, f is null ? BuildOptions.Default : new(f.Ipset, f.Game));
+    }
+
+    /// <summary>Положить текст в буфер обмена (в тестах — подмена).</summary>
+    public Action<string> CopyText { get; set; } = text => Clipboard.SetText(text);
+
+    public ICommand ToggleParamsCmd => _toggleParamsCmd ??= new RelayCommand(p => { if (p is StrategyChoice c) c.ShowParams = !c.ShowParams; });
+    ICommand? _toggleParamsCmd;
+
+    public ICommand CopyParamsCmd => _copyParamsCmd ??= new RelayCommand(p =>
+    {
+        if (p is not StrategyChoice { HasParams: true } c) return;
+        try { CopyText($"{c.Title}\n{c.Params}"); Message = "Параметры скопированы: " + c.Title; }
+        catch (System.Runtime.InteropServices.ExternalException) { Fail("Не удалось скопировать — буфер обмена занят другой программой."); }
+    });
+    ICommand? _copyParamsCmd;
 
     string? _chosen;
     /// <summary>Выбранная стратегия. Обход включён — перезапуск на новой; выключен — запоминаем (у помощника или в окне).</summary>
@@ -719,6 +745,8 @@ public sealed partial class MainViewModel : Observable
                 _localStrategy = strategy;
                 _coreProblem = null;
             }
+            // Обход ПК заработал, а роутер уже «включён» (служба ПК поднялась с Windows, состояние пришло позже ответа роутера) — §6.
+            if (_active && Router.Found && Router.RouterEnabled) OnRouterChanged();
             VpnWarning = vpn.Count == 0 ? "" : $"Включён VPN ({string.Join(", ", vpn)}). С ним обход обычно не нужен, а подбор может показать неверный результат.";
             ConflictWarning = conflicts.Count == 0 ? "" : $"Мешают другие программы обхода: {string.Join(", ", conflicts.Select(c => c.Name).Distinct())}.";
         }
@@ -752,6 +780,8 @@ public sealed partial class MainViewModel : Observable
     {
         // Роутер уже обходит для всего дома — двойная обработка ломает сайты (router-api §6): подобрать там или выключить там.
         if (!IsRunning && !await RouterGateAsync(select: false)) return;
+        // Роутер не отвечает, а человек включает обход здесь — его выбор: при следующем старте окно этот обход не выключит.
+        if (!Router.Found) Router.ForgetBypass();
         await EnableCoreAsync();
     }
 
@@ -1214,6 +1244,8 @@ public sealed partial class MainViewModel : Observable
         Scores.Clear();
         foreach (var s in ordered) Scores.Add(new ScoreRow(s, Names) { IsBest = best is not null && s.Strategy.Id == best.Strategy.Id });
         SelectProgress = SelectProgressMax;
+        // Статистика до этого подбора — для подсказки «работала N раз подряд, сейчас нет»; перечитывается ниже.
+        var regression = StrategyChoice.Regression(Helper.Results?.Stats, r, CurrentStrategyId, Names);
         // Новая статистика и найденные стратегии — в список на главной; запасные помощник запомнил сам.
         _ = ReloadChoicesAsync();
 
@@ -1228,7 +1260,9 @@ public sealed partial class MainViewModel : Observable
         {
             ResultText = r.Cancelled ? "Подбор остановлен, подходящей стратегии пока нет." : "Ни одна стратегия не помогла.";
             if (!r.Cancelled)
-                ResultHint = "Проверьте, что свои адреса набраны верно и открываются хотя бы через VPN, или добавьте другие адреса этих сайтов и запустите полный подбор.";
+                ResultHint = (regression.Length > 0 ? regression + " " : "")
+                    + "Проверьте, что свои адреса набраны верно и открываются хотя бы через VPN, или добавьте другие адреса этих сайтов и запустите полный подбор.";
+            else ResultHint = regression;
             return;
         }
         SetBest(best.Strategy.Id);
@@ -1240,7 +1274,7 @@ public sealed partial class MainViewModel : Observable
         if (r.Cancelled) notes.Add("подбор остановлен, проверены не все стратегии");
         var blocked = string.Join(", ", r.TestedGroups.Select(g => g.Title));
         notes.Add("без обхода не открывалось: " + blocked);
-        ResultHint = string.Join("; ", notes) + ".";
+        ResultHint = string.Join("; ", notes) + "." + (regression.Length > 0 ? " " + regression : "");
     }
 
     // ---------- свои адреса ----------

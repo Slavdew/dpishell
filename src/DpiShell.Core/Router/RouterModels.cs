@@ -54,8 +54,21 @@ public sealed record RouterWatchdog(bool Enabled, DateTime? CheckedAt, bool? Ok,
 /// <summary>Фоновые задания роутера; dns — любое DNS-задание (§9, 2026-10-17), dns_analyze оставлен с тем же значением.</summary>
 public sealed record RouterJobs(bool Select, bool Check, bool CoreInstall, bool DnsAnalyze = false, bool SiteCheck = false, bool Dns = false, bool Update = false);
 
-/// <summary>Последнее задание обновления (status.update.job): action update | update_check, from feed | local; at — когда закончилось.</summary>
-public sealed record RouterUpdateJob(string? Action, string? From, bool Running, bool? Ok, string? Message, DateTime? At = null);
+/// <summary>
+/// Последнее задание обновления (status.update.job): action update | update_check, from feed | local; at — когда закончилось.
+/// step — шаг идущего обновления (download | install | restart | done), log — хвост журнала (массив строк или одна строка);
+/// оба необязательные: старый роутер их не отдаёт.
+/// </summary>
+public sealed record RouterUpdateJob(string? Action, string? From, bool Running, bool? Ok, string? Message, DateTime? At = null,
+    string? Step = null, System.Text.Json.JsonElement? Log = null)
+{
+    /// <summary>Хвост журнала строками; не отдан или непонятного вида — пусто.</summary>
+    public IReadOnlyList<string> LogLines => Log is not { } l ? []
+        : l.ValueKind == System.Text.Json.JsonValueKind.Array
+            ? l.EnumerateArray().Where(x => x.ValueKind == System.Text.Json.JsonValueKind.String).Select(x => x.GetString()!).ToList()
+        : l.ValueKind == System.Text.Json.JsonValueKind.String ? l.GetString()!.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        : [];
+}
 /// <summary>
 /// status.update (ядро договора §5.4): available — в витрине версия новее установленной, notes — что нового (до 15 строк),
 /// job — последнее задание обновления (null — не было).
@@ -79,13 +92,21 @@ public sealed record RouterStatus(
     // Аварийный выключатель (§5.1): включение ждёт confirm, последнее выключение без человека, состояние сторожа. Старый роутер — null.
     RouterPendingConfirm? PendingConfirm = null, RouterLastOff? LastOff = null, RouterWatchdog? Watchdog = null);
 
-/// <summary>source: catalog | user; у user id «u-…» — присланные с ПК (strategies_user_set), «r-…» — найденные глубоким поиском на роутере (§9).</summary>
-public sealed record RouterStrategyItem(string Id, string Title, string Source, int Runs, int Passed)
+/// <summary>
+/// source: catalog | user; у user id «u-…» — присланные с ПК (strategies_user_set), «r-…» — найденные глубоким поиском на роутере (§9).
+/// Runs/Passed — история: окно её не показывает (о сегодняшней сети не говорит). Last — последняя проверка, Roles — параметры по ролям
+/// (необязательные поля, предложение окна; старый роутер — null: тогда в окне ни того, ни другого).
+/// </summary>
+public sealed record RouterStrategyItem(string Id, string Title, string Source, int Runs, int Passed,
+    RouterStrategyLast? Last = null, Dictionary<string, string>? Roles = null)
 {
     public bool FoundOnRouter => Source == "user" && Id.StartsWith("r-", StringComparison.Ordinal);
     public bool FromPc => Source == "user" && Id.StartsWith("u-", StringComparison.Ordinal);
 }
 public sealed record RouterStrategies(int CatalogVersion, List<RouterStrategyItem> Items);
+
+/// <summary>Последняя проверка стратегии на роутере: когда и открыла ли всё; failed — названия групп, что не открылись.</summary>
+public sealed record RouterStrategyLast(DateTime? At, bool Ok, List<string>? Failed = null);
 
 /// <summary>
 /// Строка хода подбора; title — название из каталога или описание кандидата глубокого поиска (редакция §9, 2026-10-17).

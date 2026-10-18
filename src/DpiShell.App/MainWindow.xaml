@@ -180,7 +180,11 @@
                                                         <!-- Стрелка — адреса последнего подбора (как в таблице подбора); щелчок по ней и по адресам стратегию не выбирает. -->
                                                         <ToggleButton DockPanel.Dock="Left" Style="{StaticResource RowToggle}" IsChecked="{Binding Expanded}" Margin="-4,0,2,0"
                                                                       Visibility="{Binding HasDetails, Converter={StaticResource Vis}}" ToolTip="Подробнее: адреса последнего подбора" />
-                                                        <TextBlock Text="{Binding Stats}" Style="{StaticResource Hint}" FontSize="13" VerticalAlignment="Center" />
+                                                        <!-- «Параметры»: роли и командная строка winws — щелчок стратегию не выбирает. -->
+                                                        <Button DockPanel.Dock="Right" Content="{Binding ParamsLinkText}" Style="{StaticResource LinkButton}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                Command="{Binding DataContext.ToggleParamsCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"
+                                                                Visibility="{Binding HasParams, Converter={StaticResource Vis}}" ToolTip="Точные параметры обхода и командная строка winws" />
+                                                        <TextBlock Text="{Binding Stats}" Style="{StaticResource Hint}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" />
                                                     </DockPanel>
                                                     <TextBlock Text="{Binding Warning}" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,1,0,0"
                                                                Visibility="{Binding HasWarning, Converter={StaticResource Vis}}" />
@@ -188,6 +192,11 @@
                                                             Visibility="{Binding Expanded, Converter={StaticResource Vis}}">
                                                         <ItemsControl ItemsSource="{Binding Details}" ItemTemplate="{StaticResource VerdictRow}" />
                                                     </Border>
+                                                    <StackPanel Margin="0,4,0,4" Background="Transparent" MouseLeftButtonDown="KeepSelection" Visibility="{Binding ShowParams, Converter={StaticResource Vis}}">
+                                                        <TextBox Text="{Binding Params, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Padding="6,4" AutomationProperties.Name="Параметры стратегии" />
+                                                        <Button Content="Скопировать параметры" Style="{StaticResource LinkButton}" FontSize="12" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                                                Command="{Binding DataContext.CopyParamsCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" />
+                                                    </StackPanel>
                                                 </StackPanel>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
@@ -1105,10 +1114,33 @@
                             <Border Style="{StaticResource Card}" Visibility="{Binding ShowUpdate, Converter={StaticResource Vis}}">
                                 <StackPanel>
                                     <DockPanel>
-                                        <Button DockPanel.Dock="Right" Content="Обновить" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}" VerticalAlignment="Center"
+                                        <Button DockPanel.Dock="Right" Content="{Binding UpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}" VerticalAlignment="Center"
                                                 Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
                                         <TextBlock Text="{Binding UpdateTitle}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
                                     </DockPanel>
+                                    <!-- Шаги (status.update.job.step): «Скачиваю → Устанавливаю → Перезапуск службы → Готово», текущий выделен. -->
+                                    <ItemsControl ItemsSource="{Binding UpdateSteps}" Margin="0,6,0,0" Visibility="{Binding HasUpdateSteps, Converter={StaticResource Vis}}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock>
+                                                    <Run x:Name="Step" Text="{Binding Title, Mode=OneWay}" Foreground="{DynamicResource Muted}" /><Run Text="{Binding Arrow, Mode=OneWay}" Foreground="{DynamicResource Muted}" />
+                                                </TextBlock>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding Current}" Value="True">
+                                                        <Setter TargetName="Step" Property="FontWeight" Value="SemiBold" />
+                                                        <Setter TargetName="Step" Property="Foreground" Value="{DynamicResource Text}" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Expander Header="Подробнее" Margin="0,6,0,0" Visibility="{Binding HasUpdateLog, Converter={StaticResource Vis}}">
+                                        <TextBox Text="{Binding UpdateLog, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Padding="6,4" Margin="0,4,0,0"
+                                                 MaxHeight="220" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Журнал обновления" />
+                                    </Expander>
                                     <Expander Header="Что нового" Margin="0,6,0,0" Visibility="{Binding HasUpdateNotes, Converter={StaticResource Vis}}">
                                         <TextBlock Text="{Binding UpdateNotes}" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     </Expander>
@@ -1366,6 +1398,13 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
+                                    <!-- Пароль переиспользуется везде (вход, установка, удаление, обновление по SSH); видно, что он сохранён, и его можно забыть. -->
+                                    <WrapPanel Margin="0,4,0,0" Visibility="{Binding HasSavedPassword, Converter={StaticResource Vis}}">
+                                        <TextBlock Text="{Binding SavedPasswordText}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                        <TextBlock Text=" · " Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                        <Button Content="Забыть" Style="{StaticResource LinkButton}" Command="{Binding ForgetPasswordCmd}" VerticalAlignment="Center"
+                                                ToolTip="Стереть сохранённый пароль роутера с этого компьютера" />
+                                    </WrapPanel>
                                     <!-- Адрес — в «Дополнительно», как в окне входа: обычно его определяют сами (UX-аудит 2, п. 10). -->
                                     <Expander Header="Дополнительно: адрес роутера" Margin="0,8,0,0" IsExpanded="{Binding AddressCustom, Mode=OneTime}">
                                         <StackPanel Margin="0,4,0,0">
@@ -1423,6 +1462,19 @@
                                         <RadioButton Content="Как в Windows" IsChecked="{Binding ThemeAuto}" Margin="0,3,24,3" />
                                         <RadioButton Content="Светлое" IsChecked="{Binding ThemeLight}" Margin="0,3,24,3" />
                                         <RadioButton Content="Тёмное" IsChecked="{Binding ThemeDark}" Margin="0,3,24,3" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Роутер: сохранённый пароль виден и здесь, рядом с остальными данными на этом компьютере. -->
+                            <Border Style="{StaticResource Card}" DataContext="{Binding Router}" Visibility="{Binding HasSavedPassword, Converter={StaticResource Vis}}">
+                                <StackPanel>
+                                    <TextBlock Text="Роутер" Style="{StaticResource H2}" />
+                                    <WrapPanel>
+                                        <TextBlock Text="{Binding SavedPasswordText}" VerticalAlignment="Center" />
+                                        <TextBlock Text=" · " VerticalAlignment="Center" />
+                                        <Button Content="Забыть" Style="{StaticResource LinkButton}" Command="{Binding ForgetPasswordCmd}" VerticalAlignment="Center"
+                                                ToolTip="Стереть сохранённый пароль роутера с этого компьютера" />
                                     </WrapPanel>
                                 </StackPanel>
                             </Border>
