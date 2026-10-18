@@ -1496,7 +1496,7 @@
             </Border.Effect>
             <StackPanel>
                 <TextBlock Text="{Binding TrialText}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                <WrapPanel Margin="-4,8,0,0">
+                <WrapPanel Margin="-4,8,0,0" Visibility="{Binding TrialAsk, Converter={StaticResource Vis}}">
                     <Button Content="Да, оставить" Style="{StaticResource Primary}" Command="{Binding TrialKeepCmd}" Margin="4,0,8,0" />
                     <Button Content="Вернуть как было" Command="{Binding TrialRevertCmd}" Margin="0,0,12,0" />
                     <TextBlock Text="{Binding TrialCountdown}" Style="{StaticResource Hint}" VerticalAlignment="Center" />

@@ -40,11 +40,15 @@ public sealed partial class RouterViewModel
 
     public string TrialText => _trialState switch
     {
-        RouterTrialState.Checking => "Обход на роутере включён на пробу — проверяю сайты с этого ПК…",
-        RouterTrialState.Failed => "Сайты с этого ПК не открылись. Всё работает?",
+        RouterTrialState.Checking => "Проверяю, что сайты открываются. Если не подтвердить — роутер сам вернёт прежнее "
+            + (_trialDeadline is { } d ? "через " + RouterTexts.Countdown(d - UtcNow()) : "скоро") + ".",
+        RouterTrialState.Failed => "Часть сайтов с этого ПК не открылась. Оставить обход?",
         RouterTrialState.Unknown => "Проверить сайты с этого ПК не удалось. Всё работает?",
         _ => "Обход на роутере включён на пробу. Всё работает?",
     };
+
+    /// <summary>Кнопки и отсчёт рядом с ними — только когда решает человек (проверка не прошла или её нет).</summary>
+    public bool TrialAsk => !TrialChecking;
 
     /// <summary>«вернётся само через 2:45».</summary>
     public string TrialCountdown => _trialDeadline is { } d ? "вернётся само через " + RouterTexts.Countdown(d - UtcNow()) : "";
@@ -55,7 +59,7 @@ public sealed partial class RouterViewModel
 
     void RaiseTrial()
     {
-        Raise(nameof(TrialVisible)); Raise(nameof(TrialChecking)); Raise(nameof(TrialText)); Raise(nameof(TrialCountdown));
+        Raise(nameof(TrialVisible)); Raise(nameof(TrialChecking)); Raise(nameof(TrialAsk)); Raise(nameof(TrialText)); Raise(nameof(TrialCountdown));
         Requery();
     }
 
@@ -85,6 +89,7 @@ public sealed partial class RouterViewModel
             while (!_disposed && Connected && _trialDeadline is { } d)
             {
                 Raise(nameof(TrialCountdown));
+                if (_trialState == RouterTrialState.Checking) Raise(nameof(TrialText));
                 if (UtcNow() < d) { await Task.Delay(TrialTick); continue; }
                 if (++late > 3) { _trialDeadline = null; break; }
                 await Task.Delay(TrialGrace);
@@ -131,7 +136,7 @@ public sealed partial class RouterViewModel
         if (opened == true)
         {
             _trialState = RouterTrialState.Ask;
-            if (await ConfirmCoreAsync()) { Say((done ?? "Обход на роутере включён.") + " Сайты с этого ПК открываются."); return; }
+            if (await ConfirmCoreAsync()) { Say("Проверено — оставил. " + (done ?? "Обход на роутере включён.")); return; }
         }
         else _trialState = opened == false ? RouterTrialState.Failed : RouterTrialState.Unknown;
         RaiseTrial();
