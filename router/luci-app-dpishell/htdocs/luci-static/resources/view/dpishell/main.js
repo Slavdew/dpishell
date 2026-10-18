@@ -107,7 +107,8 @@ return view.extend({
 				api.line('Роутер проверит адрес с обходом и без. Если сайт открывается только без обхода — предложит добавить его в исключения.', 'dps-muted'),
 				E('div', { 'class': 'dps-actions' }, [this.el.siteUrl, this.el.siteBtn]),
 				this.el.siteResult
-			])
+			]),
+			this.about()
 		]);
 
 		this.fillStrategies();
@@ -248,6 +249,17 @@ return view.extend({
 			this.lastWarnJson = wj;
 			this.renderWarnings(s.warnings || []);
 		}
+	},
+
+	// «О программе»: версии пакета, договора с окном ПК и ядра; где код и инструкция.
+	about: function() {
+		var s = this.status, link = function(href, text) { return E('a', { href: href, target: '_blank', rel: 'noopener' }, text); };
+		return api.card('О программе', [
+			api.line('DpiShell ' + (s.version || '—') + ' · договор с приложением на ПК ' + (s.api || '—') +
+				' · ядро zapret ' + ((s.core && s.core.version) || '—'), 'dps-muted'),
+			api.line([link('https://github.com/Slavdew/dpishell', 'Исходный код на GitHub'), ' · ',
+				link('https://github.com/Slavdew/dpishell/blob/master/docs/router/README.md', 'Инструкция для роутера')])
+		]);
 	},
 
 	renderConfirm: function() {

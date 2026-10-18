@@ -442,14 +442,28 @@ methods.select_start = {
 			return err('invalid', 'Список своих адресов на роутере пуст — добавьте адреса или выберите другие группы', 'groups');
 		if (index(['full', 'quick'], a.mode ?? 'full') < 0) return err('invalid', 'Режим: full или quick', 'mode');
 		if (index(['main', 'deep'], a.depth ?? 'main') < 0) return err('invalid', 'Глубина: main или deep', 'depth');
-		spawn(`select ${q(sprintf('%J', { groups, mode: a.mode ?? 'full', depth: a.depth ?? 'main', started_by: a.started_by == 'page' ? 'page' : 'app' }))}`);
+		let by = a.started_by == 'page' ? 'page' : 'app';
+		// Начальное состояние — сразу, до фонового задания: select_progress сразу после select_start видит «идёт, 0 из N»,
+		// а не прошлый итог или пустоту (окно ПК принимало это за ошибку и запускало подбор повторно).
+		st.ensure_dirs();
+		st.write_atomic('/tmp/dpishell/select.json', sprintf('%J
+', { running: true, started_at: time(), started_by: by, depth: a.depth ?? 'main', index: 0, total: 0,
+			eta_s: null, message: 'Запускаю подбор', rows: [], finished_at: null, cancelled: false, best: null, applied: false, backups: [] }));
+		spawn(`select ${q(sprintf('%J', { groups, mode: a.mode ?? 'full', depth: a.depth ?? 'main', started_by: by }))}`);
 		return { started: true };
 	}
 };
 
 methods.select_progress = {
 	call: function() {
-		let p = st.read_json('/tmp/dpishell/select.json', { running: false, rows: [], best: null, applied: false, backups: [] });
+		let p = st.read_json('/tmp/dpishell/select.json', { running: false, index: 0, total: 0, rows: [], best: null, applied: false, backups: [] });
+		// Запись и живой процесс расходятся: задание умерло (убито, перезагрузка) — итог «прервался»; запись ещё не
+		// обновилась, а задание идёт — «идёт».
+		let alive = st.job_running('select');
+		if (p.running && !alive && time() - (p.started_at ?? 0) > 10)
+			p = { ...p, running: false, message: 'Подбор прервался', cancelled: true };
+		else if (!p.running && alive)
+			p = { ...p, running: true, index: 0, total: 0, rows: [], message: 'Запускаю подбор', finished_at: null };
 		p.finished_at = st.iso(p.finished_at);
 		return p;
 	}
