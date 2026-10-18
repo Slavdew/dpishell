@@ -80,6 +80,10 @@ function injectStyle() {
 		'.dps-check{display:block;margin:.3em 0}',
 		'.dps-check input{margin-right:.5em}',
 		'.dps-list{margin:.3em 0 .3em 1.2em;padding:0}',
+		'.dps-preset{padding:.4em 0;border-bottom:1px solid var(--border-color-low,#e5e5e5)}',
+		'.dps-preset .dps-radio{display:inline-block;font-weight:600;margin-right:.5em}',
+		'.dps-preset .btn{padding:0 .6em;font-size:.9em}',
+		'.dps-preset-info{margin-left:1.7em;font-size:.95em;overflow-wrap:anywhere}',
 		'.dps-pre{white-space:pre-wrap;word-break:break-word;max-height:16em;overflow:auto;font-family:monospace;font-size:.9em}',
 		'@media (max-width:480px){.dps-actions .btn,.dps-actions button{flex:1 1 auto}}'
 	].join('\n')));
