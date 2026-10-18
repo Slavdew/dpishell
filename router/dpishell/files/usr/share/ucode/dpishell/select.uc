@@ -472,7 +472,7 @@ function select_run(args) {
 	groups = baseline_groups(groups, cache);
 	if (!length(filter(groups, g => !g.control))) {
 		restore();
-		p = { ...p, running: false, finished_at: time(), message: 'Блокировки не обнаружено — всё открывается и без обхода' };
+		p = { ...p, running: false, finished_at: time(), message: 'блокировок не найдено — всё открывается и без обхода' };
 		progress(p);
 		return p;
 	}

@@ -68,6 +68,7 @@ function injectStyle() {
 		'.dps-line{margin:.5em 0}',
 		'.dps-error{color:var(--error-color-high,#c00);margin:.5em 0;white-space:pre-wrap}',
 		'.dps-ok{color:var(--success-color-high,#080)}',
+		'.dps-ok::before{content:"✓ "}',
 		'.dps-warn{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}',
 		'.dps-warn .btn{margin:0}',
 		'.dps-textarea{width:100%;max-width:100%;min-height:8em;font-family:monospace;box-sizing:border-box}',

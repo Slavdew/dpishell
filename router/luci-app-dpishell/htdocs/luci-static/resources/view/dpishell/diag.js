@@ -169,7 +169,7 @@ return view.extend({
 		var keep = E('input', { type: 'radio', name: 'dps-uninst', value: 'keep', checked: '' });
 		var full = E('input', { type: 'radio', name: 'dps-uninst', value: 'full' });
 		var word = E('input', { type: 'text', 'class': 'cbi-input-text', placeholder: 'удалить', autocomplete: 'off', style: 'max-width:12em' });
-		var btn = api.btn('Удалить DpiShell', function() { return self.uninstall(!full.checked); }, 'cbi-button-neutral');
+		var btn = api.btn('Удалить DpiShell', function() { return self.uninstall(!full.checked); }, 'cbi-button-negative');
 		btn.disabled = true;
 		word.addEventListener('input', function() { btn.disabled = word.value.trim().toLowerCase() != 'удалить'; });
 		this.el.uninstall = E('div', {}, [
@@ -178,10 +178,11 @@ return view.extend({
 			E('label', { 'class': 'dps-radio' }, [full, 'Удалить полностью, вместе с настройками']),
 			E('div', { 'class': 'dps-actions' }, [E('span', {}, 'Чтобы подтвердить, введите слово «удалить»: '), word, btn])
 		]);
-		return E('details', { 'style': 'margin-top:2em' }, [
-			E('summary', { 'class': 'dps-muted' }, 'Удаление DpiShell'),
+		// Опасное — отдельной красной карточкой, не рядом с «Сохранить отчёт» (ux-audit-web п.29).
+		return E('div', { 'class': 'dps-danger', 'style': 'margin-top:2em' }, E('details', {}, [
+			E('summary', { 'style': 'font-weight:600' }, 'Удалить DpiShell с роутера'),
 			this.el.uninstall
-		]);
+		]));
 	},
 
 	uninstall: function(keepSettings) {
