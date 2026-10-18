@@ -54,8 +54,20 @@ function guard() {
 		return;
 	let l = lock('guard');
 	if (!l) return;
+	// Только сайты, через которые обход идёт: из исключений (стандартных и своих) обход не трогает — их сторож не видит
+	// (vk.com, ozon.ru… в exclude.txt открывались бы при любой поломке).
+	let excl = {};
+	for (let f in [`${st.P.share}/lists/exclude.txt`, `${st.P.lists}/user-exclude.txt`])
+		for (let d in split(readfile(f) ?? '', '\n'))
+			if (length(trim(d))) excl[lc(trim(d))] = true;
+	let excluded = url => {
+		let h = lc(match(url, /^https?:\/\/([^\/:]+)/)?.[1] ?? '');
+		for (let parts = split(h, '.'); length(parts) >= 2; shift(parts))
+			if (excl[join('.', parts)]) return true;
+		return false;
+	};
 	let ctl = filter(sel.load_groups(null, s.mode), g => g.control)[0];
-	let targets = slice(filter(ctl?.targets ?? [], t => t.required !== false), 0, 3);
+	let targets = slice(filter(ctl?.targets ?? [], t => t.required !== false && !excluded(t.url)), 0, 3);
 	if (!length(targets)) { unlink(l); return; }
 	// По одной цели и до первой открывшейся: при живом интернете — одно рукопожатие.
 	let probe = () => {
@@ -93,6 +105,14 @@ function guard() {
 		save(false, { interval: iv, next_at: time() + iv * 60 - 30 });
 	}
 	unlink(l);
+}
+
+// Задания, чей процесс умер (убит, перезагрузка), остаются «идёт» навсегда — закрыть по факту (tick, старт пакета).
+function recover_jobs() {
+	try { upd.recover(); } catch (x) {}
+	let dj = st.read_json('/tmp/dpishell/dns_job.json', null);
+	if (dj?.running && !st.job_running('dns'))
+		st.write_atomic('/tmp/dpishell/dns_job.json', sprintf('%J\n', { ...dj, running: false, ok: false, message: 'Задание прервалось', at: time() }));
 }
 
 // Проверка по таймеру, DNS и обновления (бывший cron run watch раз в 30 мин).
@@ -161,10 +181,13 @@ else if (cmd == 'check') {
 }
 else if (cmd == 'watch')
 	watch();
+else if (cmd == 'recover')
+	recover_jobs();
 else if (cmd == 'guard')
 	guard();
 // cron раз в 5 мин (nice): сторож — каждый раз, остальное — раз в 30 мин. Одна строка вместо двух — проверки не пересекаются.
 else if (cmd == 'tick') {
+	recover_jobs();
 	guard();
 	let T = '/tmp/dpishell/tick.json';
 	if (time() - (st.read_json(T, { watch_at: 0 }).watch_at ?? 0) >= 30 * 60 - 60) {
@@ -242,16 +265,17 @@ else if (cmd == 'update' || cmd == 'update_check') {
 	// Обновление: пакет заменяет сам себя (и этот файл) — сценарий уже в памяти, итог — в /tmp (router-api.md §5, update_install).
 	let l = lock('update');
 	if (!l) exit(1);
-	let job = '/tmp/dpishell/update_job.json';
 	let from = ARGV[1] == 'local' ? 'local' : 'feed';
-	st.write_atomic(job, sprintf('%J\n', { action: cmd, from, running: true }));
+	let job = { action: cmd, from, running: true, step: cmd == 'update' ? 'download' : null, started_at: time(),
+		from_version: upd.installed_version('dpishell'), target: null, log: [] };
+	upd.job_put(job, {});
 	let e = null;
 	try {
 		if (cmd == 'update_check') upd.check();
-		else e = upd.install(from);
+		else e = upd.install(from, job);
 	} catch (x) { e = `${x}`; }
-	st.write_atomic(job, sprintf('%J\n', { action: cmd, from, running: false, ok: !e,
-		message: e ?? (cmd == 'update' ? `Обновлено до ${upd.installed_version('dpishell')}` : 'Проверено'), at: time() }));
+	upd.job_put(job, { running: false, step: 'done', ok: !e,
+		message: e ?? (cmd == 'update' ? `Обновлено до ${upd.installed_version('dpishell')}` : 'Проверено') });
 	unlink(l);
 }
 else {

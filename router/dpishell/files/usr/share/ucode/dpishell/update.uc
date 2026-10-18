@@ -10,6 +10,7 @@ const RELEASE_URL = 'https://slavdew.github.io/dpishell/feed/release.json';
 const LOCAL_DIR = '/tmp/dpishell-update';
 const PACKAGES = ['dpishell', 'luci-app-dpishell'];
 const DAY = 86400;
+const JOB = '/tmp/dpishell/update_job.json';
 
 function sh(cmd) {
 	let p = popen(`${cmd} 2>&1`);
@@ -111,29 +112,72 @@ function local_files() {
 	return files;
 }
 
-// Установка обновления. from: feed | local. null — успех, иначе текст ошибки.
-function install(from) {
+// Последние строки вывода apk/opkg — в итог задания (окно и страница показывают, что случилось).
+function tail(out, n) {
+	let l = filter(split(trim(out ?? ''), '\n'), x => length(trim(x)));
+	return slice(l, -n);
+}
+
+// Ход задания обновления (router-api.md §5.2 update_install): step download → install → restart → done.
+// Пишется на каждом шаге — окно и страница видят, что идёт, а не ждут молча.
+function job_put(job, extra) {
+	for (let k in extra)
+		job[k] = extra[k];
+	job.at = time();
+	st.write_atomic(JOB, sprintf('%J\n', job));
+}
+
+// Установка обновления. from: feed | local. job — запись хода (job_put). null — успех, иначе текст ошибки.
+function install(from, job) {
 	let names = filter(PACKAGES, n => installed_version(n) != null);
 	if (!length(names))
 		names = ['dpishell'];
 	let r;
 	if (from == 'local') {
+		job_put(job, { step: 'download' });
 		let files = local_files();
 		if (type(files) == 'string')
 			return files;
+		let m = match(join(' ', files), /dpishell-([0-9][A-Za-z0-9._~+-]*)\.(apk|ipk)/);
+		job_put(job, { step: 'install', target: m ? m[1] : null });
 		r = apk() ? sh(`apk add --allow-untrusted ${join(' ', files)}`) : sh(`opkg install --force-reinstall ${join(' ', files)}`);
-	} else if (apk()) {
-		// Сбой постороннего фида (код ≠ 0) не мешает: наш индекс обновился или есть в кэше — решает сам upgrade.
-		sh('apk update');
-		r = sh(`apk upgrade ${join(' ', names)}`);
 	} else {
-		sh('opkg update');
-		r = sh(`opkg upgrade ${join(' ', names)}`);
+		job_put(job, { step: 'download' });
+		// Сбой постороннего фида не должен мешать: apk без --force-missing-repositories отказывает в upgrade, если недоступен
+		// хоть один репозиторий («Not continuing due to stale/unavailable repositories»), а мы ставим только свои пакеты.
+		sh(apk() ? 'apk update' : 'opkg update');
+		job_put(job, { step: 'install', target: feed_version('dpishell') });
+		r = sh(apk() ? `apk upgrade --force-missing-repositories ${join(' ', names)}` : `opkg upgrade ${join(' ', names)}`);
 	}
+	job.log = tail(r.out, 6);
 	if (r.rc != 0)
-		return `Не удалось обновить: ${trim(r.out)}`;
+		return `Не удалось обновить: ${join('; ', tail(r.out, 2))}`;
+	// postinst перезапускает rpcd через 2 с: ждём, пока объект dpishell снова отвечает (до 20 с).
+	job_put(job, { step: 'restart' });
+	for (let i = 0; i < 20; i++) {
+		sleep(1000);
+		if (i >= 2 && sh('ubus -t 2 list dpishell').rc == 0)
+			break;
+	}
 	check();
 	return null;
 }
 
-export { check, check_daily, status, install, installed_version, LOCAL_DIR };
+// Задание обновления, чей процесс умер (убит вместе с rpcd при переходе со старой версии, перезагрузка): итог по факту —
+// установленная версия против целевой. Зовут status (чтение), run tick и старт пакета. true — запись исправлена.
+function recover() {
+	let job = st.read_json(JOB, null);
+	if (!job?.running || st.job_running('update'))
+		return false;
+	let inst = installed_version('dpishell');
+	// Запись старой версии (до r7) без целевой и исходной — сверка с последней версией витрины.
+	let feed = st.read_json(FILE, null)?.version;
+	let ok = job.target ? inst == job.target
+		: job.from_version != null ? inst != job.from_version
+		: (inst != null && feed != null && !older(inst, feed));
+	job_put(job, { running: false, step: 'done', ok,
+		message: ok ? `Обновлено до ${inst}` : `Обновление прервалось, установлена ${inst ?? 'неизвестная версия'}` });
+	return true;
+}
+
+export { check, check_daily, status, install, installed_version, recover, job_put, LOCAL_DIR, JOB };

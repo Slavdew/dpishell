@@ -272,7 +272,9 @@ return view.extend({
 			return;
 		this.lastUpdateKey = key;
 		if (this.updating) {
-			dom.content(this.el.update, E('div', { 'class': 'alert-message notice' }, E('span', { 'class': 'spinning' }, 'Обновляю DpiShell… страница перезагрузится сама')));
+			this.el.updateStep = E('div', { 'class': 'dps-muted' });
+			dom.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
+				E('span', { 'class': 'spinning' }, 'Обновляю DpiShell… страница перезагрузится сама'), this.el.updateStep]));
 			return;
 		}
 		if (!u || !u.available) {
@@ -300,6 +302,13 @@ return view.extend({
 			var started = Date.now();
 			var timer = window.setInterval(function() {
 				api.safe('status').then(function(s) {
+					var sec = Math.round((Date.now() - started) / 1000);
+					var j = !s.__error && s.update && s.update.job;
+					// Ход (update_job.step); пока rpcd перезапускается, ответа нет — это и есть перезапуск.
+					if (self.el.updateStep)
+						self.el.updateStep.textContent = (s.__error ? 'Перезапуск служб роутера' :
+							({ download: 'Скачиваю пакеты', install: 'Устанавливаю' + (j && j.target ? ' ' + j.target : ''), restart: 'Перезапуск служб роутера' }[j && j.step] || 'Готовлюсь')) +
+							' · ' + api.duration(sec);
 					if (s.__error && Date.now() - started < 300000)
 						return;
 					if (!s.__error && s.jobs && s.jobs.update)
