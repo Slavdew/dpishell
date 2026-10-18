@@ -104,13 +104,61 @@ public sealed partial class RouterViewModel
     {
         ClearRemoved();
         ForgetRouterSetup();
-        for (int i = 0; i < 4; i++)
+        var deadline = DateTime.UtcNow + RpcdSettle;
+        for (int i = 0; ; i++)
         {
             if (i > 0) await Task.Delay(PollInterval * 2);
-            if (await ConnectAsync(password, noPassword: password.Length == 0)) return true;
+            if (await ConnectAsync(password, noPassword: password.Length == 0))
+            {
+                // Вошли, а объект dpishell ещё не поднялся (rpcd перезапускается) — дождаться и перечитать, а не показывать ошибку.
+                if (await WaitDpishellAsync() > 0) await ReloadAfterRestartAsync();
+                return true;
+            }
             if (_detection?.Found == RouterFound.Ok && ConnectionText.Contains("пароль")) return false;
+            if (i >= 3 && DateTime.UtcNow >= deadline) return false;
         }
-        return false;
+    }
+
+    /// <summary>
+    /// После установки или обновления DpiShell rpcd на роутере перезапускается (~2 с после конца задания): объект dpishell пропадает
+    /// и появляется снова. Столько окно ждёт его (повторяя status), прежде чем показать ошибку. По умолчанию — 8 опросов.
+    /// </summary>
+    public TimeSpan RpcdSettle => PollInterval * 8;
+
+    static bool Restarting(RouterException e) => e.Failure is RouterFailure.Unreachable or RouterFailure.NoResponse or RouterFailure.NotSupported;
+
+    /// <summary>
+    /// Ждать, пока dpishell ответит на status, не дольше <see cref="RpcdSettle"/>: сколько раз пришлось повторить (0 — ответил сразу),
+    /// -1 — так и не ответил (ошибка уже в строке состояния).
+    /// </summary>
+    async Task<int> WaitDpishellAsync()
+    {
+        var deadline = DateTime.UtcNow + RpcdSettle;
+        for (int retries = 0; ; retries++)
+        {
+            try
+            {
+                Status = await Call(c => c.StatusAsync());
+                return retries;
+            }
+            catch (RouterException e) when (Restarting(e))
+            {
+                if (DateTime.UtcNow >= deadline) { Failed(RouterTexts.Friendly(e)); return -1; }
+                await Task.Delay(PollInterval);
+            }
+        }
+    }
+
+    /// <summary>Объект dpishell поднялся после перезапуска rpcd — перечитать состояние и стратегии, строка «Подключено».</summary>
+    async Task ReloadAfterRestartAsync()
+    {
+        try
+        {
+            await RefreshStatusCoreAsync();
+            if (Compat?.CanCall("strategies") != false) await LoadStrategiesAsync();
+            SetConnection($"Подключено, DpiShell {_status?.Version ?? _detection?.Status?.Version}", ok: true);
+        }
+        catch (RouterException e) { Say(RouterTexts.Friendly(e)); }
     }
 
     internal void SetBusy(bool busy) => Busy = busy;
@@ -192,13 +240,13 @@ public sealed partial class RouterViewModel
         try
         {
             var job = await UpdateFromAsync(RouterUpdateSource.Feed);
-            if (job?.Ok == true) return Updated(job);
+            if (job?.Ok == true) return await UpdatedAsync(job);
             // Роутер не достал витрину — пакеты через этот ПК: скачать, проверить подпись и хеши, положить по SSH, from: "local".
             if (_status?.Update?.Version is { } version && Compat?.CanCall("update_install") != false)
             {
                 Say("Роутер не достал витрину пакетов — загружаю обновление через этот компьютер…");
                 job = await UpdateLocalAsync(version);
-                if (job?.Ok == true) return Updated(job);
+                if (job?.Ok == true) return await UpdatedAsync(job);
             }
             Failed("Обновить DpiShell на роутере не удалось" + (job?.Message is { Length: > 0 } m ? ": " + m : ""));
             return false;
@@ -277,8 +325,28 @@ public sealed partial class RouterViewModel
         finally { Busy = false; }
     }
 
+    /// <summary>
+    /// Обновление закончилось — rpcd перезапустится через ~2 с: переждать перезапуск и дождаться dpishell (<see cref="WaitDpishellAsync"/>),
+    /// чтобы следующая команда не упала «объекта нет».
+    /// </summary>
+    async Task<bool> UpdatedAsync(RouterUpdateJob job)
+    {
+        await Task.Delay(PollInterval * 3);
+        if (await WaitDpishellAsync() < 0)
+        {
+            Say("DpiShell на роутере обновлён, но роутер ещё перезапускается — обновите вкладку через минуту");
+            return true;
+        }
+        if (Compat?.CanCall("strategies") != false)
+        {
+            try { await LoadStrategiesAsync(); } catch (RouterException e) when (Restarting(e)) { }
+        }
+        return Updated(job);
+    }
+
     bool Updated(RouterUpdateJob job)
     {
+
         SetConnection($"Подключено, DpiShell {_status?.Version}", ok: true);
         Say(job.Message is { Length: > 0 } m ? m : $"DpiShell на роутере обновлён до {_status?.Version}");
         return true;
@@ -296,7 +364,7 @@ public sealed partial class RouterViewModel
             await Task.Delay(PollInterval);
             RouterStatus s;
             try { s = await Call(c => c.StatusAsync()); }
-            catch (RouterException e) when (e.Failure is RouterFailure.Unreachable or RouterFailure.NoResponse) { continue; }
+            catch (RouterException e) when (Restarting(e)) { continue; }   // rpcd перезапускается — объекта dpishell пока нет
             Status = s;
             var job = s.Update?.Job;
             if (s.Jobs?.Update == true || job?.Running == true) { sawRunning = true; continue; }
