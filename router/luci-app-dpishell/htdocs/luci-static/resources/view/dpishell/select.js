@@ -103,9 +103,17 @@ return view.extend({
 			head = 'Подбор остановлен ' + api.time(p.finished_at) + ' — прежние настройки возвращены';
 		else if (p.best)
 			head = 'Подбор завершён ' + api.time(p.finished_at) + ': ' + (p.applied ? 'включена ' : 'лучшая — ') + this.title(p, p.best);
+		else if (!(p.rows && p.rows.length) && p.message)
+			head = 'Подбор завершён ' + api.time(p.finished_at) + ': ' + p.message;
 		else
 			head = 'Подбор завершён ' + api.time(p.finished_at) + ': ни одна стратегия не открыла все сайты';
 		this.el.head.textContent = head;
+		// Стратегии не проверялись (блокировок нет, подбор прервался) — без пустой таблицы: «завершён» и «пока ни одна
+		// не проверена» противоречили друг другу (ux-audit-web п.12).
+		if (!(p.rows && p.rows.length) && !p.best) {
+			dom.content(this.el.body, []);
+			return;
+		}
 
 		var kids = [];
 		if (p.message && !p.best)
