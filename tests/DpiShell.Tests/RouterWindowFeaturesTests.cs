@@ -603,7 +603,11 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         var cand = vm.Scores.Single(s => s.Id == "c-3");
         Assert.True(cand.IsCandidate);
         Assert.Equal("проверяется в поиске", cand.Kind);
-        Assert.Equal("3 из 4", cand.Share);
+        Assert.Equal("75 %", cand.Share);   // процент, как у остальных строк столбца «Открылось»
+        // Группы — как на ПК: «N из M», когда роутер прислал разбивку по адресам (M — группы в ней).
+        var withVerdicts = new RouterSelectRow("x", 0.5, 0.75, 0.6, null, Verdicts: [new("youtube", "https://a/", true), new("discord", "https://b/", false)]);
+        Assert.Equal("1 из 2", new RouterScoreRow(withVerdicts, "x", null, 2).Groups);
+        Assert.Equal("50 %", new RouterScoreRow(withVerdicts, "x").Groups);   // без разбивки числа групп нет — доля
         Assert.False(cand.Usable);   // применить вариант нельзя — его нет в strategies
         Assert.Equal("c-3", vm.Scores[^1].Id);   // варианты — после стратегий
         Assert.Equal("Включена на роутере: fake + multisplit, ts", vm.ResultText);

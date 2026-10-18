@@ -498,7 +498,7 @@
                                     <DataGridTextColumn Header="Группы" Binding="{Binding Groups}" Width="70" />
                                     <DataGridTextColumn Header="Открылось" Binding="{Binding Share}" Width="90" />
                                     <DataGridTextColumn Header="Время" Binding="{Binding Avg}" Width="80" />
-                                    <DataGridTemplateColumn Header="Ошибка" Width="2*">
+                                    <DataGridTemplateColumn Header="Что не так" Width="2*">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding Error}" ToolTip="{Binding Error}" Foreground="{DynamicResource Danger}"

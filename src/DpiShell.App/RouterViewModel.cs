@@ -29,7 +29,7 @@ public sealed record RouterStrategyRow(string Id, string Title, string Stats, st
 }
 
 /// <summary>Строка таблицы подбора на роутере (select_progress.rows).</summary>
-public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames? names = null) : Observable
+public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames? names = null, int groupsTotal = 0) : Observable
 {
     bool _best, _expanded;
     IReadOnlyList<CheckRow>? _details;
@@ -39,9 +39,11 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames
     /// <summary>Вариант глубокого поиска (candidate): в списке стратегий роутера его нет — только посмотреть, применить нельзя.</summary>
     public bool IsCandidate => Row.Candidate;
     public string Kind => IsCandidate ? "проверяется в поиске" : "";
-    public string Groups => IsCandidate ? "—" : $"{Row.GroupShare * 100:0} %";
-    /// <summary>У варианта поиска — сколько обязательных адресов его части открылось (ok из total).</summary>
-    public string Share => IsCandidate && Row.Total is > 0 ? $"{Row.Ok ?? 0} из {Row.Total}" : $"{Row.TargetShare * 100:0} %";
+    /// <summary>Как на ПК: «N из M» (M — отмеченных групп); число групп роутер не присылает — берём по адресам в разбивке, нет её — доля.</summary>
+    public string Groups => IsCandidate ? "—"
+        : groupsTotal > 0 ? $"{(int)Math.Round(Row.GroupShare * groupsTotal)} из {groupsTotal}" : $"{Row.GroupShare * 100:0} %";
+    /// <summary>У варианта поиска доля обязательных адресов его части (ok из total) — тоже процентом, как у остальных строк.</summary>
+    public string Share => IsCandidate && Row.Total is > 0 ? $"{(double)(Row.Ok ?? 0) / Row.Total.Value * 100:0} %" : $"{Row.TargetShare * 100:0} %";
     public string Avg => Row.Error is null && Row.AvgS > 0 ? $"{Row.AvgS:0.00} с" : "—";
     public string Error => Row.Error ?? "";
     public bool Usable => !IsCandidate && Row.Error is null && Row.GroupShare > 0;
@@ -1301,6 +1303,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         var s => $"осталось ~{(int)Math.Ceiling(s.Value / 60.0)} мин",
     };
 
+    int _groupsTotal;
+
     void ShowProgress(RouterSelectProgress p)
     {
         SelectProgressMax = Math.Max(1, p.Total);
@@ -1313,10 +1317,12 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             SelectProgressText = who + string.Join(" · ", parts.Where(x => x.Length > 0));
         }
         else SelectProgressText = "";
+        var seen = (p.Rows ?? []).Where(r => !r.Candidate).Select(r => r.Verdicts?.Select(v => v.Group).Distinct().Count() ?? 0).DefaultIfEmpty(0).Max();
+        if (seen > 0) _groupsTotal = seen;
         foreach (var r in p.Rows ?? [])
         {
             var i = Scores.ToList().FindIndex(x => x.Id == r.Id);
-            var row = new RouterScoreRow(r, StrategyNaming.DisplayTitle(r.Title ?? StrategyTitle(r.Id), r.Roles ?? _roles.GetValueOrDefault(r.Id)), Names);
+            var row = new RouterScoreRow(r, StrategyNaming.DisplayTitle(r.Title ?? StrategyTitle(r.Id), r.Roles ?? _roles.GetValueOrDefault(r.Id)), Names, _groupsTotal);
             if (i < 0) Scores.Add(row);
             else if (!Scores[i].Same(r)) { row.Expanded = Scores[i].Expanded; Scores[i] = row; }
         }
