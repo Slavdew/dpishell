@@ -233,6 +233,45 @@ public sealed class RouterViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Select_ProgressErrorsRightAfterStart_ShowStarting_NotError()
+    {
+        using var r = new FakeRouter { SelectSteps = 2, ProgressErrors = 3, ProgressZeros = 2 };
+        var (vm, _) = Make(r);
+        await vm.ConnectAsync("secret");
+        var texts = new List<string>();
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.SelectProgressText) && vm.SelectProgressText.Length > 0) lock (texts) texts.Add(vm.SelectProgressText); };
+        await vm.StartSelectAsync(deep: false);
+        Assert.Contains("Запускаю подбор…", texts);
+        Assert.DoesNotContain(texts, t => t.StartsWith("Проверено 0 из"));
+        Assert.StartsWith("Включена на роутере: ", vm.ResultText);   // дошёл до результата, а не «не удалось узнать ход»
+        lock (_said) Assert.DoesNotContain(_said, s => s.Contains("Подбор ещё не поднялся") || s.Contains("Ошибка на роутере"));
+    }
+
+    [Fact]
+    public async Task Select_ProgressErrorsAfterGrace_AreErrors()
+    {
+        using var r = new FakeRouter { ProgressErrors = 1000 };
+        var (vm, _) = Make(r);
+        vm.SelectStartGrace = TimeSpan.Zero;
+        await vm.ConnectAsync("secret");
+        await vm.StartSelectAsync(deep: false);
+        Assert.Equal("Не удалось узнать ход подбора на роутере.", vm.ResultText);
+    }
+
+    [Fact]
+    public async Task Select_AlreadyRunning_ShowsRunningSelect_NotError()
+    {
+        using var r = new FakeRouter { SelectSteps = 2, Applied = false, BusyOn = "select_start", SelectRunningJob = true };
+        var (vm, _) = Make(r);
+        await vm.ConnectAsync("secret");
+        await Task.Delay(100);   // status увидел идущий подбор и сам начал опрос — дождёмся конца
+        while (vm.Selecting) await Task.Delay(10);
+        await vm.StartSelectAsync(deep: false);
+        lock (_said) Assert.DoesNotContain(_said, s => s.StartsWith("Роутер занят"));
+        Assert.False(string.IsNullOrEmpty(vm.ResultText));
+    }
+
+    [Fact]
     public async Task Select_Cancel_ShowsStopped()
     {
         using var r = new FakeRouter { SelectSteps = 1000 };

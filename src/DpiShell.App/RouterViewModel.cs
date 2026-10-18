@@ -1109,6 +1109,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             else if (!await OfferPcTargetsAsync()) return;
         }
         bool emptyOnRouter = false, dropUser = false;
+        RouterException? busyError = null;
         for (int attempt = 0; ; attempt++)
         {
             if (dropUser) { o = WithoutUser(o, out hint); dropUser = false; }
@@ -1117,6 +1118,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                     Scores.Clear(); SelectedScore = null; ResultText = ""; ResultHint = ""; SetBest(null, false);
                     SelectProgress = 0; SelectProgressText = "Подготовка…";
                     try { await Call(c => c.SelectStartAsync(o.Groups, o.Full, deep)); }
+                    catch (RouterException e) when (e.AppError?.Code == "busy" && !Selecting)
+                    {
+                        // «Подбор уже запущен» — не ошибка: он идёт (первый запуск мы могли не заметить), покажем его ход.
+                        busyError = e; SelectProgressText = StartingText;
+                    }
                     catch (RouterException e) when (attempt == 0 && IsEmptyUserTargets(e))
                     {
                         // Роутер ответил «Список своих адресов на роутере пуст…» — предложим отправить с ПК и повторим;
@@ -1135,9 +1141,26 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             emptyOnRouter = false;
             if (!await OfferPcTargetsAsync()) { SelectProgressText = ""; return; }
         }
-        Say(hint ?? "");
-        await PollSelectAsync();
+        if (busyError is not null)
+        {
+            // Занято подбором — показать его; занято другим (проверка) — сказать как есть.
+            await RefreshStatusSafeAsync(resumeSelect: false);
+            if (_status?.Jobs?.Select != true)
+            {
+                SelectProgressText = "";
+                Failed(RouterTexts.Friendly(busyError));
+                return;
+            }
+            Say("Подбор уже идёт — показываю ход.");
+        }
+        else Say(hint ?? "");
+        await PollSelectAsync(justStarted: true);
     }
+
+    public const string StartingText = "Запускаю подбор…";
+
+    /// <summary>Сколько после запуска ошибка или пустой ответ select_progress — ещё «Запускаю подбор…» (роутер поднимает подбор не сразу).</summary>
+    public TimeSpan SelectStartGrace { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>Выбор без «Своих адресов» (на роутере их нет); ничего не осталось — группы по умолчанию. Экран «Подбор» — следом.</summary>
     (IReadOnlyList<string> Groups, bool Full) WithoutUser((IReadOnlyList<string> Groups, bool Full) o, out string hint)
@@ -1190,18 +1213,25 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     bool _polling;
 
     /// <summary>Ход подбора — select_progress раз в PollInterval, пока running. Подбор мог запустить и не этот ПК (started_by).</summary>
-    public async Task PollSelectAsync()
+    public async Task PollSelectAsync(bool justStarted = false)
     {
         if (_polling || !Connected) return;
         _polling = true;
         Selecting = true;
         int failures = 0;
+        var grace = justStarted ? DateTime.UtcNow + SelectStartGrace : DateTime.MinValue;
         try
         {
             while (Connected)
             {
                 RouterSelectProgress p;
                 try { p = await Call(c => c.SelectProgressAsync()); failures = 0; }
+                catch (RouterException e) when (e.Failure != RouterFailure.AccessDenied && DateTime.UtcNow < grace)
+                {
+                    SelectProgressText = StartingText;
+                    await Task.Delay(PollInterval);
+                    continue;
+                }
                 catch (RouterException e) when (e.Failure is RouterFailure.Unreachable or RouterFailure.NoResponse && ++failures < 5)
                 {
                     await Task.Delay(PollInterval);
@@ -1238,7 +1268,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     {
         SelectProgressMax = Math.Max(1, p.Total);
         SelectProgress = Math.Min(p.Index, SelectProgressMax);
-        if (p.Running)
+        if (p.Running && p.Total == 0 && p.Index == 0 && p.Message is not { Length: > 0 }) SelectProgressText = StartingText;
+        else if (p.Running)
         {
             var who = p.StartedBy switch { "page" => "Запущен со страницы роутера. ", "auto" or "timer" => "Роутер подбирает сам. ", _ => "" };
             var parts = new[] { $"Проверено {p.Index} из {p.Total}" + (p.Message is { Length: > 0 } m ? $": {m}" : ""), Eta(p.EtaS) };
