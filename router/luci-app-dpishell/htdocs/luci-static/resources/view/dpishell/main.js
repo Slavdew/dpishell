@@ -8,6 +8,8 @@
 // Вкладка «Обход» — главный экран (architecture.md «Страница роутера»).
 
 var HOURS = [[0.5, '30 мин'], [1, '1 ч'], [3, '3 ч'], [6, '6 ч'], [12, '12 ч'], [24, '24 ч']];
+// Сколько роутер ждёт «Да, оставить» после включения со страницы (router-api.md confirm_s).
+var CONFIRM_S = 180;
 
 var WARN_CLASS = {
 	switched_backup: 'notice', auto_selected: 'notice', dns_fallback: 'warning'
@@ -58,12 +60,16 @@ return view.extend({
 				api.info('Эта стратегия требует, чтобы Windows отправляла метки времени в соединениях (TCP timestamps); по умолчанию они выключены. Приложение DpiShell на компьютере включает их само. Вручную — в командной строке от администратора: netsh interface tcp set global timestamps=enabled. Телефоны, ТВ и приставки настраивать не нужно.')
 			]),
 			warnings: E('div'),
+			// Включение на пробу (architecture.md «Аварийный выключатель»): без «Да, оставить» роутер сам вернёт прежнее.
+			confirmText: E('span'),
+			confirm: E('div', { 'class': 'alert-message notice', 'style': 'display:none' }),
 			update: E('div'),
 			lastCheck: E('div', { 'class': 'dps-line dps-muted' }),
 			schedOn: E('input', { type: 'checkbox', change: function() { self.saveSchedule(); } }),
 			schedHours: E('select', { 'class': 'cbi-input-select', change: function() { self.saveSchedule(); } },
 				HOURS.map(function(h) { return E('option', { value: String(h[0]) }, h[1]); })),
 			schedAuto: E('input', { type: 'checkbox', change: function() { self.saveSchedule(); } }),
+			schedWatch: E('input', { type: 'checkbox', change: function() { self.saveSchedule(); } }),
 			schedMsg: E('div', { 'class': 'dps-line dps-muted' }),
 			siteUrl: E('input', { type: 'text', 'class': 'cbi-input-text', placeholder: 'example.com', style: 'width:100%;max-width:28em', keydown: function(ev) { if (ev.key == 'Enter') self.siteCheck(); } }),
 			siteBtn: api.btn('Проверить', function() { return self.siteCheck(); }, 'cbi-button-action'),
@@ -82,6 +88,7 @@ return view.extend({
 				E('div', { 'class': 'dps-actions' }, [this.el.toggle, this.el.check, this.el.select]),
 				this.el.err,
 				this.el.lastCheck,
+				this.el.confirm,
 				this.el.warnings,
 				this.el.ts,
 				api.row(['Для каких сайтов', api.info('«Все сайты» — обход для любого сайта, кроме исключений; это основной режим. «Только из списков» — только для сайтов из списков (YouTube, Discord, свои). После смены роутер сам проверяет, что сайты открываются.')],
@@ -92,6 +99,8 @@ return view.extend({
 				E('label', { 'class': 'dps-check' }, [this.el.schedOn, 'Проверять сайты каждые ', this.el.schedHours]),
 				E('label', { 'class': 'dps-check' }, [this.el.schedAuto, 'Если не помогло — подобрать заново',
 					api.info('Если обход перестал работать и запасные стратегии не помогли, роутер сам запустит быстрый подбор и включит найденную — не чаще раза в 6 часов. Пока идёт подбор (2–3 минуты), сайты в сети могут открываться с перебоями в непредсказуемый момент, поэтому по умолчанию выключено.')]),
+				E('label', { 'class': 'dps-check' }, [this.el.schedWatch, 'Выключать обход, если с ним пропал интернет',
+					api.info('Раз в 5 минут роутер проверяет обычные сайты. Если с обходом они не открываются, а без него открываются — обход выключается, причина видна здесь. Включить снова — кнопкой «Включить». Если интернета нет и без обхода, это обрыв у провайдера: обход остаётся.')]),
 				this.el.schedMsg
 			]),
 			api.card('Сайт не открывается', [
@@ -113,6 +122,7 @@ return view.extend({
 	tick: function() {
 		var self = this;
 		this.tickNo++;
+		this.renderConfirm();
 		var fast = this.status.jobs && (this.status.jobs.select || this.status.jobs.site_check || this.status.jobs.check);
 		if (!fast && (this.tickNo % 3) != 0)
 			return Promise.resolve();
@@ -195,6 +205,7 @@ return view.extend({
 		this.el.schedOn.checked = !!sc.enabled;
 		this.el.schedHours.value = String(sc.hours || 1);
 		this.el.schedAuto.checked = !!sc.auto_select;
+		this.el.schedWatch.checked = sc.watchdog !== false;
 	},
 
 	update: function() {
@@ -228,12 +239,29 @@ return view.extend({
 			this.el.lastCheck.textContent = '';
 
 		this.renderUpdate(s.update);
+		// Отсчёт — от left_s, не от until: часы роутера и браузера могут расходиться.
+		this.confirmDeadline = s.pending_confirm ? Date.now() + (s.pending_confirm.left_s || 0) * 1000 : 0;
+		this.renderConfirm();
 
 		var wj = JSON.stringify(s.warnings || []);
 		if (wj != this.lastWarnJson) {
 			this.lastWarnJson = wj;
 			this.renderWarnings(s.warnings || []);
 		}
+	},
+
+	renderConfirm: function() {
+		var self = this, pc = this.status.pending_confirm;
+		var left = pc ? Math.max(0, Math.round((this.confirmDeadline - Date.now()) / 1000)) : 0;
+		if (!pc || !left) {
+			this.el.confirm.style.display = 'none';
+			return;
+		}
+		if (!this.el.confirm.firstChild)
+			dom.content(this.el.confirm, [this.el.confirmText, ' ',
+				api.btn('Да, оставить', function() { return self.act('confirm'); }, 'cbi-button-positive')]);
+		this.el.confirmText.textContent = 'Всё работает? Иначе через %d:%02d роутер вернёт как было.'.format(Math.floor(left / 60), left % 60);
+		this.el.confirm.style.display = '';
 	},
 
 	// Плашка «Доступно обновление» (router-api.md §5): что нового — до трёх строк, кнопка «Обновить».
@@ -348,7 +376,7 @@ return view.extend({
 		var self = this;
 		if (this.status.enabled)
 			return this.act('disable').catch(function() {});
-		return this.act('enable').catch(function(e) {
+		return this.act('enable', { confirm_s: CONFIRM_S }).catch(function(e) {
 			// Без стратегии и статистики «Включить» = подобрать (architecture.md «Принцип»).
 			if (!self.status.strategy && e.code != 'busy' && e.code != 'not_installed')
 				self.openSelect();
@@ -408,7 +436,7 @@ return view.extend({
 		var self = this, p = this.pending;
 		var chain = Promise.resolve();
 		if (p.strategy)
-			chain = chain.then(function() { return self.act('strategy_set', { id: p.strategy }); });
+			chain = chain.then(function() { return self.act('strategy_set', { id: p.strategy, confirm_s: CONFIRM_S }); });
 		if (p.mode)
 			chain = chain.then(function() { return self.act('mode_set', { mode: p.mode }); });
 		return chain.then(function() { self.cancelPending(); }, function() { self.cancelPending(); });
@@ -420,7 +448,8 @@ return view.extend({
 		return api.call('schedule_set', {
 			enabled: this.el.schedOn.checked,
 			hours: parseFloat(this.el.schedHours.value),
-			auto_select: this.el.schedAuto.checked
+			auto_select: this.el.schedAuto.checked,
+			watchdog: this.el.schedWatch.checked
 		}).then(function() {
 			self.el.schedMsg.textContent = 'Сохранено';
 			setTimeout(function() { self.el.schedMsg.textContent = ''; }, 2000);

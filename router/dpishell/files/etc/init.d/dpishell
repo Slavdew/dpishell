@@ -6,11 +6,14 @@ START=95
 USE_PROCD=1
 
 CRON=/etc/crontabs/root
-CRON_LINE='*/30 * * * * /usr/libexec/dpishell/run watch'
+# Одна строка на всё фоновое: сторож раз в 5 мин, проверка по таймеру, DNS и обновления — раз в 30 мин (run tick);
+# включены ли они — run смотрит в настройках сам. Пониженный приоритет: железо пользователя не нагружать.
+CRON_LINE='*/5 * * * * nice -n 19 /usr/libexec/dpishell/run tick'
 
+# cron_set 0|1
 cron_set() {
 	touch "$CRON"
-	grep -v '/usr/libexec/dpishell/run watch' "$CRON" > "$CRON.dpishell" || true
+	grep -v '/usr/libexec/dpishell/run \(watch\|guard\|tick\)' "$CRON" > "$CRON.dpishell" || true
 	[ "$1" = 1 ] && echo "$CRON_LINE" >> "$CRON.dpishell"
 	if ! cmp -s "$CRON" "$CRON.dpishell"; then
 		mv "$CRON.dpishell" "$CRON"
@@ -34,18 +37,14 @@ restore_choice() {
 }
 
 start_service() {
+	# Перезагрузка, пока включение ждало подтверждения (confirm_s), — то же, что неподтверждение: откат до restore_choice.
+	[ -f /etc/dpishell/pending-confirm.json ] && /usr/libexec/dpishell/run revert now
 	restore_choice
-	config_load dpishell
-	local sched
-	config_get sched main schedule_enabled 1
-	cron_set "$sched"
+	cron_set 1
 }
 
 reload_service() {
-	config_load dpishell
-	local sched
-	config_get sched main schedule_enabled 1
-	cron_set "$sched"
+	cron_set 1
 }
 
 stop_service() {

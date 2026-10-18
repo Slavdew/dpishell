@@ -2,7 +2,7 @@
 // Ни один метод не принимает командную строку или путь: всё проверяется здесь.
 'use strict';
 
-import { readfile, writefile, stat, popen } from 'fs';
+import { readfile, writefile, stat, popen, unlink } from 'fs';
 import * as cat from 'dpishell.catalog';
 import * as st from 'dpishell.state';
 import * as core from 'dpishell.core';
@@ -41,6 +41,48 @@ function zapret(action) {
 	return r.rc == 0 ? null : err('failed', `zapret ${action}: ${trim(r.out)}`);
 }
 
+// Запуск вне cgroup rpcd: иначе перезапуск rpcd (postinst при обновлении, удаление) упирается в занятую cgroup
+// («failed to remove busy cgroup of rpcd::instance1») или procd убивает задание вместе с rpcd — и rpcd не поднимается.
+const DETACH = `sh -c 'echo $$ > /sys/fs/cgroup/cgroup.procs 2>/dev/null; exec "$@"' detach`;
+
+function spawn(args) {
+	// Фоном, без ожидания: rpcd-вызов должен вернуться сразу (router-api §4).
+	sh(`( ${DETACH} /usr/libexec/dpishell/run ${args} >/dev/null 2>&1 & )`);
+}
+
+// Подтверждение включения (architecture.md «Аварийный выключатель»): confirm_s — сколько ждать confirm, иначе откат
+// к revert_to. Повторное включение до подтверждения откатывает к первому подтверждённому состоянию.
+function trial_arg(a) {
+	let c = a.confirm_s;
+	if (c == null)
+		return null;
+	if (type(c) != 'int' || c < 60 || c > 600)
+		return err('invalid', 'confirm_s: 60–600 с', 'confirm_s');
+	return c;
+}
+
+function trial_start(c, s) {
+	if (c == null)
+		return;
+	let prev = st.read_json(st.PENDING, null);
+	let revert_to = prev ? prev.revert_to : (s.enabled && s.strategy ? s.strategy : 'off');
+	st.write_atomic(st.PENDING, sprintf('%J\n', { until: time() + c, revert_to, token: `${time()}-${c}-${s.strategy}` }));
+	spawn('revert');
+}
+
+// Человек включил сам — прежние «выключено кнопкой/сторожем/откатом» больше не к месту.
+function clear_off() {
+	unlink(st.LAST_OFF);
+	let w = filter(st.read_json(`${st.P.run}/warnings.json`, []), x => index(['watchdog_off', 'button_off', 'confirm_reverted'], x.code) < 0);
+	st.write_atomic(`${st.P.run}/warnings.json`, sprintf('%J\n', w));
+}
+
+// status.watchdog: жив ли сторож — время и итог последней проверки, через сколько минут следующая (растёт при обрыве).
+function guard_status(s) {
+	let g = st.read_json('/tmp/dpishell/guard.json', null);
+	return { enabled: s.schedule.watchdog, checked_at: st.iso(g?.checked_at), ok: g?.ok ?? null, interval_min: g?.interval ?? 5 };
+}
+
 function warnings(s) {
 	let w = [];
 	if (!st.core_installed())
@@ -54,6 +96,9 @@ function warnings(s) {
 		push(w, { code: 'ipv6', text: 'У роутера есть IPv6 от провайдера, а обход работает только для IPv4' });
 	for (let x in st.read_json(`${st.P.run}/warnings.json`, []))
 		push(w, x);
+	let off = s.enabled ? null : st.last_off();
+	if (off)
+		push(w, { code: off.by == 'watchdog' ? 'watchdog_off' : off.by == 'button' ? 'button_off' : 'confirm_reverted', text: off.text });
 	return w;
 }
 
@@ -117,6 +162,8 @@ const methods = {
 				needs_tcp_timestamps: strat ? cat.uses_ts(strat) : false,
 				last_check: lc ? { ...lc, at: st.iso(lc.at) } : null, fail_streak: st.read_json(`${st.P.etc}/fail-streak.json`, 0),
 				schedule: s.schedule, jobs: jobs(), warnings: warnings(s), update: update_status(),
+				pending_confirm: st.pending_confirm(), last_off: s.enabled ? null : st.last_off(),
+				watchdog: guard_status(s),
 			};
 		}
 	},
@@ -128,9 +175,12 @@ const methods = {
 	},
 
 	enable: {
-		call: function() {
+		args: { confirm_s: 180 },
+		call: function(req) {
 			let b = busy() ?? conflict(); if (b) return b;
+			let c = trial_arg(req.args); if (type(c) == 'object') return c;
 			let s = st.settings();
+			let before = { enabled: s.enabled, strategy: s.strategy };
 			if (!s.strategy) {
 				// Без стратегии — лучшая по статистике (architecture.md «Сборка config zapret из стратегии»); подбор без статистики — в select.uc.
 				let best = strategy_list()[0];
@@ -144,6 +194,8 @@ const methods = {
 			let z = zapret('enable') ?? zapret('restart');
 			if (z) return z;
 			st.uci_set({ enabled: 1 });
+			clear_off();
+			trial_start(c, before);
 			st.write_status_json();
 			return {};
 		}
@@ -156,6 +208,7 @@ const methods = {
 				sh('/etc/init.d/zapret stop');
 				sh('/etc/init.d/zapret disable');
 			}
+			unlink(st.PENDING);
 			st.uci_set({ enabled: 0 });
 			st.write_status_json();
 			return {};
@@ -163,19 +216,24 @@ const methods = {
 	},
 
 	strategy_set: {
-		args: { id: 'id' },
+		args: { id: 'id', confirm_s: 180 },
 		call: function(req) {
 			let b = busy(); if (b) return b;
 			let id = req.args.id;
 			if (type(id) != 'string' || !cat.find(st.catalogs(), id))
 				return err('invalid', 'Нет такой стратегии', 'id');
+			let c = trial_arg(req.args); if (type(c) == 'object') return c;
 			let s = st.settings();
+			let before = { enabled: s.enabled, strategy: s.strategy };
 			s.strategy = id;
 			if (s.enabled) {
 				let e = st.write_zapret_config(id, s);
 				if (e) return err('failed', e);
 				let z = zapret('restart');
 				if (z) return z;
+				// Подтверждение — только когда обход работает: выключенному нечего откатывать.
+				if (before.strategy != id)
+					trial_start(c, before);
 			}
 			st.uci_set({ strategy: id });
 			st.write_status_json();
@@ -250,9 +308,13 @@ const methods = {
 	},
 
 	schedule_set: {
-		args: { enabled: true, hours: 1, auto_select: false },
+		args: { enabled: true, hours: 1, auto_select: false, watchdog: true },
 		call: function(req) {
 			let a = req.args;
+			if (a.watchdog != null && type(a.watchdog) != 'bool')
+				return err('invalid', 'watchdog: true/false', 'watchdog');
+			if (a.watchdog != null)
+				st.uci_set({ watchdog: a.watchdog ? 1 : 0 });
 			if (type(a.enabled) != 'bool')
 				return err('invalid', 'enabled: true/false', 'enabled');
 			if (index(st.HOURS, a.hours) < 0)
@@ -360,14 +422,6 @@ const methods = {
 	},
 };
 
-// Запуск вне cgroup rpcd: иначе перезапуск rpcd (postinst при обновлении, удаление) упирается в занятую cgroup
-// («failed to remove busy cgroup of rpcd::instance1») или procd убивает задание вместе с rpcd — и rpcd не поднимается.
-const DETACH = `sh -c 'echo $$ > /sys/fs/cgroup/cgroup.procs 2>/dev/null; exec "$@"' detach`;
-
-function spawn(args) {
-	// Фоном, без ожидания: rpcd-вызов должен вернуться сразу (router-api §4).
-	sh(`( ${DETACH} /usr/libexec/dpishell/run ${args} >/dev/null 2>&1 & )`);
-}
 
 function q(s) { return `'${replace(`${s}`, "'", "'\\''")}'`; }
 
@@ -409,12 +463,21 @@ methods.select_cancel = {
 };
 
 methods.apply = {
-	args: { id: 'id', backups: [] },
+	args: { id: 'id', backups: [], confirm_s: 180 },
 	call: function(req) {
-		let r = methods.strategy_set.call({ args: { id: req.args.id } });
+		let r = methods.strategy_set.call({ args: { id: req.args.id, confirm_s: req.args.confirm_s } });
 		if (r.error) return r;
 		let bk = filter(req.args.backups ?? [], x => type(x) == 'string' && cat.find(st.catalogs(), x));
 		st.uci_set({ backups: slice(bk, 0, 3) });
+		return {};
+	}
+};
+
+// Подтверждение включения: ожидание снимается, откат не случится. Без ожидания — тоже {} (router-api.md §5.2).
+methods.confirm = {
+	call: function() {
+		if (unlink(st.PENDING))
+			st.write_status_json();
 		return {};
 	}
 };

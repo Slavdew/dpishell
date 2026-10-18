@@ -1,0 +1,39 @@
+#!/bin/sh
+# Аварийное выключение обхода без входа в панель (architecture.md «Аварийный выключатель»).
+#   off button              — кнопка на корпусе (/etc/hotplug.d/button/50-dpishell)
+#   off watchdog '<json>'   — сторож: с обходом пропал интернет, без него есть; json — цели, что не открылись
+#   off revert              — включение не подтверждено вовремя (confirm_s)
+# Только выключает: включить снова может лишь человек — со страницы или из окна ПК.
+BY=$1
+TARGETS=${2:-[]}
+case "$BY" in
+	button) TEXT='Обход выключен кнопкой на роутере' ;;
+	watchdog) TEXT='Обход выключен сторожем: с ним пропал интернет, без него есть' ;;
+	revert) TEXT='Включение не подтверждено — обход выключен' ;;
+	*) echo "usage: off button|watchdog|revert" >&2; exit 2 ;;
+esac
+
+[ "$(uci -q get dpishell.main.enabled)" = 1 ] || pidof nfqws >/dev/null || exit 0
+# Сначала — в настройки: короткое нажатие reset тут же перезагружает роутер, после загрузки обход должен остаться выключен.
+uci set dpishell.main.enabled=0
+uci commit dpishell
+sync
+# Подбор и проверка держат свой config zapret и метки TCP — остановить.
+for l in /tmp/dpishell/select.lock /tmp/dpishell/check.lock; do
+	[ -f "$l" ] && kill "$(cat "$l")" 2>/dev/null
+done
+if [ -x /etc/init.d/zapret ]; then
+	/etc/init.d/zapret stop >/dev/null 2>&1
+	/etc/init.d/zapret disable >/dev/null 2>&1
+fi
+[ "$(cat /proc/sys/net/ipv4/tcp_timestamps 2>/dev/null)" = 0 ] && ! grep -qs tcp_timestamps /etc/sysctl.conf /etc/sysctl.d/*.conf &&
+	echo 1 > /proc/sys/net/ipv4/tcp_timestamps
+
+TEXT="$TEXT ($(date +%H:%M))"
+mkdir -p /etc/dpishell
+printf '{"by":"%s","at":%s,"text":"%s","targets":%s}\n' "$BY" "$(date +%s)" "$TEXT" "$TARGETS" > /etc/dpishell/last-off.json.tmp &&
+	mv /etc/dpishell/last-off.json.tmp /etc/dpishell/last-off.json
+rm -f /etc/dpishell/pending-confirm.json
+logger -t dpishell "$TEXT"
+ucode -L '/usr/share/ucode/*.uc' -e 'import * as st from "dpishell.state"; st.write_status_json();' >/dev/null 2>&1
+exit 0

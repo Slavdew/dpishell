@@ -194,8 +194,9 @@ function fake_dpi(items) {
 	for (let it in items) {
 		let host = host_of(it.target.url);
 		let rule = filter(rules, r => index(host, r.host) >= 0)[0];
-		let ok = !rule || (running && length(filter(profiles, pf => index(pf, rule.profile) >= 0 &&
-			!length(filter(rule.need, n => index(pf, n) < 0)))) > 0);
+		// bypass_breaks: сайт ломает сам обход — открывается только без nfqws (проверка сторожа).
+		let ok = !rule || (rule.bypass_breaks ? !running : (running && length(filter(profiles, pf => index(pf, rule.profile) >= 0 &&
+			!length(filter(rule.need, n => index(pf, n) < 0)))) > 0));
 		push(res, { outcome: ok ? 'ok' : 'reset', ok, seconds: 0.3, bytes: ok ? 1000 : 0, detail: 'имитация DPI',
 			url: it.target.url, tls: it.tls, dns: 'fake' });
 	}

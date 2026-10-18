@@ -51,7 +51,9 @@ define Package/dpishell/install
 	$(INSTALL_DATA) ./files/usr/share/rpcd/ucode/dpishell $(1)/usr/share/rpcd/ucode/
 	$(INSTALL_DATA) ./files/usr/share/rpcd/acl.d/dpishell.json $(1)/usr/share/rpcd/acl.d/
 	$(INSTALL_DIR) $(1)/usr/libexec/dpishell
-	$(INSTALL_BIN) ./files/usr/libexec/dpishell/run ./files/usr/libexec/dpishell/uninstall.sh $(1)/usr/libexec/dpishell/
+	$(INSTALL_BIN) ./files/usr/libexec/dpishell/run ./files/usr/libexec/dpishell/uninstall.sh ./files/usr/libexec/dpishell/off $(1)/usr/libexec/dpishell/
+	$(INSTALL_DIR) $(1)/etc/hotplug.d/button
+	$(INSTALL_BIN) ./files/etc/hotplug.d/button/50-dpishell $(1)/etc/hotplug.d/button/
 	$(INSTALL_DIR) $(1)/etc/init.d $(1)/etc/config
 	$(INSTALL_BIN) ./files/etc/init.d/dpishell $(1)/etc/init.d/
 	$(INSTALL_CONF) ./files/etc/config/dpishell $(1)/etc/config/

@@ -101,9 +101,11 @@ function settings() {
 			enabled: uci_get('schedule_enabled', '1') == '1',
 			hours: +uci_get('schedule_hours', '1'),
 			auto_select: uci_get('auto_select', '0') == '1',
+			watchdog: uci_get('watchdog', '1') == '1',
 		},
 	};
 }
+
 
 function roles() { return cat.load_json(`${P.share}/roles.json`); }
 function catalog() { return cat.load_json(`${P.share}/strategies.json`); }
@@ -151,12 +153,28 @@ function iso(t) {
 	return sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ', g.year, g.mon, g.mday, g.hour, g.min, g.sec);
 }
 
+// Аварийный выключатель (architecture.md «Аварийный выключатель»): ожидающее подтверждение включения
+// { until, revert_to: 'off'|id, token } и последнее выключение без человека { by, at, text, targets }.
+const PENDING = '/etc/dpishell/pending-confirm.json';
+const LAST_OFF = '/etc/dpishell/last-off.json';
+
+function pending_confirm() {
+	let p = read_json(PENDING, null);
+	return p ? { until: iso(p.until), left_s: max(0, p.until - time()), revert_to: p.revert_to } : null;
+}
+
+function last_off() {
+	let o = read_json(LAST_OFF, null);
+	return o ? { ...o, at: iso(o.at) } : null;
+}
+
 function write_status_json() {
 	let s = settings(), lc = last_check();
 	let pub = {
 		product: 'dpishell-router', api: API, min_app: MIN_APP, version: VERSION, engine: 'zapret1', core: 'v72.13',
 		enabled: s.enabled, strategy: s.strategy, catalog_version: catalog().version,
 		checked_at: iso(lc?.at), last_check_ok: lc?.ok,
+		pending_confirm: pending_confirm(), last_off: s.enabled ? null : last_off(),
 	};
 	write_atomic(P.status_json, sprintf('%J\n', pub));
 	chmod(P.status_json, 0o644);
@@ -185,5 +203,6 @@ function valid_subnet_line(l) {
 export {
 	P, VERSION, API, MIN_APP, MODES, HOURS, USER_LISTS,
 	ensure_dirs, write_atomic, read_json, uci_set, settings, roles, catalog, user_catalog, found_catalog, catalogs,
-	write_zapret_config, write_zapret_config_for, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running, iso
+	write_zapret_config, write_zapret_config_for, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running, iso,
+	PENDING, LAST_OFF, pending_confirm, last_off
 };

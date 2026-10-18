@@ -3,6 +3,9 @@
 //   run select '<json args>'   — подбор (select_start)
 //   run check <manual|app>     — полная проверка текущей стратегии
 //   run watch                  — проверка по таймеру: запасные стратегии, автоподбор (architecture.md «Проверка по таймеру и запасные»)
+//   run guard                  — сторож: с обходом пропал интернет, без него есть — выключить
+//   run tick                   — cron раз в 5 мин: сторож и раз в 30 мин watch
+//   run revert [now]           — откат включения, не подтверждённого вовремя (confirm_s)
 'use strict';
 
 import { writefile, readfile, stat, unlink } from 'fs';
@@ -12,6 +15,7 @@ import * as core from 'dpishell.core';
 import * as dg from 'dpishell.diag';
 import * as dns from 'dpishell.dns';
 import * as upd from 'dpishell.update';
+import * as pr from 'dpishell.probe';
 
 const cmd = ARGV[0];
 
@@ -33,6 +37,113 @@ function warn(code, text) {
 	st.write_atomic('/tmp/dpishell/warnings.json', sprintf('%J\n', w));
 }
 
+// Сторож (architecture.md «Аварийный выключатель»): обычные сайты (группа control) — только рукопожатие TLS, по одной,
+// до 3 целей. Не открылись дважды подряд — проверка без обхода: открылись — обход мешает, выключить (включит снова только
+// человек); нет — обрыв у провайдера, обход вернуть и проверять реже (5 → 10 → 20 мин, после успеха снова 5).
+// Журнал — только logread; состояние — /tmp/dpishell/guard.json { fails, interval, next_at, checked_at, ok }.
+function guard() {
+	let s = st.settings();
+	if (!s.enabled || !s.schedule.watchdog)
+		return;
+	for (let j in ['select', 'check', 'update', 'core_install', 'dns', 'site_check'])
+		if (st.job_running(j))
+			return;
+	let G = '/tmp/dpishell/guard.json';
+	let gs = st.read_json(G, { fails: 0, interval: 5, next_at: 0 });
+	if (time() < (gs.next_at ?? 0))
+		return;
+	let l = lock('guard');
+	if (!l) return;
+	let ctl = filter(sel.load_groups(null, s.mode), g => g.control)[0];
+	let targets = slice(filter(ctl?.targets ?? [], t => t.required !== false), 0, 3);
+	if (!length(targets)) { unlink(l); return; }
+	// По одной цели и до первой открывшейся: при живом интернете — одно рукопожатие.
+	let probe = () => {
+		let res = [];
+		for (let t in targets) {
+			let r = pr.check_batch([{ target: { ...t, handshake_only: true }, tls: '1.3' }], { parallel: 1, connect_s: 3, read_s: 2 })[0];
+			push(res, r);
+			if (r.ok) break;
+		}
+		return res;
+	};
+	let save = (ok, extra) => st.write_atomic(G, sprintf('%J\n', { fails: 0, interval: 5, next_at: 0, ...(extra ?? {}), checked_at: time(), ok }));
+	let r = probe();
+	if (length(filter(r, x => x.ok))) {
+		save(true);
+		unlink(l);
+		return;
+	}
+	if ((gs.fails ?? 0) < 1) {
+		save(false, { fails: 1, interval: gs.interval ?? 5 });
+		unlink(l);
+		return;
+	}
+	system('/etc/init.d/zapret stop >/dev/null 2>&1');
+	sleep(2000);
+	let r2 = probe();
+	if (length(filter(r2, x => x.ok))) {
+		let bad = sprintf('%J', map(r, x => ({ url: x.url, detail: x.detail })));
+		system(`/usr/libexec/dpishell/off watchdog '${replace(bad, "'", "'\\''")}'`);
+		save(false);
+	} else {
+		system('/etc/init.d/zapret restart >/dev/null 2>&1');
+		let iv = min((gs.interval ?? 5) * 2, 20);
+		system(`logger -t dpishell 'Сторож: интернета нет и без обхода — обрыв у провайдера, обход оставлен; следующая проверка через ${iv} мин'`);
+		save(false, { interval: iv, next_at: time() + iv * 60 - 30 });
+	}
+	unlink(l);
+}
+
+// Проверка по таймеру, DNS и обновления (бывший cron run watch раз в 30 мин).
+function watch() {
+	let dw = null;
+	try { dw = dns.watch(); } catch (x) {}
+	// Есть ли новая версия DpiShell — раз в сутки (router-api.md §5, status.update).
+	if (!st.job_running('update'))
+		try { upd.check_daily(); } catch (x) {}
+	if (dw == 'dns_fallback') warn('dns_fallback', 'Защищённый DNS недоступен — временно работает DNS провайдера');
+	else if (dw == 'dns_back') warn('dns_fallback', null);
+	let s = st.settings();
+	if (!s.schedule.enabled || !s.enabled || st.job_running('select')) return;
+	// Интервал выдерживаем сами: cron зовёт каждые 30 мин.
+	let last = st.read_json(`${st.P.etc}/last-check.json`, null);
+	if (last && time() - last.at < s.schedule.hours * 3600 - 120) return;
+	let l = lock('check');
+	if (!l) return;
+	let r = sel.check_run('timer', true);
+	unlink(l);
+	if (!r || r.fail_streak < 2) return;
+	// Две неудачи подряд: следующая запасная (architecture.md «Проверка по таймеру и запасные»).
+	let backups = s.backups;
+	if (length(backups)) {
+		let next = backups[0];
+		s.strategy = next;
+		if (!st.write_zapret_config(next, s) && system('/etc/init.d/zapret restart >/dev/null 2>&1') == 0) {
+			st.uci_set({ strategy: next, backups: slice(backups, 1) });
+			st.write_atomic(`${st.P.etc}/fail-streak.json`, '0\n');
+			warn('switched_backup', `Стратегия перестала работать — включена запасная ${next}`);
+			st.write_status_json();
+		}
+		return;
+	}
+	if (!s.schedule.auto_select) {
+		warn('switched_backup', null);
+		return;
+	}
+	let lr = st.read_json(`${st.P.etc}/auto-select.json`, { at: 0 });
+	if (time() - lr.at < 6 * 3600) return;
+	st.write_atomic(`${st.P.etc}/auto-select.json`, sprintf('%J\n', { at: time() }));
+	let ls = lock('select');
+	if (!ls) return;
+	let p = sel.select_run({ mode: 'quick', depth: 'main', started_by: 'timer' });
+	unlink(ls);
+	if (p.applied)
+		warn('auto_selected', `Автоподбор включил ${p.best}`);
+	else
+		warn('auto_select_failed', 'Автоподбор не нашёл рабочую стратегию — оставлена прежняя');
+}
+
 if (cmd == 'select') {
 	let l = lock('select');
 	if (!l) exit(1);
@@ -48,52 +159,41 @@ else if (cmd == 'check') {
 	try { sel.check_run(ARGV[1] == 'manual' ? 'manual' : 'app', false); } catch (e) {}
 	unlink(l);
 }
-else if (cmd == 'watch') {
-	let dw = null;
-	try { dw = dns.watch(); } catch (x) {}
-	// Есть ли новая версия DpiShell — раз в сутки (router-api.md §5, status.update).
-	if (!st.job_running('update'))
-		try { upd.check_daily(); } catch (x) {}
-	if (dw == 'dns_fallback') warn('dns_fallback', 'Защищённый DNS недоступен — временно работает DNS провайдера');
-	else if (dw == 'dns_back') warn('dns_fallback', null);
-	let s = st.settings();
-	if (!s.schedule.enabled || !s.enabled || st.job_running('select')) exit(0);
-	// Интервал выдерживаем сами: cron зовёт каждые 30 мин.
-	let last = st.read_json(`${st.P.etc}/last-check.json`, null);
-	if (last && time() - last.at < s.schedule.hours * 3600 - 120) exit(0);
-	let l = lock('check');
-	if (!l) exit(0);
-	let r = sel.check_run('timer', true);
-	unlink(l);
-	if (!r || r.fail_streak < 2) exit(0);
-	// Две неудачи подряд: следующая запасная (architecture.md «Проверка по таймеру и запасные»).
-	let backups = s.backups;
-	if (length(backups)) {
-		let next = backups[0];
-		s.strategy = next;
-		if (!st.write_zapret_config(next, s) && system('/etc/init.d/zapret restart >/dev/null 2>&1') == 0) {
-			st.uci_set({ strategy: next, backups: slice(backups, 1) });
-			st.write_atomic(`${st.P.etc}/fail-streak.json`, '0\n');
-			warn('switched_backup', `Стратегия перестала работать — включена запасная ${next}`);
-			st.write_status_json();
+else if (cmd == 'watch')
+	watch();
+else if (cmd == 'guard')
+	guard();
+// cron раз в 5 мин (nice): сторож — каждый раз, остальное — раз в 30 мин. Одна строка вместо двух — проверки не пересекаются.
+else if (cmd == 'tick') {
+	guard();
+	let T = '/tmp/dpishell/tick.json';
+	if (time() - (st.read_json(T, { watch_at: 0 }).watch_at ?? 0) >= 30 * 60 - 60) {
+		st.write_atomic(T, sprintf('%J\n', { watch_at: time() }));
+		watch();
+	}
+}
+// Откат неподтверждённого включения (confirm_s): ждать до until, пока ожидание то же (token); run revert now — сразу (при загрузке).
+else if (cmd == 'revert') {
+	let p = st.read_json(st.PENDING, null);
+	if (!p) exit(0);
+	if (ARGV[1] != 'now')
+		while (time() < p.until) {
+			sleep(1000);
+			let cur = st.read_json(st.PENDING, null);
+			if (cur?.token != p.token) exit(0);
 		}
-		exit(0);
+	if (p.revert_to == 'off')
+		system('/usr/libexec/dpishell/off revert');
+	else {
+		let s = st.settings();
+		s.strategy = p.revert_to;
+		if (!st.write_zapret_config(p.revert_to, s))
+			system('/etc/init.d/zapret enable; /etc/init.d/zapret restart >/dev/null 2>&1');
+		st.uci_set({ strategy: p.revert_to, enabled: 1 });
+		unlink(st.PENDING);
+		warn('confirm_reverted', `Включение не подтверждено — возвращена стратегия ${p.revert_to}`);
+		st.write_status_json();
 	}
-	if (!s.schedule.auto_select) {
-		warn('switched_backup', null);
-		exit(0);
-	}
-	let lr = st.read_json(`${st.P.etc}/auto-select.json`, { at: 0 });
-	if (time() - lr.at < 6 * 3600) exit(0);
-	st.write_atomic(`${st.P.etc}/auto-select.json`, sprintf('%J\n', { at: time() }));
-	let ls = lock('select');
-	if (!ls) exit(0);
-	let p = sel.select_run({ mode: 'quick', depth: 'main', started_by: 'timer' });
-	unlink(ls);
-	if (p.applied)
-		warn('auto_selected', `Автоподбор включил ${p.best}`);
-	else
-		warn('auto_select_failed', 'Автоподбор не нашёл рабочую стратегию — оставлена прежняя');
 }
 else if (cmd == 'core_install') {
 	let l = lock('core_install');

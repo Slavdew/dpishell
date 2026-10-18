@@ -20,7 +20,7 @@ r=$(ubus call dpishell lists_get '{"name":"user-exclude"}' 2>&1) && ok lists_get
 
 [ -f /www/dpishell/status.json ] && ucode -e 'import {readfile} from "fs"; json(readfile("/www/dpishell/status.json"));' 2>/dev/null \
 	&& ok 'status.json' || bad 'status.json' 'нет файла или не JSON'
-grep -q 'dpishell/run watch' /etc/crontabs/root && ok 'cron watch' || bad 'cron watch' 'нет строки'
+grep -q 'nice -n 19 /usr/libexec/dpishell/run tick' /etc/crontabs/root && ok 'cron tick' || bad 'cron tick' 'нет строки'
 
 [ $fail = 0 ] && echo 'api_smoke: всё прошло' || echo 'api_smoke: есть ошибки'
 exit $fail

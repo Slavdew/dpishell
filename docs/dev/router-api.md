@@ -51,13 +51,15 @@
   "last_check": { "at": "2026-10-16T21:00:00Z", "source": "timer", "ok": true,
                   "groups": [ { "id": "youtube", "ok": true }, { "id": "discord", "ok": true } ] },
   "fail_streak": 0,
-  "schedule": { "enabled": true, "hours": 1, "auto_select": false },
+  "schedule": { "enabled": true, "hours": 1, "auto_select": false, "watchdog": true },
+  "pending_confirm": { "until": "2026-10-19T12:03:00Z", "left_s": 165, "revert_to": "off" }, "last_off": null,
+  "watchdog": { "enabled": true, "checked_at": "2026-10-19T12:00:01Z", "ok": true, "interval_min": 5 },
   "jobs": { "select": false, "check": false, "core_install": false, "dns": false, "dns_analyze": false, "site_check": false, "update": false },
   "warnings": [ { "code": "flow_offload", "text": "Включено ускорение сети (flow offloading) — с ним обход не работает" } ],
   "update": { "available": true, "version": "0.2.1-r1", "notes": ["Глубокий поиск стратегий на самом роутере"], "checked_at": "2026-10-17T14:00:00Z",
               "job": { "action": "update", "from": "feed", "running": false, "ok": true, "message": "Обновлено до 0.2.0-r1", "at": "…" } } }
 ```
-`source`: `manual` | `timer` | `app`. `jobs.dns` — идёт любое DNS-задание (`dns_analyze` — прежнее имя, то же значение). Коды `warnings`: `flow_offload`, `ipv6`, `dns_spoofed`, `conflict`, `core_missing`, `switched_backup` (сработала запасная стратегия, в `text` — какая), `auto_selected` (автоподбор нашёл и включил стратегию, в `text` — какую), `auto_select_failed` (автоподбор ничего не нашёл, оставлена прежняя), `dns_fallback` (защищённый DNS недоступен, временно DNS провайдера). `needs_tcp_timestamps` — включённая стратегия работает только у устройств с временными метками TCP (нужно только компьютерам на Windows: у Android, iOS, macOS и Linux они включены по умолчанию).
+`source`: `manual` | `timer` | `app`. `jobs.dns` — идёт любое DNS-задание (`dns_analyze` — прежнее имя, то же значение). Коды `warnings`: `flow_offload`, `ipv6`, `dns_spoofed`, `conflict`, `core_missing`, `switched_backup` (сработала запасная стратегия, в `text` — какая), `auto_selected` (автоподбор нашёл и включил стратегию, в `text` — какую), `auto_select_failed` (автоподбор ничего не нашёл, оставлена прежняя), `dns_fallback` (защищённый DNS недоступен, временно DNS провайдера), `watchdog_off` / `button_off` / `confirm_reverted` (обход выключен сторожем, кнопкой на корпусе, откатом неподтверждённого включения — пока его не включат снова). **Аварийный выключатель** ([architecture.md](architecture.md) «Аварийный выключатель»): `pending_confirm` — включение ждёт `confirm` до `until` (`left_s` — сколько осталось на момент ответа: часы роутера и ПК могут расходиться), иначе роутер сам вернёт `revert_to` (`off` или id стратегии), `null` — не ждёт; есть и в `status.json` (без входа). `last_off` — последнее выключение без человека `{ by: "watchdog"|"button"|"revert", at, text, targets: [ { url, detail } ] }` (`targets` — что не открылось у сторожа), `null` при включённом обходе. `watchdog` — жив ли сторож: последняя проверка и через сколько минут следующая (5, при обрыве у провайдера 10, 20). `needs_tcp_timestamps` — включённая стратегия работает только у устройств с временными метками TCP (нужно только компьютерам на Windows: у Android, iOS, macOS и Linux они включены по умолчанию).
 
 `api` — «мажор.минор» (§5.4); роутеры до 0.2.0 отдают число `1` (= «1.0»). `methods` — методы, которые этот роутер реально обрабатывает (заглушки «не реализовано» не входят); `min_app` — минимальная версия окна ПК, которую он понимает. `update` — есть ли в витрине версия новее установленной (проверка раз в сутки и по `update_check`), `notes` — что нового (до 15 строк, `router/release-notes.json`), `job` — последнее задание обновления (`null` — не было).
 
@@ -93,16 +95,17 @@
 
 | Метод | Аргументы | Что делает | Ответ |
 |---|---|---|---|
-| `enable` | `{}` | включает обход с текущей стратегией; при работающем чужом обходе — `error: conflict` | `{}` или `error` |
+| `enable` | `{}` или `{ "confirm_s": 180 }` (60–600) | включает обход с текущей стратегией; при работающем чужом обходе — `error: conflict`. С `confirm_s` — включение на пробу: без `confirm` за это время роутер вернёт прежнее (и после перезагрузки) | `{}` или `error` |
+| `confirm` | `{}` | «Всё работает» — снять `pending_confirm`; без ожидания — тоже `{}` | `{}` |
 | `disable` | `{}` | выключает | `{}` |
 | `mode_set` | `{ "mode": "all" \| "lists" }` | «Все сайты» / «Только из списков»; перезапуск zapret и полная проверка с контрольной группой | `{ "started": true }` |
 | `site_check` | `{ "url": "https://example.com/" }` (голое имя `example.com` → `https://example.com/`) | «Сайт не открывается с обходом»: проверка с обходом и без; ход — `status.jobs.site_check`, итог — `site_check_result` | `{ "started": true }` |
-| `strategy_set` | `{ "id": "alt9" }` | выбор стратегии; при включённом обходе — перезапуск | `{}` |
+| `strategy_set` | `{ "id": "alt9" }`, необязательно `confirm_s` | выбор стратегии; при включённом обходе — перезапуск, с `confirm_s` — на пробу, как у `enable` (`apply` передаёт `confirm_s` так же) | `{}` |
 | `check_now` | `{}` | запускает проверку (результат — в `status.last_check`, `source: app`) | `{ "started": true }` |
 | `select_start` | `{ "groups": ["youtube","discord","user"], "mode": "full" \| "quick", "depth": "main" \| "deep" }` | запускает подбор; `deep` — глубокий поиск (генерация кандидатов по ролям, ориентир 5–15 мин), `main` — готовые стратегии (~2–3 мин). Только группа `user` при пустом списке своих адресов роутера — `error: invalid`, `field: groups` (приложение предлагает отправить свои адреса с ПК и повторить). При чужом обходе — `error: conflict` | `{ "started": true }` |
 | `select_cancel` | `{}` | останавливает, возвращает прежнее | `{}` |
 | `apply` | `{ "id": "alt9", "backups": ["alt13"] }` | выбрать другую стратегию из итога подбора вместо автоматически включённой | `{}` |
-| `schedule_set` | `{ "enabled": true, "hours": 1, "auto_select": false }` (`hours` ∈ 0.5, 1, 3, 6, 12, 24) | таймер проверки; `auto_select` — при неудаче проверки и исчерпанных запасных роутер сам запускает быстрый подбор (`depth: main`, не чаще раза в 6 ч, `started_by: timer`, применяет сам; итог — `auto_selected`/`auto_select_failed` в `warnings`) | `{}` |
+| `schedule_set` | `{ "enabled": true, "hours": 1, "auto_select": false, "watchdog": true }` (`hours` ∈ 0.5, 1, 3, 6, 12, 24) | таймер проверки; `auto_select` — при неудаче проверки и исчерпанных запасных роутер сам запускает быстрый подбор (`depth: main`, не чаще раза в 6 ч, `started_by: timer`, применяет сам; итог — `auto_selected`/`auto_select_failed` в `warnings`) | `{}` |
 | `targets_set` | `{ "items": [ { "url": "…", "important": true } ] }` | свои адреса (до 50) | `{}` |
 | `lists_set` | `{ "name": "user-general", "lines": [ … ] }` | свои списки (домены по шаблону, до 5000 строк) | `{}` |
 | `strategies_user_set` | `{ "items": [ { "id": "u-…", "title": "…", "roles": { "google": "…" } } ] }` — `id` по шаблону `^u-[a-z0-9-]{1,48}$`, `title` до 80 символов; роли и значения — в той же записи, что `strategies.json` (§5.3) | загрузить найденные на ПК стратегии (§6); заменяет весь прежний набор из приложения; роутер перепроверяет их сам (`check_now`) до включения | `{}` или `error: invalid` |
@@ -175,4 +178,4 @@ API 1 (до первого выпуска роутерного пакета пр
 - `flow_offload_fix`, `ipv6_set`; предупреждения `flow_offload`/`ipv6`/`conflict` в `status.warnings`; `enable`/`select_start` при чужом обходе — `conflict`; `kind: package` в `diag.conflicts`; поле `flowoffload` в `diag`.
 - `select_start` только с группой `user` при пустых своих адресах — `invalid`/`groups`; свои адреса в `report` скрыты.
 
-API 1.0 (первый выпуск пакета, 0.2.0): `api` строкой «мажор.минор», `methods`, `min_app`, `update`, `jobs.update`; `uninstall`, `update_install`, `update_check`; ядро договора (§5.4); сценарии по SSH (§5.5); `mode_set` — «Все сайты» / «Только из списков». `rows[].verdicts` в `select_progress`.
+API 1.0 (первый выпуск пакета, 0.2.0): `api` строкой «мажор.минор», `methods`, `min_app`, `update`, `jobs.update`; `uninstall`, `update_install`, `update_check`; ядро договора (§5.4); сценарии по SSH (§5.5); `mode_set` — «Все сайты» / «Только из списков». `rows[].verdicts` в `select_progress`. Аварийный выключатель: `confirm`, `confirm_s` у `enable`/`strategy_set`/`apply`, `status.pending_confirm`/`last_off`/`watchdog`, `schedule.watchdog`, предупреждения `watchdog_off`/`button_off`/`confirm_reverted`.
