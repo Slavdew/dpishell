@@ -643,7 +643,7 @@ public sealed class WindowSmokeTests
                     router.GetType().GetProperty("UpdateLog")!.SetValue(router, "# download: dpishell-0.2.1-r1.apk\n# install: apk add --upgrade dpishell luci-app-dpishell");
                     SetProp(router, "Updating", true);
                     Pump();
-                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Обновляю DpiShell на роутере… 1:2") && t.IsVisible) is null) throw new Exception("Нет «Обновляю…» с прошедшим временем");
+                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Обновляю DpiShell на роутере… прошло 1:2") && t.IsVisible) is null) throw new Exception("Нет «Обновляю…» с прошедшим временем");
                     if (Find<Expander>(tabs, e => e.Header as string == "Подробнее" && e.IsVisible && e.DataContext == router) is not { } log) throw new Exception("Нет «Подробнее» с журналом обновления");
                     log.IsExpanded = true;
                     Pump();

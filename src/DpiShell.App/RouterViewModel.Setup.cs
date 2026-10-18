@@ -383,8 +383,8 @@ public sealed partial class RouterViewModel
     public bool UpdateAvailable => _status?.Update is { Available: true } && !Updating;
     public bool ShowUpdate => UpdateAvailable || Updating;
     /// <summary>Идёт — «Обновляю DpiShell на роутере… 1:23» (прошедшее время: видно, что не зависло); не завершилось — так и сказано.</summary>
-    public string UpdateTitle => Updating ? $"Обновляю DpiShell на роутере… {DateTime.UtcNow - _updateStarted:m\\:ss}"
-        : _updateFailed ? $"Обновление до {_status?.Update?.Version} не завершилось"
+    public string UpdateTitle => Updating ? $"Обновляю DpiShell на роутере… прошло {DateTime.UtcNow - _updateStarted:m\\:ss}"
+        : _updateFailed ? $"Обновление до {_status?.Update?.Version} не завершилось" + (_status?.Version is { Length: > 0 } cur ? $" — работает прежняя {cur}" : "")
         : $"Доступно обновление {_status?.Update?.Version}";
     public string UpdateNotes => string.Join("\n", (_status?.Update?.Notes ?? []).Select(n => "• " + n));
     public bool HasUpdateNotes => UpdateNotes.Length > 0 && !Updating;

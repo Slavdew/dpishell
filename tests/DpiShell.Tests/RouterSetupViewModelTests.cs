@@ -532,7 +532,7 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.True(await vm.UpdateRouterAsync());
         // Шаги по step: текущий выделен, пройденные — с ✓.
         Assert.Equal(["Скачиваю", "Устанавливаю", "Перезапуск службы", "✓ Готово"], current);
-        Assert.Contains(titles, t => t.StartsWith("Обновляю DpiShell на роутере… 0:0"));   // прошедшее время в заголовке
+        Assert.Contains(titles, t => t.StartsWith("Обновляю DpiShell на роутере… прошло 0:0"));   // прошедшее время в заголовке
         Assert.Equal("# download\n# install\n# restart", vm.UpdateLog);   // «Подробнее» — хвост журнала
         Assert.Empty(vm.UpdateSteps);   // закончилось — шагов не видно
         Assert.Contains("Обновлено до 0.2.1-r1", _said);
@@ -576,7 +576,7 @@ public sealed class RouterSetupViewModelTests : IDisposable
         else
         {
             Assert.Contains(_said, s => s.StartsWith("Обновление не завершилось: роутер отвечает, но версия DpiShell прежняя (0.2.0-r3)"));
-            Assert.Equal("Обновление до 0.2.1-r1 не завершилось", vm.UpdateTitle);
+            Assert.Equal("Обновление до 0.2.1-r1 не завершилось — работает прежняя 0.2.0-r3", vm.UpdateTitle);
             Assert.Equal("Повторить", vm.UpdateButtonText);
             Assert.True(vm.UpdateAvailable && vm.UpdateCmd.CanExecute(null));
         }
