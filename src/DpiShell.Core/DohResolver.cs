@@ -83,3 +83,51 @@ public static class DnsCheck
         return new(host, sys, await doh.ResolveAsync(host, ct), err);
     }
 }
+
+/// <summary>
+/// «Сравнить» в выборе DNS: время ответа защищённого DNS с этого компьютера — запрос RFC 8484 (GET ?dns=, A-запись известного имени).
+/// Меряется второй запрос по уже открытому соединению: первый включает установку TLS и сильно зависит от случая.
+/// </summary>
+public static class DohPing
+{
+    /// <summary>Имя для запроса: есть всегда и не блокируется.</summary>
+    public const string Name = "example.com";
+
+    /// <summary>DNS-запрос A для имени в формате RFC 1035 (id 0 — как советует RFC 8484 для кэша), base64url без «=».</summary>
+    public static string Query(string name)
+    {
+        var bytes = new List<byte> { 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0 };   // id, RD, один вопрос
+        foreach (var label in name.TrimEnd('.').Split('.'))
+        {
+            bytes.Add((byte)label.Length);
+            bytes.AddRange(System.Text.Encoding.ASCII.GetBytes(label));
+        }
+        bytes.AddRange(new byte[] { 0, 0, 1, 0, 1 });   // конец имени, тип A, класс IN
+        return Convert.ToBase64String(bytes.ToArray()).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    /// <summary>Миллисекунды ответа; null — сервер не ответил DNS-ответом за отведённое время.</summary>
+    public static async Task<double?> MeasureAsync(string template, HttpMessageHandler? handler = null, CancellationToken ct = default)
+    {
+        using var http = new HttpClient(handler ?? new SocketsHttpHandler { UseProxy = false, ConnectTimeout = TimeSpan.FromSeconds(3) }, disposeHandler: handler is null)
+            { Timeout = TimeSpan.FromSeconds(5) };
+        var url = template + (template.Contains('?') ? "&" : "?") + "dns=" + Query(Name);
+        double? last = null;
+        for (int i = 0; i < 2; i++)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.Accept.ParseAdd("application/dns-message");
+                using var resp = await http.SendAsync(req, ct);
+                var body = await resp.Content.ReadAsByteArrayAsync(ct);
+                // Ответ DNS — с битом QR; иначе это не DNS (страница-заглушка, ошибка).
+                if (!resp.IsSuccessStatusCode || body.Length < 12 || (body[2] & 0x80) == 0) return null;
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested) { return null; }
+            last = sw.Elapsed.TotalMilliseconds;   // второй запрос — по открытому соединению
+        }
+        return last;
+    }
+}

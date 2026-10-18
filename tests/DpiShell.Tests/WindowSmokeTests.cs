@@ -903,6 +903,12 @@ public sealed class WindowSmokeTests
         vm.ShowPcDns(new DnsStatusInfo("google", true, false, true, true,
             [new DnsAdapterInfo("Ethernet", "ethernet", false, ["8.8.8.8", "8.8.4.4"], true), new DnsAdapterInfo("Wi-Fi", "wifi", false, ["8.8.8.8", "8.8.4.4"], true)],
             ["Radmin VPN", "vEthernet (Default Switch)"]));
+        // «Сравнить» без сети: время ответа рядом с названиями (и у роутера — тот же выбор).
+        foreach (var picker in new[] { vm.PcDns, vm.Router.DnsPick })
+        {
+            picker.Measure = (doh, _) => Task.FromResult<double?>(doh.Contains("quad9") ? null : doh.Contains("google") ? 38 : 52);
+            picker.CompareAsync().GetAwaiter().GetResult();
+        }
         SetProp(vm, "CheckSummary", "Открывается 1 из 2");
         // «Проверить сейчас» и таблица подбора — те же строки по адресам, что строит окно из проверки (CheckRow.From).
         static TargetVerdict V(string group, string url, bool required, ProbeOutcome o13, string d13, ProbeOutcome o12, string d12, double s)

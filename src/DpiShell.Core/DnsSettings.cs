@@ -8,7 +8,9 @@ namespace DpiShell.Core;
 /// <summary>Готовый вариант DNS этого компьютера (architecture.md «DNS этого компьютера»).</summary>
 /// <param name="Ips">Адреса серверов: IPv4, затем IPv6 (до 4, уже в нормальной записи).</param>
 /// <param name="Doh">Шаблон защищённого DNS (DoH); null — только обычный DNS.</param>
-public sealed record DnsPreset(string Id, string Title, IReadOnlyList<string> Ips, string? Doh, string? Note = null);
+/// <param name="Note">Чем отличается (фильтрация, реестр блокировок) — показывается у варианта.</param>
+/// <param name="Owner">Кто держит сервер — для описания варианта.</param>
+public sealed record DnsPreset(string Id, string Title, IReadOnlyList<string> Ips, string? Doh, string? Note = null, string? Owner = null);
 
 /// <summary>Готовые варианты DNS. Адреса и шаблоны проверены запросом RFC 8484 (2026-10-17).</summary>
 public static class DnsPresets
@@ -19,12 +21,16 @@ public static class DnsPresets
     public static IReadOnlyList<DnsPreset> All { get; } =
     [
         new(Auto, "Как у провайдера (автоматически)", [], null),
-        new("google", "Google", ["8.8.8.8", "8.8.4.4", "2001:4860:4860::8888", "2001:4860:4860::8844"], "https://dns.google/dns-query"),
-        new("cloudflare", "Cloudflare", ["1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001"], "https://cloudflare-dns.com/dns-query"),
-        new("quad9", "Quad9", ["9.9.9.9", "149.112.112.112", "2620:fe::fe", "2620:fe::9"], "https://dns.quad9.net/dns-query"),
+        new("google", "Google", ["8.8.8.8", "8.8.4.4", "2001:4860:4860::8888", "2001:4860:4860::8844"], "https://dns.google/dns-query",
+            Owner: "Google (США)"),
+        new("cloudflare", "Cloudflare", ["1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001"], "https://cloudflare-dns.com/dns-query",
+            Owner: "Cloudflare (США)"),
+        // 9.9.9.9 — основной режим Quad9: отвечает ошибкой на известные вредоносные домены (quad9.net/service/service-addresses-and-features).
+        new("quad9", "Quad9", ["9.9.9.9", "149.112.112.112", "2620:fe::fe", "2620:fe::9"], "https://dns.quad9.net/dns-query",
+            "отсеивает известные вредоносные сайты", "фонд Quad9 (Швейцария)"),
         // DoH Яндекса — по 77.88.8.8 и 77.88.8.1, только HTTP/2 (проверено); адреса — yandex.ru/support/dns, базовый режим.
         new("yandex", "Яндекс", ["77.88.8.8", "77.88.8.1", "2a02:6b8::feed:ff", "2a02:6b8:0:1::feed:ff"],
-            "https://common.dot.dns.yandex.net/dns-query", "российский: применяет реестр блокировок"),
+            "https://common.dot.dns.yandex.net/dns-query", "российский: применяет реестр блокировок", "Яндекс (Россия)"),
     ];
 
     /// <summary>Что принимает команда dns_set: готовые и «свой».</summary>

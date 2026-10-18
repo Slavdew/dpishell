@@ -37,7 +37,8 @@ public sealed partial class MainViewModel
             Restore = RestorePcDnsAsync,
             Enabled = () => !Busy && !IsLoading,
         };
-        PcDns.SetPresets(DnsPresets.All.Select(p => new DnsOption(p.Id, p.Title, PresetDetail(p), false, p.Ips, p.Doh)).ToList());
+        PcDns.SetPresets(DnsPresets.All.Select(p => new DnsOption(p.Id, p.Title, PresetDetail(p), false, p.Ips, p.Doh,
+            Owner: p.Owner, Note: PresetNote(p.Id, p.Note))).ToList());
         FixDnsCmd = RelayCommand.Async(() => ApplyPcDnsAsync(PcDns.Options.First(o => o.Id == RecommendedDns)), () => !Busy && !IsLoading);
         // «Другой DNS» — сразу к выбору, а не в начало «Диагностики» (UX-аудит 2, п. 4): окно прокручивает к карточке и раскрывает список.
         ChooseDnsCmd = new RelayCommand(() => { Page = Pages.Diag; ShowRequested?.Invoke(Spot.PcDns); });
@@ -52,6 +53,10 @@ public sealed partial class MainViewModel
         var v4 = string.Join(", ", p.Ips.Where(ip => !DnsValues.IsIpv6(ip)));
         return v4 + (p.Doh is null ? "" : Windows11 ? " · защищённый" : " · без шифрования") + (p.Note is { } n ? " · " + n : "");
     }
+
+    /// <summary>Заметка варианта: «рекомендуем» у рекомендуемого (ПК и роутер), затем своя заметка пресета.</summary>
+    public static string? PresetNote(string id, string? note) =>
+        id == RecommendedDns ? "рекомендуем" + (note is { Length: > 0 } ? " · " + note : "") : note;
 
     public string RecommendedDnsText => "Включить защищённый DNS";
     public string RecommendedDnsHint => DnsPresets.Find(RecommendedDns)!.Title + ", для Ethernet и Wi-Fi. Вернуть — кнопкой в сообщении после смены или «Диагностика» → «DNS этого компьютера».";

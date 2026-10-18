@@ -1545,7 +1545,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             : p.Resolvers is { Count: > 0 } ? "защищённый" + (p.Resolvers.Count > 1 ? $" · серверов: {p.Resolvers.Count}" : "")
             : string.Join(", ", ips) + " · без шифрования";
         if (p.Note is { Length: > 0 } n) detail += " · " + n;
-        return new DnsOption(p.Id, p.Title, detail, false, ips, p.Resolvers?.FirstOrDefault()?.Doh);
+        // Описание: адреса и шаблоны — с роутера; кто держит — из пресетов ПК по тому же id (у «Google + Cloudflare» — оба).
+        var dohs = (p.Resolvers ?? []).Select(x => x.Doh).OfType<string>().ToList();
+        var owner = DnsPresets.Find(p.Id)?.Owner ?? (p.Id == "default" ? "Google и Cloudflare (США)" : null);
+        return new DnsOption(p.Id, p.Title, detail, false, ips, dohs.FirstOrDefault(), dohs, owner, MainViewModel.PresetNote(p.Id, p.Note));
     }
 
     /// <summary>«Применить» в выборе DNS роутера: готовый — dns_set preset, свой — dns_set custom (адреса — bootstrap при DoH, иначе plain).</summary>
