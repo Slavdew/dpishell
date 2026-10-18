@@ -85,13 +85,13 @@ public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, 
 
     public static CheckRow From(TargetVerdict v, Func<string, string> groupTitle, bool control = false)
     {
-        var note = v.BrowserFails ? "✓ для программы, ✗ для браузера"
+        var note = v.BrowserFails ? (v.Browser!.Reason == BrowserPath.WindowsOnlyReason ? "✓ по защищённому DNS, ✗ по DNS Windows" : "✓ для программы, ✗ для браузера")
             : v.Ok ? "" : control ? "ломает обычный сайт" : v.Target.Required ? "обязательный" : "необязательный";
         var seconds = v.Ok ? v.BestSeconds : v.Probes.Select(p => p.Seconds).DefaultIfEmpty(0).Max();
         var detail = Texts.ProbeDetail(v.Probes);
         // Адреса разошлись — оба пути с адресами: программа (DoH) и браузер (DNS системы, с hosts).
         if (v.Browser is { } b)
-            detail = $"Программа (защищённый DNS: {Ips(b.Doh)}): {detail}\nБраузер ({(b.FromHosts ? "hosts" : "DNS системы")}: {(b.System.Length > 0 ? Ips(b.System) : "имени нет")}): "
+            detail = $"Программа (защищённый DNS: {Ips(b.Doh)}): {detail}\nЧерез Windows ({(b.FromHosts ? "hosts" : "DNS Windows")}: {(b.System.Length > 0 ? Ips(b.System) : "имени нет")}): "
                 + (b.Probes.Count > 0 ? Texts.ProbeDetail(b.Probes) : "не открыть") + (b.Ok ? "" : " — " + b.Reason);
         return new(v.Ok, groupTitle(v.GroupId), v.Target.Url, detail, $"{seconds:0.0} с", note, !v.Ok && (control || v.Target.Required),
             v.BrowserFails ? v.Browser!.Reason : "");

@@ -85,13 +85,18 @@ public sealed partial class MainViewModel
         {
             var bad = CheckRows.Where(r => r.HasBrowser).ToList();
             if (bad.Count == 0) return "";
-            var reasons = string.Join("; ", bad.Select(r => r.Browser).Distinct());
-            return $"⚠ В браузере не откроется: {string.Join(", ", bad.Select(r => r.Group).Distinct())} — {reasons}.";
+            // Явная подмена и hosts — «в браузере не откроется»; просто «через DNS Windows не открылось» — про программы, берущие адрес у Windows.
+            var parts = bad.GroupBy(r => r.Browser).Select(g =>
+            {
+                var groups = string.Join(", ", g.Select(r => r.Group).Distinct());
+                return g.Key == BrowserPath.WindowsOnlyReason ? $"{g.Key}: {groups}." : $"В браузере не откроется: {groups} — {g.Key}.";
+            });
+            return "⚠ " + string.Join(" ", parts);
         }
     }
     public bool HasBrowserWarning => CheckRows.Any(r => r.HasBrowser);
-    /// <summary>Кнопка «Включить защищённый DNS» — когда виноват DNS провайдера (не hosts).</summary>
-    public bool ShowBrowserDnsFix => CheckRows.Any(r => r.Browser == BrowserPath.DnsReason);
+    /// <summary>Кнопка «Включить защищённый DNS» — когда виноват DNS (подмена или просто не открылось через DNS Windows), не hosts.</summary>
+    public bool ShowBrowserDnsFix => CheckRows.Any(r => r.Browser is BrowserPath.DnsReason or BrowserPath.WindowsOnlyReason);
 
     // ---------- помехи ----------
 

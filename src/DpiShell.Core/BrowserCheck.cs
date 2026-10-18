@@ -30,11 +30,18 @@ public sealed record BrowserPath(IPAddress[] System, IPAddress[] Doh, bool Ok, s
 {
     public bool FromHosts => HostsIp is not null;
 
-    /// <summary>Почему браузер не откроет: «DNS провайдера подменяет адрес» или «запись в hosts ведёт на неработающий адрес».</summary>
-    public string Reason => FromHosts ? HostsReason : DnsReason;
+    /// <summary>Подмена — только явная (<see cref="BrowserCheck.IsSpoof"/>): чужой адрес, заглушка или чужой сертификат.</summary>
+    public bool Spoofed => !Ok && !FromHosts && BrowserCheck.IsSpoof(System, Probes);
+
+    /// <summary>
+    /// Почему не откроется по пути Windows: подмена адреса, запись в hosts или просто «через DNS Windows не открылось»
+    /// (браузер при этом может ходить через свой защищённый DNS, а CDN законно отдаёт разным DNS разные адреса).
+    /// </summary>
+    public string Reason => FromHosts ? HostsReason : Spoofed ? DnsReason : WindowsOnlyReason;
 
     public const string DnsReason = "DNS провайдера подменяет адрес";
     public const string HostsReason = "запись в hosts ведёт на неработающий адрес";
+    public const string WindowsOnlyReason = "Программы, которые берут адрес у Windows (Discord, игры, часть браузеров), сюда не достучатся";
 }
 
 /// <summary>
@@ -54,6 +61,31 @@ public static class BrowserCheck
         if (system.Count == 0) return false;
         var nets = doh.Select(Net24).ToHashSet();
         return system.Any(ip => nets.Contains(Net24(ip)));
+    }
+
+    /// <summary>
+    /// Явная подмена: адрес из DNS системы — не интернетный (заглушка, частная или зарезервированная сеть), провайдер ответил
+    /// страницей-заглушкой или сертификат по адресу не для этого сайта. Просто другой публичный адрес — не подмена.
+    /// </summary>
+    public static bool IsSpoof(IReadOnlyCollection<IPAddress> system, IReadOnlyCollection<ProbeResult> probes) =>
+        system.Any(IsNonPublic)
+        || probes.Any(p => p.Outcome == ProbeOutcome.ForeignRedirect
+            || p.Outcome == ProbeOutcome.TlsFailed && (p.Detail.Contains("certificate", StringComparison.OrdinalIgnoreCase) || p.Detail.Contains("сертификат", StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>0.x, 10.x, 127.x, 169.254.x, 172.16/12, 192.168.x, 100.64/10, 192.0.0/24, 192.0.2/24, 198.18/15, 198.51.100/24, 203.0.113/24, 224+.</summary>
+    public static bool IsNonPublic(IPAddress ip)
+    {
+        if (ip.AddressFamily != AddressFamily.InterNetwork) return ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.IPv6Any);
+        var b = ip.GetAddressBytes();
+        return b[0] is 0 or 10 or 127 or >= 224
+            || b[0] == 169 && b[1] == 254
+            || b[0] == 172 && b[1] is >= 16 and <= 31
+            || b[0] == 192 && b[1] == 168
+            || b[0] == 100 && b[1] is >= 64 and <= 127
+            || b[0] == 192 && b[1] == 0 && b[2] is 0 or 2
+            || b[0] == 198 && b[1] is 18 or 19
+            || b[0] == 198 && b[1] == 51 && b[2] == 100
+            || b[0] == 203 && b[1] == 0 && b[2] == 113;
     }
 
     static string Net24(IPAddress ip)
