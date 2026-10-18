@@ -48,6 +48,15 @@ public sealed class HttpProbeTests : IAsyncLifetime
             case "/503": await RawHttpServer.RespondAsync(s, 503, []); break;
             case "/400": await RawHttpServer.RespondAsync(s, 400, new byte[30_000]); break;
             case "/404": await RawHttpServer.RespondAsync(s, 404, new byte[30_000]); break;
+            case "/403": await RawHttpServer.RespondAsync(s, 403, new byte[30_000]); break;
+            case "/451": await RawHttpServer.RespondAsync(s, 451, new byte[30_000]); break;
+            case "/redir-small": await RawHttpServer.RespondAsync(s, 301, [], "Location: /small"); break;
+            case "/redir-foreign-2": await RawHttpServer.RespondAsync(s, 301, [], "Location: /redir-foreign"); break;
+            case "/redir-451": await RawHttpServer.RespondAsync(s, 302, [], "Location: /451"); break;
+            case var p when p.StartsWith("/hop/"): // /hop/N: N переходов до /big
+                var left = int.Parse(p[5..]);
+                await RawHttpServer.RespondAsync(s, 301, [], "Location: " + (left <= 1 ? "/big" : $"/hop/{left - 1}"));
+                break;
             default: await RawHttpServer.RespondAsync(s, 404, []); break;
         }
     }
@@ -130,13 +139,68 @@ public sealed class HttpProbeTests : IAsyncLifetime
     public async Task ServerErrorsAnd400_BadStatus(string path) =>
         Assert.Equal(ProbeOutcome.BadStatus, (await Once(path, 20_480)).Outcome);
 
-    // Зафиксированное поведение: 404 с телом считается «сайт открылся» (DPI-блокировка так не выглядит).
     [Fact]
-    public async Task NotFoundWithBody_Ok() => Assert.Equal(ProbeOutcome.Ok, (await Once("/404", 20_480)).Outcome);
+    public async Task Redirect_FollowedToFinalPage_DetailHasChain()
+    {
+        var r = await Once("/redir-abs", 20_480);
+        Assert.Equal(ProbeOutcome.Ok, r.Outcome);
+        Assert.Equal(30_000, r.Bytes);   // судим по конечному телу
+        Assert.Equal("301 → /big → 200, 29 КБ", r.Detail);
+    }
+
+    // Было: 301 сразу Ok в обход MinBytes. Теперь — по конечной странице.
+    [Fact]
+    public async Task Redirect_ToSmallBody_Truncated()
+    {
+        var r = await Once("/redir-small", 20_480);
+        Assert.Equal(ProbeOutcome.Truncated, r.Outcome);
+        Assert.Equal(100, r.Bytes);
+        Assert.StartsWith("301 → /small → 200", r.Detail);
+    }
+
+    [Fact]
+    public async Task Redirect_FiveHopsOk_SixFail()
+    {
+        Assert.Equal(ProbeOutcome.Ok, (await Once("/hop/5", 20_480)).Outcome);
+        var r = await Once("/hop/6", 20_480);
+        Assert.Equal(ProbeOutcome.BadStatus, r.Outcome);
+        Assert.Contains("больше 5 переходов", r.Detail);
+    }
+
+    [Fact]
+    public async Task Redirect_ThenForeign_ForeignRedirect()
+    {
+        var r = await Once("/redir-foreign-2");
+        Assert.Equal(ProbeOutcome.ForeignRedirect, r.Outcome);
+        Assert.Contains("warning.rt.ru", r.Detail);
+    }
+
+    [Theory]
+    [InlineData("/451")]
+    [InlineData("/redir-451")]
+    public async Task Status451_Blocked(string path)
+    {
+        var r = await Once(path);
+        Assert.Equal(ProbeOutcome.Blocked, r.Outcome);
+        Assert.Contains("451", r.Detail);
+    }
+
+    // Было: 403/404 с телом — «сайт открылся». У целей с телом это провал с понятным текстом.
+    [Theory]
+    [InlineData("/403", "403: доступ запрещён")]
+    [InlineData("/404", "404: страницы нет")]
+    public async Task ForbiddenAndNotFound_WithBodyTarget_BadStatus(string path, string detail)
+    {
+        var r = await Once(path);
+        Assert.Equal(ProbeOutcome.BadStatus, r.Outcome);
+        Assert.Equal(detail, r.Detail);
+    }
 
     [Theory]
     [InlineData("/500")]
     [InlineData("/400")]
+    [InlineData("/404")]
+    [InlineData("/403")]
     [InlineData("/redir-foreign")]
     [InlineData("/small")]
     public async Task HandshakeOnly_AnyStatus_Ok(string path)

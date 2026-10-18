@@ -25,7 +25,8 @@ public sealed record TargetSet(List<TargetGroup> Groups)
             .Select(e => new Target(e.Contains("://") ? e : $"https://{e}/")).ToList());
 }
 
-public enum ProbeOutcome { Ok, Timeout, ConnectFailed, TlsFailed, Reset, Truncated, BadStatus, ForeignRedirect, Error }
+/// <summary>Blocked — HTTP 451 «недоступно по требованию закона»: блокировка, а не сайт.</summary>
+public enum ProbeOutcome { Ok, Timeout, ConnectFailed, TlsFailed, Reset, Truncated, BadStatus, ForeignRedirect, Error, Blocked }
 
 public sealed record ProbeResult(Target Target, SslProtocols Tls, ProbeOutcome Outcome, double Seconds, long Bytes, string Detail)
 {
@@ -42,6 +43,8 @@ public sealed class HttpProbe
     public TimeSpan ReadTimeout { get; init; } = TimeSpan.FromSeconds(6);
     public int MaxBytes { get; init; } = 1 << 20;
     public int Attempts { get; init; } = 2;
+    /// <summary>Сколько редиректов внутри сайта пройти до конечной страницы; больше — провал.</summary>
+    public int MaxRedirects { get; init; } = 5;
 
     /// <summary>Если задан — адреса целей берутся из DoH, а не из DNS системы (см. docs/research/dns.md). Не нашёл — системный DNS.</summary>
     public DohResolver? Resolver { get; init; }
@@ -88,38 +91,56 @@ public sealed class HttpProbe
         long bytes = 0;
         try
         {
-            using var req = new HttpRequestMessage(HttpMethod.Get, t.Url);
-            req.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36");
-            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
-            using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
-            var code = (int)resp.StatusCode;
-
-            if (t.HandshakeOnly)
-                return new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, 0, $"HTTP {code}");
-
-            if (code is >= 300 and < 400)
+            // Редиректы внутри сайта — до конечной страницы тем же клиентом (тот же DoH и версия TLS); судим по конечному ответу.
+            var url = new Uri(t.Url);
+            var host = url.Host;
+            var chain = new List<string>();
+            for (int hop = 0; ; hop++)
             {
-                var loc = resp.Headers.Location;
-                var target = loc is null ? null : (loc.IsAbsoluteUri ? loc : new Uri(new Uri(t.Url), loc));
-                // Редирект на страницу-заглушку провайдера — признак блокировки.
-                return target is not null && SameSite(new Uri(t.Url).Host, target.Host)
-                    ? new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, 0, $"HTTP {code} → {target.Host}")
-                    : new(t, tls, ProbeOutcome.ForeignRedirect, sw.Elapsed.TotalSeconds, 0, $"редирект на {target?.Host ?? "?"}");
+                cts.CancelAfter(ConnectTimeout + ReadTimeout);   // у каждого перехода — свой срок
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36");
+                req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
+                using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                var code = (int)resp.StatusCode;
+
+                if (t.HandshakeOnly)
+                    return new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, 0, $"HTTP {code}");
+
+                string Chain(string end) => string.Concat(chain.Select(c => c + " → ")) + end;
+
+                if (code is >= 300 and < 400)
+                {
+                    var loc = resp.Headers.Location;
+                    var next = loc is null ? null : (loc.IsAbsoluteUri ? loc : new Uri(url, loc));
+                    // Редирект на страницу-заглушку провайдера — признак блокировки.
+                    if (next is null || !SameSite(host, next.Host))
+                        return new(t, tls, ProbeOutcome.ForeignRedirect, sw.Elapsed.TotalSeconds, 0, Chain($"{code}: редирект на {next?.Host ?? "?"}"));
+                    chain.Add($"{code} → {Short(next, url)}");
+                    if (hop + 1 > MaxRedirects)
+                        return new(t, tls, ProbeOutcome.BadStatus, sw.Elapsed.TotalSeconds, 0, Chain($"больше {MaxRedirects} переходов"));
+                    url = next;
+                    continue;
+                }
+                if (code == 451)
+                    return new(t, tls, ProbeOutcome.Blocked, sw.Elapsed.TotalSeconds, 0, Chain("451: недоступно по требованию закона"));
+                if (code is 403 or 404)
+                    return new(t, tls, ProbeOutcome.BadStatus, sw.Elapsed.TotalSeconds, 0, Chain(code == 403 ? "403: доступ запрещён" : "404: страницы нет"));
+                if (code == 400 || code >= 500)
+                    return new(t, tls, ProbeOutcome.BadStatus, sw.Elapsed.TotalSeconds, 0, Chain($"HTTP {code}"));
+
+                var expected = resp.Content.Headers.ContentLength;
+                await using var stream = await resp.Content.ReadAsStreamAsync(cts.Token);
+                var buf = new byte[16384];
+                int n;
+                while (bytes < MaxBytes && (n = await stream.ReadAsync(buf, cts.Token)) > 0) bytes += n;
+
+                if (bytes < MaxBytes && expected is { } len && bytes < len)
+                    return new(t, tls, ProbeOutcome.Truncated, sw.Elapsed.TotalSeconds, bytes, Chain($"{code}, получено {bytes} из {len}"));
+                if (bytes < t.MinBytes)
+                    return new(t, tls, ProbeOutcome.Truncated, sw.Elapsed.TotalSeconds, bytes, Chain($"{code}, получено {bytes}, нужно ≥ {t.MinBytes}"));
+                return new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, bytes, Chain(chain.Count == 0 ? $"HTTP {code}, {Kb(bytes)}" : $"{code}, {Kb(bytes)}"));
             }
-            if (code == 400 || code >= 500)
-                return new(t, tls, ProbeOutcome.BadStatus, sw.Elapsed.TotalSeconds, 0, $"HTTP {code}");
-
-            var expected = resp.Content.Headers.ContentLength;
-            await using var stream = await resp.Content.ReadAsStreamAsync(cts.Token);
-            var buf = new byte[16384];
-            int n;
-            while (bytes < MaxBytes && (n = await stream.ReadAsync(buf, cts.Token)) > 0) bytes += n;
-
-            if (bytes < MaxBytes && expected is { } len && bytes < len)
-                return new(t, tls, ProbeOutcome.Truncated, sw.Elapsed.TotalSeconds, bytes, $"получено {bytes} из {len}");
-            if (bytes < t.MinBytes)
-                return new(t, tls, ProbeOutcome.Truncated, sw.Elapsed.TotalSeconds, bytes, $"получено {bytes}, нужно ≥ {t.MinBytes}");
-            return new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, bytes, $"HTTP {code}, {bytes / 1024} КБ");
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -135,6 +156,12 @@ public sealed class HttpProbe
             return new(t, tls, bytes > 0 ? ProbeOutcome.Truncated : ProbeOutcome.Reset, sw.Elapsed.TotalSeconds, bytes, Flatten(e));
         }
     }
+
+    static string Kb(long bytes) => bytes >= 1024 ? $"{bytes / 1024} КБ" : $"{bytes} байт";
+
+    /// <summary>Куда ведёт переход: путь, если хост тот же; иначе хост и путь («www.youtube.com/»).</summary>
+    static string Short(Uri next, Uri from) =>
+        next.Host.Equals(from.Host, StringComparison.OrdinalIgnoreCase) && next.Scheme == from.Scheme ? next.PathAndQuery : next.Host + next.PathAndQuery;
 
     static async ValueTask<Stream> ConnectAsync(DohResolver resolver, DnsEndPoint ep, CancellationToken ct)
     {

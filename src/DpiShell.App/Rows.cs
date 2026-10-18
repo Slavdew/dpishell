@@ -83,6 +83,7 @@ public static class Texts
         ProbeOutcome.Truncated => "загрузка обрывается",
         ProbeOutcome.BadStatus => "ошибка на сайте",
         ProbeOutcome.ForeignRedirect => "заглушка провайдера",
+        ProbeOutcome.Blocked => "блокировка (451)",
         ProbeOutcome.Ok => "открывается",
         _ => "ошибка",
     };
