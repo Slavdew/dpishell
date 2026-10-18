@@ -144,7 +144,7 @@ public static class RouterTexts
     public static string Found(RouterFound f, string? version) => f switch
     {
         RouterFound.NotFound => "DpiShell на роутере не найден",
-        RouterFound.AppTooOld => "Обновите приложение: роутер новее",
+        RouterFound.AppTooOld => "Обновите программу: роутер новее",
         RouterFound.RouterTooOld => "Обновите пакет на роутере",
         _ => $"DpiShell {version} найден — введите пароль роутера",
     };
@@ -674,7 +674,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         }
         if (Updating) parts.Add("обновляется");
         else if (_status?.Update is { Available: true, Version: { } uv }) parts.Add("доступно обновление " + uv);
-        if (Compat is { Level: not RouterCompatLevel.Ok }) parts.Add(CompatNeedsApp ? "нужна новая версия программы" : "обновите DpiShell на роутере");
+        if (Compat is { Level: not RouterCompatLevel.Ok }) parts.Add(CompatNeedsApp ? Compat.Level == RouterCompatLevel.Blocked ? "нужна новая версия программы" : "есть новая версия программы" :"обновите DpiShell на роутере");
         else if (!Connected && _detection?.Found is RouterFound.AppTooOld or RouterFound.RouterTooOld)
             parts.Add(RouterTexts.Found(_detection.Found, null) is var t ? char.ToLowerInvariant(t[0]) + t[1..] : "");
         // Выключение сторожем, кнопкой или откатом — отдельной фразой с «Подробнее» (UpdateOff), не строкой предупреждений.

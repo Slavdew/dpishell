@@ -32,7 +32,7 @@ public class RouterCompatTests
     {
         var c = RouterCompatibility.Evaluate(new(1, 3), [.. Methods020, "new_thing"], "1.0.0", App);
         Assert.Equal(RouterCompatLevel.Warning, c.Level);
-        Assert.Contains("обновления приложения", c.Text);
+        Assert.Equal("DpiShell на роутере новее программы — обновите программу, чтобы получить новые возможности.", c.Text);
         Assert.True(c.CanCall("enable"));
     }
 
@@ -51,7 +51,7 @@ public class RouterCompatTests
     {
         var c = RouterCompatibility.Evaluate(new(2, 0), Methods020, "2.0.0", App);
         Assert.Equal(RouterCompatLevel.Blocked, c.Level);
-        Assert.Contains("обновите приложение", c.Text);
+        Assert.Contains("обновите программу", c.Text);
         Assert.False(c.CanCall("enable"));
         Assert.True(c.CanCall("status"));
         Assert.True(c.CanCall("update_install"));

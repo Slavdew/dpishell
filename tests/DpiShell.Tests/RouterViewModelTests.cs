@@ -114,7 +114,7 @@ public sealed class RouterViewModelTests : IDisposable
 
     [Theory]
     [InlineData("""{ "product": "dpishell-router", "version": "0.0.9", "enabled": true, "strategy": "alt10" }""", "\"0.9\"", "Обновите пакет на роутере", "устарел", false)]
-    [InlineData("""{ "product": "dpishell-router", "api": 2, "enabled": true, "strategy": "alt10" }""", "\"2.0\"", "Обновите приложение: роутер новее", "новее этого приложения", true)]
+    [InlineData("""{ "product": "dpishell-router", "api": 2, "enabled": true, "strategy": "alt10" }""", "\"2.0\"", "Обновите программу: роутер новее", "новее программы", true)]
     public async Task Connect_OtherApi_LoginOnlyForStatusUpdateUninstall(string statusJson, string rpcApi, string text, string compat, bool needsApp)
     {
         using var r = new FakeRouter { StatusJson = statusJson, StatusApi = rpcApi };
