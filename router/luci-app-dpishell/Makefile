@@ -7,7 +7,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-dpishell
 PKG_VERSION:=0.2.0
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=DpiShell
 
@@ -51,6 +51,11 @@ define Package/luci-app-dpishell/install
 endef
 
 define Package/luci-app-dpishell/postinst
+#!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] || { rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache; exit 0; }
+endef
+
+define Package/luci-app-dpishell/postrm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] || { rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache; exit 0; }
 endef

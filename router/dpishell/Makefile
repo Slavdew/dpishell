@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=dpishell
 PKG_VERSION:=0.2.0
-PKG_RELEASE:=5
+PKG_RELEASE:=6
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=DpiShell
 
@@ -67,7 +67,11 @@ endef
 define Package/dpishell/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/etc/init.d/rpcd restart
+# Кеш LuCI до перезапуска rpcd: со старым кешем меню ссылается на прежние страницы и вход в панель ломается.
+rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache
+# Перезапуск rpcd — отдельным процессом вне его cgroup и через 2 с: при установке через веб-вход apk — потомок rpcd,
+# и перезапуск изнутри оставлял занятую cgroup («failed to remove busy cgroup of rpcd::instance1»), а вызов — без ответа.
+sh -c 'echo $$$$ > /sys/fs/cgroup/cgroup.procs 2>/dev/null; sleep 2; /etc/init.d/rpcd restart' >/dev/null 2>&1 &
 /etc/init.d/dpishell enable
 /etc/init.d/dpishell start
 exit 0
@@ -79,6 +83,15 @@ define Package/dpishell/prerm
 # Ручной apk del: та же очистка, что у кнопки «Удалить» (выключить обход, вернуть разгрузку, DNS, cron, убрать ядро
 # из /opt/zapret), без удаления пакетов и с сохранением настроек /etc/dpishell.
 [ -x /usr/libexec/dpishell/uninstall.sh ] && sh /usr/libexec/dpishell/uninstall.sh --keep --from-prerm
+exit 0
+endef
+
+define Package/dpishell/postrm
+#!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
+# Файлы плагина уже удалены: без перезапуска rpcd держит объект dpishell, а LuCI — меню из кеша.
+rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache
+sh -c 'echo $$$$ > /sys/fs/cgroup/cgroup.procs 2>/dev/null; sleep 2; /etc/init.d/rpcd restart' >/dev/null 2>&1 &
 exit 0
 endef
 

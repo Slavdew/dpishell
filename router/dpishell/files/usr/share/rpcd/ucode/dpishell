@@ -360,9 +360,13 @@ const methods = {
 	},
 };
 
+// Запуск вне cgroup rpcd: иначе перезапуск rpcd (postinst при обновлении, удаление) упирается в занятую cgroup
+// («failed to remove busy cgroup of rpcd::instance1») или procd убивает задание вместе с rpcd — и rpcd не поднимается.
+const DETACH = `sh -c 'echo $$ > /sys/fs/cgroup/cgroup.procs 2>/dev/null; exec "$@"' detach`;
+
 function spawn(args) {
 	// Фоном, без ожидания: rpcd-вызов должен вернуться сразу (router-api §4).
-	sh(`( /usr/libexec/dpishell/run ${args} >/dev/null 2>&1 & )`);
+	sh(`( ${DETACH} /usr/libexec/dpishell/run ${args} >/dev/null 2>&1 & )`);
 }
 
 function q(s) { return `'${replace(`${s}`, "'", "'\\''")}'`; }
@@ -489,7 +493,7 @@ methods.uninstall = {
 		let r = sh(`cp /usr/libexec/dpishell/uninstall.sh /tmp/dpishell-uninstall.sh && chmod 700 /tmp/dpishell-uninstall.sh`);
 		if (r.rc != 0)
 			return err('failed', `Не удалось запустить удаление: ${trim(r.out)}`);
-		sh(`( setsid sh /tmp/dpishell-uninstall.sh ${keep === false ? '--full' : '--keep'} >/dev/null 2>&1 & )`);
+		sh(`( setsid ${DETACH} sh /tmp/dpishell-uninstall.sh ${keep === false ? '--full' : '--keep'} >/dev/null 2>&1 & )`);
 		return { started: true };
 	}
 };

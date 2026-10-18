@@ -16,6 +16,8 @@ for a in "$@"; do
 	esac
 done
 OUT=/tmp/dpishell-uninstall.json
+# Не в cgroup rpcd (запуск со страницы): шаг 9 перезапускает rpcd, procd не должен убить нас вместе с ним.
+[ -n "$PKGS" ] && echo $$ > /sys/fs/cgroup/cgroup.procs 2>/dev/null
 
 say() {
 	[ -n "$PKGS" ] || return 0
