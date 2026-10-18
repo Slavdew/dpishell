@@ -9,6 +9,9 @@ namespace DpiShell.App;
 /// Настройки окна — %LocalAppData%\DpiShell\window.json (helper-protocol §4): принадлежат пользователю, права не нужны.
 /// Тема, крестик, адрес и пароль роутера (пароль — DPAPI CurrentUser, см. RouterSecrets). Обходные настройки — у помощника.
 /// </summary>
+/// <summary>Роутер, на котором работает обход: адрес и MAC (null — не узнали; тогда «тот же роутер» не подтвердить).</summary>
+public sealed record RouterBypassMark(string Address, string? Mac);
+
 public sealed class WindowSettings
 {
     /// <summary>"system" / "light" / "dark".</summary>
@@ -19,6 +22,11 @@ public sealed class WindowSettings
     public string? RouterAddress { get; set; }
     /// <summary>Пароль роутера под DPAPI (CurrentUser); открытым не хранится.</summary>
     public string? RouterPassword { get; set; }
+    /// <summary>
+    /// Обход «живёт» на роутере: в последний раз роутер ответил «включён» (router-api §6). Адрес и MAC — узнать тот же роутер,
+    /// когда он не отвечает (обновление, перезагрузка): тогда при старте окно не оставляет и не включает обход на ПК. null — не живёт.
+    /// </summary>
+    public RouterBypassMark? RouterBypass { get; set; }
     /// <summary>Подсказку «свернулась в трей» уже показывали.</summary>
     public bool TrayHintShown { get; set; }
     /// <summary>Окно при входе в Windows (в трее). Null — не выбирали: по режиму работы (architecture.md «Автозапуск»).</summary>

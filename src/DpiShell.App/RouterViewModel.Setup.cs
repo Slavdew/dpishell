@@ -505,6 +505,7 @@ public sealed partial class RouterViewModel
         Status = null;
         Strategies.Clear();
         ForgetRouterSetup();
+        ForgetBypass();
         _removed = true;
         try { await DetectAsync(); }
         catch (RouterException) { SetDetection(null); }

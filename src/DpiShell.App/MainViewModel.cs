@@ -262,7 +262,10 @@ public sealed partial class MainViewModel : Observable
     {
         await FetchAsync(full: true);
         ApplyHelperData();
-        if (Helper.Client is { } c && Helper.Status is { RunMode: "process", Enabled: true, Active: false, StrategyId: { } id })
+        // Обход «живёт» на роутере — не включать его здесь, пока не узнаем, где мы (ReconcileRouterPcAsync).
+        if (Router.BypassRemembered && Helper.Status is { RunMode: "process", Enabled: true, Active: false, StrategyId: { } deferred })
+            _resumeDeferred = deferred;
+        else if (Helper.Client is { } c && Helper.Status is { RunMode: "process", Enabled: true, Active: false, StrategyId: { } id })
         {
             try { await c.EnableAsync(id); }
             catch (Exception e) when (e is HelperException or HelperUnavailableException) { _error = Texts.Friendly(e); Fail(_error); }
@@ -455,13 +458,14 @@ public sealed partial class MainViewModel : Observable
     {
         IsLoading = false; LoadSlow = false;
         // Роутер ищем сразу и параллельно: его нет — блок просто не появится.
-        _ = Router.RefreshAsync();
+        var router = Router.RefreshAsync();
         if (Helper.Reader is not null) await AfterConnectAsync();
         else
         {
             ApplyHelperData();
             await RefreshStatusAsync();
         }
+        _ = ReconcileRouterPcAsync(router);
         _ = CheckDnsAsync();
         _ = RefreshPcDnsAsync();
         // «Починить адреса» включено и с прошлой проверки прошли сутки — перепроверить записи (устаревшие уберутся).
@@ -741,6 +745,8 @@ public sealed partial class MainViewModel : Observable
                 _localStrategy = strategy;
                 _coreProblem = null;
             }
+            // Обход ПК заработал, а роутер уже «включён» (служба ПК поднялась с Windows, состояние пришло позже ответа роутера) — §6.
+            if (_active && Router.Found && Router.RouterEnabled) OnRouterChanged();
             VpnWarning = vpn.Count == 0 ? "" : $"Включён VPN ({string.Join(", ", vpn)}). С ним обход обычно не нужен, а подбор может показать неверный результат.";
             ConflictWarning = conflicts.Count == 0 ? "" : $"Мешают другие программы обхода: {string.Join(", ", conflicts.Select(c => c.Name).Distinct())}.";
         }
@@ -774,6 +780,8 @@ public sealed partial class MainViewModel : Observable
     {
         // Роутер уже обходит для всего дома — двойная обработка ломает сайты (router-api §6): подобрать там или выключить там.
         if (!IsRunning && !await RouterGateAsync(select: false)) return;
+        // Роутер не отвечает, а человек включает обход здесь — его выбор: при следующем старте окно этот обход не выключит.
+        if (!Router.Found) Router.ForgetBypass();
         await EnableCoreAsync();
     }
 

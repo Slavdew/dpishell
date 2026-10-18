@@ -694,6 +694,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         Raise(nameof(RouterEnabled));
         Raise(nameof(FlowOffloadFixable)); Raise(nameof(Ipv6Fixable));
         RaisePc();
+        RememberBypass();
         Changed?.Invoke();
     }
 

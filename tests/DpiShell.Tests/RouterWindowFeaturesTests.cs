@@ -1,5 +1,6 @@
 using DpiShell.App;
 using DpiShell.Core;
+using DpiShell.Core.Helper;
 using DpiShell.Core.Router;
 
 namespace DpiShell.Tests;
@@ -455,7 +456,118 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         await vm.Router.ConnectAsync("secret");
         // Помощника нет — выключить обход ПК нечем: остаётся плашка «включён и здесь, и на роутере» с двумя кнопками.
         Assert.True(vm.Router.BothOn);
-        Assert.NotEqual("Обход перешёл на роутер.", vm.Message);
+        Assert.NotEqual("Обход перешёл на роутер: на этом ПК выключен.", vm.Message);
+    }
+
+    // ---------- обход «живёт» на роутере: старт окна, роутер не отвечает (живой случай: обновление роутера) ----------
+
+    /// <summary>Окно с фейковым помощником (служба ПК в заданном состоянии) и роутером по адресу; заставка ещё не снята.</summary>
+    async Task<(MainViewModel Vm, HelperFixture Helper, WindowSettings Settings)> MainWithHelper(string routerAddress, HelperStatus pc, RouterBypassMark? mark, string? macNow)
+    {
+        var f = new HelperFixture();
+        f.Backend.StatusValue = pc;
+        var shell = new Shell(new AppPaths(_tmp.Sub("main"), Repo.Data));
+        var settings = TestWindow.Settings(shell);
+        settings.RouterBypass = mark;
+        var vm = TestWindow.Model(shell, await f.LinkAsync(), settings);
+        vm.AskHelper = _ => false;
+        vm.Router.PcTimestamps = () => true;
+        vm.Router.AddressAuto = false;
+        vm.Router.CustomAddress = routerAddress;
+        vm.Router.PollInterval = TimeSpan.FromMilliseconds(10);
+        vm.Router.MacOf = _ => macNow;
+        return (vm, f, settings);
+    }
+
+    static string DeadAddress()
+    {
+        using var gone = new FakeRouter();
+        return gone.Address;   // роутер «выключен»: по адресу никто не отвечает
+    }
+
+    static HelperStatus Pc(bool active, string mode = "service") =>
+        FakeHelperBackend.DefaultStatus with { Enabled = true, Active = active, RunMode = mode, Service = active ? SvcState.Running : SvcState.Stopped };
+
+    [Fact]
+    public async Task Router_On_RemembersBypass_Off_Forgets()
+    {
+        using var r = new FakeRouter();
+        var vm = Main(r);
+        vm.Router.MacOf = _ => "AABBCCDDEEFF";
+        await vm.Router.ConnectAsync("secret");
+        await Until(() => vm.Router.BypassRemembered && Settings(vm).RouterBypass?.Mac is not null);
+        Assert.Equal(new RouterBypassMark(r.Address, "AABBCCDDEEFF"), Settings(vm).RouterBypass);
+        Assert.True(await vm.Router.DisableAsync());
+        Assert.Null(Settings(vm).RouterBypass);
+    }
+
+    static WindowSettings Settings(MainViewModel vm) =>
+        (WindowSettings)typeof(RouterViewModel).GetField("_settings", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(vm.Router)!;
+
+    [Theory]
+    [InlineData("AABBCCDDEEFF", true)]    // тот же роутер, просто не отвечает (обновляется) — служба ПК, поднявшаяся с Windows, выключается
+    [InlineData("001122334455", false)]   // другая сеть с тем же адресом шлюза — обход ПК не трогаем
+    [InlineData(null, false)]             // MAC не узнать — не уверены, не трогаем
+    public async Task Start_ServiceUp_RouterAbsent_SameRouter_PcOff(string? macNow, bool off)
+    {
+        var address = DeadAddress();
+        var (vm, f, _) = await MainWithHelper(address, Pc(active: true), new RouterBypassMark(address, "AABBCCDDEEFF"), macNow);
+        await using var _f = f;
+        await vm.InitializeAsync();
+        if (off) await Until(() => vm.Message == "Обход на этом ПК выключен: он работает на роутере, а роутер сейчас не отвечает.");
+        else await Task.Delay(300);
+        Assert.Equal(off, f.Backend.Calls.Contains("disable"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Start_ProcessMode_RouterAbsent_NotResumedOnPc_UnlessOtherNetwork(bool sameRouter)
+    {
+        var address = DeadAddress();
+        var (vm, f, _) = await MainWithHelper(address, Pc(active: false, mode: "process"), new RouterBypassMark(address, "AABBCCDDEEFF"),
+            sameRouter ? "AABBCCDDEEFF" : "001122334455");
+        await using var _f = f;
+        await vm.InitializeAsync();
+        await Until(() => f.Backend.Calls.Contains("disable") || f.Backend.Calls.Contains("enable alt9"));
+        Assert.Equal(sameRouter, f.Backend.Calls.Contains("disable"));
+        Assert.Equal(!sameRouter, f.Backend.Calls.Contains("enable alt9"));   // в гостях — как раньше: включён был — включается
+    }
+
+    [Fact]
+    public async Task Start_ProcessMode_NoRouterMemory_ResumesAsBefore()
+    {
+        var (vm, f, _) = await MainWithHelper(DeadAddress(), Pc(active: false, mode: "process"), null, null);
+        await using var _f = f;
+        await vm.InitializeAsync();
+        Assert.Contains("enable alt9", f.Backend.Calls);
+    }
+
+    [Fact]
+    public async Task PcStateArrivesAfterRouter_On_PcSwitchesOff()
+    {
+        using var r = new FakeRouter();
+        var (vm, f, _) = await MainWithHelper(r.Address, Pc(active: false), null, null);
+        await using var _f = f;
+        typeof(MainViewModel).GetProperty(nameof(MainViewModel.IsLoading))!.SetValue(vm, false);
+        await vm.Router.ConnectAsync("secret");   // роутер «включён», а ПК ещё не знаем (выключен)
+        Assert.DoesNotContain("disable", f.Backend.Calls);
+        f.Backend.StatusValue = Pc(active: true);  // служба ПК поднялась с Windows
+        await vm.RefreshStatusAsync();
+        await Until(() => f.Backend.Calls.Contains("disable"));
+        await Until(() => vm.Message == "Обход перешёл на роутер: на этом ПК выключен.");
+    }
+
+    [Fact]
+    public async Task PcEnable_RouterAbsent_ForgetsRouterBypass()
+    {
+        var address = DeadAddress();
+        var (vm, f, settings) = await MainWithHelper(address, Pc(active: false), new RouterBypassMark(address, "AABBCCDDEEFF"), null);
+        await using var _f = f;
+        typeof(MainViewModel).GetProperty(nameof(MainViewModel.IsLoading))!.SetValue(vm, false);
+        await vm.RefreshStatusAsync();
+        await vm.EnableAsync();
+        Assert.Null(settings.RouterBypass);   // человек выбрал обход здесь — при следующем старте его не выключать
     }
 
     // ---------- 7. глубокий поиск на роутере ----------
