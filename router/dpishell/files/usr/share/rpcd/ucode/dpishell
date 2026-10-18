@@ -120,6 +120,8 @@ function strategy_list() {
 			push(items, {
 				id: s.id, title: s.title ?? s.id, source: (s.source == 'user' || index(s.id, 'u-') == 0) ? 'user' : 'catalog',
 				runs: stats[s.id]?.runs ?? 0, passed: stats[s.id]?.passed ?? 0,
+				last: stats[s.id]?.last ? { ...stats[s.id].last, at: st.iso(stats[s.id].last.at) } : null,
+				roles: s.roles ?? {},
 			});
 	// Порядок — по статистике (architecture.md «Порядок по статистике»): доля удачных, затем число прогонов.
 	return sort(items, (a, b) => {

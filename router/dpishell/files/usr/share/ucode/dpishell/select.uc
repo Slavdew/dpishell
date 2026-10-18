@@ -231,6 +231,16 @@ function baseline_groups(groups, cache) {
 	return filter(groups, g => length(g.targets));
 }
 
+// Последняя проверка стратегии для списка стратегий (router-api.md §5.1 strategies.items[].last): что не открылось — названиями групп.
+const GROUP_TITLE = { youtube: 'YouTube', discord: 'Discord', user: 'Свои адреса', control: 'Обычные сайты' };
+
+function last_of(ok, failed_ids) {
+	let seen = {}, failed = [];
+	for (let g in failed_ids)
+		if (!seen[g]) { seen[g] = true; push(failed, GROUP_TITLE[g] ?? g); }
+	return { at: time(), ok, failed };
+}
+
 // Итог: лучшая включается сама (architecture.md «Автоприменение»), до 3 запасных. rows — только полные проверки (не кандидаты поиска).
 function finish(p, rows, groups, s, ts_was, restore) {
 	let ranked = sort(filter(rows, r => r.error == null && r.group_share > 0), (a, b) => better(a, b) ? -1 : 1);
@@ -239,6 +249,7 @@ function finish(p, rows, groups, s, ts_was, restore) {
 		let x = stats[r.id] ??= { runs: 0, passed: 0 };
 		x.runs++;
 		if (r.perfect) x.passed++;
+		x.last = last_of(!!r.perfect, map(filter(r.verdicts ?? [], v => !v.ok), v => v.group));
 	}
 	st.write_atomic(`${st.P.etc}/stats.json`, sprintf('%J\n', stats));
 	ts_set(ts_was);
@@ -549,6 +560,10 @@ function check_run(source, light) {
 	let lc = { at: time(), source, ok: sc.perfect, groups: map(filter(groups, g => !g.control), g => ({
 		id: g.id, ok: length(filter(verdicts, v => v.group == g.id && v.required && !v.ok)) == 0 })) , error: sc.error };
 	st.write_atomic(`${st.P.etc}/last-check.json`, sprintf('%J\n', lc));
+	let stats = st.read_json(`${st.P.etc}/stats.json`, {});
+	(stats[s.strategy] ??= { runs: 0, passed: 0 }).last = last_of(!!sc.perfect,
+		map(filter(verdicts, v => v.required && !v.ok), v => v.group));
+	st.write_atomic(`${st.P.etc}/stats.json`, sprintf('%J\n', stats));
 	let streak = lc.ok ? 0 : st.read_json(`${st.P.etc}/fail-streak.json`, 0) + 1;
 	st.write_atomic(`${st.P.etc}/fail-streak.json`, `${streak}\n`);
 	st.write_status_json();
