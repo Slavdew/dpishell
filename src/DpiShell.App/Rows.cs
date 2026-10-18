@@ -16,9 +16,15 @@ public sealed class GroupOption(string id, string title, bool isChecked) : Obser
 /// Строка списка стратегий на главной: название, итог последнего прогона по группам, найдена ли поиском.
 /// Warning — «ломает обычные сайты» (в последнем прогоне); Details — адреса последнего прогона (раскрываются).
 /// </summary>
-public sealed class StrategyChoice(string id, string title, string stats, bool found, string warning = "", IReadOnlyList<CheckRow>? details = null) : Observable
+public sealed class StrategyChoice(string id, string title, string stats, bool found, string warning = "", IReadOnlyList<CheckRow>? details = null,
+    string parameters = "") : Observable
 {
-    bool _expanded;
+    bool _expanded, _showParams;
+    /// <summary>Точные параметры по ролям и командная строка winws для этого ПК (<see cref="StrategyParams"/>); пусто — стратегии нет у окна.</summary>
+    public string Params { get; } = parameters;
+    public bool HasParams => Params.Length > 0;
+    public bool ShowParams { get => _showParams; set { if (Set(ref _showParams, value)) Raise(nameof(ParamsLinkText)); } }
+    public string ParamsLinkText => ShowParams ? "Скрыть параметры" : "Параметры";
     public string Id { get; } = id;
     public string Title { get; } = title;
     public string Stats { get; } = stats;
@@ -107,6 +113,33 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
                 Enum.TryParse<ProbeOutcome>(p.Outcome, out var o) ? o : ProbeOutcome.Error, p.Seconds, 0, p.Detail)).ToList();
             return new TargetVerdict(t.Control ? "control" : t.GroupId, target, t.Ok, t.Seconds, probes);
         }), names);
+}
+
+/// <summary>
+/// «Параметры» стратегии: роли как в каталоге (плейсхолдеры {fake}/… как есть) и итоговая командная строка winws для этого ПК
+/// (с текущими режимами IP-списка и игр; пути — от папки программы).
+/// </summary>
+public static class StrategyParams
+{
+    /// <summary>Роли в порядке командной строки, затем незнакомые (новые роли каталога) — по имени.</summary>
+    public static string Roles(IReadOnlyDictionary<string, string> roles) =>
+        string.Join("\n", roles.OrderBy(r => Array.IndexOf(WinwsArgs.RoleOrder, r.Key) is var i and >= 0 ? i : int.MaxValue).ThenBy(r => r.Key, StringComparer.Ordinal)
+            .Select(r => $"{r.Key}: {r.Value}"));
+
+    public static string Full(Strategy s, AppPaths p, BuildOptions o)
+    {
+        string line;
+        try { line = "winws.exe " + Short(WinwsArgs.Join(WinwsArgs.Build(s, p, o)), p.Root); }
+        catch (ArgumentException e) { line = "не собрать: " + e.Message; }
+        return $"Параметры по ролям:\n{Roles(s.Roles)}\n\n"
+            + $"Командная строка на этом ПК (IP-список: {Mode(o.Ipset)}, игровой режим: {(o.GameTcp || o.GameUdp ? "вкл" : "выкл")}; пути — от {p.Root}):\n{line}";
+    }
+
+    static string Mode(IpsetMode m) => m switch { IpsetMode.List => "только из списков", IpsetMode.Any => "все адреса", _ => "выкл" };
+
+    /// <summary>Пути внутри папки программы — относительными: строка короче, а что где лежит, сказано в заголовке.</summary>
+    static string Short(string line, string root) =>
+        line.Replace(root.TrimEnd(System.IO.Path.DirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar, "", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>Названия групп целей для подробностей: из каталога целей и «Свои адреса»; контрольные («Обычные сайты») отмечены.</summary>

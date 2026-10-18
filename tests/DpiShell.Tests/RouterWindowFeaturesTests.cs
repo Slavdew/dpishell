@@ -476,7 +476,8 @@ public sealed class RouterWindowFeaturesTests : IDisposable
             StrategiesJson = """
                 { "catalog_version": 3, "items": [ { "id": "alt10", "title": "general (ALT10)", "source": "catalog", "runs": 7, "passed": 6 },
                   { "id": "r-261017-1", "title": "fake + multisplit, ts", "source": "user", "runs": 1, "passed": 1,
-                    "last": { "at": "2026-10-17T11:30:00Z", "ok": false, "failed": ["Discord"] } },
+                    "last": { "at": "2026-10-17T11:30:00Z", "ok": false, "failed": ["Discord"] },
+                    "roles": { "general": "--dpi-desync=fake --dpi-desync-fake-tls={fake}/stun.bin", "quic": "--dpi-desync=fake" } },
                   { "id": "u-found-1", "title": "С ПК", "source": "user", "runs": 0, "passed": 0 } ] }
                 """,
         };
@@ -493,6 +494,14 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         var at = new DateTime(2026, 10, 17, 11, 30, 0, DateTimeKind.Utc).ToLocalTime();
         Assert.Equal($"найдена на роутере · ✗ проверено {at:dd.MM} в {at:HH:mm}, не открылось: Discord", vm.Strategies.Single(s => s.Id == "r-261017-1").Stats);
         Assert.Equal("", vm.Strategies.Single(s => s.Id == "alt10").Stats);
+        // Роли — только если роутер их отдал; плейсхолдер как есть, порядок — как в командной строке.
+        var found = vm.Strategies.Single(s => s.Id == "r-261017-1");
+        Assert.Equal("Параметры по ролям:\nquic: --dpi-desync=fake\ngeneral: --dpi-desync=fake --dpi-desync-fake-tls={fake}/stun.bin", found.Params);
+        Assert.False(vm.Strategies.Single(s => s.Id == "alt10").HasParams);
+        string? copied = null;
+        vm.CopyText = t => copied = t;
+        vm.CopyParams(found);
+        Assert.Equal("fake + multisplit, ts\n" + found.Params, copied);
         Assert.Equal("с ПК", vm.Strategies.Single(s => s.Id == "u-found-1").Stats);
         vm.SelectedScore = cand;
         Assert.False(vm.ApplySelectedCmd.CanExecute(null));

@@ -159,6 +159,38 @@ public sealed class VerdictDetailTests
     }
 
     [Fact]
+    public void StrategyParams_RolesAsInCatalog_CommandLineForThisPc()
+    {
+        using var t = new TempDir();
+        var p = new AppPaths(t.Sub("root"), Repo.Data);
+        var s = new Strategy("alt", "general (ALT)", "catalog", new()
+        {
+            ["general"] = "--dpi-desync=fake --dpi-desync-fake-tls={fake}/tls_clienthello_www_google_com.bin",
+            ["google"] = "--dpi-desync=fake",
+            ["quic"] = "--dpi-desync=fake --dpi-desync-repeats=6",
+        });
+        var text = StrategyParams.Full(s, p, BuildOptions.Default);
+        var lines = text.Split('\n');
+        // Роли — в порядке командной строки, плейсхолдер как в каталоге.
+        Assert.Equal(["Параметры по ролям:", "quic: --dpi-desync=fake --dpi-desync-repeats=6", "google: --dpi-desync=fake",
+            "general: --dpi-desync=fake --dpi-desync-fake-tls={fake}/tls_clienthello_www_google_com.bin", ""], lines[..5]);
+        Assert.StartsWith("Командная строка на этом ПК (IP-список: выкл, игровой режим: выкл; пути — от " + p.Root, lines[5]);
+        // Командная строка — та же, что у WinwsArgs.Build, пути — от папки программы.
+        Assert.Equal("winws.exe " + WinwsArgs.Join(WinwsArgs.Build(s, p)).Replace(p.Root + Path.DirectorySeparatorChar, ""), lines[6]);
+        Assert.Contains("--dpi-desync-fake-tls=" + Path.Combine("fake", "tls_clienthello_www_google_com.bin"), lines[6]);
+        Assert.DoesNotContain(p.Root, lines[6]);
+        Assert.Contains("IP-список: только из списков, игровой режим: вкл", StrategyParams.Full(s, p, new(IpsetMode.List, GameMode.TcpUdp)));
+
+        // Строка списка: «Параметры» раскрываются отдельно от адресов.
+        var row = new StrategyChoice("alt", "general (ALT)", "ещё не проверялась", false, parameters: text);
+        Assert.True(row.HasParams && !row.ShowParams);
+        Assert.Equal("Параметры", row.ParamsLinkText);
+        row.ShowParams = true;
+        Assert.Equal("Скрыть параметры", row.ParamsLinkText);
+        Assert.False(new StrategyChoice("x", "X", "", false).HasParams);
+    }
+
+    [Fact]
     public void StrategyChoice_Regression_AfterStreak_NotForOldRecords()
     {
         var yt = new TargetGroup("youtube", "YouTube", [new("https://www.youtube.com/", 20480)]);

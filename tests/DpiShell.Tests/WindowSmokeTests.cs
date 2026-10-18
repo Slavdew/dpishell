@@ -325,8 +325,25 @@ public sealed class WindowSmokeTests
                             Pump();
                         }
                         Snap(w, Path.Combine(snapDir, $"{theme}-home-open.png"));
-                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } top2) top2.ScrollToHome();
+                        // «Параметры»: роли и командная строка winws; «Скопировать параметры» — в буфер (подмена).
                         detailed.Expanded = false;
+                        detailed.ShowParams = true;
+                        Pump();
+                        if (Find<TextBox>(Find<TabControl>(w)!, t => t.Text.Contains("general: --dpi-desync=") && t.Text.Contains("winws.exe --wf-tcp=") && t.IsVisible) is null)
+                            throw new Exception("В «Параметры» нет ролей или командной строки");
+                        string? copied = null;
+                        vm.CopyText = t => copied = t;
+                        vm.CopyParamsCmd.Execute(detailed);
+                        if (copied is null || !copied.StartsWith(detailed.Title + "\n") || !copied.Contains("{fake}/")) throw new Exception("«Скопировать параметры» скопировал не то: " + copied);
+                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } pv
+                            && Find<ListBox>(Find<TabControl>(w)!)?.ItemContainerGenerator.ContainerFromItem(detailed) is FrameworkElement item)
+                        {
+                            pv.ScrollToVerticalOffset(item.TranslatePoint(new Point(0, 0), (UIElement)pv.Content).Y - 20);
+                            Pump();
+                        }
+                        Snap(w, Path.Combine(snapDir, $"{theme}-home-params.png"));
+                        detailed.ShowParams = false;
+                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } top2) top2.ScrollToHome();
                         if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } hv)
                         {
                             hv.ScrollToEnd();

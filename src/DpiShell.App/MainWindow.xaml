@@ -180,7 +180,11 @@
                                                         <!-- Стрелка — адреса последнего подбора (как в таблице подбора); щелчок по ней и по адресам стратегию не выбирает. -->
                                                         <ToggleButton DockPanel.Dock="Left" Style="{StaticResource RowToggle}" IsChecked="{Binding Expanded}" Margin="-4,0,2,0"
                                                                       Visibility="{Binding HasDetails, Converter={StaticResource Vis}}" ToolTip="Подробнее: адреса последнего подбора" />
-                                                        <TextBlock Text="{Binding Stats}" Style="{StaticResource Hint}" FontSize="13" VerticalAlignment="Center" />
+                                                        <!-- «Параметры»: роли и командная строка winws — щелчок стратегию не выбирает. -->
+                                                        <Button DockPanel.Dock="Right" Content="{Binding ParamsLinkText}" Style="{StaticResource LinkButton}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                Command="{Binding DataContext.ToggleParamsCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"
+                                                                Visibility="{Binding HasParams, Converter={StaticResource Vis}}" ToolTip="Точные параметры обхода и командная строка winws" />
+                                                        <TextBlock Text="{Binding Stats}" Style="{StaticResource Hint}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" />
                                                     </DockPanel>
                                                     <TextBlock Text="{Binding Warning}" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,1,0,0"
                                                                Visibility="{Binding HasWarning, Converter={StaticResource Vis}}" />
@@ -188,6 +192,11 @@
                                                             Visibility="{Binding Expanded, Converter={StaticResource Vis}}">
                                                         <ItemsControl ItemsSource="{Binding Details}" ItemTemplate="{StaticResource VerdictRow}" />
                                                     </Border>
+                                                    <StackPanel Margin="0,4,0,4" Background="Transparent" MouseLeftButtonDown="KeepSelection" Visibility="{Binding ShowParams, Converter={StaticResource Vis}}">
+                                                        <TextBox Text="{Binding Params, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Padding="6,4" AutomationProperties.Name="Параметры стратегии" />
+                                                        <Button Content="Скопировать параметры" Style="{StaticResource LinkButton}" FontSize="12" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                                                Command="{Binding DataContext.CopyParamsCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" />
+                                                    </StackPanel>
                                                 </StackPanel>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>

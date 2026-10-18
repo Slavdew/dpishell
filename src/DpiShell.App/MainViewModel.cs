@@ -600,13 +600,36 @@ public sealed partial class MainViewModel : Observable
             if (stats.TryGetValue(s.Id, out var st) && st.Runs > 0)
             {
                 var (note, warning) = StrategyChoice.Describe(st, Names);
-                StrategyChoices.Add(new(s.Id, s.Title, note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names)));
+                StrategyChoices.Add(new(s.Id, s.Title, note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names), ParamsOf(s.Id)));
             }
-            else StrategyChoices.Add(new(s.Id, s.Title, "ещё не проверялась", s.Source == "search"));
+            else StrategyChoices.Add(new(s.Id, s.Title, "ещё не проверялась", s.Source == "search", parameters: ParamsOf(s.Id)));
         }
         _chosen = CurrentStrategyId;
         Raise(nameof(ChosenStrategyId));
     }
+
+    /// <summary>Роли стратегии и командная строка winws с режимами, что сейчас у помощника; найденные поиском — от помощника.</summary>
+    string ParamsOf(string id)
+    {
+        var s = Helper.Details?.Found.FirstOrDefault(x => x.Id == id) ?? _shell.Catalog.Find(id);
+        if (s is null) return "";
+        var f = Helper.Status?.Features;
+        return StrategyParams.Full(s, _shell.Paths, f is null ? BuildOptions.Default : new(f.Ipset, f.Game));
+    }
+
+    /// <summary>Положить текст в буфер обмена (в тестах — подмена).</summary>
+    public Action<string> CopyText { get; set; } = text => Clipboard.SetText(text);
+
+    public ICommand ToggleParamsCmd => _toggleParamsCmd ??= new RelayCommand(p => { if (p is StrategyChoice c) c.ShowParams = !c.ShowParams; });
+    ICommand? _toggleParamsCmd;
+
+    public ICommand CopyParamsCmd => _copyParamsCmd ??= new RelayCommand(p =>
+    {
+        if (p is not StrategyChoice { HasParams: true } c) return;
+        try { CopyText($"{c.Title}\n{c.Params}"); Message = "Параметры скопированы: " + c.Title; }
+        catch (System.Runtime.InteropServices.ExternalException) { Fail("Не удалось скопировать — буфер обмена занят другой программой."); }
+    });
+    ICommand? _copyParamsCmd;
 
     string? _chosen;
     /// <summary>Выбранная стратегия. Обход включён — перезапуск на новой; выключен — запоминаем (у помощника или в окне).</summary>

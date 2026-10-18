@@ -16,8 +16,11 @@ public sealed class RouterTargetRow(string url, bool important) : Observable
     public bool Important { get => _important; set => Set(ref _important, value); }
 }
 
-/// <summary>Стратегия роутера в меню выбора.</summary>
-public sealed record RouterStrategyRow(string Id, string Title, string Stats);
+/// <summary>Стратегия роутера в меню выбора. Params — роли, если роутер их отдаёт (strategies.items[].roles), иначе пусто и не показываются.</summary>
+public sealed record RouterStrategyRow(string Id, string Title, string Stats, string Params = "")
+{
+    public bool HasParams => Params.Length > 0;
+}
 
 /// <summary>Строка таблицы подбора на роутере (select_progress.rows).</summary>
 public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames? names = null) : Observable
@@ -839,7 +842,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         foreach (var s in list.Items)
         {
             _titles[s.Id] = s.Title;
-            Strategies.Add(new(s.Id, s.Title, StrategyNote(s)));
+            Strategies.Add(new(s.Id, s.Title, StrategyNote(s), s.Roles is { Count: > 0 } roles ? "Параметры по ролям:\n" + StrategyParams.Roles(roles) : ""));
         }
     }
 
@@ -862,6 +865,17 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     }
 
     public string? CurrentStrategyId => _status?.Strategy ?? _detection?.Status?.Strategy;
+
+    /// <summary>Положить текст в буфер обмена (в тестах — подмена).</summary>
+    public Action<string> CopyText { get; set; } = text => System.Windows.Clipboard.SetText(text);
+
+    /// <summary>«Скопировать параметры» стратегии роутера (только если роутер отдал роли).</summary>
+    public void CopyParams(RouterStrategyRow s)
+    {
+        if (!s.HasParams) return;
+        try { CopyText($"{s.Title}\n{s.Params}"); Say("Параметры скопированы: " + s.Title); }
+        catch (System.Runtime.InteropServices.ExternalException) { Failed("Не удалось скопировать — буфер обмена занят другой программой."); }
+    }
 
     public ICommand LoginCmd { get; }
     /// <summary>«Найти»: поиск роутера по адресу из настроек; есть сохранённый пароль — и вход.</summary>
