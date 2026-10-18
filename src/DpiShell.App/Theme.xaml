@@ -876,4 +876,71 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- ===== Подробности по адресам ===== -->
+
+        <!-- Стрелка раскрытия строки таблицы (как у Expander): ▸ свернуто, ▾ раскрыто. -->
+        <Style x:Key="RowToggle" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="ToolTip" Value="Подробнее: результаты по адресам" />
+            <Setter Property="AutomationProperties.Name" Value="Подробнее" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="Transparent" Padding="4,2">
+                            <Path x:Name="Arrow" Data="M0,0 L4.5,4.5 L0,9" Stroke="{TemplateBinding Foreground}" StrokeThickness="1.5"
+                                  VerticalAlignment="Center" HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.5" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Arrow" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <RotateTransform Angle="90" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource Text}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Строка по адресу (CheckRow): ✓/✗, группа, адрес, отметка, время; ниже — исход и подробности по версиям TLS. -->
+        <DataTemplate x:Key="VerdictRow">
+            <Grid Margin="0,3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="22" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock x:Name="M" Text="{Binding Mark}" FontWeight="Bold" Foreground="{DynamicResource Ok}" />
+                <TextBlock Grid.Column="1" Text="{Binding Group}" TextWrapping="NoWrap" Margin="0,0,10,0" />
+                <TextBlock Grid.Column="2" Text="{Binding Url}" Style="{StaticResource Hint}" FontSize="13" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                           ToolTip="{Binding Url}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="10,0,0,0">
+                    <TextBlock x:Name="Note" Text="{Binding Note}" FontSize="12" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"
+                               Visibility="{Binding HasNote, Converter={StaticResource Vis}}" />
+                    <TextBlock Text="{Binding Time}" Style="{StaticResource Hint}" FontSize="13" MinWidth="48" TextAlignment="Right" TextWrapping="NoWrap" />
+                </StackPanel>
+                <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding Detail}" Style="{StaticResource Hint}" FontSize="12.5" />
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Ok}" Value="False">
+                    <Setter TargetName="M" Property="Foreground" Value="{DynamicResource Danger}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Alert}" Value="True">
+                    <Setter TargetName="Note" Property="Foreground" Value="{DynamicResource Danger}" />
+                    <Setter TargetName="Note" Property="FontWeight" Value="SemiBold" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
     </ResourceDictionary>

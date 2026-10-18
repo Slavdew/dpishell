@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Authentication;
 using DpiShell.Core;
 
 namespace DpiShell.App;
@@ -14,32 +15,76 @@ public sealed class GroupOption(string id, string title, bool isChecked) : Obser
 /// <summary>Строка списка стратегий на главной: название, статистика подборов, найдена ли поиском.</summary>
 public sealed record StrategyChoice(string Id, string Title, string Stats, bool Found);
 
-/// <summary>Строка «Проверить сейчас».</summary>
-public sealed record CheckRow(bool Ok, string Group, string Url, string Detail)
+/// <summary>Названия групп целей для подробностей: из каталога целей и «Свои адреса»; контрольные («Обычные сайты») отмечены.</summary>
+public sealed class GroupNames
 {
-    public string Mark => Ok ? "✓" : "✗";
+    readonly Dictionary<string, (string Title, bool Control)> _map = new() { ["user"] = ("Свои адреса", false) };
 
-    public static CheckRow From(TargetVerdict v, Func<string, string> groupTitle) =>
-        new(v.Ok, groupTitle(v.GroupId), v.Target.Url, v.Ok ? $"{v.BestSeconds:0.0} с" : Texts.Problem(v));
+    public GroupNames(IEnumerable<TargetGroup> groups)
+    {
+        foreach (var g in groups) _map[g.Id] = (g.Title, g.Control);
+    }
+
+    public static readonly GroupNames Empty = new([]);
+
+    public string Title(string id) => _map.TryGetValue(id, out var g) ? g.Title : id;
+    public bool Control(string id) => _map.TryGetValue(id, out var g) && g.Control;
 }
 
-/// <summary>Строка таблицы подбора.</summary>
-public sealed class ScoreRow(StrategyScore s) : Observable
+/// <summary>
+/// Строка подробностей по адресу — одна для «Проверить сейчас», таблиц подбора и списка стратегий: группа, адрес, ✓/✗,
+/// исход и подробности по обеим версиям TLS (код, байты, цепочка редиректов), время. Alert — провал, который решает исход:
+/// обязательный адрес или сломанный «обычный сайт».
+/// </summary>
+public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, string Time = "", string Note = "", bool Alert = false)
 {
-    bool _best;
+    public string Mark => Ok ? "✓" : "✗";
+    public bool HasNote => Note.Length > 0;
+
+    public static CheckRow From(TargetVerdict v, Func<string, string> groupTitle, bool control = false)
+    {
+        var note = v.Ok ? "" : control ? "ломает обычный сайт" : v.Target.Required ? "обязательный" : "необязательный";
+        var seconds = v.Ok ? v.BestSeconds : v.Probes.Select(p => p.Seconds).DefaultIfEmpty(0).Max();
+        return new(v.Ok, groupTitle(v.GroupId), v.Target.Url, Texts.ProbeDetail(v.Probes), $"{seconds:0.0} с", note, !v.Ok && (control || v.Target.Required));
+    }
+
+    public static CheckRow From(TargetVerdict v, GroupNames names) => From(v, names.Title, names.Control(v.GroupId));
+
+    /// <summary>Подробности по адресам: сначала провалы, решающие исход, затем остальное в порядке проверки.</summary>
+    public static IReadOnlyList<CheckRow> List(IEnumerable<TargetVerdict> verdicts, GroupNames names) =>
+        verdicts.Select(v => From(v, names)).OrderByDescending(r => r.Alert).ToList();
+
+    /// <summary>«не открылось: YouTube, Discord» — группы, где не открылся обязательный адрес (видно в строке таблицы, без раскрытия).</summary>
+    public static string Missed(IEnumerable<CheckRow> rows)
+    {
+        var bad = rows.Where(r => r.Alert && r.Note == "обязательный").Select(r => r.Group).Distinct().ToList();
+        return bad.Count == 0 ? "" : "не открылось: " + string.Join(", ", bad);
+    }
+}
+
+/// <summary>Строка таблицы подбора. Раскрывается — результаты по всем проверенным адресам.</summary>
+public sealed class ScoreRow(StrategyScore s, GroupNames? names = null) : Observable
+{
+    bool _best, _expanded;
+    IReadOnlyList<CheckRow>? _details;
     public StrategyScore Score { get; } = s;
     public string Id => Score.Strategy.Id;
     public string Title => Score.Strategy.Title;
     public string Groups => $"{Score.GroupsPassed} из {Score.GroupsTotal}";
     public string Share => $"{Score.TargetShare * 100:0} %";
     public string Avg => Score.Verdicts.Any(v => v.Ok) ? $"{Score.AvgSeconds:0.00} с" : "—";
-    public string Error => Score.Error is null ? "" : Score.Error.Length > 80 ? Score.Error[..80] + "…" : Score.Error;
-    public string ErrorFull => Score.Error ?? "";
+    /// <summary>Ошибка запуска или «ломает обычные сайты»; без неё — где не открылись обязательные адреса.</summary>
+    public string Error => Score.Error is null ? CheckRow.Missed(Details) : Score.Error.Length > 80 ? Score.Error[..80] + "…" : Score.Error;
+    public string ErrorFull => Score.Error ?? CheckRow.Missed(Details);
     public bool Usable => Score.Error is null && Score.GroupsPassed > 0;
     public bool IsBest { get => _best; set { if (Set(ref _best, value)) Raise(nameof(Mark)); } }
     public string Mark => IsBest ? "★" : "";
     /// <summary>Найдена глубоким поиском, а не из готового набора.</summary>
     public bool Found => Score.Strategy.Source == "search";
+
+    public IReadOnlyList<CheckRow> Details => _details ??= CheckRow.List(Score.Verdicts, names ?? GroupNames.Empty);
+    public bool HasDetails => Score.Verdicts.Count > 0;
+    public bool Expanded { get => _expanded; set => Set(ref _expanded, value); }
 }
 
 /// <summary>Строка сравнения DNS на «Диагностике».</summary>
@@ -87,6 +132,22 @@ public static class Texts
         ProbeOutcome.Ok => "открывается",
         _ => "ошибка",
     };
+
+    public static string Tls(SslProtocols v) => v switch
+    {
+        SslProtocols.Tls13 => "TLS 1.3",
+        SslProtocols.Tls12 => "TLS 1.2",
+        _ => v.ToString(),
+    };
+
+    /// <summary>
+    /// По версиям TLS: «TLS 1.3 и TLS 1.2: 301 → www.youtube.com/ → 200, 512 КБ» — одинаковые сливаются;
+    /// у провала — исход словами: «TLS 1.3: загрузка обрывается, получено 16384 из 500000».
+    /// </summary>
+    public static string ProbeDetail(IEnumerable<ProbeResult> probes) => string.Join(" · ", probes
+        .Select(p => (p.Tls, Text: p.Ok ? p.Detail : p.Detail.Length > 0 ? $"{Outcome(p.Outcome)}, {p.Detail}" : Outcome(p.Outcome)))
+        .GroupBy(x => x.Text)
+        .Select(g => $"{string.Join(" и ", g.Select(x => Tls(x.Tls)))}: {g.Key}"));
 
     public static string Problem(TargetVerdict v) =>
         v.Probes.FirstOrDefault(p => !p.Ok) is { } p ? Outcome(p.Outcome) : "не открывается";

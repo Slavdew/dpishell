@@ -20,9 +20,10 @@ public sealed class RouterTargetRow(string url, bool important) : Observable
 public sealed record RouterStrategyRow(string Id, string Title, string Stats);
 
 /// <summary>Строка таблицы подбора на роутере (select_progress.rows).</summary>
-public sealed class RouterScoreRow(RouterSelectRow row, string title) : Observable
+public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames? names = null) : Observable
 {
-    bool _best;
+    bool _best, _expanded;
+    IReadOnlyList<CheckRow>? _details;
     public RouterSelectRow Row { get; } = row;
     public string Id => Row.Id;
     public string Title { get; } = title;
@@ -37,6 +38,22 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title) : Observab
     public bool Usable => !IsCandidate && Row.Error is null && Row.GroupShare > 0;
     public bool IsBest { get => _best; set { if (Set(ref _best, value)) Raise(nameof(Mark)); } }
     public string Mark => IsBest ? "★" : "";
+
+    /// <summary>Результаты по адресам — если роутер их отдаёт (verdicts); старый роутер присылает только доли.</summary>
+    public IReadOnlyList<CheckRow> Details => _details ??= (Row.Verdicts ?? []).Select(v =>
+    {
+        var n = names ?? GroupNames.Empty;
+        bool control = n.Control(v.Group);
+        return new CheckRow(v.Ok, n.Title(v.Group), v.Url, v.Detail ?? "", v.Seconds is { } sec ? $"{sec:0.0} с" : "",
+            !v.Ok && control ? "ломает обычный сайт" : "", !v.Ok && control);
+    }).OrderByDescending(r => r.Alert).ToList();
+    public bool HasDetails => Row.Verdicts is { Count: > 0 };
+    public bool NoDetails => !HasDetails;
+    public string NoDetailsHint => "Подробности по адресам появятся после обновления роутера.";
+    public bool Expanded { get => _expanded; set => Set(ref _expanded, value); }
+
+    /// <summary>То же содержимое строки (без сравнения списков по ссылке): ход опрашивается часто, раскрытую строку не пересоздаём.</summary>
+    public bool Same(RouterSelectRow r) => Row with { Verdicts = null } == r with { Verdicts = null } && (Row.Verdicts?.Count ?? -1) == (r.Verdicts?.Count ?? -1);
 }
 
 /// <summary>Чужой обход на роутере (diag.conflicts). Пакет (kind: package) не остановить — только удалить.</summary>
@@ -907,6 +924,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         finally { Checking = false; }
     }
 
+    GroupNames? _names;
+    GroupNames Names => _names ??= new GroupNames(_shell.DefaultTargets.Groups);
+
     string GroupTitle(string id) => id switch
     {
         "user" => "свои адреса",
@@ -1177,8 +1197,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         foreach (var r in p.Rows ?? [])
         {
             var i = Scores.ToList().FindIndex(x => x.Id == r.Id);
-            var row = new RouterScoreRow(r, r.Title ?? StrategyTitle(r.Id));
-            if (i < 0) Scores.Add(row); else if (Scores[i].Row != r) Scores[i] = row;
+            var row = new RouterScoreRow(r, r.Title ?? StrategyTitle(r.Id), Names);
+            if (i < 0) Scores.Add(row);
+            else if (!Scores[i].Same(r)) { row.Expanded = Scores[i].Expanded; Scores[i] = row; }
         }
     }
 

@@ -70,7 +70,8 @@ public sealed partial class MainViewModel
     void RebuildCheckGroups()
     {
         CheckGroups.Clear();
-        foreach (var g in CheckRows.GroupBy(r => r.Group)) CheckGroups.Add(new(g.Key, g.All(r => r.Ok)));
+        // Как в подборе: группа открывается, если открылись её обязательные адреса (необязательный провал — только в «Подробнее»).
+        foreach (var g in CheckRows.GroupBy(r => r.Group)) CheckGroups.Add(new(g.Key, g.All(r => r.Ok || !r.Alert)));
         Raise(nameof(HasCheck));
     }
 

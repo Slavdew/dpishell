@@ -835,7 +835,7 @@ public sealed partial class MainViewModel : Observable
             });
             await dns;
             if (gen != _checkGen) return;   // пока проверяли, обход включили или выключили — итог уже не про это
-            foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, GroupTitle));
+            foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, Names));
             // В тех же единицах, что и отметки рядом (п. 5): группы, а не адреса; адреса — в «Подробнее».
             CheckSummary = $"Открывается {CheckGroups.Count(g => g.Ok)} из {CheckGroups.Count}";
             CheckedAt = $"в {DateTime.Now:HH:mm}";
@@ -912,7 +912,9 @@ public sealed partial class MainViewModel : Observable
         finally { DnsChecking = false; }
     }
 
-    string GroupTitle(string id) => Groups.FirstOrDefault(g => g.Id == id)?.Title ?? id;
+    GroupNames? _names;
+    /// <summary>Названия групп для подробностей по адресам (и контрольные — «Обычные сайты»).</summary>
+    public GroupNames Names => _names ??= new GroupNames(_shell.DefaultTargets.Groups);
 
     // ---------- подбор ----------
 
@@ -1018,7 +1020,7 @@ public sealed partial class MainViewModel : Observable
             SelectProgressMax = Math.Max(1, p.Total);
             SelectProgress = p.Index;
             SelectProgressText = p.Message;
-            if (p.Last is { } s) Scores.Add(new ScoreRow(s));
+            if (p.Last is { } s) Scores.Add(new ScoreRow(s, Names));
             UpdateStatus();
         });
         var quick = Quick;
@@ -1086,7 +1088,7 @@ public sealed partial class MainViewModel : Observable
                 SelectProgressMax = Math.Max(1, p.Total);
                 SelectProgress = p.Index;
                 SelectProgressText = "Проверяю найденное: " + p.Message;
-                if (p.Last is { } s) Scores.Add(new ScoreRow(s));
+                if (p.Last is { } s) Scores.Add(new ScoreRow(s, Names));
             }
             UpdateStatus();
         });
@@ -1192,7 +1194,7 @@ public sealed partial class MainViewModel : Observable
         var ordered = r.Scores.OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds).ToList();
         var best = r.Best;
         Scores.Clear();
-        foreach (var s in ordered) Scores.Add(new ScoreRow(s) { IsBest = best is not null && s.Strategy.Id == best.Strategy.Id });
+        foreach (var s in ordered) Scores.Add(new ScoreRow(s, Names) { IsBest = best is not null && s.Strategy.Id == best.Strategy.Id });
         SelectProgress = SelectProgressMax;
         // Новая статистика и найденные стратегии — в список на главной; запасные помощник запомнил сам.
         _ = ReloadChoicesAsync();

@@ -71,8 +71,12 @@ public sealed record RouterStrategies(int CatalogVersion, List<RouterStrategyIte
 /// Кандидат глубокого поиска — candidate: true, ok из total — открылось обязательных целей его роли (§9, 2026-10-17);
 /// в strategies его нет — применить нельзя, найденные в финале приходят в strategies с id «r-…».
 /// </summary>
+/// <remarks>verdicts — необязательно (предложение к договору, формат обсуждается): результаты по адресам для «Подробнее»; без него — только доли.</remarks>
 public sealed record RouterSelectRow(string Id, double GroupShare, double TargetShare, double AvgS, string? Error, string? Title = null,
-    bool Candidate = false, int? Ok = null, int? Total = null);
+    bool Candidate = false, int? Ok = null, int? Total = null, List<RouterUrlVerdict>? Verdicts = null);
+
+/// <summary>Итог по одному адресу в строке подбора роутера: группа целей, адрес, открылся ли, подробности (код, байты), время.</summary>
+public sealed record RouterUrlVerdict(string Group, string Url, bool Ok, string? Detail = null, double? Seconds = null);
 /// <summary>
 /// Ход подбора (§5.1, редакция §9 от 2026-10-16): по завершении роутер сам включает лучшую — `applied`, `backups`;
 /// остановленный — `cancelled`. `started_by`: page | app | auto. `eta_s` — оценка оставшегося, null — неизвестна.
