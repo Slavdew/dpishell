@@ -1,12 +1,14 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using DpiShell.Core;
 
 namespace DpiShell.App;
 
 /// <summary>Отметка группы в итоге «Проверить сейчас» на главной: «✓ YouTube».</summary>
-public sealed record CheckGroupMark(string Title, bool Ok)
+public sealed record CheckGroupMark(string Title, bool Ok, bool Browser = false)
 {
-    public string Mark => Ok ? "✓" : "✗";
+    /// <summary>⚠ — открывается программой, но не браузером (DNS системы ведёт не туда).</summary>
+    public string Mark => !Ok ? "✗" : Browser ? "⚠" : "✓";
 }
 
 /// <summary>Место в окне, куда прокрутить по ссылке (<see cref="MainViewModel.ShowRequested"/>).</summary>
@@ -71,9 +73,25 @@ public sealed partial class MainViewModel
     {
         CheckGroups.Clear();
         // Как в подборе: группа открывается, если открылись её обязательные адреса (необязательный провал — только в «Подробнее»).
-        foreach (var g in CheckRows.GroupBy(r => r.Group)) CheckGroups.Add(new(g.Key, g.All(r => r.Ok || !r.Alert)));
+        foreach (var g in CheckRows.GroupBy(r => r.Group)) CheckGroups.Add(new(g.Key, g.All(r => r.Ok || !r.Alert), g.Any(r => r.HasBrowser)));
         Raise(nameof(HasCheck));
+        Raise(nameof(BrowserWarning)); Raise(nameof(HasBrowserWarning)); Raise(nameof(ShowBrowserDnsFix));
     }
+
+    /// <summary>«⚠ В браузере не откроется: YouTube — DNS провайдера подменяет адрес.» Пусто — браузер открывает то же, что программа.</summary>
+    public string BrowserWarning
+    {
+        get
+        {
+            var bad = CheckRows.Where(r => r.HasBrowser).ToList();
+            if (bad.Count == 0) return "";
+            var reasons = string.Join("; ", bad.Select(r => r.Browser).Distinct());
+            return $"⚠ В браузере не откроется: {string.Join(", ", bad.Select(r => r.Group).Distinct())} — {reasons}.";
+        }
+    }
+    public bool HasBrowserWarning => CheckRows.Any(r => r.HasBrowser);
+    /// <summary>Кнопка «Включить защищённый DNS» — когда виноват DNS провайдера (не hosts).</summary>
+    public bool ShowBrowserDnsFix => CheckRows.Any(r => r.Browser == BrowserPath.DnsReason);
 
     // ---------- помехи ----------
 

@@ -169,4 +169,33 @@ public sealed class HomeViewModelTests : IDisposable
         Assert.False(vm.HasCheck);
         Assert.Empty(vm.CheckRows);
     }
+
+    /// <summary>По DoH YouTube открылся, по адресу DNS провайдера — нет: в итоге ⚠, причина и кнопка защищённого DNS; из hosts — без кнопки.</summary>
+    [Fact]
+    public async Task CheckResult_BrowserFails_WarningAndDnsButton()
+    {
+        await using var f = new HelperFixture();
+        f.Backend.StatusValue = Status(active: true);
+        var vm = Model(await f.LinkAsync());
+        string? hostsIp = null;
+        vm.ProbeGroups = groups => Task.FromResult<IReadOnlyList<TargetVerdict>>(groups.SelectMany(g => g.Targets.Select(t =>
+            new TargetVerdict(g.Id, t, true, 0.3, [], g.Id == "youtube"
+                ? new BrowserPath([System.Net.IPAddress.Parse("195.208.4.1")], [System.Net.IPAddress.Parse("142.250.74.14")], false, hostsIp, [])
+                : null))).ToList());
+        await vm.RefreshStatusAsync();
+        foreach (var g in vm.Groups) g.IsChecked = g.Id is "youtube" or "discord";
+
+        await vm.CheckNowAsync();
+        Assert.Equal("Открывается 2 из 2", vm.CheckSummary);
+        Assert.Equal("⚠", vm.CheckGroups.Single(g => g.Title == "YouTube").Mark);
+        Assert.Equal("✓", vm.CheckGroups.Single(g => g.Title == "Discord").Mark);
+        Assert.True(vm.HasBrowserWarning);
+        Assert.Equal("⚠ В браузере не откроется: YouTube — DNS провайдера подменяет адрес.", vm.BrowserWarning);
+        Assert.True(vm.ShowBrowserDnsFix);
+
+        hostsIp = "195.208.4.1";
+        await vm.CheckNowAsync();
+        Assert.Contains("запись в hosts", vm.BrowserWarning);
+        Assert.False(vm.ShowBrowserDnsFix);
+    }
 }

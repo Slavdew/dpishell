@@ -65,12 +65,21 @@
                                                             <DataTrigger Binding="{Binding Ok}" Value="False">
                                                                 <Setter TargetName="M" Property="Foreground" Value="{DynamicResource Danger}" />
                                                             </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Browser}" Value="True">
+                                                                <Setter TargetName="M" Property="Foreground" Value="{DynamicResource Danger}" />
+                                                            </DataTrigger>
                                                         </DataTemplate.Triggers>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
                                             <TextBlock Text="{Binding CheckedAt}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                         </WrapPanel>
+                                        <!-- Программа открывает по DoH, браузер по DNS системы — нет: что не так и кнопка защищённого DNS. -->
+                                        <StackPanel Margin="0,6,0,0" Visibility="{Binding HasBrowserWarning, Converter={StaticResource Vis}}">
+                                            <TextBlock Text="{Binding BrowserWarning}" TextWrapping="Wrap" Foreground="{DynamicResource Danger}" />
+                                            <Button ContentTemplate="{StaticResource Shield}" Content="{Binding RecommendedDnsText}" Command="{Binding FixDnsCmd}" ToolTip="{Binding RecommendedDnsHint}"
+                                                    HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="{Binding ShowBrowserDnsFix, Converter={StaticResource Vis}}" />
+                                        </StackPanel>
                                         <Expander Header="Подробнее" Margin="0,6,0,0" Visibility="{Binding CheckRows.Count, Converter={StaticResource NonZero}}">
                                             <ItemsControl ItemsSource="{Binding CheckRows}" ItemTemplate="{StaticResource VerdictRow}" Margin="0,4,0,0" />
                                         </Expander>

@@ -296,7 +296,10 @@ public sealed class WindowSmokeTests
                         var more = Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Подробнее" && e.IsVisible)!;
                         more.IsExpanded = true;
                         Pump();
-                        if (Find<TextBlock>(more, t => t.Text.StartsWith("TLS 1.3 и TLS 1.2: 301 → ") && t.IsVisible) is null) throw new Exception("В «Подробнее» проверки нет подробностей по TLS");
+                        if (Find<TextBlock>(more, t => t.Text.Contains("TLS 1.3 и TLS 1.2: 301 → ") && t.IsVisible) is null) throw new Exception("В «Подробнее» проверки нет подробностей по TLS");
+                        // Адреса разошлись — оба пути с адресами: программа (DoH) и браузер (DNS системы).
+                        if (Find<TextBlock>(more, t => t.Text.Contains("Браузер (DNS системы: 195.208.4.1)") && t.IsVisible) is null) throw new Exception("В «Подробнее» нет пути браузера");
+                        if (Find<TextBlock>(w, t => t.Text.StartsWith("⚠ В браузере не откроется: YouTube") && t.IsVisible) is null) throw new Exception("В итоге нет ⚠ про браузер");
                         Snap(w, Path.Combine(snapDir, $"{theme}-home-check-detail.png"));
                         more.IsExpanded = false;
                         Pump();
@@ -925,7 +928,11 @@ public sealed class WindowSmokeTests
         var gw = V("discord", "https://gateway.discord.gg/", true, ProbeOutcome.Reset, "соединение сброшено удалённой стороной", ProbeOutcome.Reset, "соединение сброшено удалённой стороной", 0.1);
         var vk = V("control", "https://vk.com/", true, ProbeOutcome.Ok, "HTTP 200, 96 КБ", ProbeOutcome.Ok, "HTTP 200, 96 КБ", 0.2);
         var rbc = V("control", "https://www.rbc.ru/", true, ProbeOutcome.Truncated, "200, получено 16384 из 402113", ProbeOutcome.Truncated, "200, получено 16384 из 402113", 6);
-        foreach (var v in new[] { yt, img, ggpht, dc, gw }) vm.CheckRows.Add(CheckRow.From(v, vm.Names));
+        // Программа открывает по DoH, браузер по адресу DNS провайдера — нет: ⚠ и кнопка защищённого DNS.
+        var stub = new ProbeResult(yt.Target, SslProtocols.Tls13, ProbeOutcome.ForeignRedirect, 0.1, 0, "302: редирект на warning.rt.ru");
+        var ytBrowser = yt with { Browser = new BrowserPath([System.Net.IPAddress.Parse("195.208.4.1")], [System.Net.IPAddress.Parse("142.250.74.14")], false, null,
+            [stub, stub with { Tls = SslProtocols.Tls12 }]) };
+        foreach (var v in new[] { ytBrowser, img, ggpht, dc, gw }) vm.CheckRows.Add(CheckRow.From(v, vm.Names));
 
         var rows = new List<ScoreRow>
         {

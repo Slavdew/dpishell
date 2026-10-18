@@ -831,11 +831,8 @@ public sealed partial class MainViewModel : Observable
         try
         {
             var dns = ProbeGroups is null ? CheckDnsAsync() : Task.CompletedTask;   // подмена проверки — и DNS без сети не трогаем
-            var verdicts = ProbeGroups is { } probe ? await probe(groups) : await Task.Run(async () =>
-            {
-                using var doh = new DohResolver();
-                return await new Selector(_shell.Paths, Shell.NewProbe(doh)).CheckGroupsAsync(groups, CancellationToken.None);
-            });
+            // По DoH и, где DNS системы даёт другой адрес, — по пути браузера (BrowserCheck): только эти цели, по очереди.
+            var verdicts = ProbeGroups is { } probe ? await probe(groups) : await Task.Run(() => _shell.CheckGroupsAsync(groups));
             await dns;
             if (gen != _checkGen) return;   // пока проверяли, обход включили или выключили — итог уже не про это
             foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, Names));

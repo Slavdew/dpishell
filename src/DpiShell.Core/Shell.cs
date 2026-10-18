@@ -361,8 +361,19 @@ public sealed class Shell
     /// <summary>«Проверить сейчас»: работает ли то, что включено.</summary>
     public async Task<IReadOnlyList<TargetVerdict>> CheckNowAsync(CancellationToken ct = default)
     {
+        return await CheckGroupsAsync(SelectedGroups(), ct);
+    }
+
+    /// <summary>
+    /// Проверка целей по DoH и, где DNS системы даёт другой адрес, — ещё и по пути браузера (<see cref="BrowserCheck"/>).
+    /// Для «Проверить сейчас» и проверки после «Включить»; подбор оценивается без этого.
+    /// </summary>
+    public async Task<IReadOnlyList<TargetVerdict>> CheckGroupsAsync(IReadOnlyList<TargetGroup> groups, CancellationToken ct = default)
+    {
         using var doh = new DohResolver();
-        return await new Selector(Paths, NewProbe(doh)).CheckGroupsAsync(SelectedGroups(), ct);
+        var verdicts = await new Selector(Paths, NewProbe(doh)).CheckGroupsAsync(groups, ct);
+        return await BrowserCheck.AddAsync(verdicts, SystemResolver.Instance, doh,
+            (t, r, token) => new HttpProbe { Resolver = r }.CheckAsync(t, HttpProbe.DefaultTls, token), BrowserCheck.SystemHosts(), ct);
     }
 
     /// <summary>Проверка резолвит цели через DoH: результат зависит от DPI, а не от DNS системы. Кэш DoH живёт один прогон.</summary>

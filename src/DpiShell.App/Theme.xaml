@@ -941,6 +941,10 @@
                     <Setter TargetName="Note" Property="Foreground" Value="{DynamicResource Danger}" />
                     <Setter TargetName="Note" Property="FontWeight" Value="SemiBold" />
                 </DataTrigger>
+                <DataTrigger Binding="{Binding HasBrowser}" Value="True">
+                    <Setter TargetName="M" Property="Foreground" Value="{DynamicResource Danger}" />
+                    <Setter TargetName="Note" Property="Foreground" Value="{DynamicResource Danger}" />
+                </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
     </ResourceDictionary>

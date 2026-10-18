@@ -76,17 +76,28 @@ public sealed class GroupNames
 /// исход и подробности по обеим версиям TLS (код, байты, цепочка редиректов), время. Alert — провал, который решает исход:
 /// обязательный адрес или сломанный «обычный сайт».
 /// </summary>
-public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, string Time = "", string Note = "", bool Alert = false)
+public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, string Time = "", string Note = "", bool Alert = false, string Browser = "")
 {
-    public string Mark => Ok ? "✓" : "✗";
+    /// <summary>⚠ — программа открывает, браузер (DNS системы) — нет; причина — в <see cref="Browser"/>.</summary>
+    public string Mark => !Ok ? "✗" : HasBrowser ? "⚠" : "✓";
     public bool HasNote => Note.Length > 0;
+    public bool HasBrowser => Browser.Length > 0;
 
     public static CheckRow From(TargetVerdict v, Func<string, string> groupTitle, bool control = false)
     {
-        var note = v.Ok ? "" : control ? "ломает обычный сайт" : v.Target.Required ? "обязательный" : "необязательный";
+        var note = v.BrowserFails ? "✓ для программы, ✗ для браузера"
+            : v.Ok ? "" : control ? "ломает обычный сайт" : v.Target.Required ? "обязательный" : "необязательный";
         var seconds = v.Ok ? v.BestSeconds : v.Probes.Select(p => p.Seconds).DefaultIfEmpty(0).Max();
-        return new(v.Ok, groupTitle(v.GroupId), v.Target.Url, Texts.ProbeDetail(v.Probes), $"{seconds:0.0} с", note, !v.Ok && (control || v.Target.Required));
+        var detail = Texts.ProbeDetail(v.Probes);
+        // Адреса разошлись — оба пути с адресами: программа (DoH) и браузер (DNS системы, с hosts).
+        if (v.Browser is { } b)
+            detail = $"Программа (защищённый DNS: {Ips(b.Doh)}): {detail}\nБраузер ({(b.FromHosts ? "hosts" : "DNS системы")}: {(b.System.Length > 0 ? Ips(b.System) : "имени нет")}): "
+                + (b.Probes.Count > 0 ? Texts.ProbeDetail(b.Probes) : "не открыть") + (b.Ok ? "" : " — " + b.Reason);
+        return new(v.Ok, groupTitle(v.GroupId), v.Target.Url, detail, $"{seconds:0.0} с", note, !v.Ok && (control || v.Target.Required),
+            v.BrowserFails ? v.Browser!.Reason : "");
     }
+
+    static string Ips(IPAddress[] a) => string.Join(", ", a.Take(2)) + (a.Length > 2 ? " …" : "");
 
     public static CheckRow From(TargetVerdict v, GroupNames names) => From(v, names.Title, names.Control(v.GroupId));
 
