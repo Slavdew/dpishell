@@ -297,8 +297,8 @@ public sealed class WindowSmokeTests
                         more.IsExpanded = true;
                         Pump();
                         if (Find<TextBlock>(more, t => t.Text.Contains("TLS 1.3 и TLS 1.2: 301 → ") && t.IsVisible) is null) throw new Exception("В «Подробнее» проверки нет подробностей по TLS");
-                        // Адреса разошлись — оба пути с адресами: программа (DoH) и браузер (DNS системы).
-                        if (Find<TextBlock>(more, t => t.Text.Contains("Браузер (DNS системы: 195.208.4.1)") && t.IsVisible) is null) throw new Exception("В «Подробнее» нет пути браузера");
+                        // Адреса разошлись — оба пути с адресами: программа (DoH) и путь через DNS Windows.
+                        if (Find<TextBlock>(more, t => t.Text.Contains("Через Windows (DNS Windows: 195.208.4.1)") && t.IsVisible) is null) throw new Exception("В «Подробнее» нет пути через DNS Windows");
                         if (Find<TextBlock>(w, t => t.Text.StartsWith("⚠ В браузере не откроется: YouTube") && t.IsVisible) is null) throw new Exception("В итоге нет ⚠ про браузер");
                         Snap(w, Path.Combine(snapDir, $"{theme}-home-check-detail.png"));
                         more.IsExpanded = false;
