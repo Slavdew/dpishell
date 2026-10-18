@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using DpiShell.Core.Helper;
 
 namespace DpiShell.App;
@@ -21,6 +22,7 @@ public sealed partial class MainViewModel
         Router.PcRunning = () => IsRunning;
         Router.StopPc = async () => !IsRunning || (await DisableCoreAsync() && !IsRunning);
         Router.EnablePcTimestamps = EnableTimestampsAsync;
+        Router.VerifyFromPc = VerifyRouterFromPcAsync;
         Router.Changed += OnRouterChanged;
     }
 
@@ -93,6 +95,49 @@ public sealed partial class MainViewModel
         _ = SwitchToRouterAsync();
     }
 
+    /// <summary>Отложенное при старте включение обхода ПК (режим без службы): решится, когда станет ясно, что с роутером.</summary>
+    string? _resumeDeferred;
+
+    /// <summary>Сколько ждать, пока окно освободится, чтобы сверить ПК и роутер при старте.</summary>
+    public TimeSpan ReconcileWait { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// При старте окна, когда известно и состояние ПК, и ответ роутера (§6): роутер включён — обход ПК выключается;
+    /// роутер не отвечает, но это тот же роутер, где «живёт» обход (обновление, перезагрузка), — обход ПК тоже выключается
+    /// (служба могла подняться с Windows от старой настройки) и не включается сам; другая сеть — всё как было.
+    /// </summary>
+    internal async Task ReconcileRouterPcAsync(Task routerRefresh)
+    {
+        try { await routerRefresh; } catch (Exception e) when (e is Core.Router.RouterException or HttpRequestException or TaskCanceledException) { }
+        var until = DateTime.UtcNow + ReconcileWait;
+        while ((Busy || Selecting) && DateTime.UtcNow < until) await Task.Delay(100);
+        var deferred = _resumeDeferred;
+        _resumeDeferred = null;
+        if (Router.Found && Router.RouterEnabled)
+        {
+            if (IsRunning) await SwitchToRouterAsync();
+            else if (deferred is not null) await DisableCoreQuietAsync();   // режим без службы: «включён» у помощника — снять, работает роутер
+            return;
+        }
+        if ((IsRunning || deferred is not null) && await Router.BypassExpectedButAbsentAsync())
+        {
+            if (Helper.Client is not null && await DisableCoreAsync())
+                Message = "Обход на этом ПК выключен: он работает на роутере, а роутер сейчас не отвечает.";
+            return;
+        }
+        if (deferred is not null && Helper.Client is { } c)
+        {
+            try { await c.EnableAsync(deferred); }
+            catch (Exception e) when (e is HelperException or HelperUnavailableException) { Fail(Texts.Friendly(e)); }
+            await RefreshStatusAsync();
+        }
+    }
+
+    async Task DisableCoreQuietAsync()
+    {
+        if (Helper.Client is not null) await DisableCoreAsync();
+    }
+
     async Task SwitchToRouterAsync()
     {
         _switchingToRouter = true;
@@ -100,7 +145,7 @@ public sealed partial class MainViewModel
         {
             // Помощника нет — выключить нечем: на главной плашка «включён и здесь, и на роутере» с кнопками.
             if (Helper.Client is null) return;
-            if (await DisableCoreAsync()) Message = "Обход перешёл на роутер.";
+            if (await DisableCoreAsync()) Message = "Обход перешёл на роутер: на этом ПК выключен.";
         }
         finally { _switchingToRouter = false; }
     }

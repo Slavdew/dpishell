@@ -115,6 +115,24 @@ public sealed class StrategyStatsTests
         var d = StrategyStats.LoadDetailed(p);
         Assert.Equal((10, 10), (d["a"].Runs, d["a"].Groups![0].Ok));   // старая неудача за пределами 10 прогонов
         Assert.Equal(1, d["b"].Runs);   // у «b» — её единственный прогон, хоть он и старше 10 файлов
+        Assert.Equal(("2026-10-12_00-00-00.json", 10), (d["a"].Newest!.File, d["a"].Streak));   // неудача 01.10 — за пределами 10 прогонов
+        Assert.Equal("2026-10-01_00-00-00.json", d["b"].Newest!.File);
+    }
+
+    [Fact]
+    public void Streak_StopsAtFailure_OldRecordsDoNotCount()
+    {
+        using var t = new TempDir();
+        var p = new AppPaths(t.Sub("root"), Repo.Data);
+        var groups = new[] { Yt, Dc };
+        Result(p, "2026-10-01_00-00-00", ("a", 2, null), ("b", 2, null));   // старые без групп — серию не продолжают
+        Save(p, "2026-10-02_00-00-00", groups, Run("a", groups, 0.5), Run("b", groups, 0.5));
+        Save(p, "2026-10-03_00-00-00", groups, Run("a", groups, 0.5), Run("b", groups, 0.5));
+        Save(p, "2026-10-04_00-00-00", groups, Run("a", groups, 0.5, "https://discord.com/"), Run("b", groups, 0.5));
+        var d = StrategyStats.LoadDetailed(p);
+        Assert.Equal(0, d["a"].Streak);   // свежий прогон провален
+        Assert.Equal(3, d["b"].Streak);   // три прогона с группами, старый файл не в счёт
+        Assert.Equal(new StrategyStats.NewestRun("2026-10-04_00-00-00.json", 1, 2, false), d["a"].Newest);
     }
 
     [Fact]

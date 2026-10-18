@@ -93,10 +93,19 @@ public partial class MainWindow : Window
             {
                 Header = (s.Id == router.CurrentStrategyId ? "✓ " : "    ") + s.Title,
                 InputGestureText = s.Stats,
+                // Роли — если роутер их отдал: видно при наведении, копируется пунктом ниже.
+                ToolTip = s.HasParams ? new System.Windows.Controls.TextBlock { Text = s.Params, FontFamily = new System.Windows.Media.FontFamily("Consolas"), TextWrapping = TextWrapping.Wrap, MaxWidth = 640 } : null,
             };
             var id = s.Id;
             item.Click += (_, _) => _ = router.ChooseStrategyAsync(id);
             menu.Items.Add(item);
+        }
+        if (router.Strategies.FirstOrDefault(s => s.Id == router.CurrentStrategyId) is { HasParams: true } current)
+        {
+            menu.Items.Add(new System.Windows.Controls.Separator());
+            var copy = new System.Windows.Controls.MenuItem { Header = "Скопировать параметры: " + current.Title };
+            copy.Click += (_, _) => router.CopyParams(current);
+            menu.Items.Add(copy);
         }
         if (menu.Items.Count == 0) menu.Items.Add(new System.Windows.Controls.MenuItem { Header = "Список стратегий роутера пуст", IsEnabled = false });
         menu.IsOpen = true;

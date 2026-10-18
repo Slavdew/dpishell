@@ -5,7 +5,8 @@ namespace DpiShell.Core;
 /// <summary>
 /// Статистика прошлых подборов (results\*.json): по каждой стратегии — последние <see cref="Runs"/> её прогонов,
 /// по группам целей и по адресам, свежие прогоны весят больше. Нужна для порядка проверки (стабильные первыми — быстрый подбор
-/// заканчивается раньше) и для подписи в списке стратегий. На выбор лучшей в подборе не влияет.
+/// заканчивается раньше) и для подсказки «работала N раз подряд, сейчас нет». В списке стратегий видно только последний прогон
+/// (<see cref="Stat.Newest"/>, <see cref="Stat.Last"/>): история о сегодняшней сети не говорит. На выбор лучшей в подборе не влияет.
 /// </summary>
 /// <remarks>
 /// Старые файлы (до групп в targets) дают только общие числа: GroupsPassed/GroupsTotal — в Score, Runs и FullOk, как раньше.
@@ -23,10 +24,14 @@ public static class StrategyStats
     /// Score — взвешенная доля обязательных групп (YouTube, Discord…; без них — доля своих адресов); Runs — прогонов; FullOk — открыла всё.
     /// UserShare — взвешенная доля своих адресов; UserOk из UserTotal — в последнем прогоне со своими адресами. Seconds — среднее время.
     /// ControlBroken — в скольких прогонах ломала «Обычные сайты». Groups — по группам каталога; Last — по адресам из последнего прогона.
+    /// Newest — самый свежий прогон (и старого формата); Streak — сколько свежих прогонов подряд открывала всё (только с группами).
     /// </summary>
     public sealed record Stat(double Score, int Runs, int FullOk,
         double? UserShare = null, int UserOk = 0, int UserTotal = 0, double? Seconds = null, int ControlBroken = 0,
-        IReadOnlyList<GroupStat>? Groups = null, LastRun? Last = null);
+        IReadOnlyList<GroupStat>? Groups = null, LastRun? Last = null, NewestRun? Newest = null, int Streak = 0);
+
+    /// <summary>Самый свежий прогон: файл (в имени — время подбора), групп прошло из всех, ломала ли обычные сайты.</summary>
+    public sealed record NewestRun(string File, int Passed, int Total, bool ControlBroken);
 
     /// <summary>Группа каталога: открылась (все обязательные адреса) в Ok из Runs прогонов, где проверялась.</summary>
     public sealed record GroupStat(string Id, int Runs, int Ok);
@@ -107,6 +112,8 @@ public static class StrategyStats
         double w = 0, goal = 0, uw = 0, user = 0, sw = 0, sec = 0;
         var groups = new List<(string Id, int Runs, int Ok)>();
         int? userOk = null, userTotal = null;
+        int streak = 0;
+        bool streaking = true;
         for (int k = 0; k < runs.Count; k++)
         {
             var r = runs[k];
@@ -133,6 +140,9 @@ public static class StrategyStats
                 else if (mine.Count > 0) share = (double)mine.Count(t => t.Ok) / mine.Count;
             }
             if (r.ControlBroken) share = 0;
+            // Подряд «открыла всё» — только прогоны с группами: старые файлы не знают, что именно открылось.
+            if (streaking && r.Targets is not null && share >= 1) streak++;
+            else streaking = false;
             w += weight; goal += share * weight;
             if (r.HasSeconds) { sw += weight; sec += r.AvgSeconds * weight; }
         }
@@ -140,7 +150,8 @@ public static class StrategyStats
         return new(goal / w, runs.Count, runs.Count(r => !r.ControlBroken && r.Passed == r.Total),
             uw > 0 ? user / uw : null, userOk ?? 0, userTotal ?? 0, sw > 0 ? sec / sw : null, runs.Count(r => r.ControlBroken),
             groups.Select(g => new GroupStat(g.Id, g.Runs, g.Ok)).ToList(),
-            last is null ? null : new LastRun(last.File, last.Targets!));
+            last is null ? null : new LastRun(last.File, last.Targets!),
+            new NewestRun(runs[0].File, runs[0].Passed, runs[0].Total, runs[0].ControlBroken), streak);
     }
 
     /// <summary>Порядок проверки по статистике: обязательные группы, затем доля своих адресов, затем время; при равенстве — исходный.</summary>

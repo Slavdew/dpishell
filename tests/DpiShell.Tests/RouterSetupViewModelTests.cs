@@ -89,7 +89,11 @@ public sealed class RouterSetupViewModelTests : IDisposable
 
         var i = vm.NewInstall();
         Assert.False(i.CanInstall);   // сначала — «Проверить роутер»
+        Assert.Null(Settings.RouterPassword);
         Assert.True(await i.CheckAsync("secret"));
+        // Пароль подошёл по SSH — сохранён сразу (вход после установки может не успеть: rpcd перезапускается), дальше не спросят.
+        Assert.Equal("secret", RouterSecrets.Unprotect(Settings.RouterPassword));
+        Assert.True(vm.HasSavedPassword);
         Assert.True(i.VerdictOk);
         Assert.Equal("Роутер подходит — можно ставить DpiShell 0.2.0.", i.VerdictTitle);
         Assert.False(i.HasTunnelNote);
@@ -456,6 +460,110 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.Contains("Обновлено до 0.2.1-r1", _said);
         Assert.DoesNotContain("обновление", vm.HomeDetail);
         Assert.False(vm.Busy);
+    }
+
+    [Fact]
+    public async Task SavedPassword_ReusedForSshAndLogin_ForgetClears_WrongErases()
+    {
+        using var r = new FakeRouter().As020();
+        var ssh = new FakeSsh();
+        var conn = new FakeSshConnector(ssh);
+        var vm = Make(r, conn);
+        Assert.True(await vm.ConnectAsync("secret"));
+        Assert.Equal("Пароль сохранён на этом компьютере (зашифрован)", vm.SavedPasswordText);
+        Assert.True(vm.ForgetPasswordCmd.CanExecute(null));
+        vm.ForgetPasswordCmd.Execute(null);
+        Assert.Null(Settings.RouterPassword);
+        Assert.False(vm.HasSavedPassword);
+        Assert.Contains("Пароль роутера забыт — на этом компьютере его больше нет", _said);
+
+        // Сохранённый перестал подходить (пароль сменили) — стирается при входе им, а не держится.
+        Assert.True(await vm.ConnectAsync("secret"));
+        r.Password = "new";
+        var again = Make(r, conn);   // новый запуск окна: тот же window.json
+        Assert.True(again.HasSavedPassword);
+        Assert.False(await again.ConnectAsync(null));
+        Assert.Null(Settings.RouterPassword);
+    }
+
+    [Fact]
+    public void WindowSettings_FieldOfOtherShape_KeepsPasswordAndRest()
+    {
+        var pw = RouterSecrets.Protect("secret");
+        var s = WindowSettings.Parse($$"""{ "theme": "dark", "router_password": "{{pw}}", "router_address": "192.168.1.1", "dns_custom": "не список", "autostart": 5 }""");
+        Assert.Equal(("dark", "192.168.1.1"), (s.Theme, s.RouterAddress));
+        Assert.Equal("secret", RouterSecrets.Unprotect(s.RouterPassword));
+        Assert.Empty(s.DnsCustom);
+        Assert.Null(s.Autostart);
+        Assert.Equal("system", WindowSettings.Parse("{битый").Theme);
+    }
+
+    [Fact]
+    public async Task Update_Steps_ElapsedAndLog()
+    {
+        using var r = new FakeRouter().As020();
+        r.UpdateStepsOnRouter = ["download", "install", "restart"];
+        var vm = Make(r, new FakeSshConnector(new FakeSsh()));
+        Assert.True(await vm.ConnectAsync("secret"));
+        var current = new List<string>();
+        var titles = new List<string>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.UpdateSteps) && vm.UpdateSteps.FirstOrDefault(s => s.Current) is { } c && (current.Count == 0 || current[^1] != c.Title))
+                current.Add(c.Title);
+            if (e.PropertyName == nameof(vm.UpdateTitle)) titles.Add(vm.UpdateTitle);
+        };
+        Assert.True(await vm.UpdateRouterAsync());
+        // Шаги по step: текущий выделен, пройденные — с ✓.
+        Assert.Equal(["Скачиваю", "Устанавливаю", "Перезапуск службы", "✓ Готово"], current);
+        Assert.Contains(titles, t => t.StartsWith("Обновляю DpiShell на роутере… 0:0"));   // прошедшее время в заголовке
+        Assert.Equal("# download\n# install\n# restart", vm.UpdateLog);   // «Подробнее» — хвост журнала
+        Assert.Empty(vm.UpdateSteps);   // закончилось — шагов не видно
+        Assert.Contains("Обновлено до 0.2.1-r1", _said);
+        Assert.Equal("Подключено, DpiShell 0.2.1-r1", vm.ConnectionText);
+    }
+
+    [Fact]
+    public void UpdateJob_LogAsArrayOrString_StepOptional()
+    {
+        var o = new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower };
+        var a = System.Text.Json.JsonSerializer.Deserialize<RouterUpdateJob>("""{ "action": "update", "running": true, "step": "install", "log": ["a", "b"] }""", o)!;
+        Assert.Equal("install", a.Step);
+        Assert.Equal(["a", "b"], a.LogLines);
+        var b = System.Text.Json.JsonSerializer.Deserialize<RouterUpdateJob>("""{ "action": "update", "running": true, "log": "a\nb" }""", o)!;
+        Assert.Null(b.Step);
+        Assert.Equal(["a", "b"], b.LogLines);
+        Assert.Empty(System.Text.Json.JsonSerializer.Deserialize<RouterUpdateJob>("""{ "action": "update", "running": true }""", o)!.LogLines);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Update_RunningTooLong_DecidedByVersion(bool newVersion)
+    {
+        using var r = new FakeRouter().As020();
+        r.UpdateHangs = true;
+        r.UpdateHangNewVersion = newVersion;
+        var vm = Make(r, new FakeSshConnector(new FakeSsh()));
+        vm.UpdateStuckAfter = TimeSpan.FromMilliseconds(150);
+        Assert.True(await vm.ConnectAsync("secret"));
+        Assert.Equal(newVersion, await vm.UpdateRouterAsync());
+        Assert.False(vm.Busy || vm.Updating);
+        // Через ПК поверх висящего apk не качаем.
+        Assert.DoesNotContain(r.Calls, c => Method(c) == "update_install" && c["params"]![3]!["from"]!.GetValue<string>() == "local");
+        if (newVersion)
+        {
+            Assert.Contains(_said, s => s.Contains("обновлён до 0.2.1-r1 (роутер не дописал итог)"));
+            Assert.Equal("Подключено, DpiShell 0.2.1-r1", vm.ConnectionText);
+            Assert.False(vm.UpdateAvailable);
+        }
+        else
+        {
+            Assert.Contains(_said, s => s.StartsWith("Обновление не завершилось: роутер отвечает, но версия DpiShell прежняя (0.2.0-r3)"));
+            Assert.Equal("Обновление до 0.2.1-r1 не завершилось", vm.UpdateTitle);
+            Assert.Equal("Повторить", vm.UpdateButtonText);
+            Assert.True(vm.UpdateAvailable && vm.UpdateCmd.CanExecute(null));
+        }
     }
 
     [Fact]
