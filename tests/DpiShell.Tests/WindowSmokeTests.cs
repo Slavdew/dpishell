@@ -666,7 +666,9 @@ public sealed class WindowSmokeTests
                 {
                     var tabs = Find<TabControl>(w)!;
                     if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Обход на роутере выключил сторож") && t.IsVisible) is null) throw new Exception("На главной нет фразы о стороже");
-                    if (Find<Button>(tabs, b => b.Content as string == "Включить снова" && b.IsVisible && b.IsEnabled) is null) throw new Exception("На главной нет «Включить снова»");
+                    if (Find<Button>(tabs, b => b.Content as string == "Попробовать снова (на пробу)" && b.IsVisible && b.IsEnabled) is null) throw new Exception("На главной нет «Попробовать снова»");
+                    if (Find<Button>(tabs, b => b.Content as string == "Подобрать заново" && b.IsVisible && b.IsEnabled) is null) throw new Exception("В плашке главной нет «Подобрать заново»");
+                    if (Find<Button>(tabs, b => b.Content as string == "Включить снова") is not null) throw new Exception("Осталась «Включить снова»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-home.png"));
                     vm.Page = Pages.Router;
                     Pump();
@@ -788,6 +790,7 @@ public sealed class WindowSmokeTests
                 if (Find<Button>(d, b => b.Content as string == "Проверить роутер" && b.IsVisible) is null || Find<PasswordBox>(d) is null
                     || Find<CheckBox>(d, c => c.Content as string == "Пароль не задан (свежая OpenWrt)") is null)
                     throw new Exception("В диалоге установки нет пароля, «Пароль не задан» или «Проверить роутер»");
+                if (Find<Button>(d, b => b.Content as string == "Установить" && b.IsVisible && b.IsEnabled) is null) throw new Exception("В начале установки «Установить» неактивна");
                 Shot(d, "install-start");
                 router.SshConnector = new FakeSshConnector(RouterSetupViewModelTests.Ssh(fake, bad));
                 Task.Run(() => i.CheckAsync("secret")).GetAwaiter().GetResult();
@@ -801,6 +804,7 @@ public sealed class WindowSmokeTests
                 Pump();
                 if (Find<Expander>(d, e => e.Header as string == "Подробнее" && e.IsVisible) is not { } more) throw new Exception("У ошибки установки нет «Подробнее»");
                 more.IsExpanded = true;
+                if (Find<Button>(d, b => b.Content as string == "Повторить" && b.IsVisible && b.IsEnabled) is null) throw new Exception("После сбоя установки нет «Повторить»");
                 Shot(d, "install-failed");
                 router.SshConnector = new FakeSshConnector(RouterSetupViewModelTests.Ssh(fake));
                 Task.Run(async () => { await i.CheckAsync("secret"); await i.InstallAsync("secret"); }).GetAwaiter().GetResult();

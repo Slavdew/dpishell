@@ -129,6 +129,20 @@ public sealed class RouterSetupViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Install_WithoutCheck_ChecksItselfThenInstalls()
+    {
+        using var r = new FakeRouter().As020();
+        r.Remove();
+        var vm = Make(r, new FakeSshConnector(Ssh(r)));
+        var i = vm.NewInstall();
+        Assert.True(i.CanTryInstall);
+        Assert.Equal("Установить", i.InstallText);
+        Assert.False(i.CanInstall);
+        Assert.True(await i.InstallAsync("secret"));   // «Проверить роутер» не нажимали
+        Assert.Equal(RouterInstallStage.Done, i.Stage);
+    }
+
+    [Fact]
     public async Task Install_StepsFollowScriptLines()
     {
         Assert.Equal(0, RouterInstallViewModel.StepOf("Подключение к роутеру"));

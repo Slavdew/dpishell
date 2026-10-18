@@ -111,7 +111,9 @@
                                     <Button Content="Войти" Style="{StaticResource LinkButton}" Command="{Binding LoginCmd}" Margin="8,0,0,0"
                                             Visibility="{Binding NeedLogin, Converter={StaticResource Vis}}" />
                                     <!-- Выключил сторож, кнопка или откат (last_off) — включить снова тут же, на пробу. -->
-                                    <Button Content="Включить снова" Style="{StaticResource LinkButton}" Command="{Binding ReEnableCmd}" Margin="8,0,0,0"
+                                    <Button Content="Подобрать заново" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="8,0,0,0"
+                                            Visibility="{Binding CanReEnable, Converter={StaticResource Vis}}" />
+                                    <Button Content="Попробовать снова (на пробу)" Style="{StaticResource LinkButton}" Command="{Binding ReEnableCmd}" Margin="8,0,0,0"
                                             Visibility="{Binding CanReEnable, Converter={StaticResource Vis}}" />
                                     <Button Content="Подробнее →" Style="{StaticResource LinkButton}" Command="{Binding DataContext.GoRouterCmd, RelativeSource={RelativeSource AncestorType=TabControl}}"
                                             Margin="8,0,0,0" AutomationProperties.Name="Открыть вкладку «Роутер»" />
@@ -1211,8 +1213,11 @@
                                                 Visibility="{Binding HasOff, Converter={StaticResource Vis}}">
                                             <StackPanel>
                                                 <DockPanel>
-                                                    <Button DockPanel.Dock="Right" Content="Включить снова" Style="{StaticResource Primary}" Command="{Binding ReEnableCmd}" Margin="12,0,0,0"
-                                                            VerticalAlignment="Center" Visibility="{Binding CanReEnable, Converter={StaticResource Vis}}" />
+                                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0"
+                                                                Visibility="{Binding CanReEnable, Converter={StaticResource Vis}}">
+                                                        <Button Content="Попробовать снова (на пробу)" Style="{StaticResource LinkButton}" Command="{Binding ReEnableCmd}" />
+                                                        <Button Content="Подобрать на роутере" Style="{StaticResource Primary}" Command="{Binding GoSelectCmd}" Margin="8,0,0,0" />
+                                                    </StackPanel>
                                                     <TextBlock Text="{Binding OffText}" TextWrapping="Wrap" VerticalAlignment="Center" />
                                                 </DockPanel>
                                                 <Expander Header="Подробнее" Margin="0,4,0,0" Visibility="{Binding HasOffDetails, Converter={StaticResource Vis}}">

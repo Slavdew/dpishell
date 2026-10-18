@@ -594,7 +594,7 @@ public sealed class RouterInstallViewModel : Observable
         private set
         {
             if (!Set(ref _stage, value)) return;
-            foreach (var n in new[] { nameof(Working), nameof(CanEdit), nameof(CanCheck), nameof(CanInstall), nameof(ShowSteps), nameof(IsDone), nameof(CanGoSelect), nameof(ShowCheck) })
+            foreach (var n in new[] { nameof(Working), nameof(CanEdit), nameof(CanCheck), nameof(CanInstall), nameof(CanTryInstall), nameof(InstallText), nameof(ShowSteps), nameof(IsDone), nameof(CanGoSelect), nameof(ShowCheck) })
                 Raise(n);
         }
     }
@@ -604,6 +604,10 @@ public sealed class RouterInstallViewModel : Observable
     public bool CanCheck => CanEdit;
     public bool ShowCheck => Stage != RouterInstallStage.Done;
     public bool CanInstall => Stage == RouterInstallStage.Checked && _verdict?.CanInstall == true;
+    /// <summary>«Установить» активна всегда, пока можно править: непроверенный роутер она проверит сама.</summary>
+    public bool CanTryInstall => CanEdit;
+    /// <summary>После сбоя установки главная кнопка — «Повторить».</summary>
+    public string InstallText => Stage == RouterInstallStage.Failed ? "Повторить" : "Установить";
     public bool IsDone => Stage == RouterInstallStage.Done;
     public bool CanGoSelect => IsDone && _router.Connected;
     bool _installStarted;
@@ -742,7 +746,9 @@ public sealed class RouterInstallViewModel : Observable
     /// <summary>«Установить»: установка целиком; при успехе — вход тем же паролем.</summary>
     public async Task<bool> InstallAsync(string? password, bool noPassword = false)
     {
-        if (!CanInstall || Prepare(password, noPassword) is not { } p) return false;
+        // Не проверяли (или прошлая попытка сорвалась) — сначала сама проверка роутера, потом установка.
+        if (!CanInstall && (!await CheckAsync(password, noPassword) || !CanInstall)) return false;
+        if (Prepare(password, noPassword) is not { } p) return false;
         _installStarted = true; Raise(nameof(ShowSteps));
         foreach (var s in Steps) s.State = RouterInstallStep.Waiting;
         Stage = RouterInstallStage.Installing;

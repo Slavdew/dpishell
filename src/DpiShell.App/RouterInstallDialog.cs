@@ -163,10 +163,11 @@ public static class RouterInstallDialog
 
         var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
         var check = DialogKit.Button("Проверить роутер").Enable(nameof(RouterInstallViewModel.CanCheck)).Show(nameof(RouterInstallViewModel.ShowCheck));
-        var install = DialogKit.Button("Установить", primary: true).Enable(nameof(RouterInstallViewModel.CanInstall)).Show(nameof(RouterInstallViewModel.ShowCheck));
+        var install = DialogKit.Button("Установить", primary: true).Enable(nameof(RouterInstallViewModel.CanTryInstall)).Show(nameof(RouterInstallViewModel.ShowCheck));
+        install.SetBinding(System.Windows.Controls.ContentControl.ContentProperty, nameof(RouterInstallViewModel.InstallText));
         var select = DialogKit.Button("Подобрать на роутере", primary: true).Show(nameof(RouterInstallViewModel.CanGoSelect));
         var close = DialogKit.Button("Закрыть", cancel: true);
-        check.IsDefault = true;
+        install.IsDefault = true;   // «Установить» сама проверит роутер; «Проверить роутер» — второстепенная
         foreach (var b in new[] { check, install, select, close }) buttons.Children.Add(b);
         panel.Children.Add(buttons);
         w.Content = panel;
@@ -175,8 +176,6 @@ public static class RouterInstallDialog
         {
             try { await action(password.Password, noPassword.IsChecked == true); }
             catch (Exception ex) { vm.Router.Say(Texts.Friendly(ex)); }
-            install.IsDefault = vm.CanInstall;
-            check.IsDefault = !vm.CanInstall;
         }
         check.Click += async (_, _) => await Run(vm.CheckAsync);
         install.Click += async (_, _) => { await Run(vm.InstallAsync); if (vm.IsDone) password.Clear(); };
