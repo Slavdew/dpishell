@@ -1465,7 +1465,7 @@
                                 <StackPanel>
                                     <TextBlock Text="Работа" Style="{StaticResource H2}" />
                                     <!-- Режим службы (п. 4 аудита): настройка «на один раз», не действие главной. -->
-                                    <CheckBox Content="Работать, даже когда окно закрыто" IsChecked="{Binding ServiceMode}" IsEnabled="{Binding CanChoose}" HorizontalAlignment="Left" Margin="0,4,0,0" />
+                                    <CheckBox Content="Обход работает, даже когда программа закрыта" IsChecked="{Binding ServiceMode}" IsEnabled="{Binding CanChoose}" HorizontalAlignment="Left" Margin="0,4,0,0" />
                                     <TextBlock Text="{Binding RunModeHint}" Style="{StaticResource Hint}" Margin="26,2,0,0" />
                                     <!-- Автозапуск окна при входе (architecture.md «Окно, трей, автозапуск»): ключ Run пользователя, окно — в трее. -->
                                     <CheckBox Content="Запускать вместе с Windows (в трее)" IsChecked="{Binding Autostart.Enabled}" Margin="0,12,0,0" HorizontalAlignment="Left" />

@@ -713,7 +713,7 @@ public sealed partial class MainViewModel : Observable
 
     public string RunModeHint => ServiceMode
         ? "Обход работает и без окна, и после перезагрузки"
-        : "Обход работает, пока открыта программа (в окне или в трее)";
+        : "Сейчас обход работает, только пока программа открыта (в окне или в трее).";
 
     async Task SetRunModeAsync(bool service)
     {
@@ -1578,7 +1578,7 @@ public sealed partial class MainViewModel : Observable
         Raise(nameof(CloseTray)); Raise(nameof(CloseExit));
     }
 
-    /// <summary>Только без «Работать, даже когда окно закрыто» (UX-аудит 2, п. 12): с ней подсказка под галочкой уже всё сказала.</summary>
+    /// <summary>Только без «Обход работает, даже когда программа закрыта» (UX-аудит 2, п. 12): с ней подсказка под галочкой уже всё сказала.</summary>
     public string CloseHint => ServiceMode ? "" : "Закрытие программы выключит обход.";
     public bool HasCloseHint => CloseHint.Length > 0;
 

@@ -990,11 +990,12 @@ public sealed class WindowSmokeTests
         Pump();
     }
 
-    /// <summary>Галочка «Работать, даже когда окно закрыто» показывает режим помощника.</summary>
+    /// <summary>Галочка «Обход работает, даже когда программа закрыта» показывает режим помощника.</summary>
     static void AssertServiceMode(Window w, MainViewModel vm)
     {
         var mode = Find<CheckBox>(Find<TabControl>(w)!, c => BindingOperations.GetBinding(c, ToggleButton.IsCheckedProperty)?.Path.Path == "ServiceMode")
-            ?? throw new Exception("Нет галочки «Работать, даже когда окно закрыто»");
+            ?? throw new Exception("Нет галочки «Обход работает, даже когда программа закрыта»");
+        if (mode.Content as string != "Обход работает, даже когда программа закрыта") throw new Exception($"Галочка режима называется «{mode.Content}»");
         if (mode.IsChecked != (vm.Helper.Status?.RunMode != "process")) throw new Exception("Галочка режима не совпадает с режимом помощника");
     }
 
