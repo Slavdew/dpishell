@@ -214,12 +214,12 @@ public static class RouterSuitability
         }
         else warn.Add(new("space_unknown", "Не удалось узнать свободное место на роутере"));
         if (p.Space?.TmpFreeKb is { } tmp && tmp < MinTmpKb)
-            stop.Add(new("space_tmp", $"Мало памяти на роутере: в /tmp свободно {tmp / 1024.0:0.#} МБ, нужно около {MinTmpKb / 1024} МБ"));
+            stop.Add(new("space_tmp", $"Мало временной памяти на роутере: свободно {tmp / 1024.0:0.#} МБ, нужно около {MinTmpKb / 1024} МБ."));
 
         foreach (var f in p.Foreign ?? [])
         {
             if (f.Kind == "package")
-                stop.Add(new("foreign_package", $"Удалите пакет «{f.Name}» (другой обход блокировок): он мешает DpiShell. Сервисы → Дополнения или apk del {f.Name}, затем повторите"));
+                stop.Add(new("foreign_package", $"Удалите пакет «{f.Name}» (другой обход блокировок): в меню роутера «Система» → «Программное обеспечение», затем повторите."));
             else
                 warn.Add(new("foreign_service", $"На роутере работает другой обход ({f.Name}) — после установки DpiShell предложит его остановить"));
         }

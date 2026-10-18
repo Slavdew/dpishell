@@ -581,7 +581,7 @@ public sealed class RouterInstallViewModel : Observable
     public RouterInstallViewModel(RouterViewModel router)
     {
         _router = router;
-        Steps = [new("Проверка и подготовка"), new("Ключ витрины пакетов"), new("Пакеты DpiShell"), new("Ядро обхода"), new("Запуск")];
+        Steps = [new("Проверка и подготовка"), new("Проверка источника пакетов"), new("Пакеты DpiShell"), new("Ядро обхода"), new("Запуск")];
     }
 
     public RouterViewModel Router => _router;
@@ -670,7 +670,7 @@ public sealed class RouterInstallViewModel : Observable
     {
         "packages" => "Не удалось поставить пакеты DpiShell. Чаще всего роутер не достал до витрины пакетов — проверьте интернет на роутере и повторите.",
         "core" => "Не удалось загрузить ядро обхода на роутер. Повторите установку.",
-        "key" => "Ключ витрины пакетов не совпал — установка отменена.",
+        "key" => "Источник пакетов не прошёл проверку — установка отменена.",
         _ => r.Message,
     };
 

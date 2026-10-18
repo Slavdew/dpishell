@@ -169,6 +169,8 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.False(i.VerdictOk);
         Assert.Equal("Роутер не подходит", i.VerdictTitle);
         Assert.Contains("Удалите пакет «zapret»", i.VerdictText);
+        Assert.Contains("«Система» → «Программное обеспечение»", i.VerdictText);
+        Assert.Equal("Проверка источника пакетов", i.Steps[1].Title);
         Assert.Contains("fw4", i.VerdictText);
         Assert.False(i.CanInstall);
         Assert.False(await i.InstallAsync("secret"));
