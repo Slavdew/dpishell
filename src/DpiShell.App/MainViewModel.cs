@@ -593,14 +593,17 @@ public sealed partial class MainViewModel : Observable
         var list = Helper.Status?.Strategies ?? _shell.Catalog.Strategies.Select(s => new StrategyInfo(s.Id, s.Title, s.Source)).ToList();
         var stats = Helper.Results?.Stats ?? new Dictionary<string, StrategyStats.Stat>();
         StrategyChoices.Clear();
-        foreach (var s in list.Select((s, i) => (s, i))
-                     .OrderByDescending(x => stats.TryGetValue(x.s.Id, out var v) ? v.Score : 0.5).ThenBy(x => x.i).Select(x => x.s))
+        // Порядок — тот же, что у подбора: обязательные группы, доля своих адресов, время.
+        foreach (var s in StrategyStats.Order(list, x => x.Id, stats))
         {
-            // Не «процент сайтов», а сколько раз в прошлых подборах открыла всё отмеченное.
-            var note = stats.TryGetValue(s.Id, out var st) && st.Runs > 0
-                ? $"открыла всё в {st.FullOk} из {st.Runs} подборов ({(double)st.FullOk / st.Runs:P0})"
-                : stats.Count == 0 ? "статистика появится после первого подбора" : "в подборах ещё не участвовала";
-            StrategyChoices.Add(new(s.Id, s.Title, note, s.Source == "search"));
+            // По группам, а не «открыла всё»: один нестабильный свой сайт не роняет всю строку.
+            if (stats.TryGetValue(s.Id, out var st) && st.Runs > 0)
+            {
+                var (note, warning) = StrategyChoice.Describe(st, Names);
+                StrategyChoices.Add(new(s.Id, s.Title, note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names)));
+            }
+            else StrategyChoices.Add(new(s.Id, s.Title,
+                stats.Count == 0 ? "статистика появится после первого подбора" : "в подборах ещё не участвовала", s.Source == "search"));
         }
         _chosen = CurrentStrategyId;
         Raise(nameof(ChosenStrategyId));

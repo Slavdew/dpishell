@@ -112,4 +112,35 @@ public sealed class VerdictDetailTests
         Assert.True(withDetails.Same(again.Rows![0]));
         Assert.False(withDetails.Same(again.Rows[0] with { AvgS = 0.9 }));
     }
+
+    // ---------- список стратегий: подпись по группам и адреса последнего подбора ----------
+
+    [Fact]
+    public void StrategyChoice_Describe_ByGroups_UserShare_ControlAsWarning()
+    {
+        var names = new GroupNames([new("youtube", "YouTube", []), new("discord", "Discord", []), new("control", "Обычные сайты", [], Control: true)]);
+        var st = new StrategyStats.Stat(0.9, 5, 3, 0.8, 7, 9, 0.5, 1,
+            [new("youtube", 5, 5), new("discord", 5, 4)],
+            new("2026-10-17_10-00-00.json", [
+                new("youtube", "https://www.youtube.com/", true, true, false, 0.4, [new("Tls13", "Ok", "301 → /?gl=RU → 200, 512 КБ", 0.4), new("Tls12", "Ok", "301 → /?gl=RU → 200, 512 КБ", 0.5)]),
+                new("user", "свой адрес №2", false, true, false, 6, [new("Tls13", "Truncated", "200, получено 16384 из 90000", 6)]),
+            ]));
+        var (stats, warning) = StrategyChoice.Describe(st, names);
+        Assert.Equal("YouTube 5/5 · Discord 4/5 · свои сайты 7 из 9", stats);
+        Assert.Equal("ломала обычные сайты: 1 из 5 подборов", warning);
+
+        var details = StrategyChoice.LastDetails(st, names);
+        Assert.Equal(["свой адрес №2", "https://www.youtube.com/"], details.Select(d => d.Url));   // провал своего адреса — первым
+        Assert.Equal(("Свои адреса", "обязательный"), (details[0].Group, details[0].Note));
+        Assert.Equal("TLS 1.3: загрузка обрывается, 200, получено 16384 из 90000", details[0].Detail);
+        Assert.Equal("TLS 1.3 и TLS 1.2: 301 → /?gl=RU → 200, 512 КБ", details[1].Detail);
+
+        var row = new StrategyChoice("a", "A", stats, false, warning, details);
+        Assert.True(row.HasWarning && row.HasDetails && !row.Expanded);
+
+        // Старая статистика (без групп) — общие числа, как раньше; раскрывать нечего.
+        var old = new StrategyStats.Stat(0.8, 5, 4);
+        Assert.Equal(("открыла всё в 4 из 5 подборов (80 %)", ""), StrategyChoice.Describe(old, names));
+        Assert.Empty(StrategyChoice.LastDetails(old, names));
+    }
 }

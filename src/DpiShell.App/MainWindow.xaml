@@ -150,8 +150,17 @@
                                                                     Command="{Binding DataContext.Router.SendStrategyCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding Id}"
                                                                     Visibility="{Binding Found, Converter={StaticResource Vis}}" ToolTip="Отправить на роутер, включить там и проверить" />
                                                         </Border>
+                                                        <!-- Стрелка — адреса последнего подбора (как в таблице подбора); щелчок по ней и по адресам стратегию не выбирает. -->
+                                                        <ToggleButton DockPanel.Dock="Left" Style="{StaticResource RowToggle}" IsChecked="{Binding Expanded}" Margin="-4,0,2,0"
+                                                                      Visibility="{Binding HasDetails, Converter={StaticResource Vis}}" ToolTip="Подробнее: адреса последнего подбора" />
                                                         <TextBlock Text="{Binding Stats}" Style="{StaticResource Hint}" FontSize="13" VerticalAlignment="Center" />
                                                     </DockPanel>
+                                                    <TextBlock Text="{Binding Warning}" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,1,0,0"
+                                                               Visibility="{Binding HasWarning, Converter={StaticResource Vis}}" />
+                                                    <Border Background="Transparent" Margin="18,4,0,4" MouseLeftButtonDown="KeepSelection"
+                                                            Visibility="{Binding Expanded, Converter={StaticResource Vis}}">
+                                                        <ItemsControl ItemsSource="{Binding Details}" ItemTemplate="{StaticResource VerdictRow}" />
+                                                    </Border>
                                                 </StackPanel>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>

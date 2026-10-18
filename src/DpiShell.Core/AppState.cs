@@ -75,13 +75,15 @@ public static class ResultStore
         foreach (var v in r.Baseline.Concat(r.Scores.SelectMany(s => s.Verdicts)).Where(v => v.GroupId == "user"))
             userNo.TryAdd(v.Target.Url, userNo.Count + 1);
         string Url(TargetVerdict v) => v.GroupId == "user" ? $"свой адрес №{userNo[v.Target.Url]}" : v.Target.Url;
-        IEnumerable<string> Detail(TargetVerdict v) => v.Probes.Select(x =>
+        IEnumerable<string> Detail(TargetVerdict v) => v.Probes.Select(x => Hide(v, $"{x.Tls}: {x.Outcome} {x.Detail}"));
+        string Hide(TargetVerdict v, string d)
         {
-            var d = $"{x.Tls}: {x.Outcome} {x.Detail}";
             if (v.GroupId != "user") return d;
             var host = Uri.TryCreate(v.Target.Url, UriKind.Absolute, out var u) ? u.Host : v.Target.Url;
             return d.Replace(v.Target.Url, "***").Replace(host, "***", StringComparison.OrdinalIgnoreCase);
-        });
+        }
+        static double Seconds(TargetVerdict v) => Math.Round(v.Ok ? v.BestSeconds : v.Probes.Select(p => p.Seconds).DefaultIfEmpty(0).Max(), 2);
+        var control = r.TestedGroups.Where(g => g.Control).Select(g => g.Id).ToHashSet();
 
         var doc = new
         {
@@ -89,10 +91,17 @@ public static class ResultStore
             best = r.Best?.Strategy.Id,
             cancelled = r.Cancelled,
             baseline = r.Baseline.Select(v => new { v.GroupId, Url = Url(v), v.Ok, detail = Detail(v) }),
+            // По адресам — для статистики по группам и «Подробнее» в списке стратегий (StrategyStats): группа, обязательный ли,
+            // контрольный («Обычные сайты»), время и каждая версия TLS отдельно. detail — прежняя строка, для чтения глазами.
             scores = r.Scores.Select(s => new
             {
                 s.Strategy.Id, s.GroupsPassed, s.GroupsTotal, s.TargetShare, s.AvgSeconds, s.Error,
-                targets = s.Verdicts.Select(v => new { Url = Url(v), v.Ok, detail = Detail(v) }),
+                ControlBroken = s.Verdicts.Any(v => control.Contains(v.GroupId) && !v.Ok),
+                targets = s.Verdicts.Select(v => new
+                {
+                    v.GroupId, Url = Url(v), v.Ok, v.Target.Required, Control = control.Contains(v.GroupId), Seconds = Seconds(v), detail = Detail(v),
+                    Probes = v.Probes.Select(x => new { Tls = x.Tls.ToString(), Outcome = x.Outcome.ToString(), Detail = Hide(v, x.Detail), x.Seconds }),
+                }),
             }),
         };
         File.WriteAllText(file, JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));

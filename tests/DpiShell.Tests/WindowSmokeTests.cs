@@ -302,8 +302,27 @@ public sealed class WindowSmokeTests
                         Pump();
                         vm.ShowAllIssues = true;
                         vm.ShowStrategies = true;
+                        var detailed = vm.StrategyChoices.First(c => c.HasWarning);
+                        if (!detailed.Stats.StartsWith("YouTube 3/3 · Discord 2/3 · свои сайты 7 из 9") || !detailed.HasDetails)
+                            throw new Exception("Подпись стратегии не по группам: " + detailed.Stats);
+                        detailed.Expanded = true;
                         Pump();
+                        // Щелчок по раскрытым адресам не выбирает стратегию (выбор её включает).
+                        var chosen = vm.ChosenStrategyId;
+                        var addr = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "свой адрес №1" && t.IsVisible) ?? throw new Exception("Раскрытая стратегия без адресов");
+                        addr.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+                            { RoutedEvent = UIElement.MouseLeftButtonDownEvent });
+                        Pump();
+                        if (vm.ChosenStrategyId != chosen || detailed.Id == chosen) throw new Exception("Щелчок по подробностям сменил выбор стратегии");
+                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } top
+                            && Find<ListBox>(Find<TabControl>(w)!) is { } lb)
+                        {
+                            top.ScrollToVerticalOffset(lb.TranslatePoint(new Point(0, 0), (UIElement)top.Content).Y - 40);
+                            Pump();
+                        }
                         Snap(w, Path.Combine(snapDir, $"{theme}-home-open.png"));
+                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } top2) top2.ScrollToHome();
+                        detailed.Expanded = false;
                         if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } hv)
                         {
                             hv.ScrollToEnd();
@@ -869,11 +888,11 @@ public sealed class WindowSmokeTests
     /// <summary>Наполнение: строки таблиц и плашки — для проверки главной и для снимков. В памяти и во временной папке.</summary>
     static void Fill(MainViewModel vm, Shell shell)
     {
-        FillPc(vm, shell);
         var strategies = shell.Catalog.Strategies.Take(6).ToList();
-        vm.StrategyChoices.Add(new("found-1", "Найденная: fake + split2", "открыла всё в 2 из 2 подборов (100 %)", true));
-        foreach (var (s, i) in strategies.Select((s, i) => (s, i)))
-            vm.StrategyChoices.Add(new(s.Id, s.Title, i < 4 ? $"открыла всё в {4 - i} из 4 подборов ({(4 - i) * 25} %)" : "в подборах ещё не участвовала", false));
+        // Статистика — настоящими файлами подборов: помощник отдаёт её окну (read_results), список строит само окно.
+        SeedResults(shell, strategies);
+        FillPc(vm, shell);
+        vm.StrategyChoices.Insert(0, new("found-1", "Найденная: fake + split2", "YouTube 2/2 · Discord 2/2", true));
         vm.ChosenStrategyId = strategies[0].Id;
 
         SetProp(vm, "VpnWarning", "Включён VPN (WireGuard Tunnel). С ним обход обычно не нужен, а подбор может показать неверный результат.");
@@ -942,6 +961,37 @@ public sealed class WindowSmokeTests
         vm.Findings.Add(new(true, "Папка программы", "в порядке"));
 
         vm.Message = "Готово.";
+    }
+
+    /// <summary>
+    /// Три подбора в results: у второй стратегии свои сайты открываются не все и однажды сломались обычные сайты —
+    /// в списке подпись по группам, предупреждение и адреса последнего подбора.
+    /// </summary>
+    static void SeedResults(Shell shell, IReadOnlyList<Strategy> strategies)
+    {
+        var groups = new List<TargetGroup>(shell.DefaultTargets.Groups.Where(g => g.Id is "youtube" or "discord" or "control"))
+            { TargetSet.UserGroup(Enumerable.Range(1, 9).Select(i => $"site{i}.example")) };
+        StrategyScore Run(Strategy st, double seconds, params string[] failed)
+        {
+            var verdicts = groups.SelectMany(g => g.Targets.Select(t =>
+            {
+                bool ok = !failed.Contains(t.Url);
+                var ps = new[] { SslProtocols.Tls13, SslProtocols.Tls12 }.Select(v => new ProbeResult(t, v, ok ? ProbeOutcome.Ok : ProbeOutcome.Truncated, seconds, 0,
+                    ok ? (t.HandshakeOnly ? "HTTP 404" : t.Url.Contains("youtube") ? "301 → /?gl=RU → 200, 512 КБ" : "HTTP 200, 96 КБ") : "200, получено 16384 из 90000")).ToList();
+                return new TargetVerdict(g.Id, t, ok, ok ? seconds : 0, ps);
+            })).ToList();
+            return DpiShell.Core.Selector.Score(st, groups, verdicts);
+        }
+        for (int run = 0; run < 3; run++)
+        {
+            var file = ResultStore.Save(shell.Paths, new SelectionReport([], groups,
+            [
+                Run(strategies[0], 0.4),
+                Run(strategies[1], 0.5, run == 0 ? ["https://www.rbc.ru/"] : run == 1 ? ["https://discord.com/"] : ["https://site2.example/", "https://site5.example/"]),
+                Run(strategies[2], 0.6, "https://www.youtube.com/"),
+            ], false));
+            File.Move(file, Path.Combine(shell.Paths.Results, $"2026-10-1{5 + run}_10-00-00.json"), overwrite: true);
+        }
     }
 
     /// <summary>Состояние ПК (его хранит помощник): режимы IP-списка и игр, копия hosts — во временной папке.</summary>

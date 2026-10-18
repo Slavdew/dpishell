@@ -12,8 +12,48 @@ public sealed class GroupOption(string id, string title, bool isChecked) : Obser
     public bool IsChecked { get => _checked; set => Set(ref _checked, value); }
 }
 
-/// <summary>Строка списка стратегий на главной: название, статистика подборов, найдена ли поиском.</summary>
-public sealed record StrategyChoice(string Id, string Title, string Stats, bool Found);
+/// <summary>
+/// Строка списка стратегий на главной: название, статистика подборов по группам, найдена ли поиском.
+/// Warning — «ломала обычные сайты»; Details — адреса последнего прогона (раскрываются).
+/// </summary>
+public sealed class StrategyChoice(string id, string title, string stats, bool found, string warning = "", IReadOnlyList<CheckRow>? details = null) : Observable
+{
+    bool _expanded;
+    public string Id { get; } = id;
+    public string Title { get; } = title;
+    public string Stats { get; } = stats;
+    public bool Found { get; } = found;
+    public string Warning { get; } = warning;
+    public bool HasWarning => Warning.Length > 0;
+    public IReadOnlyList<CheckRow> Details { get; } = details ?? [];
+    public bool HasDetails => Details.Count > 0;
+    public bool Expanded { get => _expanded; set => Set(ref _expanded, value); }
+
+    /// <summary>
+    /// Подпись по статистике: «YouTube 5/5 · Discord 4/5 · свои сайты 7 из 9» — группы каталога (открылась в N из M прогонов),
+    /// свои адреса — сколько открылось в последнем прогоне. Старая статистика (без групп) — «открыла всё в N из M подборов».
+    /// </summary>
+    public static (string Stats, string Warning) Describe(StrategyStats.Stat st, GroupNames names)
+    {
+        var parts = (st.Groups ?? []).Select(g => $"{names.Title(g.Id)} {g.Ok}/{g.Runs}").ToList();
+        if (st.UserTotal > 0) parts.Add($"свои сайты {st.UserOk} из {st.UserTotal}");
+        var stats = parts.Count > 0 ? string.Join(" · ", parts)
+            : $"открыла всё в {st.FullOk} из {st.Runs} подборов ({(double)st.FullOk / st.Runs:P0})";
+        var warning = st.ControlBroken > 0 ? $"ломала обычные сайты: {st.ControlBroken} из {st.Runs} подборов" : "";
+        return (stats, warning);
+    }
+
+    /// <summary>Адреса последнего прогона — те же строки, что в таблице подбора.</summary>
+    public static IReadOnlyList<CheckRow> LastDetails(StrategyStats.Stat st, GroupNames names) =>
+        st.Last is not { } last ? [] : CheckRow.List(last.Targets.Select(t =>
+        {
+            var target = new Target(t.Url, Required: t.Required);
+            var probes = t.Probes.Select(p => new ProbeResult(target,
+                Enum.TryParse<SslProtocols>(p.Tls, out var tls) ? tls : SslProtocols.None,
+                Enum.TryParse<ProbeOutcome>(p.Outcome, out var o) ? o : ProbeOutcome.Error, p.Seconds, 0, p.Detail)).ToList();
+            return new TargetVerdict(t.Control ? "control" : t.GroupId, target, t.Ok, t.Seconds, probes);
+        }), names);
+}
 
 /// <summary>Названия групп целей для подробностей: из каталога целей и «Свои адреса»; контрольные («Обычные сайты») отмечены.</summary>
 public sealed class GroupNames
