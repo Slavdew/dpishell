@@ -508,11 +508,15 @@ public sealed partial class MainViewModel : Observable
 
     readonly Dictionary<string, string> _titles = [];
 
+    /// <summary>Название для показа: автоимя найденной стратегии — по её параметрам (роли у помощника), своё имя — как есть.</summary>
+    string ShownTitle(string id, string title) =>
+        StrategyNaming.IsAutoName(title) ? StrategyNaming.DisplayTitle(title, Helper.Details?.Found.FirstOrDefault(f => f.Id == id)?.Roles) : title;
+
     /// <summary>Название по id — и готовых, и найденных поиском.</summary>
     string StrategyTitle(string? id)
     {
         if (id is null) return "";
-        if (Helper.Status?.Strategies.FirstOrDefault(s => s.Id == id) is { } i) return i.Title;
+        if (Helper.Status?.Strategies.FirstOrDefault(s => s.Id == id) is { } i) return ShownTitle(i.Id, i.Title);
         if (_shell.Catalog.Find(id) is { } s) return s.Title;
         return _titles.TryGetValue(id, out var t) ? t : id;
     }
@@ -579,8 +583,8 @@ public sealed partial class MainViewModel : Observable
     public ObservableCollection<StrategyChoice> StrategyChoices { get; } = [];
 
     /// <summary>Порядок списков стратегий (общий с роутером, хранится в window.json): по имени / по результату.</summary>
-    public bool SortByName { get => Settings.SortByName; set { if (value != Settings.SortByName) Settings.SetStrategySort(value); } }
-    public bool SortByResult { get => !Settings.SortByName; set { if (value == Settings.SortByName) Settings.SetStrategySort(!value); } }
+    public bool SortByName { get => Settings.SortByName; set => Settings.SetStrategySort(value); }
+    public bool SortByResult { get => !Settings.SortByName; set => Settings.SetStrategySort(!value); }
 
     void OnSortChanged()
     {
@@ -625,10 +629,10 @@ public sealed partial class MainViewModel : Observable
             if (stats.TryGetValue(s.Id, out var st) && st.Runs > 0)
             {
                 var (note, warning) = StrategyChoice.Describe(st, Names);
-                choices.Add(new(s.Id, s.Title, note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names)) { Opened = StrategyOrder.Opened(st) });
+                choices.Add(new(s.Id, ShownTitle(s.Id, s.Title), note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names)) { Opened = StrategyOrder.Opened(st), Tip = TipFor(s.Id, s.Title) });
             }
-            else choices.Add(new(s.Id, s.Title,
-                stats.Count == 0 ? "статистика появится после первого подбора" : "в подборах ещё не участвовала", s.Source == "search"));
+            else choices.Add(new(s.Id, ShownTitle(s.Id, s.Title),
+                stats.Count == 0 ? "статистика появится после первого подбора" : "в подборах ещё не участвовала", s.Source == "search") { Tip = TipFor(s.Id, s.Title) });
         }
         StrategyChoices.Clear();
         foreach (var c in Settings.SortByName ? StrategyOrder.SortByName(choices, c => c.Title) : StrategyOrder.SortByOpened(choices, c => c.Opened))
@@ -636,6 +640,8 @@ public sealed partial class MainViewModel : Observable
         _chosen = CurrentStrategyId;
         Raise(nameof(ChosenStrategyId));
     }
+
+    string TipFor(string id, string title) => ShownTitle(id, title) != title ? title : "";
 
     string? _chosen;
     /// <summary>Выбранная стратегия. Обход включён — перезапуск на новой; выключен — запоминаем (у помощника или в окне).</summary>
@@ -1235,7 +1241,7 @@ public sealed partial class MainViewModel : Observable
 
     void ShowReport(SelectionReport r)
     {
-        foreach (var s in r.Scores) _titles[s.Strategy.Id] = s.Strategy.Title;
+        foreach (var s in r.Scores) _titles[s.Strategy.Id] = StrategyNaming.DisplayTitle(s.Strategy.Title, s.Strategy.Roles);
         // Итоговая таблица — в порядке оценки, лучшая отмечена.
         var ordered = r.Scores.OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds).ToList();
         var best = r.Best;

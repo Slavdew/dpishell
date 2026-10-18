@@ -158,8 +158,8 @@
                                     <TextBlock Text="{Binding StrategyHeader}" Style="{StaticResource H2}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding StrategyHeader}" />
                                     <WrapPanel Margin="0,0,0,6" AutomationProperties.Name="Порядок стратегий">
                                         <TextBlock Text="Порядок:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                        <RadioButton GroupName="SortHome" Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" ToolTip="Сначала те, что открыли больше сайтов в последнем прогоне" />
-                                        <RadioButton GroupName="SortHome" Content="по имени" IsChecked="{Binding SortByName}" ToolTip="ALT2, ALT3 … ALT10, ALT11" />
+                                        <RadioButton Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" ToolTip="Сначала те, что открыли больше сайтов в последнем прогоне" />
+                                        <RadioButton Content="по имени" IsChecked="{Binding SortByName}" ToolTip="ALT2, ALT3 … ALT10, ALT11" />
                                     </WrapPanel>
                                     <ListBox ItemsSource="{Binding StrategyChoices}" SelectedValue="{Binding ChosenStrategyId}" SelectedValuePath="Id"
                                              IsEnabled="{Binding CanChoose}" Margin="0,0,0,10" PreviewMouseWheel="PassWheelToPage" AutomationProperties.Name="Стратегии">
@@ -172,7 +172,7 @@
                                                                 Visibility="{Binding Found, Converter={StaticResource Vis}}">
                                                             <TextBlock Text="найдена поиском" FontSize="12" Foreground="{DynamicResource AccentText}" TextWrapping="NoWrap" />
                                                         </Border>
-                                                        <TextBlock Text="{Binding Title}" FontSize="15" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Title}" />
+                                                        <TextBlock Text="{Binding Title}" FontSize="15" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Tip}" />
                                                     </DockPanel>
                                                     <DockPanel Margin="0,1,0,0">
                                                         <!-- Найденную на ПК — на роутер (router-api §6); видно, только если роутер подключён. -->
@@ -316,8 +316,8 @@
                             </WrapPanel>
                             <WrapPanel Margin="0,0,0,6" AutomationProperties.Name="Порядок стратегий">
                                 <TextBlock Text="Порядок:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                <RadioButton GroupName="SortPc" Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
-                                <RadioButton GroupName="SortPc" Content="по имени" IsChecked="{Binding SortByName}" />
+                                <RadioButton Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
+                                <RadioButton Content="по имени" IsChecked="{Binding SortByName}" />
                             </WrapPanel>
                             <!-- Ход — только во время подбора: пустая полоса без подбора выглядела незавершённой операцией. -->
                             <StackPanel Visibility="{Binding Selecting, Converter={StaticResource Vis}}">
@@ -422,8 +422,8 @@
                                 <TextBlock Text="Подбор идёт на самом роутере — программу можно закрыть. Лучшую стратегию роутер включит сам." Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                 <WrapPanel Margin="0,0,0,6" AutomationProperties.Name="Порядок стратегий">
                                     <TextBlock Text="Порядок:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                    <RadioButton GroupName="SortRouter" Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
-                                    <RadioButton GroupName="SortRouter" Content="по имени" IsChecked="{Binding SortByName}" />
+                                    <RadioButton Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
+                                    <RadioButton Content="по имени" IsChecked="{Binding SortByName}" />
                                 </WrapPanel>
                                 <StackPanel Visibility="{Binding Selecting, Converter={StaticResource Vis}}">
                                     <ProgressBar Height="8" Maximum="{Binding SelectProgressMax}" Value="{Binding SelectProgress, Mode=OneWay}" Margin="0,2,0,4" />

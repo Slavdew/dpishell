@@ -56,7 +56,7 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames
     public bool Expanded { get => _expanded; set => Set(ref _expanded, value); }
 
     /// <summary>То же содержимое строки (без сравнения списков по ссылке): ход опрашивается часто, раскрытую строку не пересоздаём.</summary>
-    public bool Same(RouterSelectRow r) => Row with { Verdicts = null } == r with { Verdicts = null } && (Row.Verdicts?.Count ?? -1) == (r.Verdicts?.Count ?? -1);
+    public bool Same(RouterSelectRow r) => Row with { Verdicts = null, Roles = null } == r with { Verdicts = null, Roles = null } && (Row.Verdicts?.Count ?? -1) == (r.Verdicts?.Count ?? -1);
 }
 
 /// <summary>Чужой обход на роутере (diag.conflicts). Пакет (kind: package) не остановить — только удалить.</summary>
@@ -162,6 +162,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     readonly SemaphoreSlim _gate = new(1, 1);
     RouterClient? _client;
     readonly Dictionary<string, string> _titles = [];
+    readonly Dictionary<string, Dictionary<string, string>> _roles = [];
 
     public RouterViewModel(Shell shell, WindowSettings settings)
     {
@@ -839,10 +840,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         Strategies.Clear();
         foreach (var s in list.Items)
         {
-            _titles[s.Id] = s.Title;
+            _titles[s.Id] = StrategyNaming.DisplayTitle(s.Title, s.Roles); if (s.Roles is not null) _roles[s.Id] = s.Roles;
             var origin = s.FoundOnRouter ? "найдена на роутере" : s.FromPc ? "с ПК" : "";
             var stats = s.Runs > 0 ? $"удачных проверок: {s.Passed} из {s.Runs}" : "";
-            Strategies.Add(new(s.Id, s.Title, string.Join(" · ", new[] { origin, stats }.Where(x => x.Length > 0))));
+            Strategies.Add(new(s.Id, _titles[s.Id], string.Join(" · ", new[] { origin, stats }.Where(x => x.Length > 0))));
         }
     }
 
@@ -1280,15 +1281,15 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         foreach (var r in p.Rows ?? [])
         {
             var i = Scores.ToList().FindIndex(x => x.Id == r.Id);
-            var row = new RouterScoreRow(r, r.Title ?? StrategyTitle(r.Id), Names);
+            var row = new RouterScoreRow(r, StrategyNaming.DisplayTitle(r.Title ?? StrategyTitle(r.Id), r.Roles ?? _roles.GetValueOrDefault(r.Id)), Names);
             if (i < 0) Scores.Add(row);
             else if (!Scores[i].Same(r)) { row.Expanded = Scores[i].Expanded; Scores[i] = row; }
         }
     }
 
     /// <summary>Порядок списков стратегий (общий с ПК, window.json): по имени / по результату.</summary>
-    public bool SortByName { get => _settings.SortByName; set { if (value != _settings.SortByName) _settings.SetStrategySort(value); } }
-    public bool SortByResult { get => !_settings.SortByName; set { if (value == _settings.SortByName) _settings.SetStrategySort(!value); } }
+    public bool SortByName { get => _settings.SortByName; set => _settings.SetStrategySort(value); }
+    public bool SortByResult { get => !_settings.SortByName; set => _settings.SetStrategySort(!value); }
 
     List<RouterScoreRow> InOrder(IEnumerable<RouterScoreRow> rows) => _settings.SortByName
         ? StrategyOrder.SortByName(rows, s => s.Title).ToList()

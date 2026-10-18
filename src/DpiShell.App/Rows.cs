@@ -26,6 +26,9 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
     public string Warning { get; } = warning;
     /// <summary>Сколько сайтов открылось в последнем прогоне; null — прогона не было.</summary>
     public int? Opened { get; init; }
+    /// <summary>Подсказка к названию: прежняя запись с датой поиска, если показано имя по параметрам; иначе название.</summary>
+    public string Tip { get => _tip.Length > 0 ? _tip : Title; init => _tip = value; }
+    readonly string _tip = "";
     public bool HasWarning => Warning.Length > 0;
     public IReadOnlyList<CheckRow> Details { get; } = details ?? [];
     public bool HasDetails => Details.Count > 0;
@@ -122,7 +125,9 @@ public sealed class ScoreRow(StrategyScore s, GroupNames? names = null) : Observ
     IReadOnlyList<CheckRow>? _details;
     public StrategyScore Score { get; } = s;
     public string Id => Score.Strategy.Id;
-    public string Title => Score.Strategy.Title;
+    public string Title => StrategyNaming.DisplayTitle(Score.Strategy.Title, Score.Strategy.Roles);
+    /// <summary>Прежняя запись названия (с датой поиска), если показано имя по параметрам.</summary>
+    public string Tip => StrategyNaming.Tip(Score.Strategy.Title, Score.Strategy.Roles) is { Length: > 0 } t ? t : Title;
     public string Groups => $"{Score.GroupsPassed} из {Score.GroupsTotal}";
     public string Share => $"{Score.TargetShare * 100:0} %";
     public string Avg => Score.Verdicts.Any(v => v.Ok) ? $"{Score.AvgSeconds:0.00} с" : "—";

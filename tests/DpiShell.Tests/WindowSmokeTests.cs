@@ -872,6 +872,20 @@ public sealed class WindowSmokeTests
         if (!list.IsVisible) throw new Exception("«Сменить стратегию» не раскрыл список");
         if (list.Items.Count != vm.StrategyChoices.Count || list.Items.Count == 0) throw new Exception($"В списке {list.Items.Count} строк, ждали {vm.StrategyChoices.Count}");
         if ((list.SelectedItem as StrategyChoice)?.Id != vm.ChosenStrategyId) throw new Exception("В списке не выделена выбранная стратегия");
+        // Порядок списка: «по результату» выбран; «по имени» — числа как числа (ALT2 … ALT10), без номера — первым; выбор виден в окне.
+        var rByResult = Find<RadioButton>(tabs, r => r.Content as string == "по результату" && r.IsVisible);
+        var rByName = Find<RadioButton>(tabs, r => r.Content as string == "по имени" && r.IsVisible);
+        if (rByResult is null || rByName is null) throw new Exception("На главной нет переключателя порядка «по результату» / «по имени»");
+        if (rByResult.IsChecked != true) throw new Exception("По умолчанию порядок должен быть «по результату»");
+        rByName.IsChecked = true;
+        Pump();
+        if (!vm.SortByName) throw new Exception("«по имени» не дошёл до настроек");
+        var named = vm.StrategyChoices.Select(c => c.Title).ToList();
+        for (int i = 1; i < named.Count; i++)
+            if (StrategyOrder.NaturalCompare(named[i - 1], named[i]) > 0) throw new Exception($"«по имени»: «{named[i - 1]}» стоит раньше «{named[i]}»");
+        rByResult.IsChecked = true;
+        Pump();
+        if (vm.SortByName) throw new Exception("«по результату» не вернулся");
         vm.ShowStrategies = false;
 
         // Наполнение: подмена DNS и VPN — видна только первая (DNS), заголовок и «Ещё 1» считают одно и то же (UX-аудит 2, п. 6).
