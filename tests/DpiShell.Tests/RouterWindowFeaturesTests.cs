@@ -172,7 +172,12 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.True(vm.DnsPresetsAvailable);
         Assert.False(vm.DnsSingleButton);
         Assert.Equal(["provider", "default", "google", "yandex"], vm.DnsPick.Options.Select(o => o.Id));
-        Assert.Equal("provider", vm.DnsPick.Selected!.Id);
+        // Подмена найдена, стоит DNS провайдера — в списке сразу рекомендованный Google, «Применить» включает его.
+        Assert.Equal("provider", vm.DnsPick.CurrentId);
+        Assert.Equal("google", vm.DnsPick.Selected!.Id);
+        Assert.True(vm.DnsPick.ApplyCmd.CanExecute(null));
+        vm.DnsPick.Selected = vm.DnsPick.Options.Single(o => o.Id == "provider");
+        Assert.False(vm.DnsPick.ApplyCmd.CanExecute(null));   // выбрано то, что уже стоит, — «Применить» неактивна
         Assert.False(vm.DnsPick.CanRestore);
         Assert.Contains("реестр блокировок", vm.DnsPick.Options.Single(o => o.Id == "yandex").Detail);
         // Описание варианта роутера: оба шаблона у «Google + Cloudflare», кто держит — по id из пресетов ПК, «рекомендуем» у Google.

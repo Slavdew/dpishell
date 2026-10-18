@@ -1639,8 +1639,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             _ => "",
         };
         // Выбор вариантов (dns_presets): включённый, «Вернуть как было» — когда DNS не как у провайдера.
+        var untouched = DnsPick.SelectionUntouched;
         if (d.Preset == "custom" && d.Custom is { } own) DnsPick.CurrentId = DnsPicker.CustomId(own.Title);
         else if (d.Preset is { } p) DnsPick.CurrentId = p;
+        if (untouched && d.Spoofed && d.CheckedAt is not null && d.Mode != "doh" && d.Preset == "provider") DnsPick.PreselectRecommended(MainViewModel.RecommendedDns);
         DnsPick.CanRestore = d.Mode is "doh" or "plain" || d.Preset is { } q && q != "provider";
         var title = d.Preset == "custom" ? d.Custom?.Title ?? "свой" : DnsPick.Options.FirstOrDefault(o => o.Id == d.Preset)?.Title;
         DnsPick.CurrentText = title is null ? "" : "Сейчас: " + title + (d.Mode switch { "doh" => ", защищённый", "plain" => ", без шифрования", _ => "" });

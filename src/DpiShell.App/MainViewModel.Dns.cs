@@ -98,7 +98,9 @@ public sealed partial class MainViewModel
         PcDns.Note = string.Join(" ", notes);
         PcDns.ShowFallback = s.DohSupported;
         PcDns.CanRestore = s.CanRestore;
+        var untouched = PcDns.SelectionUntouched;
         PcDns.CurrentId = own?.Id ?? (s.Current is "other" or DnsPresets.Custom ? null : s.Current);
+        if (untouched && DnsSpoofed && s.Current == DnsPresets.Auto) PcDns.PreselectRecommended(RecommendedDns);
     }
 
     /// <summary>«Применить»: помощник меняет DNS адаптеров, сбрасывает кэш, проверяет; затем «Проверить сейчас» и проверка подмены.</summary>

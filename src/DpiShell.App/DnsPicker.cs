@@ -59,7 +59,7 @@ public sealed class DnsPicker : Observable
     public DnsPicker(WindowSettings settings)
     {
         _s = settings;
-        ApplyCmd = RelayCommand.Async(() => Selected is { } o ? Apply(o) : Task.CompletedTask, () => !Working && Selected is not null && Enabled());
+        ApplyCmd = RelayCommand.Async(() => Selected is { } o ? Apply(o) : Task.CompletedTask, () => !Working && Selected is not null && Selected.Id != CurrentId && Enabled());
         RestoreCmd = RelayCommand.Async(() => Restore(), () => !Working && CanRestore && Enabled());
         AddCustomCmd = new RelayCommand(AddCustom);
         CopyIpsCmd = new RelayCommand(() => { if (Selected is { } o) Copy(o.CopyIps, "Адреса"); }, () => Selected is { Ips.Count: > 0 });
@@ -166,7 +166,17 @@ public sealed class DnsPicker : Observable
         {
             if (!Set(ref _currentId, value)) return;
             if (value is not null && Options.FirstOrDefault(o => o.Id == value) is { } o) Selected = o;
+            CommandManager.InvalidateRequerySuggested();
         }
+    }
+
+    /// <summary>Человек ещё не выбирал другой вариант: в списке стоит включённый (или ничего).</summary>
+    public bool SelectionUntouched => Selected is null || Selected.Id == CurrentId;
+
+    /// <summary>Найдена подмена, а стоит DNS провайдера: в списке сразу рекомендованный вариант, «Применить» включает его.</summary>
+    public void PreselectRecommended(string id)
+    {
+        if (Options.FirstOrDefault(o => o.Id == id) is { } o) Selected = o;
     }
 
     bool _canRestore;
