@@ -44,6 +44,22 @@ public sealed class WindowSettings
     /// <summary>Защищённый DNS не отвечает — разрешить обычный (по умолчанию нет: только защищённый).</summary>
     public bool DnsFallback { get; set; }
 
+    /// <summary>Порядок списка стратегий: "result" (по числу открывшихся сайтов) или "name" (по имени). Один на оба списка и на ПК, и на роутере.</summary>
+    public string StrategySort { get; set; } = StrategyOrder.ByResult;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool SortByName => StrategySort == StrategyOrder.ByName;
+    /// <summary>Порядок сменили — списки перестраиваются.</summary>
+    public event Action? StrategySortChanged;
+
+    public void SetStrategySort(bool byName)
+    {
+        var v = byName ? StrategyOrder.ByName : StrategyOrder.ByResult;
+        if (v == StrategySort) return;
+        StrategySort = v;
+        try { Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        StrategySortChanged?.Invoke();
+    }
+
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
     /// <summary>Папка окна: %LocalAppData%\DpiShell (логи окна, выгруженные результаты, window.json).</summary>

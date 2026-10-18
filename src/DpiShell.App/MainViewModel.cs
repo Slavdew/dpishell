@@ -66,6 +66,7 @@ public sealed partial class MainViewModel : Observable
         _shell = shell;
         Helper = helper;
         Settings = settings;
+        settings.StrategySortChanged += OnSortChanged;
         Helper.Changed += OnHelperChanged;
         Updates = new UpdatesViewModel(helper, shell, settings)
         {
@@ -511,11 +512,15 @@ public sealed partial class MainViewModel : Observable
 
     readonly Dictionary<string, string> _titles = [];
 
+    /// <summary>Название для показа: автоимя найденной стратегии — по её параметрам (роли у помощника), своё имя — как есть.</summary>
+    string ShownTitle(string id, string title) =>
+        StrategyNaming.IsAutoName(title) ? StrategyNaming.DisplayTitle(title, Helper.Details?.Found.FirstOrDefault(f => f.Id == id)?.Roles) : title;
+
     /// <summary>Название по id — и готовых, и найденных поиском.</summary>
     string StrategyTitle(string? id)
     {
         if (id is null) return "";
-        if (Helper.Status?.Strategies.FirstOrDefault(s => s.Id == id) is { } i) return i.Title;
+        if (Helper.Status?.Strategies.FirstOrDefault(s => s.Id == id) is { } i) return ShownTitle(i.Id, i.Title);
         if (_shell.Catalog.Find(id) is { } s) return s.Title;
         return _titles.TryGetValue(id, out var t) ? t : id;
     }
@@ -581,6 +586,30 @@ public sealed partial class MainViewModel : Observable
 
     public ObservableCollection<StrategyChoice> StrategyChoices { get; } = [];
 
+    /// <summary>Порядок списков стратегий (общий с роутером, хранится в window.json): по имени / по результату.</summary>
+    public bool SortByName { get => Settings.SortByName; set => Settings.SetStrategySort(value); }
+    public bool SortByResult { get => !Settings.SortByName; set => Settings.SetStrategySort(!value); }
+
+    void OnSortChanged()
+    {
+        Raise(nameof(SortByName)); Raise(nameof(SortByResult));
+        ReloadChoices();
+        ResortScores();
+    }
+
+    /// <summary>Таблица подбора в выбранном порядке (по результату — как её собрал подбор).</summary>
+    void ResortScores()
+    {
+        if (Scores.Count < 2) return;
+        var sel = SelectedScore;
+        var rows = Scores.ToList();
+        var ordered = Settings.SortByName ? StrategyOrder.SortByName(rows, r => r.Title)
+            : rows.OrderByDescending(r => r.Score.GroupShare).ThenByDescending(r => r.Score.TargetShare).ThenBy(r => r.Score.AvgSeconds).ToList();
+        Scores.Clear();
+        foreach (var r in ordered) Scores.Add(r);
+        SelectedScore = sel;
+    }
+
     /// <summary>Перечитать у помощника и обновить список (после подбора: новая статистика и найденные).</summary>
     public async Task ReloadChoicesAsync()
     {
@@ -596,21 +625,26 @@ public sealed partial class MainViewModel : Observable
     {
         var list = Helper.Status?.Strategies ?? _shell.Catalog.Strategies.Select(s => new StrategyInfo(s.Id, s.Title, s.Source)).ToList();
         var stats = Helper.Results?.Stats ?? new Dictionary<string, StrategyStats.Stat>();
-        StrategyChoices.Clear();
         // Порядок — тот же, что у подбора: обязательные группы, доля своих адресов, время.
+        var choices = new List<StrategyChoice>();
         foreach (var s in StrategyStats.Order(list, x => x.Id, stats))
         {
             // Только последний прогон: прошлые подборы о сегодняшней сети не говорят.
             if (stats.TryGetValue(s.Id, out var st) && st.Runs > 0)
             {
                 var (note, warning) = StrategyChoice.Describe(st, Names);
-                StrategyChoices.Add(new(s.Id, s.Title, note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names), ParamsOf(s.Id)));
+                choices.Add(new(s.Id, ShownTitle(s.Id, s.Title), note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names), ParamsOf(s.Id)) { Opened = StrategyOrder.Opened(st), Tip = TipFor(s.Id, s.Title) });
             }
-            else StrategyChoices.Add(new(s.Id, s.Title, "ещё не проверялась", s.Source == "search", parameters: ParamsOf(s.Id)));
+            else choices.Add(new(s.Id, ShownTitle(s.Id, s.Title), "ещё не проверялась", s.Source == "search", parameters: ParamsOf(s.Id)) { Tip = TipFor(s.Id, s.Title) });
         }
+        StrategyChoices.Clear();
+        foreach (var c in Settings.SortByName ? StrategyOrder.SortByName(choices, c => c.Title) : StrategyOrder.SortByOpened(choices, c => c.Opened))
+            StrategyChoices.Add(c);
         _chosen = CurrentStrategyId;
         Raise(nameof(ChosenStrategyId));
     }
+
+    string TipFor(string id, string title) => ShownTitle(id, title) != title ? title : "";
 
     /// <summary>Роли стратегии и командная строка winws с режимами, что сейчас у помощника; найденные поиском — от помощника.</summary>
     string ParamsOf(string id)
@@ -1237,12 +1271,13 @@ public sealed partial class MainViewModel : Observable
 
     void ShowReport(SelectionReport r)
     {
-        foreach (var s in r.Scores) _titles[s.Strategy.Id] = s.Strategy.Title;
+        foreach (var s in r.Scores) _titles[s.Strategy.Id] = StrategyNaming.DisplayTitle(s.Strategy.Title, s.Strategy.Roles);
         // Итоговая таблица — в порядке оценки, лучшая отмечена.
         var ordered = r.Scores.OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds).ToList();
         var best = r.Best;
         Scores.Clear();
         foreach (var s in ordered) Scores.Add(new ScoreRow(s, Names) { IsBest = best is not null && s.Strategy.Id == best.Strategy.Id });
+        ResortScores();
         SelectProgress = SelectProgressMax;
         // Статистика до этого подбора — для подсказки «работала N раз подряд, сейчас нет»; перечитывается ниже.
         var regression = StrategyChoice.Regression(Helper.Results?.Stats, r, CurrentStrategyId, Names);

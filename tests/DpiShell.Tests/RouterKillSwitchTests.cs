@@ -69,7 +69,21 @@ public sealed class RouterKillSwitchTests : IDisposable
         Assert.Null(r.Pending);
         Assert.True(r.Enabled);
         Assert.False(vm.TrialVisible);
-        Assert.Equal("Обход на роутере включён. Сайты с этого ПК открываются.", LastSaid());
+        Assert.Equal("Проверено — оставил. Обход на роутере включён.", LastSaid());
+    }
+
+    [Fact]
+    public async Task Enable_WhileChecking_TextWithCountdown_NoButtons()
+    {
+        using var r = Router();
+        using var vm = await Connected(r, sitesOpen: true);
+        string? text = null; bool? ask = null, visible = null;
+        vm.VerifyFromPc = () => { text = vm.TrialText; ask = vm.TrialAsk; visible = vm.TrialVisible; return Task.FromResult<bool?>(true); };
+        await vm.ToggleAsync();
+        Assert.Equal("Проверяю, что сайты открываются. Если не подтвердить — роутер сам вернёт прежнее через 3:00.", text);
+        Assert.False(ask);
+        Assert.True(visible);
+        Assert.False(vm.TrialVisible);
     }
 
     [Fact]
@@ -80,7 +94,8 @@ public sealed class RouterKillSwitchTests : IDisposable
         await vm.ToggleAsync();
         Assert.Equal(0, r.ConfirmCalls);
         Assert.True(vm.TrialVisible);
-        Assert.Equal("Сайты с этого ПК не открылись. Всё работает?", vm.TrialText);
+        Assert.Equal("Часть сайтов с этого ПК не открылась. Оставить обход?", vm.TrialText);
+        Assert.True(vm.TrialAsk);
         // Отсчёт — от left_s по часам ПК, не от until роутера.
         Assert.Equal("вернётся само через 3:00", vm.TrialCountdown);
         _now = _now.AddSeconds(15);

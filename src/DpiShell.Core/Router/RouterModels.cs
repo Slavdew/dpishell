@@ -115,7 +115,8 @@ public sealed record RouterStrategyLast(DateTime? At, bool Ok, List<string>? Fai
 /// </summary>
 /// <remarks>verdicts — необязательно (предложение к договору, формат обсуждается): результаты по адресам для «Подробнее»; без него — только доли.</remarks>
 public sealed record RouterSelectRow(string Id, double GroupShare, double TargetShare, double AvgS, string? Error, string? Title = null,
-    bool Candidate = false, int? Ok = null, int? Total = null, List<RouterUrlVerdict>? Verdicts = null);
+    bool Candidate = false, int? Ok = null, int? Total = null, List<RouterUrlVerdict>? Verdicts = null,
+    Dictionary<string, string>? Roles = null);
 
 /// <summary>Итог по одному адресу в строке подбора роутера: группа целей, адрес, открылся ли, подробности (код, байты), время.</summary>
 public sealed record RouterUrlVerdict(string Group, string Url, bool Ok, string? Detail = null, double? Seconds = null);

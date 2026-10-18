@@ -336,6 +336,16 @@ public sealed class FakeRouter : IDisposable
             return;
         }
         if (BusyOn == method) { await Write(ctx, Result(0, """{"error":{"code":"busy","text":"Идёт подбор"}}""")); return; }
+        if (method == "select_progress" && Interlocked.Decrement(ref _progressErrors) >= 0)
+        {
+            await Write(ctx, Result(0, """{"error":{"code":"internal","text":"Подбор ещё не поднялся"}}"""));
+            return;
+        }
+        if (method == "select_progress" && Interlocked.Decrement(ref _progressZeros) >= 0)
+        {
+            await Write(ctx, Result(0, """{ "running": true, "started_by": "app", "depth": "main", "index": 0, "total": 0, "eta_s": null, "message": "", "rows": [], "finished_at": null, "cancelled": false, "best": null, "applied": false, "backups": [] }"""));
+            return;
+        }
 
         if (method == "status") AdvanceUpdate();
         await Write(ctx, Result(0, method switch
@@ -498,6 +508,11 @@ public sealed class FakeRouter : IDisposable
     }
 
     bool _cancelled;
+    int _progressErrors, _progressZeros;
+    /// <summary>Первые n ответов select_progress — ошибка (подбор ещё не поднялся).</summary>
+    public int ProgressErrors { set => _progressErrors = value; }
+    /// <summary>Первые n ответов select_progress — «идёт, 0 из 0» (как роутер r7).</summary>
+    public int ProgressZeros { set => _progressZeros = value; }
     public string StartedBy { get; set; } = "app";
     /// <summary>Подбор сам включил лучшую (architecture.md «Подбор на роутере»).</summary>
     public bool Applied { get; set; } = true;

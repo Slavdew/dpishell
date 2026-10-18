@@ -65,7 +65,7 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames
     public bool Expanded { get => _expanded; set => Set(ref _expanded, value); }
 
     /// <summary>То же содержимое строки (без сравнения списков по ссылке): ход опрашивается часто, раскрытую строку не пересоздаём.</summary>
-    public bool Same(RouterSelectRow r) => Row with { Verdicts = null } == r with { Verdicts = null } && (Row.Verdicts?.Count ?? -1) == (r.Verdicts?.Count ?? -1);
+    public bool Same(RouterSelectRow r) => Row with { Verdicts = null, Roles = null } == r with { Verdicts = null, Roles = null } && (Row.Verdicts?.Count ?? -1) == (r.Verdicts?.Count ?? -1);
 }
 
 /// <summary>Чужой обход на роутере (diag.conflicts). Пакет (kind: package) не остановить — только удалить.</summary>
@@ -171,11 +171,13 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     readonly SemaphoreSlim _gate = new(1, 1);
     RouterClient? _client;
     readonly Dictionary<string, string> _titles = [];
+    readonly Dictionary<string, Dictionary<string, string>> _roles = [];
 
     public RouterViewModel(Shell shell, WindowSettings settings)
     {
         _shell = shell;
         _settings = settings;
+        settings.StrategySortChanged += () => { Raise(nameof(SortByName)); Raise(nameof(SortByResult)); ResortScores(); };
         _auto = string.IsNullOrWhiteSpace(settings.RouterAddress);
         _custom = settings.RouterAddress ?? "";
 
@@ -846,8 +848,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         Strategies.Clear();
         foreach (var s in list.Items)
         {
-            _titles[s.Id] = s.Title;
-            Strategies.Add(new(s.Id, s.Title, StrategyNote(s), s.Roles is { Count: > 0 } roles ? "Параметры по ролям:\n" + StrategyParams.Roles(roles) : ""));
+            _titles[s.Id] = StrategyNaming.DisplayTitle(s.Title, s.Roles); if (s.Roles is not null) _roles[s.Id] = s.Roles;
+            Strategies.Add(new(s.Id, _titles[s.Id], StrategyNote(s), s.Roles is { Count: > 0 } roles ? "Параметры по ролям:\n" + StrategyParams.Roles(roles) : ""));
         }
     }
 
@@ -1144,6 +1146,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             else if (!await OfferPcTargetsAsync()) return;
         }
         bool emptyOnRouter = false, dropUser = false;
+        RouterException? busyError = null;
         for (int attempt = 0; ; attempt++)
         {
             if (dropUser) { o = WithoutUser(o, out hint); dropUser = false; }
@@ -1152,6 +1155,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                     Scores.Clear(); SelectedScore = null; ResultText = ""; ResultHint = ""; SetBest(null, false);
                     SelectProgress = 0; SelectProgressText = "Подготовка…";
                     try { await Call(c => c.SelectStartAsync(o.Groups, o.Full, deep)); }
+                    catch (RouterException e) when (e.AppError?.Code == "busy" && !Selecting)
+                    {
+                        // «Подбор уже запущен» — не ошибка: он идёт (первый запуск мы могли не заметить), покажем его ход.
+                        busyError = e; SelectProgressText = StartingText;
+                    }
                     catch (RouterException e) when (attempt == 0 && IsEmptyUserTargets(e))
                     {
                         // Роутер ответил «Список своих адресов на роутере пуст…» — предложим отправить с ПК и повторим;
@@ -1170,9 +1178,26 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             emptyOnRouter = false;
             if (!await OfferPcTargetsAsync()) { SelectProgressText = ""; return; }
         }
-        Say(hint ?? "");
-        await PollSelectAsync();
+        if (busyError is not null)
+        {
+            // Занято подбором — показать его; занято другим (проверка) — сказать как есть.
+            await RefreshStatusSafeAsync(resumeSelect: false);
+            if (_status?.Jobs?.Select != true)
+            {
+                SelectProgressText = "";
+                Failed(RouterTexts.Friendly(busyError));
+                return;
+            }
+            Say("Подбор уже идёт — показываю ход.");
+        }
+        else Say(hint ?? "");
+        await PollSelectAsync(justStarted: true);
     }
+
+    public const string StartingText = "Запускаю подбор…";
+
+    /// <summary>Сколько после запуска ошибка или пустой ответ select_progress — ещё «Запускаю подбор…» (роутер поднимает подбор не сразу).</summary>
+    public TimeSpan SelectStartGrace { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>Выбор без «Своих адресов» (на роутере их нет); ничего не осталось — группы по умолчанию. Экран «Подбор» — следом.</summary>
     (IReadOnlyList<string> Groups, bool Full) WithoutUser((IReadOnlyList<string> Groups, bool Full) o, out string hint)
@@ -1225,18 +1250,25 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     bool _polling;
 
     /// <summary>Ход подбора — select_progress раз в PollInterval, пока running. Подбор мог запустить и не этот ПК (started_by).</summary>
-    public async Task PollSelectAsync()
+    public async Task PollSelectAsync(bool justStarted = false)
     {
         if (_polling || !Connected) return;
         _polling = true;
         Selecting = true;
         int failures = 0;
+        var grace = justStarted ? DateTime.UtcNow + SelectStartGrace : DateTime.MinValue;
         try
         {
             while (Connected)
             {
                 RouterSelectProgress p;
                 try { p = await Call(c => c.SelectProgressAsync()); failures = 0; }
+                catch (RouterException e) when (e.Failure != RouterFailure.AccessDenied && DateTime.UtcNow < grace)
+                {
+                    SelectProgressText = StartingText;
+                    await Task.Delay(PollInterval);
+                    continue;
+                }
                 catch (RouterException e) when (e.Failure is RouterFailure.Unreachable or RouterFailure.NoResponse && ++failures < 5)
                 {
                     await Task.Delay(PollInterval);
@@ -1273,7 +1305,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     {
         SelectProgressMax = Math.Max(1, p.Total);
         SelectProgress = Math.Min(p.Index, SelectProgressMax);
-        if (p.Running)
+        if (p.Running && p.Total == 0 && p.Index == 0 && p.Message is not { Length: > 0 }) SelectProgressText = StartingText;
+        else if (p.Running)
         {
             var who = p.StartedBy switch { "page" => "Запущен со страницы роутера. ", "auto" or "timer" => "Роутер подбирает сам. ", _ => "" };
             var parts = new[] { $"Проверено {p.Index} из {p.Total}" + (p.Message is { Length: > 0 } m ? $": {m}" : ""), Eta(p.EtaS) };
@@ -1283,16 +1316,33 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         foreach (var r in p.Rows ?? [])
         {
             var i = Scores.ToList().FindIndex(x => x.Id == r.Id);
-            var row = new RouterScoreRow(r, r.Title ?? StrategyTitle(r.Id), Names);
+            var row = new RouterScoreRow(r, StrategyNaming.DisplayTitle(r.Title ?? StrategyTitle(r.Id), r.Roles ?? _roles.GetValueOrDefault(r.Id)), Names);
             if (i < 0) Scores.Add(row);
             else if (!Scores[i].Same(r)) { row.Expanded = Scores[i].Expanded; Scores[i] = row; }
         }
     }
 
+    /// <summary>Порядок списков стратегий (общий с ПК, window.json): по имени / по результату.</summary>
+    public bool SortByName { get => _settings.SortByName; set => _settings.SetStrategySort(value); }
+    public bool SortByResult { get => !_settings.SortByName; set => _settings.SetStrategySort(!value); }
+
+    List<RouterScoreRow> InOrder(IEnumerable<RouterScoreRow> rows) => _settings.SortByName
+        ? StrategyOrder.SortByName(rows, s => s.Title).ToList()
+        : rows.OrderByDescending(s => s.Usable).ThenByDescending(s => s.Row.GroupShare).ThenByDescending(s => s.Row.TargetShare).ThenBy(s => s.Row.AvgS).ToList();
+
+    void ResortScores()
+    {
+        if (Scores.Count < 2 || Selecting) return;
+        var sel = SelectedScore;
+        var ordered = InOrder(Scores);
+        Scores.Clear();
+        foreach (var s in ordered) Scores.Add(s);
+        SelectedScore = sel;
+    }
+
     void Finish(RouterSelectProgress p)
     {
-        var ordered = Scores.OrderByDescending(s => s.Usable).ThenByDescending(s => s.Row.GroupShare).ThenByDescending(s => s.Row.TargetShare)
-            .ThenBy(s => s.Row.AvgS).ToList();
+        var ordered = InOrder(Scores);
         Scores.Clear();
         foreach (var s in ordered) { s.IsBest = s.Id == p.Best; Scores.Add(s); }
         SelectProgress = SelectProgressMax;
