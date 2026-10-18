@@ -627,6 +627,27 @@ public sealed class WindowSmokeTests
                     if (Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } usv) usv.ScrollToHome();
                     Pump();
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-update.png"));
+                    // Идёт обновление: шаги (status.update.job.step), прошедшее время, «Подробнее» — хвост журнала.
+                    void Field(string name, object? value) => typeof(RouterViewModel).GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(router, value);
+                    Field("_updateStep", "install");
+                    Field("_updateStarted", DateTime.UtcNow - TimeSpan.FromSeconds(83));
+                    router.GetType().GetProperty("UpdateLog")!.SetValue(router, "# download: dpishell-0.2.1-r1.apk\n# install: apk add --upgrade dpishell luci-app-dpishell");
+                    SetProp(router, "Updating", true);
+                    Pump();
+                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Обновляю DpiShell на роутере… 1:2") && t.IsVisible) is null) throw new Exception("Нет «Обновляю…» с прошедшим временем");
+                    if (Find<Expander>(tabs, e => e.Header as string == "Подробнее" && e.IsVisible && e.DataContext == router) is not { } log) throw new Exception("Нет «Подробнее» с журналом обновления");
+                    log.IsExpanded = true;
+                    Pump();
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-updating.png"));
+                    // Не завершилось (running висит, версия прежняя) — так и сказано, кнопка «Повторить».
+                    Field("_updateFailed", true);
+                    SetProp(router, "Updating", false);
+                    Pump();
+                    if (Find<Button>(tabs, b => b.Content as string == "Повторить" && b.IsVisible) is null) throw new Exception("Нет «Повторить» у незавершённого обновления");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-update-failed.png"));
+                    Field("_updateFailed", false);
+                    Field("_updateStep", null);
+                    router.GetType().GetProperty("UpdateLog")!.SetValue(router, "");
                     vm.Page = Pages.Home;
                     Pump();
                     if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text.Contains("доступно обновление 0.2.1-r1") && t.IsVisible) is null && !router.HomeLine.Contains("предупрежд"))

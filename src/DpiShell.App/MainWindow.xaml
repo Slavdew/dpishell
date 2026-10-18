@@ -1114,10 +1114,33 @@
                             <Border Style="{StaticResource Card}" Visibility="{Binding ShowUpdate, Converter={StaticResource Vis}}">
                                 <StackPanel>
                                     <DockPanel>
-                                        <Button DockPanel.Dock="Right" Content="Обновить" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}" VerticalAlignment="Center"
+                                        <Button DockPanel.Dock="Right" Content="{Binding UpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}" VerticalAlignment="Center"
                                                 Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
                                         <TextBlock Text="{Binding UpdateTitle}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
                                     </DockPanel>
+                                    <!-- Шаги (status.update.job.step): «Скачиваю → Устанавливаю → Перезапуск службы → Готово», текущий выделен. -->
+                                    <ItemsControl ItemsSource="{Binding UpdateSteps}" Margin="0,6,0,0" Visibility="{Binding HasUpdateSteps, Converter={StaticResource Vis}}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock>
+                                                    <Run x:Name="Step" Text="{Binding Title, Mode=OneWay}" Foreground="{DynamicResource Muted}" /><Run Text="{Binding Arrow, Mode=OneWay}" Foreground="{DynamicResource Muted}" />
+                                                </TextBlock>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding Current}" Value="True">
+                                                        <Setter TargetName="Step" Property="FontWeight" Value="SemiBold" />
+                                                        <Setter TargetName="Step" Property="Foreground" Value="{DynamicResource Text}" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Expander Header="Подробнее" Margin="0,6,0,0" Visibility="{Binding HasUpdateLog, Converter={StaticResource Vis}}">
+                                        <TextBox Text="{Binding UpdateLog, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Padding="6,4" Margin="0,4,0,0"
+                                                 MaxHeight="220" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Журнал обновления" />
+                                    </Expander>
                                     <Expander Header="Что нового" Margin="0,6,0,0" Visibility="{Binding HasUpdateNotes, Converter={StaticResource Vis}}">
                                         <TextBlock Text="{Binding UpdateNotes}" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     </Expander>

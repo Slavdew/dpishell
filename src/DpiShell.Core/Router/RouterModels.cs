@@ -54,8 +54,21 @@ public sealed record RouterWatchdog(bool Enabled, DateTime? CheckedAt, bool? Ok,
 /// <summary>Фоновые задания роутера; dns — любое DNS-задание (§9, 2026-10-17), dns_analyze оставлен с тем же значением.</summary>
 public sealed record RouterJobs(bool Select, bool Check, bool CoreInstall, bool DnsAnalyze = false, bool SiteCheck = false, bool Dns = false, bool Update = false);
 
-/// <summary>Последнее задание обновления (status.update.job): action update | update_check, from feed | local; at — когда закончилось.</summary>
-public sealed record RouterUpdateJob(string? Action, string? From, bool Running, bool? Ok, string? Message, DateTime? At = null);
+/// <summary>
+/// Последнее задание обновления (status.update.job): action update | update_check, from feed | local; at — когда закончилось.
+/// step — шаг идущего обновления (download | install | restart | done), log — хвост журнала (массив строк или одна строка);
+/// оба необязательные: старый роутер их не отдаёт.
+/// </summary>
+public sealed record RouterUpdateJob(string? Action, string? From, bool Running, bool? Ok, string? Message, DateTime? At = null,
+    string? Step = null, System.Text.Json.JsonElement? Log = null)
+{
+    /// <summary>Хвост журнала строками; не отдан или непонятного вида — пусто.</summary>
+    public IReadOnlyList<string> LogLines => Log is not { } l ? []
+        : l.ValueKind == System.Text.Json.JsonValueKind.Array
+            ? l.EnumerateArray().Where(x => x.ValueKind == System.Text.Json.JsonValueKind.String).Select(x => x.GetString()!).ToList()
+        : l.ValueKind == System.Text.Json.JsonValueKind.String ? l.GetString()!.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        : [];
+}
 /// <summary>
 /// status.update (ядро договора §5.4): available — в витрине версия новее установленной, notes — что нового (до 15 строк),
 /// job — последнее задание обновления (null — не было).

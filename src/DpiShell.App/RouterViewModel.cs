@@ -16,6 +16,12 @@ public sealed class RouterTargetRow(string url, bool important) : Observable
     public bool Important { get => _important; set => Set(ref _important, value); }
 }
 
+/// <summary>Шаг обновления DpiShell на роутере: Current — идёт сейчас (выделен), Done — пройден, Last — без стрелки после.</summary>
+public sealed record UpdateStepRow(string Title, bool Current, bool Done, bool Last)
+{
+    public string Arrow => Last ? "" : "  →  ";
+}
+
 /// <summary>Стратегия роутера в меню выбора. Params — роли, если роутер их отдаёт (strategies.items[].roles), иначе пусто и не показываются.</summary>
 public sealed record RouterStrategyRow(string Id, string Title, string Stats, string Params = "")
 {

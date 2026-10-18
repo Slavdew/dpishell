@@ -459,6 +459,74 @@ public sealed class RouterSetupViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Update_Steps_ElapsedAndLog()
+    {
+        using var r = new FakeRouter().As020();
+        r.UpdateStepsOnRouter = ["download", "install", "restart"];
+        var vm = Make(r, new FakeSshConnector(new FakeSsh()));
+        Assert.True(await vm.ConnectAsync("secret"));
+        var current = new List<string>();
+        var titles = new List<string>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.UpdateSteps) && vm.UpdateSteps.FirstOrDefault(s => s.Current) is { } c && (current.Count == 0 || current[^1] != c.Title))
+                current.Add(c.Title);
+            if (e.PropertyName == nameof(vm.UpdateTitle)) titles.Add(vm.UpdateTitle);
+        };
+        Assert.True(await vm.UpdateRouterAsync());
+        // Шаги по step: текущий выделен, пройденные — с ✓.
+        Assert.Equal(["Скачиваю", "Устанавливаю", "Перезапуск службы", "✓ Готово"], current);
+        Assert.Contains(titles, t => t.StartsWith("Обновляю DpiShell на роутере… 0:0"));   // прошедшее время в заголовке
+        Assert.Equal("# download\n# install\n# restart", vm.UpdateLog);   // «Подробнее» — хвост журнала
+        Assert.Empty(vm.UpdateSteps);   // закончилось — шагов не видно
+        Assert.Contains("Обновлено до 0.2.1-r1", _said);
+        Assert.Equal("Подключено, DpiShell 0.2.1-r1", vm.ConnectionText);
+    }
+
+    [Fact]
+    public void UpdateJob_LogAsArrayOrString_StepOptional()
+    {
+        var o = new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower };
+        var a = System.Text.Json.JsonSerializer.Deserialize<RouterUpdateJob>("""{ "action": "update", "running": true, "step": "install", "log": ["a", "b"] }""", o)!;
+        Assert.Equal("install", a.Step);
+        Assert.Equal(["a", "b"], a.LogLines);
+        var b = System.Text.Json.JsonSerializer.Deserialize<RouterUpdateJob>("""{ "action": "update", "running": true, "log": "a\nb" }""", o)!;
+        Assert.Null(b.Step);
+        Assert.Equal(["a", "b"], b.LogLines);
+        Assert.Empty(System.Text.Json.JsonSerializer.Deserialize<RouterUpdateJob>("""{ "action": "update", "running": true }""", o)!.LogLines);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Update_RunningTooLong_DecidedByVersion(bool newVersion)
+    {
+        using var r = new FakeRouter().As020();
+        r.UpdateHangs = true;
+        r.UpdateHangNewVersion = newVersion;
+        var vm = Make(r, new FakeSshConnector(new FakeSsh()));
+        vm.UpdateStuckAfter = TimeSpan.FromMilliseconds(150);
+        Assert.True(await vm.ConnectAsync("secret"));
+        Assert.Equal(newVersion, await vm.UpdateRouterAsync());
+        Assert.False(vm.Busy || vm.Updating);
+        // Через ПК поверх висящего apk не качаем.
+        Assert.DoesNotContain(r.Calls, c => Method(c) == "update_install" && c["params"]![3]!["from"]!.GetValue<string>() == "local");
+        if (newVersion)
+        {
+            Assert.Contains(_said, s => s.Contains("обновлён до 0.2.1-r1 (роутер не дописал итог)"));
+            Assert.Equal("Подключено, DpiShell 0.2.1-r1", vm.ConnectionText);
+            Assert.False(vm.UpdateAvailable);
+        }
+        else
+        {
+            Assert.Contains(_said, s => s.StartsWith("Обновление не завершилось: роутер отвечает, но версия DpiShell прежняя (0.2.0-r3)"));
+            Assert.Equal("Обновление до 0.2.1-r1 не завершилось", vm.UpdateTitle);
+            Assert.Equal("Повторить", vm.UpdateButtonText);
+            Assert.True(vm.UpdateAvailable && vm.UpdateCmd.CanExecute(null));
+        }
+    }
+
+    [Fact]
     public async Task Update_FeedUnreachable_PackagesThroughPc_SignedAndHashed_FromLocal()
     {
         using var r = new FakeRouter().As020();

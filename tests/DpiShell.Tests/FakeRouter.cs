@@ -94,6 +94,12 @@ public sealed class FakeRouter : IDisposable
     /// <summary>Пакеты уже положены в /tmp/dpishell-update (иначе update_install local — invalid).</summary>
     public bool LocalUpdateReady { get; set; }
     public int UpdateCheckCalls { get; private set; }
+    /// <summary>Шаги обновления по опросам (job.step и хвост журнала log), затем итог с step: done; null — старый роутер: без шагов, один опрос «идёт».</summary>
+    public string[]? UpdateStepsOnRouter { get; set; }
+    /// <summary>Задание обновления висит в running и итог не пишет.</summary>
+    public bool UpdateHangs { get; set; }
+    /// <summary>При зависании пакет уже новый (версия сменилась).</summary>
+    public bool UpdateHangNewVersion { get; set; }
     public bool? UninstallKeepSettings { get; private set; }
     /// <summary>После uninstall объект dpishell пропадает — все вызовы отвечают 4.</summary>
     public bool Uninstalled { get; private set; }
@@ -214,10 +220,14 @@ public sealed class FakeRouter : IDisposable
     {
         _updateRunning = false;
         if (_updateFrom is not { } from) return;
-        if (_updatePolls++ == 0)
+        var steps = UpdateStepsOnRouter ?? [null!];
+        int n = _updatePolls++;
+        string StepField(string? step) => step is null ? "" : $$""", "step": "{{step}}", "log": [{{string.Join(", ", steps.Take(n + 1).Select(x => $"\"# {x}\""))}}]""";
+        if (UpdateHangs || n < steps.Length)
         {
             _updateRunning = true;
-            _updateJob = $$"""{ "action": "update", "from": "{{from}}", "running": true, "ok": null, "message": "Обновление", "at": null }""";
+            if (UpdateHangs && UpdateHangNewVersion) { RouterVersion = UpdateVersion; UpdateAvailable = false; }
+            _updateJob = $$"""{ "action": "update", "from": "{{from}}", "running": true, "ok": null, "message": "Обновление", "at": null{{StepField(steps[Math.Min(n, steps.Length - 1)])}} }""";
             return;
         }
         _updateFrom = null;
@@ -228,7 +238,7 @@ public sealed class FakeRouter : IDisposable
         }
         RouterVersion = UpdateVersion; UpdateAvailable = false;
         RpcdRestartCalls = RpcdRestartAfterUpdate;   // после обновления rpcd перезапускается — dpishell ненадолго пропадает
-        _updateJob = $$"""{ "action": "update", "from": "{{from}}", "running": false, "ok": true, "message": "Обновлено до {{UpdateVersion}}", "at": "2026-10-17T14:05:00Z" }""";
+        _updateJob = $$"""{ "action": "update", "from": "{{from}}", "running": false, "ok": true, "message": "Обновлено до {{UpdateVersion}}", "at": "2026-10-17T14:05:00Z"{{(UpdateStepsOnRouter is null ? "" : ", \"step\": \"done\"")}} }""";
     }
 
     bool _updateRunning;

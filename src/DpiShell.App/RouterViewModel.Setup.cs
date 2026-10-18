@@ -220,8 +220,55 @@ public sealed partial class RouterViewModel
 
     // ---------- обновление DpiShell на роутере (ядро договора §5.4) ----------
 
-    /// <summary>Ждать итог обновления не дольше (apk upgrade и перезапуск rpcd).</summary>
+    /// <summary>Ждать итог обновления не дольше (apk upgrade и перезапуск rpcd), если роутер перестал отвечать.</summary>
     public TimeSpan UpdateTimeout { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// running держится дольше — роутер отвечает, но итог не пишет: решаем по версии (новая — обновлено, «роутер не дописал итог»;
+    /// прежняя — «Обновление не завершилось» и «Повторить»).
+    /// </summary>
+    public TimeSpan UpdateStuckAfter { get; set; } = TimeSpan.FromMinutes(4);
+
+    /// <summary>Шаги обновления на роутере (status.update.job.step) — подписи для «Скачиваю → Устанавливаю → Перезапуск службы → Готово».</summary>
+    static readonly (string Id, string Title)[] UpdateStepNames =
+        [("download", "Скачиваю"), ("install", "Устанавливаю"), ("restart", "Перезапуск службы"), ("done", "Готово")];
+
+    string? _updateStep;
+    DateTime _updateStarted;
+    string _updateLog = "";
+    bool _updateFailed;
+
+    /// <summary>Шаги с отметками: пройденные — ✓, текущий — выделен. Роутер не отдаёт step — пусто (видно только «Обновляю…» и время).</summary>
+    public IReadOnlyList<UpdateStepRow> UpdateSteps
+    {
+        get
+        {
+            int current = Array.FindIndex(UpdateStepNames, x => x.Id == _updateStep);
+            if (!Updating || current < 0) return [];
+            bool finished = UpdateStepNames[current].Id == "done";
+            return UpdateStepNames.Select((x, i) => (x, i, done: i < current || finished))
+                .Select(s => new UpdateStepRow((s.done ? "✓ " : "") + s.x.Title, s.i == current, s.done, s.i == UpdateStepNames.Length - 1)).ToList();
+        }
+    }
+    public bool HasUpdateSteps => UpdateSteps.Count > 0;
+
+    /// <summary>Хвост журнала обновления («Подробнее»), если роутер его отдаёт.</summary>
+    public string UpdateLog { get => _updateLog; private set { if (Set(ref _updateLog, value)) Raise(nameof(HasUpdateLog)); } }
+    public bool HasUpdateLog => UpdateLog.Length > 0;
+
+    /// <summary>Прошлое обновление не завершилось (версия прежняя) — кнопка «Повторить».</summary>
+    public string UpdateButtonText => _updateFailed ? "Повторить" : "Обновить";
+
+    /// <summary>Очередной ответ status во время обновления: шаг, журнал, прошедшее время.</summary>
+    void ShowUpdateJob(RouterUpdateJob? job)
+    {
+        if (job is not null)
+        {
+            _updateStep = job.Step;
+            if (job.LogLines is { Count: > 0 } lines) UpdateLog = string.Join("\n", lines.TakeLast(30));
+        }
+        RaiseUpdate();
+    }
 
     public ICommand UpdateCmd => _updateCmd ??= RelayCommand.Async(() => UpdateRouterAsync(), () => Connected && !Busy && (Compat?.CanCall("update_install") ?? true));
     ICommand? _updateCmd;
@@ -235,12 +282,23 @@ public sealed partial class RouterViewModel
         if (Busy) { Say("Подождите: роутер ещё выполняет прошлую команду"); return false; }
         if (!Connected) { Say("Сначала подключитесь к роутеру"); return false; }
         Busy = true;
+        _updateStep = null;
+        _updateFailed = false;
+        UpdateLog = "";
+        _updateStarted = DateTime.UtcNow;
         Updating = true;
         Say("Обновляю DpiShell на роутере…");
+        var target = _status?.Update?.Version;
         try
         {
-            var job = await UpdateFromAsync(RouterUpdateSource.Feed);
+            var job = await UpdateFromAsync(RouterUpdateSource.Feed, target);
             if (job?.Ok == true) return await UpdatedAsync(job);
+            if (job is { Running: true })   // завис: роутер отвечает, версия прежняя — повторить, а не качать через ПК поверх идущего apk
+            {
+                _updateFailed = true;
+                Failed("Обновление не завершилось: роутер отвечает, но версия DpiShell прежняя" + (_status?.Version is { } v ? $" ({v})" : "") + ". Можно повторить.");
+                return false;
+            }
             // Роутер не достал витрину — пакеты через этот ПК: скачать, проверить подпись и хеши, положить по SSH, from: "local".
             if (_status?.Update?.Version is { } version && Compat?.CanCall("update_install") != false)
             {
@@ -248,7 +306,9 @@ public sealed partial class RouterViewModel
                 job = await UpdateLocalAsync(version);
                 if (job?.Ok == true) return await UpdatedAsync(job);
             }
-            Failed("Обновить DpiShell на роутере не удалось" + (job?.Message is { Length: > 0 } m ? ": " + m : ""));
+            _updateFailed = true;
+            Failed((job is { Running: true } ? "Обновление не завершилось" : "Обновить DpiShell на роутере не удалось")
+                + (job is { Running: false, Message.Length: > 0 } ? ": " + job.Message : ""));
             return false;
         }
         catch (RouterException e) { Failed(RouterTexts.Friendly(e)); return false; }
@@ -257,7 +317,7 @@ public sealed partial class RouterViewModel
             Failed("Обновить через этот компьютер не удалось: " + (e is HttpRequestException ? "не скачались пакеты, проверьте интернет" : SshText(e)));
             return false;
         }
-        finally { Busy = false; Updating = false; }
+        finally { Busy = false; Updating = false; RaiseUpdate(); }
     }
 
     /// <summary>Проверочный ключ выпусков; null — встроенный (в тестах — тестовый).</summary>
@@ -278,7 +338,7 @@ public sealed partial class RouterViewModel
         var pw = SshPassword(null, false) ?? throw new RouterSshException(RouterSshFailure.AuthFailed, "Нет сохранённого пароля роутера — войдите заново");
         await using (var ssh = await Ssh.ConnectAsync(new RouterSshTarget(address), () => pw))
             await new RouterSsh(ssh).UploadUpdateAsync(files);
-        return await UpdateFromAsync(RouterUpdateSource.Local);
+        return await UpdateFromAsync(RouterUpdateSource.Local, version);
     }
 
     // ---------- «Доступно обновление» и «Проверить обновления» ----------
@@ -286,13 +346,17 @@ public sealed partial class RouterViewModel
     /// <summary>status.update.available: на вкладке «Роутер» — строка «Доступно обновление X», «Что нового», «Обновить».</summary>
     public bool UpdateAvailable => _status?.Update is { Available: true } && !Updating;
     public bool ShowUpdate => UpdateAvailable || Updating;
-    public string UpdateTitle => Updating ? "Обновляю DpiShell на роутере…" : $"Доступно обновление {_status?.Update?.Version}";
+    /// <summary>Идёт — «Обновляю DpiShell на роутере… 1:23» (прошедшее время: видно, что не зависло); не завершилось — так и сказано.</summary>
+    public string UpdateTitle => Updating ? $"Обновляю DpiShell на роутере… {DateTime.UtcNow - _updateStarted:m\\:ss}"
+        : _updateFailed ? $"Обновление до {_status?.Update?.Version} не завершилось"
+        : $"Доступно обновление {_status?.Update?.Version}";
     public string UpdateNotes => string.Join("\n", (_status?.Update?.Notes ?? []).Select(n => "• " + n));
     public bool HasUpdateNotes => UpdateNotes.Length > 0 && !Updating;
 
     void RaiseUpdate()
     {
-        foreach (var n in new[] { nameof(UpdateAvailable), nameof(ShowUpdate), nameof(UpdateTitle), nameof(UpdateNotes), nameof(HasUpdateNotes) }) Raise(n);
+        foreach (var n in new[] { nameof(UpdateAvailable), nameof(ShowUpdate), nameof(UpdateTitle), nameof(UpdateNotes), nameof(HasUpdateNotes),
+                     nameof(UpdateSteps), nameof(HasUpdateSteps), nameof(UpdateButtonText) }) Raise(n);
     }
 
     /// <summary>Ждать итог update_check не дольше.</summary>
@@ -352,22 +416,37 @@ public sealed partial class RouterViewModel
         return true;
     }
 
-    /// <summary>update_install и ждать новое задание до конца. Пока rpcd перезапускается, роутер может не отвечать — ждём дальше.</summary>
-    async Task<RouterUpdateJob?> UpdateFromAsync(RouterUpdateSource from)
+    /// <summary>
+    /// update_install и ждать новое задание до конца. Пока rpcd перезапускается, роутер может не отвечать — ждём дальше.
+    /// running держится дольше <see cref="UpdateStuckAfter"/>, а роутер отвечает: версия уже <paramref name="target"/> — успех
+    /// («роутер не дописал итог»), прежняя — задание с Running = true (не завершилось).
+    /// </summary>
+    async Task<RouterUpdateJob?> UpdateFromAsync(RouterUpdateSource from, string? target)
     {
         var before = _status?.Update?.Job;
+        var versionBefore = _status?.Version;
         await Call(c => c.UpdateInstallAsync(from));
         var started = DateTime.UtcNow;
         bool sawRunning = false;
         while (DateTime.UtcNow - started < UpdateTimeout)
         {
             await Task.Delay(PollInterval);
+            RaiseUpdate();   // прошедшее время в заголовке — и пока роутер не отвечает
             RouterStatus s;
             try { s = await Call(c => c.StatusAsync()); }
             catch (RouterException e) when (Restarting(e)) { continue; }   // rpcd перезапускается — объекта dpishell пока нет
             Status = s;
             var job = s.Update?.Job;
-            if (s.Jobs?.Update == true || job?.Running == true) { sawRunning = true; continue; }
+            ShowUpdateJob(job);
+            if (s.Jobs?.Update == true || job?.Running == true)
+            {
+                sawRunning = true;
+                if (DateTime.UtcNow - started < UpdateStuckAfter) continue;
+                bool updated = target is not null ? s.Version == target : s.Version != versionBefore;
+                return updated
+                    ? new RouterUpdateJob("update", job?.From, false, true, $"DpiShell на роутере обновлён до {s.Version} (роутер не дописал итог)", Log: job?.Log)
+                    : (job ?? new RouterUpdateJob("update", null, true, null, null)) with { Running = true };
+            }
             if (job is not null && (sawRunning || job != before)) return job;
         }
         throw new RouterException(RouterFailure.NoResponse, "Обновление на роутере идёт дольше обычного — проверьте позже");
