@@ -136,9 +136,10 @@ const LIST_LIMIT = 5000;
 
 // status.update (router-api.md §5): { available, version, notes, checked_at, job } — job — последнее задание обновления.
 function update_status() {
+	upd.recover();
 	let u = upd.status();
 	u.job = st.read_json('/tmp/dpishell/update_job.json', null);
-	if (u.job) u.job.at = st.iso(u.job.at);
+	if (u.job) { u.job.at = st.iso(u.job.at); u.job.started_at = st.iso(u.job.started_at); }
 	return u;
 }
 

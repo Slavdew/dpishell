@@ -39,6 +39,8 @@ restore_choice() {
 start_service() {
 	# Перезагрузка, пока включение ждало подтверждения (confirm_s), — то же, что неподтверждение: откат до restore_choice.
 	[ -f /etc/dpishell/pending-confirm.json ] && /usr/libexec/dpishell/run revert now
+	# Задания, прерванные перезагрузкой или обновлением со старой версии, — закрыть итогом по факту.
+	/usr/libexec/dpishell/run recover
 	restore_choice
 	cron_set 1
 }
