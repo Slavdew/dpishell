@@ -42,10 +42,13 @@ return view.extend({
 		}
 
 		this.el = {
-			state: E('div', { 'class': 'dps-state' }),
-			toggle: api.btn('Включить', function() { return self.toggle(); }, 'cbi-button-apply'),
-			select: api.btn('Подобрать', function() { return self.openSelect(); }, 'cbi-button-action'),
-			check: api.btn('Проверить', function() { return self.checkNow(); }, 'cbi-button-neutral'),
+			// Панель состояния (ux-audit-web п.1): точка, крупное состояние, одна строка пояснения, одна главная кнопка.
+			dot: E('span', { 'class': 'dps-dot' }),
+			state: E('div', { 'class': 'dps-hero-title' }),
+			stateSub: E('div', { 'class': 'dps-hero-sub' }),
+			toggle: api.btn('Включить', function() { return self.toggle(); }, 'cbi-button-positive dps-big'),
+			select: api.btn('Подобрать стратегию', function() { return self.openSelect(); }, 'cbi-button-neutral'),
+			check: api.btn('Проверить сайты', function() { return self.checkNow(); }, 'cbi-button-neutral'),
 			err: E('div', { 'class': 'dps-error' }),
 			// Стратегия и режим — не сразу: обход для всей сети перезапускается (UX-аудит п. 50).
 			strategy: E('select', { 'class': 'cbi-input-select', 'style': 'width:100%;max-width:36em', 'change': function(ev) { self.pend('strategy', ev.target.value); } }),
@@ -64,7 +67,7 @@ return view.extend({
 			confirmText: E('span'),
 			confirm: E('div', { 'class': 'alert-message notice', 'style': 'display:none' }),
 			update: E('div'),
-			lastCheck: E('div', { 'class': 'dps-line dps-muted' }),
+			lastCheck: E('div', { 'class': 'dps-line' }),
 			schedOn: E('input', { type: 'checkbox', change: function() { self.saveSchedule(); } }),
 			schedHours: E('select', { 'class': 'cbi-input-select', change: function() { self.saveSchedule(); } },
 				HOURS.map(function(h) { return E('option', { value: String(h[0]) }, h[1]); })),
@@ -76,37 +79,44 @@ return view.extend({
 			siteResult: E('div', { 'class': 'dps-line' })
 		};
 		this.el.modeAll = api.radio('dps-mode', 'all', 'Все сайты', true, function() { self.pend('mode', 'all'); });
-		this.el.modeLists = api.radio('dps-mode', 'lists', 'Только из списков', false, function() { self.pend('mode', 'lists'); });
+		this.el.modeLists = api.radio('dps-mode', 'lists', 'Только YouTube, Discord и мои списки', false, function() { self.pend('mode', 'lists'); });
 		this.pending = {};
 
 		// Порядок — как во вкладке «Роутер» окна ПК (UX-аудит, макет страницы роутера).
 		var view = E('div', {}, [
 			E('h2', {}, 'DpiShell — обход блокировок'),
 			this.el.update,
-			api.card('Обход', [
-				this.el.state,
-				E('div', { 'class': 'dps-actions' }, [this.el.toggle, this.el.check, this.el.select]),
-				this.el.err,
-				this.el.lastCheck,
+			api.card(null, [
+				E('div', { 'class': 'dps-hero' }, [
+					this.el.dot,
+					E('div', { 'class': 'dps-hero-text' }, [this.el.state, this.el.stateSub]),
+					this.el.toggle
+				]),
 				this.el.confirm,
 				this.el.warnings,
-				this.el.ts,
-				api.row(['Для каких сайтов', api.info('«Все сайты» — обход для любого сайта, кроме исключений; это основной режим. «Только из списков» — только для сайтов из списков (YouTube, Discord, свои). После смены роутер сам проверяет, что сайты открываются.')],
+				this.el.lastCheck,
+				E('div', { 'class': 'dps-actions' }, [this.el.check, this.el.select]),
+				this.el.err,
+				this.el.ts
+			]),
+			api.card('Сайт не открывается', [
+				api.line('Роутер проверит адрес с обходом и без. Если сайт открывается только без обхода — предложит добавить его в исключения.', 'dps-muted'),
+				E('div', { 'class': 'dps-actions' }, [this.el.siteUrl, this.el.siteBtn]),
+				this.el.siteResult
+			]),
+			api.card('Настройки', [
+				api.row(['Что обходить', api.info('«Все сайты» — обход для любого сайта, кроме исключений; это основной режим. «Только из списков» — только для сайтов из списков (YouTube, Discord, свои). После смены роутер сам проверяет, что сайты открываются.')],
 					E('div', {}, [this.el.modeAll, this.el.modeLists])),
 				api.row(['Стратегия', api.info('Стратегия — способ, которым обход обманывает оборудование провайдера; у разных провайдеров работают разные. Если не знаете, какую выбрать, нажмите «Подобрать» — роутер проверит сам и включит лучшую.')], this.el.strategy),
-				this.el.apply,
-				E('h4', { 'style': 'margin-top:1.2em' }, 'Проверять сам'),
+				this.el.apply
+			]),
+			api.card('Проверять сам', [
 				E('label', { 'class': 'dps-check' }, [this.el.schedOn, 'Проверять сайты каждые ', this.el.schedHours]),
 				E('label', { 'class': 'dps-check' }, [this.el.schedAuto, 'Если не помогло — подобрать заново',
 					api.info('Если обход перестал работать и запасные стратегии не помогли, роутер сам запустит быстрый подбор и включит найденную — не чаще раза в 6 часов. Пока идёт подбор (2–3 минуты), сайты в сети могут открываться с перебоями в непредсказуемый момент, поэтому по умолчанию выключено.')]),
 				E('label', { 'class': 'dps-check' }, [this.el.schedWatch, 'Выключать обход, если с ним пропал интернет',
 					api.info('Раз в 5 минут роутер проверяет обычные сайты. Если с обходом они не открываются, а без него открываются — обход выключается, причина видна здесь. Включить снова — кнопкой «Включить». Если интернета нет и без обхода, это обрыв у провайдера: обход остаётся.')]),
 				this.el.schedMsg
-			]),
-			api.card('Сайт не открывается', [
-				api.line('Роутер проверит адрес с обходом и без. Если сайт открывается только без обхода — предложит добавить его в исключения.', 'dps-muted'),
-				E('div', { 'class': 'dps-actions' }, [this.el.siteUrl, this.el.siteBtn]),
-				this.el.siteResult
 			]),
 			this.about()
 		]);
@@ -153,28 +163,29 @@ return view.extend({
 		});
 	},
 
+	// Состояние для панели: kind — ok | off | err | busy (цвет точки).
 	stateText: function() {
 		var s = this.status, j = s.jobs || {};
 		if (j.select) {
 			var p = this.progress;
-			return 'Подбор… ' + (p && p.total ? '%d из %d'.format(Math.min(p.index || 1, p.total), p.total) : '') +
-				(p && p.message ? ' — ' + p.message : '');
+			return { kind: 'busy', title: 'Идёт подбор' + (p && p.total ? ' — %d из %d'.format(Math.min(p.index || 1, p.total), p.total) : ''),
+				sub: (p && p.message) || 'Сайты в сети могут открываться с перебоями' };
 		}
 		if (j.core_install)
-			return 'Загрузка ядра обхода…';
+			return { kind: 'busy', title: 'Загрузка программы обхода…' };
 		if (!s.core.installed)
-			return 'Ошибка: ядро обхода не установлено';
+			return { kind: 'err', title: 'Программа обхода не установлена', sub: 'Нажмите «Загрузить ядро» ниже' };
 		if (s.core.hash_ok === false)
-			return 'Ошибка: файлы обхода повреждены — нажмите «Восстановить» в «Диагностике»';
+			return { kind: 'err', title: 'Файлы обхода повреждены', sub: 'Нажмите «Восстановить» во вкладке «Диагностика»' };
 		var title = this.strategyTitle(s.strategy);
 		if (j.check)
-			return (s.enabled ? 'Работает — ' + title + ', ' : '') + 'идёт проверка…';
+			return { kind: 'busy', title: 'Идёт проверка сайтов', sub: s.enabled ? title : '' };
 		if (!s.enabled)
-			return 'Выключено';
+			return { kind: 'off', title: 'Обход выключен', sub: s.strategy ? 'Будет включена ' + title : 'Стратегия не выбрана — «Включить» подберёт её сам' };
 		var lc = s.last_check;
 		if (lc && lc.ok === false)
-			return 'Ошибка: проверка в ' + api.time(lc.at) + ' не прошла — ' + title;
-		return 'Работает — ' + title + (lc && lc.at ? ', проверено в ' + api.time(lc.at) : ', ещё не проверялось');
+			return { kind: 'err', title: 'Обход работает не на всех сайтах', sub: title + ' · проверено в ' + api.time(lc.at) };
+		return { kind: 'ok', title: 'Обход работает', sub: title + (lc && lc.at ? ' · проверено в ' + api.time(lc.at) : ' · ещё не проверялся') };
 	},
 
 	strategyTitle: function(id) {
@@ -212,9 +223,13 @@ return view.extend({
 	update: function() {
 		var s = this.status, j = s.jobs || {};
 		var busy = !!(j.select || j.core_install);
-		this.el.state.textContent = this.stateText();
+		var st = this.stateText();
+		this.el.state.textContent = st.title;
+		this.el.stateSub.textContent = st.sub || '';
+		this.el.dot.className = 'dps-dot dps-dot-' + st.kind;
 		this.el.toggle.textContent = s.enabled ? 'Выключить' : 'Включить';
-		this.el.toggle.className = 'btn cbi-button ' + (s.enabled ? 'cbi-button-remove' : 'cbi-button-apply');
+		this.el.toggle.className = 'btn cbi-button dps-big ' + (s.enabled ? 'cbi-button-neutral' : 'cbi-button-positive');
+		this.el.check.title = s.enabled ? '' : 'Сначала включите обход';
 		this.el.toggle.disabled = busy || !s.core.installed;
 		this.el.select.disabled = busy || !s.core.installed;
 		this.el.check.disabled = busy || !s.enabled || j.check;
@@ -231,13 +246,17 @@ return view.extend({
 		var lc = s.last_check;
 		if (lc && lc.at) {
 			var src = { manual: 'по кнопке', timer: 'по таймеру', app: 'из приложения' }[lc.source] || '';
-			var groups = (lc.groups || []).map(function(g) {
-				return ({ youtube: 'YouTube', discord: 'Discord', user: 'свои адреса' }[g.id] || g.id) + (g.ok ? ' — да' : ' — нет');
-			}).join(', ');
-			this.el.lastCheck.textContent = 'Последняя проверка ' + api.time(lc.at) + (src ? ' ' + src : '') + ': ' +
-				(lc.ok ? 'всё открывается' : 'не всё открывается') + (groups ? ' (' + groups + ')' : '');
+			// Итог проверки значками (ux-audit-web п.3): ✓ YouTube  ✗ Discord, ниже — когда.
+			dom.content(this.el.lastCheck, [
+				E('div', { 'class': 'dps-verdicts' }, (lc.groups || []).map(function(g) {
+					return E('span', { 'class': g.ok ? 'dps-v-ok' : 'dps-v-bad' }, (g.ok ? '✓ ' : '✗ ') +
+						({ youtube: 'YouTube', discord: 'Discord', user: 'Свои адреса' }[g.id] || g.id));
+				})),
+				E('div', { 'class': 'dps-muted' }, 'Проверено ' + api.time(lc.at) + (src ? ' ' + src : '') +
+					(lc.ok ? '' : ' — не всё открывается'))
+			]);
 		} else
-			this.el.lastCheck.textContent = '';
+			dom.content(this.el.lastCheck, []);
 
 		this.renderUpdate(s.update);
 		// Отсчёт — от left_s, не от until: часы роутера и браузера могут расходиться.
@@ -369,6 +388,13 @@ return view.extend({
 				break;
 			case 'dns_fallback':
 				action = api.btn('Подробнее', function() { api.go('dns'); }, 'cbi-button-neutral');
+				break;
+			case 'watchdog_off':
+			case 'button_off':
+			case 'confirm_reverted':
+				action = E('span', { 'class': 'dps-actions', 'style': 'margin:0' }, [
+					api.btn('Включить снова', function() { return self.toggle(); }, 'cbi-button-positive'),
+					api.btn('Подобрать другую', function() { return self.openSelect(); }, 'cbi-button-neutral')]);
 				break;
 			}
 			return E('div', { 'class': 'alert-message ' + (WARN_CLASS[w.code] || 'warning') },
