@@ -31,7 +31,26 @@ public sealed record RouterCore(string? Version, bool Installed, bool HashOk);
 public sealed record RouterGroupCheck(string Id, bool Ok);
 public sealed record RouterLastCheck(DateTime? At, string? Source, bool Ok, List<RouterGroupCheck>? Groups);
 /// <summary>Таймер проверки; hours ∈ 0.5, 1, 3, 6, 12, 24 (редакция §9).</summary>
-public sealed record RouterSchedule(bool Enabled, double Hours, bool AutoSelect = false);
+/// <remarks>watchdog — сторож включён (аварийный выключатель, §5.1); null — роутер до сторожа.</remarks>
+public sealed record RouterSchedule(bool Enabled, double Hours, bool AutoSelect = false, bool? Watchdog = null);
+
+/// <summary>
+/// Включение на пробу ждёт confirm (§5.1 pending_confirm): left_s — сколько осталось на момент ответа (часы роутера и ПК расходятся,
+/// поэтому отсчёт — от left_s, не от until); revert_to — что вернёт роутер сам: off или id стратегии.
+/// </summary>
+public sealed record RouterPendingConfirm(DateTime? Until, int LeftS, string? RevertTo)
+{
+    public bool RevertsToOff => RevertTo is null or "off";
+}
+
+/// <summary>Цель, которая не открылась у сторожа: адрес и что сломалось.</summary>
+public sealed record RouterOffTarget(string Url, string? Detail = null);
+
+/// <summary>Последнее выключение без человека (§5.1 last_off): by watchdog | button | revert; null при включённом обходе.</summary>
+public sealed record RouterLastOff(string By, DateTime? At, string? Text, List<RouterOffTarget>? Targets = null);
+
+/// <summary>Жив ли сторож (§5.1 watchdog): последняя проверка, её итог и через сколько минут следующая.</summary>
+public sealed record RouterWatchdog(bool Enabled, DateTime? CheckedAt, bool? Ok, int? IntervalMin = null);
 /// <summary>Фоновые задания роутера; dns — любое DNS-задание (§9, 2026-10-17), dns_analyze оставлен с тем же значением.</summary>
 public sealed record RouterJobs(bool Select, bool Check, bool CoreInstall, bool DnsAnalyze = false, bool SiteCheck = false, bool Dns = false, bool Update = false);
 
@@ -56,7 +75,9 @@ public sealed record RouterStatus(
     // С 0.2.0: методы, которые роутер реально обрабатывает (null — старый роутер, считаем «все из API 1.0»), и min_app.
     List<string>? Methods = null, string? MinApp = null,
     // С 0.2.0 (ядро договора): есть ли обновление и последнее задание обновления.
-    RouterUpdate? Update = null);
+    RouterUpdate? Update = null,
+    // Аварийный выключатель (§5.1): включение ждёт confirm, последнее выключение без человека, состояние сторожа. Старый роутер — null.
+    RouterPendingConfirm? PendingConfirm = null, RouterLastOff? LastOff = null, RouterWatchdog? Watchdog = null);
 
 /// <summary>source: catalog | user; у user id «u-…» — присланные с ПК (strategies_user_set), «r-…» — найденные глубоким поиском на роутере (§9).</summary>
 public sealed record RouterStrategyItem(string Id, string Title, string Source, int Runs, int Passed)

@@ -215,9 +215,24 @@ public sealed class RouterClient : IDisposable
 
     // ---------- §5.2 действия ----------
 
-    public Task EnableAsync(CancellationToken ct = default) => CallAsync("enable", null, ct);
+    /// <param name="confirmS">Включение на пробу (60–600 с): без <see cref="ConfirmAsync"/> за это время роутер вернёт прежнее (§5.2). null — как раньше.</param>
+    public Task EnableAsync(int? confirmS = null, CancellationToken ct = default) => CallAsync("enable", WithConfirm(new JsonObject(), confirmS), ct);
     public Task DisableAsync(CancellationToken ct = default) => CallAsync("disable", null, ct);
-    public Task StrategySetAsync(string id, CancellationToken ct = default) => CallAsync("strategy_set", new JsonObject { ["id"] = id }, ct);
+    public Task StrategySetAsync(string id, int? confirmS = null, CancellationToken ct = default) =>
+        CallAsync("strategy_set", WithConfirm(new JsonObject { ["id"] = id }, confirmS), ct);
+    /// <summary>«Всё работает» — снять pending_confirm; без ожидания — тоже без ошибки (§5.2).</summary>
+    public Task ConfirmAsync(CancellationToken ct = default) => CallAsync("confirm", null, ct);
+
+    /// <summary>Срок пробы по договору — 60–600 с.</summary>
+    public const int MinConfirmS = 60, MaxConfirmS = 600;
+
+    static JsonObject WithConfirm(JsonObject args, int? confirmS)
+    {
+        if (confirmS is not { } s) return args;
+        if (s is < MinConfirmS or > MaxConfirmS) throw new ArgumentOutOfRangeException(nameof(confirmS), "Срок пробы на роутере — 60–600 с");
+        args["confirm_s"] = s;
+        return args;
+    }
     public Task<RouterStarted> CheckNowAsync(CancellationToken ct = default) => CallAsync<RouterStarted>("check_now", null, ct);
 
     public Task<RouterStarted> SelectStartAsync(IEnumerable<string> groups, bool full, bool deep, CancellationToken ct = default) =>
@@ -231,15 +246,18 @@ public sealed class RouterClient : IDisposable
     public Task SelectCancelAsync(CancellationToken ct = default) => CallAsync("select_cancel", null, ct);
 
     /// <summary>`apply` (редакция §9): выбрать другую стратегию из итога подбора вместо автоматически включённой.</summary>
-    public Task ApplyAsync(string id, IEnumerable<string> backups, CancellationToken ct = default) =>
-        CallAsync("apply", new JsonObject { ["id"] = id, ["backups"] = new JsonArray(backups.Select(b => (JsonNode)b).ToArray()) }, ct);
+    public Task ApplyAsync(string id, IEnumerable<string> backups, int? confirmS = null, CancellationToken ct = default) =>
+        CallAsync("apply", WithConfirm(new JsonObject { ["id"] = id, ["backups"] = new JsonArray(backups.Select(b => (JsonNode)b).ToArray()) }, confirmS), ct);
 
     /// <param name="autoSelect">При неудаче проверки и исчерпанных запасных роутер сам запускает быстрый подбор (§9, вопрос 7).</param>
-    public Task ScheduleSetAsync(bool enabled, double hours, bool autoSelect = false, CancellationToken ct = default)
+    /// <param name="watchdog">Сторож: выключать обход, если с ним пропал интернет (§5.2); null — не передавать (старый роутер).</param>
+    public Task ScheduleSetAsync(bool enabled, double hours, bool autoSelect = false, bool? watchdog = null, CancellationToken ct = default)
     {
         // §9: добавлено 0.5 (раз в 30 мин).
         if (hours is not (0.5 or 1 or 3 or 6 or 12 or 24)) throw new ArgumentOutOfRangeException(nameof(hours), "Часы проверки: 0.5, 1, 3, 6, 12 или 24");
-        return CallAsync("schedule_set", new JsonObject { ["enabled"] = enabled, ["hours"] = hours, ["auto_select"] = autoSelect }, ct);
+        var args = new JsonObject { ["enabled"] = enabled, ["hours"] = hours, ["auto_select"] = autoSelect };
+        if (watchdog is { } w) args["watchdog"] = w;
+        return CallAsync("schedule_set", args, ct);
     }
 
     /// <summary>«Все сайты, кроме исключений» (all) / «По спискам» (lists); роутер перезапускает zapret и проверяет с контрольной группой.</summary>

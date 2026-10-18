@@ -118,9 +118,92 @@ public sealed class FakeRouter : IDisposable
     /// <summary>Как роутер 0.2.0: api "1.0", methods (все, что знает подделка), min_app, update.</summary>
     public FakeRouter As020()
     {
-        StatusApi = "\"1.0\""; RouterVersion = "0.2.0-r3"; MinApp = "0.9.0"; UpdateFieldOn = true;
-        MethodsJson = """["apply","check_now","conflict_stop","core_install","diag","disable","dns_analyze","dns_enable","dns_presets","dns_restore","dns_set","dns_status","enable","flow_offload_fix","ipv6_set","lists_get","lists_set","mode_set","report","schedule_set","select_cancel","select_progress","select_start","site_check","site_check_result","status","strategies","strategies_user_set","strategy_set","targets_get","targets_set","uninstall","update_check","update_install"]""";
+        StatusApi = "\"1.0\""; RouterVersion = "0.2.0-r3"; MinApp = "0.9.0"; UpdateFieldOn = true; KillSwitch = true;
+        MethodsJson = Methods020;
         return this;
+    }
+
+    /// <summary>status.methods роутера 0.2.0 — все методы, что знает подделка.</summary>
+    public const string Methods020 = """["apply","check_now","confirm","conflict_stop","core_install","diag","disable","dns_analyze","dns_enable","dns_presets","dns_restore","dns_set","dns_status","enable","flow_offload_fix","ipv6_set","lists_get","lists_set","mode_set","report","schedule_set","select_cancel","select_progress","select_start","site_check","site_check_result","status","strategies","strategies_user_set","strategy_set","targets_get","targets_set","uninstall","update_check","update_install"]""";
+
+    // ---------- аварийный выключатель (§5.1, §5.2): проба с confirm, last_off, сторож ----------
+
+    /// <summary>Отдавать pending_confirm, last_off, watchdog и schedule.watchdog (роутер 0.2.0 со сторожем). Без него — как старый роутер.</summary>
+    public bool KillSwitch { get; set; }
+    /// <summary>Включение ждёт confirm: сколько секунд осталось (left_s) и что роутер вернёт сам (off или id стратегии).</summary>
+    public (int LeftS, string RevertTo)? Pending { get; set; }
+    public int ConfirmCalls { get; private set; }
+    /// <summary>confirm_s последнего enable/strategy_set/apply (null — не передан).</summary>
+    public int? LastConfirmS { get; private set; }
+    public bool WatchdogEnabled { get; set; } = true;
+    public bool WatchdogOk { get; set; } = true;
+    public string WatchdogCheckedAt { get; set; } = "2026-10-19T12:00:01Z";
+    /// <summary>status.last_off как JSON (null — поля нет / null).</summary>
+    public string? LastOffJson { get; set; }
+    /// <summary>Предупреждение выключения (watchdog_off, button_off, confirm_reverted) — до следующего включения.</summary>
+    string? _offWarning;
+
+    /// <summary>Время пробы вышло без confirm — роутер вернул прежнее сам (как по таймеру).</summary>
+    public void ExpireConfirm()
+    {
+        if (Pending is not { } p) return;
+        Pending = null;
+        if (p.RevertTo == "off")
+        {
+            Enabled = false;
+            LastOffJson = """{ "by": "revert", "at": "2026-10-19T12:03:00Z", "text": "Включение не подтвердили — обход выключен", "targets": [] }""";
+        }
+        else Strategy = p.RevertTo;
+        _offWarning = """{ "code": "confirm_reverted", "text": "Включение не подтвердили — роутер вернул прежнее" }""";
+    }
+
+    /// <summary>Сторож: с обходом интернет пропал, без него есть — обход выключен (targets — что не открылось).</summary>
+    public void WatchdogTrip()
+    {
+        Enabled = false; Pending = null; WatchdogOk = false; WatchdogCheckedAt = "2026-10-19T11:32:00Z";
+        LastOffJson = """
+            { "by": "watchdog", "at": "2026-10-19T11:32:00Z", "text": "С обходом интернет пропал, без обхода есть",
+              "targets": [ { "url": "https://www.google.com/generate_204", "detail": "таймаут 5 с" }, { "url": "https://ya.ru/", "detail": "сброс соединения" } ] }
+            """;
+        _offWarning = """{ "code": "watchdog_off", "text": "Сторож выключил обход: с ним пропал интернет" }""";
+    }
+
+    /// <summary>Короткое нажатие кнопки reset на корпусе — обход выключен.</summary>
+    public void ButtonOff()
+    {
+        Enabled = false; Pending = null;
+        LastOffJson = """{ "by": "button", "at": "2026-10-19T11:40:00Z", "text": "Выключено кнопкой на корпусе", "targets": [] }""";
+        _offWarning = """{ "code": "button_off", "text": "Обход выключен кнопкой на корпусе" }""";
+    }
+
+    /// <summary>enable / strategy_set / apply с confirm_s при включённом сторожевом договоре — на пробу.</summary>
+    void Trial(JsonObject args, bool wasEnabled, string wasStrategy)
+    {
+        LastConfirmS = args["confirm_s"]?.GetValue<int>();
+        if (!KillSwitch || LastConfirmS is not { } s) return;
+        if (!wasEnabled) Pending = (s, "off");
+        else if (wasStrategy != Strategy) Pending = (s, wasStrategy);
+    }
+
+    void OnEnabled() { LastOffJson = null; _offWarning = null; }
+
+    string KillSwitchFields()
+    {
+        if (!KillSwitch) return "";
+        var pending = Pending is { } p
+            ? $$"""{ "until": "2026-10-19T12:03:00Z", "left_s": {{p.LeftS}}, "revert_to": "{{p.RevertTo}}" }"""
+            : "null";
+        return $$"""
+            , "pending_confirm": {{pending}}, "last_off": {{(Enabled ? "null" : LastOffJson ?? "null")}},
+              "watchdog": { "enabled": {{(WatchdogEnabled ? "true" : "false")}}, "checked_at": "{{WatchdogCheckedAt}}", "ok": {{(WatchdogOk ? "true" : "false")}}, "interval_min": 5 }
+            """;
+    }
+
+    string Warnings()
+    {
+        if (_offWarning is null) return WarningsJson;
+        var rest = WarningsJson.Trim();
+        return rest == "[]" ? $"[{_offWarning}]" : $"[{_offWarning}, {rest[1..]}";
     }
 
     string Contract020() =>
@@ -254,14 +337,15 @@ public sealed class FakeRouter : IDisposable
                   "last_check": { "at": "{{CheckedAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture)}}", "source": "timer", "ok": true,
                                   "groups": [ { "id": "youtube", "ok": true }, { "id": "discord", "ok": true } ] },
                   "fail_streak": 0,
-                  "schedule": { "enabled": {{(ScheduleEnabled ? "true" : "false")}}, "hours": {{ScheduleHours.ToString(System.Globalization.CultureInfo.InvariantCulture)}}, "auto_select": {{(AutoSelect ? "true" : "false")}} },
+                  "schedule": { "enabled": {{(ScheduleEnabled ? "true" : "false")}}, "hours": {{ScheduleHours.ToString(System.Globalization.CultureInfo.InvariantCulture)}}, "auto_select": {{(AutoSelect ? "true" : "false")}}{{(KillSwitch ? $", \"watchdog\": {(WatchdogEnabled ? "true" : "false")}" : "")}} },
                   "jobs": { "select": {{(SelectRunningJob ? "true" : "false")}}, "check": false, "core_install": false, "dns_analyze": false, "site_check": false, "dns": false, "update": {{(_updateRunning ? "true" : "false")}} },
-                  "warnings": {{WarningsJson}}{{UpdateField()}} }
+                  "warnings": {{Warnings()}}{{UpdateField()}}{{KillSwitchFields()}} }
                 """,
             "strategies" => StrategiesJson,
-            "enable" => Do(() => Enabled = true),
-            "disable" => Do(() => Enabled = false),
-            "strategy_set" => Do(() => Strategy = args["id"]!.GetValue<string>()),
+            "enable" => Do(() => { var was = Enabled; Enabled = true; OnEnabled(); Trial(args, was, Strategy); }),
+            "disable" => Do(() => { Enabled = false; Pending = null; }),
+            "confirm" => Do(() => { ConfirmCalls++; Pending = null; }),
+            "strategy_set" => Do(() => { var was = Strategy; Strategy = args["id"]!.GetValue<string>(); Trial(args, Enabled, was); }),
             "check_now" => Do(() => CheckedAt = CheckedAt.AddMinutes(1), """{ "started": true }"""),
             // §9 (2026-10-17): только «Свои адреса», а их список пуст — invalid, field groups.
             "select_start" when args["groups"] is System.Text.Json.Nodes.JsonArray g && g.Count == 1 && g[0]!.GetValue<string>() == "user" && UserTargets.Count == 0 =>
@@ -269,11 +353,12 @@ public sealed class FakeRouter : IDisposable
             "select_start" => Step0("""{ "started": true }"""),
             "targets_set" => Do(() => UserTargets = args["items"]!.AsArray().Select(x => (x!["url"]!.GetValue<string>(), x["important"]?.GetValue<bool>() ?? false)).ToList()),
             "select_cancel" => Do(() => { _cancelled = true; SelectRunningJob = false; }),
-            "apply" => Do(() => Strategy = args["id"]!.GetValue<string>()),
+            "apply" => Do(() => { var was = Strategy; Strategy = args["id"]!.GetValue<string>(); Trial(args, Enabled, was); }),
             "schedule_set" => Do(() =>
             {
                 ScheduleEnabled = args["enabled"]!.GetValue<bool>(); ScheduleHours = args["hours"]!.GetValue<double>();
                 AutoSelect = args["auto_select"]?.GetValue<bool>() ?? false;
+                if (args["watchdog"] is { } wd) WatchdogEnabled = wd.GetValue<bool>();
             }),
             "mode_set" => Do(() => Mode = args["mode"]!.GetValue<string>(), """{ "started": true }"""),
             "site_check" => Do(() => { SiteCheckUrl = args["url"]!.GetValue<string>(); _sitePolls = 0; }, """{ "started": true }"""),

@@ -21,6 +21,7 @@ public sealed partial class MainViewModel
         Router.PcRunning = () => IsRunning;
         Router.StopPc = async () => !IsRunning || (await DisableCoreAsync() && !IsRunning);
         Router.EnablePcTimestamps = EnableTimestampsAsync;
+        Router.VerifyFromPc = VerifyRouterFromPcAsync;
         Router.Changed += OnRouterChanged;
     }
 

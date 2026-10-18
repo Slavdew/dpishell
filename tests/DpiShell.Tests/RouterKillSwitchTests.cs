@@ -1,0 +1,231 @@
+using DpiShell.App;
+using DpiShell.Core;
+using DpiShell.Core.Router;
+
+namespace DpiShell.Tests;
+
+/// <summary>
+/// Аварийный выключатель роутера в окне (router-api §5.1, §5.2): включение на пробу с confirm_s, проверка с этого ПК,
+/// «Да, оставить» / «Вернуть как было», откат самим роутером, сторож и кнопка на корпусе, старый роутер без этих полей.
+/// </summary>
+public sealed class RouterKillSwitchTests : IDisposable
+{
+    readonly TempDir _tmp = new();
+    readonly List<string> _said = [];
+    DateTime _now = new(2026, 10, 19, 12, 0, 0, DateTimeKind.Utc);
+    int _verifyCalls;
+
+    public void Dispose() => _tmp.Dispose();
+
+    async Task<RouterViewModel> Connected(FakeRouter r, bool? sitesOpen)
+    {
+        var pc = new Shell(new AppPaths(_tmp.Sub("root"), Repo.Data));
+        var settings = WindowSettings.Load(Path.Combine(_tmp.Sub("window"), "window.json"));
+        var vm = new RouterViewModel(pc, settings)
+        {
+            AddressAuto = false,
+            CustomAddress = r.Address,
+            PollInterval = TimeSpan.FromMilliseconds(10),
+            CheckTimeout = TimeSpan.FromSeconds(5),
+            PcTimestamps = () => true,
+            Gateway = () => throw new InvalidOperationException("в тестах — только фейковый роутер"),
+            AppVersion = new Version(1, 0, 0),
+            Say = s => { lock (_said) _said.Add(s); },
+            Confirm = _ => true,
+            TrialTick = TimeSpan.FromMilliseconds(10),
+            TrialGrace = TimeSpan.FromMilliseconds(10),
+            UtcNow = () => _now,
+            VerifyFromPc = () => { _verifyCalls++; return Task.FromResult(sitesOpen); },
+        };
+        Assert.True(await vm.ConnectAsync("secret"));
+        return vm;
+    }
+
+    /// <summary>Роутер 0.2.0 со сторожем (confirm в methods), без посторонних предупреждений.</summary>
+    static FakeRouter Router(bool enabled = false)
+    {
+        var r = new FakeRouter { WarningsJson = "[]", Enabled = enabled }.As020();
+        r.UpdateFieldOn = false;
+        return r;
+    }
+
+    static async Task Until(Func<bool> cond)
+    {
+        for (int i = 0; i < 500 && !cond(); i++) await Task.Delay(10);
+        Assert.True(cond());
+    }
+
+    string LastSaid() { lock (_said) return _said[^1]; }
+
+    [Fact]
+    public async Task Enable_SitesOpen_ConfirmedWithoutAsking()
+    {
+        using var r = Router();
+        using var vm = await Connected(r, sitesOpen: true);
+        await vm.ToggleAsync();
+        Assert.Equal(RouterViewModel.TrialSeconds, r.LastConfirmS);
+        Assert.Equal(1, _verifyCalls);
+        Assert.Equal(1, r.ConfirmCalls);
+        Assert.Null(r.Pending);
+        Assert.True(r.Enabled);
+        Assert.False(vm.TrialVisible);
+        Assert.Equal("Обход на роутере включён. Сайты с этого ПК открываются.", LastSaid());
+    }
+
+    [Fact]
+    public async Task Enable_SitesFail_Banner_Keep_Confirms()
+    {
+        using var r = Router();
+        using var vm = await Connected(r, sitesOpen: false);
+        await vm.ToggleAsync();
+        Assert.Equal(0, r.ConfirmCalls);
+        Assert.True(vm.TrialVisible);
+        Assert.Equal("Сайты с этого ПК не открылись. Всё работает?", vm.TrialText);
+        // Отсчёт — от left_s по часам ПК, не от until роутера.
+        Assert.Equal("вернётся само через 3:00", vm.TrialCountdown);
+        _now = _now.AddSeconds(15);
+        Assert.Equal("вернётся само через 2:45", vm.TrialCountdown);
+        Assert.True(vm.TrialKeepCmd.CanExecute(null));
+
+        await vm.KeepTrialAsync();
+        Assert.Equal(1, r.ConfirmCalls);
+        Assert.False(vm.TrialVisible);
+        Assert.True(r.Enabled);
+        Assert.Equal("Оставлено: обход на роутере работает.", LastSaid());
+    }
+
+    [Fact]
+    public async Task Enable_CannotCheck_Revert_DisablesAtOnce()
+    {
+        using var r = Router();
+        using var vm = await Connected(r, sitesOpen: null);
+        await vm.EnableAsync();
+        Assert.Equal("Проверить сайты с этого ПК не удалось. Всё работает?", vm.TrialText);
+        await vm.RevertTrialAsync();
+        Assert.False(r.Enabled);
+        Assert.False(vm.TrialVisible);
+        Assert.False(vm.HasOff);   // выключил человек — не «выключено без вас»
+        Assert.Equal("Вернул как было: обход на роутере выключен.", LastSaid());
+    }
+
+    [Fact]
+    public async Task StrategyChange_Revert_BringsPreviousStrategy()
+    {
+        using var r = Router(enabled: true);
+        r.StrategiesJson = """{ "catalog_version": 3, "items": [ { "id": "alt10", "title": "general (ALT10)", "source": "catalog", "runs": 7, "passed": 6 }, { "id": "alt9", "title": "general (ALT9)", "source": "catalog", "runs": 3, "passed": 3 } ] }""";
+        using var vm = await Connected(r, sitesOpen: false);
+        await vm.ChooseStrategyAsync("alt9");
+        Assert.Equal(("alt9", 180, "alt10"), (r.Strategy, r.LastConfirmS, r.Pending?.RevertTo));
+        Assert.True(vm.TrialVisible);
+        await vm.RevertTrialAsync();
+        Assert.Equal("alt10", r.Strategy);
+        Assert.True(r.Enabled);
+        Assert.Null(r.Pending);
+        Assert.Equal("Вернул как было: на роутере стратегия general (ALT10).", LastSaid());
+    }
+
+    [Fact]
+    public async Task RouterRevertedItself_AfterCountdown_Message_AndEnableAgain()
+    {
+        using var r = Router();
+        using var vm = await Connected(r, sitesOpen: false);
+        await vm.ToggleAsync();
+        Assert.True(vm.TrialVisible);
+        // Никто не ответил: роутер вернул сам; окно узнаёт это одним запросом после срока (без опроса).
+        r.ExpireConfirm();
+        _now = _now.AddSeconds(200);
+        await Until(() => vm.HasOff);
+        Assert.False(vm.TrialVisible);
+        Assert.False(vm.RouterEnabled);
+        Assert.Equal($"Роутер вернул как было в {RouterTexts.Time(new DateTime(2026, 10, 19, 12, 3, 0, DateTimeKind.Utc))}: включение не подтвердили вовремя", vm.OffText);
+        Assert.Equal(vm.OffText, vm.HomeLine);
+        Assert.DoesNotContain(vm.WarningRows, w => w.Code == "confirm_reverted");
+        Assert.True(vm.CanReEnable);
+
+        // «Включить снова» — снова на пробу с проверкой с ПК; обход включён — сообщение о выключении ушло.
+        _verifyCalls = 0;
+        await vm.ToggleAsync();
+        Assert.Equal(1, _verifyCalls);
+        Assert.False(vm.HasOff);
+    }
+
+    [Fact]
+    public async Task WatchdogOff_Message_Details_AndSetting()
+    {
+        using var r = Router(enabled: true);
+        using var vm = await Connected(r, sitesOpen: true);
+        Assert.True(vm.WatchdogAvailable);
+        Assert.True(vm.WatchdogEnabled);
+        Assert.Equal($"проверено в {RouterTexts.Time(new DateTime(2026, 10, 19, 12, 0, 1, DateTimeKind.Utc))} · всё в порядке", vm.WatchdogLine);
+
+        r.WatchdogTrip();
+        await vm.RefreshAsync();
+        Assert.Equal($"Обход на роутере выключил сторож в {RouterTexts.Time(new DateTime(2026, 10, 19, 11, 32, 0, DateTimeKind.Utc))}: с ним пропал интернет, без него есть", vm.OffText);
+        Assert.Equal(vm.OffText, vm.HomeLine);
+        Assert.Equal("С обходом интернет пропал, без обхода есть", vm.OffDetail);
+        Assert.Equal(["https://www.google.com/generate_204", "https://ya.ru/"], vm.OffTargets.Select(t => t.Url));
+        Assert.Equal("таймаут 5 с", vm.OffTargets[0].Detail);
+        Assert.True(vm.HasOffDetails);
+        Assert.Empty(vm.WarningRows);
+        Assert.EndsWith("· с обходом пропадал интернет", vm.WatchdogLine);
+
+        // Галочка — schedule_set с watchdog, расписание то же.
+        vm.WatchdogEnabled = false;
+        await Until(() => !r.WatchdogEnabled && !vm.Busy);
+        Assert.False(vm.WatchdogEnabled);
+        Assert.Equal("", vm.WatchdogLine);
+        Assert.True(r.ScheduleEnabled);
+        // Другая настройка расписания не сбрасывает сторожа.
+        vm.AutoSelect = true;
+        await Until(() => r.AutoSelect && !vm.Busy);
+        Assert.False(r.WatchdogEnabled);
+    }
+
+    [Fact]
+    public async Task ButtonOff_Message_WithoutDetails()
+    {
+        using var r = Router(enabled: true);
+        using var vm = await Connected(r, sitesOpen: true);
+        r.ButtonOff();
+        await vm.RefreshAsync();
+        Assert.StartsWith("Обход на роутере выключен кнопкой на корпусе в ", vm.OffText);
+        Assert.Empty(vm.OffTargets);
+        Assert.True(vm.CanReEnable);
+    }
+
+    [Fact]
+    public async Task OldRouter_NoFields_AsBefore()
+    {
+        using var r = new FakeRouter { Enabled = false };   // 0.1.0: без confirm, pending_confirm, last_off, watchdog
+        using var vm = await Connected(r, sitesOpen: false);
+        await vm.ToggleAsync();
+        Assert.True(r.Enabled);
+        Assert.Null(r.LastConfirmS);
+        Assert.Equal(0, r.ConfirmCalls);
+        Assert.Equal(0, _verifyCalls);
+        Assert.False(vm.TrialVisible);
+        Assert.False(vm.HasOff);
+        Assert.False(vm.WatchdogAvailable);
+        Assert.Equal("Обход на роутере включён.", LastSaid());
+        lock (r.Calls) Assert.DoesNotContain(r.RawBodies, b => b.Contains("confirm_s") || b.Contains("watchdog"));
+    }
+
+    [Fact]
+    public async Task Client_ConfirmS_InContractRange()
+    {
+        using var r = Router();
+        using var c = new RouterClient(r.Address);
+        await c.LoginAsync(() => "secret");
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => c.EnableAsync(30));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => c.StrategySetAsync("alt9", 601));
+        await c.EnableAsync(60);
+        var st = await c.StatusAsync();
+        Assert.Equal(60, st.PendingConfirm!.LeftS);
+        Assert.True(st.PendingConfirm.RevertsToOff);
+        Assert.True(st.Schedule!.Watchdog);
+        Assert.Equal(5, st.Watchdog!.IntervalMin);
+        await c.ConfirmAsync();
+        Assert.Null((await c.StatusAsync()).PendingConfirm);
+        Assert.Equal("2:45", RouterTexts.Countdown(TimeSpan.FromSeconds(164.2)));
+    }
+}

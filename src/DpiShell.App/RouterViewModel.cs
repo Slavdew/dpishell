@@ -81,6 +81,32 @@ public static class RouterTexts
 
     public const string Conflict = "На роутере работает другая программа обхода — остановите или удалите её: «Диагностика» → «Роутер: что мешает».";
 
+    /// <summary>Выключение без человека (§5.1): сторож, кнопка на корпусе, откат неподтверждённого включения.</summary>
+    public static bool IsOffCode(string code) => code is "watchdog_off" or "button_off" or "confirm_reverted";
+
+    /// <summary>
+    /// Фраза о выключении без человека: by — watchdog | button | revert (last_off.by или код предупреждения), at — когда.
+    /// enabled — обход сейчас включён (откат вернул прежнюю стратегию, а не выключил).
+    /// </summary>
+    public static string Off(string by, DateTime? at, bool enabled = false)
+    {
+        var when = at is null ? "" : " в " + Time(at);
+        return by switch
+        {
+            "watchdog" or "watchdog_off" => $"Обход на роутере выключил сторож{when}: с ним пропал интернет, без него есть",
+            "button" or "button_off" => $"Обход на роутере выключен кнопкой на корпусе{when}",
+            _ when enabled => $"Роутер вернул прежнюю стратегию{when}: новую не подтвердили вовремя",
+            _ => $"Роутер вернул как было{when}: включение не подтвердили вовремя",
+        };
+    }
+
+    /// <summary>Сколько осталось до отката: «2:45».</summary>
+    public static string Countdown(TimeSpan left)
+    {
+        var s = Math.Max(0, (int)Math.Ceiling(left.TotalSeconds));
+        return $"{s / 60}:{s % 60:D2}";
+    }
+
     /// <summary>Предупреждение status.warnings → строка главной. flow_offload и ipv6 роутер исправляет сам (§9).</summary>
     public static RouterWarningRow Warning(RouterWarning w) => w.Code switch
     {
@@ -481,8 +507,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             if (value?.Schedule is { } sch)
             {
                 _scheduleEnabled = sch.Enabled; _scheduleHours = sch.Hours; _autoSelect = sch.AutoSelect;
+                _watchdog = sch.Watchdog ?? value.Watchdog?.Enabled ?? false;
                 Raise(nameof(ScheduleEnabled)); Raise(nameof(ScheduleHours)); Raise(nameof(ScheduleEditable)); Raise(nameof(AutoSelect));
             }
+            SyncTrial(value?.PendingConfirm);
+            RaiseWatchdog();
             Raise(nameof(ModeAll)); Raise(nameof(ModeLists)); Raise(nameof(ModeHint));
             RaiseCompat();
             UpdateHome();
@@ -526,11 +555,25 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         set { if (value != _autoSelect) _ = SetScheduleAsync(_scheduleEnabled, _scheduleHours, value); }
     }
 
-    public async Task SetScheduleAsync(bool enabled, double hours, bool autoSelect = false)
+    /// <param name="watchdog">Сторож (§5.2 schedule_set); null — как сейчас на роутере (у старого роутера поле не передаётся).</param>
+    public async Task SetScheduleAsync(bool enabled, double hours, bool autoSelect = false, bool? watchdog = null)
     {
+        if (watchdog is { } w)
+        {
+            // Сторож меняется своим сообщением: расписание то же.
+            if (await Guard(w ? "Включаю сторож на роутере…" : "Выключаю сторож на роутере…", async () =>
+                {
+                    await Call(c => c.ScheduleSetAsync(enabled, hours, autoSelect, w));
+                    await RefreshStatusCoreAsync();
+                }))
+                Say(w ? WatchdogOnText : "Сторож на роутере выключен.");
+            else RaiseWatchdog();
+            return;
+        }
+        bool? wd = WatchdogAvailable ? _watchdog : null;
         if (await Guard("Меняю расписание проверки на роутере…", async () =>
             {
-                await Call(c => c.ScheduleSetAsync(enabled, hours, autoSelect));
+                await Call(c => c.ScheduleSetAsync(enabled, hours, autoSelect, wd));
                 await RefreshStatusCoreAsync();
             }))
             Say(!enabled ? "Роутер больше не проверяет сайты сам."
@@ -623,7 +666,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (Compat is { Level: not RouterCompatLevel.Ok }) parts.Add(CompatNeedsApp ? "нужна новая версия программы" : "обновите DpiShell на роутере");
         else if (!Connected && _detection?.Found is RouterFound.AppTooOld or RouterFound.RouterTooOld)
             parts.Add(RouterTexts.Found(_detection.Found, null) is var t ? char.ToLowerInvariant(t[0]) + t[1..] : "");
-        var rows = (_status?.Warnings ?? []).Select(RouterTexts.Warning).ToList();
+        // Выключение сторожем, кнопкой или откатом — отдельной фразой с «Подробнее» (UpdateOff), не строкой предупреждений.
+        UpdateOff();
+        var rows = (_status?.Warnings ?? []).Where(w => !RouterTexts.IsOffCode(w.Code)).Select(RouterTexts.Warning).ToList();
         if (!rows.SequenceEqual(WarningRows))
         {
             WarningRows.Clear();
@@ -631,7 +676,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         }
         HomeDetail = string.Join(", ", parts.Where(p => p.Length > 0));
         // Строка на главной: есть что исправить — вместо стратегии и времени (они на вкладке) первое предупреждение (UX-аудит 2, п. 7).
-        HomeLine = !Selecting && FirstFix() is { } fix ? fix : HomeDetail;
+        HomeLine = !Selecting && HasOff ? OffText : !Selecting && FirstFix() is { } fix ? fix : HomeDetail;
         // Обновление для роутера — коротко и первым, даже когда строка занята предупреждением.
         if (!Selecting && !Updating && _status?.Update is { Available: true, Version: { } upd } && !HomeLine.Contains(upd))
             HomeLine = $"доступно обновление {upd} · {HomeLine}";
@@ -729,11 +774,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task<bool> EnableAsync()
     {
         if (RouterEnabled) return true;
-        return await Guard("Включаю обход на роутере…", async () =>
-        {
-            await Call(c => c.EnableAsync());
-            await RefreshStatusCoreAsync();
-        });
+        return await TrialAsync("Включаю обход на роутере…", (c, confirmS) => c.EnableAsync(confirmS), done: null);
     }
 
     // ---------- временные метки TCP (needs_tcp_timestamps, §6) ----------
@@ -871,23 +912,26 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                          + "Выключить обход на этом ПК и включить на роутере?")) return;
             if (!await StopPc()) { Failed("Не удалось выключить обход на этом ПК — на роутере не включаю."); return; }
         }
-        if (await Guard(enable ? "Включаю обход на роутере…" : "Выключаю обход на роутере…", async () =>
+        if (enable)
+        {
+            // На пробу (§5.2 confirm_s): проверка с этого ПК решит, оставить ли; без ответа роутер вернёт как было сам.
+            await TrialAsync("Включаю обход на роутере…", (c, confirmS) => c.EnableAsync(confirmS), "Обход на роутере включён.");
+            return;
+        }
+        if (await Guard("Выключаю обход на роутере…", async () =>
             {
-                await Call(c => enable ? c.EnableAsync() : c.DisableAsync());
+                await Call(c => c.DisableAsync());
                 await RefreshStatusCoreAsync();
             }))
-            Say(enable ? "Обход на роутере включён." : "Обход на роутере выключен.");
+            Say("Обход на роутере выключен.");
     }
 
     public async Task ChooseStrategyAsync(string id)
     {
         if (id == CurrentStrategyId) return;
-        if (await Guard("Меняю стратегию на роутере…", async () =>
-            {
-                await Call(c => c.StrategySetAsync(id));
-                await RefreshStatusCoreAsync();
-            }))
-            Say("На роутере стратегия: " + StrategyTitle(id));
+        // При включённом обходе смена стратегии — на пробу, как включение (§5.2).
+        bool trial = RouterEnabled;
+        await TrialAsync("Меняю стратегию на роутере…", (c, confirmS) => c.StrategySetAsync(id, trial ? confirmS : null), "На роутере стратегия: " + StrategyTitle(id) + ".");
     }
 
     bool _checking;
@@ -969,11 +1013,15 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                         + (e.AppError?.Field is { } f ? $" ({f})" : ""), e.AppError);
                 }
                 _titles[routerId] = strategy.Title;
-                await Call(c => c.StrategySetAsync(routerId));
+                var confirmS = RouterEnabled ? TrialArg : null;
+                await Call(c => c.StrategySetAsync(routerId, confirmS));
                 result = await CheckCoreAsync();
                 await LoadStrategiesAsync();
             }))
+        {
             Say($"Стратегия «{strategy.Title}» включена на роутере. {result}");
+            if (_status?.PendingConfirm is not null) await VerifyTrialAsync();
+        }
     }
 
     // ---------- подбор на роутере ----------
@@ -1247,17 +1295,12 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task ApplyAsync(string id)
     {
         var backups = Scores.Where(s => s.Usable && s.Id != id).Select(s => s.Id).Take(2).ToList();
-        if (await Guard("Применяю на роутере…", async () =>
-            {
-                await Call(c => c.ApplyAsync(id, backups));
-                await RefreshStatusCoreAsync();
-            }))
+        if (await TrialAsync("Применяю на роутере…", (c, confirmS) => c.ApplyAsync(id, backups, confirmS), "Включена на роутере: " + StrategyTitle(id) + "."))
         {
             SetBest(_best, true);
             foreach (var s in Scores) s.IsBest = s.Id == id;
             ResultText = "Включена на роутере: " + StrategyTitle(id);
             ResultHint = backups.Count > 0 ? "Запасные: " + string.Join(", ", backups.Select(StrategyTitle)) + "." : "";
-            Say(ResultText);
         }
     }
 
@@ -1705,6 +1748,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
         _client?.Dispose();
 
     }

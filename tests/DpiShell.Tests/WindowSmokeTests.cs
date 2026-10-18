@@ -615,7 +615,52 @@ public sealed class WindowSmokeTests
                         throw new Exception("На главной нет «доступно обновление»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-update-home.png"));
                 }
+                // Аварийный выключатель (§5.1, §5.2): сторож выключил обход — фраза на главной и на вкладке, «Подробнее» с целями, «Включить снова»;
+                // сторож в «Проверять сам»; включение на пробу, сайты с ПК не открылись — плашка «Всё работает?» внизу окна.
                 fake.UpdateFieldOn = false;
+                fake.KillSwitch = true;
+                fake.MethodsJson = FakeRouter.Methods020;
+                fake.WatchdogTrip();
+                WaitUi(router.RefreshAsync());
+                vm.Page = Pages.Home;
+                Pump();
+                {
+                    var tabs = Find<TabControl>(w)!;
+                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Обход на роутере выключил сторож") && t.IsVisible) is null) throw new Exception("На главной нет фразы о стороже");
+                    if (Find<Button>(tabs, b => b.Content as string == "Включить снова" && b.IsVisible && b.IsEnabled) is null) throw new Exception("На главной нет «Включить снова»");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-home.png"));
+                    vm.Page = Pages.Router;
+                    Pump();
+                    tabs = Find<TabControl>(w)!;
+                    if (Find<Expander>(tabs, e => e.Header as string == "Подробнее" && e.IsVisible) is not { } more) throw new Exception("На вкладке нет «Подробнее» у выключения");
+                    more.IsExpanded = true;
+                    if (Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } wsv) wsv.ScrollToHome();
+                    Pump();
+                    if (Find<TextBlock>(tabs, t => t.Inlines.OfType<System.Windows.Documents.Run>().Any(r => r.Text == "https://ya.ru/") && t.IsVisible) is null)
+                        throw new Exception("В «Подробнее» нет целей сторожа");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-tab.png"));
+                    if (Find<CheckBox>(tabs, c => (c.Content as string ?? "").StartsWith("Сторож:") && c.IsVisible) is not { } wdBox) throw new Exception("В «Проверять сам» нет сторожа");
+                    if (Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } wsv2)
+                    {
+                        wsv2.ScrollToVerticalOffset(wdBox.TranslatePoint(new Point(0, 0), (UIElement)wsv2.Content).Y - 200);
+                        Pump();
+                        if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-setting.png"));
+                        wsv2.ScrollToHome();
+                    }
+                }
+                router.VerifyFromPc = () => Task.FromResult<bool?>(false);
+                WaitUi(router.ToggleAsync());
+                Pump();
+                {
+                    if (!router.TrialVisible || Find<Button>(w, b => b.Content as string == "Да, оставить" && b.IsVisible && b.IsEnabled) is null)
+                        throw new Exception("Нет плашки «Всё работает?» после включения на пробу");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-trial.png"));
+                }
+                WaitUi(router.RevertTrialAsync());
+                fake.KillSwitch = false;
+                fake.MethodsJson = null;
+                fake.WatchdogOk = true;
+                fake.Enabled = true;
                 fake.StatusApi = "1";
                 SetProp(vm, "IsLoading", true);
                 Close(w);
@@ -776,9 +821,9 @@ public sealed class WindowSmokeTests
     public void InfoButtons_EveryDocSection_HasButton_WithDocText()
     {
         var doc = DocInfoTexts();
-        Assert.Equal(12, doc.Count);
+        Assert.Equal(13, doc.Count);
         using var tmp = new TempDir();
-        using var fake = new FakeRouter();
+        using var fake = new FakeRouter { KillSwitch = true };   // «Сторож» в «Проверять сам» — у роутера со сторожем
         var seen = new Dictionary<string, string>();
         var errors = WithBindingErrors(() =>
         {

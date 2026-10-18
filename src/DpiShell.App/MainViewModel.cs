@@ -818,11 +818,15 @@ public sealed partial class MainViewModel : Observable
     }
 
     /// <summary>«Проверить сейчас» — без прав: HTTPS-проверка целей с DoH, winws не нужен. Не занимает окно: идёт рядом с другими действиями.</summary>
-    public async Task CheckNowAsync()
+    public Task CheckNowAsync() => CheckNowCoreAsync();
+
+    /// <summary>«Проверить сейчас»; итог — проверенные адреса (null — не проверяли, проверка не удалась или устарела по ходу).</summary>
+    async Task<IReadOnlyList<TargetVerdict>?> CheckNowCoreAsync()
     {
         var groups = CheckedGroups();
-        if (groups.Count == 0) { Message = "Нечего проверять: отметьте группы на вкладке «Подбор»."; return; }
-        if (Checking) return;
+        if (groups.Count == 0) { Message = "Нечего проверять: отметьте группы на вкладке «Подбор»."; return null; }
+        if (Checking) return null;
+        IReadOnlyList<TargetVerdict>? result = null;
         int gen = ++_checkGen;
         _checkFor = CheckState();
         CheckRows.Clear(); CheckedAt = "";
@@ -834,15 +838,16 @@ public sealed partial class MainViewModel : Observable
             // По DoH и, где DNS системы даёт другой адрес, — по пути браузера (BrowserCheck): только эти цели, по очереди.
             var verdicts = ProbeGroups is { } probe ? await probe(groups) : await Task.Run(() => _shell.CheckGroupsAsync(groups));
             await dns;
-            if (gen != _checkGen) return;   // пока проверяли, обход включили или выключили — итог уже не про это
+            if (gen != _checkGen) return null;   // пока проверяли, обход включили или выключили — итог уже не про это
             foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, Names));
+            result = verdicts;
             // В тех же единицах, что и отметки рядом (п. 5): группы, а не адреса; адреса — в «Подробнее».
             CheckSummary = $"Открывается {CheckGroups.Count(g => g.Ok)} из {CheckGroups.Count}";
             CheckedAt = $"в {DateTime.Now:HH:mm}";
         }
         catch (Exception e)
         {
-            if (gen != _checkGen) return;
+            if (gen != _checkGen) return null;
             CheckSummary = "";
             Fail("Проверка не удалась: " + Texts.Friendly(e));
         }
@@ -851,6 +856,19 @@ public sealed partial class MainViewModel : Observable
             if (gen == _checkGen) Checking = false;
         }
         await RefreshStatusAsync();
+        return result;
+    }
+
+    /// <summary>
+    /// Включили обход на роутере на пробу (router-api §5.2 confirm_s): «Проверить сейчас» с этого ПК.
+    /// Как в подборе: судят обязательные адреса, контрольная группа не в счёт. true — открылись, false — нет, null — проверить нельзя.
+    /// </summary>
+    async Task<bool?> VerifyRouterFromPcAsync()
+    {
+        var control = CheckedGroups().Where(g => g.Control).Select(g => g.Id).ToHashSet();
+        if (await CheckNowCoreAsync() is not { } verdicts) return null;
+        var required = verdicts.Where(v => v.Target.Required && !control.Contains(v.GroupId)).ToList();
+        return required.Count == 0 ? null : required.All(v => v.Ok);
     }
 
     /// <summary>Отмеченные группы целей. Свои адреса — из поля «Свои адреса», как на экране.</summary>
