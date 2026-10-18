@@ -57,15 +57,16 @@ return view.extend({
 		var view = E('div', {}, [
 			E('h2', {}, 'DNS'),
 			api.card(null, [
-				api.line(['DNS переводит имя сайта в адрес. Некоторые провайдеры подменяют ответы, и тогда обход не помогает программам на телефонах, ТВ и компьютерах. Роутер раздаёт DNS всем устройствам, поэтому защищённый DNS включается здесь для всей сети.',
+				api.line(['Некоторые провайдеры подменяют ответы DNS — тогда обход не помогает на телефонах и ТВ. DNS здесь меняется для всей сети.',
 					api.info('«Проверить» сравнивает ответы DNS провайдера с эталонными (Google и Cloudflare по шифрованному каналу). Если ответы подменяются — включите защищённый DNS. Браузеры с собственным защищённым DNS это не затрагивает. Если после включения что-то пропало — «Вернуть как было».')], 'dps-muted'),
 				this.el.state,
 				this.el.body,
 				this.el.actions,
 				this.el.err
 			]),
-			api.card('Какой DNS раздавать сети', [this.el.presets, this.el.presetErr]),
-			api.card('Что изменится при включении защищённого DNS', [api.dnsConsequences()])
+			api.card('Какой DNS раздавать сети', [
+				E('details', { 'class': 'dps-details' }, [E('summary', {}, 'Что изменится при защищённом DNS'), api.dnsConsequences()]),
+				this.el.presets, this.el.presetErr])
 		]);
 
 		this.update();
@@ -155,9 +156,9 @@ return view.extend({
 			kids.push(E('div', { 'class': 'spinning' }, 'Выполняется…'));
 
 		actions.push(api.btn('Проверить', function() { return self.analyze(); }, 'cbi-button-action'));
-		if (!d.__error && d.mode == 'doh')
+		if (!d.__error && d.mode != 'provider')
 			actions.push(api.btn('Вернуть как было', function() { return self.restore(); }, 'cbi-button-remove'));
-		else
+		else if (!d.__error && d.spoofed === true)
 			actions.push(api.btn('Включить защищённый DNS', function() { api.dnsEnableDialog(function() { self.wait(); }); }, 'cbi-button-apply'));
 		actions.forEach(function(b) { b.disabled = analyzing; });
 
@@ -198,21 +199,29 @@ return view.extend({
 			var who = [OWNERS[x.id], x.note].filter(function(t) { return t; }).join(' · ');
 			if (who)
 				info.push(E('div', { 'class': 'dps-muted' }, who));
+			// Адреса и DoH — свёрнуто (ux-audit-web п.23): видно название, кто держит и заметку; раскрытое не сворачивается при опросе.
+			var addr = [];
 			if (plain.length)
-				info.push(E('div', {}, 'Адреса: ' + plain.join(', ')));
+				addr.push(E('div', {}, 'Адреса: ' + plain.join(', ')));
 			if (doh)
-				info.push(E('div', {}, 'DoH: ' + doh));
+				addr.push(E('div', {}, 'DoH: ' + doh));
+			self.openAddr = self.openAddr || {};
 			var head = [api.radio('dps-dns-preset', x.id, x.title + (x.id == current ? ' — сейчас' : ''), x.id == self.choice, function() {
 				self.choice = x.id;
 				self.renderPresets(busy);
 			})];
 			if (plain.length || doh)
-				head.push(' ', api.btn('Копировать', function(ev) {
+				addr.push(api.btn('Копировать', function(ev) {
 					var text = [plain.length ? 'DNS: ' + plain.join(', ') : null, doh ? 'DoH: ' + doh : null].filter(function(t) { return t; }).join('\n');
 					copyText(text);
 					ev.target.textContent = 'Скопировано';
 					window.setTimeout(function() { ev.target.textContent = 'Копировать'; }, 1500);
 				}));
+			if (addr.length) {
+				var det = E('details', { 'class': 'dps-details', open: self.openAddr[x.id] ? '' : null,
+					toggle: function() { self.openAddr[x.id] = det.open; } }, [E('summary', {}, 'Адреса')].concat(addr));
+				info.push(det);
+			}
 			return E('div', { 'class': 'dps-preset' }, [E('div', {}, head), E('div', { 'class': 'dps-preset-info' }, info)]);
 		});
 
@@ -227,13 +236,14 @@ return view.extend({
 			form = E('div', {}, [
 				api.row('Название', this.cf.title),
 				api.row('Адреса DNS', this.cf.plain, 'До 4, через запятую'),
-				api.row('Адрес DoH', this.cf.doh, 'Необязательно'),
-				api.row('Адреса сервера DoH', this.cf.boot, 'Нужны, если в адресе DoH имя, а не IP')
+				api.row('DoH-адрес', this.cf.doh, 'Необязательно'),
+				api.row('IP сервера DoH', this.cf.boot, 'Нужны, если в DoH-адресе имя, а не IP')
 			]);
 		}
 		var apply = api.btn('Применить', function() { return self.applyPreset(); }, 'cbi-button-apply');
 		apply.disabled = busy || (this.choice == current && this.choice != 'custom');
-		dom.content(this.el.presets, rows.concat(form ? [form] : [], [E('div', { 'class': 'dps-actions' }, [apply])]));
+		var hint = apply.disabled && !busy ? E('span', { 'class': 'dps-muted' }, 'Выберите другой DNS, чтобы применить') : '';
+		dom.content(this.el.presets, rows.concat(form ? [form] : [], [E('div', { 'class': 'dps-actions' }, [apply, hint])]));
 	},
 
 	applyPreset: function() {
