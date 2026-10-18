@@ -202,7 +202,7 @@
 
                                 <Border Style="{StaticResource Warn}" Visibility="{Binding ShowDns, Converter={StaticResource Vis}}">
                                     <StackPanel>
-                                        <TextBlock Text="DNS провайдера подменяет адреса сайтов. В браузере сайты могут работать, а Discord и другие программы — нет." />
+                                        <TextBlock Text="DNS провайдера подменяет адреса сайтов — из-за этого часть сайтов и программ может не открываться даже с обходом." />
                                         <WrapPanel Margin="0,8,0,0">
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{Binding RecommendedDnsText}" Command="{Binding FixDnsCmd}" ToolTip="{Binding RecommendedDnsHint}" />
                                             <Button Content="Другой DNS" Style="{StaticResource LinkButton}" Command="{Binding ChooseDnsCmd}" VerticalAlignment="Center" Margin="0,0,0,8" />
