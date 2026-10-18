@@ -177,10 +177,10 @@ public sealed class HomeViewModelTests : IDisposable
         await using var f = new HelperFixture();
         f.Backend.StatusValue = Status(active: true);
         var vm = Model(await f.LinkAsync());
-        string? hostsIp = null;
+        string? hostsIp = null; var sysIp = "10.1.1.1";
         vm.ProbeGroups = groups => Task.FromResult<IReadOnlyList<TargetVerdict>>(groups.SelectMany(g => g.Targets.Select(t =>
             new TargetVerdict(g.Id, t, true, 0.3, [], g.Id == "youtube"
-                ? new BrowserPath([System.Net.IPAddress.Parse("195.208.4.1")], [System.Net.IPAddress.Parse("142.250.74.14")], false, hostsIp, [])
+                ? new BrowserPath([System.Net.IPAddress.Parse(sysIp)], [System.Net.IPAddress.Parse("142.250.74.14")], false, hostsIp, [])
                 : null))).ToList());
         await vm.RefreshStatusAsync();
         foreach (var g in vm.Groups) g.IsChecked = g.Id is "youtube" or "discord";
@@ -193,9 +193,16 @@ public sealed class HomeViewModelTests : IDisposable
         Assert.Equal("⚠ В браузере не откроется: YouTube — DNS провайдера подменяет адрес.", vm.BrowserWarning);
         Assert.True(vm.ShowBrowserDnsFix);
 
-        hostsIp = "195.208.4.1";
+        hostsIp = "10.1.1.1";
         await vm.CheckNowAsync();
         Assert.Contains("запись в hosts", vm.BrowserWarning);
         Assert.False(vm.ShowBrowserDnsFix);
+
+        // Чужого адреса нет, просто не открылось через DNS Windows — без слов «подмена» и «браузер».
+        hostsIp = null; sysIp = "173.194.220.91";
+        await vm.CheckNowAsync();
+        Assert.StartsWith("⚠ Программы, которые берут адрес у Windows", vm.BrowserWarning);
+        Assert.DoesNotContain("подмен", vm.BrowserWarning);
+        Assert.True(vm.ShowBrowserDnsFix);
     }
 }

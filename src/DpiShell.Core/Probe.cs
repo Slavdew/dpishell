@@ -105,7 +105,7 @@ public sealed class HttpProbe
                 var code = (int)resp.StatusCode;
 
                 if (t.HandshakeOnly)
-                    return new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, 0, $"HTTP {code}");
+                    return new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, 0, HandshakeText);
 
                 string Chain(string end) => string.Concat(chain.Select(c => c + " → ")) + end;
 
@@ -121,7 +121,7 @@ public sealed class HttpProbe
                     if (hop + 1 > MaxRedirects)
                         return t.MinBytes > 0
                             ? new(t, tls, ProbeOutcome.BadStatus, sw.Elapsed.TotalSeconds, 0, Chain($"не дошли до страницы: больше {MaxRedirects} перенаправлений"))
-                            : new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, 0, Chain($"больше {MaxRedirects} перенаправлений"));
+                            : new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, 0, RespondsText);
                     url = next;
                     continue;
                 }
@@ -142,6 +142,9 @@ public sealed class HttpProbe
                     return new(t, tls, ProbeOutcome.Truncated, sw.Elapsed.TotalSeconds, bytes, Chain($"{code}, получено {bytes} из {len}"));
                 if (bytes < t.MinBytes)
                     return new(t, tls, ProbeOutcome.Truncated, sw.Elapsed.TotalSeconds, bytes, Chain($"{code}, получено {bytes}, нужно ≥ {t.MinBytes}"));
+                // Тело не нужно (MinBytes = 0), а сайт ответил переходами или кодом 4xx (антибот, 498…) — для проверки достаточно.
+                if (t.MinBytes == 0 && (chain.Count > 0 || code >= 400))
+                    return new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, bytes, RespondsText);
                 return new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, bytes, Chain(chain.Count == 0 ? $"HTTP {code}, {Kb(bytes)}" : $"{code}, {Kb(bytes)}"));
             }
         }
@@ -159,6 +162,11 @@ public sealed class HttpProbe
             return new(t, tls, bytes > 0 ? ProbeOutcome.Truncated : ProbeOutcome.Reset, sw.Elapsed.TotalSeconds, bytes, Flatten(e));
         }
     }
+
+    /// <summary>Служебный адрес (HandshakeOnly): страницы нет и не должно быть, важно само соединение.</summary>
+    public const string HandshakeText = "соединение есть (страницы у этого адреса нет — так и должно быть)";
+    /// <summary>Тело не требовалось, сервер ответил переходами или антибот-кодом.</summary>
+    public const string RespondsText = "сервер отвечает (для проверки достаточно)";
 
     static string Kb(long bytes) => bytes >= 1024 ? $"{bytes / 1024} КБ" : $"{bytes} байт";
 

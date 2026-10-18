@@ -109,6 +109,52 @@ public sealed class BrowserCheckTests
         Assert.All(v, x => Assert.Null(x.Browser));
     }
 
+    static ProbeResult Fail(ProbeOutcome o, string detail) => new(Yt, SslProtocols.Tls13, o, 0.1, 0, detail);
+
+    static BrowserPath Path(string sys, params ProbeResult[] probes) =>
+        new([IPAddress.Parse(sys)], [IPAddress.Parse("142.250.74.14")], false, null, probes);
+
+    [Theory]
+    [InlineData("0.0.0.0")]
+    [InlineData("127.0.0.1")]
+    [InlineData("10.1.2.3")]
+    [InlineData("192.168.0.9")]
+    [InlineData("172.20.0.1")]
+    [InlineData("100.64.5.5")]
+    public void PrivateAddress_IsSpoof(string ip)
+    {
+        var b = Path(ip, Fail(ProbeOutcome.Timeout, "таймаут"));
+        Assert.True(b.Spoofed);
+        Assert.Equal(BrowserPath.DnsReason, b.Reason);
+    }
+
+    [Fact]
+    public void OtherPublicAddress_NotSpoof_WindowsOnlyText()
+    {
+        var b = Path("173.194.220.91", Fail(ProbeOutcome.Timeout, "таймаут"));
+        Assert.False(b.Spoofed);
+        Assert.Equal(BrowserPath.WindowsOnlyReason, b.Reason);
+        Assert.DoesNotContain("подмен", b.Reason);
+    }
+
+    [Fact]
+    public void PublicAddress_WrongCertificate_IsSpoof()
+    {
+        Assert.True(Path("173.194.220.91", Fail(ProbeOutcome.TlsFailed, "The remote certificate is invalid according to the validation procedure.")).Spoofed);
+        Assert.False(Path("173.194.220.91", Fail(ProbeOutcome.TlsFailed, "handshake failed")).Spoofed);
+    }
+
+    [Fact]
+    public async Task Differs_PublicAddress_Fails_WindowsOnlyRow()
+    {
+        var sys = new FakeResolver(new() { ["www.youtube.com"] = ["173.194.220.91"] });
+        var v = await BrowserCheck.AddAsync(Ok(Yt), sys, Doh, (t, r, c) => Task.FromResult<IReadOnlyList<ProbeResult>>([Fail(ProbeOutcome.Timeout, "таймаут")]), _ => null);
+        Assert.True(v[0].BrowserFails);
+        var row = CheckRow.From(v[0], _ => "YouTube");
+        Assert.Equal(BrowserPath.WindowsOnlyReason, row.Browser);
+        Assert.DoesNotContain("подмен", row.Detail);
+    }
+
     [Fact]
     public void SameAddresses_Rules()
     {

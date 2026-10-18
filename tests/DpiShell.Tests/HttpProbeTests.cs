@@ -210,6 +210,17 @@ public sealed class HttpProbeTests : IAsyncLifetime
         var r = await Once(path, 20_480, handshake: true);
         Assert.Equal(ProbeOutcome.Ok, r.Outcome);
         Assert.Equal(0, r.Bytes);
+        Assert.Equal("соединение есть (страницы у этого адреса нет — так и должно быть)", r.Detail);
+    }
+
+    [Theory]
+    [InlineData("/redir-abs")]
+    [InlineData("/hop/6")]
+    public async Task NoBodyNeeded_RedirectChain_RespondsText(string path)
+    {
+        var r = await Once(path);
+        Assert.Equal(ProbeOutcome.Ok, r.Outcome);
+        Assert.Equal("сервер отвечает (для проверки достаточно)", r.Detail);
     }
 
     [Fact]
