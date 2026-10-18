@@ -89,7 +89,11 @@ public sealed class RouterSetupViewModelTests : IDisposable
 
         var i = vm.NewInstall();
         Assert.False(i.CanInstall);   // сначала — «Проверить роутер»
+        Assert.Null(Settings.RouterPassword);
         Assert.True(await i.CheckAsync("secret"));
+        // Пароль подошёл по SSH — сохранён сразу (вход после установки может не успеть: rpcd перезапускается), дальше не спросят.
+        Assert.Equal("secret", RouterSecrets.Unprotect(Settings.RouterPassword));
+        Assert.True(vm.HasSavedPassword);
         Assert.True(i.VerdictOk);
         Assert.Equal("Роутер подходит — можно ставить DpiShell 0.2.0.", i.VerdictTitle);
         Assert.False(i.HasTunnelNote);
@@ -456,6 +460,42 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.Contains("Обновлено до 0.2.1-r1", _said);
         Assert.DoesNotContain("обновление", vm.HomeDetail);
         Assert.False(vm.Busy);
+    }
+
+    [Fact]
+    public async Task SavedPassword_ReusedForSshAndLogin_ForgetClears_WrongErases()
+    {
+        using var r = new FakeRouter().As020();
+        var ssh = new FakeSsh();
+        var conn = new FakeSshConnector(ssh);
+        var vm = Make(r, conn);
+        Assert.True(await vm.ConnectAsync("secret"));
+        Assert.Equal("Пароль сохранён на этом компьютере (зашифрован)", vm.SavedPasswordText);
+        Assert.True(vm.ForgetPasswordCmd.CanExecute(null));
+        vm.ForgetPasswordCmd.Execute(null);
+        Assert.Null(Settings.RouterPassword);
+        Assert.False(vm.HasSavedPassword);
+        Assert.Contains("Пароль роутера забыт — на этом компьютере его больше нет", _said);
+
+        // Сохранённый перестал подходить (пароль сменили) — стирается при входе им, а не держится.
+        Assert.True(await vm.ConnectAsync("secret"));
+        r.Password = "new";
+        var again = Make(r, conn);   // новый запуск окна: тот же window.json
+        Assert.True(again.HasSavedPassword);
+        Assert.False(await again.ConnectAsync(null));
+        Assert.Null(Settings.RouterPassword);
+    }
+
+    [Fact]
+    public void WindowSettings_FieldOfOtherShape_KeepsPasswordAndRest()
+    {
+        var pw = RouterSecrets.Protect("secret");
+        var s = WindowSettings.Parse($$"""{ "theme": "dark", "router_password": "{{pw}}", "router_address": "192.168.1.1", "dns_custom": "не список", "autostart": 5 }""");
+        Assert.Equal(("dark", "192.168.1.1"), (s.Theme, s.RouterAddress));
+        Assert.Equal("secret", RouterSecrets.Unprotect(s.RouterPassword));
+        Assert.Empty(s.DnsCustom);
+        Assert.Null(s.Autostart);
+        Assert.Equal("system", WindowSettings.Parse("{битый").Theme);
     }
 
     [Fact]

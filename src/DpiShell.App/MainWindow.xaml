@@ -1398,6 +1398,13 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
+                                    <!-- Пароль переиспользуется везде (вход, установка, удаление, обновление по SSH); видно, что он сохранён, и его можно забыть. -->
+                                    <WrapPanel Margin="0,4,0,0" Visibility="{Binding HasSavedPassword, Converter={StaticResource Vis}}">
+                                        <TextBlock Text="{Binding SavedPasswordText}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                        <TextBlock Text=" · " Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                        <Button Content="Забыть" Style="{StaticResource LinkButton}" Command="{Binding ForgetPasswordCmd}" VerticalAlignment="Center"
+                                                ToolTip="Стереть сохранённый пароль роутера с этого компьютера" />
+                                    </WrapPanel>
                                     <!-- Адрес — в «Дополнительно», как в окне входа: обычно его определяют сами (UX-аудит 2, п. 10). -->
                                     <Expander Header="Дополнительно: адрес роутера" Margin="0,8,0,0" IsExpanded="{Binding AddressCustom, Mode=OneTime}">
                                         <StackPanel Margin="0,4,0,0">
@@ -1455,6 +1462,19 @@
                                         <RadioButton Content="Как в Windows" IsChecked="{Binding ThemeAuto}" Margin="0,3,24,3" />
                                         <RadioButton Content="Светлое" IsChecked="{Binding ThemeLight}" Margin="0,3,24,3" />
                                         <RadioButton Content="Тёмное" IsChecked="{Binding ThemeDark}" Margin="0,3,24,3" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Роутер: сохранённый пароль виден и здесь, рядом с остальными данными на этом компьютере. -->
+                            <Border Style="{StaticResource Card}" DataContext="{Binding Router}" Visibility="{Binding HasSavedPassword, Converter={StaticResource Vis}}">
+                                <StackPanel>
+                                    <TextBlock Text="Роутер" Style="{StaticResource H2}" />
+                                    <WrapPanel>
+                                        <TextBlock Text="{Binding SavedPasswordText}" VerticalAlignment="Center" />
+                                        <TextBlock Text=" · " VerticalAlignment="Center" />
+                                        <Button Content="Забыть" Style="{StaticResource LinkButton}" Command="{Binding ForgetPasswordCmd}" VerticalAlignment="Center"
+                                                ToolTip="Стереть сохранённый пароль роутера с этого компьютера" />
                                     </WrapPanel>
                                 </StackPanel>
                             </Border>

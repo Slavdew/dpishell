@@ -75,10 +75,40 @@ public sealed class WindowSettings
         WindowSettings s;
         try
         {
-            s = System.IO.File.Exists(file) ? JsonSerializer.Deserialize<WindowSettings>(System.IO.File.ReadAllText(file), Json) ?? new() : Migrate(legacy);
+            s = System.IO.File.Exists(file) ? Parse(System.IO.File.ReadAllText(file), file) : Migrate(legacy);
         }
-        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException) { s = new(); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { s = new(); }
         s.File = file;
+        return s;
+    }
+
+    /// <summary>
+    /// Разобрать window.json. Одно поле не того вида (файл писала другая сборка) не стирает остальное — прежде так терялся
+    /// и сохранённый пароль роутера: поля читаются по одному, непрочитанные остаются по умолчанию. Файл не JSON — копия в .bad.
+    /// </summary>
+    public static WindowSettings Parse(string text, string? file = null)
+    {
+        try { return JsonSerializer.Deserialize<WindowSettings>(text, Json) ?? new(); }
+        catch (JsonException) { }
+        var s = new WindowSettings();
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) throw new JsonException("не объект");
+            var props = typeof(WindowSettings).GetProperties().Where(p => p.CanWrite && p.GetSetMethod() is not null)
+                .ToDictionary(p => Json.PropertyNamingPolicy!.ConvertName(p.Name));
+            foreach (var x in doc.RootElement.EnumerateObject())
+            {
+                if (!props.TryGetValue(x.Name, out var p)) continue;
+                try { p.SetValue(s, x.Value.Deserialize(p.PropertyType, Json)); }
+                catch (Exception e) when (e is JsonException or NotSupportedException or InvalidOperationException) { }
+            }
+        }
+        catch (JsonException)
+        {
+            if (file is not null)
+                try { System.IO.File.Copy(file, file + ".bad", overwrite: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
         return s;
     }
 

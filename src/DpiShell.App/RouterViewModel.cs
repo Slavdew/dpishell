@@ -434,10 +434,12 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         {
             plain = null;
             Connected = false;
+            // Сохранённый перестал подходить (сменили пароль, переставили прошивку) — стереть, иначе каждый поиск ошибался бы им.
             if (typed is null && _settings.RouterPassword is not null)
             {
                 _settings.RouterPassword = null;
                 TrySave();
+                RaisePassword();
             }
             SetConnection(typed == "" ? "У роутера есть пароль — введите его" : "Неверный пароль");
             return false;
@@ -449,11 +451,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             SetConnection(RouterTexts.Friendly(e));
             return false;
         }
-        if (typed is not null)
-        {
-            _settings.RouterPassword = RouterSecrets.Protect(typed);
-            TrySave();
-        }
+        if (typed is not null) RememberPassword(typed);
         plain = null;
         Connected = true;
         SetConnection($"Подключено, DpiShell {_detection?.Status?.Version}", ok: true);

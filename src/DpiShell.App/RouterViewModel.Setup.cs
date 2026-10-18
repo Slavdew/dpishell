@@ -30,20 +30,56 @@ public sealed partial class RouterViewModel
         "Ключ роутера изменился. Так бывает после переустановки прошивки (OpenWrt).\n\n"
         + "Если вы переустанавливали прошивку — нажмите «Доверять новому». Если нет — нажмите «Отмена»: кто-то может подменять роутер.";
 
+    /// <summary>
+    /// SSH с вопросом о сменившемся ключе. Пароль подошёл — он и есть пароль root (тот же, что для входа в окне и в LuCI):
+    /// сохраняется, как после входа, — установка, проверка, удаление и обновление по SSH больше его не спросят.
+    /// </summary>
     sealed class HostKeyAware(RouterViewModel vm) : ISshConnector
     {
         public async Task<ISshSession> ConnectAsync(RouterSshTarget target, Func<string> password, CancellationToken ct = default)
         {
-            try { return await vm.SshConnector.ConnectAsync(target, password, ct); }
+            ISshSession session;
+            try { session = await vm.SshConnector.ConnectAsync(target, password, ct); }
             catch (RouterSshException e) when (e.Failure == RouterSshFailure.HostKeyChanged)
             {
                 if (!vm.TrustNewKey(HostKeyText))
                     throw new RouterSshException(RouterSshFailure.HostKeyChanged, "Ключ роутера изменился — подключение отменено. Если прошивку переустанавливали, повторите и нажмите «Доверять новому».", e);
                 vm._settings.HostKeys.Remove(target.HostKeyId);
                 vm.Say("Новый ключ роутера принят");
-                return await vm.SshConnector.ConnectAsync(target, password, ct);
+                session = await vm.SshConnector.ConnectAsync(target, password, ct);
             }
+            vm.RememberPassword(password());
+            return session;
         }
+    }
+
+    /// <summary>Пароль подошёл (вход или SSH) — сохранить зашифрованным, если он другой.</summary>
+    internal void RememberPassword(string password)
+    {
+        if (RouterSecrets.Unprotect(_settings.RouterPassword) == password) return;
+        _settings.RouterPassword = RouterSecrets.Protect(password);
+        TrySave();
+        RaisePassword();
+    }
+
+    /// <summary>«Забыть» сохранённый пароль: дальше вход, установка и удаление снова спросят его.</summary>
+    public ICommand ForgetPasswordCmd => _forgetPasswordCmd ??= new RelayCommand(() =>
+    {
+        _settings.RouterPassword = null;
+        TrySave();
+        RaisePassword();
+        Say("Пароль роутера забыт — на этом компьютере его больше нет");
+    }, () => HasSavedPassword);
+    ICommand? _forgetPasswordCmd;
+
+    /// <summary>«Пароль сохранён на этом компьютере» (зашифрован, только для этого пользователя Windows).</summary>
+    public string SavedPasswordText => RouterSecrets.Unprotect(_settings.RouterPassword) == ""
+        ? "Пароль не задан — так и запомнено на этом компьютере" : "Пароль сохранён на этом компьютере (зашифрован)";
+
+    void RaisePassword()
+    {
+        Raise(nameof(HasSavedPassword)); Raise(nameof(SavedPasswordText));
+        Requery();
     }
     static readonly Lazy<HttpClient> SharedHttp = new(() => new HttpClient { Timeout = TimeSpan.FromMinutes(5) });
     /// <summary>Загрузка ядра обхода и пакетов обновления на этот ПК.</summary>
