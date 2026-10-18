@@ -103,6 +103,18 @@ function run_checks(items, cache) {
 	return values(verdicts);
 }
 
+// Разбивка строки подбора по целям для «Подробнее» (router-api.md §5.1 select_progress): исход одной строкой,
+// у провала — что сломалось и на какой версии TLS.
+function brief_verdicts(vs) {
+	return map(vs, v => {
+		let bad = filter(v.probes, p => !p.ok);
+		let detail = length(bad)
+			? join('; ', map(bad, p => length(v.probes) > 1 && p.tls ? `TLS ${p.tls}: ${p.detail}` : p.detail))
+			: (v.probes[0]?.detail ?? '');
+		return { group: v.group, url: v.url, ok: v.ok, detail, seconds: 1.0 * int(v.seconds * 100 + 0.5) / 100 };
+	});
+}
+
 // Оценка: доля прошедших групп, доля целей, среднее время; контрольная цель сломана — 0.
 function score(groups, verdicts) {
 	let total = 0, passed = 0, broken = [];
@@ -189,16 +201,19 @@ function eval_strategy(strat, groups, items, cache, s, ts_was) {
 	let uses_ts = cat.uses_ts(strat);
 	// Стратегии с ts оцениваем глазами клиента Windows: без меток времени (architecture.md «Проверка одной цели»).
 	if (uses_ts) ts_set(0);
-	let sc = score(groups, run_checks(items, cache));
+	let vs = run_checks(items, cache);
+	let sc = score(groups, vs);
 	if (uses_ts) {
 		ts_set(ts_was);
 		if (!sc.perfect) {
-			let sc2 = score(groups, run_checks(items, cache));
-			if (better(sc2, sc) && sc2.group_share > sc.group_share) { sc = sc2; row.needs_ts = true; }
+			let vs2 = run_checks(items, cache);
+			let sc2 = score(groups, vs2);
+			if (better(sc2, sc) && sc2.group_share > sc.group_share) { sc = sc2; vs = vs2; row.needs_ts = true; }
 		}
 	}
 	// avg_s 99 — внутренняя заглушка «ничего не открылось» для сравнения; в таблицу — null (прочерк).
-	return { ...row, group_share: sc.group_share, target_share: sc.target_share, avg_s: sc.target_share > 0 ? sc.avg_s : null, error: sc.error, perfect: sc.perfect };
+	return { ...row, group_share: sc.group_share, target_share: sc.target_share, avg_s: sc.target_share > 0 ? sc.avg_s : null, error: sc.error, perfect: sc.perfect,
+		verdicts: brief_verdicts(vs) };
 }
 
 // Без обхода: что открывается и так — не оцениваем; контрольные — оставляем только открывающиеся.

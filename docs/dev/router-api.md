@@ -67,10 +67,11 @@
 ```json
 { "running": true, "started_by": "app", "depth": "main", "index": 4, "total": 20, "eta_s": 95,
   "message": "alt3: YouTube",
-  "rows": [ { "id": "alt", "title": "general (ALT)", "group_share": 1.0, "target_share": 0.88, "avg_s": 0.74, "error": null } ],
+  "rows": [ { "id": "alt", "title": "general (ALT)", "group_share": 1.0, "target_share": 0.88, "avg_s": 0.74, "error": null,
+              "verdicts": [ { "group": "youtube", "url": "https://www.youtube.com/", "ok": false, "detail": "TLS 1.2: поток оборвался на 16384 байтах", "seconds": 6.1 } ] } ],
   "finished_at": null, "cancelled": false, "best": null, "applied": false, "backups": [] }
 ```
-`index` — номер проверяемой стратегии с 1. `title` в строках `rows` — всегда: название из каталога или короткое описание кандидата глубокого поиска («fake + multisplit, ts — YouTube»); у кандидатов ещё `candidate: true`, `ok`/`total` (сколько обязательных целей роли открылось); кандидаты в `strategies` не попадают — только найденные в финале. `started_by`: `page` | `app` | `auto` («Включить» без стратегии) | `timer` (автоподбор после неудачной проверки). Подбор, запущенный с другого устройства, виден так же и его можно отменить. `eta_s` — оценка оставшегося времени, `null`, пока не известна (глубокий поиск сужает перебор по ходу). После завершения — `best`, `applied: true` (подбор сам включил лучшую) и `backups` (до 3 запасных). Остановленный подбор — `cancelled: true`, `applied: false`, прежнее состояние восстановлено. Доли `group_share`/`target_share` — дробные.
+`index` — номер проверяемой стратегии с 1. `title` в строках `rows` — всегда: название из каталога или короткое описание кандидата глубокого поиска («fake + multisplit, ts — YouTube»); у кандидатов ещё `candidate: true`, `ok`/`total` (сколько обязательных целей роли открылось); кандидаты в `strategies` не попадают — только найденные в финале. `started_by`: `page` | `app` | `auto` («Включить» без стратегии) | `timer` (автоподбор после неудачной проверки). Подбор, запущенный с другого устройства, виден так же и его можно отменить. `eta_s` — оценка оставшегося времени, `null`, пока не известна (глубокий поиск сужает перебор по ходу). После завершения — `best`, `applied: true` (подбор сам включил лучшую) и `backups` (до 3 запасных). Остановленный подбор — `cancelled: true`, `applied: false`, прежнее состояние восстановлено. Доли `group_share`/`target_share` — дробные. `verdicts` (у полных проверок, не у кандидатов) — исход по каждой цели для «Подробнее»: `detail` — одна строка (код, байты, редиректы; у провала — что сломалось, с версией TLS, если проверялись обе), `seconds` — самая долгая из проверок цели. Исходы проверки — как на ПК: свои редиректы проходятся до конечной страницы (до 5) и судятся по ней, чужой редирект — заглушка, HTTP 451 — блокировка, 403/404 у целей с телом — провал.
 
 **`targets_get`** `{}` → `{ "items": [ { "url": "https://example.com/", "important": true } ] }` — только «Свои адреса» роутера.
 
@@ -172,4 +173,4 @@ API 1 (до первого выпуска роутерного пакета пр
 - `flow_offload_fix`, `ipv6_set`; предупреждения `flow_offload`/`ipv6`/`conflict` в `status.warnings`; `enable`/`select_start` при чужом обходе — `conflict`; `kind: package` в `diag.conflicts`; поле `flowoffload` в `diag`.
 - `select_start` только с группой `user` при пустых своих адресах — `invalid`/`groups`; свои адреса в `report` скрыты.
 
-API 1.0 (первый выпуск пакета, 0.2.0): `api` строкой «мажор.минор», `methods`, `min_app`, `update`, `jobs.update`; `uninstall`, `update_install`, `update_check`; ядро договора (§5.4); сценарии по SSH (§5.5); `mode_set` — «Все сайты» / «Только из списков».
+API 1.0 (первый выпуск пакета, 0.2.0): `api` строкой «мажор.минор», `methods`, `min_app`, `update`, `jobs.update`; `uninstall`, `update_install`, `update_check`; ядро договора (§5.4); сценарии по SSH (§5.5); `mode_set` — «Все сайты» / «Только из списков». `rows[].verdicts` в `select_progress`.
