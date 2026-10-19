@@ -124,6 +124,42 @@ function advanced() {
 	return { enabled: !!a.enabled, others: index(ADV_OTHERS, a.others) >= 0 ? a.others : 'lists', rows: type(a.rows) == 'array' ? a.rows : [] };
 }
 
+// Совместная работа с ПК (router-api §5.2 pc_link_set, mixed-strategies.md §7): { items: [ { id, macs, domains,
+// seen_at, expires_at } ] }. Связка действует, пока не истекла (24 ч без продления) и оптимизация включена.
+const PC_LINKS = '/etc/dpishell/pc-links.json';
+const PC_MAX = 4, PC_TTL = 24 * 3600;
+const CUSTOM_SRC = '/usr/share/dpishell/zapret-custom.sh';
+
+function pc_links() {
+	let l = read_json(PC_LINKS, null);
+	return type(l?.items) == 'array' ? l.items : [];
+}
+
+function pc_active(s) {
+	return s.enabled ? filter(pc_links(), x => x.expires_at > time()) : [];
+}
+
+// Домены, которыми владеет роутер: его списки ролей (YouTube, Discord) и строки продвинутого режима. Совпадающие домены
+// ПК роутер к себе не берёт («у адреса один хозяин»), в обе стороны: сам домен, поддомен и надомен.
+function owned_domains() {
+	let out = [];
+	for (let f in ['google.txt', 'discord.txt'])
+		for (let l in split(readfile(`${P.share}/lists/${f}`) ?? '', '\n'))
+			if (length(trim(l))) push(out, lc(trim(l)));
+	let a = advanced();
+	if (a.enabled)
+		for (let r in a.rows) push(out, ...r.domains);
+	return out;
+}
+
+function pc_split(domains) {
+	let own = owned_domains(), kept = [], ignored = [];
+	let covers = (a, b) => b == a || (length(b) > length(a) && substr(b, length(b) - length(a) - 1) == `.${a}`);
+	for (let d in domains)
+		push(length(filter(own, o => covers(o, d) || covers(d, o))) ? ignored : kept, d);
+	return { kept, ignored };
+}
+
 // strat — стратегия, для которой пишется config. Строка «auto» идёт по resolved (итог подбора для строки), а во время
 // подбора (selecting) и до него — по проверяемой/текущей стратегии.
 function build_opts(s, strat, selecting) {
@@ -131,6 +167,17 @@ function build_opts(s, strat, selecting) {
 		mode: s.mode, lists_dir: P.lists, fake_dir: P.fake,
 		ipset_file: 'ipset-none.txt', ipv6: s.ipv6, flowoffload: s.flowoffload, features: {},
 	};
+	// ПК: исключения — в файл pc-<n>.txt (без доменов роутера); номер — порядок активных связок.
+	let pcs = slice(pc_active(s), 0, PC_MAX);
+	if (length(pcs)) {
+		o.pcs = [];
+		for (let i = 0; i < length(pcs); i++) {
+			let file = `${P.lists}/pc-${i + 1}.txt`, kept = pc_split(pcs[i].domains).kept;
+			write_atomic(file, length(kept) ? join('\n', kept) + '\n' : '');
+			chmod(file, 0o644);   // nfqws читает списки от daemon
+			push(o.pcs, { id: pcs[i].id, macs: pcs[i].macs, exclude: file });
+		}
+	}
 	let a = advanced();
 	if (!a.enabled)
 		return o;
@@ -157,7 +204,13 @@ function write_zapret_config_for(st, s, selecting) {
 	if (err)
 		return `Стратегия ${st.id} не прошла проверку: ${err}`;
 	ensure_dirs();
-	return write_atomic(P.zapret_config, cat.render_config(st, r, build_opts(s, st, selecting))) ? null : 'Не удалось записать config zapret';
+	let o = build_opts(s, st, selecting);
+	// Скрипт custom.d (второй nfqws для ПК): без связок он ничего не делает, но держим на месте — ядро ставится отдельно.
+	let cd = `${P.zapret}/init.d/openwrt/custom.d`;
+	if (stat(cd) && readfile(`${cd}/50-dpishell`) != readfile(CUSTOM_SRC))
+		write_atomic(`${cd}/50-dpishell`, readfile(CUSTOM_SRC) ?? '');
+	write_atomic(`${P.run}/pc-rendered.json`, sprintf('%J\n', map(o.pcs ?? [], x => x.id)));
+	return write_atomic(P.zapret_config, cat.render_config(st, r, o)) ? null : 'Не удалось записать config zapret';
 }
 
 // То же по id из каталогов.
@@ -235,5 +288,6 @@ export {
 	P, VERSION, API, MIN_APP, MODES, HOURS, USER_LISTS,
 	ensure_dirs, write_atomic, read_json, uci_set, settings, roles, catalog, user_catalog, found_catalog, catalogs,
 	write_zapret_config, write_zapret_config_for, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running, iso,
-	PENDING, LAST_OFF, WATCHDOG_SELECT, pending_confirm, last_off, ADVANCED, ADV_OTHERS, advanced
+	PENDING, LAST_OFF, WATCHDOG_SELECT, pending_confirm, last_off, ADVANCED, ADV_OTHERS, advanced,
+	PC_LINKS, PC_MAX, PC_TTL, pc_links, pc_active, pc_split
 };

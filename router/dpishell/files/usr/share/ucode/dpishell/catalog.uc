@@ -147,8 +147,28 @@ function render_config(strategy, roles, opts) {
 		'TPWS_SOCKS_ENABLE=0',
 		'FILTER_TTL_EXPIRED_ICMP=1',
 		'GZIP_LISTS=1',
-		''
 	];
+	// ПК в совместной работе (custom.d/50-dpishell): основной nfqws — только помеченные (все, кроме ПК); у ПК свой nfqws
+	// с той же стратегией и исключением его сайтов в каждом профиле.
+	if (length(tokens) && length(opts.pcs ?? [])) {
+		push(lines, 'FILTER_MARK=0x10000000', `DPS_PC_N=${length(opts.pcs)}`);
+		for (let i = 0; i < length(opts.pcs); i++) {
+			let pc = opts.pcs[i], t = [];
+			for (let tok in [...tokens, '--new']) {
+				if (tok == '--new') {
+					if (length(t)) push(t, `--hostlist-exclude=${pc.exclude}`, '--new');
+					continue;
+				}
+				push(t, tok);
+			}
+			if (length(t) && t[length(t) - 1] == '--new') pop(t);
+			for (let m in pc.macs)
+				if (!match(m, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/))
+					die(`недопустимый MAC: ${m}`);
+			push(lines, `DPS_PC${i + 1}_MACS="${join(',', pc.macs)}"`, `DPS_PC${i + 1}_OPT="${join(' ', t)}"`);
+		}
+	}
+	push(lines, '');
 	return join('\n', lines);
 }
 
