@@ -134,6 +134,23 @@ function guard() {
 	unlink(l);
 }
 
+// Связки с ПК (pc_link_set): истекла (24 ч без продления) — config без её nfqws; набор активных разошёлся с тем,
+// что записан в config, — переписать и перезапустить zapret. Во время заданий не трогаем: они держат свой config.
+function pc_refresh() {
+	let s = st.settings();
+	if (!s.enabled || !s.strategy)
+		return;
+	for (let j in ['select', 'check', 'update', 'core_install'])
+		if (st.job_running(j))
+			return;
+	let want = join(',', map(slice(st.pc_active(s), 0, st.PC_MAX), x => x.id));
+	let have = join(',', st.read_json('/tmp/dpishell/pc-rendered.json', []));
+	if (want == have)
+		return;
+	if (!st.write_zapret_config(s.strategy, s))
+		system('/etc/init.d/zapret restart >/dev/null 2>&1');
+}
+
 // Задания, чей процесс умер (убит, перезагрузка), остаются «идёт» навсегда — закрыть по факту (tick, старт пакета).
 function recover_jobs() {
 	try { upd.recover(); } catch (x) {}
@@ -216,6 +233,7 @@ else if (cmd == 'guard')
 else if (cmd == 'tick') {
 	recover_jobs();
 	guard();
+	pc_refresh();
 	let T = '/tmp/dpishell/tick.json';
 	if (time() - (st.read_json(T, { watch_at: 0 }).watch_at ?? 0) >= 30 * 60 - 60) {
 		st.write_atomic(T, sprintf('%J\n', { watch_at: time() }));

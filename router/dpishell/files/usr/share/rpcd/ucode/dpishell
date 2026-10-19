@@ -181,6 +181,7 @@ const methods = {
 				pending_confirm: st.pending_confirm(), last_off: s.enabled ? null : st.last_off(),
 				watchdog: guard_status(s),
 				advanced: ((a) => ({ enabled: a.enabled, rows: length(a.rows) }))(st.advanced()),
+				pc_links: length(st.pc_active(s)),
 			};
 		}
 	},
@@ -375,9 +376,10 @@ const methods = {
 		call: function(req) {
 			let n = req.args.name;
 			let editable = index(st.USER_LISTS, n) >= 0;
-			if (!editable && n != 'exclude')
+			// Встроенные — только чтение: exclude и (для окна при совместной работе) списки ролей google, discord, general.
+			if (!editable && index(['exclude', 'google', 'discord', 'general'], n) < 0)
 				return err('invalid', 'Нет такого списка', 'name');
-			let path = editable ? `${st.P.lists}/${n}.txt` : `${st.P.share}/lists/exclude.txt`;
+			let path = editable ? `${st.P.lists}/${n}.txt` : `${st.P.share}/lists/${n}.txt`;
 			let text = readfile(path) ?? '';
 			return { lines: filter(split(text, '\n'), l => length(trim(l)) > 0), editable };
 		}
@@ -581,6 +583,84 @@ methods.advanced_set = {
 		}
 		st.write_status_json();
 		return {};
+	}
+};
+
+// Совместная работа с ПК (router-api §5.2, mixed-strategies.md §7): у ПК свой nfqws (очередь 200+n) с исключением
+// его сайтов, по MAC. Домены, которыми владеет роутер, не берутся — ignored. Связка живёт 24 ч без продления.
+function pc_apply(changed) {
+	let s = st.settings();
+	if (!changed || !s.enabled || !s.strategy)
+		return null;
+	let e = st.write_zapret_config(s.strategy, s);
+	return e ? err('failed', e) : zapret('restart');
+}
+
+function pc_save(items) {
+	// Истёкшие больше 7 дней назад — удаляются.
+	items = filter(items, x => x.expires_at > time() - 7 * 86400);
+	st.ensure_dirs();
+	return st.write_atomic(st.PC_LINKS, sprintf('%J\n', { items }));
+}
+
+methods.pc_link_set = {
+	args: { id: 'id', macs: [], domains: [] },
+	call: function(req) {
+		let a = req.args, id = a.id;
+		if (type(id) != 'string' || !match(id, /^[A-Za-z0-9-]{8,64}$/))
+			return err('invalid', 'id ПК: 8–64 символа, буквы, цифры, дефис', 'id');
+		let macs = lines_of(a.macs), doms = lines_of(a.domains);
+		if (!macs || !length(macs) || length(macs) > 8)
+			return err('invalid', 'От 1 до 8 MAC-адресов', 'macs');
+		let m2 = [];
+		for (let i = 0; i < length(macs); i++) {
+			let m = lc(replace(trim(`${macs[i]}`), '-', ':'));
+			if (!match(m, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/))
+				return err('invalid', 'MAC вида aa:bb:cc:dd:ee:ff', `macs[${i}]`);
+			push(m2, m);
+		}
+		if (!doms || length(doms) > 500)
+			return err('invalid', 'Сайты ПК: список, не больше 500', 'domains');
+		let d2 = [];
+		for (let i = 0; i < length(doms); i++) {
+			let d = lc(trim(`${doms[i]}`));
+			if (!st.valid_domain_line(d) || index(d, '^') >= 0)
+				return err('invalid', 'Домен вида example.com', `domains[${i}]`);
+			push(d2, d);
+		}
+		let items = st.pc_links(), old = filter(items, x => x.id == id)[0];
+		if (!old && length(filter(items, x => x.expires_at > time())) >= st.PC_MAX)
+			return err('invalid', `Не больше ${st.PC_MAX} компьютеров одновременно`, 'id');
+		let now = time(), it = { id, macs: m2, domains: d2, seen_at: now, expires_at: now + st.PC_TTL };
+		let was_active = old && old.expires_at > now;
+		let changed = !was_active || join(',', old.macs) != join(',', m2) || join(',', old.domains) != join(',', d2);
+		if (!pc_save([...filter(items, x => x.id != id), it]))
+			return err('failed', 'Не удалось сохранить');
+		let e = pc_apply(changed);
+		if (e) return e;
+		st.write_status_json();
+		return { expires_at: st.iso(it.expires_at), ignored: st.pc_split(d2).ignored };
+	}
+};
+
+methods.pc_link_del = {
+	args: { id: 'id' },
+	call: function(req) {
+		let items = st.pc_links(), old = filter(items, x => x.id == req.args.id)[0];
+		if (!old)
+			return {};
+		if (!pc_save(filter(items, x => x.id != req.args.id)))
+			return err('failed', 'Не удалось сохранить');
+		return pc_apply(old.expires_at > time()) ?? {};
+	}
+};
+
+methods.pc_link_get = {
+	call: function() {
+		let s = st.settings();
+		return { items: map(st.pc_links(), x => ({ id: x.id, macs: x.macs, domains: length(x.domains),
+			ignored: length(st.pc_split(x.domains).ignored), seen_at: st.iso(x.seen_at), expires_at: st.iso(x.expires_at),
+			active: s.enabled && x.expires_at > time() })) };
 	}
 };
 
