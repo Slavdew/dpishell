@@ -35,7 +35,9 @@ var PARAMS = {
 	uninstall: ['keep_settings'],
 	update_install: ['from'],
 	update_check: [],
-	ipv6_set: ['enabled']
+	ipv6_set: ['enabled'],
+	advanced_get: [],
+	advanced_set: ['enabled', 'others', 'rows', 'confirm_s']
 };
 
 var declared = {};
@@ -74,6 +76,9 @@ function injectStyle() {
 		'.dps-textarea{width:100%;max-width:100%;min-height:8em;font-family:monospace;box-sizing:border-box}',
 		'.dps-target{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}',
 		'.dps-target input[type=text]{flex:1 1 200px;min-width:0}',
+		// Строки «сайты → стратегия»: на телефоне сайты — во всю ширину, стратегия и «×» — одной строкой под ними.
+		'.dps-adv-row{padding-bottom:6px;border-bottom:1px solid var(--border-color-low,rgba(128,128,128,.3))}',
+		'@media (max-width:600px){.dps-adv-row input[type=text]{flex:1 1 100%}.dps-adv-row select{flex:1 1 0;width:auto!important;min-width:0}.dps-adv-row .cbi-button-remove{flex:0 0 auto;width:auto!important}}',
 		'.dps-target.dps-bad input[type=text]{border-color:var(--error-color-high,#c00);outline:2px solid var(--error-color-high,#c00)}',
 		'.dps-table{width:100%}',
 		'.dps-table .td,.dps-table .th{word-break:break-word}',

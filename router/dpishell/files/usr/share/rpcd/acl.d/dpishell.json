@@ -1,10 +1,10 @@
 {
 	"dpishell": {
-		"description": "DpiShell: управление обходом DPI (объект dpishell; из файлов — только загрузка архива ядра через cgi-upload, без exec)",
+		"description": "DpiShell: управление оптимизацией соединения (объект dpishell; из файлов — только загрузка архива ядра через cgi-upload, без exec)",
 		"read": {
 			"ubus": {
 				"dpishell": [ "status", "strategies", "select_progress", "targets_get", "lists_get", "diag", "report",
-				              "dns_status", "site_check_result", "dns_presets" ]
+				              "dns_status", "site_check_result", "dns_presets", "advanced_get", "pc_link_get" ]
 			}
 		},
 		"write": {
@@ -14,7 +14,8 @@
 			"ubus": {
 				"dpishell": [ "enable", "disable", "strategy_set", "mode_set", "check_now", "select_start", "select_cancel", "apply",
 				              "schedule_set", "targets_set", "lists_set", "strategies_user_set", "conflict_stop", "core_install",
-				              "dns_analyze", "dns_enable", "dns_restore", "site_check", "flow_offload_fix", "ipv6_set", "dns_set", "uninstall", "update_install", "update_check", "confirm" ]
+				              "dns_analyze", "dns_enable", "dns_restore", "site_check", "flow_offload_fix", "ipv6_set", "dns_set", "uninstall", "update_install", "update_check", "confirm",
+				              "advanced_set", "pc_link_set", "pc_link_del" ]
 			}
 		}
 	}
