@@ -4,8 +4,8 @@
 'require dom';
 'require dpishell.api as api';
 
-// Вкладка «Исключения и списки» (architecture.md «Режимы роутера»): свои исключения, стандартные — просмотр,
-// свои сайты (только в режиме «Только из списков»), свои адреса для проверки.
+// Вкладка «Сайты» (architecture.md «Режимы роутера»): свои настройки для сайтов (продвинутый режим), свои исключения,
+// стандартные — просмотр, свои сайты (только в режиме «Только из списков»), свои адреса для проверки.
 
 return view.extend({
 	handleSaveApply: null,
@@ -18,7 +18,9 @@ return view.extend({
 			api.safe('lists_get', { name: 'user-exclude' }),
 			api.safe('lists_get', { name: 'exclude' }),
 			api.safe('lists_get', { name: 'user-general' }),
-			api.safe('targets_get')
+			api.safe('targets_get'),
+			api.safe('advanced_get'),
+			api.safe('strategies')
 		]);
 	},
 
@@ -27,7 +29,8 @@ return view.extend({
 		var listsMode = status.mode == 'lists';
 
 		return E('div', {}, [
-			E('h2', {}, 'Исключения'),
+			E('h2', {}, 'Сайты'),
+			this.advancedEditor(data[5], data[6].__error ? { items: [] } : data[6]),
 			this.listEditor('user-exclude', 'Исключения', data[1],
 				['Сайты, которые оптимизация ломает: к ним она применяться не будет. Один адрес на строку, например example.com.',
 					api.info('Строка example.com закрывает и все поддомены (video.example.com). Чтобы исключить только сам домен без поддоменов, начните строку с ^: ^example.com. Сюда попадают сайты, добавленные кнопкой «Сайт не открывается с оптимизацией» на главной.')]),
@@ -103,6 +106,82 @@ return view.extend({
 		if (m10 == 1 && m100 != 11) return one;
 		if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
 		return many;
+	},
+
+	// Свои настройки для сайтов (продвинутый режим, router-api §5.2 advanced_set): строки «сайты → стратегия» и что делать
+	// с остальными. Выключено — всё как сейчас, строки хранятся.
+	advancedEditor: function(got, strategies) {
+		var title = 'Свои настройки для сайтов';
+		if (got.__error)
+			return api.card(title, [api.errorLine(got.__error)]);
+		var items = strategies.items || [];
+		var name = function(id) {
+			var s = items.filter(function(x) { return x.id == id; })[0];
+			return s ? s.title : id;
+		};
+		var on = E('input', { type: 'checkbox', checked: got.enabled ? '' : null });
+		var rowsBox = E('div');
+		var msg = E('div', { 'class': 'dps-line' });
+		var others = {};
+		var othersBox = E('div', {}, [['lists', 'Как сейчас (по выбору на вкладке «Оптимизация»)'], ['all', 'Для всех сайтов'], ['direct', 'Напрямую — без оптимизации']]
+			.map(function(o) { others[o[0]] = api.radio('dps-adv-others', o[0], o[1], (got.others || 'lists') == o[0]); return others[o[0]]; }));
+
+		function addRow(r) {
+			var row = E('div', { 'class': 'dps-target dps-adv-row' });
+			var doms = E('input', { type: 'text', 'class': 'cbi-input-text', placeholder: 'example.com, cdn.example.com', value: r ? (r.domains || []).join(', ') : '' });
+			var sel = E('select', { 'class': 'cbi-input-select' }, [
+				E('option', { value: 'auto' }, 'Авто'), E('option', { value: 'direct' }, 'Напрямую')
+			].concat(items.map(function(s) { return E('option', { value: s.id }, s.title); })));
+			sel.value = r ? r.strategy : 'auto';
+			var note = E('div', { 'class': 'dps-muted', 'style': 'font-size:.9em;width:100%' },
+				r && r.strategy == 'auto' && r.resolved ? 'Авто — сейчас ' + name(r.resolved) : '');
+			row.appendChild(doms);
+			row.appendChild(sel);
+			row.appendChild(E('button', { 'class': 'btn cbi-button cbi-button-remove', title: 'Убрать', click: function(ev) { ev.preventDefault(); row.remove(); } }, '×'));
+			row.appendChild(note);
+			rowsBox.appendChild(row);
+			return doms;
+		}
+		(got.rows || []).forEach(addRow);
+
+		var add = api.btn('Добавить сайты', function() { addRow().focus(); }, 'cbi-button-add');
+		var save = api.btn('Сохранить', function() {
+			msg.className = 'dps-line';
+			msg.textContent = '';
+			var rows = rowsBox.querySelectorAll('.dps-adv-row'), sent = [], map = [];
+			rows.forEach(function(r, i) {
+				r.classList.remove('dps-bad');
+				var d = r.querySelector('input').value.split(/[\s,;]+/).filter(function(x) { return x; });
+				if (d.length) { sent.push({ domains: d, strategy: r.querySelector('select').value }); map.push(i); }
+			});
+			var oth = Object.keys(others).filter(function(k) { return others[k].firstChild.checked; })[0] || 'lists';
+			return api.call('advanced_set', { enabled: on.checked, others: oth, rows: sent }).then(function() {
+				msg.className = 'dps-line dps-ok';
+				msg.textContent = 'Сохранено';
+			}, function(e) {
+				msg.className = 'dps-line dps-error';
+				var m = /^rows\[(\d+)\]/.exec(e.field || '');
+				if (m && map[parseInt(m[1], 10)] != null) {
+					var r = rows[map[parseInt(m[1], 10)]];
+					r.classList.add('dps-bad');
+					r.querySelector('input').focus();
+					msg.textContent = 'Строка ' + (map[parseInt(m[1], 10)] + 1) + ': ' + api.text(e);
+				} else
+					msg.textContent = api.text(e);
+			});
+		}, 'cbi-button-save');
+
+		return api.card(title, [
+			E('label', { 'class': 'dps-check' }, [on, 'Включить',
+				api.info('Выключено — всё работает как сейчас. Включено — для перечисленных сайтов своя стратегия, а остальные сайты — как выбрано ниже. «Авто» — стратегию для строки выберет подбор, до него — текущая. «Напрямую» — эти сайты оптимизация не трогает. Свои строки важнее списков YouTube и Discord: если впишете youtube.com, он пойдёт по вашей строке.')]),
+			rowsBox,
+			E('div', { 'class': 'dps-actions' }, [add]),
+			E('p', { 'style': 'margin:.6em 0 .2em' }, [E('b', {}, 'Остальные сайты'),
+				api.info('«Для всех сайтов» может мешать обычным сайтам — после сохранения проверьте их. «Напрямую» — работают только ваши строки.')]),
+			othersBox,
+			E('div', { 'class': 'dps-actions' }, [save]),
+			msg
+		]);
 	},
 
 	// «Свои адреса» для проверки: адрес + флаг «важный».

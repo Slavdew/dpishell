@@ -42,6 +42,9 @@ jobs:
       - name: Списки ролей не пересекаются
         run: python3 router/tools/lists-overlap.py
 
+      - name: Методы в ACL и PARAMS страницы
+        run: python3 router/tools/acl-check.py
+
       - name: Пакеты в дерево SDK, данные из data/
         run: |
           SDK=/builder

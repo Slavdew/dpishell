@@ -29,7 +29,7 @@
 	},
 
 	"admin/services/dpishell/lists": {
-		"title": "Исключения",
+		"title": "Сайты",
 		"order": 3,
 		"action": {
 			"type": "view",
