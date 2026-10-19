@@ -424,7 +424,11 @@ function deep_search(p, groups, s, ts_was, cache) {
 		let lt = localtime();
 		let stamp = sprintf('%02d%02d%02d-%02d%02d', lt.year % 100, lt.mon, lt.mday, lt.hour, lt.min);
 		// Название — словами (UX-аудит п. 55): «Новая стратегия 2 (поиск 16.10 23:19)»; id — с меткой времени.
-		let when = sprintf('%02d.%02d %02d:%02d', lt.mday, lt.mon, lt.hour, lt.min);
+		// Часовой пояс не задан (/etc/TZ — GMT0/UTC, как на роутере владельца) — местного времени роутер не знает: только дата по UTC.
+		let tz = trim(readfile('/etc/TZ') ?? '');
+		let when = (tz != '' && index(['GMT0', 'UTC', 'UTC0'], tz) < 0)
+			? sprintf('%02d.%02d %02d:%02d', lt.mday, lt.mon, lt.hour, lt.min)
+			: sprintf('%02d.%02d', gmtime().mday, gmtime().mon);
 		for (let g in (length(tops.google) ? tops.google : [null]))
 			for (let d in (length(tops.general) ? tops.general : [null])) {
 				if (g == null && d == null) continue;

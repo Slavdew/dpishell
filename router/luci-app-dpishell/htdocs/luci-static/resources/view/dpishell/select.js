@@ -135,6 +135,7 @@ return view.extend({
 	// Глубокий поиск: кандидаты (candidate: true) — отдельным свёрнутым списком, во время поиска — последние 8.
 	table: function(p, withApply) {
 		var all = p.rows || [];
+		this.ipBlocked = this.allTimeouts(all);
 		var cands = all.filter(function(r) { return r.candidate; });
 		if (!cands.length)
 			return this.rowsTable(p, all, withApply);
@@ -152,6 +153,23 @@ return view.extend({
 		return E('div', {}, parts);
 	},
 
+	// Адреса, что не ответили (таймаут на всех версиях TLS) ни в одной полной проверке, — хотя бы в двух: стратегией такое
+	// обычно не лечится, похоже на блокировку по адресу. Кандидаты поиска исходов по адресам не отдают — судим по полным.
+	allTimeouts: function(rows) {
+		var full = rows.filter(function(r) { return !r.candidate && r.verdicts && r.verdicts.length; });
+		var res = {};
+		if (full.length < 2)
+			return res;
+		full[0].verdicts.forEach(function(v) {
+			var dead = full.every(function(r) {
+				return r.verdicts.some(function(x) { return x.url == v.url && !x.ok && /таймаут/.test(x.detail) && !/HTTP/.test(x.detail); });
+			});
+			if (dead)
+				res[v.url] = true;
+		});
+		return res;
+	},
+
 	// «Подробнее» — исход по каждой цели (select_progress rows[].verdicts); раскрытое не сворачивается при опросе.
 	details: function(r) {
 		var self = this;
@@ -163,7 +181,8 @@ return view.extend({
 			E('ul', { 'class': 'dps-list' }, r.verdicts.slice().sort(function(a, b) { return a.ok - b.ok; }).map(function(v) {
 				var host = (v.url.match(/^https?:\/\/([^\/]+)/) || [])[1] || v.url;
 				return E('li', { 'class': v.ok ? '' : 'dps-error' }, (v.ok ? 'да' : 'нет') + ' — ' + host + ': ' + v.detail +
-					(v.seconds ? ', ' + v.seconds.toFixed(1) + ' с' : ''));
+					(v.seconds ? ', ' + v.seconds.toFixed(1) + ' с' : '') +
+					(!v.ok && self.ipBlocked && self.ipBlocked[v.url] ? ' — не ответил ни с одной стратегией, похоже на блокировку по адресу' : ''));
 			}))
 		]);
 		return d;
@@ -199,7 +218,8 @@ return view.extend({
 					r.needs_ts ? E('div', { 'class': 'dps-muted', 'style': 'font-size:.85em' }, 'компьютерам на Windows нужна настройка') : '',
 					self.details(r)
 				]),
-				E('td', { 'class': 'td', 'data-title': 'Группы' }, api.percent(r.group_share)),
+				// «N из M» (groups_ok/groups_total, роутер с r8); у старых — доля.
+				E('td', { 'class': 'td', 'data-title': 'Группы' }, r.groups_total != null ? '%d из %d'.format(r.groups_ok, r.groups_total) : api.percent(r.group_share)),
 				E('td', { 'class': 'td', 'data-title': 'Сайты' }, api.percent(r.target_share)),
 				E('td', { 'class': 'td', 'data-title': 'Время' }, r.avg_s != null ? r.avg_s.toFixed(1) + ' с' : '—'),
 				E('td', { 'class': 'td' }, last)
