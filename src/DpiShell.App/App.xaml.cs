@@ -111,6 +111,9 @@ public partial class App : Application
         // Настоящие реестр и сеть — только здесь: тесты окна получают память и выключенную проверку обновлений.
         vm.Autostart.Store = new RegistryRunKeyStore();
         vm.Autostart.Apply();
+        vm.Proxy.Registry = new WindowsProxyRegistry();   // «для этого пользователя» окно пишет само (HKCU) + сообщает системе
+        vm.Proxy.WinHttp = new WindowsWinHttpProxy();     // только чтение; меняет помощник
+        vm.Proxy.Notifier = new WininetNotifier();
         vm.LocalDns = new WindowsDnsSystem();   // только чтение DNS адаптеров без помощника; меняет помощник
         vm.Updates.Http = () => new System.Net.Http.HttpClient(new System.Net.Http.SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(5) })
             { Timeout = Timeout.InfiniteTimeSpan };

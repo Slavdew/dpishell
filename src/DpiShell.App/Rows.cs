@@ -267,8 +267,10 @@ public sealed record DnsRow(string Host, string System, string Doh, bool Spoofed
 }
 
 /// <summary>Проверка окружения на «Диагностике»: ✓ — в порядке, ⚠ — мешает (что делать — в тексте).</summary>
-public sealed record FindingRow(bool Ok, string Title, string Text)
+public sealed record FindingRow(bool Ok, string Title, string Text, string? Go = null)
 {
+    /// <summary>У находки есть ссылка «Настроить →» на вкладку «Прокси».</summary>
+    public bool HasGo => Go == SystemFinding.GoProxy;
     public string Mark => Ok ? "✓" : "⚠";
 }
 

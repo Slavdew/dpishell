@@ -43,6 +43,10 @@ public sealed class WindowSettings
     public string? UpdatesApp { get; set; }
     /// <summary>Свои варианты DNS — одни и те же для этого компьютера и для роутера (architecture.md «DNS этого компьютера»).</summary>
     public List<DnsCustomEntry> DnsCustom { get; set; } = [];
+    /// <summary>Свои прокси (вкладка «Прокси»): название, адрес, исключения, необязательный PAC.</summary>
+    public List<ProxyEntry> ProxyList { get; set; } = [];
+    /// <summary>Системный прокси пользователя до последнего «Очистить» — для «Вернуть прежний». null — нечего возвращать.</summary>
+    public ProxySettings? ProxyPrevious { get; set; }
     /// <summary>Защищённый DNS не отвечает — разрешить обычный (по умолчанию нет: только защищённый).</summary>
     public bool DnsFallback { get; set; }
 
@@ -156,6 +160,9 @@ public sealed class WindowSettings
         System.IO.File.Move(tmp, File, overwrite: true);
     }
 }
+
+/// <summary>Свой прокси из списка: название, адрес (хост:порт или схема=хост:порт;…), исключения (через «;») и необязательный адрес PAC.</summary>
+public sealed record ProxyEntry(string Name, string Server, string? Bypass = null, string? Pac = null);
 
 /// <summary>Свой вариант DNS: имя, 1–2 адреса и необязательный шаблон защищённого DNS (https).</summary>
 public sealed record DnsCustomEntry(string Name, List<string> Ips, string? Doh = null);

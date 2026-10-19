@@ -345,6 +345,42 @@ public sealed class FakeHelperBackend : IHelperBackend
         return Task.FromResult(new DnsSetResult(true, "Google, защищённый — Ethernet.", DnsValue));
     }
 
+    // ---------- системный прокси: состояние в памяти ----------
+    public ProxySettings ProxyUserValue { get; set; } = ProxySettings.Off;
+    public ProxySettings ProxyMachineValue { get; set; } = ProxySettings.Off;
+    public ProxyBackup? ProxyPreviousValue { get; set; }
+    /// <summary>SID клиента, пришедший с последней командой «для пользователя».</summary>
+    public string? LastClientSid { get; private set; }
+
+    ProxyStatusInfo ProxyInfo() => new(new ProxyOverview(ProxyUserValue, false, ProxyMachineValue, false, ProxyMachineValue.IsOn ? 0 : null, false, WinHttpInfo.Direct), ProxyPreviousValue);
+
+    public ProxyStatusInfo ProxyStatus(string? clientSid) { Call("proxy_status"); LastClientSid = clientSid; return ProxyInfo(); }
+
+    public ProxyChangeResult ProxyUserSet(string? clientSid, bool enabled, string? server, string? bypass, string? pac)
+    {
+        Call($"proxy_user_set {enabled} {server} {bypass} {pac}");
+        LastClientSid = clientSid;
+        ProxyUserValue = enabled ? ProxyValues.Build(server, bypass, pac) : ProxyUserValue.Cleared();
+        return new(true, enabled ? "Системный прокси включён для пользователя." : "Системный прокси выключен для пользователя.", ProxyInfo());
+    }
+
+    public ProxyChangeResult ProxyMachineSet(bool enabled, string? server, string? bypass, string? pac, bool winhttp)
+    {
+        Call($"proxy_machine_set {enabled} {server} {bypass} {pac} {winhttp}");
+        if (!enabled && ProxyMachineValue.IsOn) ProxyPreviousValue = new(ProxyMachineValue, null);
+        ProxyMachineValue = enabled ? ProxyValues.Build(server, bypass, pac) : ProxyMachineValue.Cleared();
+        return new(true, enabled ? "Системный прокси включён для всей машины." : "Системный прокси выключен для всей машины.", ProxyInfo());
+    }
+
+    public ProxyChangeResult ProxyMachineRestore()
+    {
+        Call("proxy_machine_restore");
+        if (ProxyPreviousValue is null) return new(false, "Прежнего прокси машины нет.", ProxyInfo());
+        ProxyMachineValue = ProxyPreviousValue.Machine;
+        ProxyPreviousValue = null;
+        return new(true, "Системный прокси включён для всей машины.", ProxyInfo());
+    }
+
     public Task<DnsSetResult> DnsRestoreAsync(CancellationToken ct)
     {
         Call("dns_restore");
@@ -437,8 +473,12 @@ public sealed class NoSetup : IHelperSetup
 /// <summary>Настоящий помощник над временной папкой — для тестов окна: службы машины не трогает (sc, WMI — подмены).</summary>
 public static class PcHelper
 {
-    public static ShellHelperBackend Over(Shell shell, FakeFlowSource? flows = null, IProcessCatalog? processes = null) => new(shell)
+    public static ShellHelperBackend Over(Shell shell, FakeFlowSource? flows = null, IProcessCatalog? processes = null,
+        IProxyRegistry? proxy = null, IWinHttpProxy? winHttp = null) => new(shell)
     {
+        // Системный прокси: реестр и WinHTTP — в памяти, настоящие настройки машины тесты не трогают.
+        ProxyRegistry = proxy ?? new MemoryProxyRegistry(),
+        WinHttp = winHttp ?? new MemoryWinHttpProxy(),
         InspectService = () => new ServiceInfo(SvcState.NotInstalled, null, null, false),
         IsActive = () => false,
         FindForeign = () => [],

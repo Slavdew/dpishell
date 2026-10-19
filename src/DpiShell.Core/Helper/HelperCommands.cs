@@ -48,6 +48,12 @@ public enum ArgKind
     ProfileId,
     /// <summary>Номер записи журнала изменений: 12 шестнадцатеричных цифр.</summary>
     ChangeId,
+    /// <summary>Адрес системного прокси: хост:порт или схема=хост:порт;… (<see cref="ProxyValues.ParseServer"/>); на выходе нормальная запись.</summary>
+    ProxyServer,
+    /// <summary>Исключения прокси: имена, маски, &lt;local&gt; (<see cref="ProxyValues.NormalizeBypass"/>).</summary>
+    ProxyBypass,
+    /// <summary>Адрес автонастройки (PAC): только http(s) (<see cref="ProxyValues.NormalizePac"/>).</summary>
+    ProxyPac,
 }
 
 public sealed record ArgSpec(string Name, ArgKind Kind, bool Required = false, string[]? Choices = null, int MaxItems = 0);
@@ -62,6 +68,8 @@ public sealed record CommandSpec(string Name, bool Exclusive, bool Long, params 
 /// <summary>Проверенный запрос. Аргументы уже приведены к типам (bool, string, IReadOnlyList&lt;string&gt;).</summary>
 public sealed record HelperCall(long Id, CommandSpec Spec, IReadOnlyDictionary<string, object> Args, long? Target = null)
 {
+    /// <summary>SID пользователя, подключившегося к каналу (определён сервером по токену, не из запроса). Нужен командам «для пользователя».</summary>
+    public string? ClientSid { get; init; }
     public string Cmd => Spec.Name;
     public bool Bool(string name, bool fallback = false) => Args.TryGetValue(name, out var v) ? (bool)v : fallback;
     public int Int(string name) => Args.TryGetValue(name, out var v) ? (int)v : 0;
@@ -172,6 +180,17 @@ public static partial class HelperCommands
         new("changes_list", false, false),
         new("changes_undo_all", true, true),
         new("changes_undo", true, true, new ArgSpec("id", ArgKind.ChangeId, Required: true)),
+        // Системный прокси (API 1.7). Ни путей реестра, ни имён значений команды не принимают: адрес — хост:порт, исключения — имена и маски,
+        // PAC — http(s). «Для пользователя» помощник пишет в ветку пользователя ЭТОГО канала (SID клиента), «для машины» — HKLM + политику
+        // ProxySettingsPerUser и по желанию WinHTTP. enabled=false — «Очистить» (прежнее запоминается), без остальных аргументов.
+        new("proxy_status", false, false),
+        new("proxy_user_set", true, false,
+            new ArgSpec("enabled", ArgKind.Bool, Required: true), new ArgSpec("server", ArgKind.ProxyServer),
+            new ArgSpec("bypass", ArgKind.ProxyBypass), new ArgSpec("pac", ArgKind.ProxyPac)),
+        new("proxy_machine_set", true, false,
+            new ArgSpec("enabled", ArgKind.Bool, Required: true), new ArgSpec("server", ArgKind.ProxyServer),
+            new ArgSpec("bypass", ArgKind.ProxyBypass), new ArgSpec("pac", ArgKind.ProxyPac), new ArgSpec("winhttp", ArgKind.Bool)),
+        new("proxy_machine_restore", true, false),
     ];
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);
@@ -252,6 +271,15 @@ public static partial class HelperCommands
             bool process = (string)args["mode"] == "process";
             if (process != args.ContainsKey("pid"))
                 throw new HelperRequestException(id, process ? "rec_start: для режима process нужен pid." : "rec_start: pid — только для режима process.");
+        }
+        // proxy_*_set: включить — адрес или PAC обязателен; выключить — без значений и без галочки WinHTTP-адресов.
+        if (spec.Name is "proxy_user_set" or "proxy_machine_set")
+        {
+            bool on = (bool)args["enabled"];
+            bool values = args.ContainsKey("server") || args.ContainsKey("pac") || args.ContainsKey("bypass");
+            if (on && !args.ContainsKey("server") && !args.ContainsKey("pac"))
+                throw new HelperRequestException(id, $"{spec.Name}: нужен адрес прокси или адрес автонастройки.");
+            if (!on && values) throw new HelperRequestException(id, $"{spec.Name}: при enabled = false адрес, исключения и PAC не передаются.");
         }
         if (spec.Name == "app_profile_set" && !args.ContainsKey("tcp") && !args.ContainsKey("udp"))
             throw new HelperRequestException(id, "app_profile_set: нужны порты TCP или UDP.");
@@ -408,6 +436,28 @@ public static partial class HelperCommands
                 var str = String(id, Where(), v, 12);
                 if (!ChangeIdRx().IsMatch(str)) throw new HelperRequestException(id, $"{Where()}: неверный номер записи журнала.");
                 return str;
+            }
+
+            case ArgKind.ProxyServer:
+            {
+                var str = String(id, Where(), v, ProxyValues.MaxServerLength);
+                return ProxyValues.NormalizeServer(str) ?? throw new HelperRequestException(id, $"{Where()}: нужен адрес вида хост:порт (или схема=хост:порт;…).");
+            }
+
+            case ArgKind.ProxyBypass:
+            {
+                var str = String(id, Where(), v, 2_000);
+                var (value, ok) = ProxyValues.NormalizeBypass(str);
+                if (!ok || value is null) throw new HelperRequestException(id, $"{Where()}: исключения — имена и маски через «;».");
+                return value;
+            }
+
+            case ArgKind.ProxyPac:
+            {
+                var str = String(id, Where(), v, ProxyValues.MaxPacLength);
+                var (value, ok) = ProxyValues.NormalizePac(str);
+                if (!ok || value is null) throw new HelperRequestException(id, $"{Where()}: нужна ссылка http:// или https://.");
+                return value;
             }
 
             case ArgKind.Roles:

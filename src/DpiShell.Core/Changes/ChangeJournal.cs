@@ -15,7 +15,12 @@ public static class ChangeKinds
     public const string HostsComment = "hosts_comment";
     public const string Core = "core";
     public const string AppProfile = "app_profile";
+    /// <summary>Системный прокси WinINET (+ политика «одни настройки на всех», + WinHTTP) для всей машины — HKLM, пишет помощник.</summary>
+    public const string ProxyMachine = "proxy_machine";
+    /// <summary>Системный прокси пользователя окна, записанный помощником (HKU\SID) — журнал помощника.</summary>
+    public const string ProxyUserAdmin = "proxy_user_admin";
     // Журнал окна (%LocalAppData%): права администратора не нужны.
+    public const string ProxyUser = "proxy_user";
     public const string Autostart = "autostart";
     public const string RouterDns = "router_dns";
     public const string RouterEnable = "router_enable";

@@ -375,6 +375,19 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public Task<UndoReport> ChangesUndoAllAsync(CancellationToken ct = default) => CallAsync<UndoReport>("changes_undo_all", null, null, ct);
     public Task<UndoReport> ChangesUndoAsync(string id, CancellationToken ct = default) => CallAsync<UndoReport>("changes_undo", new { id }, null, ct);
 
+    // Системный прокси (API 1.7). Значения проходят белый список помощника; пути реестра окно не передаёт.
+    public Task<ProxyStatusInfo> ProxyStatusAsync(CancellationToken ct = default) => CallAsync<ProxyStatusInfo>("proxy_status", null, null, ct);
+
+    /// <summary>Для пользователя окна с правами администратора. enabled = false — «Очистить» (значения не передаются).</summary>
+    public Task<ProxyChangeResult> ProxyUserSetAsync(bool enabled, string? server = null, string? bypass = null, string? pac = null, CancellationToken ct = default) =>
+        CallAsync<ProxyChangeResult>("proxy_user_set", new { enabled, server, bypass, pac }, null, ct);   // пустые поля в запрос не попадают
+
+    /// <summary>Для всей машины; winhttp — ещё и прокси для служб. enabled = false — «Очистить».</summary>
+    public Task<ProxyChangeResult> ProxyMachineSetAsync(bool enabled, string? server = null, string? bypass = null, string? pac = null, bool winhttp = false, CancellationToken ct = default) =>
+        CallAsync<ProxyChangeResult>("proxy_machine_set", new { enabled, server, bypass, pac, winhttp }, null, ct);
+
+    public Task<ProxyChangeResult> ProxyMachineRestoreAsync(CancellationToken ct = default) => CallAsync<ProxyChangeResult>("proxy_machine_restore", null, null, ct);
+
     // ---------- подключения программ (ТЗ 13, протокол 1.4) ----------
 
     /// <summary>Начать запись: процессы, запущенные после этого (pid не нужен), или выбранный процесс с дочерними. driver = false — без драйвера, только TCP.</summary>

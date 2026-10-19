@@ -1401,6 +1401,150 @@
                     </ScrollViewer>
                 </TabItem>
 
+                <!-- ===== Прокси: системный прокси Windows, свои прокси, «Включить» / «Очистить» / «Вернуть прежний», проверка. ===== -->
+                <TabItem Header="Прокси">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,4">
+                                <Button DockPanel.Dock="Right" Content="Обновить" Style="{StaticResource LinkButton}" Command="{Binding Proxy.RefreshCmd}" VerticalAlignment="Top" />
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
+                                    <TextBlock Text="Прокси" Style="{StaticResource H1}" />
+                                    <local:InfoButton Topic="{x:Static local:InfoTexts.Proxy}" Margin="10,0,0,12" />
+                                </StackPanel>
+                            </DockPanel>
+
+                            <!-- Что стоит сейчас в Windows: пользователь, машина, службы (WinHTTP). Адреса — чувствительные. -->
+                            <Border x:Name="ProxyNowCard" Style="{StaticResource Card}" DataContext="{Binding Proxy}">
+                                <StackPanel>
+                                    <TextBlock Text="Сейчас в Windows" Style="{StaticResource H2}" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="190" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Для этого пользователя" Style="{StaticResource Hint}" Margin="0,2" />
+                                        <TextBlock Grid.Column="1" Text="{Binding UserLine}" local:Demo.Sensitive="True" TextWrapping="Wrap" Margin="0,2" />
+                                        <TextBlock Grid.Row="1" Text="Для всей машины" Style="{StaticResource Hint}" Margin="0,2" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MachineLine}" local:Demo.Sensitive="True" TextWrapping="Wrap" Margin="0,2" />
+                                        <TextBlock Grid.Row="2" Text="Для служб (WinHTTP)" Style="{StaticResource Hint}" Margin="0,2" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding WinHttpLine}" local:Demo.Sensitive="True" TextWrapping="Wrap" Margin="0,2" />
+                                    </Grid>
+                                    <ItemsControl ItemsSource="{Binding Notes}" Margin="0,6,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,2" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Свои прокси: список, «Проверить», форма добавления/изменения. -->
+                            <Border x:Name="ProxyListCard" Style="{StaticResource Card}" DataContext="{Binding Proxy}">
+                                <StackPanel>
+                                    <TextBlock Text="Мои прокси" Style="{StaticResource H2}" />
+                                    <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding ListEmpty, Converter={StaticResource Vis}}"
+                                               Text="Список пуст. Добавьте прокси ниже; формат записи, например: Clash Verge — 127.0.0.1:7897." />
+                                    <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Margin="0,0,0,8" PreviewMouseWheel="PassWheelToPage"
+                                             AutomationProperties.Name="Мои прокси" Visibility="{Binding ListEmpty, Converter={StaticResource InvVis}}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel>
+                                                    <DockPanel>
+                                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Address}" local:Demo.Sensitive="True" Style="{StaticResource Hint}" Margin="12,0,0,0" VerticalAlignment="Center" />
+                                                        <TextBlock Text="{Binding Name}" FontSize="15" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" local:Demo.Sensitive="True" />
+                                                    </DockPanel>
+                                                    <TextBlock Text="{Binding Detail}" Style="{StaticResource Hint}" FontSize="13" TextWrapping="Wrap" local:Demo.Sensitive="True"
+                                                               Visibility="{Binding HasDetail, Converter={StaticResource Vis}}" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+
+                                    <Expander Header="Добавить или изменить" IsExpanded="True">
+                                        <Grid Margin="0,6,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="170" />
+                                                <ColumnDefinition Width="*" MaxWidth="420" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="Название" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Column="1" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" local:Demo.Sensitive="True" AutomationProperties.Name="Название прокси" />
+                                            <TextBlock Grid.Row="1" Text="Адрес (хост:порт)" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding EditServer, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" local:Demo.Sensitive="True"
+                                                     ToolTip="Например: 127.0.0.1:7897 или http=127.0.0.1:7897;https=127.0.0.1:7897" AutomationProperties.Name="Адрес прокси" />
+                                            <TextBlock Grid.Row="2" Text="Исключения" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding EditBypass, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" local:Demo.Sensitive="True"
+                                                     ToolTip="Необязательно. Через «;»: &lt;local&gt;;*.example.com" AutomationProperties.Name="Исключения прокси" />
+                                            <TextBlock Grid.Row="3" Text="Автонастройка (PAC)" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding EditPac, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" local:Demo.Sensitive="True"
+                                                     ToolTip="Необязательно. Ссылка http:// или https://" AutomationProperties.Name="Адрес автонастройки" />
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding FormError}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,0,0,6"
+                                                       Visibility="{Binding HasFormError, Converter={StaticResource Vis}}" />
+                                            <WrapPanel Grid.Row="5" Grid.Column="1">
+                                                <Button Content="Добавить" Style="{DynamicResource Small}" Command="{Binding AddCmd}" Margin="0,0,8,0" />
+                                                <Button Content="Сохранить изменения" Style="{DynamicResource Small}" Command="{Binding SaveCmd}" Margin="0,0,8,0" Visibility="{Binding IsSelected, Converter={StaticResource Vis}}" />
+                                                <Button Content="Удалить" Style="{DynamicResource Small}" Command="{Binding DeleteCmd}" Margin="0,0,8,0" Visibility="{Binding IsSelected, Converter={StaticResource Vis}}" />
+                                                <Button Content="Очистить поля" Style="{StaticResource LinkButton}" Command="{Binding ClearFormCmd}" />
+                                            </WrapPanel>
+                                        </Grid>
+                                    </Expander>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Применить выбранный: куда, «Включить», «Очистить», «Вернуть прежний», «Проверить». -->
+                            <Border x:Name="ProxyApplyCard" Style="{StaticResource Card}" DataContext="{Binding Proxy}">
+                                <StackPanel>
+                                    <TextBlock Text="Куда применить" Style="{StaticResource H2}" />
+                                    <StackPanel Margin="0,0,0,6">
+                                        <RadioButton Content="Для этого пользователя" IsChecked="{Binding TargetUser}" Margin="0,0,0,4" ToolTip="Окно меняет само, права администратора не нужны" />
+                                        <RadioButton Content="Для этого пользователя, с правами администратора" IsChecked="{Binding TargetUserAdmin}" Margin="0,0,0,4" ToolTip="Меняет помощник; нужен, если окно само изменить не может" />
+                                        <RadioButton Content="Для всей машины (права администратора)" IsChecked="{Binding TargetMachine}" ToolTip="Настройки станут общими для всех пользователей этого компьютера" />
+                                    </StackPanel>
+                                    <CheckBox Content="Ещё и для служб Windows (WinHTTP)" IsChecked="{Binding AlsoWinHttp}" Margin="0,0,0,8"
+                                              Visibility="{Binding TargetMachine, Converter={StaticResource Vis}}"
+                                              ToolTip="Прокси WinHTTP берут службы и часть программ, которые не читают системный прокси" />
+                                    <WrapPanel>
+                                        <Button Content="Включить выбранный" Style="{StaticResource Primary}" Command="{Binding EnableCmd}" />
+                                        <Button Content="Очистить" Command="{Binding ClearCmd}" ToolTip="Выключить системный прокси; прежний запоминается" />
+                                        <Button Content="Вернуть прежний" Command="{Binding RestoreCmd}" Visibility="{Binding HasPrevious, Converter={StaticResource Vis}}" />
+                                        <Button Content="Проверить прокси" Command="{Binding CheckCmd}" ToolTip="Открыть через выбранный прокси соединение к двум сайтам" />
+                                    </WrapPanel>
+                                    <TextBlock Text="{Binding PreviousText}" local:Demo.Sensitive="True" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                               Visibility="{Binding HasPrevious, Converter={StaticResource Vis}}" />
+                                    <TextBlock Text="{Binding CheckText}" local:Demo.Sensitive="True" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="{Binding HasCheck, Converter={StaticResource Vis}}" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Короткие честные подсказки о подводных камнях. -->
+                            <Border x:Name="ProxyHintsCard" Style="{StaticResource Card}" DataContext="{Binding Proxy}">
+                                <StackPanel>
+                                    <TextBlock Text="Что стоит знать" Style="{StaticResource H2}" />
+                                    <ItemsControl ItemsSource="{Binding Hints}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,2" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
                 <!-- ===== Диагностика: только проверки и исправления (UX-аудит п. 12); настройки, обновления, помощник — во вкладке «Настройки». ===== -->
                 <TabItem Header="Диагностика">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -1497,10 +1641,15 @@
                                                         <ColumnDefinition Width="22" />
                                                         <ColumnDefinition Width="150" />
                                                         <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock x:Name="M" Text="{Binding Mark}" FontWeight="Bold" Foreground="{DynamicResource Ok}" />
                                                     <TextBlock Grid.Column="1" Text="{Binding Title}" Style="{StaticResource Hint}" />
-                                                    <TextBlock Grid.Column="2" Text="{Binding Text}" local:Demo.Sensitive="True" />
+                                                    <TextBlock Grid.Column="2" Text="{Binding Text}" local:Demo.Sensitive="True" TextWrapping="Wrap" />
+                                                    <!-- «Системный прокси включён» → вкладка «Прокси». -->
+                                                    <Button Grid.Column="3" Content="Настроить →" Style="{StaticResource LinkButton}" Margin="10,0,0,0" VerticalAlignment="Top"
+                                                            Command="{Binding DataContext.GoProxyCmd, RelativeSource={RelativeSource AncestorType=TabControl}}"
+                                                            Visibility="{Binding HasGo, Converter={StaticResource Vis}}" />
                                                 </Grid>
                                                 <DataTemplate.Triggers>
                                                     <DataTrigger Binding="{Binding Ok}" Value="False">

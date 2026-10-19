@@ -4,7 +4,11 @@ using Microsoft.Win32;
 namespace DpiShell.Core;
 
 /// <summary>Находка «Диагностики»: Ok — в порядке, Warn — может мешать обходу (что делать — в тексте).</summary>
-public sealed record SystemFinding(bool Ok, string Title, string Text);
+/// <param name="Go">Куда ведёт ссылка «Настроить →» («proxy» — вкладка «Прокси»); null — ссылки нет.</param>
+public sealed record SystemFinding(bool Ok, string Title, string Text, string? Go = null)
+{
+    public const string GoProxy = "proxy";
+}
 
 /// <summary>
 /// Проверки окружения из service.bat Flowseal (architecture.md «Диагностика») — только чтение, ничего не меняют:
@@ -64,15 +68,17 @@ public static class SystemChecks
     static bool Dispose(Process[] ps) { foreach (var p in ps) p.Dispose(); return true; }
 
     public static SystemFinding ProxyFinding((bool Enabled, string? Server) proxy) => proxy.Enabled
-        ? new(false, "Системный прокси", $"включён ({proxy.Server ?? "адрес не указан"}). Через прокси оптимизация может не работать — если он не нужен, выключите: Параметры → Сеть и Интернет → Прокси.")
+        ? new(false, "Системный прокси", $"включён ({proxy.Server ?? "адрес не указан"}). Через прокси оптимизация может не работать — если он не нужен, выключите.", SystemFinding.GoProxy)
         : new(true, "Системный прокси", "не используется");
 
+    /// <summary>Действующий системный прокси: настройки пользователя или, если политика делает их общими, настройки машины. Автонастройка — как «включён».</summary>
     static (bool, string?) ReadProxy()
     {
+        if (SystemProxyGuard.Forbidden) return (false, null);   // под тестами настоящий реестр не читается
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Internet Settings");
-            return (key?.GetValue("ProxyEnable") is int v && v != 0, key?.GetValue("ProxyServer") as string);
+            var eff = ProxyOverview.Read(new WindowsProxyRegistry(), new WindowsWinHttpProxy()).Effective;
+            return (eff.IsOn, ProxyValues.Describe(eff));
         }
         catch (Exception e) when (e is System.Security.SecurityException or IOException or UnauthorizedAccessException) { return (false, null); }
     }

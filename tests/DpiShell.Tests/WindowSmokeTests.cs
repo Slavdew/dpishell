@@ -150,7 +150,7 @@ public sealed partial class WindowSmokeTests
     }).GetAwaiter().GetResult();
 
     static readonly (int Page, string Name)[] AllPages =
-        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Sites, "sites"), (Pages.Apps, "apps"), (Pages.Hosts, "hosts"), (Pages.Dns, "dns"), (Pages.Diag, "diag"), (Pages.Settings, "settings"), (Pages.About, "about")];
+        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Sites, "sites"), (Pages.Apps, "apps"), (Pages.Hosts, "hosts"), (Pages.Dns, "dns"), (Pages.Proxy, "proxy"), (Pages.Diag, "diag"), (Pages.Settings, "settings"), (Pages.About, "about")];
 
     [Fact]
     public void MainWindow_OpensAndAllPagesBind_WithoutErrors()
@@ -162,7 +162,7 @@ public sealed partial class WindowSmokeTests
             var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
             var w = Open(vm);
             var tabs = Find<TabControl>(w)!;
-            foreach (var page in new[] { Pages.Select, Pages.Sites, Pages.Apps, Pages.Hosts, Pages.Dns, Pages.Diag, Pages.Router, Pages.Settings, Pages.About, Pages.Home })
+            foreach (var page in new[] { Pages.Select, Pages.Sites, Pages.Apps, Pages.Hosts, Pages.Dns, Pages.Proxy, Pages.Diag, Pages.Router, Pages.Settings, Pages.About, Pages.Home })
             {
                 vm.Page = page;
                 Pump();
@@ -1303,7 +1303,7 @@ public sealed partial class WindowSmokeTests
     public void InfoButtons_EveryDocSection_HasButton_WithDocText()
     {
         var doc = DocInfoTexts();
-        Assert.Equal(16, doc.Count);
+        Assert.Equal(17, doc.Count);
         using var tmp = new TempDir();
         using var fake = new FakeRouter { KillSwitch = true };   // «Сторож» в «Проверять сам» — у роутера со сторожем
         var seen = new Dictionary<string, string>();
@@ -1437,6 +1437,23 @@ public sealed partial class WindowSmokeTests
             throw new Exception($"Фон окна {actual}, ждали {expected} ({(dark ? "тёмная" : "светлая")})");
     }
 
+    /// <summary>Вкладка «Прокси» для снимков: свой прокси включён в реестре (память), два прокси в списке, прежний запомнен, проверка прошла.</summary>
+    static void FillProxy(MainViewModel vm)
+    {
+        var reg = (MemoryProxyRegistry)vm.Proxy.Registry;
+        reg.Values[(ProxyKey.UserSettings, "", ProxyNames.Enable)] = 1;
+        reg.Values[(ProxyKey.UserSettings, "", ProxyNames.Server)] = "127.0.0.1:7897";
+        reg.Values[(ProxyKey.UserSettings, "", ProxyNames.Override)] = "<local>;*.example.com";
+        vm.Settings.ProxyList = [new("Clash Verge", "127.0.0.1:7897", "<local>;*.example.com"), new("Рабочий", "http=proxy.example.net:3128;https=proxy.example.net:3128", null, "https://proxy.example.net/proxy.pac")];
+        vm.Settings.ProxyPrevious = new ProxySettings(true, "proxy.example.net:3128", "<local>", null);
+        vm.Proxy.LoadList();
+        // Без обращения к помощнику: показываем прочитанное из реестра в памяти (здесь тест окна ждёт поток окна и ответа по каналу не получит).
+        vm.Proxy.Show(ProxyOverview.Read(vm.Proxy.Registry, vm.Proxy.WinHttp));
+        vm.Proxy.Selected = vm.Proxy.Items[0];
+        vm.Proxy.CheckProxy = (_, _) => Task.FromResult(new ProxyCheckResult(true, "http", [], "работает (HTTP): 2 из 2, ≈140 мс"));
+        Task.Run(vm.Proxy.CheckAsync).GetAwaiter().GetResult();
+    }
+
     /// <summary>Наполнение: строки таблиц и плашки — для проверки главной и для снимков. В памяти и во временной папке.</summary>
     static void Fill(MainViewModel vm, Shell shell)
     {
@@ -1461,6 +1478,7 @@ public sealed partial class WindowSmokeTests
             picker.Measure = (doh, _) => Task.FromResult<double?>(doh.Contains("quad9") ? null : doh.Contains("google") ? 38 : 52);
             picker.CompareAsync().GetAwaiter().GetResult();
         }
+        FillProxy(vm);
         SetProp(vm, "CheckSummary", "Открывается 1 из 2");
         // «Проверить сейчас» и таблица подбора — те же строки по адресам, что строит окно из проверки (CheckRow.From).
         static TargetVerdict V(string group, string url, bool required, ProbeOutcome o13, string d13, ProbeOutcome o12, string d12, double s)

@@ -168,6 +168,7 @@ public sealed class HelperServer : IAsyncDisposable
                 await conn.SendDirectAsync(HelperProtocol.Error(0, HelperErrors.Denied, HelperErrors.Text(HelperErrors.Denied)));
                 return;
             }
+            conn.ClientSid = who;   // при успехе Identify возвращает SID токена клиента
             Interlocked.Increment(ref _clients);
             counted = true;
             conn.StartWriter();
@@ -194,6 +195,7 @@ public sealed class HelperServer : IAsyncDisposable
                     conn.Send(HelperProtocol.Error(call.Id, HelperErrors.Invalid, "Запрос с таким id ещё выполняется."));
                     continue;
                 }
+                call = call with { ClientSid = conn.ClientSid };
                 conn.Track(Task.Run(() => ExecuteAsync(call, conn, cts)));
             }
         }
@@ -362,6 +364,12 @@ public sealed class HelperServer : IAsyncDisposable
             case "changes_list": return await Task.Run(b.ChangesList, ct);
             case "changes_undo_all": return await Task.Run(() => b.ChangesUndoAllAsync(ct), ct);
             case "changes_undo": return await Task.Run(() => b.ChangesUndoAsync(c.Str("id")!, ct), ct);
+            case "proxy_status": return await Task.Run(() => b.ProxyStatus(c.ClientSid), ct);
+            case "proxy_user_set":
+                return await Task.Run(() => b.ProxyUserSet(c.ClientSid, c.Bool("enabled"), c.Str("server"), c.Str("bypass"), c.Str("pac")), ct);
+            case "proxy_machine_set":
+                return await Task.Run(() => b.ProxyMachineSet(c.Bool("enabled"), c.Str("server"), c.Str("bypass"), c.Str("pac"), c.Bool("winhttp")), ct);
+            case "proxy_machine_restore": return await Task.Run(b.ProxyMachineRestore, ct);
             case "app_profile_remove": return new { removed = await Task.Run(() => b.AppProfileRemove(c.Str("id")!), ct) };
         }
         // Белый список и диспетчер должны совпадать — тест проверяет, что сюда не попасть.
@@ -389,6 +397,9 @@ public sealed class HelperServer : IAsyncDisposable
         readonly ConcurrentBag<Task> _running = [];
 
         public CancellationToken Closing => _closing.Token;
+
+        /// <summary>SID пользователя клиента (по токену канала).</summary>
+        public string? ClientSid { get; set; }
 
         public void StartWriter() => _ = Task.Run(WriterAsync);
 

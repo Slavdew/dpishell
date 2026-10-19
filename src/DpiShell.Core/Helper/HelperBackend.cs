@@ -88,7 +88,22 @@ public interface IHelperBackend : IHelperCatalog
     Task<UndoReport> ChangesUndoAllAsync(CancellationToken ct);
     /// <summary>Откатить одну запись журнала.</summary>
     Task<UndoReport> ChangesUndoAsync(string id, CancellationToken ct);
+
+    // ---------- системный прокси (API 1.7) ----------
+    /// <summary>Что стоит сейчас (ветка пользователя канала, машина, политика, WinHTTP) и есть ли что вернуть. Только чтение.</summary>
+    ProxyStatusInfo ProxyStatus(string? clientSid);
+    /// <summary>Для пользователя канала (HKU\SID клиента). enabled = false — «Очистить»: прокси и PAC выключаются, прежнее запоминает окно.</summary>
+    ProxyChangeResult ProxyUserSet(string? clientSid, bool enabled, string? server, string? bypass, string? pac);
+    /// <summary>Для всей машины: HKLM + политика «одни настройки на всех»; winhttp — ещё и прокси для служб.</summary>
+    ProxyChangeResult ProxyMachineSet(bool enabled, string? server, string? bypass, string? pac, bool winhttp);
+    /// <summary>«Вернуть прежний» для машины — из proxy-backup.json помощника.</summary>
+    ProxyChangeResult ProxyMachineRestore();
 }
+
+/// <summary>Ответ proxy_status. Previous — что вернёт «Вернуть прежний» для машины (null — нечего).</summary>
+public sealed record ProxyStatusInfo(ProxyOverview Now, ProxyBackup? Previous);
+
+public sealed record ProxyChangeResult(bool Ok, string Message, ProxyStatusInfo Status);
 
 /// <summary>Ответ на status: всё, что окну без прав нужно для экранов.</summary>
 public sealed record HelperStatus(
@@ -587,6 +602,7 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
             e.Register(new ServiceUndoer(ServiceOps));
             e.Register(new TcpTimestampsUndoer(shell.Tcp));
             e.Register(new DnsUndoer(DnsSystem));
+            e.Register(new ProxyUndoer(ProxyRegistry, WinHttp));
             e.Register(new HostsUndoer(() => shell.Hosts));
             e.Register(new CoreUndoer(() => shell.Installer, shell.Paths));
             e.Register(new AppProfileUndoer(id => shell.State.AppProfiles.FirstOrDefault(p => p.Id == id), shell.RemoveAppProfile));
@@ -620,6 +636,8 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
         if (done(ChangeKinds.TcpTimestamps)) shell.State.TimestampsEnabledByUs = false;
         if (done(ChangeKinds.HostsBlock) || done(ChangeKinds.HostsUser)) shell.State.HostsFix = false;
         shell.SaveState();
+        // Прокси машины откатили — «Вернуть прежний» после этого теряет смысл.
+        if (done(ChangeKinds.ProxyMachine)) new ProxyBackupStore(shell.Paths.ProxyBackup).Forget();
         // DNS: все записи откачены чисто — сохранённые прежние настройки больше не нужны («Вернуть как было» не должно предлагаться зря).
         var dnsItems = r.Items.Where(i => Kind(i) == ChangeKinds.Dns).ToList();
         if (dnsItems.Count > 0 && dnsItems.All(i => i.Status is UndoStatus.Restored or UndoStatus.AlreadyBack) && shell.Journal.Active(ChangeKinds.Dns).Count == 0)
@@ -627,6 +645,48 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
     }
 
     string Kind(UndoItem i) => shell.Journal.Entries().FirstOrDefault(e => e.Id == i.Id)?.Kind ?? "";
+
+    // ---------- системный прокси ----------
+
+    /// <summary>Реестр и WinHTTP; в тестах — подмена в памяти (настоящие настройки машины не трогаются).</summary>
+    public IProxyRegistry ProxyRegistry { get; init; } = new WindowsProxyRegistry();
+    public IWinHttpProxy WinHttp { get; init; } = new WindowsWinHttpProxy();
+
+    ProxyManager ProxyMgr() => new(ProxyRegistry, WinHttp) { Recorder = shell.Journal, Backup = new ProxyBackupStore(shell.Paths.ProxyBackup) };
+
+    public ProxyStatusInfo ProxyStatus(string? clientSid)
+    {
+        var sid = ProxySid.IsUserSid(clientSid) && ProxyRegistry.UserHiveLoaded(clientSid!) ? clientSid : null;
+        return new(ProxyMgr().Overview(sid), new ProxyBackupStore(shell.Paths.ProxyBackup).Load());
+    }
+
+    ProxyChangeResult ProxyResult(ProxyOutcome o, string? sid) => new(o.Ok, o.Message, ProxyStatus(sid));
+
+    public ProxyChangeResult ProxyUserSet(string? clientSid, bool enabled, string? server, string? bypass, string? pac)
+    {
+        if (!ProxySid.IsUserSid(clientSid))
+            return new(false, "Не удалось определить пользователя окна — для этого пользователя прокси с правами администратора не меняется.", ProxyStatus(null));
+        shell.Paths.EnsureDirectories();
+        var mgr = ProxyMgr();
+        var cur = ProxyRegistryIo.Read(ProxyRegistry, ProxyKey.UserSettings, clientSid);
+        var next = enabled ? ProxyValues.Build(server, bypass, pac) : cur.Cleared();
+        return ProxyResult(mgr.ApplyUser(clientSid, next, ChangeKinds.ProxyUserAdmin), clientSid);
+    }
+
+    public ProxyChangeResult ProxyMachineSet(bool enabled, string? server, string? bypass, string? pac, bool winhttp)
+    {
+        shell.Paths.EnsureDirectories();
+        var mgr = ProxyMgr();
+        var cur = ProxyRegistryIo.Read(ProxyRegistry, ProxyKey.MachineSettings);
+        var next = enabled ? ProxyValues.Build(server, bypass, pac) : cur.Cleared();
+        return ProxyResult(mgr.ApplyMachine(next, winhttp ? WinHttpInfo.From(next) : null), null);
+    }
+
+    public ProxyChangeResult ProxyMachineRestore()
+    {
+        shell.Paths.EnsureDirectories();
+        return ProxyResult(ProxyMgr().RestoreMachine(), null);
+    }
 
     public DnsStatusInfo DnsStatus() => Dns.Status();
 

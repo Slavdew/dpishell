@@ -13,8 +13,8 @@ public enum StatusKind { Off, On, Busy, Error }
 
 public static class Pages
 {
-    // «Сайты» (свои сайты и исключения), «Игры и программы» (запись подключений, профили, игровой режим, IP-списки), «Починить адреса» (hosts), «DNS»; порядок вкладок — по номерам.
-    public const int Home = 0, Select = 1, Sites = 2, Apps = 3, Hosts = 4, Dns = 5, Diag = 6, Router = 7, Settings = 8, About = 9;
+    // «Сайты» (свои сайты и исключения), «Игры и программы» (запись подключений, профили, игровой режим, IP-списки), «Починить адреса» (hosts), «DNS», «Прокси»; порядок вкладок — по номерам.
+    public const int Home = 0, Select = 1, Sites = 2, Apps = 3, Hosts = 4, Dns = 5, Proxy = 6, Diag = 7, Router = 8, Settings = 9, About = 10;
 }
 
 /// <summary>
@@ -53,6 +53,8 @@ public sealed partial class MainViewModel : Observable
     public Autostart Autostart { get; }
     /// <summary>«Отменить всё, что сделала DpiShell» (Настройки): журнал помощника и журнал окна.</summary>
     public ChangesViewModel Changes { get; }
+    /// <summary>Вкладка «Прокси»: системный прокси Windows, свои прокси, проверка.</summary>
+    public ProxyViewModel Proxy { get; }
     /// <summary>Уведомление в трей (окно может быть свёрнуто): «Все адреса» закончились, адрес в hosts устарел.</summary>
     public event Action<string>? Notify;
 
@@ -97,6 +99,7 @@ public sealed partial class MainViewModel : Observable
         GoSelectCmd = new RelayCommand(() => Page = Pages.Select);
         GoAboutCmd = new RelayCommand(() => Page = Pages.About);
         GoDiagCmd = new RelayCommand(() => Page = Pages.Diag);
+        GoProxyCmd = new RelayCommand(() => Page = Pages.Proxy);
         CheckNowCmd = RelayCommand.Async(CheckNowAsync, () => !Busy && !IsLoading && !Checking);
 
         StartSelectCmd = RelayCommand.Async(StartSelectAsync, () => !Busy && !IsLoading);
@@ -137,6 +140,16 @@ public sealed partial class MainViewModel : Observable
         windowChanges.Register(new DelegateUndoer([ChangeKinds.RouterEnable], Router.UndoEnableAsync));
         Autostart.Recorder = windowJournal;
         Router.Recorder = windowJournal;
+        Proxy = new ProxyViewModel(helper, settings)
+        {
+            Recorder = windowJournal,
+            Need = NeedHelperAsync,
+            Guard = Guard,
+            IsBusy = () => Busy,
+            Say = s => Message = s,
+        };
+        Proxy.LoadList();
+        windowChanges.Register(new DelegateUndoer([ChangeKinds.ProxyUser], Proxy.UndoAsync));
         Changes = new ChangesViewModel(helper, windowChanges)
         {
             Say = s => Message = s,
@@ -369,6 +382,7 @@ public sealed partial class MainViewModel : Observable
             if (value == Pages.Apps) _ = RefreshNetAsync();
             if (value == Pages.Hosts) _ = Hosts.RefreshAsync();
             if (value == Pages.Settings) _ = Changes.RefreshAsync();
+            if (value == Pages.Proxy) _ = Proxy.RefreshAsync();
             if (value == Pages.Router) _ = Router.RefreshRouterPageAsync();   // и «Роутер: что мешает» — внутри
             if (value == Pages.Dns && DnsRows.Count == 0) _ = CheckDnsAsync();
             if (value == Pages.Diag || value == Pages.About) _ = RefreshDiagAsync();   // «Информация и обновления» показывает версию ядра
@@ -816,6 +830,8 @@ public sealed partial class MainViewModel : Observable
     public ICommand DisableCmd { get; }
     public ICommand GoSelectCmd { get; }
     public ICommand GoDiagCmd { get; }
+    /// <summary>«Настроить →» у находки «Системный прокси включён» на «Диагностике».</summary>
+    public ICommand GoProxyCmd { get; }
     public ICommand CheckNowCmd { get; }
 
     /// <summary>Без помощника: стратегия из настроек службы DpiShell (реестр) — что стоит, видно и без прав.</summary>
@@ -1650,7 +1666,7 @@ public sealed partial class MainViewModel : Observable
             var (ts, findings) = await Task.Run(() => (TcpTimestamps.IsEnabled(), SystemChecks.Run(_shell.Paths)));
             TimestampsText = TimestampsLine(ts);
             Findings.Clear();
-            foreach (var f in findings) Findings.Add(new FindingRow(f.Ok, f.Title, f.Text));
+            foreach (var f in findings) Findings.Add(new FindingRow(f.Ok, f.Title, f.Text, f.Go));
             OnHelperChanged();
             DiagUpdated = $"обновлено в {DateTime.Now:HH:mm:ss}";
         }
