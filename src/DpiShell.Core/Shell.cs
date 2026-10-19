@@ -72,6 +72,9 @@ public sealed class Shell
     /// <summary>Версия данных в работе (обновлённых или поставки).</summary>
     public string? DataVersion => Paths.SeedManifest?.Version;
 
+    /// <summary>Проверочный ключ подписи манифеста данных (в тестах подменяется тестовым).</summary>
+    public byte[] DataSigningKey { get; set; } = ReleaseSignature.ReleaseKey;
+
     /// <summary>
     /// Поставить обновление данных по data.json с источников из списка (architecture.md «Обновления данных»). Новое ядро в манифесте —
     /// ставится по нему же до замены данных; затем каталог, цели и списки перечитываются, свои файлы не трогаются.
@@ -83,7 +86,7 @@ public sealed class Shell
         http ??= new HttpClient(new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(5) }) { Timeout = Timeout.InfiniteTimeSpan };
         try
         {
-            var updater = new DataUpdater(Paths, new DataUpdateClient(http, UpdateSources)) { InstallCore = installCore };
+            var updater = new DataUpdater(Paths, new DataUpdateClient(http, UpdateSources) { SigningKey = DataSigningKey }) { InstallCore = installCore };
             var r = await updater.InstallAsync(confirmed, log, ct);
             if (r.Applied) ReloadData();
             return r;

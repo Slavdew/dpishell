@@ -112,7 +112,7 @@ public sealed partial class DataUpdateTests
     }
 
     static DataUpdateClient Client(MapHandler h, params string[] sources) =>
-        new(new HttpClient(h), UpdateSources.From(sources)) { PerSourceTimeout = TimeSpan.FromMilliseconds(300) };
+        new(new HttpClient(h), UpdateSources.From(sources)) { PerSourceTimeout = TimeSpan.FromMilliseconds(300), RequireSignature = false };
 
     // ---------- источники ----------
 
@@ -236,7 +236,8 @@ public sealed partial class DataUpdateTests
         var general = Encoding.UTF8.GetBytes(File.ReadAllText(Path.Combine(pkg, "lists", "general.txt")).Replace("\r\n", "\n") + "new-domain.example\n");
         var remote = Remote(pkg, "2026-12-01", new() { ["lists/general.txt"] = general });
         // Основной молчит — данные с зеркала.
-        var h = Serve(new MapHandler().Fail(A + "data.json"), B, remote);
+        var h = ServeSigned(new MapHandler().Fail(A + "data.json"), B, remote);
+        shell.DataSigningKey = DataKey.PublicKey;
 
         var r = await shell.UpdateDataAsync(false, null, null, default, new HttpClient(h));
 
@@ -465,7 +466,8 @@ public sealed partial class DataUpdateTests
         var (paths, pkg) = Setup(t, A, B);
         var shell = new Shell(paths);
         var settings = TestWindow.Settings(shell);
-        var h = Serve(new MapHandler().Fail(A + "data.json"), B, Remote(pkg, "2026-12-01", app: "9.0"));
+        var h = ServeSigned(new MapHandler().Fail(A + "data.json"), B, Remote(pkg, "2026-12-01", app: "9.0"));
+        shell.DataSigningKey = DataKey.PublicKey;
         var now = new DateTime(2026, 10, 17, 12, 0, 0);
         var vm = new UpdatesViewModel(TestWindow.NoHelper(), shell, settings)
         {

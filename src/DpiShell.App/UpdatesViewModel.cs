@@ -99,7 +99,7 @@ public sealed class UpdatesViewModel : Observable
         try
         {
             using var http = Http?.Invoke() ?? new HttpClient(new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(5) }) { Timeout = Timeout.InfiniteTimeSpan };
-            var client = new DataUpdateClient(http, _shell.UpdateSources);
+            var client = new DataUpdateClient(http, _shell.UpdateSources) { SigningKey = _shell.DataSigningKey };
             var r = await client.FetchManifestAsync();
             _s.UpdatesCheckedAt = Now();
             if (r.Result is { } got)

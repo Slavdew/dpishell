@@ -71,8 +71,8 @@ public sealed record ManifestFetch(FetchedManifest? Result, IReadOnlyList<string
 /// <summary>
 /// Скачивание по списку источников: по очереди, на каждый — 5 с до ответа сервера (заблокированный адрес
 /// не держит проверку). Манифест доверенный, только если пришёл с адреса из списка и его подпись <c>data.json.sig</c>
-/// (ed25519, <see cref="ReleaseSignature"/>) верна; подписи у источника нет (404) — принимается с пометкой «не подписан»,
-/// пока не включён <see cref="RequireSignature"/>. Подпись есть, но неверна — источник отброшен. Файл — только если
+/// (ed25519, <see cref="ReleaseSignature"/>) верна; подписи у источника нет (404) или она неверна — источник отброшен
+/// (<see cref="RequireSignature"/> по умолчанию включён). Файл — только если
 /// его sha256 совпал с манифестом, иначе он отбрасывается и берётся следующий источник.
 /// </summary>
 public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
@@ -84,8 +84,8 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
 
     /// <summary>Проверочный ключ подписи манифеста; в тестах — тестовый.</summary>
     public byte[] SigningKey { get; init; } = ReleaseSignature.ReleaseKey;
-    /// <summary>Манифест без подписи не принимать (конец переходного периода).</summary>
-    public bool RequireSignature { get; init; }
+    /// <summary>Манифест без подписи не принимать (по умолчанию — да; false оставлен для тестов переходного режима).</summary>
+    public bool RequireSignature { get; init; } = true;
 
     public const int MaxManifestBytes = 256 * 1024;
     public const int MaxFileBytes = 8 * 1024 * 1024;

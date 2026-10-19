@@ -93,5 +93,34 @@ public sealed partial class DataUpdateTests
     }
 
     [Fact]
+    public async Task Default_RequiresSignature_UnsignedInstallRejected_DataKept()
+    {
+        Assert.True(new DataUpdateClient(new HttpClient(), UpdateSources.From([A])).RequireSignature);
+        using var t = new TempDir();
+        var (paths, pkg) = Setup(t, A);
+        var before = paths.SeedManifest!.Version;
+        var h = Serve(new MapHandler(), A, Remote(pkg, "2026-12-01"));
+        var client = new DataUpdateClient(new HttpClient(h), UpdateSources.From([A])) { PerSourceTimeout = TimeSpan.FromMilliseconds(300), SigningKey = DataKey.PublicKey };
+        var r = await new DataUpdater(paths, client) { InstallCore = _ => Task.CompletedTask }.InstallAsync(false);
+        Assert.False(r.Applied);
+        Assert.Contains("без подписи", r.Message);
+        paths.ResetSeed();
+        Assert.Equal(before, paths.SeedManifest!.Version);
+    }
+
+    [Fact]
+    public async Task Install_TamperedManifest_Rejected()
+    {
+        using var t = new TempDir();
+        var (paths, pkg) = Setup(t, A);
+        var good = Remote(pkg, "2026-12-01");
+        var evil = Remote(pkg, "2026-12-09");
+        var h = Serve(new MapHandler(), A, evil).Ok(A + DataUpdateClient.SignatureName, DataKey.Sign(Encoding.UTF8.GetBytes(good.Json)));
+        var r = await new DataUpdater(paths, SignedClient(h, true, A)) { InstallCore = _ => Task.CompletedTask }.InstallAsync(false);
+        Assert.False(r.Applied);
+        Assert.Contains("подпись манифеста не совпала", r.Message);
+    }
+
+    [Fact]
     public void ManifestKey_NeverSignature() => Assert.False(DataKeys.IsAllowed(DataUpdateClient.SignatureName));
 }
