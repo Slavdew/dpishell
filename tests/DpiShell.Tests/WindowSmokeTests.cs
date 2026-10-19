@@ -20,7 +20,7 @@ namespace DpiShell.Tests;
 /// Поймал бы падение 2026-10-16: TwoWay-привязка ProgressBar.Value к свойству без публичного set.
 /// DPISHELL_SNAPSHOTS=&lt;папка&gt; — тест тем сохраняет PNG каждой вкладки в светлой и тёмной теме: &lt;тема&gt;-&lt;вкладка&gt;.png.
 /// </summary>
-public sealed class WindowSmokeTests
+public sealed partial class WindowSmokeTests
 {
     sealed class BindingErrors : TraceListener
     {

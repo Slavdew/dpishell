@@ -814,12 +814,12 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel>
                                             <TextBlock Text="Добавить к списку" Style="{StaticResource Hint}" Margin="0,0,0,4" />
-                                            <TextBox Text="{Binding UserText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110"
+                                            <TextBox Text="{Binding UserText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110" local:Demo.Sensitive="True"
                                                      VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="Добавить к списку" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="2">
                                             <TextBlock Text="Исключения" Style="{StaticResource Hint}" Margin="0,0,0,4" />
-                                            <TextBox Text="{Binding ExcludeText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110"
+                                            <TextBox Text="{Binding ExcludeText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110" local:Demo.Sensitive="True"
                                                      VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="Исключения" />
                                         </StackPanel>
                                     </Grid>
@@ -1008,7 +1008,7 @@
                                                                 <ColumnDefinition Width="80" />
                                                             </Grid.ColumnDefinitions>
                                                             <TextBlock Text="{Binding Host}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Host}" />
-                                                            <TextBlock Grid.Column="1" Text="{Binding System}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding System}" />
+                                                            <TextBlock Grid.Column="1" Text="{Binding System}" local:Demo.Sensitive="True" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding System}" />
                                                             <TextBlock Grid.Column="2" Text="{Binding Doh}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Doh}" />
                                                             <TextBlock Grid.Column="3" Text="{Binding Mark}" Foreground="{DynamicResource Danger}" FontWeight="SemiBold" />
                                                         </Grid>
@@ -1091,7 +1091,7 @@
                                     <Button ContentTemplate="{StaticResource Shield}" Content="Восстановить" Style="{StaticResource Primary}" Command="{Binding RepairCoreCmd}" HorizontalAlignment="Left" />
                                     <!-- Путь не переписывать руками: «Скопировать путь» и сразу «Безопасность Windows» (п. 16). -->
                                     <TextBlock Margin="0,4,0,0" Text="Чтобы снизить вероятность повторения, добавьте папку в исключения Защитника: «Защита от вирусов и угроз» → «Управление настройками» → «Исключения» → «Добавить» → «Папка» (названия могут отличаться); для другого антивируса — в его настройках." />
-                                    <TextBlock Text="{Binding CoreFolder}" FontWeight="SemiBold" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding CoreFolder}" />
+                                    <TextBlock Text="{Binding CoreFolder}" local:Demo.Sensitive="True" FontWeight="SemiBold" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding CoreFolder}" />
                                     <WrapPanel Margin="-4,6,0,0">
                                         <Button Content="Скопировать путь" Style="{StaticResource LinkButton}" Command="{Binding CopyCoreFolderCmd}" Margin="0,0,10,0" />
                                         <Button Content="Открыть Защитник" Style="{StaticResource LinkButton}" Command="{Binding OpenDefenderCmd}" />
@@ -1103,7 +1103,7 @@
                                 <StackPanel>
                                     <TextBlock Text="Похожие программы" Style="{StaticResource H2}" />
                                     <TextBlock Text="Не найдены." Style="{StaticResource Hint}" Visibility="{Binding ConflictList.Count, Converter={StaticResource Zero}}" />
-                                    <ItemsControl ItemsSource="{Binding ConflictList}" />
+                                    <ItemsControl ItemsSource="{Binding ConflictList}" local:Demo.Sensitive="True" />
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
                                                Text="Могут перехватывать тот же трафик и мешать оптимизации." />
                                     <Button ContentTemplate="{StaticResource Shield}" Content="Остановить" Command="{Binding StopConflictsCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
@@ -1115,7 +1115,7 @@
                                 <StackPanel>
                                     <TextBlock Text="VPN" Style="{StaticResource H2}" />
                                     <TextBlock Text="Не найден." Style="{StaticResource Hint}" Visibility="{Binding VpnList.Count, Converter={StaticResource Zero}}" />
-                                    <ItemsControl ItemsSource="{Binding VpnList}" />
+                                    <ItemsControl ItemsSource="{Binding VpnList}" local:Demo.Sensitive="True" />
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
                                                Text="При включённом VPN оптимизация обычно не нужна, а подбор может показать неверный результат." />
                                 </StackPanel>
@@ -1137,7 +1137,7 @@
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock x:Name="M" Text="{Binding Mark}" FontWeight="Bold" Foreground="{DynamicResource Ok}" />
                                                     <TextBlock Grid.Column="1" Text="{Binding Title}" Style="{StaticResource Hint}" />
-                                                    <TextBlock Grid.Column="2" Text="{Binding Text}" />
+                                                    <TextBlock Grid.Column="2" Text="{Binding Text}" local:Demo.Sensitive="True" />
                                                 </Grid>
                                                 <DataTemplate.Triggers>
                                                     <DataTrigger Binding="{Binding Ok}" Value="False">
@@ -1402,13 +1402,13 @@
                                                         Visibility="{Binding Ipv6Fixable, Converter={StaticResource Vis}}" />
                                             </StackPanel>
                                             <TextBlock Grid.Row="2" Text="DNS" Style="{StaticResource Hint}" Margin="0,0,0,6" />
-                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DnsText}" Margin="0,0,0,6" />
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DnsText}" local:Demo.Sensitive="True" Margin="0,0,0,6" />
                                             <TextBlock Grid.Row="3" Text="Свободно места" Style="{StaticResource Hint}" />
                                             <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SpaceText}" />
                                         </Grid>
                                         <TextBlock Text="Похожие программы на роутере" Style="{StaticResource Hint}" Margin="0,12,0,4" />
                                         <TextBlock Text="Не найдены." Visibility="{Binding Conflicts.Count, Converter={StaticResource Zero}}" />
-                                        <ItemsControl ItemsSource="{Binding Conflicts}">
+                                        <ItemsControl ItemsSource="{Binding Conflicts}" local:Demo.Sensitive="True">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <DockPanel Margin="0,2">
@@ -1529,10 +1529,10 @@
                                     <!-- Адрес — в «Дополнительно», как в окне входа: обычно его определяют сами (UX-аудит 2, п. 10). -->
                                     <Expander Header="Дополнительно: адрес роутера" Margin="0,8,0,0" IsExpanded="{Binding AddressCustom, Mode=OneTime}">
                                         <StackPanel Margin="0,4,0,0">
-                                            <RadioButton Content="{Binding AutoAddressText}" IsChecked="{Binding AddressAuto}" Margin="0,3" HorizontalAlignment="Left" />
+                                            <RadioButton Content="{Binding AutoAddressText}" IsChecked="{Binding AddressAuto}" Margin="0,3" HorizontalAlignment="Left" local:Demo.Sensitive="True" />
                                             <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                                 <RadioButton Content="Свой:" IsChecked="{Binding AddressCustom}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                                <TextBox Text="{Binding CustomAddress, UpdateSourceTrigger=PropertyChanged}" Width="200" Padding="6,4" IsEnabled="{Binding AddressCustom}"
+                                                <TextBox Text="{Binding CustomAddress, UpdateSourceTrigger=PropertyChanged}" Width="200" Padding="6,4" IsEnabled="{Binding AddressCustom}" local:Demo.Sensitive="True"
                                                          ToolTip="IP или имя роутера, например 192.168.1.1" AutomationProperties.Name="Адрес роутера">
                                                     <TextBox.InputBindings>
                                                         <KeyBinding Key="Enter" Command="{Binding FindCmd}" />

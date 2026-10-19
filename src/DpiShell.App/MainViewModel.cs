@@ -1465,7 +1465,7 @@ public sealed partial class MainViewModel : Observable
     public ObservableCollection<string> ConflictList { get; } = [];
     public ObservableCollection<string> VpnList { get; } = [];
 
-    public string CoreFolder => _shell.Paths.Core;
+    public string CoreFolder => Demo.Path(_shell.Paths.Core, @"C:\Users\user\AppData\Local\DpiShell\core");
 
     /// <summary>Путь для исключения Защитника — не переписывать руками (п. 16 аудита).</summary>
     public ICommand CopyCoreFolderCmd => _copyCoreFolderCmd ??= new RelayCommand(() =>
