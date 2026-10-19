@@ -6,7 +6,7 @@ const GOOGLE = '{fake}/tls_clienthello_www_google_com.bin';
 const TLS_FAKES = [GOOGLE, '{fake}/tls_clienthello_4pda_to.bin', '{fake}/tls_clienthello_max_ru.bin', '!'];
 
 // Какая роль обслуживает какие группы целей (google.txt — YouTube, general — остальное).
-const ROLE_GROUPS = { google: ['youtube'], general: ['discord', 'user'] };
+const ROLE_GROUPS = { google: ['youtube'], discord_tcp: ['discord'], general: ['user'] };
 
 // Грубый проход: по одному-двум представителям каждого семейства приёмов.
 function coarse() {
@@ -117,7 +117,7 @@ function cost(desync) {
 	return (fake ? repeats : 0) + length(split(mode, ',')) + length(t) * 0.1;
 }
 
-const ROLE_TITLES = { google: 'YouTube', general: 'Discord и свои' };
+const ROLE_TITLES = { google: 'YouTube', discord_tcp: 'Discord', general: 'свои сайты' };
 
 // Короткое описание кандидата для таблицы подбора: «fake + multisplit, ts — YouTube» (router-api §5.1).
 function describe(desync, role) {

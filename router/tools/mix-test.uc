@@ -28,7 +28,28 @@ ok(m?.roles?.discord_udp == null, 'discord_udp не берётся из друг
 ok(m?.roles?.general == 'nC' && m?.roles?.quic == null, 'general из C, quic только из части «свои»');
 ok(match(m?.id ?? '', /^r-mix-[0-9a-f]{8}$/) != null, 'id r-mix-…');
 ok(sel.mix_from(rows, list, groups)?.id == m?.id, 'id детерминирован');
-ok(index(m?.title ?? '', 'Смешанная · YouTube — A · Discord — B · Свои адреса — C') == 0, 'название по частям');
+ok(m?.title == 'Смешанная · YouTube — A · Discord — B · свои сайты — C', 'название по частям (как MixBuilder)');
+// Основа недостающих частей: «свои» → Discord → YouTube. Свои не открылись ни у кого — общие роли из части Discord.
+let rows4 = [
+	{ id: 'A', verdicts: [v('youtube', true), v('discord', false), v('user', false)] },
+	{ id: 'B', verdicts: [v('youtube', false), v('discord', true), v('user', false)] },
+];
+let m4 = sel.mix_from(rows4, list, groups);
+ok(m4?.parts?.user == null && m4?.roles?.general == 'nB', 'без части «свои» общие роли — из Discord');
+ok(m4?.title == 'Смешанная · YouTube — A · остальное — B', 'Discord и свои из одной — «остальное»');
+// Длинные имена частей: «general (ALT10)» → «ALT10», не влезает в 60 знаков — «свои».
+let list5 = [
+	{ id: 'alt10', title: 'general (ALT10)', roles: { google: 'g1', general: 'n1' } },
+	{ id: 'r-261019-2120-2', title: 'Новая стратегия 2 (поиск 19.10)', roles: { google: 'g2', general: 'n2' } },
+	{ id: 'alt3', title: 'general (ALT3)', roles: { google: 'g3', general: 'n3' } },
+];
+let rows5 = [
+	{ id: 'alt10', verdicts: [v('youtube', true), v('discord', false), v('user', false)] },
+	{ id: 'r-261019-2120-2', verdicts: [v('youtube', false), v('discord', true), v('user', false)] },
+	{ id: 'alt3', verdicts: [v('youtube', false), v('discord', false), v('user', true)] },
+];
+let t5 = sel.mix_from(rows5, list5, groups)?.title;
+ok(t5 == 'Смешанная · YouTube — ALT10 · Discord — r-261019-2120-2 · свои — ALT3', `длинная подпись сокращается: ${t5}`);
 
 // Одна стратегия лучше всех во всех группах — смешивать нечего.
 let rows2 = [
