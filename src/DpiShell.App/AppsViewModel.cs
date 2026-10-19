@@ -252,7 +252,7 @@ public sealed class AppsViewModel : Observable
         _simple = true; _last = null; _draft = null; _profileId = null; _attempt = 0; _variant = 0;
         try
         {
-            await c.RecStartAsync(RecordingMode.NewProcesses, null, driver: true);
+            await c.RecStartAsync(RecordingMode.NewProcesses, null, driver: UseDriver);
         }
         catch (Exception e) when (e is HelperException or HelperUnavailableException)
         {
@@ -414,9 +414,16 @@ public sealed class AppsViewModel : Observable
     public bool AdvByProcess { get => _byProcess; set { if (Set(ref _byProcess, value)) Raise(nameof(AdvNewProcesses)); } }
     public bool AdvNewProcesses { get => !_byProcess; set { if (value) AdvByProcess = false; } }
 
-    bool _noDriver;
-    /// <summary>Без драйвера: только TCP, зато игры с защитой от читов не пугаются.</summary>
-    public bool AdvNoDriver { get => _noDriver; set => Set(ref _noDriver, value); }
+    bool _noDriver = true;
+    /// <summary>Без драйвера: только TCP, зато игры с защитой от читов не видят лишнего драйвера. По умолчанию — так:
+    /// человек, не знающий про античиты, не должен из-за записи получить отказ игры. Общий для простого и продвинутого режима.</summary>
+    public bool AdvNoDriver { get => _noDriver; set { if (Set(ref _noDriver, value)) Raise(nameof(WithDriver)); } }
+    /// <summary>Галочка простого режима «записывать и UDP» — обратная к <see cref="AdvNoDriver"/>.</summary>
+    public bool WithDriver { get => !_noDriver; set => AdvNoDriver = !value; }
+
+    /// <summary>Оптимизация уже работает — драйвер WinDivert и так загружен, запись с ним ничего не добавляет.</summary>
+    public Func<bool> OptimizationRunning { get; init; } = () => false;
+    bool UseDriver => !AdvNoDriver || OptimizationRunning();
 
     bool _advRecording;
     public bool AdvRecording
@@ -464,7 +471,7 @@ public sealed class AppsViewModel : Observable
         _simple = false;
         try
         {
-            await c.RecStartAsync(AdvByProcess ? RecordingMode.Process : RecordingMode.NewProcesses, AdvByProcess ? SelectedProcess!.Pid : null, driver: !AdvNoDriver);
+            await c.RecStartAsync(AdvByProcess ? RecordingMode.Process : RecordingMode.NewProcesses, AdvByProcess ? SelectedProcess!.Pid : null, driver: UseDriver);
         }
         catch (Exception e) when (e is HelperException or HelperUnavailableException) { (Fail ?? Say)(Texts.Friendly(e)); return; }
         _recStarted = DateTime.UtcNow;

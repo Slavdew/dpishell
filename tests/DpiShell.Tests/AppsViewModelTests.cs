@@ -38,7 +38,7 @@ public sealed class AppsViewModelTests
 
         await Run(vm.StartCmd);
         await Until(() => vm.IsRecording, "запись не началась");
-        Assert.Contains("rec_start NewProcesses 0 True", f.Backend.Calls);   // игровые процессы — новые, драйвер включён
+        Assert.Contains("rec_start NewProcesses 0 False", f.Backend.Calls);  // игровые процессы — новые; по умолчанию без драйвера (античиты)
         Assert.True(Can(vm.FinishCmd));
         Assert.False(Can(vm.StartCmd));
 
@@ -186,6 +186,23 @@ public sealed class AppsViewModelTests
         Assert.Contains("Запись прервалась", vm.Status);
     }
 
+    [Theory]
+    [InlineData(false, false, false)]   // по умолчанию: без драйвера — игры с защитой от читов не видят лишнего драйвера
+    [InlineData(true, false, true)]     // человек сам отметил «и UDP»
+    [InlineData(false, true, true)]     // оптимизация уже работает — драйвер и так загружен
+    public async Task Simple_Driver_OnlyByChoice_OrWhenAlreadyLoaded(bool withDriver, bool running, bool expected)
+    {
+        var f = new HelperFixture();
+        await using var _ = f;
+        var vm = new AppsViewModel(await f.LinkAsync()) { Say = _ => { }, OptimizationRunning = () => running };
+        Assert.True(vm.AdvNoDriver);
+        Assert.False(vm.WithDriver);
+        vm.WithDriver = withDriver;
+        await Run(vm.StartCmd);
+        await Until(() => vm.IsRecording, "запись не началась");
+        Assert.Contains($"rec_start NewProcesses 0 {expected}", f.Backend.Calls);
+    }
+
     // ---------- «Отладка подключений» ----------
 
     [Fact]
@@ -194,6 +211,7 @@ public sealed class AppsViewModelTests
         var (f, vm, _) = await Make_();
         await using var _ = f;
         Assert.True(vm.AdvNewProcesses);
+        vm.AdvNoDriver = false;
         await Run(vm.AdvStartCmd);
         await Until(() => vm.AdvRecording, "запись");
         Assert.Contains("rec_start NewProcesses 0 True", f.Backend.Calls);

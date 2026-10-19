@@ -802,6 +802,12 @@
                                         <TextBlock Text="{Binding RecText}" FontFamily="Consolas" Margin="0,4,0,0" Visibility="{Binding IsRecording, Converter={StaticResource Vis}}" local:Demo.Sensitive="True" />
                                         <TextBlock Text="{Binding Detail}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="{Binding HasDetail, Converter={StaticResource Vis}}" local:Demo.Sensitive="True" />
                                         <ProgressBar IsIndeterminate="True" Height="6" Margin="0,8,0,0" Visibility="{Binding IsWorking, Converter={StaticResource Vis}}" />
+                                        <!-- Драйвер для записи — только по выбору: игры с защитой от читов могут его заметить (AppsViewModel.AdvNoDriver). -->
+                                        <StackPanel Margin="0,8,0,0" Visibility="{Binding ShowStart, Converter={StaticResource Vis}}">
+                                            <CheckBox Content="Записывать и голосовой чат, и игровые серверы (UDP)" IsChecked="{Binding WithDriver}" HorizontalAlignment="Left" />
+                                            <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="26,2,0,0"
+                                                       Text="Для этого на время записи нужен драйвер WinDivert. Игры с защитой от читов могут его заметить — не включайте, если не уверены. Без галочки записываются только соединения TCP. Если оптимизация уже включена, драйвер и так работает." />
+                                        </StackPanel>
                                         <WrapPanel Margin="0,10,0,0">
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{Binding StartText}" Style="{StaticResource Primary}" Command="{Binding StartCmd}"
                                                     Visibility="{Binding ShowStart, Converter={StaticResource Vis}}" />
@@ -863,7 +869,7 @@
                                             </DockPanel>
                                             <CheckBox Content="Без драйвера (только TCP)" IsChecked="{Binding AdvNoDriver}" HorizontalAlignment="Left" Margin="0,6,0,0" IsEnabled="{Binding AdvIdle}"
                                                       ToolTip="UDP без драйвера не записать: таблица Windows не знает удалённых адресов UDP." />
-                                            <TextBlock Text="Так записываются только соединения TCP, зато игры с защитой от читов не пугаются." Style="{StaticResource Hint}" Margin="26,2,0,0" TextWrapping="Wrap" />
+                                            <TextBlock Text="Так записываются только соединения TCP, зато игры с защитой от читов не видят лишнего драйвера. Включено по умолчанию." Style="{StaticResource Hint}" Margin="26,2,0,0" TextWrapping="Wrap" />
                                             <WrapPanel Margin="0,10,0,0">
                                                 <Button ContentTemplate="{StaticResource Shield}" Content="Записать" Style="{StaticResource Primary}" Command="{Binding AdvStartCmd}" />
                                                 <Button Content="Стоп" Command="{Binding AdvStopCmd}" />

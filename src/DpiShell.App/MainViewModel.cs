@@ -158,6 +158,7 @@ public sealed partial class MainViewModel : Observable
         Net.Notify += s => Notify?.Invoke(s);
         Apps = new AppsViewModel(helper)
         {
+            OptimizationRunning = () => IsRunning,
             Guard = Guard,
             Need = NeedHelperAsync,
             Say = s => Message = s,
