@@ -6,7 +6,7 @@ using DpiShell.Core.Helper;
 namespace DpiShell.App;
 
 /// <summary>
-/// DNS этого компьютера в один клик (architecture.md «DNS этого компьютера»): выбор варианта на «Диагностике» и кнопка на плашке
+/// DNS этого компьютера в один клик (architecture.md «DNS этого компьютера»): выбор варианта на вкладке «DNS» и кнопка на плашке
 /// «DNS провайдера подменяет…». Меняет помощник (нужны права); после смены — «Проверить сейчас» и проверка подмены,
 /// чтобы было видно, стало ли лучше.
 /// </summary>
@@ -40,8 +40,8 @@ public sealed partial class MainViewModel
         PcDns.SetPresets(DnsPresets.All.Select(p => new DnsOption(p.Id, p.Title, PresetDetail(p), false, p.Ips, p.Doh,
             Owner: p.Owner, Note: PresetNote(p.Id, p.Note))).ToList());
         FixDnsCmd = RelayCommand.Async(() => ApplyPcDnsAsync(PcDns.Options.First(o => o.Id == RecommendedDns)), () => !Busy && !IsLoading);
-        // «Другой DNS» — сразу к выбору, а не в начало «Диагностики» (UX-аудит 2, п. 4): окно прокручивает к карточке и раскрывает список.
-        ChooseDnsCmd = new RelayCommand(() => { Page = Pages.Diag; ShowRequested?.Invoke(Spot.PcDns); });
+        // «Другой DNS» — сразу к выбору, а не в начало вкладки «DNS» (UX-аудит 2, п. 4): окно прокручивает к карточке и раскрывает список.
+        ChooseDnsCmd = new RelayCommand(() => { Page = Pages.Dns; ShowRequested?.Invoke(Spot.PcDns); });
         // Свои варианты одни на ПК и роутер.
         PcDns.CustomChanged += Router.DnsPick.Reload;
         Router.DnsPick.CustomChanged += PcDns.Reload;
@@ -59,7 +59,7 @@ public sealed partial class MainViewModel
         id == RecommendedDns ? "рекомендуем" + (note is { Length: > 0 } ? " · " + note : "") : note;
 
     public string RecommendedDnsText => "Включить защищённый DNS";
-    public string RecommendedDnsHint => DnsPresets.Find(RecommendedDns)!.Title + ", для Ethernet и Wi-Fi. Вернуть — кнопкой в сообщении после смены или «Диагностика» → «DNS этого компьютера».";
+    public string RecommendedDnsHint => DnsPresets.Find(RecommendedDns)!.Title + ", для Ethernet и Wi-Fi. Вернуть — кнопкой в сообщении после смены или вкладка «DNS».";
 
     /// <summary>Что сейчас на адаптерах: у помощника (там же «есть что вернуть») или прочитать самим.</summary>
     public async Task RefreshPcDnsAsync()

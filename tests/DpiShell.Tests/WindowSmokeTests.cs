@@ -150,7 +150,7 @@ public sealed class WindowSmokeTests
     }).GetAwaiter().GetResult();
 
     static readonly (int Page, string Name)[] AllPages =
-        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Targets, "targets"), (Pages.Net, "net"), (Pages.Hosts, "hosts"), (Pages.Diag, "diag"), (Pages.Settings, "settings")];
+        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Targets, "targets"), (Pages.Net, "net"), (Pages.Hosts, "hosts"), (Pages.Dns, "dns"), (Pages.Diag, "diag"), (Pages.Settings, "settings")];
 
     [Fact]
     public void MainWindow_OpensAndAllPagesBind_WithoutErrors()
@@ -162,7 +162,7 @@ public sealed class WindowSmokeTests
             var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
             var w = Open(vm);
             var tabs = Find<TabControl>(w)!;
-            foreach (var page in new[] { Pages.Select, Pages.Targets, Pages.Net, Pages.Hosts, Pages.Diag, Pages.Router, Pages.Settings, Pages.Home })
+            foreach (var page in new[] { Pages.Select, Pages.Targets, Pages.Net, Pages.Hosts, Pages.Dns, Pages.Diag, Pages.Router, Pages.Settings, Pages.Home })
             {
                 vm.Page = page;
                 Pump();
@@ -397,18 +397,33 @@ public sealed class WindowSmokeTests
                     }
                     if (page == Pages.Diag && Find<Button>(Find<TabControl>(w)!, b => b.Content as string == "Остановить" && b.IsVisible) is null)
                         throw new Exception("В диагностике ПК у «Других программ обхода» нет «Остановить»");
-                    if (page == Pages.Diag && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } sv)
+                    if (page == Pages.Diag && w.FindName("PcDnsCard") is FrameworkElement { IsVisible: true }) throw new Exception("Карточка DNS осталась на «Диагностике»");
+                    if (page == Pages.Dns)
                     {
+                        // Карточка DNS этого компьютера лежит на вкладке «DNS», а не на «Диагностике».
+                        var dcard = (FrameworkElement)w.FindName("PcDnsCard")!;
+                        if (!dcard.IsVisible) throw new Exception("Нет карточки DNS на вкладке «DNS»");
+                        DependencyObject? parent = dcard;
+                        while (parent is not null and not TabItem) parent = LogicalTreeHelper.GetParent(parent);
+                        if ((parent as TabItem)?.Header as string != "DNS") throw new Exception("Карточка DNS лежит не на вкладке «DNS»");
+                        Snap(w, Path.Combine(snapDir, $"{theme}-dns.png"));
                         // «Другой DNS» с главной (UX-аудит 2, п. 4): к выбору DNS этого компьютера, список вариантов раскрыт.
                         w.ShowSpot(Spot.PcDns);
                         Pump();
                         var picker = Find<DnsPickerView>(Find<TabControl>(w)!, v => v.IsVisible && v.DataContext == vm.PcDns)!;
                         var combo = Find<ComboBox>(picker)!;
-                        if (!combo.IsDropDownOpen || sv.VerticalOffset == 0) throw new Exception("«Другой DNS» не привёл к выбору DNS");
-                        Snap(w, Path.Combine(snapDir, $"{theme}-diag-choose-dns.png"));
+                        if (!combo.IsDropDownOpen) throw new Exception("«Другой DNS» не привёл к выбору DNS");
+                        Snap(w, Path.Combine(snapDir, $"{theme}-dns-choose.png"));
                         combo.IsDropDownOpen = false;
-                        sv.ScrollToHome();
+                        // DNS — одна карточка: вывод проверки, таблица в «Подробнее» (раскрыта) и «DNS этого компьютера» (свой вариант раскрыт).
+                        if (Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Свой вариант") is { } own) own.IsExpanded = true;
+                        if (Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Подробнее: ответы DNS") is { } answers) answers.IsExpanded = true;
                         Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-dns-expanded.png"));
+                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.IsVisible) is { } dsv) dsv.ScrollToHome();
+                    }
+                    if (page == Pages.Diag && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } sv)
+                    {
                         sv.ScrollToEnd();
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-diag-end.png"));
@@ -417,14 +432,6 @@ public sealed class WindowSmokeTests
                         sv.ScrollToVerticalOffset(card.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-diag-checks.png"));
-                        // DNS — одна карточка: вывод проверки, таблица в «Подробнее» (раскрыта) и «DNS этого компьютера» (свой вариант раскрыт).
-                        var dnsCard = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "DNS" && t.IsVisible)!;
-                        if (Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Свой вариант") is { } own) own.IsExpanded = true;
-                        if (Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Подробнее: ответы DNS") is { } answers) answers.IsExpanded = true;
-                        Pump();
-                        sv.ScrollToVerticalOffset(dnsCard.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
-                        Pump();
-                        Snap(w, Path.Combine(snapDir, $"{theme}-diag-dns.png"));
                         sv.ScrollToHome();
                     }
                     // Настройки: конец — «О программе» и «Очистка и удаление».
@@ -562,6 +569,9 @@ public sealed class WindowSmokeTests
                     if (page == Pages.Select && (Find<TextBlock>(tabs, t => t.Text.StartsWith("Включена на роутере") && t.IsVisible) is null
                                                  || Find<Button>(tabs, b => b.Content as string == "Применить выбранную" && b.IsVisible && b.IsEnabled) is null))
                         throw new Exception("На «Подборе» нет итога роутера или «Применить выбранную»");
+                    if (page == Pages.Dns && (Find<TextBlock>(tabs, t => t.Text.StartsWith("DNS для всей сети — на вкладке") && t.IsVisible) is null
+                                              || Find<Button>(tabs, b => b.Content as string == "Открыть →" && b.IsVisible) is null))
+                        throw new Exception("На вкладке «DNS» нет подсказки про роутер");
                     if (page == Pages.Diag && Find<Button>(tabs, b => b.Content as string == "Остановить" && b.IsVisible) is null)
                         throw new Exception("В диагностике роутера нет «Остановить» у конфликта");
                     if (page == Pages.Router && Find<Button>(tabs, b => b.Content as string == "Исправить" && b.IsVisible) is null)
@@ -578,7 +588,7 @@ public sealed class WindowSmokeTests
                     }
                     if (snapDir is null) continue;
                     Directory.CreateDirectory(snapDir);
-                    Snap(w, Path.Combine(snapDir, $"{theme}-router-{name}.png"));
+                    Snap(w, Path.Combine(snapDir, $"{theme}-router-{(page == Pages.Dns ? "pcdns" : name)}.png"));
                     // Подбор на роутере: строка с разбивкой по адресам раскрывается; без неё — подсказка про обновление роутера.
                     if (page == Pages.Select)
                     {

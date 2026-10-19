@@ -857,6 +857,77 @@
                     </Grid>
                 </TabItem>
 
+                <!-- ===== DNS этого компьютера: проверка подмены и выбор DNS (раньше лежало на «Диагностике» — владелец: неочевидно). ===== -->
+                <TabItem Header="DNS">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,4">
+                                <Button DockPanel.Dock="Right" Content="Проверить DNS" Style="{StaticResource LinkButton}" Command="{Binding CheckDnsCmd}" VerticalAlignment="Top" />
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
+                                    <TextBlock Text="DNS" Style="{StaticResource H1}" />
+                                    <local:InfoButton Topic="{x:Static local:InfoTexts.Dns}" Margin="10,0,0,12" />
+                                </StackPanel>
+                            </DockPanel>
+
+                            <!-- DNS — один экран: вывод проверки, выбор DNS этого компьютера, таблица — в «Подробнее». -->
+                            <Border x:Name="PcDnsCard" Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding DnsSummary}" Margin="0,0,0,2" />
+                                    <Expander Header="Подробнее: ответы DNS" Margin="0,4,0,0" IsExpanded="{Binding DnsDetailsOpen}" Visibility="{Binding DnsRows.Count, Converter={StaticResource NonZero}}">
+                                        <StackPanel Margin="0,6,0,0">
+                                            <Grid Margin="0,0,0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="2*" />
+                                                    <ColumnDefinition Width="2*" />
+                                                    <ColumnDefinition Width="2*" />
+                                                    <ColumnDefinition Width="80" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Сайт" Style="{StaticResource Hint}" />
+                                                <TextBlock Grid.Column="1" Text="Системный DNS" Style="{StaticResource Hint}" />
+                                                <TextBlock Grid.Column="2" Text="Защищённый DNS" Style="{StaticResource Hint}" />
+                                                <TextBlock Grid.Column="3" Text="Подмена" Style="{StaticResource Hint}" />
+                                            </Grid>
+                                            <ItemsControl ItemsSource="{Binding DnsRows}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="0,2">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="2*" />
+                                                                <ColumnDefinition Width="2*" />
+                                                                <ColumnDefinition Width="2*" />
+                                                                <ColumnDefinition Width="80" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Text="{Binding Host}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Host}" />
+                                                            <TextBlock Grid.Column="1" Text="{Binding System}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding System}" />
+                                                            <TextBlock Grid.Column="2" Text="{Binding Doh}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Doh}" />
+                                                            <TextBlock Grid.Column="3" Text="{Binding Mark}" Foreground="{DynamicResource Danger}" FontWeight="SemiBold" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
+                                                       Text="Подбор и проверка берут адреса через защищённый DNS, поэтому подмена на их результат не влияет." />
+                                        </StackPanel>
+                                    </Expander>
+                                    <!-- DNS этого компьютера (architecture.md «DNS этого компьютера»): вариант в один клик, «Вернуть как было». -->
+                                    <Border x:Name="PcDnsPicker" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,12,0,0" Padding="0,12,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="DNS этого компьютера" Style="{StaticResource H2}" />
+                                            <local:DnsPickerView DataContext="{Binding PcDns}" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Роутер подключён — DNS для всей сети настраивается там; блок не дублируем. -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8" Visibility="{Binding Router.Connected, Converter={StaticResource Vis}}">
+                                <TextBlock Text="DNS для всей сети — на вкладке «Роутер»." Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                <Button Content="Открыть →" Style="{StaticResource LinkButton}" Command="{Binding GoRouterCmd}" Margin="8,0,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
                 <!-- ===== Диагностика: только проверки и исправления (UX-аудит п. 12); настройки, обновления, помощник — во вкладке «Настройки». ===== -->
                 <TabItem Header="Диагностика">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -979,63 +1050,6 @@
                                                    Text="После смены стратегии Discord может помнить неудачные попытки. Очистка удаляет только его временные файлы — вход и настройки останутся." />
                                     </StackPanel>
                                 </DockPanel>
-                            </Border>
-
-                            <!-- DNS — один экран (аудит, сноска к «Вкладкам»): вывод проверки, выбор DNS этого компьютера, таблица — в «Подробнее» (п. 17). -->
-                            <Border x:Name="PcDnsCard" Style="{StaticResource Card}">
-                                <StackPanel>
-                                    <DockPanel>
-                                        <Button DockPanel.Dock="Right" Content="Проверить DNS" Style="{StaticResource LinkButton}" Command="{Binding CheckDnsCmd}" VerticalAlignment="Top" />
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
-                                            <TextBlock Text="DNS" Style="{StaticResource H2}" />
-                                            <local:InfoButton Topic="{x:Static local:InfoTexts.Dns}" Margin="8,0,0,6" />
-                                        </StackPanel>
-                                    </DockPanel>
-                                    <TextBlock Text="{Binding DnsSummary}" Margin="0,0,0,2" />
-                                    <Expander Header="Подробнее: ответы DNS" Margin="0,4,0,0" IsExpanded="{Binding DnsDetailsOpen}" Visibility="{Binding DnsRows.Count, Converter={StaticResource NonZero}}">
-                                        <StackPanel Margin="0,6,0,0">
-                                            <Grid Margin="0,0,0,2">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="2*" />
-                                                    <ColumnDefinition Width="2*" />
-                                                    <ColumnDefinition Width="2*" />
-                                                    <ColumnDefinition Width="80" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="Сайт" Style="{StaticResource Hint}" />
-                                                <TextBlock Grid.Column="1" Text="Системный DNS" Style="{StaticResource Hint}" />
-                                                <TextBlock Grid.Column="2" Text="Защищённый DNS" Style="{StaticResource Hint}" />
-                                                <TextBlock Grid.Column="3" Text="Подмена" Style="{StaticResource Hint}" />
-                                            </Grid>
-                                            <ItemsControl ItemsSource="{Binding DnsRows}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Grid Margin="0,2">
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="2*" />
-                                                                <ColumnDefinition Width="2*" />
-                                                                <ColumnDefinition Width="2*" />
-                                                                <ColumnDefinition Width="80" />
-                                                            </Grid.ColumnDefinitions>
-                                                            <TextBlock Text="{Binding Host}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Host}" />
-                                                            <TextBlock Grid.Column="1" Text="{Binding System}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding System}" />
-                                                            <TextBlock Grid.Column="2" Text="{Binding Doh}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Doh}" />
-                                                            <TextBlock Grid.Column="3" Text="{Binding Mark}" Foreground="{DynamicResource Danger}" FontWeight="SemiBold" />
-                                                        </Grid>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                            <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
-                                                       Text="Подбор и проверка берут адреса через защищённый DNS, поэтому подмена на их результат не влияет." />
-                                        </StackPanel>
-                                    </Expander>
-                                    <!-- DNS этого компьютера (architecture.md «DNS этого компьютера»): вариант в один клик, «Вернуть как было». -->
-                                    <Border x:Name="PcDnsPicker" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,12,0,0" Padding="0,12,0,0">
-                                        <StackPanel>
-                                            <TextBlock Text="DNS этого компьютера" Style="{StaticResource H2}" />
-                                            <local:DnsPickerView DataContext="{Binding PcDns}" />
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
                             </Border>
 
                             <!-- Роутер: diag, чужие обходы с «Остановить», отчёт (router-api §6). -->

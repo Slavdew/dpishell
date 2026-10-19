@@ -232,7 +232,7 @@ public sealed class ScoreRow(StrategyScore s, GroupNames? names = null) : Observ
     public bool Expanded { get => _expanded; set => Set(ref _expanded, value); }
 }
 
-/// <summary>Строка сравнения DNS на «Диагностике».</summary>
+/// <summary>Строка сравнения DNS на вкладке «DNS».</summary>
 public sealed record DnsRow(string Host, string System, string Doh, bool Spoofed)
 {
     public string Mark => Spoofed ? "подмена" : "";

@@ -13,7 +13,7 @@ public enum StatusKind { Off, On, Busy, Error }
 
 public static class Pages
 {
-    public const int Home = 0, Select = 1, Targets = 2, Net = 3, Hosts = 4, Diag = 5, Router = 6, Settings = 7;
+    public const int Home = 0, Select = 1, Targets = 2, Net = 3, Hosts = 4, Dns = 5, Diag = 6, Router = 7, Settings = 8;
 }
 
 /// <summary>
@@ -320,6 +320,7 @@ public sealed partial class MainViewModel : Observable
             if (value == Pages.Net) _ = RefreshNetAsync();
             if (value == Pages.Hosts) _ = Hosts.RefreshAsync();
             if (value == Pages.Router) _ = Router.RefreshRouterPageAsync();
+            if (value == Pages.Dns && DnsRows.Count == 0) _ = CheckDnsAsync();
             if (value != Pages.Diag) return;
             _ = RefreshDiagAsync();
             if (Router.Connected) _ = Router.RefreshDiagAsync();
