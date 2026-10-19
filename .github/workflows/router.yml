@@ -39,6 +39,9 @@ jobs:
       - name: Порядок объявлений функций ucode
         run: python3 router/tools/check-order.py
 
+      - name: Списки ролей не пересекаются
+        run: python3 router/tools/lists-overlap.py
+
       - name: Пакеты в дерево SDK, данные из data/
         run: |
           SDK=/builder

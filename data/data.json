@@ -1,16 +1,17 @@
 {
-  "version": "2026-10-17.3",
+  "version": "2026-10-20.1",
   "app_version": "0.9.0",
   "min_app_version": "0.9.0",
   "source": "Flowseal/zapret-discord-youtube@eb16c1419057e36b8a36fbe7c959483450e6ac8b (MIT), проверка — docs/vetting.md",
   "files": {
     "core.json": { "sha256": "7c01fa6e4780b03a3943d156cf02a4f63f7c3226af919b86ea3bdbfdcf34e9a1" },
-    "strategies.json": { "sha256": "fe02501cd8ad435d1dbef46f1ae5cb5cc5b5123501bfc2f11aae4b2f534cad04" },
+    "strategies.json": { "sha256": "473665be109d05b55afd9ce38b8e7d2b486eee86e0e7c824286cb33134bdfc34" },
     "targets.json": { "sha256": "8f375de47811de2f3dd1f86f17aa4b2c42c5428e448ec99e7b375f6c1c5bad60" },
     "router-releases.json": { "sha256": "6718378431db3120bbd242989bf5ee4527da070a0e5ffbd1b4e1f45eb649f950" },
     "lists/exclude.txt": { "sha256": "30a67f4af8eb7abe709db84235e1d97924d851bf4380b676a109dbe408d446e9" },
     "lists/general.txt": { "sha256": "5905f9f91e53142f2a5b964ce31bd01c458f2ab6f7fda0ad71b45e2919407a93" },
-    "lists/google.txt": { "sha256": "a21df8b813593e5cb4f5fd95ca2a34a05fc44ab7dde19735e859e96ad5780301" },
+    "lists/google.txt": { "sha256": "a306ca7380fed53abb5cb9072182c88319c67ed0333a6310d86baae61918ae86" },
+    "lists/discord.txt": { "sha256": "1c9f38aabe33cdeda8f621b7eadda98a24872e36d5ddcd476d2e37cf9c187cc2" },
     "lists/ipset-exclude.txt": { "sha256": "36159ca57996843462cccef23b576cb461dfaa8738e2ab01807db5a6c1746725" },
     "lists/ipset-all.txt": {
       "sha256": "f4250118b065e0977547b3e4412c6f15489ffcffb0d11c4ef71af8fdd80b21fb",

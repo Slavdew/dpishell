@@ -57,6 +57,15 @@
       ]
     },
     {
+      "id": "discord_tcp",
+      "filter": [
+        "--filter-tcp=80,443",
+        "--hostlist={lists}/discord.txt"
+      ],
+      "lists": "excludes",
+      "lists_all": "excludes"
+    },
+    {
       "id": "google",
       "filter": [
         "--filter-tcp=443",

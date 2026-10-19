@@ -24,7 +24,7 @@ const MIN_APP = '0.9.0';
 const MODES = ['all', 'lists'];
 const HOURS = [0.5, 1, 3, 6, 12, 24];
 const USER_LISTS = ['user-general', 'user-exclude', 'user-ipset', 'user-ipset-exclude'];
-const STD_LISTS = ['general.txt', 'google.txt', 'exclude.txt', 'ipset-exclude.txt', 'ipset-all.txt'];
+const STD_LISTS = ['general.txt', 'google.txt', 'discord.txt', 'exclude.txt', 'ipset-exclude.txt', 'ipset-all.txt'];
 const DOMAIN_RX = /^\^?(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+(xn--[a-z0-9-]{2,59}|[a-z]{2,63})$/;
 const SUBNET_RX = /^([0-9]{1,3}\.){3}[0-9]{1,3}(\/[0-9]{1,2})?$/;
 
