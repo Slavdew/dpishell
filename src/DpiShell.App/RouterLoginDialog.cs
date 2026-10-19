@@ -75,7 +75,7 @@ public static class RouterLoginDialog
             login.IsEnabled = false;
             error.Visibility = Visibility.Collapsed;
             try { await router.ConnectAsync(pw, noPassword: noPassword.IsChecked == true); }
-            catch (Exception ex) { router.Say(Texts.Friendly(ex)); }
+            catch (Exception ex) { router.Failed(Texts.Friendly(ex)); }
             finally { login.IsEnabled = true; }
             if (router.Connected) { w.Close(); return; }
             error.Text = router.ConnectionText;

@@ -113,7 +113,7 @@
                                     <!-- Выключил сторож, кнопка или откат (last_off) — включить снова тут же, на пробу. -->
                                     <Button Content="Подобрать заново" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="8,0,0,0"
                                             Visibility="{Binding CanReEnable, Converter={StaticResource Vis}}" />
-                                    <Button Content="Попробовать снова (на пробу)" Style="{StaticResource LinkButton}" Command="{Binding ReEnableCmd}" Margin="8,0,0,0"
+                                    <Button Content="{Binding ReEnableText}" Style="{StaticResource LinkButton}" Command="{Binding ReEnableCmd}" Margin="8,0,0,0"
                                             Visibility="{Binding CanReEnable, Converter={StaticResource Vis}}" />
                                     <Button Content="Подробнее →" Style="{StaticResource LinkButton}" Command="{Binding DataContext.GoRouterCmd, RelativeSource={RelativeSource AncestorType=TabControl}}"
                                             Margin="8,0,0,0" AutomationProperties.Name="Открыть вкладку «Роутер»" />
@@ -147,8 +147,19 @@
                                     </TextBlock.Style>
                                 </TextBlock>
                             </DockPanel>
-                            <TextBlock Text="{Binding OffText}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="20,2,0,2"
-                                       Visibility="{Binding HasOff, Converter={StaticResource Vis}}" />
+                            <TextBlock Text="{Binding OffText}" TextWrapping="Wrap" Margin="20,2,0,2"
+                                       Visibility="{Binding HasOff, Converter={StaticResource Vis}}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource Danger}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding OffAlert}" Value="False">
+                                                <Setter Property="Foreground" Value="{DynamicResource Text}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                             </StackPanel>
                         </Border>
 
@@ -1245,12 +1256,15 @@
                                                 <DockPanel>
                                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0"
                                                                 Visibility="{Binding CanReEnable, Converter={StaticResource Vis}}">
-                                                        <Button Content="Попробовать снова (на пробу)" Style="{StaticResource LinkButton}" Command="{Binding ReEnableCmd}" />
+                                                        <Button Content="{Binding ReEnableText}" Style="{StaticResource LinkButton}" Command="{Binding ReEnableCmd}" />
                                                         <Button Content="Подобрать на роутере" Style="{StaticResource Primary}" Command="{Binding GoSelectCmd}" Margin="8,0,0,0"
                                                                 Visibility="{Binding OfferSelectButton, Converter={StaticResource Vis}}" />
                                                     </StackPanel>
                                                     <TextBlock Text="{Binding OffText}" TextWrapping="Wrap" VerticalAlignment="Center" />
                                                 </DockPanel>
+                                                <!-- Подбор после сторожа идёт: полоса хода (текст хода — строкой карточки выше), как у обычного подбора на роутере. -->
+                                                <ProgressBar Height="8" Maximum="{Binding SelectProgressMax}" Value="{Binding SelectProgress, Mode=OneWay}" Margin="0,8,0,2"
+                                                             Visibility="{Binding WdRunning, Converter={StaticResource Vis}}" />
                                                 <!-- Сторож выключил обход: не решаем за человека, а предлагаем подобрать другую стратегию; «Не сейчас» прячет до следующего срабатывания. -->
                                                 <StackPanel Margin="0,8,0,0" Visibility="{Binding OfferSelect, Converter={StaticResource Vis}}">
                                                     <TextBlock Text="Подобрать на роутере другую стратегию сейчас?" FontWeight="SemiBold" />

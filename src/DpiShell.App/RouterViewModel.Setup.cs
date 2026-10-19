@@ -194,7 +194,7 @@ public sealed partial class RouterViewModel
             if (Compat?.CanCall("strategies") != false) await LoadStrategiesAsync();
             SetConnection($"Подключено, DpiShell {_status?.Version ?? _detection?.Status?.Version}", ok: true);
         }
-        catch (RouterException e) { Say(RouterTexts.Friendly(e)); }
+        catch (RouterException e) { Failed(RouterTexts.Friendly(e)); }
     }
 
     internal void SetBusy(bool busy) => Busy = busy;

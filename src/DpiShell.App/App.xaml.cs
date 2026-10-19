@@ -150,7 +150,7 @@ public partial class App : Application
     {
         e.Handled = true;
         TryLog(e.Exception);
-        if (MainWindow is { IsLoaded: true, DataContext: MainViewModel vm }) vm.Message = Texts.Friendly(e.Exception);
+        if (MainWindow is { IsLoaded: true, DataContext: MainViewModel vm }) vm.Fail(Texts.Friendly(e.Exception));
         else
         {
             // Ошибка до того, как окно показалось: без окна приложение бесполезно и висело бы в фоне.

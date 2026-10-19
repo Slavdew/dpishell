@@ -25,6 +25,9 @@ public sealed class NetViewModel : Observable
     /// <summary>Помощник для действия (с установкой по требованию). Null — не вышло, причина уже сказана.</summary>
     public Func<Task<HelperClient?>> Need { get; set; }
     public Action<string> Say { get; set; } = _ => { };
+    /// <summary>Ошибка операции: если окно передало <see cref="Fail"/> — тостом, иначе как <see cref="Say"/>.</summary>
+    public Action<string>? Fail { get; set; }
+    void Failed(string text) => (Fail ?? Say)(text);
     public Func<string, bool> Confirm { get; set; } = _ => false;
     /// <summary>Выбор файла списка (в тестах подменяется). Null — отказались.</summary>
     public Func<string?> PickFile { get; set; } = () =>
@@ -190,7 +193,7 @@ public sealed class NetViewModel : Observable
             if (new FileInfo(file).Length > IpsetValidator.MaxBytes) { Say("Файл слишком большой для IP-списка."); return Task.CompletedTask; }
             content = File.ReadAllText(file);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say(Texts.Friendly(e)); return Task.CompletedTask; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Failed(Texts.Friendly(e)); return Task.CompletedTask; }
         if (content.Length == 0) { Say("Файл пустой."); return Task.CompletedTask; }
         return UpdateAsync("Проверяю список из файла…", (c, confirmed) => c.UpdateIpsetFromContentAsync(content, confirmed));
     }

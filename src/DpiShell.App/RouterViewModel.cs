@@ -40,7 +40,8 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames
     public bool IsCandidate => Row.Candidate;
     public string Kind => IsCandidate ? "проверяется в поиске" : "";
     /// <summary>Как на ПК: «N из M» (M — отмеченных групп); число групп роутер не присылает — берём по адресам в разбивке, нет её — доля.</summary>
-    public string Groups => IsCandidate ? "—"
+    public string Groups => Row is { GroupsOk: { } gok, GroupsTotal: > 0 and var gt } ? $"{gok} из {gt}"   // роутер 0.2.0-r8 присылает сам
+        : IsCandidate ? "—"
         : groupsTotal > 0 ? $"{(int)Math.Round(Row.GroupShare * groupsTotal)} из {groupsTotal}" : $"{Row.GroupShare * 100:0} %";
     /// <summary>У варианта поиска доля обязательных адресов его части (ok из total) — тоже процентом, как у остальных строк.</summary>
     public string Share => IsCandidate && Row.Total is > 0 ? $"{(double)(Row.Ok ?? 0) / Row.Total.Value * 100:0} %" : $"{Row.TargetShare * 100:0} %";
@@ -93,7 +94,7 @@ public static class RouterTexts
     public const string Conflict = "На роутере работает другая программа обхода — остановите или удалите её: «Роутер» → «Роутер: что мешает».";
 
     /// <summary>Выключение без человека (§5.1): сторож, кнопка на корпусе, откат неподтверждённого включения.</summary>
-    public static bool IsOffCode(string code) => code is "watchdog_off" or "button_off" or "confirm_reverted";
+    public static bool IsOffCode(string code) => code is "watchdog_off" or "button_off" or "confirm_reverted" or "watchdog_select_failed";
 
     /// <summary>
     /// Фраза о выключении без человека: by — watchdog | button | revert (last_off.by или код предупреждения), at — когда.
@@ -105,6 +106,7 @@ public static class RouterTexts
         return by switch
         {
             "watchdog" or "watchdog_off" => $"Обход на роутере выключен сторожем{when} — с обходом пропал интернет.",
+            "watchdog_select_failed" => RouterViewModel.WatchdogSelectText(RouterViewModel.WatchdogSelectState.Failed, null),
             "button" or "button_off" => $"Обход на роутере выключен кнопкой на корпусе{when}",
             _ when enabled => $"Роутер вернул прежнюю стратегию{when}: новую не подтвердили вовремя",
             _ => $"Роутер вернул как было{when}: включение не подтвердили вовремя",
@@ -287,10 +289,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     /// <summary>DpiShell на роутере найден (любой версии) — на главной есть блок роутера.</summary>
     public bool Found => _detection is { Found: not RouterFound.NotFound };
 
-    bool _searched;
+    bool _searched, _autoFindTried;
     /// <summary>Роутер уже искали (хоть раз): до того пустое состояние — «не проверялся», а не «не найден» (UX-аудит 2, п. 10).</summary>
     public bool Searched { get => _searched; private set { if (Set(ref _searched, value)) Raise(nameof(EmptyTitle)); } }
-    public string EmptyTitle => Removed ? "DpiShell с роутера удалён" : Searched ? "Роутер с DpiShell не найден" : "Роутер не проверялся";
+    public string EmptyTitle => Removed ? "DpiShell с роутера удалён" : Searched ? "Роутер с DpiShell не найден" : _autoFindTried ? "Ищу роутер…" : "Роутер не проверялся";
 
     /// <summary>Инструкция «Как поставить DpiShell на роутер» (п. 9).</summary>
     public const string GuideUrl = "https://github.com/Slavdew/dpishell/blob/master/docs/router/README.md";
@@ -370,7 +372,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         try
         {
             _settings.RouterAddress = AddressAuto ? null : CustomAddress.Trim();
-            try { _settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say(Texts.Friendly(e)); }
+            try { _settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Failed(Texts.Friendly(e)); }
             if (!await DetectAsync()) return false;
             var typed = noPassword ? "" : string.IsNullOrEmpty(password) ? null : password;
             if (typed is null && !HasSavedPassword)
@@ -465,7 +467,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             await RefreshStatusCoreAsync();
             if (Compat?.CanCall("strategies") != false) await LoadStrategiesAsync();
         }
-        catch (RouterException e) { Say(RouterTexts.Friendly(e)); }
+        catch (RouterException e) { Failed(RouterTexts.Friendly(e)); }
         return true;
     }
 
@@ -679,7 +681,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             parts.Add(RouterTexts.Found(_detection.Found, null) is var t ? char.ToLowerInvariant(t[0]) + t[1..] : "");
         // Выключение сторожем, кнопкой или откатом — отдельной фразой с «Подробнее» (UpdateOff), не строкой предупреждений.
         UpdateOff();
-        var rows = (_status?.Warnings ?? []).Where(w => !RouterTexts.IsOffCode(w.Code)).Select(RouterTexts.Warning).ToList();
+        var rows = (_status?.Warnings ?? []).Where(w => !RouterTexts.IsOffCode(w.Code) && !(w.Code == "auto_selected" && _wdState == WatchdogSelectState.Found)).Select(RouterTexts.Warning).ToList();
         if (!rows.SequenceEqual(WarningRows))
         {
             WarningRows.Clear();
@@ -1300,7 +1302,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 await Task.Delay(PollInterval);
             }
         }
-        catch (RouterException e) { Say(RouterTexts.Friendly(e)); ResultText = "Не удалось узнать ход подбора на роутере."; }
+        catch (RouterException e) { Failed(RouterTexts.Friendly(e)); ResultText = "Не удалось узнать ход подбора на роутере."; }
         finally
         {
             _polling = false;
@@ -1331,7 +1333,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (p.Running && p.Total == 0 && p.Index == 0 && p.Message is not { Length: > 0 }) SelectProgressText = StartingText;
         else if (p.Running)
         {
-            var who = p.StartedBy switch { "page" => "Запущен со страницы роутера. ", "auto" or "timer" => "Роутер подбирает сам. ", _ => "" };
+            var who = p.StartedBy switch { "page" => "Запущен со страницы роутера. ", "auto" or "timer" or "watchdog" => "Роутер подбирает сам. ", _ => "" };
             var parts = new[] { $"Проверено {p.Index} из {p.Total}" + (p.Message is { Length: > 0 } m ? $": {m}" : ""), Eta(p.EtaS) };
             SelectProgressText = who + string.Join(" · ", parts.Where(x => x.Length > 0));
         }
@@ -1526,6 +1528,13 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     /// <summary>Открыли вкладку «Роутер»: DNS и «Роутер: что мешает» — свежим (статус уже есть).</summary>
     public async Task RefreshRouterPageAsync()
     {
+        // Первый заход на вкладку за сеанс: роутер не подключён и ещё не искали — один раз ищем сами, как по «Найти».
+        if (!Connected && !Searched && !_autoFindTried && !Busy)
+        {
+            _autoFindTried = true; Raise(nameof(EmptyTitle));
+            try { await ConnectAsync(null); }
+            catch (RouterException) { /* поиск не удался — «Найти» остаётся вручную */ }
+        }
         if (!Connected || Busy) return;
         await Guard("Читаю DNS роутера…", async () =>
         {

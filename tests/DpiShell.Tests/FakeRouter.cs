@@ -174,6 +174,32 @@ public sealed class FakeRouter : IDisposable
         _offWarning = """{ "code": "watchdog_off", "text": "Сторож выключил обход: с ним пропал интернет" }""";
     }
 
+    /// <summary>status.watchdog.select как JSON (роутер 0.2.0-r8); null — поля нет (старый роутер). "null" — подбора после сторожа не было.</summary>
+    public string? WatchdogSelectJson { get; set; }
+
+    /// <summary>После срабатывания сторожа роутер сам подбирает (started_by: watchdog): идёт, ok: false.</summary>
+    public void WatchdogSelectRunning()
+    {
+        WatchdogSelectJson = """{ "at": "2026-10-19T11:32:30Z", "ok": false, "best": null }""";
+        SelectRunningJob = true; StartedBy = "watchdog";
+    }
+
+    /// <summary>Подбор после сторожа нашёл и включил стратегию (auto_selected); last_off у включённого — null.</summary>
+    public void WatchdogSelectFound(string best = "alt10")
+    {
+        WatchdogSelectJson = $$"""{ "at": "2026-10-19T11:35:00Z", "ok": true, "best": "{{best}}" }""";
+        SelectRunningJob = false; Enabled = true; Strategy = best;
+        _offWarning = $$"""{ "code": "auto_selected", "text": "Роутер подобрал и включил {{best}}" }""";
+    }
+
+    /// <summary>Подбор после сторожа ничего не нашёл: обход выключен, warning watchdog_select_failed.</summary>
+    public void WatchdogSelectFailed()
+    {
+        WatchdogSelectJson = """{ "at": "2026-10-19T11:36:00Z", "ok": false, "best": null }""";
+        SelectRunningJob = false; Enabled = false;
+        _offWarning = """{ "code": "watchdog_select_failed", "text": "Подбор после сторожа не нашёл стратегию — обход выключен" }""";
+    }
+
     /// <summary>Короткое нажатие кнопки reset на корпусе — обход выключен.</summary>
     public void ButtonOff()
     {
@@ -201,7 +227,7 @@ public sealed class FakeRouter : IDisposable
             : "null";
         return $$"""
             , "pending_confirm": {{pending}}, "last_off": {{(Enabled ? "null" : LastOffJson ?? "null")}},
-              "watchdog": { "enabled": {{(WatchdogEnabled ? "true" : "false")}}, "checked_at": "{{WatchdogCheckedAt}}", "ok": {{(WatchdogOk ? "true" : "false")}}, "interval_min": 5 }
+              "watchdog": { "enabled": {{(WatchdogEnabled ? "true" : "false")}}, "checked_at": "{{WatchdogCheckedAt}}", "ok": {{(WatchdogOk ? "true" : "false")}}, "interval_min": 5{{(WatchdogSelectJson is null ? "" : $", \"select\": {WatchdogSelectJson}")}} }
             """;
     }
 

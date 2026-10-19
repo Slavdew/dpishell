@@ -524,6 +524,9 @@ public sealed class WindowSmokeTests
                         if (!combo.IsDropDownOpen) throw new Exception("«Другой DNS» не привёл к выбору DNS");
                         Snap(w, Path.Combine(snapDir, $"{theme}-dns-choose.png"));
                         combo.IsDropDownOpen = false;
+                        // Недоступные ссылки (копирование, сравнение) прячутся, а не стоят серыми.
+                        if (Find<Button>(picker, b => b.IsVisible && !b.IsEnabled && b.Style is not null && (b.Content as string ?? "").StartsWith("Скопировать")) is not null)
+                            throw new Exception("В блоке DNS видна серая ссылка «Скопировать…»");
                         // DNS — одна карточка: вывод проверки, таблица в «Подробнее» (раскрыта) и «DNS этого компьютера» (свой вариант раскрыт).
                         if (Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Свой вариант") is { } own) own.IsExpanded = true;
                         if (Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Подробнее: ответы DNS") is { } answers) answers.IsExpanded = true;
@@ -890,6 +893,42 @@ public sealed class WindowSmokeTests
                         if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-setting.png"));
                         wsv2.ScrollToHome();
                     }
+                }
+                // Подбор после сторожа (роутер r8): идёт → нашёл и включил / не нашёл. Старый роутер (без watchdog.select) — выше, прежнее предложение.
+                {
+                    var tabs = Find<TabControl>(w)!;
+                    fake.SelectSteps = 100000;
+                    fake.WatchdogSelectRunning();
+                    WaitUi(router.RefreshAsync());
+                    Pump();
+                    if (Find<TextBlock>(tabs, t => t.Text == "Сторож выключил оптимизацию — роутер подбирает другую стратегию…" && t.IsVisible) is null) throw new Exception("Нет фразы о подборе после сторожа");
+                    if (Find<Button>(tabs, b => (b.Content as string is "Подобрать" or "Не сейчас" or "Попробовать снова (на пробу)") && b.IsVisible) is not null) throw new Exception("Во время подбора после сторожа остались кнопки предложения");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-running.png"));
+                    WaitUi(router.CancelSelectAsync());
+                    fake.WatchdogSelectFound();
+                    WaitUi(router.RefreshAsync());
+                    Pump();
+                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Сторож выключил прежнюю стратегию, роутер подобрал и включил ") && t.IsVisible) is null) throw new Exception("Нет фразы «роутер подобрал и включил»");
+                    if (Find<Button>(tabs, b => (b.Content as string is "Подобрать" or "Не сейчас" or "Попробовать снова (на пробу)" or "Попробовать прежнюю (на пробу)") && b.IsVisible) is { } extra) throw new Exception("После удачного подбора сторожа остались кнопки: " + extra.Content);
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-found.png"));
+                    fake.WatchdogTrip();
+                    fake.WatchdogSelectFailed();
+                    WaitUi(router.RefreshAsync());
+                    Pump();
+                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Сторож выключил оптимизацию, подходящей стратегии не нашлось.") && t.IsVisible) is null) throw new Exception("Нет фразы «не нашлось»");
+                    if (Find<Button>(tabs, b => b.Content as string == "Подобрать на роутере" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Подобрать на роутере» после неудачи");
+                    if (Find<Button>(tabs, b => b.Content as string == "Попробовать прежнюю (на пробу)" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Попробовать прежнюю»");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-failed.png"));
+                    vm.Page = Pages.Home;
+                    Pump();
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-failed-home.png"));
+                    vm.Page = Pages.Router;
+                    fake.WatchdogSelectJson = null;
+                    fake.SelectSteps = 3;
+                    fake.StartedBy = "app";
+                    fake.WatchdogTrip();
+                    WaitUi(router.RefreshAsync());
+                    Pump();
                 }
                 router.VerifyFromPc = () => Task.FromResult<bool?>(false);
                 WaitUi(router.ToggleAsync());

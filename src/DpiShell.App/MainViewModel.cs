@@ -77,7 +77,7 @@ public sealed partial class MainViewModel : Observable
             Confirm = s => Confirm(s),
             AfterInstall = ReloadChoicesAsync,
         };
-        Autostart = new Autostart(settings) { Say = s => Message = s };
+        Autostart = new Autostart(settings) { Say = s => Message = s, Fail = Fail };
 
         RetryCmd = RelayCommand.Async(InitializeAsync, () => ShowLoadActions);
         OpenWithoutHelperCmd = RelayCommand.Async(OpenWithoutHelperAsync, () => ShowLoadActions);
@@ -125,6 +125,7 @@ public sealed partial class MainViewModel : Observable
             Guard = Guard,
             Need = NeedHelperAsync,
             Say = s => Message = s,
+            Fail = Fail,
             Confirm = s => Confirm(s),
             AfterChange = RefreshStatusAsync,
         };
@@ -806,7 +807,7 @@ public sealed partial class MainViewModel : Observable
             VpnWarning = vpn.Count == 0 ? "" : $"Включён VPN ({string.Join(", ", vpn)}). С ним обход обычно не нужен, а подбор может показать неверный результат.";
             ConflictWarning = conflicts.Count == 0 ? "" : $"Мешают другие программы обхода: {string.Join(", ", conflicts.Select(c => c.Name).Distinct())}.";
         }
-        catch (Exception e) { Message = Texts.Friendly(e); }
+        catch (Exception e) { Fail(Texts.Friendly(e)); }
         UpdateStatus();
     }
 

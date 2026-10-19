@@ -50,7 +50,11 @@ public sealed record RouterOffTarget(string Url, string? Detail = null);
 public sealed record RouterLastOff(string By, DateTime? At, string? Text, List<RouterOffTarget>? Targets = null);
 
 /// <summary>Жив ли сторож (§5.1 watchdog): последняя проверка, её итог и через сколько минут следующая.</summary>
-public sealed record RouterWatchdog(bool Enabled, DateTime? CheckedAt, bool? Ok, int? IntervalMin = null);
+/// <remarks>Select (роутер 0.2.0-r8) — подбор после сторожа: null — не было с последнего действия человека (или старый роутер).</remarks>
+public sealed record RouterWatchdog(bool Enabled, DateTime? CheckedAt, bool? Ok, int? IntervalMin = null, RouterWatchdogSelect? Select = null);
+
+/// <summary>Подбор после сторожа (status.watchdog.select): at — когда, ok — включил ли стратегию (пока идёт — false), best — какую (null при неудаче).</summary>
+public sealed record RouterWatchdogSelect(DateTime? At, bool Ok, string? Best);
 /// <summary>Фоновые задания роутера; dns — любое DNS-задание (§9, 2026-10-17), dns_analyze оставлен с тем же значением.</summary>
 public sealed record RouterJobs(bool Select, bool Check, bool CoreInstall, bool DnsAnalyze = false, bool SiteCheck = false, bool Dns = false, bool Update = false);
 
@@ -116,7 +120,7 @@ public sealed record RouterStrategyLast(DateTime? At, bool Ok, List<string>? Fai
 /// <remarks>verdicts — необязательно (предложение к договору, формат обсуждается): результаты по адресам для «Подробнее»; без него — только доли.</remarks>
 public sealed record RouterSelectRow(string Id, double GroupShare, double TargetShare, double AvgS, string? Error, string? Title = null,
     bool Candidate = false, int? Ok = null, int? Total = null, List<RouterUrlVerdict>? Verdicts = null,
-    Dictionary<string, string>? Roles = null);
+    Dictionary<string, string>? Roles = null, int? GroupsOk = null, int? GroupsTotal = null);
 
 /// <summary>Итог по одному адресу в строке подбора роутера: группа целей, адрес, открылся ли, подробности (код, байты), время.</summary>
 public sealed record RouterUrlVerdict(string Group, string Url, bool Ok, string? Detail = null, double? Seconds = null);

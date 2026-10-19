@@ -183,14 +183,43 @@ public sealed partial class RouterViewModel
     /// <summary>Что не открылось у сторожа (last_off.targets) — адрес и что сломалось.</summary>
     public ObservableCollection<RouterOffTarget> OffTargets { get; } = [];
     public bool HasOffDetails => HasOffDetail || OffTargets.Count > 0;
-    public bool CanReEnable => HasOff && !RouterEnabled && Connected;
+    public bool CanReEnable => HasOff && !RouterEnabled && Connected && WdState != WatchdogSelectState.Running;
+
+    /// <summary>Подбор после сторожа (status.watchdog.select, роутер 0.2.0-r8): нет поля — старый роутер или подбора ещё не было.</summary>
+    public enum WatchdogSelectState { None, Running, Found, Failed }
+    WatchdogSelectState _wdState;
+    public WatchdogSelectState WdState => _wdState;
+    /// <summary>Идёт подбор после сторожа.</summary>
+    public bool WdRunning => _wdState == WatchdogSelectState.Running;
+    /// <summary>Фраза красная, кроме случая «роутер сам подобрал и включил».</summary>
+    public bool OffAlert => _wdState != WatchdogSelectState.Found;
+    /// <summary>Подпись возврата: после неудачного подбора роутера «прежняя» — она уже не подошла сторожу.</summary>
+    public string ReEnableText => _wdState == WatchdogSelectState.Failed ? "Попробовать прежнюю (на пробу)" : "Попробовать снова (на пробу)";
+
+    WatchdogSelectState ClassifyWatchdogSelect()
+    {
+        var failedWarn = _status?.Warnings?.Any(w => w.Code == "watchdog_select_failed") == true && !RouterEnabled;
+        if (_status?.Watchdog?.Select is not { } sel) return failedWarn ? WatchdogSelectState.Failed : WatchdogSelectState.None;
+        if (sel.Ok) return RouterEnabled ? WatchdogSelectState.Found : WatchdogSelectState.None;
+        if (_status.Jobs?.Select == true) return WatchdogSelectState.Running;
+        return RouterEnabled ? WatchdogSelectState.None : WatchdogSelectState.Failed;
+    }
+
+    /// <summary>Фраза о подборе после сторожа; пусто — подбора нет.</summary>
+    public static string WatchdogSelectText(WatchdogSelectState state, string? strategy) => state switch
+    {
+        WatchdogSelectState.Running => "Сторож выключил оптимизацию — роутер подбирает другую стратегию…",
+        WatchdogSelectState.Found => $"Сторож выключил прежнюю стратегию, роутер подобрал и включил {strategy}.",
+        WatchdogSelectState.Failed => "Сторож выключил оптимизацию, подходящей стратегии не нашлось. Оптимизация выключена, пока вы её не включите.",
+        _ => "",
+    };
 
     bool _offByWatchdog;
     string _offKey = "", _dismissedOffKey = "";
-    /// <summary>Выключил сторож: окно предлагает подобрать другую стратегию («Подобрать» / «Не сейчас»).</summary>
-    public bool OfferSelect => CanReEnable && _offByWatchdog && _offKey != _dismissedOffKey;
-    /// <summary>Выключили не сторож (кнопка, откат): прежняя главная кнопка «Подобрать на роутере».</summary>
-    public bool OfferSelectButton => CanReEnable && !_offByWatchdog;
+    /// <summary>Выключил сторож (роутер без подбора после сторожа): окно предлагает подобрать другую стратегию («Подобрать» / «Не сейчас»).</summary>
+    public bool OfferSelect => CanReEnable && _offByWatchdog && _wdState == WatchdogSelectState.None && _offKey != _dismissedOffKey;
+    /// <summary>Выключили не сторож (кнопка, откат) или роутер не нашёл стратегию сам: кнопка «Подобрать на роутере».</summary>
+    public bool OfferSelectButton => CanReEnable && (!_offByWatchdog || _wdState == WatchdogSelectState.Failed);
 
     /// <summary>«Не сейчас»: предложение скрыто до следующего срабатывания сторожа (по времени last_off), память — на сеанс.</summary>
     public ICommand DismissOfferCmd => _dismissOfferCmd ??= new RelayCommand(() => { _dismissedOffKey = _offKey; RaiseOffOffer(); });
@@ -204,9 +233,13 @@ public sealed partial class RouterViewModel
 
     void UpdateOff()
     {
-        var off = RouterEnabled ? null : _status?.LastOff;
+        _wdState = ClassifyWatchdogSelect();
+        // Роутер сам подобрал и включил — last_off по договору null, но если отдаёт, «Подробнее» покажет, что не открылось у сторожа.
+        var off = RouterEnabled && _wdState != WatchdogSelectState.Found ? null : _status?.LastOff;
         var warn = _status?.Warnings?.FirstOrDefault(w => RouterTexts.IsOffCode(w.Code));
-        OffText = off is not null ? RouterTexts.Off(off.By, off.At)
+        OffText = _wdState != WatchdogSelectState.None
+            ? WatchdogSelectText(_wdState, StrategyTitle(_status?.Watchdog?.Select?.Best ?? _status?.Strategy))
+            : off is not null ? RouterTexts.Off(off.By, off.At)
             : warn is not null ? RouterTexts.Off(warn.Code, null, RouterEnabled)
             : "";
         OffDetail = HasOff ? off?.Text ?? warn?.Text ?? "" : "";
@@ -216,9 +249,10 @@ public sealed partial class RouterViewModel
             OffTargets.Clear();
             foreach (var t in targets) OffTargets.Add(t);
         }
-        _offByWatchdog = HasOff && (off is not null ? off.By == "watchdog" : warn?.Code == "watchdog_off");
-        _offKey = !HasOff ? "" : off is not null ? off.By + "|" + off.At?.ToUniversalTime().Ticks : warn!.Code;
+        _offByWatchdog = HasOff && (off is not null ? off.By == "watchdog" : warn?.Code is "watchdog_off" or "watchdog_select_failed" || _wdState != WatchdogSelectState.None);
+        _offKey = !HasOff ? "" : off is not null ? off.By + "|" + off.At?.ToUniversalTime().Ticks : warn?.Code ?? "watchdog";
         Raise(nameof(HasOffDetails)); Raise(nameof(CanReEnable)); RaiseOffOffer();
+        Raise(nameof(WdState)); Raise(nameof(WdRunning)); Raise(nameof(OffAlert)); Raise(nameof(ReEnableText));
     }
 
     // ---------- сторож (schedule.watchdog, status.watchdog) ----------

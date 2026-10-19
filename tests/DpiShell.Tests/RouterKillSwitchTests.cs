@@ -237,6 +237,119 @@ public sealed class RouterKillSwitchTests : IDisposable
     }
 
     [Fact]
+    public async Task WatchdogSelect_Running_Found_Failed_AndLegacy()
+    {
+        using var r = Router(enabled: true);
+        using var vm = await Connected(r, sitesOpen: true);
+
+        // Старый роутер без watchdog.select: прежнее предложение «Подобрать / Не сейчас».
+        r.WatchdogTrip();
+        await vm.RefreshAsync();
+        Assert.Equal(RouterViewModel.WatchdogSelectState.None, vm.WdState);
+        Assert.True(vm.OfferSelect);
+
+        // Роутер сам подбирает после сторожа: фраза, ход подбора, без кнопок возврата и предложения.
+        r.SelectSteps = 1000;
+        r.WatchdogSelectRunning();
+        await vm.RefreshAsync();
+        Assert.Equal(RouterViewModel.WatchdogSelectState.Running, vm.WdState);
+        Assert.Equal("Сторож выключил оптимизацию — роутер подбирает другую стратегию…", vm.OffText);
+        Assert.True(vm.WdRunning);
+        Assert.False(vm.OfferSelect);
+        Assert.False(vm.CanReEnable);
+        await Until(() => vm.Selecting && vm.SelectProgressText.StartsWith("Роутер подбирает сам."));
+        await vm.CancelSelectAsync();
+
+        // Нашёл и включил: фраза с названием, без кнопок; «Подробнее» — если роутер отдал last_off.
+        r.WatchdogSelectFound("alt10");
+        await vm.RefreshAsync();
+        Assert.Equal(RouterViewModel.WatchdogSelectState.Found, vm.WdState);
+        Assert.StartsWith("Сторож выключил прежнюю стратегию, роутер подобрал и включил ", vm.OffText);
+        Assert.EndsWith(".", vm.OffText);
+        Assert.False(vm.OffAlert);
+        Assert.False(vm.OfferSelect);
+        Assert.False(vm.CanReEnable);
+        Assert.Empty(vm.WarningRows);   // auto_selected не дублирует фразу
+
+        // Не нашёл: оптимизация выключена, кнопки «Подобрать на роутере» и «Попробовать прежнюю».
+        r.WatchdogTrip("2026-10-19T12:10:00Z");
+        r.WatchdogSelectFailed();
+        await vm.RefreshAsync();
+        Assert.Equal(RouterViewModel.WatchdogSelectState.Failed, vm.WdState);
+        Assert.Equal("Сторож выключил оптимизацию, подходящей стратегии не нашлось. Оптимизация выключена, пока вы её не включите.", vm.OffText);
+        Assert.True(vm.OffAlert);
+        Assert.False(vm.OfferSelect);
+        Assert.True(vm.OfferSelectButton);
+        Assert.True(vm.CanReEnable);
+        Assert.Equal("Попробовать прежнюю (на пробу)", vm.ReEnableText);
+        Assert.Empty(vm.WarningRows);
+    }
+
+    [Fact]
+    public async Task Client_ReadsWatchdogSelect_AndGroups()
+    {
+        using var r = Router(enabled: false);
+        r.WatchdogSelectFound("alt9");
+        r.SelectRowsJson = """[ { "id": "alt9", "title": "x", "group_share": 0.67, "target_share": 0.9, "avg_s": 0.5, "error": null, "groups_ok": 2, "groups_total": 3 } ]""";
+        using var c = new RouterClient(r.Address);
+        await c.LoginAsync(() => "secret");
+        var st = await c.StatusAsync();
+        Assert.Equal(new RouterWatchdogSelect(new DateTime(2026, 10, 19, 11, 35, 0, DateTimeKind.Utc), true, "alt9"), st.Watchdog!.Select);
+        var row = (await c.SelectProgressAsync()).Rows![0];
+        Assert.Equal((2, 3), (row.GroupsOk, row.GroupsTotal));
+        Assert.Equal("2 из 3", new RouterScoreRow(row, "x", null, 5).Groups);
+        // Старый роутер: полей нет — «N из M» по числу групп в разбивке или долей, как раньше.
+        var old = row with { GroupsOk = null, GroupsTotal = null };
+        Assert.Equal("3 из 5", new RouterScoreRow(old, "x", null, 5).Groups);
+        Assert.Equal("67 %", new RouterScoreRow(old, "x").Groups);
+    }
+
+    [Fact]
+    public async Task RouterPage_FirstVisit_SearchesOnce()
+    {
+        using var r = Router(enabled: true);
+        var pc = new Shell(new AppPaths(_tmp.Sub("root"), Repo.Data));
+        var settings = WindowSettings.Load(Path.Combine(_tmp.Sub("window"), "window.json"));
+        using var vm = new RouterViewModel(pc, settings)
+        {
+            AddressAuto = false, CustomAddress = r.Address,
+            PcTimestamps = () => true, AppVersion = new Version(1, 0, 0), Say = _ => { }, Confirm = _ => true,
+        };
+        Assert.False(vm.Searched);
+        Assert.Equal("Роутер не проверялся", vm.EmptyTitle);
+        await vm.RefreshRouterPageAsync();
+        Assert.True(vm.Searched);
+        Assert.True(vm.Found);
+    }
+
+    [Fact]
+    public async Task RouterPage_NotFound_SearchesOnlyOnce()
+    {
+        var pc = new Shell(new AppPaths(_tmp.Sub("root"), Repo.Data));
+        var settings = WindowSettings.Load(Path.Combine(_tmp.Sub("window"), "window.json"));
+        using var vm = new RouterViewModel(pc, settings)
+        {
+            AddressAuto = false, CustomAddress = "localhost:1",
+            PcTimestamps = () => true, AppVersion = new Version(1, 0, 0), Say = _ => { }, Confirm = _ => true,
+        };
+        await vm.RefreshRouterPageAsync();
+        Assert.True(vm.Searched);
+        Assert.Equal("Роутер с DpiShell не найден", vm.EmptyTitle);
+        Assert.False(vm.Found);
+        await vm.RefreshRouterPageAsync();   // повторный заход — без нового поиска, состояние то же
+        Assert.Equal("Роутер с DpiShell не найден", vm.EmptyTitle);
+    }
+
+    [Fact]
+    public async Task Client_Status_WithoutWatchdogSelect_IsNull()
+    {
+        using var r = Router(enabled: true);
+        using var c = new RouterClient(r.Address);
+        await c.LoginAsync(() => "secret");
+        Assert.Null((await c.StatusAsync()).Watchdog!.Select);
+    }
+
+    [Fact]
     public async Task Client_ConfirmS_InContractRange()
     {
         using var r = Router();

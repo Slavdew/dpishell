@@ -60,6 +60,9 @@ public sealed class Autostart(WindowSettings settings) : Observable
     /// <summary>Путь к exe: portable-папку могут перенести — при каждом запуске запись поправляется.</summary>
     public string ExePath { get; set; } = Environment.ProcessPath ?? "DpiShell.exe";
     public Action<string> Say { get; set; } = _ => { };
+    /// <summary>Ошибка операции: если окно передало <see cref="Fail"/> — тостом, иначе как <see cref="Say"/>.</summary>
+    public Action<string>? Fail { get; set; }
+    void Failed(string text) => (Fail ?? Say)(text);
 
     public string Command => $"\"{ExePath}\" {TrayArg}";
 
@@ -71,7 +74,7 @@ public sealed class Autostart(WindowSettings settings) : Observable
         {
             if (settings.Autostart == value && Enabled == value) return;
             settings.Autostart = value;
-            try { settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say(Texts.Friendly(e)); }
+            try { settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Failed(Texts.Friendly(e)); }
             Apply();
             Raise();
         }
@@ -108,7 +111,7 @@ public sealed class Autostart(WindowSettings settings) : Observable
         }
         catch (Exception e) when (e is UnauthorizedAccessException or IOException or System.Security.SecurityException)
         {
-            Say("Не удалось изменить автозапуск: " + e.Message);
+            Failed("Не удалось изменить автозапуск: " + e.Message);
         }
     }
 }

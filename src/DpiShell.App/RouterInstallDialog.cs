@@ -175,7 +175,7 @@ public static class RouterInstallDialog
         async Task Run(Func<string?, bool, Task<bool>> action)
         {
             try { await action(password.Password, noPassword.IsChecked == true); }
-            catch (Exception ex) { vm.Router.Say(Texts.Friendly(ex)); }
+            catch (Exception ex) { vm.Router.Failed(Texts.Friendly(ex)); }
         }
         check.Click += async (_, _) => await Run(vm.CheckAsync);
         install.Click += async (_, _) => { await Run(vm.InstallAsync); if (vm.IsDone) password.Clear(); };
@@ -183,7 +183,7 @@ public static class RouterInstallDialog
         {
             w.Close();
             // Ход — на экране «Подбор»; ошибку старта скажет сам подбор (Guard), здесь — только неожиданное.
-            _ = vm.SelectNowAsync().ContinueWith(t => vm.Router.Say(Texts.Friendly(t.Exception!.GetBaseException())),
+            _ = vm.SelectNowAsync().ContinueWith(t => vm.Router.Failed(Texts.Friendly(t.Exception!.GetBaseException())),
                 CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.FromCurrentSynchronizationContext());
         };
         close.Click += (_, _) => w.Close();
@@ -274,7 +274,7 @@ public static class RouterUninstallDialog
         remove.Click += async (_, _) =>
         {
             try { await vm.UninstallAsync(password.Password, noPassword.IsChecked == true); }
-            catch (Exception ex) { vm.Router.Say(Texts.Friendly(ex)); }
+            catch (Exception ex) { vm.Router.Failed(Texts.Friendly(ex)); }
             password.Clear();
         };
         reinstall.Click += (_, _) => { w.Close(); vm.Router.InstallCmd?.Execute(null); };
