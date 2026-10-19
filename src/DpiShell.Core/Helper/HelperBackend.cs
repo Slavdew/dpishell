@@ -81,6 +81,12 @@ public interface IHelperBackend : IHelperCatalog
     AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant);
     bool AppProfileRemove(string id);
 
+    // ---------- продвинутый режим «сайты → стратегия» (API 1.8) ----------
+    /// <summary>Настройки продвинутого режима и чем идёт каждая строка. Только чтение.</summary>
+    AdvancedInfo AdvancedGet();
+    /// <summary>Сохранить: режим, остальные адреса и строки (сайты и стратегия — «auto», «direct» или id; других полей нет). Оптимизация перезапускается на новых строках.</summary>
+    AdvancedInfo AdvancedSet(bool enabled, string others, IReadOnlyList<AdvancedRowInput> rows);
+
     // ---------- откат всего (журнал изменений, API 1.6) ----------
     /// <summary>Что сделала программа в системе и можно откатить: из журнала, понятными словами.</summary>
     ChangesList ChangesList();
@@ -470,6 +476,7 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
         shell.RestoreTcpTimestamps();
         DropRecording();
         shell.ClearAppProfiles();
+        shell.ClearAdvanced();
         shell.State.Enabled = false;
         shell.SaveState();
     }
@@ -577,6 +584,14 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
 
     public bool AppProfileRemove(string id) => shell.RemoveAppProfile(id);
 
+    public AdvancedInfo AdvancedGet() => shell.AdvancedInfo();
+
+    public AdvancedInfo AdvancedSet(bool enabled, string others, IReadOnlyList<AdvancedRowInput> rows)
+    {
+        shell.SetAdvanced(enabled, others, rows);
+        return shell.AdvancedInfo();
+    }
+
     /// <summary>Смена DNS в системе; в тестах — подмена в памяти (реестр и сеть машины не трогаются).</summary>
     public IDnsSystem DnsSystem { get; init; } = new WindowsDnsSystem();
     DnsManager? _dns;
@@ -606,6 +621,7 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
             e.Register(new HostsUndoer(() => shell.Hosts));
             e.Register(new CoreUndoer(() => shell.Installer, shell.Paths));
             e.Register(new AppProfileUndoer(id => shell.State.AppProfiles.FirstOrDefault(p => p.Id == id), shell.RemoveAppProfile));
+            e.Register(new AdvancedUndoer(() => shell.State.Advanced, shell.RestoreAdvanced));
             return _changes = e;
         }
     }

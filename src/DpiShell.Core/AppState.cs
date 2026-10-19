@@ -47,6 +47,9 @@ public sealed class AppState
     /// <summary>Профили программ (ТЗ 13, «Игры и программы»): порты и адреса игры и параметры оптимизации для них. «Вернуть как было» — удалить профиль.</summary>
     public List<AppProfile> AppProfiles { get; set; } = [];
 
+    /// <summary>Продвинутый режим «сайты → стратегия» (docs/research/mixed-strategies.md §6): выключен по умолчанию; строки хранятся и при выключенном режиме.</summary>
+    public AdvancedConfig Advanced { get; set; } = new();
+
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
     public static AppState Load(AppPaths p)
@@ -68,6 +71,9 @@ public sealed record NetworkMemory(string StrategyId, DateTime CheckedAt, double
 
 public static class ResultStore
 {
+    /// <summary>Группа с адресами пользователя: «Свои сайты» и строки продвинутого режима (adv-N) — в историю идут без адресов.</summary>
+    public static bool IsUserGroup(string groupId) => groupId == "user" || AdvancedSites.IsGroupId(groupId);
+
     public static string Save(AppPaths p, SelectionReport r)
     {
         p.EnsureDirectories();
@@ -75,13 +81,13 @@ public static class ResultStore
 
         // Свои сайты пользователя в историю не пишем: «свой адрес №N», хост вычищается и из текстов ошибок.
         var userNo = new Dictionary<string, int>();
-        foreach (var v in r.Baseline.Concat(r.Scores.SelectMany(s => s.Verdicts)).Where(v => v.GroupId == "user"))
+        foreach (var v in r.Baseline.Concat(r.Scores.SelectMany(s => s.Verdicts)).Where(v => IsUserGroup(v.GroupId)))
             userNo.TryAdd(v.Target.Url, userNo.Count + 1);
-        string Url(TargetVerdict v) => v.GroupId == "user" ? $"свой адрес №{userNo[v.Target.Url]}" : v.Target.Url;
+        string Url(TargetVerdict v) => IsUserGroup(v.GroupId) ? $"свой адрес №{userNo[v.Target.Url]}" : v.Target.Url;
         IEnumerable<string> Detail(TargetVerdict v) => v.Probes.Select(x => Hide(v, $"{x.Tls}: {x.Outcome} {x.Detail}"));
         string Hide(TargetVerdict v, string d)
         {
-            if (v.GroupId != "user") return d;
+            if (!IsUserGroup(v.GroupId)) return d;
             var host = Uri.TryCreate(v.Target.Url, UriKind.Absolute, out var u) ? u.Host : v.Target.Url;
             return d.Replace(v.Target.Url, "***").Replace(host, "***", StringComparison.OrdinalIgnoreCase);
         }

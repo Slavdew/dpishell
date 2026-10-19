@@ -1369,7 +1369,7 @@ public sealed partial class WindowSmokeTests
     public void InfoButtons_EveryDocSection_HasButton_WithDocText()
     {
         var doc = DocInfoTexts();
-        Assert.Equal(17, doc.Count);
+        Assert.Equal(18, doc.Count);
         using var tmp = new TempDir();
         using var fake = new FakeRouter { KillSwitch = true };   // «Сторож» в «Проверять сам» — у роутера со сторожем
         var seen = new Dictionary<string, string>();

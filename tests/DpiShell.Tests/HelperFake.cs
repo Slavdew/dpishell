@@ -329,6 +329,29 @@ public sealed class FakeHelperBackend : IHelperBackend
         return ProfilesValue.RemoveAll(p => p.Id == id) > 0;
     }
 
+    /// <summary>Что отвечает advanced_get; advanced_set меняет и пишет сюда принятое.</summary>
+    public AdvancedInfo AdvancedValue { get; set; } = new(false, AdvancedSites.OthersLists, []);
+    /// <summary>Последние строки advanced_set как пришли в бэкенд (после проверки запроса).</summary>
+    public IReadOnlyList<AdvancedRowInput> LastAdvancedRows { get; private set; } = [];
+    /// <summary>advanced_set отвечает отказом с этим текстом (как Shell при ошибке).</summary>
+    public string? AdvancedFails { get; set; }
+
+    public AdvancedInfo AdvancedGet()
+    {
+        Call("advanced_get");
+        return AdvancedValue;
+    }
+
+    public AdvancedInfo AdvancedSet(bool enabled, string others, IReadOnlyList<AdvancedRowInput> rows)
+    {
+        Call($"advanced_set {enabled} {others} {rows.Count}");
+        if (AdvancedFails is { } f) throw new InvalidOperationException(f);
+        LastAdvancedRows = rows;
+        AdvancedValue = new(enabled, others, [.. rows.Select(r => new AdvancedRowInfo(r.Domains, r.Strategy,
+            r.Strategy == AdvancedSites.Direct ? null : r.Strategy == AdvancedSites.Auto ? StatusValue.StrategyId : r.Strategy))]);
+        return AdvancedValue;
+    }
+
     /// <summary>Что отвечает dns_status (dns_set/dns_restore меняют Current).</summary>
     public DnsStatusInfo DnsValue { get; set; } = new("auto", false, false, true, false,
         [new DnsAdapterInfo("Ethernet", "ethernet", true, [], false)], ["Radmin VPN"]);

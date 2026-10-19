@@ -305,6 +305,27 @@ public sealed class RouterClient : IDisposable
         return CallAsync<RouterStarted>("dns_set", new JsonObject { ["custom"] = c }, ct);
     }
 
+    /// <summary>Продвинутый режим «сайты → стратегия» (§5.1, роутер 0.2.0-r9).</summary>
+    public Task<RouterAdvanced> AdvancedGetAsync(CancellationToken ct = default) => CallAsync<RouterAdvanced>("advanced_get", null, ct);
+
+    /// <summary>
+    /// Сохранить продвинутый режим: до 20 строк, в строке 1–50 сайтов (строгий шаблон имени) и стратегия auto | direct | id. При включённой оптимизации роутер перезапускается;
+    /// с <paramref name="confirmS"/> — на пробу, откат вернёт и прежние строки (§5.2). Итог подбора (resolved) окно не присылает.
+    /// </summary>
+    public Task AdvancedSetAsync(bool enabled, string others, IReadOnlyList<RouterAdvancedRow> rows, int? confirmS = null, CancellationToken ct = default)
+    {
+        if (!AdvancedSites.IsOthers(others)) throw new ArgumentException("Остальные адреса: direct, lists или all");
+        if (rows.Count > AdvancedSites.MaxRows) throw new ArgumentException($"На роутере — не больше {AdvancedSites.MaxRows} строк");
+        var list = new JsonArray();
+        foreach (var r in rows)
+        {
+            if (r.Domains.Count is 0 or > AdvancedSites.MaxDomains || !r.Domains.All(AdvancedSites.IsDomain)) throw new ArgumentException("В строке от 1 до 50 сайтов вида example.com");
+            if (!AdvancedSites.IsStrategyChoice(r.Strategy)) throw new ArgumentException("Стратегия строки: auto, direct или id из списка");
+            list.Add(new JsonObject { ["domains"] = new JsonArray(r.Domains.Select(d => (JsonNode)d).ToArray()), ["strategy"] = r.Strategy });
+        }
+        return CallAsync("advanced_set", WithConfirm(new JsonObject { ["enabled"] = enabled, ["others"] = others, ["rows"] = list }, confirmS), ct);
+    }
+
     public Task TargetsSetAsync(IReadOnlyList<RouterTarget> items, CancellationToken ct = default)
     {
         if (items.Count > 50) throw new ArgumentException("На роутере — не больше 50 своих сайтов");

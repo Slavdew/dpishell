@@ -265,7 +265,11 @@ public sealed class Shell
         // Список «По списку» удалён/изменён антивирусом — вернуть из поставки, иначе winws не стартует без файла.
         if (CurrentOptions.Ipset == IpsetMode.List && !IpLists.HasList) IpLists.SeedFromPackage();
         SyncAppProfileFiles();   // файлы адресов профилей программ должны быть на диске до запуска winws
-        var args = WinwsArgs.Build(s, Paths, CurrentOptions);
+        var options = CurrentOptions;
+        // Продвинутый режим без единой строки со стратегией и «остальные напрямую»: winws нечего обрабатывать (и без профилей программ).
+        if (options.Advanced is { Others: AdvancedSites.OthersDirect } adv && !adv.Applied.Any() && options.Profiles is null)
+            throw new InvalidOperationException(AdvancedSites.NothingToDo);
+        var args = WinwsArgs.Build(s, Paths, options);
         if (ServiceMode)
         {
             StopProcess();
@@ -340,19 +344,34 @@ public sealed class Shell
     public Strategy? FindStrategy(string id) => AllStrategies.FirstOrDefault(s => s.Id == id);
 
     /// <summary>Подбор. Служба на время подбора останавливается и потом возвращается в прежнее состояние.</summary>
-    public Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<TargetGroup>? groups = null,
-        IProgress<SelectorProgress>? progress = null, CancellationToken ct = default) =>
-        WithServicePausedAsync(async () =>
+    public async Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<TargetGroup>? groups = null,
+        IProgress<SelectorProgress>? progress = null, CancellationToken ct = default)
+    {
+        bool resolved = false;
+        var result = await WithServicePausedAsync(async () =>
         {
             using var doh = new DohResolver();
+            // Строки «auto» продвинутого режима — свои группы целей (по адресу первого сайта): вне оценки стратегии, по ним выбирается лучшая для строки.
+            var withRows = (groups ?? SelectedGroups()).Concat(AdvancedSites.Groups(State.Advanced)).ToList();
             var report = await new Selector(Paths, NewProbe(doh)).RunAsync(
-                StrategyStats.Order(AllStrategies, StrategyStats.LoadDetailed(Paths)), WithControl(groups ?? SelectedGroups(), DefaultTargets), quick, progress, ct, mix: true);
+                StrategyStats.Order(AllStrategies, StrategyStats.LoadDetailed(Paths)), WithControl(withRows, DefaultTargets), quick, progress, ct, mix: true);
             // Смешанная, которая оказалась лучше одиночных, — в файл своих стратегий (окно применяет её по id, как любую лучшую).
             foreach (var m in report.Scores.Where(x => x.Strategy.Source == MixBuilder.Source && x.Error is null))
                 UserStrategies.AddMix(Paths, m.Strategy, State.StrategyId);
             ResultStore.Save(Paths, report);
+            if (!report.Cancelled && State.Advanced.Enabled)
+            {
+                var adv = State.Advanced.Clone();
+                if (AdvancedSites.Resolve(adv, report)) { State.Advanced = adv; State.Save(Paths); resolved = true; }
+            }
             return report;
         });
+        // Служба вернулась со старой командной строкой — переставить на новые итоги строк.
+        if (resolved)
+            try { RefreshServiceIfOutdated(); }
+            catch (Exception e) when (e is InvalidOperationException or SecurityException or IOException) { }
+        return result;
+    }
 
     /// <summary>
     /// Проверка сайтов для одной стратегии (своей, вставленной): полный прогон из одного кандидата, итог сохраняется как у подбора —
@@ -440,7 +459,7 @@ public sealed class Shell
     // ---------- IP-списки и игровой режим (architecture.md «IP-списки и игровой режим») ----------
 
     /// <summary>С чем собирается командная строка сейчас. «Все адреса» с истёкшим сроком уже не действует.</summary>
-    public BuildOptions CurrentOptions => BuildOptions.From(State, DateTime.UtcNow);
+    public BuildOptions CurrentOptions => BuildOptions.From(State, DateTime.UtcNow, FindStrategy, State.StrategyId);
 
     /// <summary>Состояние для экранов «IP-списки» и «Игровой режим».</summary>
     public NetFeatures Features
@@ -658,8 +677,110 @@ public sealed class Shell
             if (!want.Contains(Path.GetFileName(f))) { try { File.Delete(f); } catch (IOException) { } }
     }
 
+    // ---------- продвинутый режим «сайты → стратегия» (docs/research/mixed-strategies.md §6) ----------
+
+    /// <summary>Текущие настройки продвинутого режима (копия): строки хранятся и при выключенном режиме.</summary>
+    public AdvancedConfig GetAdvanced() => State.Advanced.Clone();
+
+    /// <summary>
+    /// Что показать в окне: настройки и чем идёт каждая строка (у «auto» — итог подбора, до него — текущая стратегия; у «direct» — ничем).
+    /// </summary>
+    public AdvancedInfo AdvancedInfo()
+    {
+        var a = State.Advanced;
+        return new(a.Enabled, a.Others, [.. a.Rows.Select(r => new AdvancedRowInfo(r.Domains, r.Strategy,
+            r.Strategy == AdvancedSites.Direct ? null : r.Strategy == AdvancedSites.Auto ? r.Resolved ?? State.StrategyId : r.Strategy))]);
+    }
+
+    /// <summary>
+    /// Сохранить продвинутый режим. Сайты приводятся к нормальному виду (строгий шаблон), стратегия — «auto», «direct» или из каталога и найденных;
+    /// итог подбора у неизменных строк «auto» сохраняется. Работающая оптимизация перезапускается; не запустилась — всё возвращается как было.
+    /// Запись в журнал отката — ДО сохранения.
+    /// </summary>
+    public AdvancedConfig SetAdvanced(bool enabled, string others, IReadOnlyList<AdvancedRowInput> rows)
+    {
+        if (!AdvancedSites.IsOthers(others)) throw new InvalidOperationException("Остальные адреса: напрямую, по спискам или для всех.");
+        if (rows.Count > AdvancedSites.MaxRows) throw new InvalidOperationException($"Строк больше {AdvancedSites.MaxRows}.");
+        var next = new AdvancedConfig { Enabled = enabled, Others = others };
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var (domains, problem) = AdvancedSites.Domains(rows[i].Domains, i);
+            if (problem is not null) throw new InvalidOperationException(problem);
+            var strategy = rows[i].Strategy;
+            if (!AdvancedSites.IsStrategyChoice(strategy) || strategy is not (AdvancedSites.Auto or AdvancedSites.Direct) && FindStrategy(strategy) is null)
+                throw new InvalidOperationException($"Строка {i + 1}: такой стратегии нет.");
+            var old = strategy != AdvancedSites.Auto ? null
+                : State.Advanced.Rows.FirstOrDefault(r => r.Strategy == AdvancedSites.Auto && r.Domains.SequenceEqual(domains!));
+            next.Rows.Add(new() { Domains = domains!, Strategy = strategy, Resolved = old?.Resolved });
+        }
+        if (AdvancedSites.IsEmpty(next) && State.AppProfiles.Count == 0) throw new InvalidOperationException(AdvancedSites.NothingToDo);
+        ApplyAdvanced(next);
+        return next;
+    }
+
+    void ApplyAdvanced(AdvancedConfig next)
+    {
+        var before = State.Advanced.Clone();
+        if (next.SameChoice(before)) return;
+        // Журнал: первое изменение — «было …, стало …»; следующие правят «стало»; вернули как было вначале — запись закрывается.
+        string rec = "";
+        var open = Journal.Active(ChangeKinds.Advanced).FirstOrDefault();
+        bool closed = false;
+        if (open is null)
+            rec = Journal.Begin(ChangeKinds.Advanced, AdvancedTitle(next), before.ToJson(), next.ToJson());
+        else if (next.SameChoice(AdvancedConfig.FromJson(open.Before)))
+            closed = true;
+        else
+            Journal.Update(open.Id, next.ToJson());
+        State.Advanced = next;
+        State.Save(Paths);
+        try { ReapplyIfActive(); }
+        catch (Exception e) when (e is InvalidOperationException or SecurityException or IOException or ConflictException)
+        {
+            // winws с новыми строками не поднялся — настройки возвращаются, оптимизация запускается на прежних.
+            State.Advanced = before;
+            State.Save(Paths);
+            Journal.Abort(rec);
+            try { ReapplyIfActive(); } catch (Exception again) when (again is InvalidOperationException or SecurityException or IOException) { }
+            throw;
+        }
+        Journal.Done(rec);
+        if (closed) Journal.Close(ChangeKinds.Advanced, "возвращён прежний вид");
+    }
+
+    static string AdvancedTitle(AdvancedConfig c) =>
+        "Продвинутый режим «сайты → стратегия» " + (c.Enabled ? $"включён, строк: {c.Rows.Count}" : $"выключен, строк: {c.Rows.Count}");
+
+    /// <summary>Откат записи журнала: вернуть прежние настройки (итоги подбора совпадающих строк сохраняются). Журнал не трогается — его ведёт движок отката.</summary>
+    public void RestoreAdvanced(AdvancedConfig was)
+    {
+        var next = was.Clone();
+        foreach (var r in next.Rows)
+            r.Resolved = State.Advanced.Rows.FirstOrDefault(x => x.Strategy == AdvancedSites.Auto && r.Strategy == AdvancedSites.Auto && x.Domains.SequenceEqual(r.Domains))?.Resolved;
+        State.Advanced = next;
+        State.Save(Paths);
+        ReapplyIfActive();
+    }
+
+    /// <summary>«Удалить полностью»: строки и режим сбрасываются.</summary>
+    public void ClearAdvanced()
+    {
+        State.Advanced = new();
+        State.Save(Paths);
+        Journal.Close(ChangeKinds.Advanced, "настройки удалены кнопкой «Удалить службу оптимизации»");
+    }
+
     public void SaveState() => State.Save(Paths);
 }
+
+/// <summary>Строка из окна: сайты и стратегия («auto», «direct» или id).</summary>
+public sealed record AdvancedRowInput(IReadOnlyList<string> Domains, string Strategy);
+
+/// <summary>Чем идёт строка: <paramref name="Resolved"/> — у «auto» итог подбора (до подбора — текущая стратегия), у «direct» — null.</summary>
+public sealed record AdvancedRowInfo(IReadOnlyList<string> Domains, string Strategy, string? Resolved);
+
+/// <summary>Ответ advanced_get / advanced_set: настройки продвинутого режима на ПК.</summary>
+public sealed record AdvancedInfo(bool Enabled, string Others, IReadOnlyList<AdvancedRowInfo> Rows);
 
 /// <param name="Ipset">Действующий режим IP-списка.</param>
 /// <param name="AnyUntilUtc">Когда «Все адреса» вернутся сами (только при Ipset = Any).</param>

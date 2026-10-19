@@ -173,6 +173,28 @@ public sealed class CoreUndoer(Func<CoreInstaller> installer, AppPaths paths) : 
     }
 }
 
+/// <summary>
+/// Продвинутый режим «сайты → стратегия»: прежние строки и режим возвращаются, если сейчас стоит то, что поставили мы.
+/// Изменили после нас (другой записью того же вида или руками в state.json) — не трогаем.
+/// </summary>
+public sealed class AdvancedUndoer(Func<AdvancedConfig> current, Action<AdvancedConfig> restore) : IChangeUndoer
+{
+    public IReadOnlyCollection<string> Kinds { get; } = [ChangeKinds.Advanced];
+
+    static string Describe(AdvancedConfig c) => c.Enabled ? $"включён, строк: {c.Rows.Count}" : $"выключен, строк: {c.Rows.Count}";
+
+    public Task<UndoOutcome> UndoAsync(ChangeEntry e, CancellationToken ct)
+    {
+        var was = AdvancedConfig.FromJson(e.Before);
+        var ours = AdvancedConfig.FromJson(e.After);
+        var now = current();
+        if (now.SameChoice(was)) return Task.FromResult(UndoOutcome.Already("продвинутый режим уже такой, как был"));
+        if (!now.SameChoice(ours)) return Task.FromResult(UndoOutcome.Changed("продвинутый режим изменён после DpiShell"));
+        restore(was);
+        return Task.FromResult(UndoOutcome.Restored("продвинутый режим как был: " + Describe(was)));
+    }
+}
+
 /// <summary>Профиль программы: удаляется, если он такой, каким мы его записали.</summary>
 public sealed class AppProfileUndoer(Func<string, AppProfile?> find, Func<string, bool> remove) : IChangeUndoer
 {

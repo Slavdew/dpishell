@@ -407,4 +407,11 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
 
     public async Task<bool> AppProfileRemoveAsync(string id, CancellationToken ct = default) =>
         (await CallAsync("app_profile_remove", new { id }, null, ct)).GetProperty("removed").GetBoolean();
+
+    /// <summary>Продвинутый режим «сайты → стратегия» (API 1.8): настройки и чем идёт каждая строка.</summary>
+    public Task<AdvancedInfo> AdvancedGetAsync(CancellationToken ct = default) => CallAsync<AdvancedInfo>("advanced_get", null, null, ct);
+
+    /// <summary>Сохранить режим, остальные адреса и строки. Помощник проверяет сайты и стратегии и перезапускает оптимизацию; ошибка — исключение с причиной.</summary>
+    public Task<AdvancedInfo> AdvancedSetAsync(bool enabled, string others, IReadOnlyList<AdvancedRowInput> rows, CancellationToken ct = default) =>
+        CallAsync<AdvancedInfo>("advanced_set", new { enabled, others, rows = rows.Select(r => new { domains = r.Domains, strategy = r.Strategy }) }, null, ct);
 }

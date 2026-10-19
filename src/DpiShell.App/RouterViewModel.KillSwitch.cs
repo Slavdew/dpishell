@@ -70,6 +70,7 @@ public sealed partial class RouterViewModel
         {
             _trialDeadline = null;
             _trialState = RouterTrialState.Ask;
+            _advancedBeforeTrial = null; _advancedRevertJournal = null;   // проба закончилась: возвращать строки больше не нужно
         }
         else
         {
@@ -161,6 +162,7 @@ public sealed partial class RouterViewModel
         if (_status?.PendingConfirm is not { } p) return;
         if (await Guard("Возвращаю как было на роутере…", async () =>
             {
+                await RevertAdvancedTrialAsync();   // проба была от продвинутого режима — вернуть и прежние строки
                 if (p.RevertsToOff) await Call(c => c.DisableAsync());
                 else await Call(c => c.StrategySetAsync(p.RevertTo!));
                 // Прежнее уже вернули — ждать нечего (без ожидания confirm тоже отвечает {}).

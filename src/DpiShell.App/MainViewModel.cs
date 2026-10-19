@@ -138,6 +138,13 @@ public sealed partial class MainViewModel : Observable
         windowChanges.Register(new DelegateUndoer([ChangeKinds.Autostart], e => Task.FromResult(Autostart.Undo(e))));
         windowChanges.Register(new DelegateUndoer([ChangeKinds.RouterDns], Router.UndoDnsAsync));
         windowChanges.Register(new DelegateUndoer([ChangeKinds.RouterEnable], Router.UndoEnableAsync));
+        windowChanges.Register(new DelegateUndoer([ChangeKinds.RouterAdvanced], Router.UndoAdvancedAsync));
+        // «Вернуть как было» в карточке «Продвинутый режим» на роутере: откат записи журнала окна.
+        Router.Advanced.Revert = async () =>
+        {
+            var entry = windowJournal.Active(ChangeKinds.RouterAdvanced).FirstOrDefault();
+            return entry is null ? "Записи об изменении нет — вернуть нечего." : AdvancedViewModel.UndoText((await windowChanges.UndoAsync(entry.Id)).Items.FirstOrDefault());
+        };
         Autostart.Recorder = windowJournal;
         Router.Recorder = windowJournal;
         Proxy = new ProxyViewModel(helper, settings)
@@ -158,6 +165,7 @@ public sealed partial class MainViewModel : Observable
         };
         WireRouterPc();   // оптимизация ПК и роутера вместе не работают (router-api §6) — MainViewModel.Router.cs
         InitPcDns();      // DNS этого компьютера — MainViewModel.Dns.cs
+        InitAdvanced();   // продвинутый режим «сайты → стратегия» на этом ПК — MainViewModel.Advanced.cs
 
         Net = new NetViewModel(helper)
         {
@@ -363,6 +371,7 @@ public sealed partial class MainViewModel : Observable
         Net.Refresh();
         Apps.StatusChanged();
         Hosts.RefreshNow();
+        _ = AdvancedPc.RefreshAsync();
         UpdateStatus();
     }
 

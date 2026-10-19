@@ -105,7 +105,7 @@ public static class StrategyStats
     static bool GroupOk(IEnumerable<TargetStat> t) => t.Where(x => x.Required).All(x => x.Ok) && t.Any(x => x.Ok);
 
     /// <summary>Группы каталога — цели подбора: не свои сайты и не контрольные («Обычные сайты»).</summary>
-    static bool Catalog(TargetStat t) => t.GroupId != "user" && !t.Control;
+    static bool Catalog(TargetStat t) => t.GroupId != "user" && !AdvancedSites.IsGroupId(t.GroupId) && !t.Control;
 
     static Stat Summarize(List<Run> runs)   // runs — от свежего к старому
     {

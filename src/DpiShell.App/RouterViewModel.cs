@@ -219,6 +219,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         StopPcCmd = RelayCommand.Async(StopPcForRouterAsync, () => !Busy);
         StopRouterCmd = RelayCommand.Async(async () => { if (await DisableAsync()) Say("Оптимизация на роутере выключена — работает этот ПК."); }, () => Can("disable"));
         EnableTimestampsCmd = RelayCommand.Async(() => CheckTimestampsAsync(ask: true), () => !Busy);
+        InitAdvanced();   // продвинутый режим на роутере — RouterViewModel.Advanced.cs
     }
 
     // ---------- связь с окном (в тестах подменяются) ----------
@@ -227,7 +228,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public Action<string> Say { get; set; } = _ => { };
     /// <summary>Ошибка действия: окно показывает её тостом, а не только в строке состояния (UX-аудит 2, п. 16). По умолчанию — как <see cref="Say"/>.</summary>
     public Action<string>? Fail { get; set; }
-    internal void Failed(string text) => (Fail ?? Say)(text);
+    internal void Failed(string text) { _lastFailure = text; (Fail ?? Say)(text); }
     /// <summary>Стратегии, найденные глубоким поиском на ПК (их хранит помощник).</summary>
     public Func<IReadOnlyList<Strategy>> FoundStrategies { get; set; } = () => [];
     /// <summary>Свои сайты этого ПК (сохранены у помощника).</summary>
@@ -1464,6 +1465,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             if (!Set(ref _targetsOnRouter, value)) return;
             Raise(nameof(TargetsOnPc)); Raise(nameof(TargetsOnRouterVisible)); Raise(nameof(TargetsOnPcVisible));
             if (value && !_targetsLoaded) _ = LoadTargetsAsync();
+            if (value) _ = Advanced.RefreshAsync();
         }
     }
     public bool TargetsOnPc { get => !TargetsOnRouter; set => TargetsOnRouter = !value; }

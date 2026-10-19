@@ -54,6 +54,8 @@ public enum ArgKind
     ProxyBypass,
     /// <summary>Адрес автонастройки (PAC): только http(s) (<see cref="ProxyValues.NormalizePac"/>).</summary>
     ProxyPac,
+    /// <summary>Строки продвинутого режима [{domains: [домен…], strategy}]: домены — строгий шаблон (<see cref="AdvancedSites.IsDomain"/>), стратегия — auto, direct или id из каталога. Других полей нет.</summary>
+    AdvancedRows,
 }
 
 public sealed record ArgSpec(string Name, ArgKind Kind, bool Required = false, string[]? Choices = null, int MaxItems = 0);
@@ -76,6 +78,7 @@ public sealed record HelperCall(long Id, CommandSpec Spec, IReadOnlyDictionary<s
     public string? Str(string name) => Args.TryGetValue(name, out var v) ? (string)v : null;
     public IReadOnlyList<string>? List(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyList<string>)v : null;
     public IReadOnlyDictionary<string, string>? Map(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyDictionary<string, string>)v : null;
+    public IReadOnlyList<AdvancedRowInput>? Rows(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyList<AdvancedRowInput>)v : null;
 }
 
 /// <summary>Запрос отклонён до выполнения (код <c>invalid</c>). Id — если его удалось прочитать, иначе 0.</summary>
@@ -191,6 +194,13 @@ public static partial class HelperCommands
             new ArgSpec("enabled", ArgKind.Bool, Required: true), new ArgSpec("server", ArgKind.ProxyServer),
             new ArgSpec("bypass", ArgKind.ProxyBypass), new ArgSpec("pac", ArgKind.ProxyPac), new ArgSpec("winhttp", ArgKind.Bool)),
         new("proxy_machine_restore", true, false),
+        // Продвинутый режим «сайты → стратегия» (API 1.8): сайты и стратегия на строку — ни параметров winws, ни путей, ни списков. Домены проходят строгий шаблон,
+        // стратегия — auto, direct или id из каталога и найденных; помощник сам собирает профили белым списком и сам пишет итоги подбора (resolved от окна не принимается).
+        new("advanced_get", false, false),
+        new("advanced_set", true, false,
+            new ArgSpec("enabled", ArgKind.Bool, Required: true),
+            new ArgSpec("others", ArgKind.Choice, Required: true, Choices: [AdvancedSites.OthersDirect, AdvancedSites.OthersLists, AdvancedSites.OthersAll]),
+            new ArgSpec("rows", ArgKind.AdvancedRows, Required: true, MaxItems: AdvancedSites.MaxRows)),
     ];
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);
@@ -458,6 +468,33 @@ public static partial class HelperCommands
                 var (value, ok) = ProxyValues.NormalizePac(str);
                 if (!ok || value is null) throw new HelperRequestException(id, $"{Where()}: нужна ссылка http:// или https://.");
                 return value;
+            }
+
+            case ArgKind.AdvancedRows:
+            {
+                if (v is not JsonArray arr) throw new HelperRequestException(id, $"{Where()}: нужен список строк.");
+                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, $"{Where()}: больше {s.MaxItems} строк.");
+                var rows = new List<AdvancedRowInput>(arr.Count);
+                for (int i = 0; i < arr.Count; i++)
+                {
+                    if (arr[i] is not JsonObject row) throw new HelperRequestException(id, $"{Where()}[{i}]: нужен объект {{domains, strategy}}.");
+                    foreach (var (k, _) in row)
+                        if (k is not ("domains" or "strategy")) throw new HelperRequestException(id, $"{Where()}[{i}]: лишнее поле «{Short(k)}».");
+                    if (row["domains"] is not JsonArray ds || ds.Count is 0 or > AdvancedSites.MaxDomains)
+                        throw new HelperRequestException(id, $"{Where()}[{i}].domains: от 1 до {AdvancedSites.MaxDomains} сайтов.");
+                    var domains = new List<string>(ds.Count);
+                    foreach (var item in ds)
+                    {
+                        var d = item is null ? "" : String(id, Where(), item, 253);
+                        if (!AdvancedSites.IsDomain(d)) throw new HelperRequestException(id, $"{Where()}[{i}].domains: «{Short(d)}» — не сайт вида example.com.");
+                        if (!domains.Contains(d)) domains.Add(d);
+                    }
+                    var strategy = row["strategy"] is { } sn ? String(id, Where(), sn, 64) : AdvancedSites.Auto;
+                    if (strategy is not (AdvancedSites.Auto or AdvancedSites.Direct) && (!IdRx().IsMatch(strategy) || !catalog.StrategyIds.Contains(strategy)))
+                        throw new HelperRequestException(id, $"{Where()}[{i}].strategy: нужно auto, direct или стратегия из каталога.");
+                    rows.Add(new(domains, strategy));
+                }
+                return rows;
             }
 
             case ArgKind.Roles:

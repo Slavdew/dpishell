@@ -63,7 +63,7 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
         // Last — свежий прогон с адресами; старый помощник не отдаёт Newest — тогда Last и есть последний.
         if (st.Last is { } last && (newest is null || newest.File == last.File))
         {
-            foreach (var g in last.Targets.Where(t => t.GroupId != "user" && !t.Control).GroupBy(t => t.GroupId))
+            foreach (var g in last.Targets.Where(t => t.GroupId != "user" && !AdvancedSites.IsGroupId(t.GroupId) && !t.Control).GroupBy(t => t.GroupId))
                 parts.Add($"{names.Title(g.Key)} {(g.Where(t => t.Required).All(t => t.Ok) && g.Any(t => t.Ok) ? "✓" : "✗")}");
             var mine = last.Targets.Where(t => t.GroupId == "user").ToList();
             if (mine.Count > 0) parts.Add($"свои {mine.Count(t => t.Ok)} из {mine.Count}");
@@ -112,7 +112,7 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
     static string Failed(StrategyScore s, GroupNames names)
     {
         if (s.Verdicts.Any(v => names.Control(v.GroupId) && !v.Ok)) return "ломает обычные сайты";
-        var bad = s.Verdicts.Where(v => !names.Control(v.GroupId)).GroupBy(v => v.GroupId)
+        var bad = s.Verdicts.Where(v => !names.Control(v.GroupId) && !AdvancedSites.IsGroupId(v.GroupId)).GroupBy(v => v.GroupId)
             .Where(g => !(g.Where(v => v.Target.Required).All(v => v.Ok) && g.Any(v => v.Ok)))
             .Select(g => g.Key == "user" ? "свои сайты" : names.Title(g.Key)).ToList();
         return bad.Count == 0 ? "" : "не открывает " + string.Join(", ", bad);
@@ -169,7 +169,8 @@ public sealed class GroupNames
 
     public static readonly GroupNames Empty = new([]);
 
-    public string Title(string id) => _map.TryGetValue(id, out var g) ? g.Title : id;
+    public string Title(string id) => _map.TryGetValue(id, out var g) ? g.Title
+        : AdvancedSites.IsGroupId(id) && int.TryParse(id[4..], out var n) ? $"Сайты строки {n + 1}" : id;
     public bool Control(string id) => _map.TryGetValue(id, out var g) && g.Control;
 }
 

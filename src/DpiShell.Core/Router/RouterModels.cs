@@ -110,7 +110,21 @@ public sealed record RouterStatus(
     // Аварийный выключатель (§5.1): включение ждёт confirm, последнее выключение без человека, состояние сторожа. Старый роутер — null.
     RouterPendingConfirm? PendingConfirm = null, RouterLastOff? LastOff = null, RouterWatchdog? Watchdog = null,
     // С 0.2.0-r8: версии установленных пакетов (dpishell, luci-app-dpishell). Старый роутер — null.
-    RouterPackages? Packages = null);
+    RouterPackages? Packages = null,
+    // С 0.2.0-r9: продвинутый режим (§5.1 advanced_get): включён ли и сколько строк. Старый роутер — null.
+    RouterAdvancedSummary? Advanced = null);
+
+/// <summary>status.advanced (роутер 0.2.0-r9): включён ли продвинутый режим и сколько в нём строк.</summary>
+public sealed record RouterAdvancedSummary(bool Enabled, int Rows);
+
+/// <summary>
+/// Строка продвинутого режима на роутере (§5.1 advanced_get/advanced_set): сайты и стратегия — <c>auto</c>, <c>direct</c> или id из <c>strategies</c>.
+/// Resolved приходит только в ответе: чем строка идёт сейчас (у <c>auto</c> — итог подбора, до подбора — текущая стратегия; у <c>direct</c> — null).
+/// </summary>
+public sealed record RouterAdvancedRow(List<string> Domains, string Strategy, string? Resolved = null);
+
+/// <summary>advanced_get: <c>others</c> — остальные адреса: <c>direct</c> | <c>lists</c> | <c>all</c>.</summary>
+public sealed record RouterAdvanced(bool Enabled, string Others, List<RouterAdvancedRow> Rows);
 
 /// <summary>
 /// source: catalog | user; у user id «u-…» — присланные с ПК (strategies_user_set), «r-…» — найденные глубоким поиском на роутере (§9).

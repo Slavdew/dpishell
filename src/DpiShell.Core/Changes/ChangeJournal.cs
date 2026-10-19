@@ -15,6 +15,8 @@ public static class ChangeKinds
     public const string HostsComment = "hosts_comment";
     public const string Core = "core";
     public const string AppProfile = "app_profile";
+    /// <summary>Продвинутый режим «сайты → стратегия» на ПК (state.json помощника): откат возвращает прежние строки и режим.</summary>
+    public const string Advanced = "advanced";
     /// <summary>Системный прокси WinINET (+ политика «одни настройки на всех», + WinHTTP) для всей машины — HKLM, пишет помощник.</summary>
     public const string ProxyMachine = "proxy_machine";
     /// <summary>Системный прокси пользователя окна, записанный помощником (HKU\SID) — журнал помощника.</summary>
@@ -24,6 +26,8 @@ public static class ChangeKinds
     public const string Autostart = "autostart";
     public const string RouterDns = "router_dns";
     public const string RouterEnable = "router_enable";
+    /// <summary>Продвинутый режим на роутере (advanced_set) — журнал окна.</summary>
+    public const string RouterAdvanced = "router_advanced";
 }
 
 public enum ChangeState

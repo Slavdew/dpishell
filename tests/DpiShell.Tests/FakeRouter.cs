@@ -149,7 +149,7 @@ public sealed class FakeRouter : IDisposable
     }
 
     /// <summary>status.methods роутера 0.2.0 — все методы, что знает подделка.</summary>
-    public const string Methods020 = """["apply","check_now","confirm","conflict_stop","core_install","diag","disable","dns_analyze","dns_enable","dns_presets","dns_restore","dns_set","dns_status","enable","flow_offload_fix","ipv6_set","lists_get","lists_set","mode_set","report","schedule_set","select_cancel","select_progress","select_start","site_check","site_check_result","status","strategies","strategies_user_set","strategy_set","targets_get","targets_set","uninstall","update_check","update_install"]""";
+    public const string Methods020 = """["advanced_get","advanced_set","apply","check_now","confirm","conflict_stop","core_install","diag","disable","dns_analyze","dns_enable","dns_presets","dns_restore","dns_set","dns_status","enable","flow_offload_fix","ipv6_set","lists_get","lists_set","mode_set","report","schedule_set","select_cancel","select_progress","select_start","site_check","site_check_result","status","strategies","strategies_user_set","strategy_set","targets_get","targets_set","uninstall","update_check","update_install"]""";
 
     // ---------- аварийный выключатель (§5.1, §5.2): проба с confirm, last_off, сторож ----------
 
@@ -173,6 +173,7 @@ public sealed class FakeRouter : IDisposable
     {
         if (Pending is not { } p) return;
         Pending = null;
+        if (_advancedBefore is { } adv) { (AdvancedEnabled, AdvancedOthers, AdvancedRows) = adv; _advancedBefore = null; }
         if (p.RevertTo == "off")
         {
             Enabled = false;
@@ -404,12 +405,14 @@ public sealed class FakeRouter : IDisposable
                   "fail_streak": 0,
                   "schedule": { "enabled": {{(ScheduleEnabled ? "true" : "false")}}, "hours": {{ScheduleHours.ToString(System.Globalization.CultureInfo.InvariantCulture)}}, "auto_select": {{(AutoSelect ? "true" : "false")}}{{(KillSwitch ? $", \"watchdog\": {(WatchdogEnabled ? "true" : "false")}" : "")}} },
                   "jobs": { "select": {{(SelectRunningJob ? "true" : "false")}}, "check": false, "core_install": false, "dns_analyze": false, "site_check": false, "dns": false, "update": {{(_updateRunning ? "true" : "false")}} },
-                  "warnings": {{Warnings()}}{{UpdateField()}}{{KillSwitchFields()}} }
+                  "warnings": {{Warnings()}}{{UpdateField()}}{{KillSwitchFields()}}{{AdvancedField()}} }
                 """,
             "strategies" => StrategiesJson,
+            "advanced_get" => AdvancedGet(),
+            "advanced_set" => AdvancedSet(args),
             "enable" => Do(() => { var was = Enabled; Enabled = true; OnEnabled(); Trial(args, was, Strategy); }),
             "disable" => Do(() => { Enabled = false; Pending = null; }),
-            "confirm" => Do(() => { ConfirmCalls++; Pending = null; }),
+            "confirm" => Do(() => { ConfirmCalls++; Pending = null; _advancedBefore = null; }),
             "strategy_set" => Do(() => { var was = Strategy; Strategy = args["id"]!.GetValue<string>(); Trial(args, Enabled, was); }),
             "check_now" => Do(() => CheckedAt = CheckedAt.AddMinutes(1), """{ "started": true }"""),
             // §9 (2026-10-17): только «Свои сайты», а их список пуст — invalid, field groups.
@@ -523,6 +526,64 @@ public sealed class FakeRouter : IDisposable
               "fallback_active": false,
               "job": { "action": "{{_dnsAction}}", "running": {{(running ? "true" : "false")}}, "ok": {{(running ? "null" : DnsJobOk ? "true" : "false")}}, "message": "{{(running ? "" : DnsJobOk ? "Готово" : "Не удалось установить пакет")}}"{{at}} } }
             """;
+    }
+
+    // ---------- продвинутый режим (§5.1 advanced_get, §5.2 advanced_set; роутер 0.2.0-r9) ----------
+
+    /// <summary>Отдавать status.advanced (роутер r9).</summary>
+    public bool AdvancedField_On { get; set; }
+    public bool AdvancedEnabled { get; private set; }
+    public string AdvancedOthers { get; private set; } = "lists";
+    public List<(List<string> Domains, string Strategy)> AdvancedRows { get; private set; } = [];
+    /// <summary>Что advanced_set получил последним (JSON args) — для проверки того, что ушло на роутер.</summary>
+    public JsonObject? LastAdvancedSet { get; private set; }
+    (bool Enabled, string Others, List<(List<string> Domains, string Strategy)> Rows)? _advancedBefore;
+
+    string AdvancedField() => AdvancedField_On ? $", \"advanced\": {{ \"enabled\": {(AdvancedEnabled ? "true" : "false")}, \"rows\": {AdvancedRows.Count} }}" : "";
+
+    string AdvancedGet()
+    {
+        var rows = AdvancedRows.Select(r => new JsonObject
+        {
+            ["domains"] = new JsonArray(r.Domains.Select(d => (JsonNode)d).ToArray()), ["strategy"] = r.Strategy,
+            ["resolved"] = r.Strategy == "direct" ? null : r.Strategy == "auto" ? Strategy : r.Strategy,
+        });
+        return new JsonObject { ["enabled"] = AdvancedEnabled, ["others"] = AdvancedOthers, ["rows"] = new JsonArray(rows.ToArray()) }.ToJsonString();
+    }
+
+    static string AdvancedInvalid(string field, string text) =>
+        new JsonObject { ["error"] = new JsonObject { ["code"] = "invalid", ["text"] = text, ["field"] = field } }.ToJsonString();
+
+    static readonly System.Text.RegularExpressions.Regex DomainRx = new(@"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$");
+
+    string AdvancedSet(JsonObject args)
+    {
+        if (args["enabled"] is not JsonValue ev || !ev.TryGetValue<bool>(out var enabled)) return AdvancedInvalid("enabled", "enabled: true/false");
+        var others = args["others"]?.GetValue<string>();
+        if (others is not ("direct" or "lists" or "all")) return AdvancedInvalid("others", "Остальные адреса: direct, lists или all");
+        if (args["rows"] is not JsonArray rows || rows.Count > 20) return AdvancedInvalid("rows", "rows: список, не больше 20 строк");
+        var known = System.Text.Json.JsonDocument.Parse(StrategiesJson).RootElement.GetProperty("items").EnumerateArray().Select(x => x.GetProperty("id").GetString()).ToHashSet();
+        var list = new List<(List<string>, string)>();
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i] is not JsonObject r || r["domains"] is not JsonArray ds || ds.Count is 0 or > 50) return AdvancedInvalid($"rows[{i}].domains", "В строке от 1 до 50 сайтов");
+            var doms = new List<string>();
+            for (int j = 0; j < ds.Count; j++)
+            {
+                var d = ds[j]?.GetValue<string>() ?? "";
+                if (!DomainRx.IsMatch(d)) return AdvancedInvalid($"rows[{i}].domains[{j}]", "Домен вида example.com");
+                doms.Add(d);
+            }
+            var sid = r["strategy"]?.GetValue<string>() ?? "auto";
+            if (sid is not ("auto" or "direct") && !known.Contains(sid)) return AdvancedInvalid($"rows[{i}].strategy", "Стратегия: auto, direct или id из списка");
+            list.Add((doms, sid));
+        }
+        LastAdvancedSet = (JsonObject)args.DeepClone();
+        var before = (AdvancedEnabled, AdvancedOthers, AdvancedRows);
+        AdvancedEnabled = enabled; AdvancedOthers = others; AdvancedRows = list;
+        LastConfirmS = args["confirm_s"]?.GetValue<int>();
+        if (Enabled && KillSwitch && LastConfirmS is { } s) { Pending = (s, Strategy); _advancedBefore ??= before; }
+        return "{}";
     }
 
     string Step0(string payload) { _selectStep = -1; _cancelled = false; return payload; }

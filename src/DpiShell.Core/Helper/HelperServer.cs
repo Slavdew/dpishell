@@ -371,6 +371,8 @@ public sealed class HelperServer : IAsyncDisposable
                 return await Task.Run(() => b.ProxyMachineSet(c.Bool("enabled"), c.Str("server"), c.Str("bypass"), c.Str("pac"), c.Bool("winhttp")), ct);
             case "proxy_machine_restore": return await Task.Run(b.ProxyMachineRestore, ct);
             case "app_profile_remove": return new { removed = await Task.Run(() => b.AppProfileRemove(c.Str("id")!), ct) };
+            case "advanced_get": return await Task.Run(b.AdvancedGet, ct);
+            case "advanced_set": return await Task.Run(() => b.AdvancedSet(c.Bool("enabled"), c.Str("others")!, c.Rows("rows")!), ct);
         }
         // Белый список и диспетчер должны совпадать — тест проверяет, что сюда не попасть.
         throw new HelperRequestException(c.Id, $"Команда «{c.Cmd}» не поддерживается.");
