@@ -152,8 +152,10 @@ public sealed class HostsViewModel : Observable
                 list.Add("Блок DpiShell в hosts повреждён (его правили вручную). «Записать» или «Вернуть как было» исправит его.");
             if (s.ReadOnly)
                 list.Add("Файл hosts помечен «только чтение». При записи программа снимет эту отметку и вернёт её обратно.");
-            foreach (var c in s.Conflicts.GroupBy(c => c.Host).Select(g => g.First()))
-                list.Add($"В hosts уже есть запись для {c.Host} от другой программы — она действует раньше нашей.");
+            // Функция выключена — нашей записи нет и чужая никому не мешает: плашку не показываем.
+            if (Enabled)
+                foreach (var c in s.Conflicts.GroupBy(c => c.Host).Select(g => g.First()))
+                    list.Add($"В hosts есть чужая запись для {c.Host} — если сайт не откроется, дело может быть в ней.");
             if (!Enabled && s.Block.Present)
                 list.Add("Функция выключена, а записи DpiShell в hosts остались (от прошлой установки). Их можно убрать кнопкой «Вернуть как было».");
             return list;

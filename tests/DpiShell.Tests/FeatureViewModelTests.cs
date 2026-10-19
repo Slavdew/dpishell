@@ -216,6 +216,20 @@ public sealed class FeatureViewModelTests
     }
 
     [Fact]
+    public async Task Hosts_ForeignRecord_WarnsOnlyWhenEnabled()
+    {
+        using var t = new TempDir();
+        var (_, vm, hosts, _, f) = await Hosts(t, "github.com@140.82.121.3");
+        await using var _f = f;
+        File.WriteAllText(hosts, "127.0.0.1 localhost\r\n10.0.0.5 github.com\r\n");
+        await vm.RefreshAsync();
+        Assert.DoesNotContain(vm.Warnings, w => w.Contains("чужая запись"));   // функция выключена — тревоги без действия нет
+        vm.Enabled = true;
+        await vm.RefreshAsync();
+        Assert.Contains(vm.Warnings, w => w == "В hosts есть чужая запись для github.com — если сайт не откроется, дело может быть в ней.");
+    }
+
+    [Fact]
     public async Task Hosts_NothingToFix_IsSaidPlainly()
     {
         using var t = new TempDir();

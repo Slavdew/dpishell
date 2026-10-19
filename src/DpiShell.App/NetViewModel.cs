@@ -227,7 +227,7 @@ public sealed class NetViewModel : Observable
     public string UserMessage { get => _userMessage; private set => Set(ref _userMessage, value); }
 
     public string UserHint => _f.Ipset == IpsetMode.List
-        ? "Подсеть на строку, например 203.0.113.0/24 или один адрес. Действуют сразу."
+        ? "Подсеть на строку, например 203.0.113.0/24 или один адрес. Действуют сразу после «Сохранить»."
         : "Подсеть на строку, например 203.0.113.0/24 или один адрес. Действуют в режиме «Только из списков».";
 
     public ICommand SaveUserCmd { get; }
