@@ -313,7 +313,9 @@ public sealed partial class MainViewModel : Observable
         set
         {
             int was = _page;
-            if (!Set(ref _page, value) || IsLoading) return;
+            if (!Set(ref _page, value)) return;
+            if (!Busy && !IsLoading && Message.Length > 0 && Message != ReadyText) Message = ReadyText;   // сообщение от давнего действия не едет по вкладкам
+            if (IsLoading) return;
             if (was == Pages.Targets) _ = SaveDraftOnLeaveAsync();
             if (value == Pages.Net) _ = RefreshNetAsync();
             if (value == Pages.Hosts) _ = Hosts.RefreshAsync();
@@ -338,7 +340,26 @@ public sealed partial class MainViewModel : Observable
 
     string _message = "";
     /// <summary>Строка состояния внизу окна.</summary>
-    public string Message { get => _message; set => Set(ref _message, value); }
+    public string Message
+    {
+        get => _message;
+        set
+        {
+            if (!Set(ref _message, value)) return;
+            if (value.Length > 0 && value != ReadyText) ScheduleReady(value);
+        }
+    }
+
+    public const string ReadyText = "Готово.";
+    /// <summary>Сколько сообщение висит в строке состояния, прежде чем вернётся «Готово.».</summary>
+    public TimeSpan MessageLifetime { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>Старое сообщение не должно висеть вечно: через 10 с (если не сменилось) и при смене вкладки — «Готово.». Без потока окна (тесты) таймера нет.</summary>
+    void ScheduleReady(string shown)
+    {
+        if (SynchronizationContext.Current is not { } ui) return;
+        _ = Task.Delay(MessageLifetime).ContinueWith(_ => ui.Post(_ => { if (Message == shown) Message = ReadyText; }, null), TaskScheduler.Default);
+    }
 
     /// <summary>Одна операция за раз; любая ошибка — в строку состояния и на главную, а не падение.</summary>
     async Task<bool> Guard(string busyText, Func<Task> work)

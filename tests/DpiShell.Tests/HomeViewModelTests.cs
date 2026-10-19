@@ -34,6 +34,19 @@ public sealed class HomeViewModelTests : IDisposable
     };
 
     [Fact]
+    public async Task StatusMessage_BackToReady_OnTabChange()
+    {
+        await using var f = new HelperFixture();
+        f.Backend.StatusValue = Status(active: false);
+        var vm = Model(await f.LinkAsync());
+        vm.Message = "Параметры скопированы: general (ALT10)";
+        vm.Page = Pages.Diag;
+        Assert.Equal(MainViewModel.ReadyText, vm.Message);
+        vm.Page = Pages.Home;
+        Assert.Equal(MainViewModel.ReadyText, vm.Message);
+    }
+
+    [Fact]
     public async Task CheckResult_DroppedOnToggle_AndRunsItselfAfterEnable()
     {
         await using var f = new HelperFixture();
