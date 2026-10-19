@@ -13,18 +13,28 @@ public sealed class Shell
     public StrategyCatalog Catalog { get; private set; }
     public TargetSet DefaultTargets { get; private set; }
     /// <summary>«Починить адреса» — системный hosts (architecture.md «Починить адреса»); в тестах — копия во временной папке.</summary>
-    public HostsManager Hosts { get => _hosts ??= new HostsManager(Paths); set => _hosts = value; }
+    public HostsManager Hosts
+    {
+        get => _hosts ??= new HostsManager(Paths) { Recorder = Journal };
+        set { _hosts = value; value.Recorder = Journal; }
+    }
     HostsManager? _hosts;
     /// <summary>IP-списки (architecture.md «IP-списки и игровой режим»): общий из data.json, свои подсети, валидатор.</summary>
     public IpLists IpLists => _ipLists ??= new IpLists(Paths);
     IpLists? _ipLists;
 
+    /// <summary>Журнал изменений системы (<c>changes.jsonl</c>, откат всего): пишет помощник, запись — до действия.</summary>
+    public ChangeJournal Journal { get; }
+    /// <summary>Временные метки TCP в системе; в тестах — подмена.</summary>
+    public ITcpTimestampsSystem Tcp { get; set; } = new NetshTcpTimestamps();
+
     public Shell(AppPaths? paths = null)
     {
         Paths = paths ?? new AppPaths();
+        Journal = new ChangeJournal(Paths.ChangesFile);
         Data = new DataStore(Paths);
         Installer = new CoreInstaller(Paths, CoreManifest.Load(Path.Combine(Paths.Seed, "core.json")));
-        Service = new ServiceManager(Paths);
+        Service = new ServiceManager(Paths) { Recorder = Journal };
         Catalog = StrategyCatalog.Load(Path.Combine(Paths.Seed, "strategies.json"));
         DefaultTargets = TargetSet.Load(Path.Combine(Paths.Seed, "targets.json"));
         State = AppState.Load(Paths);
@@ -48,7 +58,7 @@ public sealed class Shell
         if (check.State == CoreState.Missing)
         {
             using var http = CreateDownloadClient();
-            await Installer.InstallAsync(http, log, ct);
+            await InstallRecordedAsync(http, log, ct);
             check = Installer.Check();
         }
         if (check.State == CoreState.Ok && IsAdmin())
@@ -63,7 +73,19 @@ public sealed class Shell
     public async Task RepairCoreAsync(IProgress<string>? log = null, CancellationToken ct = default)
     {
         using var http = CreateDownloadClient();
-        await Installer.InstallAsync(http, log, ct);
+        await InstallRecordedAsync(http, log, ct);
+    }
+
+    /// <summary>Установка ядра. Ядра ещё не было — в журнал «было: нет ядра» до скачивания; замена уже стоящего (восстановление) отката не требует.</summary>
+    public async Task InstallRecordedAsync(HttpClient http, IProgress<string>? log, CancellationToken ct)
+    {
+        string rec = "";
+        if (Installer.Check().State == CoreState.Missing && Journal.Active(ChangeKinds.Core).Count == 0)
+            rec = Journal.Begin(ChangeKinds.Core, $"Установлено ядро оптимизации, версия {Installer.Manifest.Version}",
+                new System.Text.Json.Nodes.JsonObject { ["installed"] = false }, new System.Text.Json.Nodes.JsonObject { ["version"] = Installer.Manifest.Version });
+        try { await Installer.InstallAsync(http, log, ct); }
+        catch { Journal.Abort(rec); throw; }
+        Journal.Done(rec);
     }
 
     /// <summary>Источники обновлений данных — только из поставки (architecture.md «Обновления данных»).</summary>
@@ -209,22 +231,28 @@ public sealed class Shell
     /// <summary>Временные метки TCP нужны стратегиям с fooling=ts; выключены — включаем и запоминаем, что это сделали мы.</summary>
     public void EnsureTcpTimestamps()
     {
-        if (TcpTimestamps.IsEnabled() != false) return;
-        if (TcpTimestamps.Set(true))
+        if (Tcp.IsEnabled() != false) return;
+        // Были выключены — запись ДО netsh: прежнее «выключены», поставим «включены».
+        var rec = Journal.Begin(ChangeKinds.TcpTimestamps, "Включены временные метки TCP (настройка Windows)",
+            new System.Text.Json.Nodes.JsonObject { ["enabled"] = false }, new System.Text.Json.Nodes.JsonObject { ["enabled"] = true });
+        if (Tcp.Set(true))
         {
+            Journal.Done(rec);
             State.TimestampsEnabledByUs = true;
             State.Save(Paths);
         }
+        else Journal.Abort(rec);
     }
 
     /// <summary>«Удалить полностью»: вернуть временные метки, если включали мы.</summary>
     public void RestoreTcpTimestamps()
     {
         if (!State.TimestampsEnabledByUs) return;
-        if (TcpTimestamps.Set(false))
+        if (Tcp.Set(false))
         {
             State.TimestampsEnabledByUs = false;
             State.Save(Paths);
+            Journal.Close(ChangeKinds.TcpTimestamps, "метки TCP возвращены кнопкой «Удалить службу полностью»");
         }
     }
 
@@ -566,8 +594,23 @@ public sealed class Shell
         if (AppProfiles.Problem(profile) is { } problem) throw new InvalidOperationException(problem);
         if (existing is null && State.AppProfiles.Count >= AppProfiles.MaxProfiles)
             throw new InvalidOperationException($"Профилей уже {AppProfiles.MaxProfiles} — удалите ненужный.");
-        if (existing is not null) State.AppProfiles[State.AppProfiles.IndexOf(existing)] = profile; else State.AppProfiles.Add(profile);
-        State.Save(Paths);
+        // Журнал отката: новый профиль — запись «было: нет профиля» до сохранения; правка своего же профиля обновляет «что поставили».
+        var snapshot = AppProfileUndoer.Snapshot(profile);
+        if (existing is null)
+        {
+            var rec = Journal.Begin(ChangeKinds.AppProfile, $"Профиль программы «{profile.Title}» (порты {(profile.TcpPorts + " " + profile.UdpPorts).Trim()})",
+                new System.Text.Json.Nodes.JsonObject { ["exists"] = false }, snapshot);
+            State.AppProfiles.Add(profile);
+            State.Save(Paths);
+            Journal.Done(rec);
+        }
+        else
+        {
+            State.AppProfiles[State.AppProfiles.IndexOf(existing)] = profile;
+            State.Save(Paths);
+            foreach (var en in Journal.Active(ChangeKinds.AppProfile).Where(x => x.After?["id"]?.GetValue<string>() == profile.Id))
+                Journal.Update(en.Id, snapshot);
+        }
         SyncAppProfileFiles();
         ReapplyIfActive();
         return profile;
@@ -581,6 +624,7 @@ public sealed class Shell
         State.AppProfiles.Remove(p);
         State.Save(Paths);
         SyncAppProfileFiles();
+        Journal.Close(ChangeKinds.AppProfile, "профиль удалён пользователем", en => en.After?["id"]?.GetValue<string>() == id);
         ReapplyIfActive();
         return true;
     }
@@ -591,6 +635,7 @@ public sealed class Shell
         State.AppProfiles.Clear();
         State.Save(Paths);
         SyncAppProfileFiles();
+        Journal.Close(ChangeKinds.AppProfile, "профили удалены кнопкой «Удалить службу полностью»");
     }
 
     /// <summary>Файлы адресов профилей — ровно по state.json: недостающие пишутся, лишние (app-*.txt) удаляются.</summary>

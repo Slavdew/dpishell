@@ -1866,6 +1866,97 @@ public sealed partial class WindowSmokeTests
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
 
+    /// <summary>
+    /// «Настройки» → «Что сделала DpiShell» (откат всего): пустой журнал, список записей, отчёт по пунктам с вопросом про чужие правки.
+    /// Без ошибок привязок в обеих темах. Снимки: &lt;тема&gt;-settings-changes-empty|list|report.png.
+    /// </summary>
+    [Fact]
+    public void Settings_ChangesCard_BindsAndSnaps()
+    {
+        using var tmp = new TempDir();
+        var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
+        var errors = WithBindingErrors(() =>
+        {
+            foreach (var theme in new[] { ThemeManager.Light, ThemeManager.Dark })
+            {
+                ThemeManager.Apply(theme);
+                var shell = new Shell(new AppPaths(tmp.Sub("root-" + theme), Repo.Data));
+                var settings = TestWindow.Settings(shell);
+                settings.Theme = theme;
+                var f = new HelperFixture();
+                var link = Task.Run(f.LinkAsync).GetAwaiter().GetResult();
+                var vm = TestWindow.Model(shell, link, settings);
+                var w = Open(vm);
+                SetProp(vm, "IsLoading", false);
+                vm.Page = Pages.Settings;
+                Pump();
+                WaitUi(vm.Changes.RefreshAsync());
+                Pump();
+
+                FrameworkElement Card() => (FrameworkElement)w.FindName("ChangesCard")!;
+                void ScrollToCard()
+                {
+                    var sv = Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0)!;
+                    sv.ScrollToVerticalOffset(Card().TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 12);
+                    Pump();
+                }
+                bool Has(string text) => Find<TextBlock>(Card(), t => t.Text == text && t.IsVisible) is not null || Find<Button>(Card(), b => b.Content as string == text && b.IsVisible) is not null;
+                void Shot(string name)
+                {
+                    if (snapDir is null) return;
+                    Directory.CreateDirectory(snapDir);
+                    Snap(w, Path.Combine(snapDir, $"{theme}-settings-changes-{name}.png"));
+                }
+
+                // Карточка стоит над «Очисткой и удалением».
+                var clean = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Очистка и удаление")!;
+                var tabsRoot = Find<TabControl>(w)!;
+                if (Card().TranslatePoint(new Point(0, 0), tabsRoot).Y >= clean.TranslatePoint(new Point(0, 0), tabsRoot).Y)
+                    throw new Exception("«Что сделала DpiShell» должна стоять над «Очисткой и удалением»");
+                if (!Has("Что сделала DpiShell") || !Has("Отменить всё") || !Has("Вернутся значения, которые были до DpiShell; ваши более поздние правки не трогаем."))
+                    throw new Exception("В карточке нет заголовка, кнопки или обещания");
+                if (!Has("Пока ничего: DpiShell ещё не меняла настройки этого компьютера.")) throw new Exception("Нет пустого состояния");
+                if (Find<Button>(Card(), b => b.Content as string == "Отменить всё")!.IsEnabled) throw new Exception("«Отменить всё» активна при пустом журнале");
+                ScrollToCard();
+                Shot("empty");
+
+                // Записи двух журналов.
+                var at = new DateTime(2026, 10, 18, 9, 30, 0, DateTimeKind.Utc);
+                f.Backend.ChangesValue.Add(new("a1a1a1a1a1a1", at, "tcp_timestamps", "Включены временные метки TCP (настройка Windows)", true));
+                f.Backend.ChangesValue.Add(new("b2b2b2b2b2b2", at.AddMinutes(20), "dns", "DNS этого компьютера: Google — Ethernet", true));
+                f.Backend.ChangesValue.Add(new("c3c3c3c3c3c3", at.AddMinutes(45), "service", "Установлена служба оптимизации DpiShell (запускается вместе с Windows)", true));
+                vm.Autostart.Recorder.Begin(ChangeKinds.Autostart, "Включён запуск окна вместе с Windows (свёрнутым в трей)", null, null);
+                WaitUi(vm.Changes.RefreshAsync());
+                Pump();
+                if (vm.Changes.Items.Count != 4 || !Find<Button>(Card(), b => b.Content as string == "Отменить всё")!.IsEnabled) throw new Exception("Список записей не появился");
+                if (!Has("DNS этого компьютера: Google — Ethernet")) throw new Exception("Нет строки записи");
+                ScrollToCard();
+                Shot("list");
+
+                // Отчёт: все четыре исхода.
+                var now = DateTime.UtcNow;
+                vm.Changes.Show([
+                    new("1", "Включён запуск окна вместе с Windows (свёрнутым в трей)", now, UndoStatus.Restored, "запуск вместе с Windows выключен"),
+                    new("2", "Установлена служба оптимизации DpiShell (запускается вместе с Windows)", now.AddMinutes(-1), UndoStatus.Restored, "служба удалена"),
+                    new("3", "DNS этого компьютера: Google — Ethernet, Wi-Fi", now.AddMinutes(-2), UndoStatus.ChangedByOthers, "DNS изменён после DpiShell: Wi-Fi"),
+                    new("4", "Закомментированы чужие строки в файле hosts (до 2)", now.AddMinutes(-3), UndoStatus.Failed, "hosts занят другой программой"),
+                    new("5", "Включены временные метки TCP (настройка Windows)", now.AddMinutes(-4), UndoStatus.AlreadyBack, "настройка уже выключена"),
+                ]);
+                Pump();
+                if (!Has("Не тронул: изменено после DpiShell") || !Has("Не смог") || !Has("Уже было как раньше") || !Has("Вернул"))
+                    throw new Exception("В отчёте нет всех четырёх исходов");
+                if (Find<TextBlock>(Card(), t => t.Text.StartsWith("Пункты «не тронул»") && t.IsVisible) is null) throw new Exception("Нет вопроса про изменённое после нас");
+                if (FindAll<TextBlock>(Card()).Any(t => t.Text.Contains("обход", StringComparison.OrdinalIgnoreCase))) throw new Exception("В карточке осталось слово «обход»");
+                ScrollToCard();
+                Shot("report");
+
+                Close(w);
+                Stop(vm, f);
+            }
+        });
+        Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
+    }
+
     static void Snap(Window w, string file)
     {
         var root = (FrameworkElement)VisualTreeHelper.GetChild(w, 0);

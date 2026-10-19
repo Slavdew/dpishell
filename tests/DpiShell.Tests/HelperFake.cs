@@ -221,6 +221,29 @@ public sealed class FakeHelperBackend : IHelperBackend
         return Task.FromResult(DataUpdateValue);
     }
 
+    /// <summary>Что отвечает changes_list; changes_undo_all отвечает отчётом по этим записям.</summary>
+    public List<ChangeInfo> ChangesValue { get; } = [];
+    public UndoStatus UndoAnswer { get; set; } = UndoStatus.Restored;
+
+    public ChangesList ChangesList() { Call("changes_list"); return new([.. ChangesValue]); }
+
+    public Task<UndoReport> ChangesUndoAllAsync(CancellationToken ct)
+    {
+        Call("changes_undo_all");
+        var items = ChangesValue.AsEnumerable().Reverse().Select(c => new UndoItem(c.Id, c.Title, c.At, UndoAnswer, UndoAnswer == UndoStatus.Failed ? "занято" : "")).ToList();
+        if (UndoAnswer != UndoStatus.Failed) ChangesValue.Clear();
+        return Task.FromResult(new UndoReport(items));
+    }
+
+    public Task<UndoReport> ChangesUndoAsync(string id, CancellationToken ct)
+    {
+        Call("changes_undo " + id);
+        var c = ChangesValue.FirstOrDefault(x => x.Id == id);
+        if (c is null) return Task.FromResult(new UndoReport([]));
+        ChangesValue.Remove(c);
+        return Task.FromResult(new UndoReport([new UndoItem(c.Id, c.Title, c.At, UndoAnswer, "")]));
+    }
+
     public void RemoveAll() => Call("remove_all");
     public int ClearHistory() { Call("clear_history"); return 3; }
 

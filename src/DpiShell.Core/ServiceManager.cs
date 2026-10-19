@@ -6,9 +6,22 @@ namespace DpiShell.Core;
 public enum SvcState { NotInstalled, Stopped, StartPending, StopPending, Running, Unknown }
 
 /// <summary>Служба Windows = сам winws (sc create), без своей обёртки — так же делают бандл bol-van и Flowseal.</summary>
-public sealed partial class ServiceManager(AppPaths paths)
+/// <summary>Что журналу отката нужно от службы: состояние, командная строка из реестра, удаление.</summary>
+public interface IServiceOps
+{
+    SvcState State { get; }
+    string? ImagePath { get; }
+    void Remove();
+}
+
+public sealed partial class ServiceManager(AppPaths paths) : IServiceOps
 {
     public const string Name = "DpiShell";
+
+    /// <summary>Журнал изменений: создание службы записывается до команды <c>sc create</c>.</summary>
+    public IChangeRecorder Recorder { get; set; } = NullRecorder.Instance;
+
+    public string? ImagePath => QueryBinPath(Name);
 
     /// <summary>Чужие службы обхода, которые держат WinDivert и мешают нашей.</summary>
     public static readonly string[] ForeignServices = ["zapret", "winws1", "winws2", "GoodbyeDPI", "discordfix_zapret", "WinDivert14"];
@@ -62,7 +75,15 @@ public sealed partial class ServiceManager(AppPaths paths)
     {
         var bin = $"\"{paths.Winws}\" {WinwsArgs.Join(args)}";
         if (State == SvcState.NotInstalled)
-            Check(Sc("create", Name, "binPath=", bin, "DisplayName=", "DpiShell DPI bypass", "start=", "auto"), "создать службу");
+        {
+            // Службы не было — запись ДО создания: прежнее «нет службы», поставим службу с нашим winws.
+            var rec = Recorder.Begin(ChangeKinds.Service, "Установлена служба оптимизации DpiShell (запускается вместе с Windows)",
+                new System.Text.Json.Nodes.JsonObject { ["exists"] = false },
+                new System.Text.Json.Nodes.JsonObject { ["exe"] = paths.Winws });
+            try { Check(Sc("create", Name, "binPath=", bin, "DisplayName=", "DpiShell DPI bypass", "start=", "auto"), "создать службу"); }
+            catch { Recorder.Abort(rec); throw; }
+            Recorder.Done(rec);
+        }
         else
         {
             Stop();
@@ -93,6 +114,7 @@ public sealed partial class ServiceManager(AppPaths paths)
         Sc("delete", Name);
         Sc("stop", "WinDivert");
         Sc("delete", "WinDivert");
+        Recorder.Close(ChangeKinds.Service, "служба удалена кнопкой «Удалить службу полностью»");
     }
 
     public static bool WaitFor(string name, SvcState want, TimeSpan timeout)

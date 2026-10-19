@@ -359,6 +359,9 @@ public sealed class HelperServer : IAsyncDisposable
             case "app_profiles": return await Task.Run(b.AppProfilesInfo, ct);
             case "app_profile_set":
                 return await Task.Run(() => b.AppProfileSet(c.Str("id"), c.Str("title")!, c.Str("tcp"), c.Str("udp"), c.List("addresses")!, c.Int("variant")), ct);
+            case "changes_list": return await Task.Run(b.ChangesList, ct);
+            case "changes_undo_all": return await Task.Run(() => b.ChangesUndoAllAsync(ct), ct);
+            case "changes_undo": return await Task.Run(() => b.ChangesUndoAsync(c.Str("id")!, ct), ct);
             case "app_profile_remove": return new { removed = await Task.Run(() => b.AppProfileRemove(c.Str("id")!), ct) };
         }
         // Белый список и диспетчер должны совпадать — тест проверяет, что сюда не попасть.

@@ -80,6 +80,14 @@ public interface IHelperBackend : IHelperCatalog
     /// <summary>Создать (id = null) или заменить профиль; параметры берутся из варианта готовых стратегий.</summary>
     AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant);
     bool AppProfileRemove(string id);
+
+    // ---------- откат всего (журнал изменений, API 1.6) ----------
+    /// <summary>Что сделала программа в системе и можно откатить: из журнала, понятными словами.</summary>
+    ChangesList ChangesList();
+    /// <summary>Откатить всё по журналу в обратном порядке. Значение возвращается, только если сейчас стоит то, что ставили мы.</summary>
+    Task<UndoReport> ChangesUndoAllAsync(CancellationToken ct);
+    /// <summary>Откатить одну запись журнала.</summary>
+    Task<UndoReport> ChangesUndoAsync(string id, CancellationToken ct);
 }
 
 /// <summary>Ответ на status: всё, что окну без прав нужно для экранов.</summary>
@@ -232,7 +240,7 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
     public bool TcpTimestampsOn()
     {
         shell.EnsureTcpTimestamps();
-        return TcpTimestamps.IsEnabled() == true;
+        return shell.Tcp.IsEnabled() == true;
     }
     public void SetRunMode(bool service) => shell.SetRunMode(service);
 
@@ -557,7 +565,68 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
     /// <summary>Смена DNS в системе; в тестах — подмена в памяти (реестр и сеть машины не трогаются).</summary>
     public IDnsSystem DnsSystem { get; init; } = new WindowsDnsSystem();
     DnsManager? _dns;
-    DnsManager Dns => _dns ??= new DnsManager(DnsSystem, shell.Paths.DnsBackup);
+    DnsManager Dns => _dns ??= new DnsManager(DnsSystem, shell.Paths.DnsBackup) { Recorder = shell.Journal };
+
+    // ---------- откат всего ----------
+
+    /// <summary>Служба оптимизации для отката; в тестах — подмена, чтобы не трогать службы машины.</summary>
+    public IServiceOps ServiceOps { get; init; } = shell.Service;
+
+    ChangeUndoEngine? _changes;
+
+    /// <summary>
+    /// Журнал и откат. Точка расширения: новый вид изменения пишется в <c>shell.Journal</c> (<see cref="IChangeRecorder.Begin"/> до действия),
+    /// а его обработчик добавляется сюда: <c>backend.Changes.Register(new MyUndoer(...))</c>.
+    /// </summary>
+    public ChangeUndoEngine Changes
+    {
+        get
+        {
+            if (_changes is not null) return _changes;
+            var e = new ChangeUndoEngine(shell.Journal);
+            e.Register(new ServiceUndoer(ServiceOps));
+            e.Register(new TcpTimestampsUndoer(shell.Tcp));
+            e.Register(new DnsUndoer(DnsSystem));
+            e.Register(new HostsUndoer(() => shell.Hosts));
+            e.Register(new CoreUndoer(() => shell.Installer, shell.Paths));
+            e.Register(new AppProfileUndoer(id => shell.State.AppProfiles.FirstOrDefault(p => p.Id == id), shell.RemoveAppProfile));
+            return _changes = e;
+        }
+    }
+
+    public ChangesList ChangesList() => Changes.List();
+
+    public async Task<UndoReport> ChangesUndoAllAsync(CancellationToken ct)
+    {
+        // Свой winws режима «без службы» — не запись журнала, но откат всего его гасит.
+        shell.StopOwnProcess();
+        var r = await Changes.UndoAllAsync(ct);
+        AfterUndo(r);
+        return r;
+    }
+
+    public async Task<UndoReport> ChangesUndoAsync(string id, CancellationToken ct)
+    {
+        var r = await Changes.UndoAsync(id, ct);
+        AfterUndo(r);
+        return r;
+    }
+
+    /// <summary>Привести память программы к тому, что откатили: служба убрана — оптимизация выключена, hosts возвращён — «Починить адреса» выключено и т. д.</summary>
+    void AfterUndo(UndoReport r)
+    {
+        bool done(string kind) => r.Items.Any(i => i.Status is UndoStatus.Restored or UndoStatus.AlreadyBack && Kind(i) == kind);
+        if (done(ChangeKinds.Service)) shell.State.Enabled = false;
+        if (done(ChangeKinds.TcpTimestamps)) shell.State.TimestampsEnabledByUs = false;
+        if (done(ChangeKinds.HostsBlock) || done(ChangeKinds.HostsUser)) shell.State.HostsFix = false;
+        shell.SaveState();
+        // DNS: все записи откачены чисто — сохранённые прежние настройки больше не нужны («Вернуть как было» не должно предлагаться зря).
+        var dnsItems = r.Items.Where(i => Kind(i) == ChangeKinds.Dns).ToList();
+        if (dnsItems.Count > 0 && dnsItems.All(i => i.Status is UndoStatus.Restored or UndoStatus.AlreadyBack) && shell.Journal.Active(ChangeKinds.Dns).Count == 0)
+            Dns.ForgetBackup();
+    }
+
+    string Kind(UndoItem i) => shell.Journal.Entries().FirstOrDefault(e => e.Id == i.Id)?.Kind ?? "";
 
     public DnsStatusInfo DnsStatus() => Dns.Status();
 

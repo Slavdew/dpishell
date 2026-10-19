@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Input;
 using DpiShell.Core;
@@ -956,7 +957,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (enable)
         {
             // На пробу (§5.2 confirm_s): проверка с этого ПК решит, оставить ли; без ответа роутер вернёт как было сам.
+            // Журнал окна: оптимизация на роутере была выключена — запись ДО включения.
+            var rec = Connected ? BeginRouter(ChangeKinds.RouterEnable, "Включена оптимизация на роутере", new JsonObject { ["enabled"] = true }) : "";
             await TrialAsync("Включаю оптимизацию на роутере…", (c, confirmS) => c.EnableAsync(confirmS), "Оптимизация на роутере включена.");
+            if (rec.Length > 0) { if (RouterEnabled) Recorder.Done(rec); else Recorder.Abort(rec); }
             return;
         }
         if (await Guard("Выключаю оптимизацию на роутере…", async () =>
@@ -964,7 +968,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 await Call(c => c.DisableAsync());
                 await RefreshStatusCoreAsync();
             }))
+        {
+            Recorder.Close(ChangeKinds.RouterEnable, "оптимизация на роутере выключена кнопкой");
             Say("Оптимизация на роутере выключена.");
+        }
     }
 
     public async Task ChooseStrategyAsync(string id)
@@ -1733,9 +1740,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (o.Custom)
         {
             var custom = new RouterDnsCustom(o.Title, o.Doh, o.Doh is null ? null : [.. o.Ips], o.Doh is null ? [.. o.Ips] : null);
-            await DnsJobAsync("dns_set", c => c.DnsSetCustomAsync(custom), done);
+            await DnsJobAsync("dns_set", c => c.DnsSetCustomAsync(custom), done, "custom");
         }
-        else await DnsJobAsync("dns_set", c => c.DnsSetAsync(o.Id), done);
+        else await DnsJobAsync("dns_set", c => c.DnsSetAsync(o.Id), done, o.Id);
     }
 
     static string JobTitle(string? action) => action switch
@@ -1761,7 +1768,23 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public Task DnsRestoreAsync() => DnsJobAsync("dns_restore", c => c.DnsRestoreAsync(), "DNS на роутере — как было.");
 
     /// <summary>Фоновое DNS-задание: запустить и опрашивать dns_status, пока job этого действия не закончится.</summary>
-    async Task DnsJobAsync(string action, Func<RouterClient, Task<RouterStarted>> start, string done)
+    async Task DnsJobAsync(string action, Func<RouterClient, Task<RouterStarted>> start, string done, string? preset = null)
+    {
+        RouterDnsJob? job = null;
+        // Журнал окна: DNS сети меняем — запись ДО команды роутеру; «как было» закрывает записи.
+        string rec = "";
+        var after = new JsonObject { ["preset"] = preset };
+        bool changes = action is "dns_set" or "dns_enable";
+        if (changes && Connected) rec = BeginRouter(ChangeKinds.RouterDns, $"DNS для всей сети на роутере: {done.Replace("DNS для всей сети: ", "").TrimEnd('.')}", after);
+        try { await DnsJobCoreAsync(action, start, done, r => job = r); }
+        finally
+        {
+            if (changes && rec.Length > 0) { if (job?.Ok == true) Recorder.Done(rec); else Recorder.Abort(rec); }
+            else if (action == "dns_restore" && job?.Ok == true) Recorder.Close(ChangeKinds.RouterDns, "DNS сети возвращён кнопкой «Вернуть как было»");
+        }
+    }
+
+    async Task DnsJobCoreAsync(string action, Func<RouterClient, Task<RouterStarted>> start, string done, Action<RouterDnsJob?> found)
     {
         RouterDnsJob? job = null;
         if (!await Guard(JobTitle(action) + " на роутере…", async () =>
@@ -1785,6 +1808,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                         if (j is not null && j.Action == action && (sawRunning || (j.At is not null && j.At != before?.At)))
                         {
                             job = j;
+                            found(j);
                             ShowDns(d);
                             if (action == "dns_analyze" && DnsServers.Count > 0) DnsDetailsOpen = true;
                             return;

@@ -3,6 +3,19 @@ using System.Text.RegularExpressions;
 
 namespace DpiShell.Core;
 
+/// <summary>Метки TCP в системе; в тестах — подмена в памяти (настоящий netsh тесты не вызывают).</summary>
+public interface ITcpTimestampsSystem
+{
+    bool? IsEnabled();
+    bool Set(bool enabled);
+}
+
+public sealed class NetshTcpTimestamps : ITcpTimestampsSystem
+{
+    public bool? IsEnabled() => TcpTimestamps.IsEnabled();
+    public bool Set(bool enabled) => TcpTimestamps.Set(enabled);
+}
+
 /// <summary>
 /// Временные метки TCP (RFC 1323). Без них стратегии с <c>--dpi-desync-fooling=ts</c> молча не работают: winws портит
 /// фейк-пакет меткой, которой нет. На чистой Windows они выключены; Flowseal включает их при каждом запуске.

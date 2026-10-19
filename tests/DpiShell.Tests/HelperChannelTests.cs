@@ -79,6 +79,7 @@ public class HelperChannelTests
             ["rec_start"] = new { mode = "new" },
             ["app_profile_set"] = new { title = "Игра", tcp = "443", addresses = new[] { "203.0.113.50" }, variant = 0 },
             ["app_profile_remove"] = new { id = "p0a1b2c3d" },
+            ["changes_undo"] = new { id = "0123456789ab" },
         };
         foreach (var cmd in HelperCommands.Specs.Keys.Where(k => k != "cancel"))
             await c.CallAsync(cmd, args.GetValueOrDefault(cmd));

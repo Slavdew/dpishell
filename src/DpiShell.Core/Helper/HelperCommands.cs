@@ -46,6 +46,8 @@ public enum ArgKind
     Ports,
     /// <summary>Номер профиля программы: p и 8 шестнадцатеричных цифр.</summary>
     ProfileId,
+    /// <summary>Номер записи журнала изменений: 12 шестнадцатеричных цифр.</summary>
+    ChangeId,
 }
 
 public sealed record ArgSpec(string Name, ArgKind Kind, bool Required = false, string[]? Choices = null, int MaxItems = 0);
@@ -165,6 +167,11 @@ public static partial class HelperCommands
             new ArgSpec("addresses", ArgKind.Lines, Required: true, MaxItems: AppProfiles.MaxAddresses),
             new ArgSpec("variant", ArgKind.Int, Required: true, MaxItems: AppProfiles.MaxVariants - 1)),
         new("app_profile_remove", true, false, new ArgSpec("id", ArgKind.ProfileId, Required: true)),
+        // Откат всего (API 1.6): журнал изменений программы. Помощник откатывает только то, что записал сам, и только если сейчас стоит то,
+        // что ставили мы; окно передаёт лишь номер записи — ни значений, ни путей.
+        new("changes_list", false, false),
+        new("changes_undo_all", true, true),
+        new("changes_undo", true, true, new ArgSpec("id", ArgKind.ChangeId, Required: true)),
     ];
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);
@@ -396,6 +403,13 @@ public static partial class HelperCommands
                 return str;
             }
 
+            case ArgKind.ChangeId:
+            {
+                var str = String(id, Where(), v, 12);
+                if (!ChangeIdRx().IsMatch(str)) throw new HelperRequestException(id, $"{Where()}: неверный номер записи журнала.");
+                return str;
+            }
+
             case ArgKind.Roles:
             {
                 if (v is not JsonObject ro || ro.Count == 0 || ro.Count > WinwsArgs.RoleOrder.Length)
@@ -426,6 +440,9 @@ public static partial class HelperCommands
     /// <summary>Id стратегий и групп: латиница, цифры, '-', '_', '.'. Пути, пробелы и кавычки не пройдут.</summary>
     [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9_.\-]{0,63}$")]
     private static partial Regex IdRx();
+
+    [GeneratedRegex("^[0-9a-f]{12}$")]
+    private static partial Regex ChangeIdRx();
 
     [GeneratedRegex(@"[\\""<>|\x00-\x1F\x7F]")]
     private static partial Regex ForbiddenInLineRx();

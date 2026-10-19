@@ -88,7 +88,7 @@ public sealed class AppProfileHelperTests
     [Fact]
     public void Protocol_IsNextMinor_AndDocumented()
     {
-        Assert.Equal("1.5", HelperProtocol.Api);
+        Assert.True(Version.Parse(HelperProtocol.Api) >= new Version(1, 5));   // 1.5 — подключения; дальше миноры растут (1.6 — откат всего)
         var doc = File.ReadAllText(Path.Combine(Path.GetDirectoryName(Repo.Data)!, "docs", "dev", "helper-protocol.md"));
         foreach (var c in new[] { "rec_start {mode, pid?, driver?}", "rec_status", "rec_stop", "app_profiles", "app_profile_set {id?, title, tcp?, udp?, addresses, variant}", "app_profile_remove {id}" })
             Assert.Contains("`" + c + "`", doc);

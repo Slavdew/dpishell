@@ -1,4 +1,5 @@
 using System.IO;
+using DpiShell.Core;
 using Microsoft.Win32;
 
 namespace DpiShell.App;
@@ -55,6 +56,23 @@ public sealed class Autostart(WindowSettings settings) : Observable
 
     bool? _serviceMode;
 
+    /// <summary>Журнал окна (откат всего): ключ Run пользователя пишет окно, а не помощник.</summary>
+    public IChangeRecorder Recorder { get; set; } = NullRecorder.Instance;
+
+    /// <summary>Откат записи журнала: вернуть «нет ключа», если сейчас стоит то, что ставили мы.</summary>
+    public UndoOutcome Undo(ChangeEntry e)
+    {
+        var now = Store.Get(ValueName);
+        if (now is null) return UndoOutcome.Already("запуска вместе с Windows уже нет");
+        if (now != e.After?["command"]?.GetValue<string>()) return UndoOutcome.Changed("запись автозапуска изменена после DpiShell");
+        settings.Autostart = false;   // явный выбор: иначе по умолчанию (режим без службы) ключ вернётся при следующем запуске
+        try { settings.Save(); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        try { Store.Remove(ValueName); }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException) { return UndoOutcome.Fail(ex.Message); }
+        Raise(nameof(Enabled));
+        return UndoOutcome.Restored("запуск вместе с Windows выключен");
+    }
+
     /// <summary>Хранилище ключа Run; App ставит реестр, по умолчанию — память.</summary>
     public IRunKeyStore Store { get; set; } = new MemoryRunKeyStore();
     /// <summary>Путь к exe: portable-папку могут перенести — при каждом запуске запись поправляется.</summary>
@@ -105,9 +123,24 @@ public sealed class Autostart(WindowSettings settings) : Observable
         {
             if (Enabled)
             {
-                if (Store.Get(ValueName) != Command) Store.Set(ValueName, Command);
+                if (Store.Get(ValueName) != Command)
+                {
+                    // Журнал отката: ключа Run не было — запись ДО записи в реестр; путь к exe поправили — обновляется «что поставили».
+                    var json = new System.Text.Json.Nodes.JsonObject { ["command"] = Command };
+                    string rec = "";
+                    if (Recorder.Active(ChangeKinds.Autostart).FirstOrDefault() is { } open) Recorder.Update(open.Id, json);
+                    else rec = Recorder.Begin(ChangeKinds.Autostart, "Включён запуск окна вместе с Windows (свёрнутым в трей)",
+                        new System.Text.Json.Nodes.JsonObject { ["command"] = null }, json);
+                    try { Store.Set(ValueName, Command); }
+                    catch { Recorder.Abort(rec); throw; }
+                    Recorder.Done(rec);
+                }
             }
-            else if (Store.Get(ValueName) is not null) Store.Remove(ValueName);
+            else if (Store.Get(ValueName) is not null)
+            {
+                Store.Remove(ValueName);
+                Recorder.Close(ChangeKinds.Autostart, "запуск вместе с Windows выключен в «Настройках»");
+            }
         }
         catch (Exception e) when (e is UnauthorizedAccessException or IOException or System.Security.SecurityException)
         {

@@ -1915,6 +1915,62 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- Откат всего: список из журналов (помощника и окна), «Отменить всё», отчёт по пунктам. Над «Очисткой и удалением». -->
+                            <Border Style="{StaticResource Card}" Margin="0,18,0,0" DataContext="{Binding Changes}" x:Name="ChangesCard">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="Отменить всё" Command="{Binding UndoAllCmd}"
+                                                VerticalAlignment="Center" Margin="12,0,0,0" />
+                                        <TextBlock Text="Что сделала DpiShell" Style="{StaticResource H2}" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                               Text="Вернутся значения, которые были до DpiShell; ваши более поздние правки не трогаем." />
+                                    <TextBlock Text="{Binding EmptyText}" Style="{StaticResource Hint}" Margin="0,8,0,0" Visibility="{Binding ShowEmpty, Converter={StaticResource Vis}}" />
+                                    <ItemsControl ItemsSource="{Binding Items}" Margin="0,8,0,0" Visibility="{Binding HasItems, Converter={StaticResource Vis}}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <DockPanel Margin="0,3">
+                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding When}" Style="{StaticResource Hint}" Margin="12,0,0,0" VerticalAlignment="Top" />
+                                                    <TextBlock Text="{Binding Title}" TextWrapping="Wrap" local:Demo.Sensitive="True" />
+                                                </DockPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="{Binding HelperNote}" Style="{StaticResource Hint}" Margin="0,8,0,0" TextWrapping="Wrap"
+                                               Visibility="{Binding HasHelperNote, Converter={StaticResource Vis}}" />
+                                    <!-- Отчёт: вернул / уже было как раньше / не тронул (изменено после нас) / не смог — с причиной. -->
+                                    <StackPanel Margin="0,12,0,0" Visibility="{Binding HasReport, Converter={StaticResource Vis}}">
+                                        <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <ItemsControl ItemsSource="{Binding Report}" Margin="0,6,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="0,3">
+                                                        <WrapPanel>
+                                                            <TextBlock Text="{Binding Status}" FontWeight="SemiBold" Margin="0,0,8,0">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Mark}" Value="ok"><Setter Property="Foreground" Value="{DynamicResource Ok}" /></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding Mark}" Value="fail"><Setter Property="Foreground" Value="{DynamicResource Danger}" /></DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBlock Text="{Binding Title}" TextWrapping="Wrap" local:Demo.Sensitive="True" />
+                                                        </WrapPanel>
+                                                        <TextBlock Text="{Binding Note}" Style="{StaticResource Hint}" Margin="0,1,0,0" TextWrapping="Wrap"
+                                                                   Visibility="{Binding HasNote, Converter={StaticResource Vis}}" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock Text="{Binding Question}" Style="{StaticResource Hint}" Margin="0,8,0,0" TextWrapping="Wrap"
+                                                   Visibility="{Binding HasQuestion, Converter={StaticResource Vis}}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
                             <!-- Удаление — отдельно, спокойным стилем, с тем, как вернуть (UX-аудит, «Опасные действия», п. 18–19). -->
                             <Border Style="{StaticResource Card}" Margin="0,18,0,14">
                                 <StackPanel>

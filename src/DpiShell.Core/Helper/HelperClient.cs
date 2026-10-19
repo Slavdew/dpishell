@@ -370,6 +370,11 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
 
     public Task<DnsSetResult> DnsRestoreAsync(CancellationToken ct = default) => CallAsync<DnsSetResult>("dns_restore", null, null, ct);
 
+    // Откат всего (API 1.6): журнал изменений помощника.
+    public Task<ChangesList> ChangesListAsync(CancellationToken ct = default) => CallAsync<ChangesList>("changes_list", null, null, ct);
+    public Task<UndoReport> ChangesUndoAllAsync(CancellationToken ct = default) => CallAsync<UndoReport>("changes_undo_all", null, null, ct);
+    public Task<UndoReport> ChangesUndoAsync(string id, CancellationToken ct = default) => CallAsync<UndoReport>("changes_undo", new { id }, null, ct);
+
     // ---------- подключения программ (ТЗ 13, протокол 1.4) ----------
 
     /// <summary>Начать запись: процессы, запущенные после этого (pid не нужен), или выбранный процесс с дочерними. driver = false — без драйвера, только TCP.</summary>

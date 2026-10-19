@@ -51,6 +51,8 @@ public sealed partial class MainViewModel : Observable
     public UpdatesViewModel Updates { get; }
     /// <summary>Окно при входе в Windows (architecture.md «Окно, трей, автозапуск»).</summary>
     public Autostart Autostart { get; }
+    /// <summary>«Отменить всё, что сделала DpiShell» (Настройки): журнал помощника и журнал окна.</summary>
+    public ChangesViewModel Changes { get; }
     /// <summary>Уведомление в трей (окно может быть свёрнуто): «Все адреса» закончились, адрес в hosts устарел.</summary>
     public event Action<string>? Notify;
 
@@ -121,6 +123,20 @@ public sealed partial class MainViewModel : Observable
             PcUserTargets = () => Helper.Status?.UserTargets ?? [],
         };
         Router.Changed += UpdateStatus;
+        // Откат всего: окно ведёт свой журнал (автозапуск, роутер); системные изменения пишет помощник.
+        var windowJournal = new ChangeJournal(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(settings.File))!, "changes-window.jsonl"));
+        var windowChanges = new ChangeUndoEngine(windowJournal);
+        windowChanges.Register(new DelegateUndoer([ChangeKinds.Autostart], e => Task.FromResult(Autostart.Undo(e))));
+        windowChanges.Register(new DelegateUndoer([ChangeKinds.RouterDns], Router.UndoDnsAsync));
+        windowChanges.Register(new DelegateUndoer([ChangeKinds.RouterEnable], Router.UndoEnableAsync));
+        Autostart.Recorder = windowJournal;
+        Router.Recorder = windowJournal;
+        Changes = new ChangesViewModel(helper, windowChanges)
+        {
+            Say = s => Message = s,
+            Confirm = s => Confirm(s),
+            Guard = Guard,
+        };
         WireRouterPc();   // оптимизация ПК и роутера вместе не работают (router-api §6) — MainViewModel.Router.cs
         InitPcDns();      // DNS этого компьютера — MainViewModel.Dns.cs
 
@@ -252,6 +268,14 @@ public sealed partial class MainViewModel : Observable
 
     async Task UninstallHelperAsync()
     {
+        // Журнал изменений хранит помощник: после его удаления откатить по журналу уже нельзя — предложить сейчас.
+        if (Helper.Ready)
+        {
+            await Changes.RefreshAsync();
+            if (Changes.Count > 0 && Confirm($"Перед удалением помощника отменить всё, что сделала DpiShell (записей: {Changes.Count})?\n\n" + ChangesViewModel.Promise
+                    + "\n\nПосле удаления помощника отменить будет нельзя. «Нет» — удалить помощника, оставив настройки как есть."))
+                await Changes.UndoAllAsync(ask: false);
+        }
         if (!Confirm("Удалить помощника DpiShell? Обычно нужен один запрос прав администратора. Окно останется в режиме просмотра; служба оптимизации, если стоит, не удаляется — для этого «Удалить службу полностью»."))
             return;
         Busy = true; BusyText = "Удаляю помощника…"; UpdateStatus();
@@ -337,6 +361,7 @@ public sealed partial class MainViewModel : Observable
             if (was == Pages.Sites) _ = SaveDraftOnLeaveAsync();
             if (value == Pages.Apps) _ = RefreshNetAsync();
             if (value == Pages.Hosts) _ = Hosts.RefreshAsync();
+            if (value == Pages.Settings) _ = Changes.RefreshAsync();
             if (value == Pages.Router) _ = Router.RefreshRouterPageAsync();   // и «Роутер: что мешает» — внутри
             if (value == Pages.Dns && DnsRows.Count == 0) _ = CheckDnsAsync();
             if (value == Pages.Diag || value == Pages.About) _ = RefreshDiagAsync();   // «Информация и обновления» показывает версию ядра

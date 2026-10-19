@@ -14,6 +14,9 @@ public sealed class AppPaths
     /// <summary>Прежние настройки DNS адаптеров до первой смены (architecture.md «DNS этого компьютера») — для «Вернуть как было».</summary>
     public string DnsBackup => Path.Combine(Root, "dns-backup.json");
 
+    /// <summary>Журнал изменений системы (откат всего): что меняли, прежнее значение, чем откатить. Пишет помощник.</summary>
+    public string ChangesFile => Path.Combine(Root, "changes.jsonl");
+
     /// <summary>Данные, приехавшие вместе с программой (data\ рядом с exe).</summary>
     public string Package { get; }
 

@@ -154,6 +154,9 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
     /// <summary>«Разрешить обычный DNS, если защищённый не отвечает» — бит 0x4 (не задокументирован, см. architecture.md «DNS этого компьютера»).</summary>
     public const ulong DohFallbackBit = 0x4;
 
+    /// <summary>Журнал изменений (откат всего): снимок «было → поставили» пишется до первой записи в адаптеры.</summary>
+    public IChangeRecorder Recorder { get; init; } = NullRecorder.Instance;
+
     /// <summary>Сколько раз и с какой паузой проверять, что DNS отвечает после переключения (DoH поднимается не сразу).</summary>
     public int VerifyAttempts { get; init; } = 4;
     public TimeSpan VerifyDelay { get; init; } = TimeSpan.FromSeconds(1.5);
@@ -266,6 +269,18 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
         var before = picked.ToDictionary(a => a.Id, sys.Read);
         foreach (var a in picked) backup.Adapters.TryAdd(a.Id, new SavedAdapter(a.Name, before[a.Id]));
 
+        var target = choice == DnsPresets.Auto ? AdapterDns.Automatic : new AdapterDns(false,
+            servers.Where(ip => !DnsValues.IsIpv6(ip)).ToList(), false, servers.Where(DnsValues.IsIpv6).ToList(),
+            template is not null && sys.DohSupported
+                ? servers.ToDictionary(ip => ip, _ => new DohSetting(DohOn | (fallback ? DohFallbackBit : 0), template))
+                : new Dictionary<string, DohSetting>());
+
+        // Журнал отката: снимок «было» и «поставим» — ДО первого изменения. Если ничего не меняется — записи нет.
+        string rec = "";
+        if (picked.Any(a => !DnsSnapshot.SameAddresses(before[a.Id], Fit(a, target))))
+            rec = Recorder.Begin(ChangeKinds.Dns, $"DNS этого компьютера: {title} — {string.Join(", ", picked.Select(a => a.Name))}",
+                DnsSnapshot.ToJson(picked, before, null), DnsSnapshot.ToJson(picked, picked.ToDictionary(a => a.Id, a => Fit(a, target)), []));
+
         // Шаблоны: встроенные (Google, Cloudflare, Quad9) уже известны Windows; остальные регистрируем.
         var addedNow = new List<string>();
         bool encrypt = template is not null && sys.DohSupported;
@@ -281,10 +296,6 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
         // Прежние настройки — на диск до первого изменения: оборвётся посередине — «Вернуть как было» всё равно сработает.
         SaveBackup(backup);
 
-        var flags = DohOn | (fallback ? DohFallbackBit : 0);
-        var target = choice == DnsPresets.Auto ? AdapterDns.Automatic : new AdapterDns(false,
-            servers.Where(ip => !DnsValues.IsIpv6(ip)).ToList(), false, servers.Where(DnsValues.IsIpv6).ToList(),
-            encrypt ? servers.ToDictionary(ip => ip, _ => new DohSetting(flags, template)) : new Dictionary<string, DohSetting>());
         try
         {
             foreach (var a in picked) sys.Write(a, Fit(a, target));
@@ -293,12 +304,14 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
         catch
         {
             Rollback(picked, before, addedNow, backup);
+            Recorder.Abort(rec);
             throw;
         }
 
         if (choice != DnsPresets.Auto && !await VerifyAsync(ct))
         {
             Rollback(picked, before, addedNow, backup);
+            Recorder.Abort(rec);
             var why = encrypt ? $"Защищённый DNS {title} не ответил" : $"DNS {title} не ответил";
             return new(false, why + " — вернул прежние настройки. Попробуйте другой вариант" + (encrypt && !fallback ? " или разрешите обычный DNS." : "."), Status(backup));
         }
@@ -306,6 +319,7 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
         backup.Choice = choice;
         backup.CustomIps = choice == DnsPresets.Custom ? [.. servers] : null;
         SaveBackup(backup);
+        Recorder.Done(rec, DnsSnapshot.ToJson(picked, picked.ToDictionary(a => a.Id, a => Fit(a, target)), addedNow));
         var names = string.Join(", ", picked.Select(a => a.Name));
         var how = choice == DnsPresets.Auto ? "DNS как у провайдера" : encrypt ? $"{title}, защищённый" : $"{title}, без шифрования";
         return new(true, $"{how} — {names}.", Status(backup));
@@ -343,6 +357,12 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
         return false;
     }
 
+    /// <summary>Забыть сохранённые прежние настройки (после отката по журналу: возвращать больше нечего).</summary>
+    public void ForgetBackup()
+    {
+        try { if (File.Exists(backupFile)) File.Delete(backupFile); } catch (IOException) { }
+    }
+
     /// <summary>«Вернуть как было»: прежние настройки каждого адаптера, свои регистрации DoH — убрать.</summary>
     public Task<DnsSetResult> RestoreAsync(CancellationToken ct)
     {
@@ -360,6 +380,7 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
         foreach (var ip in backup.AddedDoh) sys.UnregisterDoh(ip);
         sys.FlushCache();
         File.Delete(backupFile);
+        Recorder.Close(ChangeKinds.Dns, "DNS возвращён кнопкой «Вернуть как было»");
         var msg = restored.Count > 0 ? $"DNS — как было: {string.Join(", ", restored)}." : "DNS — как было.";
         return Task.FromResult(new DnsSetResult(true, msg, Status(null)));
     }
