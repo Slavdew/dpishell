@@ -5,8 +5,8 @@ using DpiShell.Core.Helper;
 namespace DpiShell.Tests;
 
 /// <summary>
-/// Главная и «Свои адреса» в модели окна (UX-аудит 2): итог «Проверить сейчас» — всегда про текущее состояние обхода,
-/// несохранённые свои адреса не теряются молча. Помощник — фейк по каналу, проверка сайтов — подмена без сети.
+/// Главная и «Свои сайты» в модели окна (UX-аудит 2): итог «Проверить сейчас» — всегда про текущее состояние обхода,
+/// несохранённые свои сайты не теряются молча. Помощник — фейк по каналу, проверка сайтов — подмена без сети.
 /// </summary>
 public sealed class HomeViewModelTests : IDisposable
 {
@@ -107,7 +107,7 @@ public sealed class HomeViewModelTests : IDisposable
         vm.Page = Pages.Home;
         for (int i = 0; i < 300 && !vm.HasToast; i++) await Task.Delay(10);
         Assert.Contains("user_targets_set example.com", f.Backend.Calls);
-        Assert.Equal("Свои адреса сохранены.", vm.Toast);
+        Assert.Equal("Свои сайты сохранены.", vm.Toast);
 
         // Дописали ещё и сразу в подбор: сначала сохранить, потом подбирать — иначе новый сайт молча не учтётся.
         f.Backend.StatusValue = Status(active: false) with { UserTargets = ["example.com"] };

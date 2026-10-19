@@ -61,6 +61,7 @@ public sealed class UpdatesViewModel : Observable
         OpenReleaseCmd = new RelayCommand(OpenRelease);
         UpdateAppCmd = RelayCommand.Async(UpdateAppAsync, () => AppReleaseReady && !_appBusy && !_checking);
         RollbackCmd = RelayCommand.Async(RollbackAsync, () => _canRollback && !_appBusy);
+        RetryCmd = RelayCommand.Async(() => AppReleaseReady ? UpdateAppAsync() : CheckAsync(quiet: false), () => !_appBusy && !_checking);
         RefreshRollback();
     }
 
@@ -69,6 +70,8 @@ public sealed class UpdatesViewModel : Observable
     public ICommand OpenReleaseCmd { get; }
     public ICommand UpdateAppCmd { get; }
     public ICommand RollbackCmd { get; }
+    /// <summary>«Повторить» под ошибкой: выпуск проверен — снова обновить, иначе снова проверить.</summary>
+    public ICommand RetryCmd { get; }
 
     /// <summary>Версия данных в работе: у помощника — его, без помощника — поставки окна.</summary>
     public string? CurrentVersion => _helper.Reader is not null && _helper.Status?.DataVersion is { } v ? v : _packageVersion;
@@ -80,7 +83,9 @@ public sealed class UpdatesViewModel : Observable
     public bool AppAvailable => _s.UpdatesApp is { } a && DataUpdateCheck.IsOlder(AppVersion, a);
     /// <summary>Подсказка без проверенного описания выпуска (его не получили): обновить из окна нельзя — только ссылка на страницу релизов.</summary>
     public bool AppHintOnly => AppAvailable && !AppReleaseReady;
-    public string AppText => AppHintOnly ? $"Вышла версия программы {_s.UpdatesApp}. Нажмите «Проверить обновления» — если описание выпуска подтвердится, появится кнопка обновления; или скачайте её со страницы релизов." : "";
+    public string AppText => AppHintOnly ? $"Вышла версия {_s.UpdatesApp}. Нажмите «Проверить обновления» — после проверки подлинности появится кнопка обновления." : "";
+    /// <summary>Одна главная кнопка по состоянию: выпуск проверен — «Обновить до X», иначе «Проверить обновления».</summary>
+    public bool ShowCheckButton => !AppReleaseReady;
     /// <summary>«Скачать программу 99.0» — рядом с «Обновить списки» видно, что это разные вещи (UX-аудит 2, п. 13).</summary>
     public string AppButtonText => $"Скачать программу {_s.UpdatesApp}";
 
@@ -88,7 +93,7 @@ public sealed class UpdatesViewModel : Observable
 
     /// <summary>Есть выпуск новее с верной подписью, подходящий этому компьютеру: можно обновить из окна.</summary>
     public bool AppReleaseReady => _appCheck is { Available: true } c && c.Version is { } v && AppRelease.IsOlder(Three(AppVersion), v);
-    public string AppReleaseTitle => AppReleaseReady ? $"Вышла версия программы {_appCheck!.Version} (сейчас {Three(AppVersion)})" : "";
+    public string AppReleaseTitle => AppReleaseReady ? $"Вышла версия {_appCheck!.Version} (сейчас {Three(AppVersion)})" : "";
     public string AppUpdateButtonText => $"Обновить до {_appCheck?.Version}";
     /// <summary>«Что нового» — из подписанного описания выпуска, показывается до обновления.</summary>
     public IReadOnlyList<string> AppNotes => AppReleaseReady ? _appCheck!.Changes : [];
@@ -98,6 +103,26 @@ public sealed class UpdatesViewModel : Observable
     public string AppError => _appError;
     public bool HasAppError => _appError.Length > 0;
     public string AppErrorDetails => _appErrorDetails;
+    /// <summary>В красной строке — только первая фраза; остальное и технический хвост — под «Подробнее».</summary>
+    public string AppErrorShort => FirstSentence(_appError);
+    public string AppErrorMore
+    {
+        get
+        {
+            var rest = _appError.Length > AppErrorShort.Length ? _appError[AppErrorShort.Length..].TrimStart('.', ' ') : "";
+            return string.Join(Environment.NewLine, new[] { rest, _appErrorDetails }.Where(x => x.Length > 0));
+        }
+    }
+    public bool HasAppErrorMore => AppErrorMore.Length > 0;
+
+    /// <summary>До первой точки с пробелом (имена файлов и версии с точками не режутся) или двоеточия, если фраза длинная.</summary>
+    internal static string FirstSentence(string text)
+    {
+        var i = text.IndexOf(". ", StringComparison.Ordinal);
+        var first = i < 0 ? text : text[..(i + 1)];
+        if (first.Length > 110 && first.IndexOf(": ", StringComparison.Ordinal) is > 0 and var c) first = first[..c];
+        return first.TrimEnd();
+    }
     public bool HasAppErrorDetails => _appErrorDetails.Length > 0;
     /// <summary>Итог прошлого запуска: «Программа обновлена до …», «Возвращена версия …».</summary>
     public string AppNotice => _appNotice;
@@ -161,7 +186,7 @@ public sealed class UpdatesViewModel : Observable
     {
         foreach (var p in new[] { nameof(CurrentVersion), nameof(DataAvailable), nameof(AvailableText), nameof(AppAvailable), nameof(AppHintOnly), nameof(AppText), nameof(AppButtonText), nameof(StatusText),
                                   nameof(AppReleaseReady), nameof(AppReleaseTitle), nameof(AppUpdateButtonText), nameof(AppNotes), nameof(HasAppNotes), nameof(AppProgressText),
-                                  nameof(AppError), nameof(HasAppError), nameof(AppErrorDetails), nameof(HasAppErrorDetails), nameof(AppNotice), nameof(HasAppNotice),
+                                  nameof(AppError), nameof(HasAppError), nameof(AppErrorDetails), nameof(HasAppErrorDetails), nameof(AppErrorShort), nameof(AppErrorMore), nameof(HasAppErrorMore), nameof(ShowCheckButton), nameof(AppNotice), nameof(HasAppNotice),
                                   nameof(AppOsNote), nameof(HasAppOsNote), nameof(CanRollback), nameof(RollbackText) })
             Raise(p);
         CommandManager.InvalidateRequerySuggested();
@@ -215,7 +240,7 @@ public sealed class UpdatesViewModel : Observable
         }
         if (!_appBusy) { _appError = ""; _appErrorDetails = ""; }
         _s.UpdatesApp = c.Available ? c.Version : null;
-        if (c.Available) return $"Вышла версия программы {c.Version} — кнопка «Обновить до {c.Version}» на вкладке «Информация и обновления».";
+        if (c.Available) return $"Вышла версия {c.Version} — кнопка «Обновить до {c.Version}» на вкладке «Информация и обновления».";
         return c.OsTooOld ? AppOsNote : null;
     }
 

@@ -893,7 +893,7 @@ public sealed class RouterUninstallViewModel(RouterViewModel router) : Observabl
     public RouterViewModel Router => router;
 
     bool _keep = true;
-    /// <summary>Сохранить настройки (стратегию, свои адреса, расписание) — для установки заново.</summary>
+    /// <summary>Сохранить настройки (стратегию, свои сайты, расписание) — для установки заново.</summary>
     public bool KeepSettings { get => _keep; set { if (Set(ref _keep, value)) Raise(nameof(Full)); } }
     public bool Full { get => !_keep; set => KeepSettings = !value; }
 

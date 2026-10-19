@@ -196,7 +196,7 @@ public sealed partial class RouterViewModel
     /// <summary>Фраза красная, кроме случая «роутер сам подобрал и включил».</summary>
     public bool OffAlert => _wdState != WatchdogSelectState.Found;
     /// <summary>Подпись возврата: после неудачного подбора роутера «прежняя» — она уже не подошла сторожу.</summary>
-    public string ReEnableText => _wdState == WatchdogSelectState.Failed ? "Попробовать прежнюю (на пробу)" : "Попробовать снова (на пробу)";
+    public string ReEnableText => "Попробовать прежнюю (на пробу)";   // одно название везде (UX-аудит 5, п. 13)
 
     WatchdogSelectState ClassifyWatchdogSelect()
     {

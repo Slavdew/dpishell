@@ -295,17 +295,18 @@ public sealed class NetViewModel : Observable
     {
         get
         {
-            if (_f.Game == GameMode.Off) return AnyActive ? "Выключен. Недоступен, пока включены «Все адреса»." : "Выключен";
-            if (_f.GameBlocked) return "Не действует, пока включены «Все адреса» — вернётся сам вместе с обычным режимом.";
+            if (_f.Game == GameMode.Off) return AnyActive ? "Выключен. Включить нельзя, пока идёт проверка «Все адреса»." : "Выключен";
+            if (_f.GameBlocked) return "Сейчас не работает: идёт проверка «Все адреса» (ниже, в «Дополнительно»). Вернётся сам, когда она закончится.";
             var list = _f.List is { } m ? $"Работает по списку адресов ниже ↓ ({m.Lines:N0} подсетей)" : "Работает по списку адресов ниже ↓";
             return _helper.Status?.Enabled == true ? list : list.Replace("Работает", "Включится вместе с оптимизацией,");
         }
     }
 
     /// <summary>Предупреждение про античиты: общее для игрового режима и записи подключений.</summary>
-    public const string AntiCheatNote = "Игры с защитой от читов (Vanguard, FACEIT, Easy Anti-Cheat) могут не работать при драйвере перехвата.";
+    public const string AntiCheatNote = "Игры с защитой от читов (Vanguard, FACEIT, Easy Anti-Cheat) могут не работать, пока загружен драйвер оптимизации (WinDivert): он перехватывает сетевые пакеты.";
 
-    public string GameHint => "Если игра или программа после включения стала работать хуже — выключите. " + AntiCheatNote;
+    // Предупреждение про античиты — одно на вкладку, под заголовком «Игры и программы» (AppsViewModel.Anti).
+    public string GameHint => "Если игра или программа после включения стала работать хуже — выключите.";
 
     public async Task SetGameAsync(bool on)
     {

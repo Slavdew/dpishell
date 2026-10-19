@@ -114,7 +114,7 @@ public sealed class ConnectionRecorder : IDisposable
         {
             _notes.AddRange(errors);
             if (opened == 0) { Dispose(); throw new InvalidOperationException("Запись не началась. " + string.Join(" ", errors)); }
-            if (!_udp) _notes.Add("UDP не записывается: без драйвера перехвата Windows не показывает, куда идёт UDP. Записаны только TCP-подключения.");
+            if (!_udp) _notes.Add("UDP не записывается: без драйвера Windows не показывает, куда идёт UDP. Записаны только TCP-подключения.");
             _running = true;
         }
     }

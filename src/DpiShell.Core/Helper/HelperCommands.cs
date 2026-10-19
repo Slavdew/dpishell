@@ -9,7 +9,7 @@ public interface IHelperCatalog
 {
     /// <summary>Каталог поставки + найденные глубоким поиском.</summary>
     IReadOnlyCollection<string> StrategyIds { get; }
-    /// <summary>Группы целей поставки + "user" (свои адреса).</summary>
+    /// <summary>Группы целей поставки + "user" (свои сайты).</summary>
     IReadOnlyCollection<string> GroupIds { get; }
 }
 

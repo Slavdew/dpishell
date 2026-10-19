@@ -667,10 +667,10 @@ public sealed partial class WindowSmokeTests
                             if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» на «Диагностике» без роутера");
                     if (page == Pages.Sites)
                     {
-                        // Роутера нет: только свои адреса ПК — без карточек роутера и заглушек про исключения.
+                        // Роутера нет: только свои сайты ПК — без карточек роутера и заглушек про исключения.
                         foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", "Исключения (оптимизация их не трогает)", "Роутер: что мешает" })
                             if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» на «Сайтах» без роутера");
-                        if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Свои адреса" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет поля своих адресов ПК");
+                        if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Свои сайты" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет поля своих сайтов ПК");
                     }
                     if (page == Pages.Dns)
                     {
@@ -777,7 +777,7 @@ public sealed partial class WindowSmokeTests
     }
 
     /// <summary>
-    /// Роутер подключён (FakeRouter на localhost): главная с блоком роутера, «Подбор» на роутере с итогом, «Свои адреса» роутера,
+    /// Роутер подключён (FakeRouter на localhost): главная с блоком роутера, «Подбор» на роутере с итогом, «Свои сайты» роутера,
     /// «Диагностика» с карточками роутера — без ошибок привязок, в обеих темах. Снимки: &lt;тема&gt;-router-&lt;вкладка&gt;.png.
     /// </summary>
     [Fact]
@@ -883,15 +883,15 @@ public sealed partial class WindowSmokeTests
                     }
                     if (page == Pages.Sites)
                     {
-                        // «Сайты» с роутером: «Сайт не открывается» наверху, «Для каких сайтов обход», свои адреса и исключения (не в раскрывашке).
-                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", "Свои адреса", "Исключения (оптимизация их не трогает)", "Сайт открывается только без оптимизации" })
+                        // «Сайты» с роутером: «Сайт не открывается» наверху, «Для каких сайтов обход», свои сайты и исключения (не в раскрывашке).
+                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", "Свои сайты", "Исключения (оптимизация их не трогает)", "Сайт открывается только без оптимизации" })
                             if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is null) throw new Exception($"На вкладке «Сайты» нет «{text}»");
                         if (Find<TextBox>(tabs, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Исключения" && t.IsVisible) is null) throw new Exception("На «Сайтах» не видно поля исключений");
                         if (Find<Button>(tabs, b => b.Content as string == "Добавить в исключения" && b.IsVisible) is null) throw new Exception("Нет «Добавить в исключения»");
                         if (Find<Expander>(tabs, e => (e.Header as string ?? "").StartsWith("Списки роутера") && e.IsVisible) is not null) throw new Exception("Исключения снова спрятаны в раскрывашке");
                         var siteTop = Find<TextBlock>(tabs, t => t.Text == "Сайт не открывается" && t.IsVisible)!.TranslatePoint(new Point(0, 0), w).Y;
-                        var addrTop = Find<TextBlock>(tabs, t => t.Text == "Свои адреса" && t.IsVisible && t.Style == (Style)w.FindResource("H2"))!.TranslatePoint(new Point(0, 0), w).Y;
-                        if (siteTop > addrTop) throw new Exception("«Сайт не открывается» должно стоять выше своих адресов");
+                        var addrTop = Find<TextBlock>(tabs, t => t.Text == "Свои сайты" && t.IsVisible && t.Style == (Style)w.FindResource("H2"))!.TranslatePoint(new Point(0, 0), w).Y;
+                        if (siteTop > addrTop) throw new Exception("«Сайт не открывается» должно стоять выше своих сайтов");
                     }
                     if (page == Pages.Router && Find<Button>(tabs, b => b.Content as string == "Исправить" && b.IsVisible) is null)
                         throw new Exception("У предупреждения роутера нет «Исправить»");
@@ -1039,8 +1039,8 @@ public sealed partial class WindowSmokeTests
                 {
                     var tabs = Find<TabControl>(w)!;
                     if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Оптимизация на роутере выключена сторожем") && t.IsVisible) is null) throw new Exception("На главной нет фразы о стороже");
-                    if (Find<Button>(tabs, b => b.Content as string == "Попробовать снова (на пробу)" && b.IsVisible && b.IsEnabled) is null) throw new Exception("На главной нет «Попробовать снова»");
-                    if (Find<Button>(tabs, b => b.Content as string == "Подобрать заново" && b.IsVisible && b.IsEnabled) is null) throw new Exception("В плашке главной нет «Подобрать заново»");
+                    if (Find<Button>(tabs, b => b.Content as string == "Попробовать прежнюю (на пробу)" && b.IsVisible && b.IsEnabled) is null) throw new Exception("На главной нет «Попробовать снова»");
+                    if (Find<Button>(tabs, b => b.Content as string == "Подобрать на роутере" && b.IsVisible && b.IsEnabled) is null) throw new Exception("В плашке главной нет «Подобрать заново»");
                     if (Find<Button>(tabs, b => b.Content as string == "Включить снова") is not null) throw new Exception("Осталась «Включить снова»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-home.png"));
                     vm.Page = Pages.Router;
@@ -1062,7 +1062,7 @@ public sealed partial class WindowSmokeTests
                     Pump();
                     if (Find<Button>(tabs, b => b.Content as string == "Не сейчас" && b.IsVisible) is not null || Find<TextBlock>(tabs, t => t.Text.StartsWith("Подобрать на роутере другую") && t.IsVisible) is not null)
                         throw new Exception("«Не сейчас» не спрятало предложение");
-                    if (Find<Button>(tabs, b => b.Content as string == "Попробовать снова (на пробу)" && b.IsVisible && b.IsEnabled) is null) throw new Exception("После «Не сейчас» пропало «Попробовать снова»");
+                    if (Find<Button>(tabs, b => b.Content as string == "Попробовать прежнюю (на пробу)" && b.IsVisible && b.IsEnabled) is null) throw new Exception("После «Не сейчас» пропало «Попробовать снова»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-dismissed.png"));
                     if (Find<CheckBox>(tabs, c => (c.Content as string ?? "").StartsWith("Сторож:") && c.IsVisible) is not { } wdBox) throw new Exception("В «Проверять сам» нет сторожа");
                     if (Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } wsv2)
@@ -1081,14 +1081,14 @@ public sealed partial class WindowSmokeTests
                     WaitUi(router.RefreshAsync());
                     Pump();
                     if (Find<TextBlock>(tabs, t => t.Text == "Сторож выключил оптимизацию — роутер подбирает другую стратегию…" && t.IsVisible) is null) throw new Exception("Нет фразы о подборе после сторожа");
-                    if (Find<Button>(tabs, b => (b.Content as string is "Подобрать" or "Не сейчас" or "Попробовать снова (на пробу)") && b.IsVisible) is not null) throw new Exception("Во время подбора после сторожа остались кнопки предложения");
+                    if (Find<Button>(tabs, b => (b.Content as string is "Подобрать" or "Не сейчас" or "Попробовать прежнюю (на пробу)") && b.IsVisible) is not null) throw new Exception("Во время подбора после сторожа остались кнопки предложения");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-running.png"));
                     WaitUi(router.CancelSelectAsync());
                     fake.WatchdogSelectFound();
                     WaitUi(router.RefreshAsync());
                     Pump();
                     if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Сторож выключил прежнюю стратегию, роутер подобрал и включил ") && t.IsVisible) is null) throw new Exception("Нет фразы «роутер подобрал и включил»");
-                    if (Find<Button>(tabs, b => (b.Content as string is "Подобрать" or "Не сейчас" or "Попробовать снова (на пробу)" or "Попробовать прежнюю (на пробу)") && b.IsVisible) is { } extra) throw new Exception("После удачного подбора сторожа остались кнопки: " + extra.Content);
+                    if (Find<Button>(tabs, b => (b.Content as string is "Подобрать" or "Не сейчас" or "Попробовать прежнюю (на пробу)" or "Попробовать прежнюю (на пробу)") && b.IsVisible) is { } extra) throw new Exception("После удачного подбора сторожа остались кнопки: " + extra.Content);
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-found.png"));
                     fake.WatchdogTrip();
                     fake.WatchdogSelectFailed();
@@ -1338,10 +1338,10 @@ public sealed partial class WindowSmokeTests
         Collect(tabs, primary);
         if (primary.Count(b => b.IsVisible && b.Style == (Style)w.FindResource("Primary")) != 1) throw new Exception("На главной должна быть одна главная кнопка");
         var list = Find<ListBox>(tabs) ?? throw new Exception("На главной нет списка стратегий");
-        if (list.IsVisible) throw new Exception("Список стратегий должен быть свёрнут до «Сменить стратегию»");
+        if (list.IsVisible) throw new Exception("Список стратегий должен быть свёрнут до «Показать стратегии»");
         vm.ShowStrategies = true;
         Pump();
-        if (!list.IsVisible) throw new Exception("«Сменить стратегию» не раскрыл список");
+        if (!list.IsVisible) throw new Exception("«Показать стратегии» не раскрыл список");
         if (list.Items.Count != vm.StrategyChoices.Count || list.Items.Count == 0) throw new Exception($"В списке {list.Items.Count} строк, ждали {vm.StrategyChoices.Count}");
         if ((list.SelectedItem as StrategyChoice)?.Id != vm.ChosenStrategyId) throw new Exception("В списке не выделена выбранная стратегия");
         // Порядок списка: «по результату» выбран; «по имени» — числа как числа (ALT2 … ALT10), без номера — первым; выбор виден в окне.
@@ -1486,7 +1486,7 @@ public sealed partial class WindowSmokeTests
         vm.TargetsText = string.Join(Environment.NewLine, Enumerable.Range(1, 40).Select(i => i == 3
             ? "очень-длинный-поддомен-для-проверки-горизонтальной-прокрутки.example-with-a-very-long-name.com"
             : $"site{i}.example.com"));
-        SetProp(vm, "TargetsMessage", "Сохранено адресов: 40.");
+        SetProp(vm, "TargetsMessage", "Сохранено сайтов: 40.");
 
         SetProp(vm, "ServiceText", "работает (стратегия: " + strategies[0].Title + ")");
         SetProp(vm, "DriverText", "работает");
@@ -1621,7 +1621,7 @@ public sealed partial class WindowSmokeTests
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-simple-check.png"));
                     Btn("Да, заработало")!.Command.Execute(null);
                     Pump();
-                    if (!Visible(t => t.Text.StartsWith("Готово: профиль включён"))) throw new Exception("Нет итога");
+                    if (!Visible(t => t.Text.StartsWith("Профиль «") && t.Text.Contains("» сохранён."))) throw new Exception("Нет итога");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-simple-done.png"));
                 }
                 else
@@ -1809,8 +1809,9 @@ public sealed partial class WindowSmokeTests
                 var (vm, w, _) = NewWindow(AppUpdateTests.Serve(new MapHandler(), AppUpdateTests.A, "1.2.0"), "1.0.0", _ => new TaskCompletionSource().Task);
                 vm.Updates.CheckCmd.Execute(null);
                 Until(() => vm.Updates.AppReleaseReady, "проверка выпуска");
-                foreach (var t in new[] { "Что нового", "• Быстрее подбор", "• Исправлен трей", "Обновить до 1.2.0", "Проверить обновления" })
+                foreach (var t in new[] { "Что нового", "• Быстрее подбор", "• Исправлен трей", "Обновить до 1.2.0" })
                     if (!Has(w, t)) throw new Exception($"Нет «{t}» при доступном обновлении");
+                if (Has(w, "Проверить обновления")) throw new Exception("Две главные кнопки: «Проверить обновления» рядом с «Обновить до X»");
                 if (Has(w, "Скачать программу 1.2.0") || HasPart(w, "Вернуть прежнюю")) throw new Exception("Лишние кнопки при доступном обновлении");
                 Shot(w, "ready");
 
@@ -1835,7 +1836,9 @@ public sealed partial class WindowSmokeTests
                 Until(() => vm2.Updates.AppReleaseReady, "проверка выпуска (ошибка)");
                 vm2.Updates.UpdateAppCmd.Execute(null);
                 Until(() => vm2.Updates.HasAppError, "ошибка обновления");
-                if (!HasPart(w2, "Скачанный файл не прошёл проверку") || !HasPart(w2, "программа не изменена")) throw new Exception("Нет фразы об ошибке");
+                if (!HasPart(w2, "Скачанный файл не прошёл проверку") || HasPart(w2, "sha256")) throw new Exception("Нет первой фразы об ошибке или технический хвост на виду");
+                if (!vm2.Updates.AppErrorMore.Contains("программа не изменена") || !vm2.Updates.AppErrorMore.Contains("sha256")) throw new Exception("Остаток и хвост не под «Подробнее»");
+                if (Find<Button>(w2, b => b.Content as string == "Повторить" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Повторить» под ошибкой");
                 if (Find<Button>(w2, b => b.Content as string == "Обновить до 1.2.0" && b.IsVisible && b.IsEnabled) is null) throw new Exception("После ошибки нельзя повторить");
                 if (store2.IsInstalled("1.2.0")) throw new Exception("Подменённый архив распакован");
                 Shot(w2, "error");

@@ -11,7 +11,7 @@ public sealed record HostsRow(string Host, string Ip, string Owner, string Live,
     public static HostsRow From(HostsCheckRow r) => new(
         r.Host, r.Ip,
         r.OwnerName ?? (r.Owner == OwnerState.Unknown ? "не узнать" : "—"),
-        r.Live is null ? "не проверялся" : r.Live.Ok ? "✓ сертификат" : r.Live.Outcome == EndpointOutcome.BadCertificate ? "✗ чужой сертификат" : "✗ не отвечает",
+        r.Live is null ? "не проверялся" : r.Live.Ok ? "✓ подтверждён" : r.Live.Outcome == EndpointOutcome.BadCertificate ? "✗ чужой сайт" : "✗ не отвечает",
         r.Live?.Ok == true,
         r.Dns switch { DnsState.Works => "✓ работает", DnsState.Fails => "✗ не работает", _ => "?" },
         r.Verdict switch
@@ -28,7 +28,7 @@ public sealed record HostsRow(string Host, string Ip, string Owner, string Live,
         HostsVerdict.Install => "адрес из DNS не открывается, этот — да",
         HostsVerdict.NotNeeded => "через DNS и так открывается",
         HostsVerdict.Unreachable => "адрес не отвечает" + Detail(r.Live?.Detail),
-        HostsVerdict.BadCertificate => "сертификат не этого сайта" + Detail(r.Live?.Detail),
+        HostsVerdict.BadCertificate => "по этому адресу отвечает другой сайт",
         HostsVerdict.OwnerMismatch => $"сеть принадлежит другой компании ({r.OwnerName})",
         _ => r.DnsDetail.Length > 0 ? r.DnsDetail : "не из разрешённого списка",
     };

@@ -157,10 +157,10 @@ public static class StrategyParams
         line.Replace(root.TrimEnd(System.IO.Path.DirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar, "", StringComparison.OrdinalIgnoreCase);
 }
 
-/// <summary>Названия групп целей для подробностей: из каталога целей и «Свои адреса»; контрольные («Обычные сайты») отмечены.</summary>
+/// <summary>Названия групп целей для подробностей: из каталога целей и «Свои сайты»; контрольные («Обычные сайты») отмечены.</summary>
 public sealed class GroupNames
 {
-    readonly Dictionary<string, (string Title, bool Control)> _map = new() { ["user"] = ("Свои адреса", false) };
+    readonly Dictionary<string, (string Title, bool Control)> _map = new() { ["user"] = ("Свои сайты", false) };
 
     public GroupNames(IEnumerable<TargetGroup> groups)
     {
@@ -230,6 +230,9 @@ public sealed class ScoreRow(StrategyScore s, GroupNames? names = null) : Observ
     public string Avg => Score.Verdicts.Any(v => v.Ok) ? $"{Score.AvgSeconds:0.00} с" : "—";
     /// <summary>Ошибка запуска или «ломает обычные сайты»; без неё — где не открылись обязательные адреса.</summary>
     public string Error => Unchecked ? "не проверена" : Score.Error is null ? CheckRow.Missed(Details) : Score.Error.Length > 80 ? Score.Error[..80] + "…" : Score.Error;
+    /// <summary>Пустая колонка выглядит как сбой отрисовки: когда ошибок нет — «нет» серым (UX-аудит 5, п. 17).</summary>
+    public string ErrorShown => Error.Length > 0 ? Error : "нет";
+    public bool ErrorIsProblem => !Unchecked && Error.Length > 0;
     public string ErrorFull => Unchecked ? "Стратегия ещё не проверена на ваших сайтах — нажмите «Проверить»." : Score.Error ?? CheckRow.Missed(Details);
     public bool Usable => Score.Error is null && Score.GroupsPassed > 0;
     public bool IsBest { get => _best; set { if (Set(ref _best, value)) Raise(nameof(Mark)); } }
@@ -252,7 +255,7 @@ public sealed class ScoreRow(StrategyScore s, GroupNames? names = null) : Observ
 /// <summary>Строка сравнения DNS на вкладке «DNS».</summary>
 public sealed record DnsRow(string Host, string System, string Doh, bool Spoofed)
 {
-    public string Mark => Spoofed ? "подмена" : "";
+    public string Mark => Spoofed ? "подменён" : "";
 
     public static DnsRow From(DnsComparison c) => new(
         c.Host,

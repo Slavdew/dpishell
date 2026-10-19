@@ -21,8 +21,8 @@ public static class StrategyStats
     const double Unknown = 0.5;   // новые стратегии — после проверенно рабочих, но до проверенно нерабочих
 
     /// <summary>
-    /// Score — взвешенная доля обязательных групп (YouTube, Discord…; без них — доля своих адресов); Runs — прогонов; FullOk — открыла всё.
-    /// UserShare — взвешенная доля своих адресов; UserOk из UserTotal — в последнем прогоне со своими адресами. Seconds — среднее время.
+    /// Score — взвешенная доля обязательных групп (YouTube, Discord…; без них — доля своих сайтов); Runs — прогонов; FullOk — открыла всё.
+    /// UserShare — взвешенная доля своих сайтов; UserOk из UserTotal — в последнем прогоне со своими адресами. Seconds — среднее время.
     /// ControlBroken — в скольких прогонах ломала «Обычные сайты». Groups — по группам каталога; Last — по адресам из последнего прогона.
     /// Newest — самый свежий прогон (и старого формата); Streak — сколько свежих прогонов подряд открывала всё (только с группами).
     /// </summary>
@@ -36,7 +36,7 @@ public static class StrategyStats
     /// <summary>Группа каталога: открылась (все обязательные адреса) в Ok из Runs прогонов, где проверялась.</summary>
     public sealed record GroupStat(string Id, int Runs, int Ok);
 
-    /// <summary>Последний прогон с разбивкой по адресам (свои адреса — «свой адрес №N», как в файле).</summary>
+    /// <summary>Последний прогон с разбивкой по адресам (свои сайты — «свой адрес №N», как в файле).</summary>
     public sealed record LastRun(string File, IReadOnlyList<TargetStat> Targets);
 
     public sealed record TargetStat(string GroupId, string Url, bool Ok, bool Required, bool Control, double Seconds, IReadOnlyList<ProbeStat> Probes);
@@ -104,7 +104,7 @@ public static class StrategyStats
     /// <summary>Группа открылась — как в подборе (Selector): все обязательные адреса и хоть один вообще.</summary>
     static bool GroupOk(IEnumerable<TargetStat> t) => t.Where(x => x.Required).All(x => x.Ok) && t.Any(x => x.Ok);
 
-    /// <summary>Группы каталога — цели подбора: не свои адреса и не контрольные («Обычные сайты»).</summary>
+    /// <summary>Группы каталога — цели подбора: не свои сайты и не контрольные («Обычные сайты»).</summary>
     static bool Catalog(TargetStat t) => t.GroupId != "user" && !t.Control;
 
     static Stat Summarize(List<Run> runs)   // runs — от свежего к старому
@@ -154,7 +154,7 @@ public static class StrategyStats
             new NewestRun(runs[0].File, runs[0].Passed, runs[0].Total, runs[0].ControlBroken), streak);
     }
 
-    /// <summary>Порядок проверки по статистике: обязательные группы, затем доля своих адресов, затем время; при равенстве — исходный.</summary>
+    /// <summary>Порядок проверки по статистике: обязательные группы, затем доля своих сайтов, затем время; при равенстве — исходный.</summary>
     public static IReadOnlyList<Strategy> Order(IReadOnlyList<Strategy> strategies, IReadOnlyDictionary<string, Stat> stats) =>
         Order(strategies, s => s.Id, stats);
 

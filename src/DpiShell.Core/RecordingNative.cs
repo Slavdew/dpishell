@@ -112,7 +112,7 @@ public sealed class TcpTableSource : IFlowSource
 /// </summary>
 public sealed class WinDivertFlowSource : IFlowSource
 {
-    public string Name => "драйвер перехвата (потоки)";
+    public string Name => "драйвер WinDivert (потоки)";
     public bool CoversUdp => true;
 
     readonly string _dll;
@@ -144,7 +144,7 @@ public sealed class WinDivertFlowSource : IFlowSource
         }
         catch (Exception e) when (e is DllNotFoundException or BadImageFormatException or EntryPointNotFoundException)
         {
-            return "драйвер перехвата не загрузился";
+            return "драйвер WinDivert не загрузился";
         }
         // Фильтр «true»: события отбираем здесь. Так нечему не скомпилироваться в фильтре на другой версии драйвера.
         _handle = _f.Open("true", LayerFlow, 0, FlagSniff | FlagRecvOnly);
@@ -152,7 +152,7 @@ public sealed class WinDivertFlowSource : IFlowSource
         {
             int err = Marshal.GetLastWin32Error();
             _handle = IntPtr.Zero;
-            return err == 5 ? "нет прав на драйвер перехвата" : err == 577 ? "драйвер перехвата заблокирован системой" : $"драйвер перехвата не открылся (код {err})";
+            return err == 5 ? "нет прав на драйвер WinDivert" : err == 577 ? "драйвер WinDivert заблокирован системой" : $"драйвер WinDivert не открылся (код {err})";
         }
         _thread = new Thread(() => Loop(onFlow)) { IsBackground = true, Name = "flow-record" };
         _thread.Start();

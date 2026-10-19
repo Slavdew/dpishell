@@ -94,7 +94,7 @@ public sealed class StrategyStatsTests
         Assert.Equal("2026-10-17_10-00-00.json", a.Last!.File);
         Assert.Equal(13, a.Last.Targets.Count);
         var site1 = a.Last.Targets.First(x => x.GroupId == "user" && !x.Ok);
-        Assert.StartsWith("свой адрес №", site1.Url);   // свои адреса в истории не хранятся
+        Assert.StartsWith("свой адрес №", site1.Url);   // свои сайты в истории не хранятся
         Assert.Equal("Reset", Assert.Single(site1.Probes).Outcome);
         Assert.True(a.Last.Targets.Single(x => x.GroupId == "control").Control);
 

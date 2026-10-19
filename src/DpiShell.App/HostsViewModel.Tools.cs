@@ -14,6 +14,9 @@ public sealed class TryRowVm : Observable
     public string Verdict { get; }
     public string Reason { get; }
     public string Detail { get; }
+    /// <summary>Технические признаки (сертификат, владелец сети, совпадение с DNS) — под «Подробнее» у строки.</summary>
+    public string Technical { get; }
+    public bool HasTechnical => Technical.Length > 0;
     /// <summary>ok — чинит; bad — мешает; warn — не поможет; muted — нейтрально.</summary>
     public string Tone { get; }
     public bool CanSelect { get; }
@@ -31,28 +34,36 @@ public sealed class TryRowVm : Observable
             HostsTryVerdict.Helps => ("Поможет", "Строка чинит", "ok"),
             HostsTryVerdict.NotNeeded => ("Не нужна", "Открывается и так", "muted"),
             HostsTryVerdict.Breaks => ("Сломает", "Сайт перестанет открываться", "bad"),
-            HostsTryVerdict.Useless => ("Не поможет", "Нужна оптимизация, не hosts", "warn"),
-            HostsTryVerdict.Dangerous => ("Опасно", "Адрес не принадлежит сайту", "bad"),
+            HostsTryVerdict.Useless => ("Не поможет", "Здесь нужна оптимизация, а не hosts", "warn"),
+            HostsTryVerdict.Dangerous => ("Опасно", "Адрес чужой, а не этого сайта", "bad"),
             _ => ("Блокирует", "Блокировка (ничего не меняет)", "muted"),
         };
-        Detail = (r.Line > 0 ? $"строка {r.Line} · " : "") + Describe(r);
+        Detail = (r.Line > 0 ? $"строка {r.Line} · " : "") + Simple(r);
+        Technical = Describe(r);
         CanSelect = selectable;
         _selected = selectable && selected;
     }
 
-    /// <summary>Что выяснила проверка: сертификат, чей адрес, как соотносится с DNS.</summary>
+    /// <summary>Одной фразой, что выяснила проверка: «Подтверждено: адрес принадлежит GitHub».</summary>
+    static string Simple(HostsTryRow r) =>
+        r.Live is null ? "адрес не проверялся"
+        : r.Live.Ok ? (string.IsNullOrWhiteSpace(r.OwnerName) ? "подтверждено: сайт отвечает по этому адресу" : $"подтверждено: адрес принадлежит {r.OwnerName.Trim()}")
+        : r.Live.Outcome == EndpointOutcome.BadCertificate ? "по адресу отвечает другой сайт"
+        : "адрес не отвечает";
+
+    /// <summary>Технические признаки: сертификат, владелец сети, как соотносится с DNS.</summary>
     static string Describe(HostsTryRow r)
     {
         var parts = new List<string>();
-        parts.Add(r.Live is null ? "адрес-заглушка, не проверялся"
+        parts.Add(r.Live is null ? "заглушка (0.0.0.0 и подобные) — не проверялся"
             : r.Live.Ok ? "сертификат верный"
             : r.Live.Outcome == EndpointOutcome.BadCertificate ? "сертификат не этого сайта"
             : "адрес не отвечает");
-        if (!string.IsNullOrWhiteSpace(r.OwnerName)) parts.Add($"адрес: {r.OwnerName}");
+        if (!string.IsNullOrWhiteSpace(r.OwnerName)) parts.Add($"владелец сети: {r.OwnerName}");
         parts.Add(r.Match switch
         {
             DnsMatch.Same => "совпадает с DNS",
-            DnsMatch.SameNet => "рядом с адресом из DNS",
+            DnsMatch.SameNet => "из той же сети, что и ответ DNS",
             DnsMatch.Differs => "отличается от DNS",
             _ => "DNS не ответил",
         });
@@ -186,13 +197,11 @@ public sealed partial class HostsViewModel
     {
         int Count(HostsTryVerdict v) => report.Rows.Count(r => r.Verdict == v);
         var parts = new List<string>();
-        void Add(string name, HostsTryVerdict v) { if (Count(v) is > 0 and var n) parts.Add($"{name}: {n}"); }
-        Add("поможет", HostsTryVerdict.Helps);
-        Add("не нужны", HostsTryVerdict.NotNeeded);
-        Add("сломают", HostsTryVerdict.Breaks);
-        Add("опасны", HostsTryVerdict.Dangerous);
-        Add("не помогут", HostsTryVerdict.Useless);
-        Add("блокируют", HostsTryVerdict.Blocks);
+        void Add(string name, params HostsTryVerdict[] vs) { if (vs.Sum(Count) is > 0 and var n) parts.Add($"{name}: {n}"); }
+        // Выводы вместо шести счётчиков: что записать можно, что не нужно, а что лучше не записывать (ломает сайт или чужой адрес).
+        Add("можно записать", HostsTryVerdict.Helps);
+        Add("не нужны", HostsTryVerdict.NotNeeded, HostsTryVerdict.Useless, HostsTryVerdict.Blocks);
+        Add("не стоит", HostsTryVerdict.Breaks, HostsTryVerdict.Dangerous);
         var text = $"{head}: {report.Rows.Count}" + (parts.Count > 0 ? ". " + string.Join(" · ", parts) : "") + ".";
         if (report.Truncated) text += $" Проверено первых {report.Rows.Count} из {report.Total}.";
         if (paste is { SkippedLines: > 0 }) text += $" Пропущено строк без адреса или имени: {paste.SkippedLines}.";

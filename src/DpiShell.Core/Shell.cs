@@ -53,7 +53,7 @@ public sealed class Shell
     public async Task<CoreCheck> PrepareAsync(IProgress<string>? log = null, CancellationToken ct = default)
     {
         Data.Seed();
-        if (IsAdmin()) Paths.Harden();   // свои адреса и ядро — только системе и администраторам
+        if (IsAdmin()) Paths.Harden();   // свои сайты и ядро — только системе и администраторам
         var check = Installer.Check();
         if (check.State == CoreState.Missing)
         {
@@ -252,7 +252,7 @@ public sealed class Shell
         {
             State.TimestampsEnabledByUs = false;
             State.Save(Paths);
-            Journal.Close(ChangeKinds.TcpTimestamps, "метки TCP возвращены кнопкой «Удалить службу полностью»");
+            Journal.Close(ChangeKinds.TcpTimestamps, "метки TCP возвращены кнопкой «Удалить службу оптимизации»");
         }
     }
 
@@ -635,7 +635,7 @@ public sealed class Shell
         State.AppProfiles.Clear();
         State.Save(Paths);
         SyncAppProfileFiles();
-        Journal.Close(ChangeKinds.AppProfile, "профили удалены кнопкой «Удалить службу полностью»");
+        Journal.Close(ChangeKinds.AppProfile, "профили удалены кнопкой «Удалить службу оптимизации»");
     }
 
     /// <summary>Файлы адресов профилей — ровно по state.json: недостающие пишутся, лишние (app-*.txt) удаляются.</summary>

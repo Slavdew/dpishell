@@ -183,8 +183,8 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         // Описание варианта роутера: оба шаблона у «Google + Cloudflare», кто держит — по id из пресетов ПК, «рекомендуем» у Google.
         var both = vm.DnsPick.Options.Single(o => o.Id == "default");
         Assert.Equal(["https://dns.google/dns-query", "https://cloudflare-dns.com/dns-query"], both.DohAll);
-        Assert.Contains(both.Info, l => l.Label == "Кто держит" && l.Value == "Google и Cloudflare (США)");
-        Assert.Contains(vm.DnsPick.Options.Single(o => o.Id == "yandex").Info, l => l.Label == "Кто держит" && l.Value == "Яндекс (Россия)");
+        Assert.Contains(both.Info, l => l.Label == "Оператор" && l.Value == "Google и Cloudflare (США)");
+        Assert.Contains(vm.DnsPick.Options.Single(o => o.Id == "yandex").Info, l => l.Label == "Оператор" && l.Value == "Яндекс (Россия)");
         Assert.StartsWith("рекомендуем", vm.DnsPick.Options.Single(o => o.Id == "google").Note);
 
         string? asked = null;
@@ -321,7 +321,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         // Простыми словами, без «временных меток» (п. 8); на главной — число и текст первого предупреждения (п. 7).
         Assert.Equal(RouterViewModel.TimestampsNeed, vm.TimestampsNote);
         Assert.Equal("· 2 предупреждения", vm.HomeFixText);   // и ускорение сети у фейкового роутера
-        Assert.Equal("Ускорение сети на роутере мешает оптимизации", vm.HomeLine);
+        Assert.DoesNotContain("Ускорение сети", vm.HomeLine);   // работает — текст предупреждений не на главной
         await vm.CheckTimestampsAsync(ask: true);   // кнопка «Включить»
         Assert.True(helper);
         Assert.False(vm.TimestampsNeedAction);
@@ -713,7 +713,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.Equal(Pages.About, page);
     }
 
-    // ---------- свои адреса роутера пусты (router-api §5.2) ----------
+    // ---------- свои сайты роутера пусты (router-api §5.2) ----------
 
     [Fact]
     public async Task SelectOnlyUser_RouterListEmpty_OffersPcTargets_SendsAndRetries()
@@ -728,7 +728,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         await vm.StartSelectAsync(deep: false);
 
         Assert.Contains("пуст", asked);
-        Assert.Contains("Отправить свои адреса с компьютера на роутер", asked);
+        Assert.Contains("Отправить свои сайты с компьютера на роутер", asked);
         Assert.Equal(2, Count(r, "select_start"));          // отказ, отправка, повтор
         Assert.Equal(1, Count(r, "targets_set"));
         Assert.Equal(["https://example.org/", "https://news.example.net/"], r.UserTargets.Select(t => t.Url));
@@ -753,10 +753,10 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.Equal(1, asks);
         Assert.Equal(0, Count(r, "select_start"));           // спросили заранее, без лишнего отказа роутера
         Assert.Equal(0, Count(r, "targets_set"));
-        Assert.Contains("нет своих адресов", _said[^1]);
+        Assert.Contains("нет своих сайтов", _said[^1]);
     }
 
-    /// <summary>Выбор «только Свои адреса» остался от прежней установки, а адресов нет нигде — снять их и подобрать по умолчанию.</summary>
+    /// <summary>Выбор «только Свои сайты» остался от прежней установки, а адресов нет нигде — снять их и подобрать по умолчанию.</summary>
     [Fact]
     public async Task SelectOnlyUser_EmptyEverywhere_DropsUser_SelectsDefaults()
     {
@@ -769,7 +769,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
 
         await vm.StartSelectAsync(deep: false);
 
-        Assert.Equal(2, Count(r, "select_start"));          // отказ роутера, повтор без «Своих адресов»
+        Assert.Equal(2, Count(r, "select_start"));          // отказ роутера, повтор без «Своих сайтов»
         Assert.Equal(["youtube", "discord"], Args(r, "select_start")["groups"]!.AsArray().Select(n => n!.GetValue<string>()));
         Assert.Equal(["youtube", "discord"], marked);
         Assert.Contains(_said, s => s.Contains("Скопировать с ПК"));
@@ -792,7 +792,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.Equal(["youtube", "discord"], marked);
     }
 
-    /// <summary>Удалили DpiShell с роутера и поставили заново — выбор групп и свои адреса прежнего роутера забыты.</summary>
+    /// <summary>Удалили DpiShell с роутера и поставили заново — выбор групп и свои сайты прежнего роутера забыты.</summary>
     [Fact]
     public async Task ForgetRouterSetup_ResetsGroupsAndTargets()
     {

@@ -53,7 +53,7 @@ public sealed class AppsViewModelTests
 
         await Run(vm.YesCmd);
         Assert.True(vm.IsDone);
-        Assert.Contains("Готово: профиль включён", vm.Status);
+        Assert.Contains("Профиль «game» сохранён.", vm.Status);
         Assert.Single(vm.Profiles);
         Assert.Contains(said, s => s.Contains("включён"));
     }

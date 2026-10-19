@@ -22,7 +22,7 @@ public sealed record DnsOption(string Id, string Title, string Detail, bool Cust
     IEnumerable<string> V6 => Ips.Where(DnsValues.IsIpv6);
     public IReadOnlyList<string> DohAll => Doh is null ? [] : [Doh, .. (MoreDoh ?? []).Where(d => d != Doh)];
 
-    /// <summary>Описание варианта строками «что — значение»: адреса, защищённый DNS, кто держит, заметка, время ответа.</summary>
+    /// <summary>Технические подробности строками «что — значение» (под «Подробнее»): адреса, адрес защищённого DNS, оператор, время ответа. Заметка — отдельно, на виду.</summary>
     public IReadOnlyList<DnsInfoLine> Info
     {
         get
@@ -30,9 +30,8 @@ public sealed record DnsOption(string Id, string Title, string Detail, bool Cust
             var lines = new List<DnsInfoLine>();
             if (V4.Any()) lines.Add(new("IPv4", string.Join(", ", V4)));
             if (V6.Any()) lines.Add(new("IPv6", string.Join(", ", V6)));
-            if (DohAll.Count > 0) lines.Add(new("Защищённый DNS", string.Join(Environment.NewLine, DohAll)));
-            if (Owner is { Length: > 0 }) lines.Add(new("Кто держит", Owner));
-            if (Note is { Length: > 0 }) lines.Add(new("Заметка", Note));
+            if (DohAll.Count > 0) lines.Add(new("Адрес защищённого DNS", string.Join(Environment.NewLine, DohAll)));
+            if (Owner is { Length: > 0 }) lines.Add(new("Оператор", Owner));
             if (Ping.Length > 0) lines.Add(new("Ответ с этого ПК", Ping));
             return lines;
         }
@@ -89,7 +88,7 @@ public sealed class DnsPicker : Observable
         set
         {
             if (!Set(ref _selected, value)) return;
-            Raise(nameof(SelectedDetail)); Raise(nameof(SelectedInfo)); Raise(nameof(HasSelectedDetail));
+            Raise(nameof(SelectedDetail)); Raise(nameof(SelectedInfo)); Raise(nameof(HasSelectedDetail)); Raise(nameof(SelectedNote)); Raise(nameof(HasSelectedNote));
             Copied = "";
             CommandManager.InvalidateRequerySuggested();
         }
@@ -98,6 +97,9 @@ public sealed class DnsPicker : Observable
     /// <summary>Строка-сводка — когда описания нет (вариант «как у провайдера»).</summary>
     public bool HasSelectedDetail => SelectedInfo.Count == 0 && SelectedDetail.Length > 0;
     public IReadOnlyList<DnsInfoLine> SelectedInfo => Selected?.Info ?? [];
+    /// <summary>Заметка варианта («рекомендуем», «российский: может применять реестр запрещённых сайтов») — одной строкой на виду.</summary>
+    public string SelectedNote => Selected?.Note ?? "";
+    public bool HasSelectedNote => SelectedNote.Length > 0;
 
     // ---------- копирование и «Сравнить» ----------
 

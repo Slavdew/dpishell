@@ -54,13 +54,23 @@
             <StackPanel>
                 <TextBlock Text="{Binding SelectedDetail}" Style="{StaticResource Hint}" TextWrapping="Wrap"
                            Visibility="{Binding HasSelectedDetail, Converter={StaticResource Vis}}" />
-                <!-- Описание варианта: адреса, защищённый DNS, кто держит, заметка — чтобы вписать вручную в Windows, телефон, роутер. -->
+                <TextBlock Text="{Binding SelectedNote}" Style="{StaticResource Hint}" TextWrapping="Wrap"
+                           Visibility="{Binding HasSelectedNote, Converter={StaticResource Vis}}" />
+            </StackPanel>
+        </DockPanel>
+        <CheckBox Content="Если защищённый DNS не отвечает, использовать обычный" IsChecked="{Binding Fallback}" Margin="0,8,0,0"
+                  Visibility="{Binding ShowFallback, Converter={StaticResource Vis}}" />
+
+        <!-- Технические подробности (адреса, IPv4/IPv6, шаблон защищённого DNS, оператор), копирование и сравнение скорости — под «Подробнее» (UX-аудит 5, п. 6). -->
+        <Expander Header="Подробнее: адреса и скорость" Margin="0,8,0,0">
+            <StackPanel Margin="0,6,0,0">
+                <!-- Описание варианта: чтобы вписать вручную в Windows, телефон, роутер. -->
                 <ItemsControl ItemsSource="{Binding SelectedInfo}" AutomationProperties.Name="Описание варианта DNS">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Grid Margin="0,1">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="170" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="{Binding Label}" Style="{StaticResource Hint}" FontSize="13" />
@@ -69,21 +79,19 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                <WrapPanel Margin="-4,4,0,0">
+                    <Button Content="Скопировать адреса" Style="{StaticResource HideWhenOff}" FontSize="13" Command="{Binding CopyIpsCmd}" Margin="0,0,10,0"
+                            ToolTip="Адреса по одному в строке — вставить вручную в Windows, телефон или роутер" />
+                    <Button Content="Скопировать адрес защищённого DNS" Style="{StaticResource HideWhenOff}" FontSize="13" Command="{Binding CopyDohCmd}" Margin="0,0,10,0" />
+                    <Button Content="{Binding CompareText}" Style="{StaticResource HideWhenOffIdle}" FontSize="13" Command="{Binding CompareCmd}"
+                            ToolTip="Время ответа защищённого DNS каждого варианта с этого компьютера" />
+                    <TextBlock Text="{Binding Copied}" Style="{StaticResource Hint}" FontSize="13" VerticalAlignment="Center" Margin="6,0,0,0"
+                               Visibility="{Binding HasCopied, Converter={StaticResource Vis}}" />
+                </WrapPanel>
+                <TextBlock Text="{Binding CompareSummary}" Style="{StaticResource Hint}" FontSize="13" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Visibility="{Binding HasCompareSummary, Converter={StaticResource Vis}}" />
             </StackPanel>
-        </DockPanel>
-        <WrapPanel Margin="-4,4,0,0">
-            <Button Content="Скопировать адреса" Style="{StaticResource HideWhenOff}" FontSize="13" Command="{Binding CopyIpsCmd}" Margin="0,0,10,0"
-                    ToolTip="Адреса по одному в строке — вставить вручную в Windows, телефон или роутер" />
-            <Button Content="Скопировать адрес защищённого DNS" Style="{StaticResource HideWhenOff}" FontSize="13" Command="{Binding CopyDohCmd}" Margin="0,0,10,0" />
-            <Button Content="{Binding CompareText}" Style="{StaticResource HideWhenOffIdle}" FontSize="13" Command="{Binding CompareCmd}"
-                    ToolTip="Время ответа защищённого DNS каждого варианта с этого компьютера" />
-            <TextBlock Text="{Binding Copied}" Style="{StaticResource Hint}" FontSize="13" VerticalAlignment="Center" Margin="6,0,0,0"
-                       Visibility="{Binding HasCopied, Converter={StaticResource Vis}}" />
-        </WrapPanel>
-        <TextBlock Text="{Binding CompareSummary}" Style="{StaticResource Hint}" FontSize="13" TextWrapping="Wrap" Margin="0,4,0,0"
-                   Visibility="{Binding HasCompareSummary, Converter={StaticResource Vis}}" />
-        <CheckBox Content="Если защищённый не отвечает — обычный DNS" IsChecked="{Binding Fallback}" Margin="0,8,0,0"
-                  Visibility="{Binding ShowFallback, Converter={StaticResource Vis}}" />
+        </Expander>
 
         <Expander Header="Свой вариант" IsExpanded="{Binding Adding}" Margin="0,8,0,0">
             <!-- Enter в любом поле — «Добавить». -->

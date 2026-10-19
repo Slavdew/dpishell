@@ -116,7 +116,7 @@ public sealed class AppsViewModel : Observable
         private set
         {
             if (!Set(ref _step, value)) return;
-            foreach (var p in new[] { nameof(IsIdle), nameof(IsRecording), nameof(IsWorking), nameof(IsCheck), nameof(IsDone), nameof(IsFailed), nameof(ShowStart), nameof(ShowMore), nameof(ShowOffHint) }) Raise(p);
+            foreach (var p in new[] { nameof(IsIdle), nameof(IsRecording), nameof(IsWorking), nameof(IsCheck), nameof(IsDone), nameof(IsFailed), nameof(ShowStart), nameof(ShowMore), nameof(ShowOffHint), nameof(ShowIntro), nameof(StartText) }) Raise(p);
             CommandManager.InvalidateRequerySuggested();
         }
     }
@@ -138,6 +138,9 @@ public sealed class AppsViewModel : Observable
     public const string AntiCheat = NetViewModel.AntiCheatNote;
     public string Intro => "Нажмите «Начать», запустите игру и дойдите до того, что не работает (вход, сервер, голосовой чат). Потом «Готово» — программа сама подберёт параметры для этой игры; остальное она не затрагивает.";
     public string Anti => AntiCheat;
+    /// <summary>Вступление — до начала и после неудачи; после «Готово» не повторяется (там итог и «Настроить ещё одну игру»).</summary>
+    public bool ShowIntro => Step is AppsStep.Idle or AppsStep.Failed;
+    public string StartText => Step == AppsStep.Done ? "Настроить ещё одну игру" : "Начать";
 
     string _status = "";
     /// <summary>Главная строка простого режима: что сейчас происходит.</summary>
@@ -145,7 +148,7 @@ public sealed class AppsViewModel : Observable
     public bool HasStatus => Status.Length > 0;
     /// <summary>«Подробнее» — до начала и после неудачи.</summary>
     public bool ShowMore => Step is AppsStep.Idle or AppsStep.Failed;
-    public bool ShowOffHint => OptimizationOff && (Step is AppsStep.Check or AppsStep.Done || HasProfiles);
+    public bool ShowOffHint => OptimizationOff && (Step == AppsStep.Check || HasProfiles && Step != AppsStep.Done);   // в «Готово» то же сказано в итоге
 
     string _detail = "";
     /// <summary>Вторая строка: подробности (попытка, предупреждения записи).</summary>
@@ -320,7 +323,8 @@ public sealed class AppsViewModel : Observable
 
     void Yes()
     {
-        Status = "Готово: профиль включён. «Вернуть как было» в списке ниже уберёт его.";
+        // Одна фраза вместо итога и жёлтой плашки; «Вернуть как было» — в списке профилей ниже.
+        Status = $"Профиль «{_draft?.Title ?? "игра"}» сохранён." + (OptimizationOff ? " Заработает после включения на Главной." : "");
         Detail = "";
         Step = AppsStep.Done;
         Say("Профиль под игру включён.");
@@ -411,7 +415,7 @@ public sealed class AppsViewModel : Observable
     public bool AdvNewProcesses { get => !_byProcess; set { if (value) AdvByProcess = false; } }
 
     bool _noDriver;
-    /// <summary>Без драйвера перехвата: только TCP, зато игры с защитой от читов не пугаются.</summary>
+    /// <summary>Без драйвера: только TCP, зато игры с защитой от читов не пугаются.</summary>
     public bool AdvNoDriver { get => _noDriver; set => Set(ref _noDriver, value); }
 
     bool _advRecording;

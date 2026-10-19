@@ -412,9 +412,9 @@ public sealed class FakeRouter : IDisposable
             "confirm" => Do(() => { ConfirmCalls++; Pending = null; }),
             "strategy_set" => Do(() => { var was = Strategy; Strategy = args["id"]!.GetValue<string>(); Trial(args, Enabled, was); }),
             "check_now" => Do(() => CheckedAt = CheckedAt.AddMinutes(1), """{ "started": true }"""),
-            // §9 (2026-10-17): только «Свои адреса», а их список пуст — invalid, field groups.
+            // §9 (2026-10-17): только «Свои сайты», а их список пуст — invalid, field groups.
             "select_start" when args["groups"] is System.Text.Json.Nodes.JsonArray g && g.Count == 1 && g[0]!.GetValue<string>() == "user" && UserTargets.Count == 0 =>
-                """{"error":{"code":"invalid","text":"Список своих адресов на роутере пуст — добавьте адреса или выберите другие группы","field":"groups"}}""",
+                """{"error":{"code":"invalid","text":"Список своих сайтов на роутере пуст — добавьте адреса или выберите другие группы","field":"groups"}}""",
             "select_start" => Step0("""{ "started": true }"""),
             "targets_set" => Do(() => UserTargets = args["items"]!.AsArray().Select(x => (x!["url"]!.GetValue<string>(), x["important"]?.GetValue<bool>() ?? false)).ToList()),
             "select_cancel" => Do(() => { _cancelled = true; SelectRunningJob = false; }),
@@ -473,7 +473,7 @@ public sealed class FakeRouter : IDisposable
 
     static string Do(Action a, string payload = "{}") { a(); return payload; }
 
-    /// <summary>«Свои адреса» роутера (targets_get/targets_set); по умолчанию — пример §5.1.</summary>
+    /// <summary>«Свои сайты» роутера (targets_get/targets_set); по умолчанию — пример §5.1.</summary>
     public List<(string Url, bool Important)> UserTargets { get; set; } = [("https://example.com/", true)];
 
     /// <summary>Свои списки после lists_set (до него — пример §5.1).</summary>

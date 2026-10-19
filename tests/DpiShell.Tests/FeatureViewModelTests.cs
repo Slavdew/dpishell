@@ -300,11 +300,11 @@ public sealed class FeatureViewModelTests
         vm.PasteText = "# гайд\r\n140.82.121.3 github.com\r\n0.0.0.0 gone.example.com\r\n9.9.9.9 dead.example.com\r\nпросто текст\r\n";
         await vm.TryAsync();
         Assert.Equal(["Поможет", "Не поможет", "Блокирует"], vm.TryRows.Select(r => r.Verdict));
-        Assert.Equal(["Строка чинит", "Нужна оптимизация, не hosts", "Блокировка (ничего не меняет)"], vm.TryRows.Select(r => r.Reason));
+        Assert.Equal(["Строка чинит", "Здесь нужна оптимизация, а не hosts", "Блокировка (ничего не меняет)"], vm.TryRows.Select(r => r.Reason));
         Assert.True(vm.TryRows[0].Selected);                                   // чинящая отмечена
         Assert.False(vm.TryRows[1].CanSelect || vm.TryRows[2].CanSelect);     // остальные записать нельзя
         Assert.Equal("Записать выбранные (1)", vm.WriteSelectedText);
-        Assert.StartsWith("Проверено строк: 3. поможет: 1", vm.TrySummary);
+        Assert.StartsWith("Проверено строк: 3. можно записать: 1", vm.TrySummary);
         Assert.Contains("Пропущено строк без адреса или имени: 1", vm.TrySummary);
         Assert.Equal(original, File.ReadAllBytes(hosts));                      // примерка файл не меняет
 

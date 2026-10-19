@@ -21,14 +21,14 @@ public sealed class DnsDetailTests : IDisposable
         var google = pc.Options.Single(o => o.Id == "google");
         Assert.Equal("8.8.8.8, 8.8.4.4", Info(google, "IPv4"));
         Assert.Equal("2001:4860:4860::8888, 2001:4860:4860::8844", Info(google, "IPv6"));
-        Assert.Equal("https://dns.google/dns-query", Info(google, "Защищённый DNS"));
-        Assert.Equal("Google (США)", Info(google, "Кто держит"));
-        Assert.Equal("рекомендуем", Info(google, "Заметка"));
+        Assert.Equal("https://dns.google/dns-query", Info(google, "Адрес защищённого DNS"));
+        Assert.Equal("Google (США)", Info(google, "Оператор"));
+        Assert.Equal("рекомендуем", google.Note);
 
         var yandex = pc.Options.Single(o => o.Id == "yandex");
-        Assert.Equal("российский: может применять реестр запрещённых сайтов", Info(yandex, "Заметка"));
-        Assert.Equal("Яндекс (Россия)", Info(yandex, "Кто держит"));
-        Assert.Contains("вредоносные", Info(pc.Options.Single(o => o.Id == "quad9"), "Заметка"));
+        Assert.Equal("российский: может применять реестр запрещённых сайтов", yandex.Note);
+        Assert.Equal("Яндекс (Россия)", Info(yandex, "Оператор"));
+        Assert.Contains("вредоносные", pc.Options.Single(o => o.Id == "quad9").Note);
 
         // «Как у провайдера» — описания нет, остаётся строка-сводка; копировать нечего.
         pc.Selected = pc.Options.Single(o => o.Id == "auto");
@@ -38,7 +38,8 @@ public sealed class DnsDetailTests : IDisposable
         Assert.False(pc.CopyDohCmd.CanExecute(null));
         pc.Selected = google;
         Assert.False(pc.HasSelectedDetail);
-        Assert.Equal(5, pc.SelectedInfo.Count);
+        Assert.Equal(4, pc.SelectedInfo.Count);
+        Assert.Equal("рекомендуем", pc.SelectedNote);
     }
 
     [Fact]

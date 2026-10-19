@@ -19,7 +19,7 @@ public sealed class RouterViewModelTests : IDisposable
     {
         var pc = shell ?? new Shell(new AppPaths(_tmp.Sub("root"), Repo.Data));
         Settings = WindowSettings.Load(Path.Combine(_tmp.Sub("window"), "window.json"));
-        // Как в окне: найденные стратегии и свои адреса ПК отдаёт помощник — здесь прямо из временной папки.
+        // Как в окне: найденные стратегии и свои сайты ПК отдаёт помощник — здесь прямо из временной папки.
         var vm = new RouterViewModel(pc, Settings)
         {
             FoundStrategies = () => UserStrategies.Load(pc.Paths),
@@ -59,8 +59,9 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.Equal("Оптимизация работает на роутере", vm.HomeTitle);
         // Есть предупреждение — на главной число и его текст вместо стратегии и времени (UX-аудит 2, п. 7).
         Assert.Equal("· 1 предупреждение", vm.HomeFixText);
-        Assert.Equal("Ускорение сети на роутере мешает оптимизации", vm.HomeLine);
-        Assert.StartsWith("Стратегия general (ALT10), проверено в ", vm.HomeDetail);   // на вкладке — как было
+        // Оптимизация работает — текст предупреждения не на главной, а на вкладке «Роутер» (UX-аудит 5, п. 22): в строке стратегия и время.
+        Assert.StartsWith("Стратегия general (ALT10), проверено в ", vm.HomeLine);
+        Assert.StartsWith("Стратегия general (ALT10), проверено в ", vm.HomeDetail);
         Assert.Equal("Ускорение сети на роутере мешает оптимизации", vm.Warnings);
         Assert.Equal("Исправить", Assert.Single(vm.WarningRows).Fix);
         Assert.Single(vm.Strategies);

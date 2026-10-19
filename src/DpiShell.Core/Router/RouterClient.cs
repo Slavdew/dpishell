@@ -307,7 +307,7 @@ public sealed class RouterClient : IDisposable
 
     public Task TargetsSetAsync(IReadOnlyList<RouterTarget> items, CancellationToken ct = default)
     {
-        if (items.Count > 50) throw new ArgumentException("На роутере — не больше 50 своих адресов");
+        if (items.Count > 50) throw new ArgumentException("На роутере — не больше 50 своих сайтов");
         return CallAsync("targets_set", new JsonObject { ["items"] = JsonSerializer.SerializeToNode(items, Json) }, ct);
     }
 

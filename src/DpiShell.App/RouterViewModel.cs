@@ -48,6 +48,9 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames
     public string Share => IsCandidate && Row.Total is > 0 ? $"{(double)(Row.Ok ?? 0) / Row.Total.Value * 100:0} %" : $"{Row.TargetShare * 100:0} %";
     public string Avg => Row.Error is null && Row.AvgS > 0 ? $"{Row.AvgS:0.00} с" : "—";
     public string Error => Row.Error ?? "";
+    /// <summary>Пустая колонка выглядит как сбой отрисовки: когда ошибок нет — «нет» серым.</summary>
+    public string ErrorShown => Error.Length > 0 ? Error : "нет";
+    public bool ErrorIsProblem => Error.Length > 0;
     public bool Usable => !IsCandidate && Row.Error is null && Row.GroupShare > 0;
     public bool IsBest { get => _best; set { if (Set(ref _best, value)) Raise(nameof(Mark)); } }
     public string Mark => IsBest ? "★" : "";
@@ -156,7 +159,7 @@ public static class RouterTexts
     public static int? Index(string? field) =>
         field is not null && System.Text.RegularExpressions.Regex.Match(field, @"\[(\d+)\]") is { Success: true } m ? int.Parse(m.Groups[1].Value) : null;
 
-    /// <summary>Адрес из поля «Свои адреса» → URL для роутера: домен — https://домен/.</summary>
+    /// <summary>Адрес из поля «Свои сайты» → URL для роутера: домен — https://домен/.</summary>
     public static string ToUrl(string line)
     {
         var s = line.Trim();
@@ -165,7 +168,7 @@ public static class RouterTexts
 }
 
 /// <summary>
-/// Обход на роутере (docs/dev/router-api.md §6): поиск, вход, статус для главной, подбор, свои адреса, диагностика.
+/// Обход на роутере (docs/dev/router-api.md §6): поиск, вход, статус для главной, подбор, свои сайты, диагностика.
 /// Все запросы к роутеру — по одному (семафор), асинхронно; действия пользователя — по одному (Busy).
 /// Пароль: из поля — только на время входа, на диске — только зашифрованным и только после успешного входа.
 /// </summary>
@@ -227,7 +230,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     internal void Failed(string text) => (Fail ?? Say)(text);
     /// <summary>Стратегии, найденные глубоким поиском на ПК (их хранит помощник).</summary>
     public Func<IReadOnlyList<Strategy>> FoundStrategies { get; set; } = () => [];
-    /// <summary>Свои адреса этого ПК (сохранены у помощника).</summary>
+    /// <summary>Свои сайты этого ПК (сохранены у помощника).</summary>
     public Func<IReadOnlyList<string>> PcUserTargets { get; set; } = () => [];
     public Func<string, bool> Confirm { get; set; } = text =>
         MessageBox.Show(text, "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
@@ -690,7 +693,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         }
         HomeDetail = string.Join(", ", parts.Where(p => p.Length > 0));
         // Строка на главной: есть что исправить — вместо стратегии и времени (они на вкладке) первое предупреждение (UX-аудит 2, п. 7).
-        HomeLine = !Selecting && HasOff ? OffText : !Selecting && FirstFix() is { } fix ? fix : HomeDetail;
+        HomeLine = !Selecting && HasOff ? OffText : !Selecting && !enabled && FirstFix() is { } fix ? fix : HomeDetail;   // работает — текст предупреждений не на главной, а по «Подробнее»
         // Обновление для роутера — коротко и первым, даже когда строка занята предупреждением.
         if (!Selecting && !Updating && _status?.Update is { Available: true, Version: { } upd } && !HomeLine.Contains(upd))
             HomeLine = $"доступно обновление {upd} · {HomeLine}";
@@ -1024,7 +1027,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     string GroupTitle(string id) => id switch
     {
-        "user" => "свои адреса",
+        "user" => "свои сайты",
         _ => _shell.DefaultTargets.Groups.FirstOrDefault(g => g.Id == id)?.Title ?? id,
     };
 
@@ -1140,7 +1143,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public ObservableCollection<RouterScoreRow> Scores { get; } = [];
 
     RouterScoreRow? _selectedScore;
-    public RouterScoreRow? SelectedScore { get => _selectedScore; set { if (Set(ref _selectedScore, value)) Requery(); } }
+    public RouterScoreRow? SelectedScore { get => _selectedScore; set { if (Set(ref _selectedScore, value)) { Raise(nameof(ApplySelectedText)); Requery(); } } }
+    /// <summary>Выбрана лучшая — «Применить лучшую»; другая строка — «Применить выбранную».</summary>
+    public string ApplySelectedText => _selectedScore is { IsBest: true } ? "Применить лучшую" : "Применить выбранную";
 
     public ICommand StartSelectCmd { get; }
     public ICommand StartDeepCmd { get; }
@@ -1169,7 +1174,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         bool onlyUser = o.Groups.Count == 1 && o.Groups[0] == "user";
         string? hint = null;
         // Подбор только по своим адресам, а на роутере их нет (router-api §5.2): есть на ПК — предложить их заранее,
-        // нет нигде — снять «Свои адреса» (выбор мог остаться от прежней установки роутера).
+        // нет нигде — снять «Свои сайты» (выбор мог остаться от прежней установки роутера).
         if (onlyUser && _targetsLoaded && Targets.Count == 0)
         {
             if (PcUserTargets().Count == 0) o = WithoutUser(o, out hint);
@@ -1192,8 +1197,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                     }
                     catch (RouterException e) when (attempt == 0 && IsEmptyUserTargets(e))
                     {
-                        // Роутер ответил «Список своих адресов на роутере пуст…» — предложим отправить с ПК и повторим;
-                        // на ПК их тоже нет — повторим без «Своих адресов».
+                        // Роутер ответил «Список своих сайтов на роутере пуст…» — предложим отправить с ПК и повторим;
+                        // на ПК их тоже нет — повторим без «Своих сайтов».
                         Targets.Clear(); _targetsLoaded = true;
                         if (PcUserTargets().Count > 0) emptyOnRouter = true; else dropUser = true;
                         SelectProgressText = "";
@@ -1229,19 +1234,19 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     /// <summary>Сколько после запуска ошибка или пустой ответ select_progress — ещё «Запускаю подбор…» (роутер поднимает подбор не сразу).</summary>
     public TimeSpan SelectStartGrace { get; set; } = TimeSpan.FromSeconds(10);
 
-    /// <summary>Выбор без «Своих адресов» (на роутере их нет); ничего не осталось — группы по умолчанию. Экран «Подбор» — следом.</summary>
+    /// <summary>Выбор без «Своих сайтов» (на роутере их нет); ничего не осталось — группы по умолчанию. Экран «Подбор» — следом.</summary>
     (IReadOnlyList<string> Groups, bool Full) WithoutUser((IReadOnlyList<string> Groups, bool Full) o, out string hint)
     {
         var rest = o.Groups.Where(g => g != "user").ToList();
         IReadOnlyList<string> groups = rest.Count > 0 ? rest : DefaultSelectGroups;
         SetSelectGroups(groups);
-        hint = "На роутере нет своих адресов — подбираю без них. Отправить их с ПК: «Сайты» → «На роутере» → «Скопировать с ПК».";
+        hint = "На роутере нет своих сайтов — подбираю без них. Отправить их с ПК: «Сайты» → «На роутере» → «Скопировать с ПК».";
         return (groups, o.Full);
     }
 
     /// <summary>
-    /// DpiShell на роутере поставлен заново или удалён: прежние свои адреса и выбор групп к нему не относятся —
-    /// забыть их и вернуть группы подбора по умолчанию (иначе «только Свои адреса» на свежем роутере не подбирает ничего).
+    /// DpiShell на роутере поставлен заново или удалён: прежние свои сайты и выбор групп к нему не относятся —
+    /// забыть их и вернуть группы подбора по умолчанию (иначе «только Свои сайты» на свежем роутере не подбирает ничего).
     /// </summary>
     public void ForgetRouterSetup()
     {
@@ -1250,26 +1255,26 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         SetSelectGroups(DefaultSelectGroups);
     }
 
-    /// <summary>Отказ подбора: только «Свои адреса», а на роутере их список пуст (router-api §5.2: invalid, field groups).</summary>
+    /// <summary>Отказ подбора: только «Свои сайты», а на роутере их список пуст (router-api §5.2: invalid, field groups).</summary>
     static bool IsEmptyUserTargets(RouterException e) =>
         e.AppError is { Code: "invalid", Field: "groups" };
 
     /// <summary>
-    /// «Отправить свои адреса с компьютера на роутер»: с согласия — свои адреса ПК (до 50) уходят на роутер (targets_set).
+    /// «Отправить свои сайты с компьютера на роутер»: с согласия — свои сайты ПК (до 50) уходят на роутер (targets_set).
     /// true — отправлены, подбор можно запускать.
     /// </summary>
     async Task<bool> OfferPcTargetsAsync()
     {
         var pc = PcUserTargets();
-        if (!Confirm($"Список своих адресов на роутере пуст, а на этом компьютере их {pc.Count}.\n\n"
-                     + "Отправить свои адреса с компьютера на роутер и подобрать по ним?"))
+        if (!Confirm($"Список своих сайтов на роутере пуст, а на этом компьютере их {pc.Count}.\n\n"
+                     + "Отправить свои сайты с компьютера на роутер и подобрать по ним?"))
         {
-            Say("Подбор не запущен: на роутере нет своих адресов. Добавьте их на вкладке «Сайты» → «На роутере».");
+            Say("Подбор не запущен: на роутере нет своих сайтов. Добавьте их на вкладке «Сайты» → «На роутере».");
             return false;
         }
         var items = pc.Select(d => new RouterTarget(RouterTexts.ToUrl(d), false))
             .DistinctBy(t => t.Url, StringComparer.OrdinalIgnoreCase).Take(MaxTargets).ToList();
-        if (!await Guard("Отправляю свои адреса на роутер…", () => Call(c => c.TargetsSetAsync(items)))) return false;
+        if (!await Guard("Отправляю свои сайты на роутер…", () => Call(c => c.TargetsSetAsync(items)))) return false;
         Targets.Clear();
         foreach (var t in items) Targets.Add(new(t.Url, t.Important));
         _targetsLoaded = true;
@@ -1379,6 +1384,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         var ordered = InOrder(Scores);
         Scores.Clear();
         foreach (var s in ordered) { s.IsBest = s.Id == p.Best; Scores.Add(s); }
+        SelectedScore = Scores.FirstOrDefault(s => s.IsBest);   // лучшая выбрана сразу, «Применить лучшую» активна
         SelectProgress = SelectProgressMax;
         if (p.Cancelled)
         {
@@ -1398,7 +1404,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         {
             SetBest(null, false);
             ResultText = "Ни одна стратегия не помогла.";
-            ResultHint = "Проверьте свои адреса роутера или поищите глубже — роутер придумает новые стратегии.";
+            ResultHint = "Проверьте свои сайты роутера или поищите глубже — роутер придумает новые стратегии.";
         }
         // «Искать глубже» — только когда готовые не помогли (UX-аудит, п. 30), а не равной кнопкой рядом с «Начать подбор».
         OfferDeep = !p.Cancelled && p.Best is null;
@@ -1423,7 +1429,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         }
     }
 
-    // ---------- свои адреса и списки роутера ----------
+    // ---------- свои сайты и списки роутера ----------
 
     bool _targetsOnRouter;
     public bool TargetsOnRouter
@@ -1457,7 +1463,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     public async Task LoadTargetsAsync()
     {
-        await Guard("Читаю свои адреса роутера…", async () =>
+        await Guard("Читаю свои сайты роутера…", async () =>
         {
             var t = await Call(c => c.TargetsGetAsync());
             Targets.Clear();
@@ -1477,7 +1483,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         Targets.Add(new("", false));
     }
 
-    /// <summary>«Скопировать с ПК»: свои адреса этого ПК, которых ещё нет на роутере (до 50).</summary>
+    /// <summary>«Скопировать с ПК»: свои сайты этого ПК, которых ещё нет на роутере (до 50).</summary>
     public void CopyFromPc()
     {
         var have = Targets.Select(t => t.Url.Trim().TrimEnd('/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -1490,7 +1496,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             Targets.Add(new(url, false));
             added++;
         }
-        TargetsMessage = PcUserTargets().Count == 0 ? "На этом ПК своих адресов нет."
+        TargetsMessage = PcUserTargets().Count == 0 ? "На этом ПК своих сайтов нет."
             : $"Добавлено с ПК: {added}" + (skipped > 0 ? $", не поместилось: {skipped}" : "") + ". Нажмите «Сохранить на роутере».";
     }
 

@@ -19,8 +19,8 @@ public sealed record TargetSet(List<TargetGroup> Groups)
     public static TargetSet Load(string path) =>
         JsonSerializer.Deserialize<TargetSet>(File.ReadAllText(path), Json) ?? new([]);
 
-    /// <summary>Группа «Свои адреса» из доменов/URL пользователя: каждый адрес обязателен, тело ≥ 1 байта не требуем.</summary>
-    public static TargetGroup UserGroup(IEnumerable<string> entries) => new("user", "Свои адреса",
+    /// <summary>Группа «Свои сайты» из доменов/URL пользователя: каждый адрес обязателен, тело ≥ 1 байта не требуем.</summary>
+    public static TargetGroup UserGroup(IEnumerable<string> entries) => new("user", "Свои сайты",
         entries.Select(e => e.Trim()).Where(e => e.Length > 0)
             .Select(e => new Target(e.Contains("://") ? e : $"https://{e}/")).ToList());
 }

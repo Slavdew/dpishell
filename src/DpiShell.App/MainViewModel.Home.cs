@@ -52,7 +52,7 @@ public sealed partial class MainViewModel
             if (value) ShowRequested?.Invoke(Spot.Strategies);
         }
     }
-    public string StrategiesLinkText => ShowStrategies ? "Скрыть стратегии" : "Сменить стратегию";
+    public string StrategiesLinkText => ShowStrategies ? "Скрыть стратегии" : "Показать стратегии";
     public ICommand ToggleStrategiesCmd => _toggleStrategiesCmd ??= new RelayCommand(() => ShowStrategies = !ShowStrategies);
     ICommand? _toggleStrategiesCmd;
 

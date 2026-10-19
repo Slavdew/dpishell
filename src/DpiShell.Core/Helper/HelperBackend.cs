@@ -138,7 +138,7 @@ public sealed record UserTargetsResult(IReadOnlyList<string> Saved, IReadOnlyLis
 public sealed record StopForeignResult(IReadOnlyList<string> Stopped, IReadOnlyList<string> ComeBackOnReboot);
 
 /// <param name="Stats">Статистика стратегий по результатам подборов.</param>
-/// <param name="Results">Последние результаты подборов (свои адреса в них уже скрыты — ResultStore).</param>
+/// <param name="Results">Последние результаты подборов (свои сайты в них уже скрыты — ResultStore).</param>
 public sealed record ResultsSnapshot(IReadOnlyDictionary<string, StrategyStats.Stat> Stats, IReadOnlyList<ResultFile> Results);
 
 public sealed record ResultFile(string Name, JsonNode? Content);
@@ -187,7 +187,7 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
             info.State, info.OurCore, info.Strategy?.Id,
             shell.Installer.Check().State, shell.Features,
             shell.AllStrategies.Select(s => new StrategyInfo(s.Id, s.Title, s.Source)).ToList(),
-            [.. shell.DefaultTargets.Groups.Select(g => new GroupInfo(g.Id, g.Title, g.Targets.Count)), new GroupInfo("user", "Свои адреса", st.UserTargets.Count)],
+            [.. shell.DefaultTargets.Groups.Select(g => new GroupInfo(g.Id, g.Title, g.Targets.Count)), new GroupInfo("user", "Свои сайты", st.UserTargets.Count)],
             st.Groups, st.UserTargets, st.Fallbacks,
             st.TimestampsEnabledByUs, st.HostsFix, foreign,
             HelperProtocol.AppVersion, shell.DataVersion);
@@ -337,7 +337,7 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
     public IpsetVerdictSummary WriteUserIpset(IReadOnlyList<string> lines, bool exclude, bool confirmed) =>
         IpsetVerdictSummary.From(shell.WriteUserIpset(lines, exclude, confirmed));
 
-    /// <summary>Как «Сохранить» своих адресов в окне: файл доменов, список целей, группа «Свои» включается.</summary>
+    /// <summary>Как «Сохранить» своих сайтов в окне: файл доменов, список целей, группа «Свои» включается.</summary>
     public UserTargetsResult SetUserTargets(IReadOnlyList<string> lines)
     {
         shell.Paths.EnsureDirectories();

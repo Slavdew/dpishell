@@ -13,7 +13,7 @@ public enum StatusKind { Off, On, Busy, Error }
 
 public static class Pages
 {
-    // «Сайты» (свои адреса и исключения), «Игры и программы» (запись подключений, профили, игровой режим, IP-списки), «Починить адреса» (hosts), «DNS»; порядок вкладок — по номерам.
+    // «Сайты» (свои сайты и исключения), «Игры и программы» (запись подключений, профили, игровой режим, IP-списки), «Починить адреса» (hosts), «DNS»; порядок вкладок — по номерам.
     public const int Home = 0, Select = 1, Sites = 2, Apps = 3, Hosts = 4, Dns = 5, Diag = 6, Router = 7, Settings = 8, About = 9;
 }
 
@@ -172,7 +172,7 @@ public sealed partial class MainViewModel : Observable
         // Группы — по умолчанию; у помощника свой выбор — подставится, когда он ответит.
         var chosen = new AppState().Groups.ToHashSet();
         foreach (var g in _shell.DefaultTargets.Groups.Where(g => !g.Control)) Groups.Add(new(g.Id, g.Title, chosen.Contains(g.Id)));
-        Groups.Add(new("user", "Свои адреса", chosen.Contains("user")));
+        Groups.Add(new("user", "Свои сайты", chosen.Contains("user")));
         InitHome();       // главная: помехи, итог проверки — MainViewModel.Home.cs
         UpdateStatus();
     }
@@ -276,7 +276,7 @@ public sealed partial class MainViewModel : Observable
                     + "\n\nПосле удаления помощника отменить будет нельзя. «Нет» — удалить помощника, оставив настройки как есть."))
                 await Changes.UndoAllAsync(ask: false);
         }
-        if (!Confirm("Удалить помощника DpiShell? Обычно нужен один запрос прав администратора. Окно останется в режиме просмотра; служба оптимизации, если стоит, не удаляется — для этого «Удалить службу полностью»."))
+        if (!Confirm("Удалить помощника DpiShell? Обычно нужен один запрос прав администратора. Окно останется в режиме просмотра; служба оптимизации, если стоит, не удаляется — для этого «Удалить службу оптимизации»."))
             return;
         Busy = true; BusyText = "Удаляю помощника…"; UpdateStatus();
         try
@@ -356,7 +356,7 @@ public sealed partial class MainViewModel : Observable
         {
             int was = _page;
             if (!Set(ref _page, value)) return;
-            if (!Busy && !IsLoading && Message.Length > 0 && Message != ReadyText) Message = ReadyText;   // сообщение от давнего действия не едет по вкладкам
+            if (!Busy && Message.Length > 0 && Message != ReadyText) Message = ReadyText;   // сообщение от давнего действия не едет по вкладкам
             if (IsLoading) return;
             if (was == Pages.Sites) _ = SaveDraftOnLeaveAsync();
             if (value == Pages.Apps) _ = RefreshNetAsync();
@@ -689,7 +689,7 @@ public sealed partial class MainViewModel : Observable
     {
         var list = Helper.Status?.Strategies ?? _shell.Catalog.Strategies.Select(s => new StrategyInfo(s.Id, s.Title, s.Source)).ToList();
         var stats = Helper.Results?.Stats ?? new Dictionary<string, StrategyStats.Stat>();
-        // Порядок — тот же, что у подбора: обязательные группы, доля своих адресов, время.
+        // Порядок — тот же, что у подбора: обязательные группы, доля своих сайтов, время.
         var choices = new List<StrategyChoice>();
         foreach (var s in StrategyStats.Order(list, x => x.Id, stats))
         {
@@ -1006,14 +1006,14 @@ public sealed partial class MainViewModel : Observable
         return required.Count == 0 ? null : required.All(v => v.Ok);
     }
 
-    /// <summary>Отмеченные группы целей. Свои адреса — из поля «Свои адреса», как на экране.</summary>
+    /// <summary>Отмеченные группы целей. Свои сайты — из поля «Свои сайты», как на экране.</summary>
     IReadOnlyList<TargetGroup> CheckedGroups()
     {
         var want = Groups.Where(g => g.IsChecked).Select(g => g.Id).ToHashSet();
         var groups = _shell.DefaultTargets.Groups.Where(g => want.Contains(g.Id)).ToList();
         if (want.Contains("user"))
         {
-            // То, что в поле «Свои адреса», — как видит человек, сохранено оно или нет.
+            // То, что в поле «Свои сайты», — как видит человек, сохранено оно или нет.
             var mine = DraftTargets();
             if (mine.Count > 0) groups.Add(TargetSet.UserGroup(mine));
         }
@@ -1115,8 +1115,10 @@ public sealed partial class MainViewModel : Observable
     public bool HasBest => _bestId is not null;
 
     ScoreRow? _selected;
-    public ScoreRow? SelectedScore { get => _selected; set { if (Set(ref _selected, value)) { Raise(nameof(HasSelectedScore)); CommandManager.InvalidateRequerySuggested(); } } }
+    public ScoreRow? SelectedScore { get => _selected; set { if (Set(ref _selected, value)) { Raise(nameof(HasSelectedScore)); Raise(nameof(ApplySelectedText)); CommandManager.InvalidateRequerySuggested(); } } }
     public bool HasSelectedScore => _selected is not null;
+    /// <summary>Выбрана лучшая — «Применить лучшую»; другая строка таблицы — «Применить выбранную».</summary>
+    public string ApplySelectedText => _selected is { IsBest: true } ? "Применить лучшую" : "Применить выбранную";
 
     public ICommand StartSelectCmd { get; }
     public ICommand StopSelectCmd { get; }
@@ -1130,7 +1132,7 @@ public sealed partial class MainViewModel : Observable
         if (ids.Count == 0) { Message = "Отметьте, что проверять."; return null; }
         if (ids.Contains("user") && UserTargets.Count == 0 && Helper.Ready)
         {
-            Message = "Список своих адресов пуст — заполните его на вкладке «Сайты» и сохраните.";
+            Message = "Список своих сайтов пуст — заполните его на вкладке «Сайты» и сохраните.";
             return null;
         }
         return ids;
@@ -1143,7 +1145,7 @@ public sealed partial class MainViewModel : Observable
         return false;
     }
 
-    /// <summary>Группы и режим для подбора на роутере. «Свои адреса» — роутерные, поэтому список ПК не проверяем.</summary>
+    /// <summary>Группы и режим для подбора на роутере. «Свои сайты» — роутерные, поэтому список ПК не проверяем.</summary>
     (IReadOnlyList<string> Groups, bool Full)? RouterSelectOptions()
     {
         var ids = Groups.Where(g => g.IsChecked).Select(g => g.Id).ToList();
@@ -1173,7 +1175,7 @@ public sealed partial class MainViewModel : Observable
         if (Busy) return;
         if (!AnyChecked()) return;
         if (await NeedHelperAsync() is not { } c) return;
-        // Свои адреса проверяем после подключения: до установки их у помощника ещё нет.
+        // Свои сайты проверяем после подключения: до установки их у помощника ещё нет.
         if (!await SaveDraftBeforeSelectAsync()) return;
         if (TakeGroups() is not { } ids) return;
         if (!ConfirmPauseIfRunning()) return;
@@ -1288,7 +1290,7 @@ public sealed partial class MainViewModel : Observable
     static string RoleTitle(string message) => message.Split(':')[0] switch
     {
         "google" => "YouTube",
-        "general" => "Discord и своих адресов",
+        "general" => "Discord и своих сайтов",
         var r => r,
     };
 
@@ -1369,6 +1371,7 @@ public sealed partial class MainViewModel : Observable
         Scores.Clear();
         foreach (var s in ordered) Scores.Add(new ScoreRow(s, Names) { IsBest = best is not null && s.Strategy.Id == best.Strategy.Id });
         ResortScores();
+        SelectedScore = Scores.FirstOrDefault(r => r.IsBest);   // лучшая выбрана сразу — «Применить лучшую» активна
         SelectProgress = SelectProgressMax;
         // Статистика до этого подбора — для подсказки «работала N раз подряд, сейчас нет»; перечитывается ниже.
         var regression = StrategyChoice.Regression(Helper.Results?.Stats, r, CurrentStrategyId, Names);
@@ -1387,7 +1390,7 @@ public sealed partial class MainViewModel : Observable
             ResultText = r.Cancelled ? "Подбор остановлен, подходящей стратегии пока нет." : "Ни одна стратегия не помогла.";
             if (!r.Cancelled)
                 ResultHint = (regression.Length > 0 ? regression + " " : "")
-                    + "Проверьте, что свои адреса набраны верно и открываются хотя бы через VPN, или добавьте другие адреса этих сайтов и запустите полный подбор.";
+                    + "Проверьте, что свои сайты набраны верно и открываются хотя бы через VPN, или добавьте другие адреса этих сайтов и запустите полный подбор.";
             else ResultHint = regression;
             return;
         }
@@ -1403,7 +1406,7 @@ public sealed partial class MainViewModel : Observable
         ResultHint = string.Join("; ", notes) + "." + (regression.Length > 0 ? " " + regression : "");
     }
 
-    // ---------- свои адреса ----------
+    // ---------- свои сайты ----------
 
     string _targetsText = "";
     /// <summary>Черновик до «Сохранить»: сохраняет помощник.</summary>
@@ -1411,7 +1414,7 @@ public sealed partial class MainViewModel : Observable
     {
         get => _targetsText;
         // Правка после «Сохранено адресов: N» — прежний итог уже не про то, что в поле.
-        set { if (Set(ref _targetsText, value)) { TargetsMessage = ""; Raise(nameof(TargetsDirty)); } }
+        set { if (Set(ref _targetsText, value)) { TargetsMessage = ""; Raise(nameof(TargetsDirty)); Raise(nameof(TargetsMessage)); } }
     }
 
     /// <summary>
@@ -1427,29 +1430,30 @@ public sealed partial class MainViewModel : Observable
         }
     }
 
-    /// <summary>Ушли с «Своих адресов», не сохранив: с помощником — сохранить сами (прав не спросит), без него — тост «Сохранить».</summary>
+    /// <summary>Ушли с «Своих сайтов», не сохранив: с помощником — сохранить сами (прав не спросит), без него — тост «Сохранить».</summary>
     async Task SaveDraftOnLeaveAsync()
     {
         if (!TargetsDirty || Busy) return;
         if (Helper.Ready)
         {
-            if (await SaveTargetsAsync()) ShowToast("Свои адреса сохранены.");
+            if (await SaveTargetsAsync()) ShowToast("Свои сайты сохранены.");
             return;
         }
-        ShowToast("Свои адреса не сохранены — подбор и оптимизация их не учтут.", "Сохранить", async () => await SaveTargetsAsync());
+        ShowToast("Свои сайты не сохранены — подбор и оптимизация их не учтут.", "Сохранить", async () => await SaveTargetsAsync());
     }
 
-    /// <summary>Перед подбором: несохранённые свои адреса — сохранить (помощник уже подключён), иначе подбор их молча не учтёт.</summary>
+    /// <summary>Перед подбором: несохранённые свои сайты — сохранить (помощник уже подключён), иначе подбор их молча не учтёт.</summary>
     async Task<bool> SaveDraftBeforeSelectAsync()
     {
         if (!TargetsDirty) return true;
         if (!await SaveTargetsAsync()) return false;
-        Message = "Свои адреса сохранены — подбор их учтёт.";
+        Message = "Свои сайты сохранены — подбор их учтёт.";
         return true;
     }
 
     string _targetsMessage = "";
-    public string TargetsMessage { get => _targetsMessage; private set => Set(ref _targetsMessage, value); }
+    /// <summary>«Сохранено: N» — только пока в поле то же, что сохранено; рядом с «Не сохранено» два статуса не показываем.</summary>
+    public string TargetsMessage { get => TargetsDirty ? "" : _targetsMessage; private set => Set(ref _targetsMessage, value); }
 
     public ICommand SaveTargetsCmd { get; }
 
@@ -1463,12 +1467,12 @@ public sealed partial class MainViewModel : Observable
                 await FetchAsync(full: false);
             }) || r is null)
             return false;
-        // Свои адреса сохранены — подбор их проверяет (галочка группы сама); список пуст — галочка снимается.
+        // Свои сайты сохранены — подбор их проверяет (галочка группы сама); список пуст — галочка снимается.
         if (Groups.FirstOrDefault(g => g.Id == "user") is { } ug) ug.IsChecked = r.Saved.Count > 0;
         TargetsText = string.Join(Environment.NewLine, r.Saved);
         TargetsMessage = r.Rejected.Count == 0
-            ? $"Сохранено адресов: {r.Saved.Count}."
-            : $"Сохранено адресов: {r.Saved.Count}. Не распознаны и убраны: {string.Join(", ", r.Rejected)}.";
+            ? $"Сохранено сайтов: {r.Saved.Count}."
+            : $"Сохранено сайтов: {r.Saved.Count}. Не распознаны и убраны: {string.Join(", ", r.Rejected)}.";
         Raise(nameof(TargetsDirty));
         return true;
     }
@@ -1486,7 +1490,8 @@ public sealed partial class MainViewModel : Observable
         {
             // Версия — из ответа помощника, а пока его нет — из поставки (data\core.json рядом с программой).
             var version = string.IsNullOrEmpty(_coreVersion) ? _shell.Installer.Manifest.Version : _coreVersion;
-            var state = string.IsNullOrEmpty(_coreText) ? "" : _coreBroken ? _coreText : "в порядке";
+            // Имена повреждённых файлов — на «Диагностике» («Подробнее»); здесь одна фраза.
+            var state = string.IsNullOrEmpty(_coreText) ? "" : _coreBroken ? _coreAbout : "в порядке";
             return (version, state) switch
             {
                 ({ Length: > 0 }, { Length: > 0 }) => $"{version} · {state}",
@@ -1497,6 +1502,7 @@ public sealed partial class MainViewModel : Observable
         }
     }
     string? _coreVersion;
+    string _coreAbout = "файлы повреждены, возможно, антивирусом";
 
     bool _coreBroken;
     public bool CoreBroken { get => _coreBroken; private set => Set(ref _coreBroken, value); }
@@ -1600,6 +1606,7 @@ public sealed partial class MainViewModel : Observable
                 var core = d.Core;
                 _coreVersion = d.CoreVersion;
                 CoreBroken = core.State != CoreState.Ok;
+                _coreAbout = core.State == CoreState.Missing ? "файлы не найдены, возможно, удалены антивирусом" : "файлы повреждены, возможно, антивирусом";
                 CoreText = core.State switch
                 {
                     CoreState.Ok => $"в порядке (версия {d.CoreVersion})",
@@ -1740,7 +1747,7 @@ public sealed partial class MainViewModel : Observable
         await RefreshStatusAsync();
     });
 
-    /// <summary>«Удалить службу полностью» — помощник: служба обхода, WinDivert, временные метки TCP (если включали мы).</summary>
+    /// <summary>«Удалить службу оптимизации» — помощник: служба обхода, WinDivert, временные метки TCP (если включали мы).</summary>
     async Task RemoveServiceAsync()
     {
         if (!Confirm(ServiceMode
@@ -1761,7 +1768,7 @@ public sealed partial class MainViewModel : Observable
 
     async Task ClearHistoryAsync()
     {
-        if (!Confirm("Удалить результаты подборов, статистику и логи?\nСвои адреса, найденные стратегии и включённая оптимизация останутся.")) return;
+        if (!Confirm("Удалить результаты подборов, статистику и логи?\nСвои сайты, найденные стратегии и включённая оптимизация останутся.")) return;
         int n = 0;
         if (!await WithHelper("Очищаю историю…", async c => n = await c.ClearHistoryAsync())) return;
         await ReloadChoicesAsync();
@@ -1769,7 +1776,7 @@ public sealed partial class MainViewModel : Observable
     }
 
     /// <summary>
-    /// «Папка результатов»: результаты лежат в закрытой папке — помощник отдаёт их (свои адреса уже скрыты),
+    /// «Папка результатов»: результаты лежат в закрытой папке — помощник отдаёт их (свои сайты уже скрыты),
     /// окно кладёт копию в %LocalAppData%\DpiShell\results и открывает.
     /// </summary>
     async Task OpenResultsAsync()

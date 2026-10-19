@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace DpiShell.Core;
 
-/// <summary>Что помним между запусками: выбранная стратегия, свои адреса, группы, результаты по сетям.</summary>
+/// <summary>Что помним между запусками: выбранная стратегия, свои сайты, группы, результаты по сетям.</summary>
 public sealed class AppState
 {
     public string? StrategyId { get; set; }
@@ -73,7 +73,7 @@ public static class ResultStore
         p.EnsureDirectories();
         var file = Path.Combine(p.Results, $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.json");
 
-        // Свои адреса пользователя в историю не пишем: «свой адрес №N», хост вычищается и из текстов ошибок.
+        // Свои сайты пользователя в историю не пишем: «свой адрес №N», хост вычищается и из текстов ошибок.
         var userNo = new Dictionary<string, int>();
         foreach (var v in r.Baseline.Concat(r.Scores.SelectMany(s => s.Verdicts)).Where(v => v.GroupId == "user"))
             userNo.TryAdd(v.Target.Url, userNo.Count + 1);
@@ -111,7 +111,7 @@ public static class ResultStore
         return file;
     }
 
-    /// <summary>«Очистить историю»: результаты подборов (а с ними статистика) и логи. Свои адреса и найденные стратегии не трогает.</summary>
+    /// <summary>«Очистить историю»: результаты подборов (а с ними статистика) и логи. Свои сайты и найденные стратегии не трогает.</summary>
     public static int ClearHistory(AppPaths p)
     {
         int n = 0;

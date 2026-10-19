@@ -114,7 +114,7 @@ public sealed partial class ServiceManager(AppPaths paths) : IServiceOps
         Sc("delete", Name);
         Sc("stop", "WinDivert");
         Sc("delete", "WinDivert");
-        Recorder.Close(ChangeKinds.Service, "служба удалена кнопкой «Удалить службу полностью»");
+        Recorder.Close(ChangeKinds.Service, "служба удалена кнопкой «Удалить службу оптимизации»");
     }
 
     public static bool WaitFor(string name, SvcState want, TimeSpan timeout)
