@@ -245,7 +245,7 @@ public sealed partial class RouterViewModel
         return true;
     }
 
-    /// <summary>Страница выпусков программы — «Обновить программу» (само обновление программы — отдельно, в «Настройках»).</summary>
+    /// <summary>Страница выпусков программы — выпуск программы (само обновление — в «Настройках» → «Обновления», см. <see cref="GoUpdatesCmd"/>).</summary>
     public const string AppReleasesUrl = "https://github.com/Slavdew/dpishell/releases/latest";
     public ICommand OpenAppReleasesCmd => _openAppCmd ??= new RelayCommand(() =>
     {
@@ -253,6 +253,10 @@ public sealed partial class RouterViewModel
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Failed("Не удалось открыть браузер: " + e.Message); }
     });
     ICommand? _openAppCmd;
+
+    /// <summary>«Обновить программу в „Настройках“»: программа обновляется там (карточка «Обновления»), а не отсюда.</summary>
+    public ICommand GoUpdatesCmd => _goUpdatesCmd ??= new RelayCommand(() => Navigate(Pages.Settings));
+    ICommand? _goUpdatesCmd;
 
     // ---------- обновление DpiShell на роутере (ядро договора §5.4) ----------
 

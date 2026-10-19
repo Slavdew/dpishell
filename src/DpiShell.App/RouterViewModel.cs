@@ -90,7 +90,7 @@ public static class RouterTexts
         _ => e.Message,
     };
 
-    public const string Conflict = "На роутере работает другая программа обхода — остановите или удалите её: «Диагностика» → «Роутер: что мешает».";
+    public const string Conflict = "На роутере работает другая программа обхода — остановите или удалите её: «Роутер» → «Роутер: что мешает».";
 
     /// <summary>Выключение без человека (§5.1): сторож, кнопка на корпусе, откат неподтверждённого включения.</summary>
     public static bool IsOffCode(string code) => code is "watchdog_off" or "button_off" or "confirm_reverted";
@@ -608,7 +608,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     }
     public bool ModeLists { get => !ModeAll; set => ModeAll = !value; }
     public string ModeHint => ModeAll
-        ? "Обход для всех сайтов. Если какой-то сайт сломался — добавьте его в исключения (ниже — «Сайт не открывается»)."
+        ? "Обход для всех сайтов. Если какой-то сайт сломался — добавьте его в исключения (выше — «Сайт не открывается»)."
         : "Обход только для YouTube, Discord и сайтов из списков.";
 
     public async Task SetModeAsync(bool all)
@@ -728,7 +728,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                     Say("Готово: обход работает и для сайтов по IPv6.");
                 break;
             case "conflict":
-                Navigate(Pages.Diag);
+                Navigate(Pages.Router);   // сам обновит «Роутер: что мешает»; на вкладке уже — обновим здесь
                 await RefreshDiagAsync();
                 break;
         }
@@ -1226,7 +1226,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         var rest = o.Groups.Where(g => g != "user").ToList();
         IReadOnlyList<string> groups = rest.Count > 0 ? rest : DefaultSelectGroups;
         SetSelectGroups(groups);
-        hint = "На роутере нет своих адресов — подбираю без них. Отправить их с ПК: «Свои адреса» → «На роутере» → «Скопировать с ПК».";
+        hint = "На роутере нет своих адресов — подбираю без них. Отправить их с ПК: «Сайты» → «На роутере» → «Скопировать с ПК».";
         return (groups, o.Full);
     }
 
@@ -1255,7 +1255,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (!Confirm($"Список своих адресов на роутере пуст, а на этом компьютере их {pc.Count}.\n\n"
                      + "Отправить свои адреса с компьютера на роутер и подобрать по ним?"))
         {
-            Say("Подбор не запущен: на роутере нет своих адресов. Добавьте их на вкладке «Свои адреса» → «На роутере».");
+            Say("Подбор не запущен: на роутере нет своих адресов. Добавьте их на вкладке «Сайты» → «На роутере».");
             return false;
         }
         var items = pc.Select(d => new RouterTarget(RouterTexts.ToUrl(d), false))
@@ -1523,7 +1523,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     // ---------- вкладка «Роутер» ----------
 
-    /// <summary>Открыли вкладку «Роутер»: DNS — свежим (статус уже есть).</summary>
+    /// <summary>Открыли вкладку «Роутер»: DNS и «Роутер: что мешает» — свежим (статус уже есть).</summary>
     public async Task RefreshRouterPageAsync()
     {
         if (!Connected || Busy) return;
@@ -1533,6 +1533,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             ShowDns(await Call(c => c.DnsStatusAsync()));
         }, changes: false);
         Say("");
+        await RefreshDiagAsync();
     }
 
     // ---------- «Сайт не открывается» (site_check) ----------
@@ -1803,7 +1804,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     bool _diagLoaded;
     public bool DiagLoaded { get => _diagLoaded; private set { if (Set(ref _diagLoaded, value)) { Raise(nameof(ShowDiagHint)); Raise(nameof(DiagHint)); } } }
     public bool ShowDiagHint => !DiagLoaded;
-    public string DiagHint => Connected ? "Нажмите «Проверить снова»." : NeedLogin ? "Войдите на роутер (вкладка «Роутер» → «Войти»), чтобы увидеть его состояние." : ConnectionText + ".";
+    public string DiagHint => Connected ? "Нажмите «Проверить снова»." : NeedLogin ? "Войдите на роутер («Войти» выше), чтобы увидеть, что ему мешает." : ConnectionText + ".";
 
     public ICommand RefreshDiagCmd { get; }
     public ICommand StopConflictCmd { get; }

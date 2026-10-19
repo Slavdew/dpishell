@@ -95,7 +95,7 @@ public sealed class HomeViewModelTests : IDisposable
         await vm.RefreshStatusAsync();
         foreach (var g in vm.Groups) g.IsChecked = g.Id == "user";
 
-        vm.Page = Pages.Targets;
+        vm.Page = Pages.Sites;
         vm.TargetsText = "example.com";
         Assert.True(vm.TargetsDirty);
         var urls = new List<string>();

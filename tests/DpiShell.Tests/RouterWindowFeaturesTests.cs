@@ -671,12 +671,46 @@ public sealed class RouterWindowFeaturesTests : IDisposable
 
         int page = -1;
         vm.Navigate = p => page = p;
-        await vm.FixWarningAsync("conflict");   // «Подробнее» — в диагностику
-        Assert.Equal(Pages.Diag, page);
+        await vm.FixWarningAsync("conflict");   // «Подробнее» — к «Роутер: что мешает» (теперь на вкладке «Роутер»)
+        Assert.Equal(Pages.Router, page);
         var pkg = vm.Conflicts.Single(c => c.Name == "zapret-manager-beam");
         Assert.False(pkg.CanStop);
         Assert.Contains("удалите его", pkg.Detail);
         Assert.True(vm.Conflicts.Single(c => c.Name == "zapret2").CanStop);
+    }
+
+    /// <summary>«Роутер: что мешает» живёт на «Роутере»: вход на вкладку читает diag; на «Диагностике» ПК роутер больше не опрашивается.</summary>
+    [Fact]
+    public async Task RouterTab_Entry_RefreshesRouterDiag_DiagTabDoesNot()
+    {
+        using var r = new FakeRouter { ConflictsJson = """[ { "kind": "service", "name": "zapret2", "running": true } ]""" };
+        var vm = Main(r);
+        typeof(MainViewModel).GetProperty(nameof(MainViewModel.IsLoading))!.SetValue(vm, false);
+        await vm.Router.ConnectAsync("secret");
+        Assert.False(vm.Router.DiagLoaded);
+        int before = Count(r, "diag");
+
+        vm.Page = Pages.Diag;
+        await Task.Delay(300);
+        Assert.Equal(before, Count(r, "diag"));
+        Assert.False(vm.Router.DiagLoaded);
+
+        vm.Page = Pages.Router;
+        await Until(() => vm.Router.DiagLoaded);
+        Assert.Equal("zapret2", vm.Router.Conflicts.Single().Name);
+        Assert.True(Count(r, "diag") > before);
+    }
+
+    /// <summary>«Обновить программу» с «Роутера» — ссылка в «Настройки», где обновление; страницу выпусков команда по-прежнему открывает.</summary>
+    [Fact]
+    public async Task UpdateApp_LinkLeadsToSettings()
+    {
+        using var r = new FakeRouter();
+        var vm = await Connected(r);
+        int page = -1;
+        vm.Navigate = p => page = p;
+        vm.GoUpdatesCmd.Execute(null);
+        Assert.Equal(Pages.Settings, page);
     }
 
     // ---------- свои адреса роутера пусты (router-api §5.2) ----------

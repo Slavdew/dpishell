@@ -150,7 +150,7 @@ public sealed class WindowSmokeTests
     }).GetAwaiter().GetResult();
 
     static readonly (int Page, string Name)[] AllPages =
-        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Targets, "targets"), (Pages.Net, "net"), (Pages.Hosts, "hosts"), (Pages.Dns, "dns"), (Pages.Diag, "diag"), (Pages.Settings, "settings")];
+        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Sites, "sites"), (Pages.Net, "net"), (Pages.Hosts, "hosts"), (Pages.Dns, "dns"), (Pages.Diag, "diag"), (Pages.Settings, "settings")];
 
     [Fact]
     public void MainWindow_OpensAndAllPagesBind_WithoutErrors()
@@ -162,7 +162,7 @@ public sealed class WindowSmokeTests
             var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
             var w = Open(vm);
             var tabs = Find<TabControl>(w)!;
-            foreach (var page in new[] { Pages.Select, Pages.Targets, Pages.Net, Pages.Hosts, Pages.Dns, Pages.Diag, Pages.Router, Pages.Settings, Pages.Home })
+            foreach (var page in new[] { Pages.Select, Pages.Sites, Pages.Net, Pages.Hosts, Pages.Dns, Pages.Diag, Pages.Router, Pages.Settings, Pages.Home })
             {
                 vm.Page = page;
                 Pump();
@@ -476,6 +476,16 @@ public sealed class WindowSmokeTests
                     if (page == Pages.Diag && Find<Button>(Find<TabControl>(w)!, b => b.Content as string == "Остановить" && b.IsVisible) is null)
                         throw new Exception("В диагностике ПК у «Других программ обхода» нет «Остановить»");
                     if (page == Pages.Diag && w.FindName("PcDnsCard") is FrameworkElement { IsVisible: true }) throw new Exception("Карточка DNS осталась на «Диагностике»");
+                    if (page == Pages.Diag)
+                        foreach (var text in new[] { "Роутер: что мешает", "Сайт не открывается" })
+                            if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» на «Диагностике» без роутера");
+                    if (page == Pages.Sites)
+                    {
+                        // Роутера нет: только свои адреса ПК — без карточек роутера и заглушек про исключения.
+                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов обход", "Исключения (обход их не трогает)", "Роутер: что мешает" })
+                            if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» на «Сайтах» без роутера");
+                        if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Свои адреса" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет поля своих адресов ПК");
+                    }
                     if (page == Pages.Dns)
                     {
                         // Карточка DNS этого компьютера лежит на вкладке «DNS», а не на «Диагностике».
@@ -660,15 +670,37 @@ public sealed class WindowSmokeTests
                     if (page == Pages.Dns && (Find<TextBlock>(tabs, t => t.Text.StartsWith("DNS для всей сети — на вкладке") && t.IsVisible) is null
                                               || Find<Button>(tabs, b => b.Content as string == "Открыть →" && b.IsVisible) is null))
                         throw new Exception("На вкладке «DNS» нет подсказки про роутер");
-                    if (page == Pages.Diag && Find<Button>(tabs, b => b.Content as string == "Остановить" && b.IsVisible) is null)
-                        throw new Exception("В диагностике роутера нет «Остановить» у конфликта");
+                    if (page == Pages.Diag)
+                    {
+                        // «Диагностика» — только этот ПК: карточки роутера (и его отчёт) переехали на вкладку «Роутер».
+                        foreach (var text in new[] { "Роутер: что мешает", "Другие программы обхода на роутере" })
+                            if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» осталось на «Диагностике»");
+                        if (Find<Button>(tabs, b => b.Content as string == "Сохранить отчёт роутера" && b.IsVisible) is not null) throw new Exception("«Сохранить отчёт роутера» осталось на «Диагностике»");
+                        if (Find<TextBlock>(tabs, t => t.Text == "Другие программы обхода" && t.IsVisible) is null) throw new Exception("На «Диагностике» нет проверок этого ПК");
+                    }
+                    if (page == Pages.Sites)
+                    {
+                        // «Сайты» с роутером: «Сайт не открывается» наверху, «Для каких сайтов обход», свои адреса и исключения (не в раскрывашке).
+                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов обход", "Свои адреса", "Исключения (обход их не трогает)", "Сайт открывается только без обхода" })
+                            if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is null) throw new Exception($"На вкладке «Сайты» нет «{text}»");
+                        if (Find<TextBox>(tabs, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Исключения" && t.IsVisible) is null) throw new Exception("На «Сайтах» не видно поля исключений");
+                        if (Find<Button>(tabs, b => b.Content as string == "Добавить в исключения" && b.IsVisible) is null) throw new Exception("Нет «Добавить в исключения»");
+                        if (Find<Expander>(tabs, e => (e.Header as string ?? "").StartsWith("Списки роутера") && e.IsVisible) is not null) throw new Exception("Исключения снова спрятаны в раскрывашке");
+                        var siteTop = Find<TextBlock>(tabs, t => t.Text == "Сайт не открывается" && t.IsVisible)!.TranslatePoint(new Point(0, 0), w).Y;
+                        var addrTop = Find<TextBlock>(tabs, t => t.Text == "Свои адреса" && t.IsVisible && t.Style == (Style)w.FindResource("H2"))!.TranslatePoint(new Point(0, 0), w).Y;
+                        if (siteTop > addrTop) throw new Exception("«Сайт не открывается» должно стоять выше своих адресов");
+                    }
                     if (page == Pages.Router && Find<Button>(tabs, b => b.Content as string == "Исправить" && b.IsVisible) is null)
                         throw new Exception("У предупреждения роутера нет «Исправить»");
                     if (page == Pages.Router)
                     {
-                        foreach (var text in new[] { "Для каких сайтов обход", "Сайт не открывается", "DNS для всей сети", "Проверять сам", "Сайт открывается только без обхода" })
+                        // «Роутер: что мешает» (diag, чужие обходы, отчёт) — на «Роутере», рядом с плашками; «Сайты» и режим обхода переехали на «Сайты».
+                        foreach (var text in new[] { "Роутер: что мешает", "Другие программы обхода на роутере", "DNS для всей сети", "Проверять сам" })
                             if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is null) throw new Exception($"На вкладке «Роутер» нет «{text}»");
-                        if (Find<Button>(tabs, b => b.Content as string == "Добавить в исключения" && b.IsVisible) is null) throw new Exception("Нет «Добавить в исключения»");
+                        foreach (var text in new[] { "Для каких сайтов обход", "Сайт не открывается" })
+                            if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» осталось на «Роутере»");
+                        if (Find<Button>(tabs, b => b.Content as string == "Остановить" && b.IsVisible) is null) throw new Exception("В «Роутер: что мешает» нет «Остановить» у конфликта");
+                        if (Find<Button>(tabs, b => b.Content as string == "Сохранить отчёт роутера" && b.IsVisible) is null) throw new Exception("На «Роутере» нет «Сохранить отчёт роутера»");
                         // dns_presets есть — вместо одной кнопки выбор вариантов, как на ПК.
                         if (Find<Button>(tabs, b => b.Content as string == "Включить защищённый DNS" && b.IsVisible) is not null) throw new Exception("Осталась одна кнопка «Включить защищённый DNS»");
                         if (Find<DnsPickerView>(tabs, p => p.IsVisible) is not { } rp || Find<ComboBox>(rp, c => c.Items.Count >= 4) is null)
@@ -698,15 +730,17 @@ public sealed class WindowSmokeTests
                     }
                     if (page == Pages.Diag && Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } sv)
                     {
-                        // Карточки роутера — в середине и в конце страницы.
-                        var card = Find<Button>(tabs, b => b.Content as string == "Сохранить отчёт роутера")!;
-                        sv.ScrollToVerticalOffset(card.TranslatePoint(new Point(0, 0), (UIElement)sv.Content).Y - 30);
-                        Pump();
-                        Snap(w, Path.Combine(snapDir, $"{theme}-router-diag-card.png"));
                         sv.ScrollToEnd();
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-router-diag-end.png"));
                         sv.ScrollToHome();
+                    }
+                    if (page == Pages.Sites && Find<ScrollViewer>(tabs, s => s.IsVisible && s.ScrollableHeight > 0) is { } ssv)
+                    {
+                        ssv.ScrollToEnd();
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-router-sites-end.png"));
+                        ssv.ScrollToHome();
                     }
                     if (page == Pages.Router && Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } rsv)
                     {
@@ -714,6 +748,10 @@ public sealed class WindowSmokeTests
                         Collect(tabs, expanders);
                         foreach (var e in expanders) e.IsExpanded = true;
                         Pump();
+                        var diagCard = Find<TextBlock>(tabs, t => t.Text == "Роутер: что мешает")!;
+                        rsv.ScrollToVerticalOffset(diagCard.TranslatePoint(new Point(0, 0), (UIElement)rsv.Content).Y - 30);
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-router-diag-card.png"));
                         rsv.ScrollToEnd();
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-router-tab-end.png"));
@@ -733,7 +771,12 @@ public sealed class WindowSmokeTests
                     vm.Page = Pages.Router;
                     Pump();
                     var tabs = Find<TabControl>(w)!;
-                    if (Find<Button>(tabs, b => b.Content as string == "Обновить программу ↗" && b.IsVisible) is null) throw new Exception($"Нет плашки совместимости ({name})");
+                    if (Find<Button>(tabs, b => b.Content as string == "Обновить программу ↗") is not null) throw new Exception($"Осталась «Обновить программу ↗» ({name})");
+                    if (Find<Button>(tabs, b => (b.Content as string ?? "").StartsWith("Обновить программу в «Настройках»") && b.IsVisible) is not { } toSettings) throw new Exception($"Нет плашки совместимости ({name})");
+                    toSettings.Command.Execute(null);
+                    if (vm.Page != Pages.Settings) throw new Exception($"Ссылка «Обновить программу» не привела в «Настройки» ({name})");
+                    vm.Page = Pages.Router;
+                    Pump();
                     if (name == "blocked" && Find<Button>(tabs, b => b.Content as string == "Проверить" && b.IsVisible && b.IsEnabled) is not null)
                         throw new Exception("При несовместимости «Проверить» активна");
                     if (Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } csv) csv.ScrollToHome();
@@ -1024,6 +1067,13 @@ public sealed class WindowSmokeTests
                 Collect(Find<TabControl>(w)!, buttons);
                 foreach (var b in buttons.Where(b => b.IsVisible)) seen[b.Topic ?? ""] = b.Text;
             }
+            // «Сайты» роутера: «Сайт не открывается» и «Для каких сайтов обход» — с переключателем «На роутере».
+            vm.Router.TargetsOnRouter = true;
+            vm.Page = Pages.Sites;
+            Pump();
+            var routerSites = new List<InfoButton>();
+            Collect(Find<TabControl>(w)!, routerSites);
+            foreach (var b in routerSites.Where(b => b.IsVisible)) seen[b.Topic ?? ""] = b.Text;
             Close(w);
         });
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));

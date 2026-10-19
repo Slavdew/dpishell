@@ -13,7 +13,8 @@ public enum StatusKind { Off, On, Busy, Error }
 
 public static class Pages
 {
-    public const int Home = 0, Select = 1, Targets = 2, Net = 3, Hosts = 4, Dns = 5, Diag = 6, Router = 7, Settings = 8;
+    // «Сайты» (свои адреса и исключения), «Игры и IP-списки», «Починить адреса» (hosts), «DNS»; порядок вкладок — по номерам.
+    public const int Home = 0, Select = 1, Sites = 2, Net = 3, Hosts = 4, Dns = 5, Diag = 6, Router = 7, Settings = 8;
 }
 
 /// <summary>
@@ -316,14 +317,12 @@ public sealed partial class MainViewModel : Observable
             if (!Set(ref _page, value)) return;
             if (!Busy && !IsLoading && Message.Length > 0 && Message != ReadyText) Message = ReadyText;   // сообщение от давнего действия не едет по вкладкам
             if (IsLoading) return;
-            if (was == Pages.Targets) _ = SaveDraftOnLeaveAsync();
+            if (was == Pages.Sites) _ = SaveDraftOnLeaveAsync();
             if (value == Pages.Net) _ = RefreshNetAsync();
             if (value == Pages.Hosts) _ = Hosts.RefreshAsync();
-            if (value == Pages.Router) _ = Router.RefreshRouterPageAsync();
+            if (value == Pages.Router) _ = Router.RefreshRouterPageAsync();   // и «Роутер: что мешает» — внутри
             if (value == Pages.Dns && DnsRows.Count == 0) _ = CheckDnsAsync();
-            if (value != Pages.Diag) return;
-            _ = RefreshDiagAsync();
-            if (Router.Connected) _ = Router.RefreshDiagAsync();
+            if (value == Pages.Diag) _ = RefreshDiagAsync();
         }
     }
 
@@ -1080,7 +1079,7 @@ public sealed partial class MainViewModel : Observable
         if (ids.Count == 0) { Message = "Отметьте, что проверять."; return null; }
         if (ids.Contains("user") && UserTargets.Count == 0 && Helper.Ready)
         {
-            Message = "Список своих адресов пуст — заполните его на вкладке «Свои адреса» и сохраните.";
+            Message = "Список своих адресов пуст — заполните его на вкладке «Сайты» и сохраните.";
             return null;
         }
         return ids;
