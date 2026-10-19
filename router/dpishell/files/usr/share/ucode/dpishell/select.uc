@@ -143,6 +143,7 @@ function score(groups, verdicts) {
 		avg_s: avg,
 		perfect: total > 0 && passed == total && !length(broken),
 		error: length(broken) ? `ломает обычные сайты: ${join(', ', broken)}` : null,
+		groups_ok: passed,
 		groups_total: total,
 	};
 }
@@ -192,7 +193,8 @@ function strategy_order() {
 
 // Полная проверка одной стратегии — строка таблицы подбора.
 function eval_strategy(strat, groups, items, cache, s, ts_was) {
-	let row = { id: strat.id, title: strat.title ?? strat.id, group_share: 0, target_share: 0, avg_s: null, error: null, needs_ts: false };
+	let row = { id: strat.id, title: strat.title ?? strat.id, group_share: 0, target_share: 0, avg_s: null, error: null, needs_ts: false,
+		groups_ok: 0, groups_total: length(filter(groups, g => !g.control)) };
 	let e = zapret_apply_for(strat, s);
 	if (e) {
 		row.error = `ошибка запуска: ${e}`;
@@ -213,7 +215,7 @@ function eval_strategy(strat, groups, items, cache, s, ts_was) {
 	}
 	// avg_s 99 — внутренняя заглушка «ничего не открылось» для сравнения; в таблицу — null (прочерк).
 	return { ...row, group_share: sc.group_share, target_share: sc.target_share, avg_s: sc.target_share > 0 ? sc.avg_s : null, error: sc.error, perfect: sc.perfect,
-		verdicts: brief_verdicts(vs) };
+		groups_ok: sc.groups_ok, groups_total: sc.groups_total, verdicts: brief_verdicts(vs) };
 }
 
 // Без обхода: что открывается и так — не оцениваем; контрольные — оставляем только открывающиеся.
@@ -341,7 +343,7 @@ function deep_search(p, groups, s, ts_was, cache) {
 			p.message = title;
 			p.eta_s = state.n > 1 ? int(1.0 * (time() - state.t0) / (state.n - 1) * (p.total > state.n ? p.total - state.n : 1)) : null;
 			progress(p);
-			let ok = 0, total = 0, sum = 0, err = zapret_apply_for(strat, s);
+			let ok = 0, total = 0, sum = 0, gk = {}, err = zapret_apply_for(strat, s);
 			if (!err) {
 				let uses_ts = cat.uses_ts(strat);
 				if (uses_ts) ts_set(0);
@@ -354,6 +356,8 @@ function deep_search(p, groups, s, ts_was, cache) {
 					x.ok = x.ok && res[i].ok;
 					if (res[i].seconds > x.seconds) x.seconds = res[i].seconds;
 				}
+				for (let i = 0; i < length(items); i++)
+					gk[items[i].group] = (gk[items[i].group] ?? true) && v[`${items[i].group}|${items[i].target.url}`].ok;
 				for (let k in v) {
 					total++;
 					if (v[k].ok) { ok++; sum += v[k].seconds; }
@@ -361,7 +365,8 @@ function deep_search(p, groups, s, ts_was, cache) {
 			}
 			let c = { role, desync, ok, total, share: total ? 1.0 * ok / total : 0, seconds: ok ? 1.0 * sum / ok : 99, cost: srch.cost(desync) };
 			push(results, c);
-			push(p.rows, { id: `cand-${state.n}`, title, candidate: true, ok, total, group_share: c.share, target_share: c.share,
+			push(p.rows, { id: `cand-${state.n}`, title, candidate: true, ok, total,
+				groups_ok: err ? 0 : length(filter(values(gk), x => x)), groups_total: length(rg), group_share: c.share, target_share: c.share,
 				avg_s: ok ? c.seconds : null, error: err ? `ошибка запуска: ${err}` : null, needs_ts: false });
 			progress(p);
 			sleep(300);
