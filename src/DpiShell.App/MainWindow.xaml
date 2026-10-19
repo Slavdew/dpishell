@@ -281,10 +281,10 @@
 
                                 <Border Style="{StaticResource Warn}" Visibility="{Binding ShowDns, Converter={StaticResource Vis}}">
                                     <StackPanel>
-                                        <TextBlock Text="DNS провайдера подменяет адреса сайтов — из-за этого часть сайтов и программ может не открываться даже с оптимизацией." />
+                                        <TextBlock Text="DNS провайдера может подменять ответы — часть сайтов не откроется даже с оптимизацией." />
                                         <WrapPanel Margin="0,8,0,0">
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{Binding RecommendedDnsText}" Command="{Binding FixDnsCmd}" ToolTip="{Binding RecommendedDnsHint}" />
-                                            <Button Content="Другой DNS" Style="{StaticResource LinkButton}" Command="{Binding ChooseDnsCmd}" VerticalAlignment="Center" Margin="0,0,0,8" />
+                                            <Button Content="Подробнее → DNS" Style="{StaticResource LinkButton}" Command="{Binding ChooseDnsCmd}" VerticalAlignment="Center" Margin="0,0,0,8" />
                                         </WrapPanel>
                                     </StackPanel>
                                 </Border>
@@ -299,8 +299,7 @@
                                 <!-- Обновление списков (architecture.md «Обновления данных»): видно, только когда у источника данные новее. -->
                                 <Border Style="{StaticResource Card}" Padding="14" Visibility="{Binding ShowUpdate, Converter={StaticResource Vis}}">
                                     <DockPanel DataContext="{Binding Updates}">
-                                        <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="Обновить списки" Command="{Binding InstallCmd}"
-                                                VerticalAlignment="Center" Margin="12,0,0,0" />
+                                        <!-- Кнопка обновления — только на «Информация и обновления» (UX-аудит 5, п. 19). -->
                                         <Button DockPanel.Dock="Right" Content="К обновлениям →" Style="{StaticResource LinkButton}" Command="{Binding DataContext.GoAboutCmd, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="Версии и обновления" />
                                         <TextBlock Text="{Binding AvailableText}" VerticalAlignment="Center" TextWrapping="Wrap" />
@@ -716,6 +715,9 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- Одной карточкой: при прокрутке заголовок и подпись не обрезаются посреди текста, кнопка «Сохранить» отделена линией (UX-аудит 5, п. 25). -->
+                            <Border Style="{StaticResource Card}">
+                            <StackPanel>
                             <TextBlock Text="Свои сайты" Style="{StaticResource H2}" />
                             <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10" TextWrapping="Wrap"
                                        Text="Роутер проверяет эти адреса при подборе — для всех устройств дома. До 50. «Важный» — без него стратегия не считается рабочей." />
@@ -749,6 +751,8 @@
                                 <Button Content="Добавить адрес" Command="{Binding AddTargetCmd}" />
                                 <Button Content="Скопировать с ПК" Command="{Binding CopyFromPcCmd}" />
                             </WrapPanel>
+                            </StackPanel>
+                            </Border>
 
                             <TextBlock Text="Что оптимизировать и что не трогать" Style="{StaticResource H2}" Margin="0,14,0,0" />
                             <Grid Margin="0,4,0,0">
@@ -770,10 +774,12 @@
                             </Grid>
                             </StackPanel>
                             </ScrollViewer>
-                            <WrapPanel Grid.Row="1" Margin="0,10,0,0">
-                                <Button Content="Сохранить на роутере" Style="{StaticResource Primary}" Command="{Binding SaveTargetsCmd}" />
-                                <TextBlock Text="{Binding TargetsMessage}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8" />
-                            </WrapPanel>
+                            <Border Grid.Row="1" Margin="0,4,0,0" Padding="0,8,0,0" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
+                                <WrapPanel>
+                                    <Button Content="Сохранить на роутере" Style="{StaticResource Primary}" Command="{Binding SaveTargetsCmd}" />
+                                    <TextBlock Text="{Binding TargetsMessage}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8" />
+                                </WrapPanel>
+                            </Border>
                         </Grid>
                     </Grid>
                 </TabItem>
@@ -1087,8 +1093,9 @@
                                 <Button Style="{StaticResource LinkButton}" Content="Проверить мой hosts" Tag="HostsAuditSection" Click="HostsAnchor_Click" />
                             </WrapPanel>
 
-                            <!-- Предупреждения видны всегда, даже когда разделы свёрнуты. -->
-                            <ItemsControl ItemsSource="{Binding Warnings}" Margin="0,0,0,6">
+                            <!-- Замечания свёрнуты в одну строку «N замечания · Подробнее» (UX-аудит 5, п. 24); раскрываются одним щелчком. -->
+                            <Expander Header="{Binding WarningsHeader}" Margin="0,0,0,6" Visibility="{Binding HasWarnings, Converter={StaticResource Vis}}">
+                            <ItemsControl ItemsSource="{Binding Warnings}" Margin="0,4,0,6">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="6"
@@ -1098,6 +1105,7 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            </Expander>
 
                             <!-- Всё, что DpiShell изменила в hosts, откатывается одной кнопкой; чужие строки остаются теми же байтами. -->
                             <Border Style="{StaticResource Card}" Padding="14,10" Visibility="{Binding HasOurs, Converter={StaticResource Vis}}">
@@ -1539,6 +1547,15 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+                                    <Expander Header="Подробнее" Margin="0,4,0,0">
+                                        <ItemsControl ItemsSource="{Binding HintsMore}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding}" Style="{StaticResource Hint}" FontSize="13" TextWrapping="Wrap" Margin="0,2" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Expander>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -1597,8 +1614,12 @@
                                     <TextBlock Text="Файлы ядра повреждены — обычно это антивирус." FontWeight="SemiBold" Margin="0,0,0,8" />
                                     <Button ContentTemplate="{StaticResource Shield}" Content="Восстановить" Style="{StaticResource Primary}" Command="{Binding RepairCoreCmd}" HorizontalAlignment="Left" />
                                     <!-- Путь не переписывать руками: «Скопировать путь» и сразу «Безопасность Windows» (п. 16). -->
-                                    <TextBlock Margin="0,4,0,0" Text="Чтобы снизить вероятность повторения, добавьте папку в исключения Защитника: «Защита от вирусов и угроз» → «Управление настройками» → «Исключения» → «Добавить» → «Папка» (названия могут отличаться); для другого антивируса — в его настройках." />
-                                    <TextBlock Text="{Binding CoreFolder}" local:Demo.Sensitive="True" FontWeight="SemiBold" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding CoreFolder}" />
+                                    <TextBlock Text="Чтобы не повторилось, добавьте эту папку в исключения антивируса:" Style="{StaticResource Hint}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding CoreFolder}" local:Demo.Sensitive="True" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding CoreFolder}" />
+                                    <Expander Header="Подробнее" Margin="0,4,0,0">
+                                        <TextBlock Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
+                                                   Text="В Защитнике Windows: «Защита от вирусов и угроз» → «Управление настройками» → «Исключения» → «Добавить» → «Папка» (названия могут отличаться). В другом антивирусе — в его настройках." />
+                                    </Expander>
                                     <WrapPanel Margin="-4,6,0,0">
                                         <Button Content="Скопировать путь" Style="{StaticResource LinkButton}" Command="{Binding CopyCoreFolderCmd}" Margin="0,0,10,0" />
                                         <Button Content="Открыть Защитник" Style="{StaticResource LinkButton}" Command="{Binding OpenDefenderCmd}" />
@@ -2252,7 +2273,7 @@
                                             <WrapPanel>
                                                 <Button Content="{Binding UpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}"
                                                         Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
-                                                <Button Content="Установить на роутер" Style="{StaticResource Primary}" Command="{Binding InstallCmd}"
+                                                <Button Content="Установить на роутер" Style="{StaticResource LinkButton}" Command="{Binding InstallCmd}"
                                                         Visibility="{Binding ShowPackageInstall, Converter={StaticResource Vis}}" />
                                             </WrapPanel>
                                         </StackPanel>

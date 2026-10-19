@@ -109,6 +109,8 @@ public sealed class StrategyEditor : Observable
     /// <summary>Итог проверки: что мешает сохранению (первая причина); пусто — можно сохранять.</summary>
     public string Summary { get => _summary; private set { if (Set(ref _summary, value)) Raise(nameof(HasSummary)); } }
     public bool HasSummary => Summary.Length > 0;
+    /// <summary>Внизу показываем причину, только если под полем нет своей красной строки: одна ошибка за раз.</summary>
+    public bool ShowSummary => HasSummary && !Fields.Any(f => f.HasError);
 
     public bool CanSave => !HasSummary;
     public bool Saved { get; private set; }
@@ -157,6 +159,7 @@ public sealed class StrategyEditor : Observable
             : roles.Count == 0 ? "Нужна хотя бы одна роль с параметрами"
             : StrategyExchange.CheckRoles(roles, _fakeExists) ?? "";
         Raise(nameof(CanSave));
+        Raise(nameof(ShowSummary));
         CommandManager.InvalidateRequerySuggested();
     }
 

@@ -690,7 +690,7 @@ public sealed partial class WindowSmokeTests
                         while (parent is not null and not TabItem) parent = LogicalTreeHelper.GetParent(parent);
                         if ((parent as TabItem)?.Header as string != "DNS") throw new Exception("Карточка DNS лежит не на вкладке «DNS»");
                         Snap(w, Path.Combine(snapDir, $"{theme}-dns.png"));
-                        // «Другой DNS» с главной (UX-аудит 2, п. 4): к выбору DNS этого компьютера, список вариантов раскрыт.
+                        // «Подробнее → DNS» с главной (UX-аудит 2, п. 4): к выбору DNS этого компьютера, список вариантов раскрыт.
                         w.ShowSpot(Spot.PcDns);
                         Pump();
                         var picker = Find<DnsPickerView>(Find<TabControl>(w)!, v => v.IsVisible && v.DataContext == vm.PcDns)!;
@@ -1390,7 +1390,7 @@ public sealed partial class WindowSmokeTests
         int dnsButtons = 0;
         foreach (var b in FindAll<Button>(tabs, b => b.Content as string == "Включить защищённый DNS" && b.IsVisible)) dnsButtons++;
         if (dnsButtons != 1) throw new Exception($"Кнопок «Включить защищённый DNS» на главной: {dnsButtons}, ждали 1");
-        if (!vm.Updates.DataAvailable || Visible("Обновить списки") is null) throw new Exception("Обновление списков спрятано вместе с помехами");
+        if (!vm.Updates.DataAvailable || Visible("К обновлениям →") is null) throw new Exception("Обновление списков спрятано вместе с помехами");
         if (Visible("Понятно, не показывать") is null) throw new Exception("Плашка VPN не видна");
     }
 

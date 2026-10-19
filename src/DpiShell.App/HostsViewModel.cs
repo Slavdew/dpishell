@@ -164,6 +164,14 @@ public sealed partial class HostsViewModel : Observable
     }
 
     public bool HasWarnings => Warnings.Count > 0;
+    /// <summary>Заголовок свёрнутого списка замечаний: первый экран вкладки начинается с действия, а не с тревог.</summary>
+    public string WarningsHeader => Warnings.Count switch
+    {
+        0 => "",
+        1 => "1 замечание",
+        var n when n % 10 is >= 2 and <= 4 && n / 10 != 1 => $"{n} замечания",
+        var n => $"{n} замечаний",
+    };
 
     /// <summary>Перечитать состояние hosts у помощника (details; файл может держать антивирус — помощник читает в фоне).</summary>
     public async Task RefreshAsync()
@@ -192,7 +200,7 @@ public sealed partial class HostsViewModel : Observable
 
     void RaiseStatus()
     {
-        foreach (var p in new[] { nameof(BlockPresent), nameof(StatusText), nameof(AppliedLines), nameof(Warnings), nameof(HasWarnings) }) Raise(p);
+        foreach (var p in new[] { nameof(BlockPresent), nameof(StatusText), nameof(AppliedLines), nameof(Warnings), nameof(HasWarnings), nameof(WarningsHeader) }) Raise(p);
         CommandManager.InvalidateRequerySuggested();
     }
 

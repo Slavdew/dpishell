@@ -141,6 +141,14 @@ public sealed class ProxyValuesTests
         });
         Assert.Contains(ProxyHints.All, h => h.Contains("Firefox"));
         Assert.Contains(ProxyHints.All, h => h.Contains("LoopbackExempt"));
+        // На виду — простые слова: жаргон только под «Подробнее».
+        Assert.InRange(ProxyHints.Short.Count, 3, 4);
+        Assert.All(ProxyHints.Short, h =>
+        {
+            foreach (var jargon in new[] { "WinINET", "loopback", ".NET", "SOCKS", "WinHTTP" })
+                Assert.DoesNotContain(jargon, h, StringComparison.OrdinalIgnoreCase);
+        });
+        Assert.Contains(ProxyHints.Details, h => h.Contains("<-loopback>"));
     }
 }
 

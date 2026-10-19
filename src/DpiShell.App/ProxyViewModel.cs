@@ -49,7 +49,8 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
 
     public ObservableCollection<ProxyRow> Items { get; } = [];
     public ObservableCollection<string> Notes { get; } = [];
-    public IReadOnlyList<string> Hints => ProxyHints.All;
+    public IReadOnlyList<string> Hints => ProxyHints.Short;
+    public IReadOnlyList<string> HintsMore => ProxyHints.Details;
     /// <summary>Пример формата для пустого списка — только подсказка, в список не добавляется.</summary>
     public const string Example = "Clash Verge — 127.0.0.1:7897";
 

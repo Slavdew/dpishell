@@ -9,7 +9,7 @@
         <!-- Итог проверки и кнопки — внизу, поля с прокруткой выше. -->
         <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
             <TextBlock Text="{Binding Summary}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,0,0,8"
-                       Visibility="{Binding HasSummary, Converter={StaticResource Vis}}" AutomationProperties.Name="Что мешает сохранить" />
+                       Visibility="{Binding ShowSummary, Converter={StaticResource Vis}}" AutomationProperties.Name="Что мешает сохранить" />
             <TextBlock Text="✓ Параметры в порядке" Style="{StaticResource Hint}" Margin="0,0,0,8" Visibility="{Binding CanSave, Converter={StaticResource Vis}}" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="Сохранить" Style="{StaticResource Primary}" Command="{Binding SaveCmd}" IsDefault="False" />
@@ -26,10 +26,7 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Margin="0,0,0,10">
-                                <TextBlock Margin="0,0,0,2">
-                                    <Run Text="{Binding Label, Mode=OneWay}" FontWeight="SemiBold" />
-                                    <Run Text="{Binding Role, Mode=OneWay}" FontFamily="Consolas" FontSize="12" Foreground="{DynamicResource Muted}" />
-                                </TextBlock>
+                                <TextBlock Text="{Binding Label, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,2" ToolTip="{Binding Role}" />
                                 <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" FontSize="12" Padding="6,4" TextWrapping="Wrap"
                                          AcceptsReturn="True" MinHeight="44" MaxHeight="110" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{Binding Label}" />
                                 <TextBlock Text="{Binding Error}" Foreground="{DynamicResource Danger}" FontSize="13" TextWrapping="Wrap" Margin="0,2,0,0"
