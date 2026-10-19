@@ -391,7 +391,7 @@
                         <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14,8" Margin="0,0,0,8" Visibility="{Binding ResultCompact, Converter={StaticResource Vis}}">
                             <DockPanel>
                                 <Button DockPanel.Dock="Right" Content="Подробнее" Style="{StaticResource LinkButton}" Command="{Binding ShowResultDetailsCmd}" Margin="12,0,0,0" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding ResultSummary}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <StackPanel VerticalAlignment="Center"><TextBlock Text="{Binding ResultSummary}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding AddressNote}" ToolTip="{Binding AddressNote}" Style="{StaticResource Hint}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" /></StackPanel>
                             </DockPanel>
                         </Border>
 
@@ -405,7 +405,7 @@
                                         ToolTip="Открыть ваши сайты через эту стратегию — только через неё" />
                                 <StackPanel>
                                     <TextBlock Text="{Binding ResultText}" FontSize="16" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding ResultHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" />
+                                    <TextBlock Text="{Binding ResultHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" /><TextBlock Text="{Binding AddressNote}" Style="{StaticResource Hint}" Margin="0,4,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
                                     <!-- Глубокий поиск — только когда готовые не помогли со всем (UX-аудит, п. 30). -->
                                     <WrapPanel Margin="0,10,0,0" Visibility="{Binding OfferDeep, Converter={StaticResource Vis}}">
                                         <TextBlock Text="Не нашлось стратегии для всего — можно поискать новые." VerticalAlignment="Center" Margin="0,0,10,8" />
@@ -527,7 +527,7 @@
                             <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14,8" Margin="0,0,0,8" Visibility="{Binding ResultCompact, Converter={StaticResource Vis}}">
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right" Content="Подробнее" Style="{StaticResource LinkButton}" Command="{Binding ShowResultDetailsCmd}" Margin="12,0,0,0" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding ResultSummary}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <StackPanel VerticalAlignment="Center"><TextBlock Text="{Binding ResultSummary}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding AddressNote}" ToolTip="{Binding AddressNote}" Style="{StaticResource Hint}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" /></StackPanel>
                                 </DockPanel>
                             </Border>
 
@@ -537,7 +537,7 @@
                                             VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding HasBest, Converter={StaticResource Vis}}" />
                                     <StackPanel>
                                         <TextBlock Text="{Binding ResultText}" FontSize="16" FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding ResultHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" />
+                                        <TextBlock Text="{Binding ResultHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" /><TextBlock Text="{Binding AddressNote}" Style="{StaticResource Hint}" Margin="0,4,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
                                         <Button Content="Искать глубже (до 15 мин)" Command="{Binding StartDeepCmd}" HorizontalAlignment="Left" Margin="0,10,0,0"
                                                 Visibility="{Binding OfferDeep, Converter={StaticResource Vis}}" ToolTip="Роутер придумывает и проверяет новые стратегии" />
                                     </StackPanel>

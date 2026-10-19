@@ -58,11 +58,17 @@ public sealed partial class MainViewModel : Observable
 
     /// <summary>Вопрос «Да/Нет» (в тестах подменяется).</summary>
     public Func<string, bool> Confirm { get; set; } = text =>
-        MessageBox.Show(text, "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+    {
+        UiGuard.Check(text);
+        return MessageBox.Show(text, "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+    };
 
     /// <summary>Вопрос об установке помощника (в тестах подменяется).</summary>
     public Func<string, bool> AskHelper { get; set; } = text =>
-        MessageBox.Show(text, "DpiShell", MessageBoxButton.OKCancel, MessageBoxImage.Information, MessageBoxResult.OK) == MessageBoxResult.OK;
+    {
+        UiGuard.Check(text);
+        return MessageBox.Show(text, "DpiShell", MessageBoxButton.OKCancel, MessageBoxImage.Information, MessageBoxResult.OK) == MessageBoxResult.OK;
+    };
 
     public event Action? StatusChanged;
 
@@ -1160,8 +1166,15 @@ public sealed partial class MainViewModel : Observable
     /// </summary>
     public bool OfferDeep { get => _offerDeep; private set => Set(ref _offerDeep, value); }
 
+    readonly AddressBlockTracker _addressBlock = new();
+    string _addressNote = "";
+    /// <summary>«Не открылось ни с одной стратегией: … — похоже на блокировку по адресу…»; пусто, когда таких адресов нет.</summary>
+    public string AddressNote { get => _addressNote; private set { if (Set(ref _addressNote, value)) Raise(nameof(HasAddressNote)); } }
+    public bool HasAddressNote => _addressNote.Length > 0;
+
     void ResetResults()
     {
+        AddressNote = "";
         Scores.Clear(); SelectedScore = null;
         ResultText = ""; ResultHint = ""; SetBest(null); OfferDeep = false;
         ResultSummary = ""; ResultExpanded = false;
@@ -1182,6 +1195,7 @@ public sealed partial class MainViewModel : Observable
         // Обход на роутере: подбор на ПК при нём неверен (router-api §6) — подобрать там или выключить там на время подбора.
         if (!await RouterGateAsync(select: true)) return;
 
+        _addressBlock.Clear();   // новый подбор — счёт проверок адресов заново (глубокий поиск продолжает прежний)
         ResetResults();
         SelectProgressMax = Math.Max(1, Helper.Status?.Strategies.Count ?? _shell.Catalog.Strategies.Count);
 
@@ -1380,6 +1394,11 @@ public sealed partial class MainViewModel : Observable
 
         // Готовые не помогли (или помогли не со всем), подбор дошёл до конца — предложить глубокий поиск; после него — уже нет.
         OfferDeep = !r.Cancelled && !r.NothingBlocked && !_searching && best is not { Perfect: true };
+        foreach (var s in r.Scores) _addressBlock.Add(s);
+        AddressNote = _addressBlock.Note();
+        // Лучшая не открыла только то, что молчит у всех стратегий, — искать новые ради этого нечего.
+        if (OfferDeep && best is not null && _addressBlock.ExplainsAllFailures(best.Verdicts.Where(v => !v.Ok).Select(v => v.Target.Url)))
+            OfferDeep = false;
         if (r.NothingBlocked)
         {
             ResultText = "Без оптимизации всё открывается: оптимизация не нужна или включён VPN.";

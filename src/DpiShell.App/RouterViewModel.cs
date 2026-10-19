@@ -233,7 +233,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     /// <summary>Свои сайты этого ПК (сохранены у помощника).</summary>
     public Func<IReadOnlyList<string>> PcUserTargets { get; set; } = () => [];
     public Func<string, bool> Confirm { get; set; } = text =>
-        MessageBox.Show(text, "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
+    {
+        UiGuard.Check(text);
+        return MessageBox.Show(text, "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
+    };
     public Func<string?> AskReportPath { get; set; } = () =>
     {
         var d = new Microsoft.Win32.SaveFileDialog { FileName = $"dpishell-router-{DateTime.Now:yyyy-MM-dd_HH-mm}.txt", Filter = "Текст (*.txt)|*.txt" };
@@ -1108,6 +1111,12 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     string _progressText = "";
     public string SelectProgressText { get => _progressText; private set { if (Set(ref _progressText, value) && Selecting) UpdateHome(); } }
 
+    readonly AddressBlockTracker _addressBlock = new();
+    string _addressNote = "";
+    /// <summary>«Не открылось ни с одной стратегией: … — похоже на блокировку по адресу…»; пусто, когда таких адресов нет.</summary>
+    public string AddressNote { get => _addressNote; private set { if (Set(ref _addressNote, value)) Raise(nameof(HasAddressNote)); } }
+    public bool HasAddressNote => _addressNote.Length > 0;
+
     string _result = "", _resultHint = "";
     public string ResultText { get => _result; private set { if (Set(ref _result, value)) { Raise(nameof(HasResult)); RaiseResultShape(); } } }
     public bool HasResult => ResultText.Length > 0;
@@ -1187,7 +1196,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             if (dropUser) { o = WithoutUser(o, out hint); dropUser = false; }
             if (!await Guard("Запускаю подбор на роутере…", async () =>
                 {
-                    Scores.Clear(); SelectedScore = null; ResultText = ""; ResultHint = ""; SetBest(null, false); ResultExpanded = false;
+                    Scores.Clear(); SelectedScore = null; ResultText = ""; ResultHint = ""; SetBest(null, false); ResultExpanded = false; AddressNote = "";
+                    if (!deep) _addressBlock.Clear();   // глубокий поиск продолжает счёт проверок прежнего подбора
                     SelectProgress = 0; SelectProgressText = "Подготовка…";
                     try { await Call(c => c.SelectStartAsync(o.Groups, o.Full, deep)); }
                     catch (RouterException e) when (e.AppError?.Code == "busy" && !Selecting)
@@ -1386,6 +1396,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         foreach (var s in ordered) { s.IsBest = s.Id == p.Best; Scores.Add(s); }
         SelectedScore = Scores.FirstOrDefault(s => s.IsBest);   // лучшая выбрана сразу, «Применить лучшую» активна
         SelectProgress = SelectProgressMax;
+        foreach (var row in Scores.Where(x => !x.IsCandidate && x.Row.Error is null))
+            foreach (var v in row.Row.Verdicts ?? []) _addressBlock.Add(row.Id, v.Url, v.Ok, !v.Ok && AddressBlockTracker.IsSilent(v.Detail));
+        AddressNote = _addressBlock.Note();
         if (p.Cancelled)
         {
             SetBest(null, false);

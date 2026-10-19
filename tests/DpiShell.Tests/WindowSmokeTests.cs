@@ -296,6 +296,12 @@ public sealed partial class WindowSmokeTests
                 if (!Visible(t => t.Text.StartsWith("Подходит:"))) throw new Exception("До применения нет карточки итога");
                 if (Visible(t => t.Text.StartsWith("✓ Включена"))) throw new Exception("До применения уже показана свёрнутая строка");
                 if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-select-result-full.png")); }
+                // Адрес молчит у всех стратегий — строка под итогом (и в свёрнутом виде, и в «Подробнее»).
+                const string blockedNote = "Не открылось ни с одной стратегией: redirector.googlevideo.com, yt3.ggpht.com — похоже на блокировку по адресу, подбор стратегии тут, скорее всего, не поможет. Сайт YouTube откроется, а видео может не воспроизводиться.";
+                SetProp(vm, "AddressNote", blockedNote);
+                Pump();
+                if (!Visible(t => t.Text == blockedNote)) throw new Exception("В карточке итога нет строки про блокировку по адресу");
+                if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-select-result-blocked-full.png"));
 
                 // Лучшая включена — одна строка.
                 SetProp(vm, "ResultText", "Применена: " + strategies[0].Title + " — оптимизация работает.");
@@ -306,6 +312,7 @@ public sealed partial class WindowSmokeTests
                 if (Find<Button>(tabs, b => b.Content as string == "Подробнее" && b.IsVisible && b.IsEnabled) is not { } more) throw new Exception("Нет ссылки «Подробнее»");
                 int rows = VisibleRows();
                 if (rows < 5) throw new Exception($"В окне 600 точек видно {rows} строк таблицы (ждали 5–6 и больше)");
+                if (!Visible(t => t.Text == blockedNote)) throw new Exception("В свёрнутом итоге нет строки про блокировку по адресу");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-select-result-collapsed.png"));
 
                 // «Подробнее» — прежняя карточка.
@@ -313,12 +320,14 @@ public sealed partial class WindowSmokeTests
                 Pump();
                 if (!Visible(t => t.Text.StartsWith("Применена:"))) throw new Exception("«Подробнее» не раскрыло карточку");
                 if (Visible(t => t.Text.StartsWith("✓ Включена"))) throw new Exception("После «Подробнее» осталась свёрнутая строка");
+                if (!Visible(t => t.Text == blockedNote)) throw new Exception("После «Подробнее» нет строки про блокировку по адресу");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-select-result-expanded.png"));
 
                 // Новый подбор сбрасывает итог: карточка снова полная.
                 typeof(MainViewModel).GetMethod("ResetResults", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
                 SetProp(vm, "ResultText", "Подходит: " + strategies[1].Title);
                 Pump();
+                if (Visible(t => t.Text == blockedNote)) throw new Exception("Новый подбор не убрал строку про блокировку по адресу");
                 if (!Visible(t => t.Text.StartsWith("Подходит:")) || Visible(t => t.Text.StartsWith("✓ Включена")))
                     throw new Exception("Новый подбор не вернул полную карточку");
                 Close(w);
@@ -865,10 +874,20 @@ public sealed partial class WindowSmokeTests
                             || Find<Button>(tabs, b => b.Content as string == "Применить выбранную" && b.IsVisible && b.IsEnabled) is null)
                             throw new Exception("На «Подборе» нет свёрнутого итога роутера или «Применить выбранную»");
                         if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-router-select-collapsed.png")); }
+                        // Адрес молчит у всех стратегий роутера — строка и в свёрнутом итоге, и в «Подробнее».
+                        const string rBlocked = "Не открылось ни с одной стратегией: redirector.googlevideo.com, yt3.ggpht.com — похоже на блокировку по адресу, подбор стратегии тут, скорее всего, не поможет. Сайт YouTube откроется, а видео может не воспроизводиться.";
+                        SetProp(router, "AddressNote", rBlocked);
+                        Pump();
+                        if (Find<TextBlock>(tabs, t => t.Text == rBlocked && t.IsVisible) is null) throw new Exception("В свёрнутом итоге роутера нет строки про блокировку по адресу");
+                        if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-select-blocked-collapsed.png"));
                         if (Find<Button>(tabs, b => b.Content as string == "Подробнее" && b.IsVisible && b.DataContext == router) is not { } rmore) throw new Exception("У свёрнутого итога роутера нет «Подробнее»");
                         rmore.Command.Execute(null);
                         Pump();
                         if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Включена на роутере") && t.IsVisible) is null) throw new Exception("«Подробнее» не раскрыло итог роутера");
+                        if (Find<TextBlock>(tabs, t => t.Text == rBlocked && t.IsVisible) is null) throw new Exception("В «Подробнее» роутера нет строки про блокировку по адресу");
+                        if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-select-blocked-expanded.png"));
+                        SetProp(router, "AddressNote", "");
+                        Pump();
                     }
                     if (page == Pages.Dns && (Find<TextBlock>(tabs, t => t.Text.StartsWith("DNS для всей сети — на вкладке") && t.IsVisible) is null
                                               || Find<Button>(tabs, b => b.Content as string == "Открыть →" && b.IsVisible) is null))

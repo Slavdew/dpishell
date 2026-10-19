@@ -87,8 +87,11 @@ public sealed class FakeHelperBackend : IHelperBackend
         progress.Report(new(0, 2, "Проверка без оптимизации…"));
         bool cancelled = await HangAsync(() => progress.Report(new(1, 2, "Стратегия Alt 9…")), ct);
         // Как Selector: отмена — частичный отчёт, а не исключение.
-        return Report(cancelled);
+        return ReportOverride is { } o && !cancelled ? o : Report(cancelled);
     }
+
+    /// <summary>Что вернёт подбор вместо стандартного отчёта (тесты итога).</summary>
+    public SelectionReport? ReportOverride { get; set; }
 
     public async Task<SearchReport> SearchAsync(string? baseId, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct)
     {
