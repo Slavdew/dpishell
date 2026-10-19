@@ -200,7 +200,9 @@
                                                         <ItemsControl ItemsSource="{Binding Details}" ItemTemplate="{StaticResource VerdictRow}" />
                                                     </Border>
                                                     <StackPanel Margin="0,4,0,4" Background="Transparent" MouseLeftButtonDown="KeepSelection" Visibility="{Binding ShowParams, Converter={StaticResource Vis}}">
-                                                        <TextBox Text="{Binding Params, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Padding="6,4" AutomationProperties.Name="Параметры стратегии" />
+                                                        <!-- Невысокий блок с прокруткой: параметры длинные и иначе растягивают список стратегий. -->
+                                                        <TextBox Text="{Binding Params, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Padding="6,4" AutomationProperties.Name="Параметры стратегии"
+                                                                 MaxHeight="130" VerticalScrollBarVisibility="Auto" />
                                                         <Button Content="Скопировать параметры" Style="{StaticResource LinkButton}" FontSize="12" HorizontalAlignment="Left" Margin="0,4,0,0"
                                                                 Command="{Binding DataContext.CopyParamsCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" />
                                                     </StackPanel>
