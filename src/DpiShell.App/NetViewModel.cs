@@ -289,7 +289,7 @@ public sealed class NetViewModel : Observable
         {
             if (_f.Game == GameMode.Off) return AnyActive ? "Выключен. Недоступен, пока включены «Все адреса»." : "Выключен";
             if (_f.GameBlocked) return "Не действует, пока включены «Все адреса» — вернётся сам вместе с обычным режимом.";
-            var list = _f.List is { } m ? $"Работает по {m.Lines:N0} подсетям из IP-списка (обновлён {(m.Updated ?? m.InstalledAt).ToLocalTime():dd.MM.yyyy})" : "Работает по IP-списку";
+            var list = _f.List is { } m ? $"Работает по списку адресов ниже ↓ ({m.Lines:N0} подсетей)" : "Работает по списку адресов ниже ↓";
             return _helper.Status?.Enabled == true ? list : list.Replace("Работает", "Включится вместе с обходом,");
         }
     }

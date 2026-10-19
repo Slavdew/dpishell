@@ -39,6 +39,8 @@ public sealed class FeatureViewModelTests
         Assert.Contains(said, s => s.Contains("Включён IP-список"));
         Assert.StartsWith("Включится вместе с обходом", net.GameStatus);   // обход выключен
         Assert.Contains("подсетей, обновлён", net.ListText);
+        Assert.Contains("по списку адресов ниже ↓ (", net.GameStatus);   // подпись-связка с IP-списком
+        Assert.EndsWith(" подсетей)", net.GameStatus);
 
         // «Выкл» у IP-списка выключает и игры: без списка им нечего ловить.
         await net.SetModeAsync(IpsetMode.Off);

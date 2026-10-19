@@ -185,6 +185,19 @@ public sealed partial class RouterViewModel
     public bool HasOffDetails => HasOffDetail || OffTargets.Count > 0;
     public bool CanReEnable => HasOff && !RouterEnabled && Connected;
 
+    bool _offByWatchdog;
+    string _offKey = "", _dismissedOffKey = "";
+    /// <summary>Выключил сторож: окно предлагает подобрать другую стратегию («Подобрать» / «Не сейчас»).</summary>
+    public bool OfferSelect => CanReEnable && _offByWatchdog && _offKey != _dismissedOffKey;
+    /// <summary>Выключили не сторож (кнопка, откат): прежняя главная кнопка «Подобрать на роутере».</summary>
+    public bool OfferSelectButton => CanReEnable && !_offByWatchdog;
+
+    /// <summary>«Не сейчас»: предложение скрыто до следующего срабатывания сторожа (по времени last_off), память — на сеанс.</summary>
+    public ICommand DismissOfferCmd => _dismissOfferCmd ??= new RelayCommand(() => { _dismissedOffKey = _offKey; RaiseOffOffer(); });
+    ICommand? _dismissOfferCmd;
+
+    void RaiseOffOffer() { Raise(nameof(OfferSelect)); Raise(nameof(OfferSelectButton)); }
+
     /// <summary>«Включить снова» — как «Включить»: на пробу и с проверкой с этого ПК.</summary>
     public ICommand ReEnableCmd => _reEnableCmd ??= RelayCommand.Async(ToggleAsync, () => Can("enable") && !RouterEnabled);
     ICommand? _reEnableCmd;
@@ -203,7 +216,9 @@ public sealed partial class RouterViewModel
             OffTargets.Clear();
             foreach (var t in targets) OffTargets.Add(t);
         }
-        Raise(nameof(HasOffDetails)); Raise(nameof(CanReEnable));
+        _offByWatchdog = HasOff && (off is not null ? off.By == "watchdog" : warn?.Code == "watchdog_off");
+        _offKey = !HasOff ? "" : off is not null ? off.By + "|" + off.At?.ToUniversalTime().Ticks : warn!.Code;
+        Raise(nameof(HasOffDetails)); Raise(nameof(CanReEnable)); RaiseOffOffer();
     }
 
     // ---------- сторож (schedule.watchdog, status.watchdog) ----------

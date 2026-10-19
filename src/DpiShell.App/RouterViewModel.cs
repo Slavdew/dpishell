@@ -104,7 +104,7 @@ public static class RouterTexts
         var when = at is null ? "" : " в " + Time(at);
         return by switch
         {
-            "watchdog" or "watchdog_off" => $"Обход на роутере выключил сторож{when}: с ним пропал интернет, без него есть",
+            "watchdog" or "watchdog_off" => $"Обход на роутере выключен сторожем{when} — с обходом пропал интернет.",
             "button" or "button_off" => $"Обход на роутере выключен кнопкой на корпусе{when}",
             _ when enabled => $"Роутер вернул прежнюю стратегию{when}: новую не подтвердили вовремя",
             _ => $"Роутер вернул как было{when}: включение не подтвердили вовремя",
@@ -1097,9 +1097,27 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public string SelectProgressText { get => _progressText; private set { if (Set(ref _progressText, value) && Selecting) UpdateHome(); } }
 
     string _result = "", _resultHint = "";
-    public string ResultText { get => _result; private set { if (Set(ref _result, value)) Raise(nameof(HasResult)); } }
+    public string ResultText { get => _result; private set { if (Set(ref _result, value)) { Raise(nameof(HasResult)); RaiseResultShape(); } } }
     public bool HasResult => ResultText.Length > 0;
     public string ResultHint { get => _resultHint; private set => Set(ref _resultHint, value); }
+
+    bool _resultExpanded;
+    /// <summary>«Подробнее» раскрыло прежнюю карточку итога; новый подбор снова показывает её целиком.</summary>
+    public bool ResultExpanded { get => _resultExpanded; private set { if (Set(ref _resultExpanded, value)) RaiseResultShape(); } }
+    /// <summary>Роутер включил (или мы применили) лучшую — итог сворачивается в строку «✓ Включена на роутере …».</summary>
+    public bool ResultCompact => HasResult && _applied && _best is not null && !_resultExpanded;
+    public bool ResultFull => HasResult && !ResultCompact;
+    public string ResultSummary
+    {
+        get
+        {
+            var row = Scores.FirstOrDefault(s => s.Id == _best);
+            return "✓ Включена на роутере " + (row?.Title ?? StrategyTitle(_best ?? "")) + (row is null ? "" : $" · {row.Groups} · {row.Share}");
+        }
+    }
+    public ICommand ShowResultDetailsCmd => _showResultDetailsCmd ??= new RelayCommand(() => ResultExpanded = true);
+    ICommand? _showResultDetailsCmd;
+    void RaiseResultShape() { Raise(nameof(ResultCompact)); Raise(nameof(ResultFull)); Raise(nameof(ResultSummary)); }
 
     string? _best;
     bool _applied;
@@ -1129,6 +1147,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     {
         _best = id; _applied = applied;
         Raise(nameof(Best)); Raise(nameof(Applied)); Raise(nameof(HasBest));
+        RaiseResultShape();
         Requery();
     }
 
@@ -1154,7 +1173,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             if (dropUser) { o = WithoutUser(o, out hint); dropUser = false; }
             if (!await Guard("Запускаю подбор на роутере…", async () =>
                 {
-                    Scores.Clear(); SelectedScore = null; ResultText = ""; ResultHint = ""; SetBest(null, false);
+                    Scores.Clear(); SelectedScore = null; ResultText = ""; ResultHint = ""; SetBest(null, false); ResultExpanded = false;
                     SelectProgress = 0; SelectProgressText = "Подготовка…";
                     try { await Call(c => c.SelectStartAsync(o.Groups, o.Full, deep)); }
                     catch (RouterException e) when (e.AppError?.Code == "busy" && !Selecting)

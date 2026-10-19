@@ -164,11 +164,11 @@ public sealed class FakeRouter : IDisposable
     }
 
     /// <summary>Сторож: с обходом интернет пропал, без него есть — обход выключен (targets — что не открылось).</summary>
-    public void WatchdogTrip()
+    public void WatchdogTrip(string at = "2026-10-19T11:32:00Z")
     {
-        Enabled = false; Pending = null; WatchdogOk = false; WatchdogCheckedAt = "2026-10-19T11:32:00Z";
-        LastOffJson = """
-            { "by": "watchdog", "at": "2026-10-19T11:32:00Z", "text": "С обходом интернет пропал, без обхода есть",
+        Enabled = false; Pending = null; WatchdogOk = false; WatchdogCheckedAt = at;
+        LastOffJson = $$"""
+            { "by": "watchdog", "at": "{{at}}", "text": "С обходом интернет пропал, без обхода есть",
               "targets": [ { "url": "https://www.google.com/generate_204", "detail": "таймаут 5 с" }, { "url": "https://ya.ru/", "detail": "сброс соединения" } ] }
             """;
         _offWarning = """{ "code": "watchdog_off", "text": "Сторож выключил обход: с ним пропал интернет" }""";

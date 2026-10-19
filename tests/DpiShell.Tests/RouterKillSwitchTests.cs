@@ -175,8 +175,19 @@ public sealed class RouterKillSwitchTests : IDisposable
 
         r.WatchdogTrip();
         await vm.RefreshAsync();
-        Assert.Equal($"Обход на роутере выключил сторож в {RouterTexts.Time(new DateTime(2026, 10, 19, 11, 32, 0, DateTimeKind.Utc))}: с ним пропал интернет, без него есть", vm.OffText);
+        Assert.Equal($"Обход на роутере выключен сторожем в {RouterTexts.Time(new DateTime(2026, 10, 19, 11, 32, 0, DateTimeKind.Utc))} — с обходом пропал интернет.", vm.OffText);
         Assert.Equal(vm.OffText, vm.HomeLine);
+        // Предложение подобрать другую стратегию; «Не сейчас» прячет его до следующего срабатывания сторожа.
+        Assert.True(vm.OfferSelect);
+        Assert.False(vm.OfferSelectButton);
+        vm.DismissOfferCmd.Execute(null);
+        Assert.False(vm.OfferSelect);
+        await vm.RefreshAsync();
+        Assert.False(vm.OfferSelect);   // тот же last_off — не возвращается
+        Assert.True(vm.CanReEnable);    // «Попробовать снова» остаётся
+        r.WatchdogTrip("2026-10-19T11:50:00Z");
+        await vm.RefreshAsync();
+        Assert.True(vm.OfferSelect);    // новое срабатывание — предложение снова
         Assert.Equal("С обходом интернет пропал, без обхода есть", vm.OffDetail);
         Assert.Equal(["https://www.google.com/generate_204", "https://ya.ru/"], vm.OffTargets.Select(t => t.Url));
         Assert.Equal("таймаут 5 с", vm.OffTargets[0].Detail);

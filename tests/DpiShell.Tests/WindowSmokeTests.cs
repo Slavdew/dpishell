@@ -189,6 +189,84 @@ public sealed class WindowSmokeTests
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
 
+    /// <summary>
+    /// «Подбор»: после «Применить» крупная карточка итога сворачивается в строку «✓ Включена …» со ссылкой «Подробнее»;
+    /// в окне высотой 600 точек видно 5–6 строк таблицы; «Подробнее» возвращает карточку, новый подбор — тоже.
+    /// </summary>
+    [Fact]
+    public void Select_AfterApply_ResultCollapsesToOneLine_TableFitsIn600()
+    {
+        using var tmp = new TempDir();
+        var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
+        var errors = WithBindingErrors(() =>
+        {
+            foreach (var theme in new[] { ThemeManager.Light, ThemeManager.Dark })
+            {
+                ThemeManager.Apply(theme);
+                var shell = new Shell(new AppPaths(tmp.Sub("root-" + theme), Repo.Data));
+                var vm = TestWindow.Model(shell);
+                var groups = shell.DefaultTargets.Groups.Where(g => g.Id is "youtube" or "discord").ToList();
+                var strategies = shell.Catalog.Strategies.Take(14).ToList();
+                for (int i = 0; i < strategies.Count; i++)
+                {
+                    var verdicts = groups.SelectMany(g => g.Targets.Select(t =>
+                    {
+                        var ps = new[] { SslProtocols.Tls13, SslProtocols.Tls12 }.Select(v => new ProbeResult(t, v, ProbeOutcome.Ok, 0.4, 0, "HTTP 200")).ToList();
+                        return new TargetVerdict(g.Id, t, true, 0.4, ps);
+                    })).ToList();
+                    vm.Scores.Add(new ScoreRow(DpiShell.Core.Selector.Score(strategies[i], groups, verdicts), vm.Names) { IsBest = i == 0 });
+                }
+                SetProp(vm, "ResultText", "Подходит: " + strategies[0].Title);
+                SetProp(vm, "ResultHint", "без обхода не открывалось: YouTube, Discord.");
+                var w = Open(vm);
+                w.Height = 600;
+                SetProp(vm, "IsLoading", false);
+                vm.Page = Pages.Select;
+                Pump();
+                var tabs = Find<TabControl>(w)!;
+                bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
+                int VisibleRows()
+                {
+                    var grid = Find<DataGrid>(tabs, g => g.IsVisible && g.Items.Contains(vm.Scores[0]))!;
+                    return grid.Items.Cast<object>().Select(grid.ItemContainerGenerator.ContainerFromItem).OfType<DataGridRow>()
+                        .Count(r => r.IsVisible && r.TranslatePoint(new Point(0, r.ActualHeight - 1), grid).Y <= grid.ActualHeight);
+                }
+
+                // Пока не применили — карточка целиком.
+                if (!Visible(t => t.Text.StartsWith("Подходит:"))) throw new Exception("До применения нет карточки итога");
+                if (Visible(t => t.Text.StartsWith("✓ Включена"))) throw new Exception("До применения уже показана свёрнутая строка");
+                if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-select-result-full.png")); }
+
+                // Лучшая включена — одна строка.
+                SetProp(vm, "ResultText", "Применена: " + strategies[0].Title + " — обход работает.");
+                SetProp(vm, "ResultSummary", $"✓ Включена {strategies[0].Title} · {vm.Scores[0].Groups} · {vm.Scores[0].Share}");
+                Pump();
+                if (!Visible(t => t.Text.StartsWith("✓ Включена " + strategies[0].Title) && t.Text.Contains(" · "))) throw new Exception("После применения нет строки «✓ Включена …»");
+                if (Visible(t => t.Text.StartsWith("Применена:") || t.Text.StartsWith("без обхода не открывалось"))) throw new Exception("После применения осталась крупная карточка");
+                if (Find<Button>(tabs, b => b.Content as string == "Подробнее" && b.IsVisible && b.IsEnabled) is not { } more) throw new Exception("Нет ссылки «Подробнее»");
+                int rows = VisibleRows();
+                if (rows < 5) throw new Exception($"В окне 600 точек видно {rows} строк таблицы (ждали 5–6 и больше)");
+                if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-select-result-collapsed.png"));
+
+                // «Подробнее» — прежняя карточка.
+                more.Command.Execute(null);
+                Pump();
+                if (!Visible(t => t.Text.StartsWith("Применена:"))) throw new Exception("«Подробнее» не раскрыло карточку");
+                if (Visible(t => t.Text.StartsWith("✓ Включена"))) throw new Exception("После «Подробнее» осталась свёрнутая строка");
+                if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-select-result-expanded.png"));
+
+                // Новый подбор сбрасывает итог: карточка снова полная.
+                typeof(MainViewModel).GetMethod("ResetResults", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
+                SetProp(vm, "ResultText", "Подходит: " + strategies[1].Title);
+                Pump();
+                if (!Visible(t => t.Text.StartsWith("Подходит:")) || Visible(t => t.Text.StartsWith("✓ Включена")))
+                    throw new Exception("Новый подбор не вернул полную карточку");
+                Close(w);
+            }
+        });
+        Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
+    }
+
     static void Collect<T>(DependencyObject root, List<T> into) where T : DependencyObject
     {
         if (root is T t) into.Add(t);
@@ -566,9 +644,19 @@ public sealed class WindowSmokeTests
                         if (Find<Button>(tabs, b => b.Content as string == "Отправить на роутер" && b.IsVisible) is null) throw new Exception("У найденной стратегии нет «Отправить на роутер»");
                     }
                     // Роутер сам включил лучшую (редакция §9) — итог «Включена на роутере», другую можно выбрать в таблице.
-                    if (page == Pages.Select && (Find<TextBlock>(tabs, t => t.Text.StartsWith("Включена на роутере") && t.IsVisible) is null
-                                                 || Find<Button>(tabs, b => b.Content as string == "Применить выбранную" && b.IsVisible && b.IsEnabled) is null))
-                        throw new Exception("На «Подборе» нет итога роутера или «Применить выбранную»");
+                    // Итог свёрнут в строку «✓ Включена на роутере …»; «Подробнее» возвращает карточку.
+                    if (page == Pages.Select)
+                    {
+                        if (Find<TextBlock>(tabs, t => t.Text.StartsWith("✓ Включена на роутере") && t.IsVisible) is null
+                            || Find<TextBlock>(tabs, t => t.Text.StartsWith("Включена на роутере") && t.IsVisible) is not null
+                            || Find<Button>(tabs, b => b.Content as string == "Применить выбранную" && b.IsVisible && b.IsEnabled) is null)
+                            throw new Exception("На «Подборе» нет свёрнутого итога роутера или «Применить выбранную»");
+                        if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-router-select-collapsed.png")); }
+                        if (Find<Button>(tabs, b => b.Content as string == "Подробнее" && b.IsVisible && b.DataContext == router) is not { } rmore) throw new Exception("У свёрнутого итога роутера нет «Подробнее»");
+                        rmore.Command.Execute(null);
+                        Pump();
+                        if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Включена на роутере") && t.IsVisible) is null) throw new Exception("«Подробнее» не раскрыло итог роутера");
+                    }
                     if (page == Pages.Dns && (Find<TextBlock>(tabs, t => t.Text.StartsWith("DNS для всей сети — на вкладке") && t.IsVisible) is null
                                               || Find<Button>(tabs, b => b.Content as string == "Открыть →" && b.IsVisible) is null))
                         throw new Exception("На вкладке «DNS» нет подсказки про роутер");
@@ -704,7 +792,7 @@ public sealed class WindowSmokeTests
                 Pump();
                 {
                     var tabs = Find<TabControl>(w)!;
-                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Обход на роутере выключил сторож") && t.IsVisible) is null) throw new Exception("На главной нет фразы о стороже");
+                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Обход на роутере выключен сторожем") && t.IsVisible) is null) throw new Exception("На главной нет фразы о стороже");
                     if (Find<Button>(tabs, b => b.Content as string == "Попробовать снова (на пробу)" && b.IsVisible && b.IsEnabled) is null) throw new Exception("На главной нет «Попробовать снова»");
                     if (Find<Button>(tabs, b => b.Content as string == "Подобрать заново" && b.IsVisible && b.IsEnabled) is null) throw new Exception("В плашке главной нет «Подобрать заново»");
                     if (Find<Button>(tabs, b => b.Content as string == "Включить снова") is not null) throw new Exception("Осталась «Включить снова»");
@@ -719,6 +807,17 @@ public sealed class WindowSmokeTests
                     if (Find<TextBlock>(tabs, t => t.Inlines.OfType<System.Windows.Documents.Run>().Any(r => r.Text == "https://ya.ru/") && t.IsVisible) is null)
                         throw new Exception("В «Подробнее» нет целей сторожа");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-tab.png"));
+                    // Предложение после срабатывания сторожа: вопрос, «Подобрать» и «Не сейчас»; «Не сейчас» прячет его, «Попробовать снова» остаётся.
+                    if (Find<TextBlock>(tabs, t => t.Text == "Подобрать на роутере другую стратегию сейчас?" && t.IsVisible) is null) throw new Exception("Нет вопроса «Подобрать на роутере другую стратегию сейчас?»");
+                    if (Find<Button>(tabs, b => b.Content as string == "Подобрать" && b.IsVisible && b.IsEnabled) is null) throw new Exception("В предложении нет «Подобрать»");
+                    if (Find<Button>(tabs, b => b.Content as string == "Не сейчас" && b.IsVisible) is not { } later) throw new Exception("В предложении нет «Не сейчас»");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-offer.png"));
+                    later.Command.Execute(null);
+                    Pump();
+                    if (Find<Button>(tabs, b => b.Content as string == "Не сейчас" && b.IsVisible) is not null || Find<TextBlock>(tabs, t => t.Text.StartsWith("Подобрать на роутере другую") && t.IsVisible) is not null)
+                        throw new Exception("«Не сейчас» не спрятало предложение");
+                    if (Find<Button>(tabs, b => b.Content as string == "Попробовать снова (на пробу)" && b.IsVisible && b.IsEnabled) is null) throw new Exception("После «Не сейчас» пропало «Попробовать снова»");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-dismissed.png"));
                     if (Find<CheckBox>(tabs, c => (c.Content as string ?? "").StartsWith("Сторож:") && c.IsVisible) is not { } wdBox) throw new Exception("В «Проверять сам» нет сторожа");
                     if (Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } wsv2)
                     {

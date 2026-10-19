@@ -323,15 +323,18 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <StackPanel>
-                            <WrapPanel>
-                                <Button ContentTemplate="{StaticResource Shield}" Content="Начать подбор" Style="{StaticResource Primary}" Command="{Binding StartSelectCmd}" />
-                                <Button Content="Стоп" Command="{Binding StopSelectCmd}" />
-                            </WrapPanel>
-                            <WrapPanel Margin="0,0,0,6" AutomationProperties.Name="Порядок стратегий">
-                                <TextBlock Text="Порядок:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                <RadioButton Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
-                                <RadioButton Content="по имени" IsChecked="{Binding SortByName}" />
-                            </WrapPanel>
+                            <!-- Порядок таблицы — в той же строке, что и кнопки подбора: отдельная строка съедала место у таблицы. -->
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,8" AutomationProperties.Name="Порядок стратегий">
+                                    <TextBlock Text="Порядок:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <RadioButton Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
+                                    <RadioButton Content="по имени" IsChecked="{Binding SortByName}" />
+                                </StackPanel>
+                                <WrapPanel>
+                                    <Button ContentTemplate="{StaticResource Shield}" Content="Начать подбор" Style="{StaticResource Primary}" Command="{Binding StartSelectCmd}" />
+                                    <Button Content="Стоп" Command="{Binding StopSelectCmd}" />
+                                </WrapPanel>
+                            </DockPanel>
                             <!-- Ход — только во время подбора: пустая полоса без подбора выглядела незавершённой операцией. -->
                             <StackPanel Visibility="{Binding Selecting, Converter={StaticResource Vis}}">
                                 <ProgressBar Height="8" Maximum="{Binding SelectProgressMax}" Value="{Binding SelectProgress, Mode=OneWay}" IsIndeterminate="{Binding SelectIndeterminate}" Margin="0,2,0,4" />
@@ -339,7 +342,15 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14" Visibility="{Binding HasResult, Converter={StaticResource Vis}}">
+                        <!-- Лучшая включена — итог одной строкой, «Подробнее» возвращает карточку. -->
+                        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14,8" Margin="0,0,0,8" Visibility="{Binding ResultCompact, Converter={StaticResource Vis}}">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="Подробнее" Style="{StaticResource LinkButton}" Command="{Binding ShowResultDetailsCmd}" Margin="12,0,0,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding ResultSummary}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
+                        </Border>
+
+                        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14" Visibility="{Binding ResultFull, Converter={StaticResource Vis}}">
                             <DockPanel>
                                 <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="Применить" Style="{StaticResource Primary}" Command="{Binding ApplyBestCmd}"
                                         VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding HasBest, Converter={StaticResource Vis}}" />
@@ -428,23 +439,32 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <StackPanel>
-                                <WrapPanel>
-                                    <Button Content="Начать подбор на роутере" Style="{StaticResource Primary}" Command="{Binding StartSelectCmd}" />
-                                    <Button Content="Стоп" Command="{Binding StopSelectCmd}" />
-                                </WrapPanel>
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,8" AutomationProperties.Name="Порядок стратегий">
+                                        <TextBlock Text="Порядок:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                        <RadioButton Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
+                                        <RadioButton Content="по имени" IsChecked="{Binding SortByName}" />
+                                    </StackPanel>
+                                    <WrapPanel>
+                                        <Button Content="Начать подбор на роутере" Style="{StaticResource Primary}" Command="{Binding StartSelectCmd}" />
+                                        <Button Content="Стоп" Command="{Binding StopSelectCmd}" />
+                                    </WrapPanel>
+                                </DockPanel>
                                 <TextBlock Text="Подбор идёт на самом роутере — программу можно закрыть. Лучшую стратегию роутер включит сам." Style="{StaticResource Hint}" Margin="0,0,0,6" />
-                                <WrapPanel Margin="0,0,0,6" AutomationProperties.Name="Порядок стратегий">
-                                    <TextBlock Text="Порядок:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                    <RadioButton Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
-                                    <RadioButton Content="по имени" IsChecked="{Binding SortByName}" />
-                                </WrapPanel>
                                 <StackPanel Visibility="{Binding Selecting, Converter={StaticResource Vis}}">
                                     <ProgressBar Height="8" Maximum="{Binding SelectProgressMax}" Value="{Binding SelectProgress, Mode=OneWay}" Margin="0,2,0,4" />
                                     <TextBlock Text="{Binding SelectProgressText}" Style="{StaticResource Hint}" Margin="0,0,0,8" />
                                 </StackPanel>
                             </StackPanel>
 
-                            <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14" Visibility="{Binding HasResult, Converter={StaticResource Vis}}">
+                            <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14,8" Margin="0,0,0,8" Visibility="{Binding ResultCompact, Converter={StaticResource Vis}}">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Подробнее" Style="{StaticResource LinkButton}" Command="{Binding ShowResultDetailsCmd}" Margin="12,0,0,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding ResultSummary}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                </DockPanel>
+                            </Border>
+
+                            <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14" Visibility="{Binding ResultFull, Converter={StaticResource Vis}}">
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right" Content="Применить на роутере" Style="{StaticResource Primary}" Command="{Binding ApplyCmd}"
                                             VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding HasBest, Converter={StaticResource Vis}}" />
@@ -661,7 +681,8 @@
                             </StackPanel>
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="Обход по адресам" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                    <!-- «Выкл» выключает и игровой режим (Shell.SetIpsetMode): без списка ему нечего ловить — так и сказано. -->
+                                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,4"><Run Text="Обход сайтов по адресам" /><Run Text=" (" /><Run Text="«Выкл» выключит и игровой режим" /><Run Text=")" /></TextBlock>
                                     <WrapPanel IsEnabled="{Binding CanEdit}">
                                         <RadioButton Content="Выкл" IsChecked="{Binding IpsetOff}" Margin="0,3,24,3" />
                                         <RadioButton Content="Только из списков" IsChecked="{Binding IpsetList}" Margin="0,3,24,3" />
@@ -681,7 +702,7 @@
                                     </Border>
                                     <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,12,0,0" Padding="0,12,0,0">
                                         <StackPanel>
-                                            <TextBlock Text="Список адресов" Style="{StaticResource Hint}" Margin="0,0,0,2" />
+                                            <TextBlock Text="Список адресов — для обоих" Style="{StaticResource Hint}" Margin="0,0,0,2" />
                                             <TextBlock Text="{Binding ListText}" />
                                             <TextBlock Text="{Binding UpdateNote}" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,4,0,0"
                                                        Visibility="{Binding HasUpdateNote, Converter={StaticResource Vis}}" />
@@ -1236,10 +1257,19 @@
                                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0"
                                                                 Visibility="{Binding CanReEnable, Converter={StaticResource Vis}}">
                                                         <Button Content="Попробовать снова (на пробу)" Style="{StaticResource LinkButton}" Command="{Binding ReEnableCmd}" />
-                                                        <Button Content="Подобрать на роутере" Style="{StaticResource Primary}" Command="{Binding GoSelectCmd}" Margin="8,0,0,0" />
+                                                        <Button Content="Подобрать на роутере" Style="{StaticResource Primary}" Command="{Binding GoSelectCmd}" Margin="8,0,0,0"
+                                                                Visibility="{Binding OfferSelectButton, Converter={StaticResource Vis}}" />
                                                     </StackPanel>
                                                     <TextBlock Text="{Binding OffText}" TextWrapping="Wrap" VerticalAlignment="Center" />
                                                 </DockPanel>
+                                                <!-- Сторож выключил обход: не решаем за человека, а предлагаем подобрать другую стратегию; «Не сейчас» прячет до следующего срабатывания. -->
+                                                <StackPanel Margin="0,8,0,0" Visibility="{Binding OfferSelect, Converter={StaticResource Vis}}">
+                                                    <TextBlock Text="Подобрать на роутере другую стратегию сейчас?" FontWeight="SemiBold" />
+                                                    <WrapPanel Margin="0,6,0,0">
+                                                        <Button Content="Подобрать" Style="{StaticResource Primary}" Command="{Binding GoSelectCmd}" />
+                                                        <Button Content="Не сейчас" Command="{Binding DismissOfferCmd}" />
+                                                    </WrapPanel>
+                                                </StackPanel>
                                                 <Expander Header="Подробнее" Margin="0,4,0,0" Visibility="{Binding HasOffDetails, Converter={StaticResource Vis}}">
                                                     <StackPanel Margin="0,4,0,0">
                                                         <TextBlock Text="{Binding OffDetail}" Style="{StaticResource Hint}" TextWrapping="Wrap"

@@ -1045,8 +1045,19 @@ public sealed partial class MainViewModel : Observable
     public string SelectProgressText { get => _progressText; private set => Set(ref _progressText, value); }
 
     string _result = "";
-    public string ResultText { get => _result; private set { if (Set(ref _result, value)) Raise(nameof(HasResult)); } }
+    public string ResultText { get => _result; private set { if (Set(ref _result, value)) { Raise(nameof(HasResult)); Raise(nameof(ResultFull)); } } }
     public bool HasResult => ResultText.Length > 0;
+
+    string _appliedLine = "";
+    bool _resultExpanded;
+    /// <summary>«✓ Включена general (ALT) · 2 из 2 · 83 %»: лучшая стратегия подбора уже в работе — итог сворачивается в эту строку.</summary>
+    public string ResultSummary { get => _appliedLine; private set { if (Set(ref _appliedLine, value)) { Raise(nameof(ResultCompact)); Raise(nameof(ResultFull)); } } }
+    /// <summary>«Подробнее» раскрыло прежнюю карточку итога; новый подбор снова показывает её целиком.</summary>
+    public bool ResultExpanded { get => _resultExpanded; private set { if (Set(ref _resultExpanded, value)) { Raise(nameof(ResultCompact)); Raise(nameof(ResultFull)); } } }
+    public bool ResultCompact => _appliedLine.Length > 0 && !_resultExpanded;
+    public bool ResultFull => HasResult && !ResultCompact;
+    public ICommand ShowResultDetailsCmd => _showResultDetailsCmd ??= new RelayCommand(() => ResultExpanded = true);
+    ICommand? _showResultDetailsCmd;
 
     string _resultHint = "";
     public string ResultHint { get => _resultHint; private set => Set(ref _resultHint, value); }
@@ -1101,6 +1112,7 @@ public sealed partial class MainViewModel : Observable
     {
         Scores.Clear(); SelectedScore = null;
         ResultText = ""; ResultHint = ""; SetBest(null); OfferDeep = false;
+        ResultSummary = ""; ResultExpanded = false;
         SelectProgress = 0; SelectIndeterminate = false;
         SelectProgressText = "Подготовка…";
     }
@@ -1286,6 +1298,8 @@ public sealed partial class MainViewModel : Observable
             SetBest(null);   // уже в работе — «Применить» не нужна
             ResultText = $"Применена: {title} — обход работает.";
             Message = ResultText;
+            var row = Scores.FirstOrDefault(s => s.Id == id);
+            ResultSummary = $"✓ Включена {title}" + (row is null ? "" : $" · {row.Groups} · {row.Share}");
         }
     }
 
