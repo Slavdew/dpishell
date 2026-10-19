@@ -356,17 +356,18 @@ public sealed class MixBuilderTests : IDisposable
 
     /// <summary>
     /// Домен не должен быть в двух списках ролей: первый подходящий профиль забирает его (google раньше general), и часть Discord
-    /// ушла бы в YouTube-часть смешанной. Известный долг — stable.dl2.discordapp.net в google.txt (из списка Flowseal): он разводится на шаге 2
-    /// (роль discord_tcp); тест держит долг в пределах одной записи и падает, если появилась новая или старая исчезла.
+    /// ушла бы в YouTube-часть смешанной. stable.dl2.discordapp.net из google.txt убран (данные 2026-10-20.1, роль discord_tcp) — пересечений нет.
     /// </summary>
-    [Fact]
-    public void RoleLists_GoogleAndGeneral_DoNotOverlap_ExceptKnownDebt()
+    [Theory]
+    [InlineData("general.txt")]
+    [InlineData("discord.txt")]
+    public void RoleLists_Google_DoesNotOverlap(string other)
     {
         var google = Domains("google.txt");
-        var general = Domains("general.txt");
-        var overlap = google.Where(g => general.Any(d => g == d || g.EndsWith("." + d) || d.EndsWith("." + g)))
-            .Concat(general.Where(d => google.Any(g => d.EndsWith("." + g)))).Distinct().Order().ToList();
+        var list = Domains(other);
+        var overlap = google.Where(g => list.Any(d => g == d || g.EndsWith("." + d) || d.EndsWith("." + g)))
+            .Concat(list.Where(d => google.Any(g => d.EndsWith("." + g)))).Distinct().Order().ToList();
 
-        Assert.Equal(["stable.dl2.discordapp.net"], overlap);
+        Assert.Empty(overlap);
     }
 }
