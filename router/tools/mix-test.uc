@@ -39,5 +39,21 @@ ok(sel.mix_from(rows2, list, groups) == null, 'одна лучшая во всё
 // Стратегия с ошибкой (ломает обычные сайты) в части не идёт.
 let rows3 = [{ ...rows[0], error: 'ломает обычные сайты' }, rows[1], rows[2]];
 ok(sel.mix_from(rows3, list, groups)?.parts?.youtube == null, 'стратегия с ошибкой не берётся');
+// Строки «auto» продвинутого режима: стратегия строки — лучшая по её группе adv-<i>.
+import * as st from 'dpishell.state';
+import { readfile, writefile, unlink } from 'fs';
+let bak = readfile(st.ADVANCED);
+writefile(st.ADVANCED, sprintf('%J', { enabled: true, others: 'lists', rows: [
+	{ domains: ['a.example'], strategy: 'auto' }, { domains: ['b.example'], strategy: 'alt' }, { domains: ['c.example'], strategy: 'auto' } ] }));
+sel.resolve_adv([
+	{ id: 'A', verdicts: [v('adv-0', false), v('adv-2', false)] },
+	{ id: 'B', verdicts: [v('adv-0', true), v('adv-2', false)] },
+]);
+let a = st.advanced();
+ok(a.rows[0].resolved == 'B', 'auto: строка 0 — B (открыла её сайт)');
+ok(a.rows[1].resolved == null, 'строка с выбранной стратегией не трогается');
+ok(a.rows[2].resolved == null, 'auto: ничего не открылось — без resolved');
+if (bak != null) writefile(st.ADVANCED, bak); else unlink(st.ADVANCED);
+
 print(fails ? `mix: ${fails} не прошло\n` : 'mix: всё прошло\n');
 exit(fails ? 1 : 0);

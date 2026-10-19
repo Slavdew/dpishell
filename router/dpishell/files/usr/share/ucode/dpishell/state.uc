@@ -114,21 +114,50 @@ function user_catalog() { return read_json(`${P.etc}/user-strategies.json`, { st
 function found_catalog() { return read_json(`${P.etc}/found-strategies.json`, { strategies: [] }); }
 function catalogs() { return [catalog(), user_catalog(), found_catalog()]; }
 
-function build_opts(s) {
-	return {
+// Продвинутый режим (router-api §5.2 advanced_set, mixed-strategies.md §6): { enabled, others: direct|lists|all,
+// rows: [ { domains, strategy: auto|direct|id, resolved } ] }. Выключен — всё как раньше, строки хранятся.
+const ADVANCED = '/etc/dpishell/advanced.json';
+const ADV_OTHERS = ['direct', 'lists', 'all'];
+
+function advanced() {
+	let a = read_json(ADVANCED, null) ?? {};
+	return { enabled: !!a.enabled, others: index(ADV_OTHERS, a.others) >= 0 ? a.others : 'lists', rows: type(a.rows) == 'array' ? a.rows : [] };
+}
+
+// strat — стратегия, для которой пишется config. Строка «auto» идёт по resolved (итог подбора для строки), а во время
+// подбора (selecting) и до него — по проверяемой/текущей стратегии.
+function build_opts(s, strat, selecting) {
+	let o = {
 		mode: s.mode, lists_dir: P.lists, fake_dir: P.fake,
 		ipset_file: 'ipset-none.txt', ipv6: s.ipv6, flowoffload: s.flowoffload, features: {},
 	};
+	let a = advanced();
+	if (!a.enabled)
+		return o;
+	if (a.others != 'direct')
+		o.mode = a.others;
+	let rows = [], direct = [];
+	for (let r in a.rows) {
+		if (r.strategy == 'direct') {
+			push(direct, ...r.domains);
+			continue;
+		}
+		let id = r.strategy == 'auto' ? (selecting ? null : r.resolved) : r.strategy;
+		let rs = (id ? cat.find(catalogs(), id) : null) ?? strat;
+		if (rs) push(rows, { domains: r.domains, strategy: rs });
+	}
+	o.advanced = { others: a.others, rows, direct };
+	return o;
 }
 
 // Записать /opt/zapret/config для стратегии-объекта (в т.ч. кандидата поиска). null — успех, иначе текст ошибки.
-function write_zapret_config_for(st, s) {
+function write_zapret_config_for(st, s, selecting) {
 	let r = roles();
 	let err = cat.validate(st, r);
 	if (err)
 		return `Стратегия ${st.id} не прошла проверку: ${err}`;
 	ensure_dirs();
-	return write_atomic(P.zapret_config, cat.render_config(st, r, build_opts(s))) ? null : 'Не удалось записать config zapret';
+	return write_atomic(P.zapret_config, cat.render_config(st, r, build_opts(s, st, selecting))) ? null : 'Не удалось записать config zapret';
 }
 
 // То же по id из каталогов.
@@ -206,5 +235,5 @@ export {
 	P, VERSION, API, MIN_APP, MODES, HOURS, USER_LISTS,
 	ensure_dirs, write_atomic, read_json, uci_set, settings, roles, catalog, user_catalog, found_catalog, catalogs,
 	write_zapret_config, write_zapret_config_for, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running, iso,
-	PENDING, LAST_OFF, WATCHDOG_SELECT, pending_confirm, last_off
+	PENDING, LAST_OFF, WATCHDOG_SELECT, pending_confirm, last_off, ADVANCED, ADV_OTHERS, advanced
 };
