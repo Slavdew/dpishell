@@ -348,6 +348,38 @@ function resolve_adv(rows) {
 		st.write_atomic(st.ADVANCED, sprintf('%J\n', a));
 }
 
+// Длина строки в символах (length() считает байты UTF-8): не считаем байты продолжения 0x80–0xBF.
+function ulen(s) {
+	let n = 0;
+	for (let i = 0; i < length(s); i++)
+		if ((ord(s, i) & 0xC0) != 0x80) n++;
+	return n;
+}
+
+// Подпись смешанной — как MixBuilder.MakeTitle (ПК): «Смешанная · YouTube — ALT · Discord — ALT2 · свои сайты — ALT10»;
+// части из одной стратегии сливаются (Discord и свои — «остальное», прочие — «YouTube и Discord»); имя части —
+// «general (ALT10)» → «ALT10», длиннее 18 знаков — id; не влезает в 60 знаков — «свои» вместо «свои сайты».
+// parts: [ [группа, стратегия] ] в порядке youtube, discord, user.
+function mix_title(parts) {
+	let groups = [];
+	for (let p in parts) {
+		let g = filter(groups, x => x.strategy.id == p[1].id)[0];
+		if (g) push(g.parts, p[0]);
+		else push(groups, { parts: [p[0]], strategy: p[1] });
+	}
+	let part_name = s => {
+		let t = s.title ?? s.id, m = match(t, /\(([^()]+)\)[ ]*$/);
+		let n = (m && index(lc(t), 'general') == 0) ? m[1] : t;
+		return ulen(n) > 18 ? s.id : n;
+	};
+	let label = (p, short) => p == 'youtube' ? 'YouTube' : p == 'discord' ? 'Discord' : short ? 'свои' : 'свои сайты';
+	let make = short => 'Смешанная · ' + join(' · ', map(groups, g =>
+		(length(g.parts) == 2 && index(g.parts, 'discord') >= 0 && index(g.parts, 'user') >= 0 ? 'остальное'
+			: join(' и ', map(g.parts, p => label(p, short)))) + ` — ${part_name(g.strategy)}`));
+	let full = make(false);
+	return ulen(full) <= 60 ? full : make(true);
+}
+
 const MIX_ROLES = { youtube: ['google'], discord: ['discord_tcp', 'discord_udp', 'discord_media'],
 	user: ['general', 'quic', 'ipset_udp', 'ipset_tcp', 'game_tcp', 'game_udp'] };
 
@@ -364,8 +396,9 @@ function mix_from(rows, list, groups) {
 	if (length(keys(pick)) < 2 || length(ids) < 2)
 		return null;
 	let src = id => filter(list, x => x.id == id)[0];
-	// Чего нет в pick (группа не открылась ни у кого) — из части «свои», иначе — из первой выбранной.
-	let base = src(pick.user ?? values(pick)[0]);
+	// Чего нет в pick (группа не открылась ни у кого) — из основы: «свои», иначе Discord, иначе YouTube (как MixBuilder.BasePart:
+	// общие роли general/quic/ipset лучше брать у части, рассчитанной на обычные сайты).
+	let base_id = pick.user ?? pick.discord ?? pick.youtube, base = src(base_id);
 	let roles = {};
 	for (let g in keys(MIX_ROLES)) {
 		let from = src(pick[g]) ?? base;
@@ -375,9 +408,7 @@ function mix_from(rows, list, groups) {
 			if (v != null) roles[role] = v;
 		}
 	}
-	let name = id => src(id)?.title ?? id;
-	let title = join(' · ', ['Смешанная', ...map(filter(['youtube', 'discord', 'user'], g => pick[g]),
-		g => `${GROUP_TITLE[g]} — ${name(pick[g])}`)]);
+	let title = mix_title(map(['youtube', 'discord', 'user'], g => [g, src(pick[g] ?? base_id)]));
 	// id по частям: один и тот же набор частей — одна стратегия (статистика копится, копии не плодятся).
 	let key = join('|', map(['youtube', 'discord', 'user'], g => pick[g] ?? '')), h = 5381;
 	for (let i = 0; i < length(key); i++) h = (h * 33 + ord(key, i)) % 2147483647;
@@ -512,15 +543,23 @@ function deep_search(p, groups, s, ts_was, cache) {
 		let when = (tz != '' && index(['GMT0', 'UTC', 'UTC0'], tz) < 0)
 			? sprintf('%02d.%02d %02d:%02d', lt.mday, lt.mon, lt.hour, lt.min)
 			: sprintf('%02d.%02d', gmtime().mday, gmtime().mon);
-		for (let g in (length(tops.google) ? tops.google : [null]))
-			for (let d in (length(tops.general) ? tops.general : [null])) {
-				if (g == null && d == null) continue;
+		// Как StrategySearch.Assemble: лучший приём каждой роли поверх базовой и по одной запасной на роль со вторым
+		// приёмом (остальные — лучшие). Роли независимы (свои списки) — сочетания не перемножаем.
+		let best = {}, picks = [];
+		for (let role in keys(srch.ROLE_GROUPS))
+			if (length(tops[role])) best[role] = tops[role][0].desync;
+		if (length(keys(best))) {
+			push(picks, best);
+			for (let role in keys(srch.ROLE_GROUPS))
+				if (length(tops[role]) > 1)
+					push(picks, { ...best, [role]: tops[role][1].desync });
+		}
+		for (let pick in picks) {
 				let roles2 = { ...base.roles };
-				if (g) roles2.google = g.desync;
-				if (d) {
-					roles2.general = d.desync;
+				for (let role in pick) roles2[role] = pick[role];
+				if (pick.general) {
 					// ipset-профиль общего трафика — тот же приём; игровой TCP-профиль базы построен на её general — убираем.
-					if (roles2.ipset_tcp != null) roles2.ipset_tcp = d.desync;
+					if (roles2.ipset_tcp != null) roles2.ipset_tcp = pick.general;
 					delete roles2.game_tcp;
 				}
 				// Такая стратегия уже есть (каталог, прошлый поиск, базовая) — проверяем её, дубль не создаём.
@@ -639,9 +678,13 @@ function select_run(args) {
 			p.message = mix.title;
 			progress(p);
 			let row = { ...eval_strategy(mix, groups, items, cache, s, ts_was), parts: mix.parts };
-			let top = 0;
-			for (let r in rows) if (r.error == null && r.groups_ok > top) top = r.groups_ok;
-			if (row.error == null && row.groups_ok > top) {
+			// Как MixBuilder.BeatsSingle: больше доля групп, при равной — больше доля адресов, чем у лучшей одиночной.
+			let top = null;
+			for (let r in rows)
+				if (r.error == null && (!top || r.group_share > top.group_share || (r.group_share == top.group_share && r.target_share > top.target_share)))
+					top = r;
+			if (row.error == null && row.groups_ok > 0 && (!top || row.group_share > top.group_share ||
+					(row.group_share == top.group_share && row.target_share > top.target_share))) {
 				save_found([mix]);
 				push(rows, row);
 				push(p.rows, row);
