@@ -301,6 +301,55 @@ function save_found(list) {
 	st.write_atomic(`${st.P.etc}/found-strategies.json`, sprintf('%J\n', { strategies: all }));
 }
 
+// Смешанная (mixed-strategies.md §2–3): ни одна стратегия не открыла всё — для каждой группы берём лучшую по её целям из уже
+// сделанного прогона и собираем роли группы из неё. Роли частей: YouTube — google; Discord — discord_tcp (у каталожных его
+// нет — берём их general), discord_udp, discord_media; свои — general, quic, ipset_*, game_*. Стратегии с ошибкой (ломают
+// обычные сайты) не берём. null — смешивать нечего (все группы лучше всего у одной стратегии).
+const MIX_ROLES = { youtube: ['google'], discord: ['discord_tcp', 'discord_udp', 'discord_media'],
+	user: ['general', 'quic', 'ipset_udp', 'ipset_tcp', 'game_tcp', 'game_udp'] };
+
+function mix_from(rows, list, groups) {
+	let gids = filter(map(filter(groups, g => !g.control), g => g.id), id => MIX_ROLES[id]);
+	if (length(gids) < 2)
+		return null;
+	let pick = {};
+	for (let g in gids) {
+		let best = null, bs = null;
+		for (let r in rows) {
+			if (r.error != null || r.candidate) continue;
+			let vs = filter(r.verdicts ?? [], v => v.group == g);
+			if (!length(vs)) continue;
+			let ok = filter(vs, v => v.ok), sum = 0;
+			for (let v in ok) sum += v.seconds;
+			let sc = { share: 1.0 * length(ok) / length(vs), t: length(ok) ? 1.0 * sum / length(ok) : 99 };
+			if (!bs || sc.share > bs.share || (sc.share == bs.share && sc.t < bs.t)) { best = r.id; bs = sc; }
+		}
+		if (best && bs.share > 0) pick[g] = best;
+	}
+	let ids = uniq(values(pick));
+	if (length(keys(pick)) < 2 || length(ids) < 2)
+		return null;
+	let src = id => filter(list, x => x.id == id)[0];
+	// Чего нет в pick (группа не открылась ни у кого) — из части «свои», иначе — из первой выбранной.
+	let base = src(pick.user ?? values(pick)[0]);
+	let roles = {};
+	for (let g in keys(MIX_ROLES)) {
+		let from = src(pick[g]) ?? base;
+		if (!from) continue;
+		for (let role in MIX_ROLES[g]) {
+			let v = from.roles?.[role] ?? (role == 'discord_tcp' ? from.roles?.general : null);
+			if (v != null) roles[role] = v;
+		}
+	}
+	let name = id => src(id)?.title ?? id;
+	let title = join(' · ', ['Смешанная', ...map(filter(['youtube', 'discord', 'user'], g => pick[g]),
+		g => `${GROUP_TITLE[g]} — ${name(pick[g])}`)]);
+	// id по частям: один и тот же набор частей — одна стратегия (статистика копится, копии не плодятся).
+	let key = join('|', map(['youtube', 'discord', 'user'], g => pick[g] ?? '')), h = 5381;
+	for (let i = 0; i < length(key); i++) h = (h * 33 + ord(key, i)) % 2147483647;
+	return { id: sprintf('r-mix-%08x', h), title, source: 'user', roles, parts: pick };
+}
+
 // Глубокий поиск (architecture.md «Глубокий поиск», как StrategySearch.cs): роли google и general подбираются раздельно на обязательных
 // целях своих групп (одна попытка, короткие таймауты, обе версии TLS), затем 2 лучших приёма каждой роли собираются
 // в стратегии и вместе с базовой проходят полную проверку. Возвращает { generated, rows, stop, base }.
@@ -546,6 +595,26 @@ function select_run(args) {
 			save_found(good);
 		rows = filter(rows, r => index(r.id, 'r-') != 0 || filter(good, x => x.id == r.id)[0]);
 	}
+
+	// 4. Ни одна не открыла всё — смешанная из лучших по группам и один проверочный прогон (с контрольной группой).
+	// Берём, только если открыла больше групп, чем лучшая одиночная; иначе её строки не остаётся.
+	if (!deep && !length(filter(rows, r => r.perfect)) && !cancel_requested()) {
+		let mix = mix_from(rows, list, groups);
+		if (mix) {
+			p.index = p.total = p.index + 1;
+			p.message = mix.title;
+			progress(p);
+			let row = { ...eval_strategy(mix, groups, items, cache, s, ts_was), parts: mix.parts };
+			let top = 0;
+			for (let r in rows) if (r.error == null && r.groups_ok > top) top = r.groups_ok;
+			if (row.error == null && row.groups_ok > top) {
+				save_found([mix]);
+				push(rows, row);
+				push(p.rows, row);
+			}
+			progress(p);
+		}
+	}
 	p = finish(p, rows, groups, s, ts_was, restore);
 	if (note) {
 		p.message = `${p.message}. ${note}`;
@@ -579,4 +648,4 @@ function check_run(source, light) {
 	return { last_check: lc, fail_streak: streak };
 }
 
-export { load_groups, items_of, run_checks, score, select_run, check_run, PROGRESS, CANCEL };
+export { load_groups, items_of, run_checks, score, select_run, check_run, mix_from, PROGRESS, CANCEL };

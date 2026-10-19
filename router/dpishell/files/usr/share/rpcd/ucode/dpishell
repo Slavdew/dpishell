@@ -128,6 +128,7 @@ function strategy_list() {
 				runs: stats[s.id]?.runs ?? 0, passed: stats[s.id]?.passed ?? 0,
 				last: stats[s.id]?.last ? { ...stats[s.id].last, at: st.iso(stats[s.id].last.at) } : null,
 				roles: s.roles ?? {},
+				...(s.parts ? { parts: s.parts } : {}),
 			});
 	// Порядок — по статистике (architecture.md «Порядок по статистике»): доля удачных, затем число прогонов.
 	return sort(items, (a, b) => {
@@ -425,7 +426,17 @@ const methods = {
 					for (let m in match(it.roles[role], /\{fake\}\/[A-Za-z0-9_.-]+\.bin/g) ?? [])
 						if (!stat(`${st.P.fake}/${substr(m[0], 7)}`))
 							return err('invalid', `Нет файла ${substr(m[0], 7)}`, `items[${i}].roles.${role}`);
-				push(out, { id: it.id, title: it.title ?? it.id, source: 'user', roles: it.roles });
+				// parts — из каких стратегий собрана смешанная (router-api §5.1): { youtube|discord|user: id }, хранится как прислали.
+				let parts = null;
+				if (it.parts != null) {
+					if (type(it.parts) != 'object' || !length(keys(it.parts)))
+						return err('invalid', 'parts: { группа: id стратегии }', `items[${i}].parts`);
+					for (let g in it.parts)
+						if (index(['youtube', 'discord', 'user'], g) < 0 || type(it.parts[g]) != 'string' || !match(it.parts[g], /^[A-Za-z0-9_.-]{1,64}$/))
+							return err('invalid', 'Группа youtube, discord или user, значение — id стратегии', `items[${i}].parts.${g}`);
+					parts = it.parts;
+				}
+				push(out, { id: it.id, title: it.title ?? it.id, source: 'user', roles: it.roles, ...(parts ? { parts } : {}) });
 			}
 			st.ensure_dirs();
 			return st.write_atomic(`${st.P.etc}/user-strategies.json`, sprintf('%J\n', { strategies: out })) ? {} : err('failed', 'Не удалось сохранить');
