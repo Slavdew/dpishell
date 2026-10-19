@@ -665,7 +665,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         var ok = _status?.LastCheck?.Ok ?? pub?.LastCheckOk;
 
         HomeTitle = Selecting ? "На роутере идёт подбор"
-            : enabled ? "Оптимизацию делает роутер" : "На роутере оптимизация выключена";
+            : enabled ? "Оптимизация работает на роутере" : "На роутере оптимизация выключена";
         var parts = new List<string>();
         if (Selecting) parts.Add(SelectProgressText);
         else

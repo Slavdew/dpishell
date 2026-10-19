@@ -773,7 +773,7 @@ public sealed class WindowSmokeTests
                     if (page == Pages.Home)
                     {
                         // Роутер — одной строкой со ссылкой на вкладку; обход делает он — кнопка ПК второстепенная.
-                        if (Find<TextBlock>(tabs, t => t.Text == "Оптимизацию делает роутер" && t.IsVisible) is null) throw new Exception("На главной нет строки роутера");
+                        if (Find<TextBlock>(tabs, t => t.Text == "Оптимизация работает на роутере" && t.IsVisible) is null) throw new Exception("На главной нет строки роутера");
                         if (Find<Button>(tabs, b => b.Content as string == "Подробнее →" && b.IsVisible) is null) throw new Exception("У строки роутера нет ссылки на вкладку");
                         if (Find<Button>(tabs, b => b.Content as string == "Включить и на этом ПК" && b.IsVisible && b.Style != (Style)w.FindResource("Primary")) is null)
                             throw new Exception("При оптимизации на роутере кнопка ПК должна быть второстепенной «Включить и на этом ПК»");

@@ -56,7 +56,7 @@ public sealed class RouterViewModelTests : IDisposable
         // Главная: статус, стратегия, предупреждения.
         Assert.True(vm.Found);
         Assert.True(vm.RouterEnabled);
-        Assert.Equal("Оптимизацию делает роутер", vm.HomeTitle);
+        Assert.Equal("Оптимизация работает на роутере", vm.HomeTitle);
         // Есть предупреждение — на главной число и его текст вместо стратегии и времени (UX-аудит 2, п. 7).
         Assert.Equal("· 1 предупреждение", vm.HomeFixText);
         Assert.Equal("Ускорение сети на роутере мешает оптимизации", vm.HomeLine);
@@ -124,7 +124,7 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.Equal(text, vm.ConnectionText);
         Assert.True(vm.Found);
         Assert.True(vm.NeedLogin);
-        Assert.Equal("Оптимизацию делает роутер", vm.HomeTitle);
+        Assert.Equal("Оптимизация работает на роутере", vm.HomeTitle);
         Assert.Contains(text.ToLowerInvariant()[..10], vm.HomeDetail);
         Assert.Equal(0, r.Logins);
 
