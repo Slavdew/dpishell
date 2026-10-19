@@ -1034,7 +1034,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         var found = FoundStrategies().ToList();
         if (found.FirstOrDefault(s => s.Id == id) is not { } strategy)
         {
-            Say("Эта стратегия не найдена среди найденных поиском");
+            Say("Эта стратегия не найдена среди своих и найденных поиском");
             return;
         }
         // Набор из приложения роутер заменяет целиком (§5.2) — шлём все найденные; название — до 80 символов.

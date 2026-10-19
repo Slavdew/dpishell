@@ -29,6 +29,16 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
     public string Title { get; } = title;
     public string Stats { get; } = stats;
     public bool Found { get; } = found;
+    /// <summary>Откуда стратегия: flowseal (готовая), search (найдена), user (своя), pasted (вставлена).</summary>
+    public string Source { get; init; } = found ? "search" : "flowseal";
+    /// <summary>Своя или вставленная: меняется «Изменить», удаляется.</summary>
+    public bool Personal => UserStrategies.IsPersonal(Source);
+    /// <summary>Лежит в файле своих стратегий (найденная, своя, вставленная): удаляется, уходит на роутер.</summary>
+    public bool Removable => Source == "search" || Personal;
+    /// <summary>Метка у названия; пусто — готовая.</summary>
+    public string Label => Source switch { "search" => "найдена поиском", "pasted" => "вставлена", "user" => "своя", _ => "" };
+    public bool HasLabel => Label.Length > 0;
+    public string EditText => Personal ? "Изменить" : "Сделать копию и изменить";
     public string Warning { get; } = warning;
     /// <summary>Сколько сайтов открылось в последнем прогоне; null — прогона не было.</summary>
     public int? Opened { get; init; }
@@ -215,17 +225,24 @@ public sealed class ScoreRow(StrategyScore s, GroupNames? names = null) : Observ
     public string Title => StrategyNaming.DisplayTitle(Score.Strategy.Title, Score.Strategy.Roles);
     /// <summary>Прежняя запись названия (с датой поиска), если показано имя по параметрам.</summary>
     public string Tip => StrategyNaming.Tip(Score.Strategy.Title, Score.Strategy.Roles) is { Length: > 0 } t ? t : Title;
-    public string Groups => $"{Score.GroupsPassed} из {Score.GroupsTotal}";
-    public string Share => $"{Score.TargetShare * 100:0} %";
+    public string Groups => Unchecked ? "—" : $"{Score.GroupsPassed} из {Score.GroupsTotal}";
+    public string Share => Unchecked ? "—" : $"{Score.TargetShare * 100:0} %";
     public string Avg => Score.Verdicts.Any(v => v.Ok) ? $"{Score.AvgSeconds:0.00} с" : "—";
     /// <summary>Ошибка запуска или «ломает обычные сайты»; без неё — где не открылись обязательные адреса.</summary>
-    public string Error => Score.Error is null ? CheckRow.Missed(Details) : Score.Error.Length > 80 ? Score.Error[..80] + "…" : Score.Error;
-    public string ErrorFull => Score.Error ?? CheckRow.Missed(Details);
+    public string Error => Unchecked ? "не проверена" : Score.Error is null ? CheckRow.Missed(Details) : Score.Error.Length > 80 ? Score.Error[..80] + "…" : Score.Error;
+    public string ErrorFull => Unchecked ? "Стратегия ещё не проверена на ваших сайтах — нажмите «Проверить»." : Score.Error ?? CheckRow.Missed(Details);
     public bool Usable => Score.Error is null && Score.GroupsPassed > 0;
     public bool IsBest { get => _best; set { if (Set(ref _best, value)) Raise(nameof(Mark)); } }
     public string Mark => IsBest ? "★" : "";
     /// <summary>Найдена глубоким поиском, а не из готового набора.</summary>
     public bool Found => Score.Strategy.Source == "search";
+    /// <summary>Метка у названия: найдена, вставлена или своя; пусто — готовая.</summary>
+    public string Label => Score.Strategy.Source switch { "search" => "найдена", "pasted" => "вставлена", "user" => "своя", _ => "" };
+    public bool HasLabel => Label.Length > 0;
+    public bool Personal => UserStrategies.IsPersonal(Score.Strategy.Source);
+    public string EditText => Personal ? "Изменить" : "Сделать копию и изменить";
+    /// <summary>Вставлена или собрана руками и ещё не прошла проверку сайтов: «Применить» — только с подтверждением.</summary>
+    public bool Unchecked => Score.Error is null && Score.Verdicts.Count == 0;
 
     public IReadOnlyList<CheckRow> Details => _details ??= CheckRow.List(Score.Verdicts, names ?? GroupNames.Empty);
     public bool HasDetails => Score.Verdicts.Count > 0;

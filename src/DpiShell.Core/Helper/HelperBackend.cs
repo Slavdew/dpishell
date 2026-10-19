@@ -49,6 +49,12 @@ public interface IHelperBackend : IHelperCatalog
     Task<DnsSetResult> DnsSetAsync(string preset, IReadOnlyList<string>? ips, string? doh, bool fallback, CancellationToken ct);
     /// <summary>«Вернуть как было» — прежние настройки DNS адаптеров.</summary>
     Task<DnsSetResult> DnsRestoreAsync(CancellationToken ct);
+    /// <summary>Сохранить свою (source = user) или вставленную (pasted) стратегию под новым id. Роли проверяются заново, файлы fake — по папке программы.</summary>
+    Strategy AddStrategy(string title, IReadOnlyDictionary<string, string> roles, string source);
+    /// <summary>Удалить свою/вставленную/найденную стратегию; выбранную сейчас — нельзя.</summary>
+    void DeleteStrategy(string strategyId);
+    /// <summary>Проверка сайтов для одной стратегии (прогон подбора из одного кандидата).</summary>
+    Task<SelectionReport> CheckStrategyAsync(string strategyId, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct);
     /// <summary>Все окна отключились от канала: в режиме без службы winws гасится.</summary>
     void OnClientsGone();
 }
@@ -214,6 +220,23 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
         var r = await shell.SelectAsync(quick, groups is null ? null : shell.SelectedGroups(groups), progress, ct);
         RememberFallbacks(r);
         return r;
+    }
+
+    public Strategy AddStrategy(string title, IReadOnlyDictionary<string, string> roles, string source) =>
+        UserStrategies.AddPersonal(shell.Paths, title, roles, source);
+
+    public void DeleteStrategy(string strategyId)
+    {
+        if (shell.Catalog.Find(strategyId) is not null) throw new InvalidOperationException("Готовые стратегии не удаляются — только свои.");
+        if (shell.State.StrategyId == strategyId) throw new InvalidOperationException("Эта стратегия сейчас выбрана — сначала выберите другую.");
+        if (!UserStrategies.Remove(shell.Paths, strategyId)) throw new InvalidOperationException("Такой своей стратегии нет.");
+        if (shell.State.Fallbacks.Remove(strategyId)) shell.SaveState();
+    }
+
+    public async Task<SelectionReport> CheckStrategyAsync(string strategyId, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct)
+    {
+        RememberGroups(groups);
+        return await shell.CheckOneAsync(strategyId, groups is null ? null : shell.SelectedGroups(groups), progress, ct);
     }
 
     public async Task<SearchReport> SearchAsync(string? baseId, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct)

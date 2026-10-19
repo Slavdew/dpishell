@@ -182,8 +182,8 @@
                                                 <StackPanel>
                                                     <DockPanel>
                                                         <Border DockPanel.Dock="Right" Background="{DynamicResource AccentSoft}" CornerRadius="4" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                                Visibility="{Binding Found, Converter={StaticResource Vis}}">
-                                                            <TextBlock Text="найдена поиском" FontSize="12" Foreground="{DynamicResource AccentText}" TextWrapping="NoWrap" />
+                                                                Visibility="{Binding HasLabel, Converter={StaticResource Vis}}">
+                                                            <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource AccentText}" TextWrapping="NoWrap" />
                                                         </Border>
                                                         <TextBlock Text="{Binding Title}" FontSize="15" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Tip}" />
                                                     </DockPanel>
@@ -193,11 +193,15 @@
                                                                 Visibility="{Binding DataContext.Router.Connected, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource Vis}}">
                                                             <Button Content="Отправить на роутер" Style="{StaticResource LinkButton}" FontSize="12"
                                                                     Command="{Binding DataContext.Router.SendStrategyCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding Id}"
-                                                                    Visibility="{Binding Found, Converter={StaticResource Vis}}" ToolTip="Отправить на роутер, включить там и проверить" />
+                                                                    Visibility="{Binding Removable, Converter={StaticResource Vis}}" ToolTip="Отправить на роутер, включить там и проверить" />
                                                         </Border>
                                                         <!-- Стрелка — адреса последнего подбора (как в таблице подбора); щелчок по ней и по адресам стратегию не выбирает. -->
                                                         <ToggleButton DockPanel.Dock="Left" Style="{StaticResource RowToggle}" IsChecked="{Binding Expanded}" Margin="-4,0,2,0"
                                                                       Visibility="{Binding HasDetails, Converter={StaticResource Vis}}" ToolTip="Подробнее: адреса последнего подбора" />
+                                                        <!-- «Скопировать стратегию»: строка dpishell:1:… в буфер — вставить в DpiShell у другого человека. -->
+                                                        <Button DockPanel.Dock="Right" Content="Скопировать стратегию" Style="{StaticResource LinkButton}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                Command="{Binding DataContext.CopyStrategyCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"
+                                                                Visibility="{Binding HasParams, Converter={StaticResource Vis}}" ToolTip="Положить стратегию в буфер одной строкой — её можно вставить в DpiShell" />
                                                         <!-- «Параметры»: роли и командная строка winws — щелчок стратегию не выбирает. -->
                                                         <Button DockPanel.Dock="Right" Content="{Binding ParamsLinkText}" Style="{StaticResource LinkButton}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
                                                                 Command="{Binding DataContext.ToggleParamsCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"
@@ -214,8 +218,16 @@
                                                         <!-- Невысокий блок с прокруткой: параметры длинные и иначе растягивают список стратегий. -->
                                                         <TextBox Text="{Binding Params, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Padding="6,4" AutomationProperties.Name="Параметры стратегии"
                                                                  MaxHeight="130" VerticalScrollBarVisibility="Auto" />
-                                                        <Button Content="Скопировать параметры" Style="{StaticResource LinkButton}" FontSize="12" HorizontalAlignment="Left" Margin="0,4,0,0"
-                                                                Command="{Binding DataContext.CopyParamsCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" />
+                                                        <WrapPanel Margin="0,4,0,0">
+                                                            <Button Content="Скопировать параметры" Style="{StaticResource LinkButton}" FontSize="12" Margin="0,0,12,0"
+                                                                    Command="{Binding DataContext.CopyParamsCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" />
+                                                            <Button Content="{Binding EditText}" Style="{StaticResource LinkButton}" FontSize="12" Margin="0,0,12,0"
+                                                                    Command="{Binding DataContext.EditStrategyCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"
+                                                                    ToolTip="Готовые стратегии не меняются — сохранится ваша копия" />
+                                                            <Button Content="Удалить" Style="{StaticResource LinkButton}" FontSize="12"
+                                                                    Command="{Binding DataContext.DeleteStrategyCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"
+                                                                    Visibility="{Binding Removable, Converter={StaticResource Vis}}" />
+                                                        </WrapPanel>
                                                     </StackPanel>
                                                 </StackPanel>
                                             </DataTemplate>
@@ -367,6 +379,10 @@
                             <DockPanel>
                                 <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="Применить" Style="{StaticResource Primary}" Command="{Binding ApplyBestCmd}"
                                         VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding HasBest, Converter={StaticResource Vis}}" />
+                                <!-- Вставленная или собранная руками стратегия: проверка сайтов только для неё. -->
+                                <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="Проверить" Style="{StaticResource Primary}" Command="{Binding CheckStrategyCmd}"
+                                        VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding HasPendingCheck, Converter={StaticResource Vis}}"
+                                        ToolTip="Открыть ваши сайты через эту стратегию — только через неё" />
                                 <StackPanel>
                                     <TextBlock Text="{Binding ResultText}" FontSize="16" FontWeight="SemiBold" />
                                     <TextBlock Text="{Binding ResultHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" />
@@ -411,8 +427,8 @@
                                                  «лучшая» — словом, как «найдена»: значок звезды в таблице читался непонятным символом. -->
                                             <DockPanel LastChildFill="True">
                                                 <Border DockPanel.Dock="Right" Background="{DynamicResource AccentSoft}" CornerRadius="4" Padding="5,0" Margin="6,0,4,0" VerticalAlignment="Center"
-                                                        Visibility="{Binding Found, Converter={StaticResource Vis}}" ToolTip="Найдена глубоким поиском">
-                                                    <TextBlock Text="найдена" FontSize="12" Foreground="{DynamicResource AccentText}" />
+                                                        Visibility="{Binding HasLabel, Converter={StaticResource Vis}}">
+                                                    <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource AccentText}" />
                                                 </Border>
                                                 <Border DockPanel.Dock="Right" Background="{DynamicResource AccentSoft}" CornerRadius="4" Padding="5,0" Margin="6,0,0,0" VerticalAlignment="Center"
                                                         Visibility="{Binding IsBest, Converter={StaticResource Vis}}">
@@ -437,10 +453,20 @@
                             </DataGrid.Columns>
                         </DataGrid>
 
-                        <WrapPanel Grid.Row="3" Margin="0,10,0,0">
-                            <Button ContentTemplate="{StaticResource Shield}" Content="Применить выбранную" Command="{Binding ApplySelectedCmd}" />
-                            <TextBlock Text="Можно выбрать стратегию в таблице вручную." Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8" />
-                        </WrapPanel>
+                        <!-- Выбранная строка: применить или своё (скопировать, изменить, проверить только её). «Вставить» — второстепенная ссылка:
+                             строка DpiShell или запуск winws из .bat Flowseal, сначала проверка, потом «Применить». -->
+                        <DockPanel Grid.Row="3" Margin="0,10,0,0">
+                            <Button DockPanel.Dock="Right" Content="Вставить стратегию" Style="{StaticResource LinkButton}" FontSize="13" Margin="8,0,0,8" VerticalAlignment="Top"
+                                    Command="{Binding PasteStrategyCmd}" ToolTip="Строка dpishell:1:… или запуск winws из .bat Flowseal; сначала проверка, потом «Применить»" />
+                            <WrapPanel>
+                                <Button ContentTemplate="{StaticResource Shield}" Content="Применить выбранную" Command="{Binding ApplySelectedCmd}" ToolTip="Можно выбрать стратегию в таблице вручную" />
+                                <StackPanel Orientation="Horizontal" Margin="4,0,0,8" VerticalAlignment="Center" Visibility="{Binding HasSelectedScore, Converter={StaticResource Vis}}">
+                                    <Button Content="Скопировать стратегию" Style="{StaticResource LinkButton}" FontSize="13" Margin="0,0,10,0" Command="{Binding CopyStrategyCmd}" CommandParameter="{Binding SelectedScore}" />
+                                    <Button Content="{Binding SelectedScore.EditText}" Style="{StaticResource LinkButton}" FontSize="13" Margin="0,0,10,0" Command="{Binding EditStrategyCmd}" CommandParameter="{Binding SelectedScore}" />
+                                    <Button Content="Проверить только её" Style="{StaticResource LinkButton}" FontSize="13" Command="{Binding CheckStrategyCmd}" CommandParameter="{Binding SelectedScore}" />
+                                </StackPanel>
+                            </WrapPanel>
+                        </DockPanel>
                         </Grid>
 
                         <!-- Подбор на роутере: группы и режим — те же, ход — select_progress, итог — «Применить на роутере». -->

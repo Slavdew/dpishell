@@ -306,6 +306,10 @@ public sealed class HelperServer : IAsyncDisposable
             case "set_run_mode": await Task.Run(() => b.SetRunMode(c.Bool("service")), ct); return null;
             case "select":
                 return await Task.Run(() => b.SelectAsync(c.Bool("quick", true), c.List("groups"), new SyncProgress<SelectorProgress>(p => progress(p)), ct), ct);
+            case "strategy_add": return await Task.Run(() => b.AddStrategy(c.Str("title")!, c.Map("roles")!, c.Str("source")!), ct);
+            case "strategy_delete": await Task.Run(() => b.DeleteStrategy(c.Str("strategy")!), ct); return null;
+            case "strategy_check":
+                return await Task.Run(() => b.CheckStrategyAsync(c.Str("strategy")!, c.List("groups"), new SyncProgress<SelectorProgress>(p => progress(p)), ct), ct);
             case "search":
                 return await Task.Run(() => b.SearchAsync(c.Str("base"), c.List("groups"), new SyncProgress<SelectorProgress>(p => progress(p)), ct), ct);
             case "ipset_mode":

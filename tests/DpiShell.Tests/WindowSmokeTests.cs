@@ -267,6 +267,111 @@ public sealed class WindowSmokeTests
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
 
+    /// <summary>
+    /// Свои стратегии: вставленная строка попадает на «Подбор» как «не проверена» с карточкой «Проверить» (без «Применить»),
+    /// на «Главной» у неё метка, «Изменить» и «Удалить»; окно правки — поля по ролям и проверка на лету. Снимки в обеих темах.
+    /// Помощник настоящий над временной папкой (strategy_add по каналу), winws не запускается.
+    /// </summary>
+    [Fact]
+    public void OwnStrategies_PastedRowAndEditor_BindAndSnap()
+    {
+        using var tmp = new TempDir();
+        var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
+        var errors = WithBindingErrors(() =>
+        {
+            foreach (var theme in new[] { ThemeManager.Light, ThemeManager.Dark })
+            {
+                ThemeManager.Apply(theme);
+                var shell = new Shell(new AppPaths(tmp.Sub("root-" + theme), Repo.Data));
+                shell.Paths.EnsureDirectories();
+                foreach (var f in Directory.GetFiles(Path.Combine(Repo.Data, "fake"), "*.bin")) File.Copy(f, Path.Combine(shell.Paths.Fake, Path.GetFileName(f)), true);
+                var settings = TestWindow.Settings(shell);
+                settings.Theme = theme;
+                var (vm, helper) = WithPcHelper(shell, settings);
+                try
+                {
+                    SetProp(vm, "IsLoading", false);
+                    var groups = shell.DefaultTargets.Groups.Where(g => g.Id is "youtube" or "discord").ToList();
+                    var strategies = shell.Catalog.Strategies.Take(5).ToList();
+                    foreach (var s in strategies)
+                    {
+                        var verdicts = groups.SelectMany(g => g.Targets.Select(t =>
+                            new TargetVerdict(g.Id, t, true, 0.4, new[] { SslProtocols.Tls13, SslProtocols.Tls12 }.Select(v => new ProbeResult(t, v, ProbeOutcome.Ok, 0.4, 0, "HTTP 200")).ToList()))).ToList();
+                        vm.Scores.Add(new ScoreRow(DpiShell.Core.Selector.Score(s, groups, verdicts), vm.Names));
+                    }
+                    // Чужая стратегия из буфера: строка DpiShell.
+                    var roles = new Dictionary<string, string>(shell.Catalog.Strategies[7].Roles);
+                    vm.ReadText = () => StrategyExchange.Encode("Стратегия от друга", roles);
+                    vm.ToastTime = TimeSpan.FromMinutes(5);
+                    WaitUi(vm.PasteStrategyAsync());
+                    var id = vm.PendingCheckId ?? throw new Exception("Вставка не дошла до проверки: " + vm.Message);
+
+                    var w = Open(vm);
+                    vm.Page = Pages.Select;
+                    Pump();
+                    var tabs = Find<TabControl>(w)!;
+                    bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
+                    if (Find<Button>(tabs, b => b.Content as string == "Проверить" && b.IsVisible) is null) throw new Exception("Нет кнопки «Проверить»");
+                    if (Find<Button>(tabs, b => b.Content as string == "Применить" && b.IsVisible) is not null) throw new Exception("«Применить» до проверки");
+                    if (Find<Button>(tabs, b => b.Content as string == "Вставить стратегию" && b.IsVisible) is null) throw new Exception("Нет ссылки «Вставить стратегию»");
+                    if (!Visible(t => t.Text == "вставлена")) throw new Exception("Нет метки «вставлена» в таблице");
+                    if (!Visible(t => t.Text == "не проверена")) throw new Exception("Нет «не проверена» в таблице");
+                    if (Find<Button>(tabs, b => b.Content as string == "Скопировать стратегию" && b.IsVisible) is null) throw new Exception("Нет «Скопировать стратегию» у выбранной строки");
+                    if (Find<Button>(tabs, b => b.Content as string == "Изменить" && b.IsVisible) is null) throw new Exception("Нет «Изменить» у вставленной");
+                    if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-select-pasted.png")); }
+
+                    // Выбрана готовая — то же действие называется «Сделать копию и изменить».
+                    vm.SelectedScore = vm.Scores.First(r => r.Id == strategies[0].Id);
+                    Pump();
+                    if (Find<Button>(tabs, b => b.Content as string == "Сделать копию и изменить" && b.IsVisible) is null) throw new Exception("У готовой нет «Сделать копию и изменить»");
+                    vm.SelectedScore = vm.Scores.First(r => r.Id == id);
+
+                    // Главная: список стратегий, у вставленной — метка и в «Параметрах» «Изменить» / «Удалить».
+                    SetProp(vm, "ShowStrategies", true);
+                    vm.Page = Pages.Home;
+                    Pump();
+                    var own = vm.StrategyChoices.First(c => c.Id == id);
+                    vm.StrategyChoices.Move(vm.StrategyChoices.IndexOf(own), 0);
+                    own.ShowParams = true;
+                    Pump();
+                    var home = Find<TabControl>(w)!;
+                    if (Find<Button>(home, b => b.Content as string == "Скопировать стратегию" && b.IsVisible) is null) throw new Exception("Нет «Скопировать стратегию» на главной");
+                    if (Find<Button>(home, b => b.Content as string == "Удалить" && b.IsVisible) is null) throw new Exception("Нет «Удалить» у вставленной");
+                    if (Find<TextBlock>(home, t => t.Text == "вставлена" && t.IsVisible) is null) throw new Exception("Нет метки «вставлена» на главной");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-home-own-strategy.png"));
+                    own.ShowParams = false;
+
+                    // Окно правки: исходное состояние и с ошибкой.
+                    var editor = new StrategyEditor("Стратегия от друга", "Моя правка", roles, catalog: false, n => File.Exists(Path.Combine(Repo.Data, "fake", n))).Start();
+                    var host = new Window
+                    {
+                        Content = new StrategyEditView { DataContext = editor }, SizeToContent = SizeToContent.WidthAndHeight, ResizeMode = ResizeMode.NoResize,
+                        WindowStartupLocation = WindowStartupLocation.Manual, Left = -20000, Top = -20000, ShowActivated = false, ShowInTaskbar = false,
+                        FontFamily = new FontFamily("Segoe UI"), FontSize = 14,
+                    };
+                    host.SetResourceReference(Control.BackgroundProperty, "Page");
+                    host.SetResourceReference(Control.ForegroundProperty, "Text");
+                    host.Show();
+                    Pump();
+                    if (!editor.CanSave) throw new Exception("Вставленная стратегия не проходит проверку правки: " + editor.Summary);
+                    if (FindAll<TextBox>(host, t => t.FontFamily.Source == "Consolas").Count() != editor.Fields.Count) throw new Exception("Поля ролей не моноширинные или не все");
+                    if (snapDir is not null) Snap(host, Path.Combine(snapDir, $"{theme}-edit-strategy.png"));
+                    editor.Fields.First(f => f.Role == "general").Text += " --wf-raw=true --dpi-desync-fake-tls=C:\\Windows\\x.bin";
+                    editor.Title = "Стратегия от друга";
+                    Pump();
+                    if (editor.CanSave) throw new Exception("Правка с чужим параметром разрешена");
+                    if (Find<Button>(host, b => b.Content as string == "Сохранить")?.IsEnabled != false) throw new Exception("«Сохранить» активна при ошибке");
+                    if (Find<TextBlock>(host, t => t.IsVisible && t.Text.Contains("Параметр --wf-raw не разрешён")) is null) throw new Exception("Нет причины в окне правки");
+                    if (snapDir is not null) Snap(host, Path.Combine(snapDir, $"{theme}-edit-strategy-error.png"));
+                    host.Close();
+                    Close(w);
+                }
+                finally { Stop(vm, helper); }
+            }
+        });
+        Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
+    }
+
     static void Collect<T>(DependencyObject root, List<T> into) where T : DependencyObject
     {
         if (root is T t) into.Add(t);

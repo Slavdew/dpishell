@@ -95,28 +95,58 @@ public static class WinwsArgs
     ];
 
     // Токен целиком: без пробельных символов, кавычек и обратных слешей — иначе строка службы разберётся иначе, чем список.
-    static readonly System.Text.RegularExpressions.Regex TokenRx = new(@"^--[a-z0-9-]+(=[A-Za-z0-9_.,+=/{}!-]+)?$");
-    static readonly System.Text.RegularExpressions.Regex FileValueRx = new(@"^(\{fake\}/[A-Za-z0-9_.-]+\.bin|0x[0-9A-Fa-f]+|!)$"); // '!' — встроенный фейк winws
+    // \z, а не $: '$' пропускал бы перевод строки в конце токена.
+    static readonly System.Text.RegularExpressions.Regex TokenRx = new(@"^--[a-z0-9-]+(=[A-Za-z0-9_.,+=/{}!-]+)?\z");
+    static readonly System.Text.RegularExpressions.Regex FileValueRx = new(@"^(\{fake\}/[A-Za-z0-9_.-]+\.bin|0x[0-9A-Fa-f]+|!)\z"); // '!' — встроенный фейк winws
+
+    /// <summary>Предел строки одной роли: у самых длинных в каталоге около 500 знаков.</summary>
+    public const int MaxRoleLength = 1200;
 
     public static void Validate(Strategy s)
     {
         foreach (var (role, args) in s.Roles)
-        {
-            if (!RoleOrder.Contains(role)) throw new InvalidDataException($"{s.Id}: неизвестная роль {role}");
-            foreach (var tok in args.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-            {
-                if (!TokenRx.IsMatch(tok)) throw new InvalidDataException($"{s.Id}: недопустимые символы в {tok}");
-                var name = tok.Split('=', 2)[0];
-                if (!AllowedOptions.Contains(name) && !(role.StartsWith("game_") && GameOnlyOptions.Contains(name)))
-                    throw new InvalidDataException($"{s.Id}: параметр {name} не в списке разрешённых для роли {role}");
-                var val = tok.Contains('=') ? tok.Split('=', 2)[1] : "";
-                if (FileOptions.Contains(name) ? !FileValueRx.IsMatch(val) : val.Contains('/'))
-                    throw new InvalidDataException($"{s.Id}: путь вне папки фейков: {tok}");
-                if (val.Contains(".."))
-                    throw new InvalidDataException($"{s.Id}: недопустимое значение {tok}");
-            }
-        }
+            if (Problem(role, args) is { } problem) throw new InvalidDataException($"{s.Id}: {problem}");
     }
+
+    /// <summary>
+    /// Что не так с ролью, одной фразой для человека; null — всё в порядке. Единый разбор для каталога, своих и вставленных стратегий.
+    /// <paramref name="fakeExists"/> — есть ли файл в папке фейков программы (имя без {fake}/); null — наличие не проверяется.
+    /// </summary>
+    public static string? Problem(string role, string args, Func<string, bool>? fakeExists = null)
+    {
+        if (!RoleOrder.Contains(role)) return $"Неизвестная роль «{Shorten(role)}»";
+        if (args.Length > MaxRoleLength) return $"Строка роли «{role}» слишком длинная";
+        foreach (var tok in args.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var name = tok.Split('=', 2)[0];
+            if (!TokenRx.IsMatch(tok))
+            {
+                // Имя из белого списка, а значение с лишними символами — «недопустимые символы»; чужое имя — «не разрешён».
+                var bare = System.Text.RegularExpressions.Regex.Match(tok, @"^--[a-z0-9-]+").Value;
+                return AllowedOptions.Contains(bare) || GameOnlyOptions.Contains(bare)
+                    ? $"В «{Shorten(tok)}» недопустимые символы"
+                    : bare.Length > 0 ? $"Параметр {bare} не разрешён" : $"«{Shorten(tok)}» — не параметр winws";
+            }
+            if (!AllowedOptions.Contains(name))
+            {
+                if (GameOnlyOptions.Contains(name))
+                {
+                    if (!role.StartsWith("game_")) return $"Параметр {name} разрешён только в игровых ролях";
+                }
+                else return $"Параметр {name} не разрешён";
+            }
+            var val = tok.Contains('=') ? tok.Split('=', 2)[1] : "";
+            if (FileOptions.Contains(name) ? !FileValueRx.IsMatch(val) : val.Contains('/'))
+                return $"Путь вне папки программы: {Shorten(tok)}";
+            if (val.Contains(".."))
+                return $"Недопустимое значение: {Shorten(tok)}";
+            if (fakeExists is not null && val.StartsWith("{fake}/", StringComparison.Ordinal) && !fakeExists(val["{fake}/".Length..]))
+                return $"Файла {val["{fake}/".Length..]} нет в папке программы";
+        }
+        return null;
+    }
+
+    static string Shorten(string s) => s.Length > 40 ? s[..40] + "…" : s;
 
     /// <summary>
     /// Роли, которые попадут в командную строку: игровые — только при включённом режиме (из каталога, а если у стратегии

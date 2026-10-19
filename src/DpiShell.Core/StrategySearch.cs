@@ -286,7 +286,50 @@ public static class UserStrategies
     {
         var all = Load(p);
         foreach (var s in found) { all.RemoveAll(x => x.Id == s.Id); all.Add(s); }
+        Save(p, all);
+    }
+
+    static void Save(AppPaths p, List<Strategy> all)
+    {
         p.EnsureDirectories();
         System.IO.File.WriteAllText(File(p), JsonSerializer.Serialize(all, Json));
+    }
+
+    /// <summary>Источники, которые ставит человек: «user» — своя (правка, копия), «pasted» — вставленная чужая. «search» — найденная программой.</summary>
+    public static bool IsPersonal(string source) => source is "user" or "pasted";
+
+    /// <summary>Сколько своих (не найденных поиском) стратегий можно держать: файл читается целиком при каждом запросе.</summary>
+    public const int MaxPersonal = 50;
+
+    /// <summary>
+    /// Сохранить свою стратегию под новым id (прежняя не меняется). Роли — уже разобранные <see cref="StrategyExchange"/>,
+    /// здесь они проверяются ещё раз: файл читает служба с правами администратора. Файлы fake — только из папки фейков программы.
+    /// </summary>
+    public static Strategy AddPersonal(AppPaths p, string title, IReadOnlyDictionary<string, string> roles, string source)
+    {
+        if (!IsPersonal(source)) throw new ArgumentException("Источник своей стратегии: user или pasted");
+        if (StrategyExchange.CheckRoles(roles, name => System.IO.File.Exists(Path.Combine(p.Fake, name))) is { } problem)
+            throw new InvalidDataException(problem);
+        var all = Load(p);
+        if (all.Count(s => IsPersonal(s.Source)) >= MaxPersonal)
+            throw new InvalidOperationException($"Своих стратегий уже {MaxPersonal} — удалите ненужные.");
+        var stamp = DateTime.Now.ToString("yyMMdd-HHmmss");
+        string id;
+        int n = 0;
+        do id = n == 0 ? $"own-{stamp}" : $"own-{stamp}-{n}"; while (all.Any(s => s.Id == id) && ++n > 0);
+        var s = new Strategy(id, StrategyExchange.CleanTitle(title), source, new Dictionary<string, string>(roles));
+        WinwsArgs.Validate(s);
+        all.Add(s);
+        Save(p, all);
+        return s;
+    }
+
+    /// <summary>Удалить свою (или вставленную) стратегию. Найденные поиском тоже можно, готовые из каталога здесь не лежат.</summary>
+    public static bool Remove(AppPaths p, string id)
+    {
+        var all = Load(p);
+        if (all.RemoveAll(x => x.Id == id) == 0) return false;
+        Save(p, all);
+        return true;
     }
 }

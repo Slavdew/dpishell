@@ -284,6 +284,17 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<string>? groups = null, IProgress<SelectorProgress>? progress = null, CancellationToken ct = default) =>
         CallAsync<SelectionReport>("select", new { quick, groups }, Map(progress), ct);
 
+    /// <summary>Сохранить свою стратегию у помощника (он проверит роли ещё раз и назначит id). source: user — своя, pasted — вставленная.</summary>
+    public Task<Strategy> StrategyAddAsync(string title, IReadOnlyDictionary<string, string> roles, string source, CancellationToken ct = default) =>
+        CallAsync<Strategy>("strategy_add", new { title, roles, source }, null, ct);
+
+    public Task StrategyDeleteAsync(string strategyId, CancellationToken ct = default) =>
+        CallAsync("strategy_delete", new { strategy = strategyId }, null, ct);
+
+    /// <summary>Проверка сайтов для одной стратегии; итог — отчёт подбора из одной строки.</summary>
+    public Task<SelectionReport> StrategyCheckAsync(string strategyId, IReadOnlyList<string>? groups = null, IProgress<SelectorProgress>? progress = null, CancellationToken ct = default) =>
+        CallAsync<SelectionReport>("strategy_check", new { strategy = strategyId, groups }, Map(progress), ct);
+
     public Task<SearchReport> SearchAsync(string? baseId = null, IReadOnlyList<string>? groups = null, IProgress<SelectorProgress>? progress = null, CancellationToken ct = default) =>
         CallAsync<SearchReport>("search", new { @base = baseId, groups }, Map(progress), ct);
 

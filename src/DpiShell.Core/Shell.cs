@@ -322,6 +322,21 @@ public sealed class Shell
             return report;
         });
 
+    /// <summary>
+    /// Проверка сайтов для одной стратегии (своей, вставленной): полный прогон из одного кандидата, итог сохраняется как у подбора —
+    /// статистика и подпись в списке. Служба на время проверки останавливается.
+    /// </summary>
+    public Task<SelectionReport> CheckOneAsync(string strategyId, IReadOnlyList<TargetGroup>? groups = null,
+        IProgress<SelectorProgress>? progress = null, CancellationToken ct = default) =>
+        WithServicePausedAsync(async () =>
+        {
+            var strategy = FindStrategy(strategyId) ?? throw new InvalidOperationException("Такой стратегии нет.");
+            using var doh = new DohResolver();
+            var report = await new Selector(Paths, NewProbe(doh)).RunAsync([strategy], WithControl(groups ?? SelectedGroups(), DefaultTargets), quick: false, progress, ct);
+            ResultStore.Save(Paths, report);
+            return report;
+        });
+
     /// <summary>Глубокий поиск (architecture.md «Глубокий поиск») от базовой стратегии; найденное, что прошло полную проверку, сохраняется как свои стратегии.</summary>
     public Task<SearchReport> SearchAsync(string? baseId = null, IReadOnlyList<TargetGroup>? groups = null,
         IProgress<SelectorProgress>? progress = null, CancellationToken ct = default) =>

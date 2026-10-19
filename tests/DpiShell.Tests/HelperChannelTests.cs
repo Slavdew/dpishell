@@ -70,6 +70,9 @@ public class HelperChannelTests
             ["user_ipset_set"] = new { lines = new[] { "10.0.0.0/8" } },
             ["user_targets_set"] = new { lines = new[] { "example.com" } },
             ["dns_set"] = new { preset = "google" },
+            ["strategy_add"] = new { title = "Моя", roles = new { general = "--dpi-desync=fake --dpi-desync-repeats=6" }, source = "user" },
+            ["strategy_delete"] = new { strategy = "found-1" },
+            ["strategy_check"] = new { strategy = "found-1", groups = new[] { "youtube" } },
         };
         foreach (var cmd in HelperCommands.Specs.Keys.Where(k => k != "cancel"))
             await c.CallAsync(cmd, args.GetValueOrDefault(cmd));

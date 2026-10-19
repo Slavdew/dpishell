@@ -30,6 +30,10 @@ public enum ArgKind
     IpAddresses,
     /// <summary>Шаблон защищённого DNS: только https://сервер[:порт]/путь.</summary>
     DohTemplate,
+    /// <summary>Название своей стратегии: одна строка до 60 знаков, без управляющих знаков.</summary>
+    Title,
+    /// <summary>Роли своей стратегии {роль: параметры}: известные роли и параметры из белого списка (WinwsArgs.Problem).</summary>
+    Roles,
 }
 
 public sealed record ArgSpec(string Name, ArgKind Kind, bool Required = false, string[]? Choices = null, int MaxItems = 0);
@@ -48,6 +52,7 @@ public sealed record HelperCall(long Id, CommandSpec Spec, IReadOnlyDictionary<s
     public bool Bool(string name, bool fallback = false) => Args.TryGetValue(name, out var v) ? (bool)v : fallback;
     public string? Str(string name) => Args.TryGetValue(name, out var v) ? (string)v : null;
     public IReadOnlyList<string>? List(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyList<string>)v : null;
+    public IReadOnlyDictionary<string, string>? Map(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyDictionary<string, string>)v : null;
 }
 
 /// <summary>Запрос отклонён до выполнения (код <c>invalid</c>). Id — если его удалось прочитать, иначе 0.</summary>
@@ -117,6 +122,14 @@ public static partial class HelperCommands
             new ArgSpec("doh", ArgKind.DohTemplate),
             new ArgSpec("fallback", ArgKind.Bool)),
         new("dns_restore", true, true),
+        // Свои стратегии (architecture.md «Свои стратегии»): окну без прав писать в папку программы нельзя. Помощник заново проверяет роли
+        // тем же белым списком, что и каталог, и сам назначает id; командной строки и путей не принимает.
+        new("strategy_add", true, false,
+            new ArgSpec("title", ArgKind.Title, Required: true), new ArgSpec("roles", ArgKind.Roles, Required: true),
+            new ArgSpec("source", ArgKind.Choice, Required: true, Choices: ["user", "pasted"])),
+        new("strategy_delete", true, false, new ArgSpec("strategy", ArgKind.StrategyId, Required: true)),
+        // Проверка сайтов только для одной стратегии (вставленной): тот же Selector, один кандидат.
+        new("strategy_check", true, true, new ArgSpec("strategy", ArgKind.StrategyId, Required: true), new ArgSpec("groups", ArgKind.GroupIds)),
     ];
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);
@@ -277,6 +290,27 @@ public static partial class HelperCommands
                 var str = String(id, Where(), v, DnsValues.MaxTemplate);
                 if (!DnsValues.IsDohTemplate(str)) throw new HelperRequestException(id, $"{Where()}: нужен адрес вида https://сервер/путь.");
                 return str;
+            }
+
+            case ArgKind.Title:
+            {
+                var str = String(id, Where(), v, StrategyExchange.MaxTitle);
+                if (str.Any(char.IsControl)) throw new HelperRequestException(id, $"{Where()}: управляющие знаки в названии.");
+                return str;
+            }
+
+            case ArgKind.Roles:
+            {
+                if (v is not JsonObject ro || ro.Count == 0 || ro.Count > WinwsArgs.RoleOrder.Length)
+                    throw new HelperRequestException(id, $"{Where()}: нужен объект «роль: параметры».");
+                var roles = new Dictionary<string, string>();
+                foreach (var (role, node) in ro)
+                {
+                    var args = node is null ? "" : String(id, Where(), node, WinwsArgs.MaxRoleLength);
+                    roles[role] = args;
+                }
+                if (StrategyExchange.CheckRoles(roles) is { } problem) throw new HelperRequestException(id, $"{Where()}: {problem}.");
+                return roles;
             }
         }
         throw new HelperRequestException(id, $"{Where()}: неизвестный тип аргумента.");

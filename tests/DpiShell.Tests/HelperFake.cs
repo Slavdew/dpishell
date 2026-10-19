@@ -97,6 +97,31 @@ public sealed class FakeHelperBackend : IHelperBackend
         return new(new Dictionary<string, IReadOnlyList<CandidateResult>>(), [], Report(false), null);
     }
 
+    public Strategy AddStrategy(string title, IReadOnlyDictionary<string, string> roles, string source)
+    {
+        Call($"strategy_add {source} {title} {string.Join(";", roles.Select(r => r.Key + "=" + r.Value))}");
+        ((HashSet<string>)StrategyIds).Add("own-1");
+        var s = new Strategy("own-1", title, source, new Dictionary<string, string>(roles));
+        DetailsValue = DetailsValue with { Found = [.. DetailsValue.Found, s] };
+        StatusValue = StatusValue with { Strategies = [.. StatusValue.Strategies, new StrategyInfo(s.Id, s.Title, source)] };
+        return s;
+    }
+
+    public void DeleteStrategy(string strategyId)
+    {
+        Call("strategy_delete " + strategyId);
+        DetailsValue = DetailsValue with { Found = [.. DetailsValue.Found.Where(x => x.Id != strategyId)] };
+        StatusValue = StatusValue with { Strategies = [.. StatusValue.Strategies.Where(x => x.Id != strategyId)] };
+    }
+
+    public Task<SelectionReport> CheckStrategyAsync(string strategyId, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct)
+    {
+        Call($"strategy_check {strategyId} {string.Join(",", groups ?? [])}");
+        progress.Report(new(0, 1, "Проверка без обхода…"));
+        var r = Report(false);
+        return Task.FromResult(r with { Scores = [.. r.Scores.Select(s => s with { Strategy = s.Strategy with { Id = strategyId, Title = "Проверяемая" } })] });
+    }
+
     public void SetIpsetMode(IpsetMode mode) => Call("ipset_mode " + mode);
     public void StartAllAddresses() => Call("all_addresses_start");
     public bool StopAllAddresses() { Call("all_addresses_stop"); return true; }

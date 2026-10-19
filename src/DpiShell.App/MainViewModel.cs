@@ -93,7 +93,8 @@ public sealed partial class MainViewModel : Observable
         CheckDnsCmd = RelayCommand.Async(CheckDnsAsync, () => !IsLoading && !DnsChecking);
         StopSelectCmd = new RelayCommand(() => _selectCts?.Cancel(), () => Selecting);
         ApplyBestCmd = RelayCommand.Async(() => ApplyAsync(_bestId!), () => !Busy && _bestId is not null);
-        ApplySelectedCmd = RelayCommand.Async(() => ApplyAsync(SelectedScore!.Id), () => !Busy && SelectedScore is { Usable: true });
+        ApplySelectedCmd = RelayCommand.Async(ApplySelectedAsync, () => !Busy && SelectedScore is { Usable: true } or { Unchecked: true });
+        InitStrategies();   // свои стратегии: копирование, вставка, правка, удаление — MainViewModel.Strategies.cs
 
         SaveTargetsCmd = RelayCommand.Async(SaveTargetsAsync, () => !Busy);
 
@@ -656,9 +657,9 @@ public sealed partial class MainViewModel : Observable
             if (stats.TryGetValue(s.Id, out var st) && st.Runs > 0)
             {
                 var (note, warning) = StrategyChoice.Describe(st, Names);
-                choices.Add(new(s.Id, ShownTitle(s.Id, s.Title), note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names), ParamsOf(s.Id)) { Opened = StrategyOrder.Opened(st), Tip = TipFor(s.Id, s.Title) });
+                choices.Add(new(s.Id, ShownTitle(s.Id, s.Title), note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names), ParamsOf(s.Id)) { Opened = StrategyOrder.Opened(st), Tip = TipFor(s.Id, s.Title), Source = s.Source });
             }
-            else choices.Add(new(s.Id, ShownTitle(s.Id, s.Title), "ещё не проверялась", s.Source == "search", parameters: ParamsOf(s.Id)) { Tip = TipFor(s.Id, s.Title) });
+            else choices.Add(new(s.Id, ShownTitle(s.Id, s.Title), "ещё не проверялась", s.Source == "search", parameters: ParamsOf(s.Id)) { Tip = TipFor(s.Id, s.Title), Source = s.Source });
         }
         StrategyChoices.Clear();
         foreach (var c in Settings.SortByName ? StrategyOrder.SortByName(choices, c => c.Title) : StrategyOrder.SortByOpened(choices, c => c.Opened))
@@ -700,6 +701,13 @@ public sealed partial class MainViewModel : Observable
         set
         {
             if (value is null || value == _chosen) return;
+            // Своя или вставленная без единой проверки — только с подтверждением; отказ возвращает прежний выбор в списке.
+            if (!ConfirmUnchecked(value))
+            {
+                if (Application.Current?.Dispatcher is { } d) d.BeginInvoke(() => Raise(nameof(ChosenStrategyId)));
+                else Raise(nameof(ChosenStrategyId));
+                return;
+            }
             _chosen = value;
             Raise();
             if (IsRunning) _ = ApplyAsync(value);
@@ -1067,7 +1075,8 @@ public sealed partial class MainViewModel : Observable
     public bool HasBest => _bestId is not null;
 
     ScoreRow? _selected;
-    public ScoreRow? SelectedScore { get => _selected; set { if (Set(ref _selected, value)) CommandManager.InvalidateRequerySuggested(); } }
+    public ScoreRow? SelectedScore { get => _selected; set { if (Set(ref _selected, value)) { Raise(nameof(HasSelectedScore)); CommandManager.InvalidateRequerySuggested(); } } }
+    public bool HasSelectedScore => _selected is not null;
 
     public ICommand StartSelectCmd { get; }
     public ICommand StopSelectCmd { get; }

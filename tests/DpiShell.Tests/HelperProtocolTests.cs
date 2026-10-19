@@ -104,6 +104,7 @@ public class HelperProtocolTests
             "all_addresses_stop", "game_mode", "ipset_update", "user_ipset_set", "user_targets_set", "hosts_check", "hosts_preview",
             "hosts_apply", "hosts_revert", "hosts_recheck", "stop_foreign", "core_repair", "remove_all", "clear_history", "read_results",
             "details", "choose", "tcp_timestamps_on", "data_update", "dns_status", "dns_set", "dns_restore",
+            "strategy_add", "strategy_delete", "strategy_check",
         ];
         Assert.Equal(spec.Order(), HelperCommands.Specs.Keys.Order());
         // Команды DNS описаны в helper-protocol §3 (часть старых там записана сокращённо: hosts_check/preview/…).
@@ -111,6 +112,7 @@ public class HelperProtocolTests
         Assert.All(["dns_status", "dns_set {preset, ips?, doh?, fallback?}", "dns_restore"], cmd => Assert.Contains("`" + cmd + "`", doc));
         // Список команд в status — тот же белый список; версия протокола — та, что записана в helper-protocol §6.
         Assert.Equal(HelperCommands.Specs.Keys.Order(StringComparer.Ordinal), HelperCommands.Names);
+        Assert.All(["strategy_add {title, roles, source}", "strategy_delete {strategy}", "strategy_check {strategy, groups?}"], cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.Contains($"Текущая версия — `{HelperProtocol.Api}`", doc);
         // Только чтение — не занимает «одну операцию за раз».
         Assert.Equal(["cancel", "details", "dns_status", "hosts_preview", "read_results", "status"],
