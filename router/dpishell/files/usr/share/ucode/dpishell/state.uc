@@ -157,6 +157,8 @@ function iso(t) {
 // { until, revert_to: 'off'|id, token } и последнее выключение без человека { by, at, text, targets }.
 const PENDING = '/etc/dpishell/pending-confirm.json';
 const LAST_OFF = '/etc/dpishell/last-off.json';
+// Подбор после сторожа уже был { at, ok, best } — больше сам не пробует, пока человек не включит обход или не запустит подбор.
+const WATCHDOG_SELECT = '/etc/dpishell/watchdog-select.json';
 
 function pending_confirm() {
 	let p = read_json(PENDING, null);
@@ -204,5 +206,5 @@ export {
 	P, VERSION, API, MIN_APP, MODES, HOURS, USER_LISTS,
 	ensure_dirs, write_atomic, read_json, uci_set, settings, roles, catalog, user_catalog, found_catalog, catalogs,
 	write_zapret_config, write_zapret_config_for, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running, iso,
-	PENDING, LAST_OFF, pending_confirm, last_off
+	PENDING, LAST_OFF, WATCHDOG_SELECT, pending_confirm, last_off
 };

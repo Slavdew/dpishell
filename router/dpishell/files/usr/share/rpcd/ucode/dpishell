@@ -70,17 +70,23 @@ function trial_start(c, s) {
 	spawn('revert');
 }
 
-// Человек включил сам — прежние «выключено кнопкой/сторожем/откатом» больше не к месту.
-function clear_off() {
-	unlink(st.LAST_OFF);
-	let w = filter(st.read_json(`${st.P.run}/warnings.json`, []), x => index(['watchdog_off', 'button_off', 'confirm_reverted'], x.code) < 0);
+// Человек включил сам — прежние «выключено кнопкой/сторожем/откатом» больше не к месту. Включил или запустил подбор
+// (only_select) — сторож снова может один раз подобрать сам.
+function clear_off(only_select) {
+	unlink(st.WATCHDOG_SELECT);
+	let codes = only_select ? ['watchdog_select_failed'] : ['watchdog_off', 'button_off', 'confirm_reverted', 'watchdog_select_failed'];
+	if (!only_select)
+		unlink(st.LAST_OFF);
+	let w = filter(st.read_json(`${st.P.run}/warnings.json`, []), x => index(codes, x.code) < 0);
 	st.write_atomic(`${st.P.run}/warnings.json`, sprintf('%J\n', w));
 }
 
 // status.watchdog: жив ли сторож — время и итог последней проверки, через сколько минут следующая (растёт при обрыве).
 function guard_status(s) {
 	let g = st.read_json('/tmp/dpishell/guard.json', null);
-	return { enabled: s.schedule.watchdog, checked_at: st.iso(g?.checked_at), ok: g?.ok ?? null, interval_min: g?.interval ?? 5 };
+	let ws = st.read_json(st.WATCHDOG_SELECT, null);
+	return { enabled: s.schedule.watchdog, checked_at: st.iso(g?.checked_at), ok: g?.ok ?? null, interval_min: g?.interval ?? 5,
+		select: ws ? { at: st.iso(ws.at), ok: !!ws.ok, best: ws.best ?? null } : null };
 }
 
 function warnings(s) {
@@ -445,6 +451,7 @@ methods.select_start = {
 		if (index(['full', 'quick'], a.mode ?? 'full') < 0) return err('invalid', 'Режим: full или quick', 'mode');
 		if (index(['main', 'deep'], a.depth ?? 'main') < 0) return err('invalid', 'Глубина: main или deep', 'depth');
 		let by = a.started_by == 'page' ? 'page' : 'app';
+		clear_off(true);
 		// Начальное состояние — сразу, до фонового задания: select_progress сразу после select_start видит «идёт, 0 из N»,
 		// а не прошлый итог или пустоту (окно ПК принимало это за ошибку и запускало подбор повторно).
 		st.ensure_dirs();
