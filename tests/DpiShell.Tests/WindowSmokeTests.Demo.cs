@@ -33,8 +33,8 @@ public sealed partial class WindowSmokeTests
                     var shell = new Shell(new AppPaths(tmp.Sub("demo-" + theme), Repo.Data));
                     var settings = TestWindow.Settings(shell);
                     settings.Theme = theme;
-                    settings.UpdatesData = "2099-01-01";
-                    settings.UpdatesApp = "99.0";
+                    settings.UpdatesData = "2026-10-18";
+                    settings.UpdatesApp = "0.9.3";
                     settings.UpdatesCheckedAt = settings.UpdatesOkAt = new DateTime(2026, 10, 17, 12, 0, 0);
                     if (theme == ThemeManager.Dark) shell.State.RunMode = "process";
                     // Запись подключений «Игр и программ» — на подменённых источнике потоков и списке процессов (выдуманные game.exe/chrome.exe).
