@@ -113,11 +113,12 @@ public sealed record SearchReport(
 /// <summary>Глубокий поиск: роли подбираются раздельно, лучшие собираются в стратегии и проходят полную проверку вместе с базовой.</summary>
 public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
 {
-    /// <summary>Какая роль обслуживает какие группы целей (по спискам: google.txt — YouTube, general.txt + свои — остальное).</summary>
+    /// <summary>Какая роль обслуживает какие группы целей (по спискам: google.txt — YouTube, discord.txt — Discord, general.txt + свои — свои сайты).</summary>
     public static readonly IReadOnlyDictionary<string, string[]> RoleGroups = new Dictionary<string, string[]>
     {
         ["google"] = ["youtube"],
-        ["general"] = ["discord", "user"],
+        ["discord_tcp"] = ["discord"],
+        ["general"] = ["user"],
     };
 
     public int RefineBudget { get; init; } = 30;
@@ -157,7 +158,9 @@ public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
             }
 
             // Контроль: если базовая роль работала и вдруг перестала — провайдер, похоже, режет нас самих.
-            var control = await Try(baseStrategy.Roles.GetValueOrDefault(role) ?? CandidateGenerator.Coarse()[0]);
+            // У каталожной базы роли discord_tcp нет — за контроль берём её general (так Discord и шёл до этой роли).
+            var control = await Try(baseStrategy.Roles.GetValueOrDefault(role)
+                ?? (role == "discord_tcp" ? baseStrategy.Roles.GetValueOrDefault("general") : null) ?? CandidateGenerator.Coarse()[0]);
             bool controlWorks = control is { Share: 1 };
             int sinceControl = 0, controlFails = 0;
             async Task<bool> ControlStillOk()
@@ -186,25 +189,9 @@ public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
             if (stopped is not null) break;
         }
 
-        // Сборка: лучшие 2 по каждой роли, все сочетания + базовая стратегия, полная проверка.
-        var generated = new List<Strategy>();
-        var tops = RoleGroups.Keys.ToDictionary(r => r, r => byRole.TryGetValue(r, out var l) ? Best(l.Where(x => x.Ok > 0), 2).ToList() : []);
-        var stamp = DateTime.Now.ToString("yyMMdd-HHmm");
-        foreach (var g in tops["google"].DefaultIfEmpty(null))
-            foreach (var d in tops["general"].DefaultIfEmpty(null))
-            {
-                if (g is null && d is null) continue;
-                var roles = new Dictionary<string, string>(baseStrategy.Roles);
-                if (g is not null) roles["google"] = g.Desync;
-                if (d is not null) roles["general"] = d.Desync;
-                // ipset-профиль общего трафика — тот же приём, что и general.
-                if (d is not null && roles.ContainsKey("ipset_tcp")) roles["ipset_tcp"] = d.Desync;
-                // Игровой TCP-профиль базы построен на её general — с новым general он выводится заново (WinwsArgs.DeriveGameTcp).
-                if (d is not null) roles.Remove("game_tcp");
-                var s = new Strategy($"found-{stamp}-{generated.Count + 1}", $"Найденная {generated.Count + 1} ({stamp})", "search", roles);
-                WinwsArgs.Validate(s);
-                generated.Add(s);
-            }
+        // Сборка: роли независимы (у каждой свой список), поэтому сочетания не перемножаются — «лучший по каждой роли» плюс запасные,
+        // где по одной роли взят второй по результату приём. Всё вместе с базовой проходит полную проверку.
+        var generated = Assemble(baseStrategy, byRole, DateTime.Now.ToString("yyMMdd-HHmm"));
 
         SelectionReport? final = null;
         if (generated.Count > 0 && !ct.IsCancellationRequested)
@@ -214,6 +201,35 @@ public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
             catch (OperationCanceledException) { stopped ??= "остановлено"; }
         }
         return new(byRole, generated, final, stopped);
+    }
+
+    /// <summary>
+    /// Стратегии для полной проверки по итогам подбора ролей: лучший приём каждой роли поверх базовой и по одной запасной на каждую роль
+    /// со вторым приёмом (остальные роли — лучшие). Роли независимы — у каждой свой список, — поэтому сочетания не перемножаются.
+    /// </summary>
+    public static List<Strategy> Assemble(Strategy baseStrategy, IReadOnlyDictionary<string, IReadOnlyList<CandidateResult>> byRole, string stamp)
+    {
+        var generated = new List<Strategy>();
+        var tops = RoleGroups.Keys.ToDictionary(r => r, r => byRole.TryGetValue(r, out var l) ? Best(l.Where(x => x.Ok > 0), 2).ToList() : []);
+        var picks = new List<Dictionary<string, string>>();
+        var best = tops.Where(t => t.Value.Count > 0).ToDictionary(t => t.Key, t => t.Value[0].Desync);
+        if (best.Count > 0) picks.Add(best);
+        foreach (var (role, list) in tops)
+            if (list.Count > 1 && best.Count > 0)
+                picks.Add(new(best) { [role] = list[1].Desync });
+        foreach (var pick in picks)
+        {
+            var roles = new Dictionary<string, string>(baseStrategy.Roles);
+            foreach (var (role, desync) in pick) roles[role] = desync;
+            // ipset-профиль общего трафика — тот же приём, что и general.
+            if (pick.TryGetValue("general", out var d) && roles.ContainsKey("ipset_tcp")) roles["ipset_tcp"] = d;
+            // Игровой TCP-профиль базы построен на её general — с новым general он выводится заново (WinwsArgs.DeriveGameTcp).
+            if (pick.ContainsKey("general")) roles.Remove("game_tcp");
+            var s = new Strategy($"found-{stamp}-{generated.Count + 1}", $"Найденная {generated.Count + 1} ({stamp})", "search", roles);
+            WinwsArgs.Validate(s);
+            generated.Add(s);
+        }
+        return generated;
     }
 
     HttpProbe QuickProbe()

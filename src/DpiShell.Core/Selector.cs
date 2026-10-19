@@ -60,7 +60,7 @@ public class Selector(AppPaths paths, HttpProbe probe)
 
     // Контрольные группы в счёт не идут: они не цель, а условие (см. RunOneAsync).
     static int GroupsPassed(IEnumerable<TargetGroup> groups, IReadOnlyList<TargetVerdict> v) =>
-        groups.Where(g => !g.Control).Count(g => v.Where(x => x.GroupId == g.Id && x.Target.Required).All(x => x.Ok)
+        groups.Where(g => g.Goal).Count(g => v.Where(x => x.GroupId == g.Id && x.Target.Required).All(x => x.Ok)
                        && v.Any(x => x.GroupId == g.Id && x.Ok));
 
     /// <summary>
@@ -120,9 +120,9 @@ public class Selector(AppPaths paths, HttpProbe probe)
         var args = WinwsArgs.Build(s, paths);
         using var w = WinwsProcess.Start(paths, args);
         if (!await w.WaitReadyAsync(Settle, ct))
-            return new(s, [], 0, groups.Count(g => !g.Control), "winws завершился: " + Tail(w.Output));
+            return new(s, [], 0, groups.Count(g => g.Goal), "winws завершился: " + Tail(w.Output));
         var verdicts = await CheckGroupsAsync(groups, ct);
-        int goals = groups.Count(g => !g.Control);
+        int goals = groups.Count(g => g.Goal);
         if (!w.Alive) return new(s, verdicts, 0, goals, "winws упал во время проверки: " + Tail(w.Output));
         return Score(s, groups, verdicts);
     }
@@ -130,7 +130,7 @@ public class Selector(AppPaths paths, HttpProbe probe)
     /// <summary>Оценка по проверке. Сломан хоть один «обычный сайт» — ноль с причиной, как на роутере (architecture.md «Оценка и порядок»).</summary>
     public static StrategyScore Score(Strategy s, IReadOnlyList<TargetGroup> groups, IReadOnlyList<TargetVerdict> verdicts)
     {
-        int goals = groups.Count(g => !g.Control);
+        int goals = groups.Count(g => g.Goal);
         var controlIds = groups.Where(g => g.Control).Select(g => g.Id).ToHashSet();
         var broken = verdicts.Where(v => controlIds.Contains(v.GroupId) && !v.Ok)
             .Select(v => Uri.TryCreate(v.Target.Url, UriKind.Absolute, out var u) ? u.Host : v.Target.Url).ToList();

@@ -33,10 +33,12 @@ public static partial class StrategyNaming
     {
         if (roles is null) return null;
         var google = roles.TryGetValue("google", out var g) ? Summary(g) : null;
+        var discord = roles.TryGetValue("discord_tcp", out var ds) ? Summary(ds) : null;
         var general = roles.TryGetValue("general", out var d) ? Summary(d) : null;
-        if (google is null && general is null) return null;
-        if (google is null || general is null || google == general) return $"{prefix}: {google ?? general}";
-        return $"{prefix}: google {google}; general {general}";
+        var named = new[] { ("google", google), ("discord", discord), ("general", general) }.Where(x => x.Item2 is not null).ToList();
+        if (named.Count == 0) return null;
+        if (named.Select(x => x.Item2).Distinct().Count() == 1) return $"{prefix}: {named[0].Item2}";
+        return $"{prefix}: " + string.Join("; ", named.Select(x => $"{x.Item1} {x.Item2}"));
     }
 
     /// <summary>«fake+multisplit · ts · ×6» из одной строки аргументов; приёма нет — null.</summary>

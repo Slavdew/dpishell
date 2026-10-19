@@ -188,7 +188,8 @@ public sealed record RouterReport(string Text);
 public sealed record RouterStarted(bool Started);
 
 /// <summary>Стратегия для `strategies_user_set`: только id, название и роли — пути и командную строку роутер не принимает.</summary>
-public sealed record RouterUserStrategy(string Id, string Title, Dictionary<string, string> Roles);
+/// <param name="Parts">Только у смешанной (договор §5.1, роутер с catalog_version 3): { youtube | discord | user → id стратегии }; роутер хранит как прислали.</param>
+public sealed record RouterUserStrategy(string Id, string Title, Dictionary<string, string> Roles, Dictionary<string, string>? Parts = null);
 
 /// <summary>Ошибка уровня DpiShell (код 0 от ubus, но в ответе `error`).</summary>
 public sealed record RouterAppError(string Code, string? Text, string? Field);

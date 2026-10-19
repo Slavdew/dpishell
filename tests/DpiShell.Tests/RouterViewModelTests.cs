@@ -340,6 +340,50 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.Contains(_said, s => s.StartsWith("Стратегия «Найденная: fake + split2» включена на роутере. Роутер проверил: всё открывается."));
     }
 
+    static Strategy Mix(Shell shell) => new("mix-alt-alt10", "Смешанная · YouTube — ALT · Discord — ALT10", "mix",
+        new(shell.Catalog.Strategies[0].Roles) { ["discord_tcp"] = shell.Catalog.Strategies[1].Roles["general"] },
+        new() { ["youtube"] = "alt", ["discord"] = "alt10", ["user"] = "alt10" });
+
+    [Fact]
+    public async Task SendStrategy_Mix_NewCatalog_SendsDiscordTcpAndParts()
+    {
+        using var r = new FakeRouter();   // catalog_version 3
+        var (vm, shell) = Make(r);
+        UserStrategies.AddMix(shell.Paths, Mix(shell));
+        await vm.ConnectAsync("secret");
+        Assert.True(vm.KnowsDiscordTcp);
+        r.Calls.Clear();
+
+        await vm.SendStrategyAsync("mix-alt-alt10");
+
+        var item = r.Calls.Single(c => Method(c) == "strategies_user_set")["params"]![3]!["items"]![0]!;
+        Assert.Equal("u-mix-alt-alt10", item["id"]!.GetValue<string>());
+        Assert.NotNull(item["roles"]!["discord_tcp"]);
+        Assert.Equal("alt10", item["parts"]!["discord"]!.GetValue<string>());
+        Assert.Equal(["discord", "user", "youtube"], item["parts"]!.AsObject().Select(x => x.Key).Order());
+        Assert.DoesNotContain(_said, s => s.Contains("Обновите DpiShell на роутере"));
+    }
+
+    [Fact]
+    public async Task SendStrategy_Mix_OldCatalog_NoDiscordTcpNoParts_AndSuggestsUpdate()
+    {
+        using var r = new FakeRouter { StrategiesJson = """{ "catalog_version": 2, "items": [ { "id": "alt10", "title": "general (ALT10)", "source": "catalog", "runs": 7, "passed": 6 } ] }""" };
+        var (vm, shell) = Make(r);
+        UserStrategies.AddMix(shell.Paths, Mix(shell));
+        await vm.ConnectAsync("secret");
+        Assert.False(vm.KnowsDiscordTcp);
+        r.Calls.Clear();
+
+        await vm.SendStrategyAsync("mix-alt-alt10");
+
+        var item = r.Calls.Single(c => Method(c) == "strategies_user_set")["params"]![3]!["items"]![0]!;
+        Assert.Null(item["roles"]!["discord_tcp"]);
+        Assert.Null(item["parts"]);
+        Assert.NotNull(item["roles"]!["general"]);
+        Assert.Equal("u-mix-alt-alt10", r.Strategy);   // вариант без Discord-части всё же включён
+        Assert.Contains(_said, s => s.Contains("включена на роутере") && s.Contains("Обновите DpiShell на роутере"));
+    }
+
     [Fact]
     public async Task SendStrategy_RouterTooOld_ClearText()
     {

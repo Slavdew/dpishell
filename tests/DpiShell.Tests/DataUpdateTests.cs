@@ -310,6 +310,24 @@ public sealed partial class DataUpdateTests
         Assert.Equal(pkg, paths.Seed);
     }
 
+    /// <summary>Домен в двух списках ролей (google.txt и discord.txt) — обновление отклоняется с причиной, прежние данные остаются.</summary>
+    [Theory]
+    [InlineData("lists/google.txt", "youtube.com\nstable.dl2.discordapp.net\n")]
+    [InlineData("lists/discord.txt", "discord.com\nyoutube.com\n")]
+    public async Task Install_RoleListsOverlap_Rejected_WithReason(string file, string body)
+    {
+        using var t = new TempDir();
+        var (paths, pkg) = Setup(t, A);
+        var h = Serve(new MapHandler(), A, Remote(pkg, "2026-12-01", new() { [file] = System.Text.Encoding.UTF8.GetBytes(body) }));
+        var r = await new DataUpdater(paths, Client(h, A)).InstallAsync(false);
+
+        Assert.False(r.Applied);
+        Assert.Contains("google.txt пересекается с discord.txt", r.Message);
+        Assert.Contains("прежние данные", r.Message);
+        Assert.Equal(pkg, paths.Seed);
+        Assert.False(Directory.Exists(paths.Updates));
+    }
+
     [Fact]
     public async Task Install_NewCore_InstalledBeforeSwap()
     {

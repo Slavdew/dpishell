@@ -55,7 +55,8 @@ public sealed class MixBuilderTests : IDisposable
         Assert.NotNull(plan);
         Assert.Equal("mix", plan.Mix.Source);
         Assert.Same(r.Scores[0], plan.Youtube);
-        Assert.Same(r.Scores[1], plan.Rest);
+        Assert.Same(r.Scores[1], plan.Discord);
+        Assert.Same(r.Scores[1], plan.User);
         Assert.Equal(a.Roles["google"], plan.Mix.Roles["google"]);
         Assert.Equal(b.Roles["general"], plan.Mix.Roles["general"]);
         Assert.Equal(new Dictionary<string, string> { ["youtube"] = "alt", ["discord"] = "alt10", ["user"] = "alt10" }, plan.Mix.Parts);
@@ -70,7 +71,9 @@ public sealed class MixBuilderTests : IDisposable
         // ipset_*, game_*, quic, general — из той же части, что и general (нулевая фаза ipset не расходится с общей частью).
         foreach (var role in new[] { "general", "ipset_tcp", "game_tcp", "quic" })
             Assert.Equal(b.Roles[role], mix.Roles[role]);
-        Assert.Equal(b.Roles.Keys.Order(), mix.Roles.Keys.Order());   // роли YouTube-части (ipset_tcp, quic из A) в смесь не попали
+        // Роли YouTube-части (ipset_tcp, quic из A) в смесь не попали; у каталожной Discord-части роли discord_tcp нет — берётся её general.
+        Assert.Equal(b.Roles.Keys.Append("discord_tcp").Order(), mix.Roles.Keys.Order());
+        Assert.Equal(b.Roles["general"], mix.Roles["discord_tcp"]);
         Assert.NotEqual(a.Roles["ipset_tcp"], mix.Roles["ipset_tcp"]);
         Assert.Null(StrategyExchange.CheckRoles(mix.Roles));
     }
@@ -135,7 +138,7 @@ public sealed class MixBuilderTests : IDisposable
             Scored(bad, groups, new() { ["youtube"] = 2, ["discord"] = 2 }, broken: "x"));
         var plan = MixBuilder.Build(r)!;
         Assert.Equal("alt", plan.Youtube.Strategy.Id);
-        Assert.Equal("alt10", plan.Rest.Strategy.Id);
+        Assert.Equal("alt10", plan.Discord!.Strategy.Id);
     }
 
     [Fact]
@@ -179,6 +182,107 @@ public sealed class MixBuilderTests : IDisposable
         var r2 = r with { Scores = [.. r.Scores, Scored(old, groups, new() { ["youtube"] = 2, ["discord"] = 2, ["user"] = 0 })] };
         var plan = MixBuilder.Build(r2)!;
         Assert.DoesNotContain(plan.Mix.Parts!.Values, v => v == "mix-x-y");
+    }
+
+    [Fact]
+    public void Build_ThreeDifferentParts_EachRoleFromItsPart_PartsAndTitle()
+    {
+        var groups = new[] { Yt, Ds, Us, Ctl };
+        var a = Strat("alt", "general (ALT)", ("google", Split), ("general", Fake), ("quic", Fake));
+        var b = Strat("alt2", "general (ALT2)", ("google", Fake), ("general", Disorder), ("discord_udp", Fake), ("discord_media", Split));
+        var c = Strat("alt3", "general (ALT3)", ("google", Fake), ("general", Split), ("quic", Disorder), ("ipset_tcp", Split));
+        var r = Report(groups,
+            Scored(a, groups, new() { ["youtube"] = 2, ["discord"] = 0, ["user"] = 0 }),
+            Scored(b, groups, new() { ["youtube"] = 0, ["discord"] = 2, ["user"] = 0 }),
+            Scored(c, groups, new() { ["youtube"] = 0, ["discord"] = 0, ["user"] = 1 }));
+        var mix = MixBuilder.Build(r)!.Mix;
+
+        Assert.Equal(new Dictionary<string, string> { ["youtube"] = "alt", ["discord"] = "alt2", ["user"] = "alt3" }, mix.Parts);
+        Assert.Equal(Split, mix.Roles["google"]);                              // YouTube — из alt
+        Assert.Equal(Disorder, mix.Roles["discord_tcp"]);                      // Discord — из alt2 (у каталожной discord_tcp = general)
+        Assert.Equal(Fake, mix.Roles["discord_udp"]);
+        Assert.Equal(Split, mix.Roles["discord_media"]);
+        Assert.Equal(Split, mix.Roles["general"]);                             // свои — из alt3
+        Assert.Equal(Disorder, mix.Roles["quic"]);
+        Assert.Equal(Split, mix.Roles["ipset_tcp"]);
+        Assert.Equal("mix-alt-alt2-alt3", mix.Id);
+        Assert.Equal("Смешанная · YouTube — ALT · Discord — ALT2 · свои — ALT3", mix.Title);   // «свои сайты» не влезают в 60 знаков — «свои»
+        Assert.True(mix.Title.Length <= StrategyExchange.MaxTitle);
+        Assert.Null(StrategyExchange.CheckRoles(mix.Roles));
+    }
+
+    [Fact]
+    public void Build_DiscordTcpOfFoundStrategy_IsTakenAsIs()
+    {
+        var groups = new[] { Yt, Ds, Ctl };
+        var a = Strat("alt", "general (ALT)", ("google", Split), ("general", Fake));
+        var found = new Strategy("found-1", "Найденная 1 (261020-1200)", "search", new() { ["general"] = Fake, ["discord_tcp"] = Disorder });
+        var r = Report(groups,
+            Scored(a, groups, new() { ["youtube"] = 2, ["discord"] = 0 }),
+            Scored(found, groups, new() { ["youtube"] = 0, ["discord"] = 2 }));
+        var mix = MixBuilder.Build(r)!.Mix;
+        Assert.Equal(Disorder, mix.Roles["discord_tcp"]);
+        Assert.Equal(Split, mix.Roles["google"]);
+        Assert.Equal(new Dictionary<string, string> { ["youtube"] = "alt", ["discord"] = "found-1" }, mix.Parts);   // «свои» не проверялись — частью не записаны
+    }
+
+    [Fact]
+    public void Title_EqualParts_AreMerged()
+    {
+        var a = Strat("alt", "general (ALT)", ("general", Fake));
+        var b = Strat("alt2", "general (ALT2)", ("general", Fake));
+        Assert.Equal("Смешанная · YouTube — ALT · остальное — ALT2", MixBuilder.MakeTitle([("youtube", a), ("discord", b), ("user", b)]));
+        Assert.Equal("Смешанная · YouTube и Discord — ALT · свои сайты — ALT2", MixBuilder.MakeTitle([("youtube", a), ("discord", a), ("user", b)]));
+        Assert.Equal("Смешанная · YouTube — A · Discord — B · свои сайты — C", MixBuilder.MakeTitle([("youtube", Strat("a", "general (A)")), ("discord", Strat("b", "general (B)")), ("user", Strat("c", "general (C)"))]));
+        Assert.Equal("Смешанная · YouTube и свои сайты — ALT · Discord — ALT2", MixBuilder.MakeTitle([("youtube", a), ("discord", b), ("user", a)]));
+    }
+
+    [Fact]
+    public void Build_ExtraGroups_AreNotParts_AndDoNotCountAsGoals()
+    {
+        var adv = new TargetGroup("adv-0", "Сайты строки 1", [new("https://adv.example/")], Extra: true);
+        var groups = new[] { Yt, Ds, adv, Ctl };
+        var a = Strat("alt", "general (ALT)", ("google", Split), ("general", Fake));
+        var b = Strat("alt10", "general (ALT10)", ("google", Fake), ("general", Disorder));
+        var r = Report(groups,
+            Scored(a, groups, new() { ["youtube"] = 2, ["discord"] = 0, ["adv-0"] = 1 }),
+            Scored(b, groups, new() { ["youtube"] = 0, ["discord"] = 2 }));
+        Assert.Equal(2, r.Scores[0].GroupsTotal);   // adv-0 в «из M» не входит
+        var plan = MixBuilder.Build(r)!;
+        Assert.Equal(["discord", "youtube"], plan.Mix.Parts!.Keys.Order());
+    }
+
+    [Fact]
+    public void ToRouter_NewRouter_SendsDiscordTcpAndParts_OldRouter_Neither()
+    {
+        var mix = new Strategy("mix-alt-alt10", "Смешанная · YouTube — ALT", "mix",
+            new() { ["google"] = Split, ["discord_tcp"] = Fake, ["general"] = Disorder },
+            new() { ["youtube"] = "alt", ["discord"] = "alt10", ["user"] = "alt10", ["evil"] = "x" });
+        var fresh = RouterClient.ToRouter(mix);
+        Assert.Equal(Fake, fresh.Roles["discord_tcp"]);
+        Assert.Equal(["discord", "user", "youtube"], fresh.Parts!.Keys.Order());   // чужая группа отброшена
+        var json = System.Text.Json.JsonSerializer.Serialize(fresh, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower });
+        Assert.Contains("\"parts\"", json);
+
+        var old = RouterClient.ToRouter(mix, withDiscordTcp: false);
+        Assert.DoesNotContain("discord_tcp", old.Roles.Keys);
+        Assert.Null(old.Parts);
+        Assert.Equal(fresh.Id, old.Id);
+        Assert.Null(RouterClient.ToRouter(new Strategy("alt", "t", "search", new() { ["general"] = Fake })).Parts);
+    }
+
+    [Fact]
+    public void RoleLists_Problem_FindsOverlapInStagedData_AndRealDataIsClean()
+    {
+        Assert.Null(RoleLists.Problem(Repo.Data));
+        var dir = _t.Sub("data");
+        Directory.CreateDirectory(Path.Combine(dir, "lists"));
+        File.WriteAllText(Path.Combine(dir, "lists", "google.txt"), "youtube.com\nstable.dl2.discordapp.net\n");
+        File.WriteAllText(Path.Combine(dir, "lists", "discord.txt"), "discordapp.net\ndiscord.com\n");
+        var problem = RoleLists.Problem(dir);
+        Assert.NotNull(problem);
+        Assert.Contains("stable.dl2.discordapp.net", problem);
+        Assert.Contains("пересекается", problem);
     }
 
     [Fact]

@@ -305,6 +305,7 @@ public static class FlowsealBat
             (false, "19294-19344,50000-50100") => "discord_udp",
             (true, "2053,2083,2087,2096,8443") when f.Domains => "discord_media",
             (true, "443") when f.Hostlist && f.HostlistName.Contains("google", StringComparison.OrdinalIgnoreCase) => "google",
+            (true, "80,443") when f.Hostlist && f.HostlistName.Contains("discord", StringComparison.OrdinalIgnoreCase) => "discord_tcp",
             (true, "80,443") when f.Hostlist => "general",
             (true, "80,443") or (true, "80,443,8443") when f.Ipset => "ipset_tcp",
             _ => null,

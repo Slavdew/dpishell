@@ -853,9 +853,16 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     public ObservableCollection<RouterStrategyRow> Strategies { get; } = [];
 
+    int _catalogVersion;
+    /// <summary>Версия каталога роутера (strategies.catalog_version): с 3 он знает роль discord_tcp и поле parts (§5.3); 0 — не узнали.</summary>
+    public int CatalogVersion => _catalogVersion;
+    /// <summary>Роутер принимает стратегии с ролью discord_tcp (смешанные с Discord-частью).</summary>
+    public bool KnowsDiscordTcp => _catalogVersion >= RouterClient.DiscordTcpCatalogVersion;
+
     async Task LoadStrategiesAsync()
     {
         var list = await Call(c => c.StrategiesAsync());
+        _catalogVersion = list.CatalogVersion;
         Strategies.Clear();
         foreach (var s in list.Items)
         {
@@ -1051,8 +1058,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             return;
         }
         // Набор из приложения роутер заменяет целиком (§5.2) — шлём все найденные; название — до 80 символов.
-        var items = found.Select(RouterClient.ToRouter).Select(x => x.Title.Length > 80 ? x with { Title = x.Title[..80] } : x).ToList();
-        var routerId = RouterClient.ToRouter(strategy).Id;
+        // Старому роутеру (catalog_version < 3) роль discord_tcp и parts не шлём — вариант без них и предложение обновить пакет (§5.3).
+        bool newRouter = KnowsDiscordTcp;
+        var items = found.Select(s => RouterClient.ToRouter(s, newRouter)).Select(x => x.Title.Length > 80 ? x with { Title = x.Title[..80] } : x).ToList();
+        var routerId = RouterClient.ToRouter(strategy, newRouter).Id;
+        bool trimmed = !newRouter && strategy.Roles.ContainsKey("discord_tcp");
         string? result = null;
         if (await Guard("Отправляю стратегию на роутер…", async () =>
             {
@@ -1073,7 +1083,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 await LoadStrategiesAsync();
             }))
         {
-            Say($"Стратегия «{strategy.Title}» включена на роутере. {result}");
+            Say($"Стратегия «{strategy.Title}» включена на роутере. {result}"
+                + (trimmed ? " Часть для Discord роутер этой версии не знает — Discord идёт по общей части. Обновите DpiShell на роутере." : ""));
             if (_status?.PendingConfirm is not null) await VerifyTrialAsync();
         }
     }

@@ -151,6 +151,59 @@ public class WinwsArgsBuildTests
     }
 
     [Fact]
+    public void Build_DiscordTcp_AfterDiscordMedia_BeforeGoogleAndGeneral_WithOwnListAndExcludes()
+    {
+        var s = Make.Strategy(("general", "--dpi-desync=G"), ("google", "--dpi-desync=O"), ("discord_tcp", "--dpi-desync=D"), ("discord_media", "--dpi-desync=M"), ("quic", "--dpi-desync=Q"));
+        var a = WinwsArgs.Build(s, P).ToList();
+        var order = a.Where(x => x.StartsWith("--dpi-desync=")).ToList();
+        Assert.Equal(["--dpi-desync=Q", "--dpi-desync=M", "--dpi-desync=D", "--dpi-desync=O", "--dpi-desync=G"], order);
+
+        var start = a.IndexOf("--dpi-desync=M") + 1;                       // после media идёт --new и профиль discord_tcp
+        Assert.Equal("--new", a[start]);
+        Assert.Equal("--filter-tcp=80,443", a[start + 1]);
+        Assert.Equal("--hostlist=" + Path.Combine(P.Lists, "discord.txt"), a[start + 2]);
+        var profile = a.Skip(start + 1).TakeWhile(x => x != "--new").ToList();
+        Assert.Contains("--hostlist-exclude=" + Path.Combine(P.Lists, "exclude.txt"), profile);
+        Assert.Contains("--hostlist-exclude=" + Path.Combine(P.Lists, DataStore.UserExclude), profile);
+        Assert.Contains("--ipset-exclude=" + Path.Combine(P.Lists, IpLists.ExcludeFile), profile);
+        Assert.Contains("--ipset-exclude=" + Path.Combine(P.Lists, IpLists.UserExcludeFile), profile);
+        Assert.DoesNotContain(profile, x => x.Contains("general.txt") || x.Contains(DataStore.UserGeneral));
+    }
+
+    [Theory]
+    [InlineData(IpsetMode.Off)]
+    [InlineData(IpsetMode.List)]
+    [InlineData(IpsetMode.Any)]
+    public void Build_DiscordTcp_KeepsItsHostlist_InEveryIpsetMode(IpsetMode mode)
+    {
+        var a = WinwsArgs.Build(Make.Strategy(("discord_tcp", "--dpi-desync=D"), ("general", "--dpi-desync=G")), P, new BuildOptions(mode));
+        Assert.Contains("--hostlist=" + Path.Combine(P.Lists, "discord.txt"), a);
+    }
+
+    [Fact]
+    public void Build_NoDiscordTcpRole_NoSuchProfile_CatalogStrategiesUnchanged()
+    {
+        foreach (var s in StrategyCatalog.Load(Repo.Strategies).Strategies)
+            Assert.DoesNotContain(WinwsArgs.Build(s, P), x => x.Contains("discord.txt"));
+    }
+
+    /// <summary>Эталон роутера (router/test/golden.json) строится из этого же кода: у 20 каталожных стратегий командная строка не должна измениться.</summary>
+    [Fact]
+    public void Build_CatalogStrategies_MatchRouterGolden()
+    {
+        var root = Directory.GetParent(Repo.Data)!.FullName;
+        var file = Path.Combine(root, "router", "test", "golden.json");
+        if (!File.Exists(file)) return;   // тесты запущены не из репозитория
+        var golden = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file)).RootElement.GetProperty("strategies");
+        var paths = new AppPaths(root: "ROOT");
+        string Norm(string a) => a.Replace(@"ROOT\lists\", "{lists}/").Replace(@"ROOT\fake\", "{fake}/");
+        var catalog = StrategyCatalog.Load(Repo.Strategies).Strategies;
+        Assert.Equal(catalog.Count, golden.EnumerateObject().Count());
+        foreach (var s in catalog)
+            Assert.Equal(golden.GetProperty(s.Id).EnumerateArray().Select(x => x.GetString()).ToList(), WinwsArgs.Build(s, paths).Select(Norm).ToList());
+    }
+
+    [Fact]
     public void Join_QuotesOnlyArgsWithSpaces()
     {
         Assert.Equal("--a=1 --b=\"x y\" \"p q\"", WinwsArgs.Join(["--a=1", "--b=x y", "p q"]));

@@ -350,7 +350,7 @@ public sealed class RouterClient : IDisposable
     /// Найденная на ПК стратегия → формат роутера (§5.2, §5.3): id по шаблону <c>^u-[a-z0-9-]{1,48}$</c>, название до 80 символов,
     /// роли как есть — неизвестную роль роутер вернёт как invalid с field, тогда предлагаем обновить пакет.
     /// </summary>
-    public static RouterUserStrategy ToRouter(Strategy s)
+    public static RouterUserStrategy ToRouter(Strategy s, bool withDiscordTcp = true)
     {
         var body = new string(s.Id.ToLowerInvariant().Select(c => c is >= 'a' and <= 'z' or >= '0' and <= '9' or '-' ? c : '-').ToArray());
         if (body.StartsWith("u-")) body = body[2..];
@@ -358,8 +358,19 @@ public sealed class RouterClient : IDisposable
         if (body.Length == 0) body = "x";
         if (body.Length > 48) body = body[..48].TrimEnd('-');
         var title = s.Title.Length > 80 ? s.Title[..80] : s.Title;
-        return new("u-" + body, title, new Dictionary<string, string>(s.Roles));
+        var roles = new Dictionary<string, string>(s.Roles);
+        // Роутер с catalog_version < 3 роли discord_tcp не знает (invalid), и частей (parts) тоже: шлём вариант без них (§5.3).
+        if (!withDiscordTcp) roles.Remove("discord_tcp");
+        var parts = withDiscordTcp && s.Parts is { Count: > 0 } p
+            ? p.Where(x => MixBuilder.PartOrder.Contains(x.Key) && PartIdRx.IsMatch(x.Value)).ToDictionary(x => x.Key, x => x.Value)
+            : null;
+        return new("u-" + body, title, roles, parts is { Count: > 0 } ? parts : null);
     }
+
+    static readonly System.Text.RegularExpressions.Regex PartIdRx = new(@"^[A-Za-z0-9_.-]{1,64}\z");
+
+    /// <summary>Версия каталога роутера, с которой он знает роль discord_tcp и поле parts (договор §5.3, роутер 0.2.0-r9).</summary>
+    public const int DiscordTcpCatalogVersion = 3;
 
     // ---------- §2.3 поиск за вторым роутером ----------
 

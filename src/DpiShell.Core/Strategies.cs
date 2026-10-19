@@ -69,7 +69,9 @@ public static class WinwsArgs
         "--dpi-desync=fake --dpi-desync-repeats=12 --dpi-desync-any-protocol=1 --dpi-desync-fake-unknown-udp={fake}/ACTIVE_GAME_UDP.bin --dpi-desync-cutoff=n2";
 
     // Порядок ролей = порядок профилей: winws берёт первый подходящий профиль. Игровые — последними (general.bat:24-25).
-    public static readonly string[] RoleOrder = ["quic", "discord_udp", "discord_media", "google", "general", "ipset_udp", "ipset_tcp", "game_tcp", "game_udp"];
+    // discord_tcp (договор с роутером §5.3, каталог 3): TCP 80/443 по discord.txt — до google и general, чтобы Discord мог идти по своей части
+    // смешанной стратегии. У каталожных стратегий этой роли нет — их командная строка не меняется.
+    public static readonly string[] RoleOrder = ["quic", "discord_udp", "discord_media", "discord_tcp", "google", "general", "ipset_udp", "ipset_tcp", "game_tcp", "game_udp"];
 
     // Разрешённые параметры десинхронизации: всё, что встречается в проверенном каталоге (docs/vetting.md).
     static readonly HashSet<string> AllowedOptions =
@@ -189,12 +191,12 @@ public static class WinwsArgs
         };
         string[] ipsetExclude = [$"--ipset-exclude={L(IpLists.ExcludeFile)}", $"--ipset-exclude={L(IpLists.UserExcludeFile)}"];
         // Списки собираются поэлементно: путь с пробелом остаётся одним аргументом.
-        string[] hostlists =
+        string[] excludes =
         [
-            $"--hostlist={L("general.txt")}", $"--hostlist={L(DataStore.UserGeneral)}",
             $"--hostlist-exclude={L("exclude.txt")}", $"--hostlist-exclude={L(DataStore.UserExclude)}",
             .. ipsetExclude,
         ];
+        string[] hostlists = [$"--hostlist={L("general.txt")}", $"--hostlist={L(DataStore.UserGeneral)}", .. excludes];
         string[] ipsetAll =
         [
             .. include, $"--hostlist-exclude={L("exclude.txt")}",
@@ -205,6 +207,8 @@ public static class WinwsArgs
             ["quic"] = ["--filter-udp=443", .. hostlists],
             ["discord_udp"] = ["--filter-udp=19294-19344,50000-50100", "--filter-l7=discord,stun"],
             ["discord_media"] = ["--filter-tcp=2053,2083,2087,2096,8443", "--hostlist-domains=discord.media"],
+            // Свой список в фильтре, как у google: в режиме «все адреса» он остаётся (иначе роль забрала бы весь TCP до general).
+            ["discord_tcp"] = ["--filter-tcp=80,443", $"--hostlist={L("discord.txt")}", .. excludes],
             ["google"] = ["--filter-tcp=443", $"--hostlist={L("google.txt")}"],
             ["general"] = ["--filter-tcp=80,443", .. hostlists],
             ["ipset_udp"] = ["--filter-udp=443", .. ipsetAll],

@@ -10,7 +10,15 @@ namespace DpiShell.Core;
 public sealed record Target(string Url, int MinBytes = 0, bool HandshakeOnly = false, bool Required = true);
 
 /// <summary>Control — «Обычные сайты»: не цель подбора, а условие «стратегия их не ломает» (architecture.md «Оценка и порядок»).</summary>
-public sealed record TargetGroup(string Id, string Title, List<Target> Targets, bool Control = false);
+/// <summary>
+/// Extra — дополнительная группа (строка продвинутого режима, <see cref="AdvancedSites"/>): проверяется вместе со всеми, но в оценку стратегии
+/// не входит и стратегию не бракует — по ней выбирается лучшая стратегия для строки.
+/// </summary>
+public sealed record TargetGroup(string Id, string Title, List<Target> Targets, bool Control = false, bool Extra = false)
+{
+    /// <summary>Цель подбора: не контрольная и не дополнительная.</summary>
+    public bool Goal => !Control && !Extra;
+}
 
 public sealed record TargetSet(List<TargetGroup> Groups)
 {

@@ -43,6 +43,59 @@ public sealed class StrategySearchTests
     }
 
     [Fact]
+    public void RoleGroups_GoogleYoutube_DiscordTcpDiscord_GeneralUser()
+    {
+        Assert.Equal(["google", "discord_tcp", "general"], StrategySearch.RoleGroups.Keys);
+        Assert.Equal(["youtube"], StrategySearch.RoleGroups["google"]);
+        Assert.Equal(["discord"], StrategySearch.RoleGroups["discord_tcp"]);
+        Assert.Equal(["user"], StrategySearch.RoleGroups["general"]);
+    }
+
+    /// <summary>Финал глубокого поиска по трём ролям: лучший по каждой роли и запасные, где по одной роли взят второй приём (не 2×2×2 сочетаний).</summary>
+    [Fact]
+    public void Assemble_ThreeRoles_BestPerRoleAndSpares()
+    {
+        const string G1 = "--dpi-desync=multisplit --dpi-desync-split-pos=1", G2 = "--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=ts";
+        const string D1 = "--dpi-desync=multisplit --dpi-desync-split-pos=2", D2 = "--dpi-desync=fake --dpi-desync-repeats=2 --dpi-desync-fooling=ts";
+        const string U1 = "--dpi-desync=multisplit --dpi-desync-split-pos=3";
+        var baseStrategy = new Strategy("alt", "general (ALT)", "flowseal",
+            new() { ["google"] = G2, ["general"] = G2, ["ipset_tcp"] = G2, ["game_tcp"] = "--dpi-desync=fake --dpi-desync-any-protocol=1", ["quic"] = G2 });
+        CandidateResult R(string role, string d, int ok) => new(role, d, ok, 2, 0.1);
+        var byRole = new Dictionary<string, IReadOnlyList<CandidateResult>>
+        {
+            ["google"] = [R("google", G1, 2), R("google", G2, 1)],
+            ["discord_tcp"] = [R("discord_tcp", D1, 2), R("discord_tcp", D2, 2)],
+            ["general"] = [R("general", U1, 2)],
+        };
+
+        var found = StrategySearch.Assemble(baseStrategy, byRole, "261020-1200");
+
+        Assert.Equal(3, found.Count);   // лучшая из каждой роли + по запасной на google и discord_tcp (у general второго приёма нет)
+        var best = found[0];
+        Assert.Equal(G1, best.Roles["google"]);
+        Assert.Equal(D1, best.Roles["discord_tcp"]);
+        Assert.Equal(U1, best.Roles["general"]);
+        Assert.Equal(U1, best.Roles["ipset_tcp"]);          // ipset-профиль общего трафика — тот же приём, что general
+        Assert.DoesNotContain("game_tcp", best.Roles.Keys);   // выводится заново из нового general
+        Assert.Equal(G2, best.Roles["quic"]);                // прочее — как у базовой
+        Assert.Contains(found, s => s.Roles["google"] == G2 && s.Roles["discord_tcp"] == D1);
+        Assert.Contains(found, s => s.Roles["google"] == G1 && s.Roles["discord_tcp"] == D2);
+        Assert.All(found, s => Assert.Equal("search", s.Source));
+        Assert.Equal(found.Count, found.Select(s => s.Id).Distinct().Count());
+    }
+
+    [Fact]
+    public void Assemble_OnlyGeneralFound_KeepsBaseForOtherRoles_NothingFound_Empty()
+    {
+        var baseStrategy = new Strategy("alt", "t", "flowseal", new() { ["google"] = "--dpi-desync=fake", ["general"] = "--dpi-desync=fake" });
+        var only = new Dictionary<string, IReadOnlyList<CandidateResult>> { ["general"] = [new("general", "--dpi-desync=multisplit --dpi-desync-split-pos=1", 1, 1, 0.1)] };
+        var s = Assert.Single(StrategySearch.Assemble(baseStrategy, only, "x"));
+        Assert.Equal("--dpi-desync=fake", s.Roles["google"]);
+        Assert.DoesNotContain("discord_tcp", s.Roles.Keys);
+        Assert.Empty(StrategySearch.Assemble(baseStrategy, new Dictionary<string, IReadOnlyList<CandidateResult>> { ["google"] = [new("google", "--dpi-desync=fake", 0, 1, 0.1)] }, "x"));
+    }
+
+    [Fact]
     public void Coarse_AllValid_AndDistinct()
     {
         var c = CandidateGenerator.Coarse();

@@ -21,6 +21,16 @@ public sealed class StrategyNamingTests
     }
 
     [Fact]
+    public void Name_DiscordTcp_ShownWhenItDiffers()
+    {
+        var a = "--dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-repeats=6";
+        var b = "--dpi-desync=multisplit --dpi-desync-split-pos=1";
+        Assert.Equal("Новая: fake · ts · ×6", StrategyNaming.Name(new Dictionary<string, string> { ["google"] = a, ["discord_tcp"] = a, ["general"] = a }));
+        Assert.Equal("Новая: google fake · ts · ×6; discord multisplit; general fake · ts · ×6",
+            StrategyNaming.Name(new Dictionary<string, string> { ["google"] = a, ["discord_tcp"] = b, ["general"] = a }));
+    }
+
+    [Fact]
     public void Name_SameRoles_OneSummary()
     {
         var a = "--dpi-desync=fake,multisplit --dpi-desync-fooling=ts --dpi-desync-repeats=6";

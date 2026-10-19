@@ -325,6 +325,8 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
             TargetSet.Load(Path.Combine(staged, "targets.json"));
             CoreManifest.Load(Path.Combine(staged, "core.json"));
             HostsCandidates.LoadSeed(new AppPaths(paths.Root, staged));
+            // Домен не в двух списках ролей (YouTube и Discord): иначе первый профиль забрал бы чужие адреса.
+            if (RoleLists.Problem(staged) is { } overlap) throw new InvalidDataException(overlap);
         }
         catch (Exception e) when (e is JsonException or InvalidDataException or IOException or ArgumentException or KeyNotFoundException or InvalidOperationException)
         {

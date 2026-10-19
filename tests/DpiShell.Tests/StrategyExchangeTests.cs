@@ -256,6 +256,16 @@ public sealed class StrategyExchangeTests
         Assert.Equal("--dpi-desync=multisplit --dpi-desync-split-pos=1", r.Roles["google"]);
     }
 
+    [Fact]
+    public void Bat_DiscordHostlist_IsDiscordTcpRole_NotGeneral()
+    {
+        var r = StrategyExchange.Parse("winws.exe --filter-tcp=80,443 --hostlist=\"%LISTS%list-discord.txt\" --dpi-desync=multisplit --dpi-desync-split-pos=1 "
+            + "--new --filter-tcp=80,443 --hostlist=\"%LISTS%list-general.txt\" --dpi-desync=fake", Exists);
+        Assert.Equal("--dpi-desync=multisplit --dpi-desync-split-pos=1", r.Roles["discord_tcp"]);
+        Assert.Equal("--dpi-desync=fake", r.Roles["general"]);
+        Assert.Null(StrategyExchange.CheckRoles(r.Roles));
+    }
+
     [Theory]
     // два профиля на одну роль
     [InlineData("winws.exe --filter-tcp=80,443 --hostlist=\"%LISTS%a.txt\" --dpi-desync=fake --new --filter-tcp=80,443 --hostlist=\"%LISTS%b.txt\" --dpi-desync=split", "Два профиля")]
