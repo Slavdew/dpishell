@@ -1619,6 +1619,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public bool DnsRunning { get => _dnsRunning; private set => Set(ref _dnsRunning, value); }
     /// <summary>Под «Подробнее»: серверы и время ответа.</summary>
     public ObservableCollection<string> DnsServers { get; } = [];
+    bool _dnsDetailsOpen;
+    /// <summary>«Подробнее» у DNS сети раскрыт: открывается сам после «Проверить» — итог там.</summary>
+    public bool DnsDetailsOpen { get => _dnsDetailsOpen; set => Set(ref _dnsDetailsOpen, value); }
     public ICommand DnsCheckCmd { get; }
     public ICommand DnsEnableCmd { get; }
     public ICommand DnsRestoreCmd { get; }
@@ -1754,6 +1757,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                         {
                             job = j;
                             ShowDns(d);
+                            if (action == "dns_analyze" && DnsServers.Count > 0) DnsDetailsOpen = true;
                             return;
                         }
                     }

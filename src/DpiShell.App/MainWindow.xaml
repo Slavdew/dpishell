@@ -992,7 +992,7 @@
                                         </StackPanel>
                                     </DockPanel>
                                     <TextBlock Text="{Binding DnsSummary}" Margin="0,0,0,2" />
-                                    <Expander Header="Подробнее: ответы DNS" Margin="0,4,0,0" Visibility="{Binding DnsRows.Count, Converter={StaticResource NonZero}}">
+                                    <Expander Header="Подробнее: ответы DNS" Margin="0,4,0,0" IsExpanded="{Binding DnsDetailsOpen}" Visibility="{Binding DnsRows.Count, Converter={StaticResource NonZero}}">
                                         <StackPanel Margin="0,6,0,0">
                                             <Grid Margin="0,0,0,2">
                                                 <Grid.ColumnDefinitions>
@@ -1357,7 +1357,7 @@
                                         <!-- Варианты для всей сети — тот же выбор, что для этого компьютера (свои — общие). -->
                                         <local:DnsPickerView x:Name="RouterDnsPicker" DataContext="{Binding DnsPick}" Margin="0,10,0,0"
                                                              Visibility="{Binding DataContext.DnsPresetsAvailable, RelativeSource={RelativeSource AncestorType=Border}, Converter={StaticResource Vis}}" />
-                                        <Expander Header="Подробнее" Visibility="{Binding DnsServers.Count, Converter={StaticResource NonZero}}">
+                                        <Expander Header="Подробнее" IsExpanded="{Binding DnsDetailsOpen}" Visibility="{Binding DnsServers.Count, Converter={StaticResource NonZero}}">
                                             <ItemsControl ItemsSource="{Binding DnsServers}" Margin="0,4,0,0">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>

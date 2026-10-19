@@ -127,6 +127,11 @@ public sealed class DnsPicker : Observable
     public bool Comparing { get => _comparing; private set { if (Set(ref _comparing, value)) { Raise(nameof(CompareText)); CommandManager.InvalidateRequerySuggested(); } } }
     public string CompareText => Comparing ? "Сравниваю…" : "Сравнить скорость";
 
+    string _compareSummary = "";
+    /// <summary>Итог «Сравнить»: варианты от быстрого к медленному; пусто — не сравнивали.</summary>
+    public string CompareSummary { get => _compareSummary; private set { if (Set(ref _compareSummary, value)) Raise(nameof(HasCompareSummary)); } }
+    public bool HasCompareSummary => CompareSummary.Length > 0;
+
     /// <summary>«Сравнить»: время ответа защищённого DNS каждого варианта с этого ПК (все сразу); итог — рядом с названием.</summary>
     public async Task CompareAsync(CancellationToken ct = default)
     {
@@ -141,8 +146,14 @@ public sealed class DnsPicker : Observable
                 catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidOperationException or UriFormatException) { ms = null; }
                 return (g, ms);
             }).ToList();
-            foreach (var (g, ms) in await Task.WhenAll(jobs))
+            var results = await Task.WhenAll(jobs);
+            foreach (var (g, ms) in results)
                 foreach (var o in g) _ping[o.Id] = ms is { } v ? $"{v:0} мс" : "нет ответа";
+            // Итог — строкой под кнопкой: время в закрытом списке без подсказки не найти.
+            var fast = results.Where(r => r.ms is not null).OrderBy(r => r.ms).Select(r => $"{r.g.First().Title} {r.ms:0} мс").ToList();
+            var dead = results.Where(r => r.ms is null).Select(r => r.g.First().Title).ToList();
+            CompareSummary = (fast.Count > 0 ? "Быстрее всех: " + string.Join(" · ", fast) : "Ни один защищённый DNS не ответил")
+                + (dead.Count > 0 && fast.Count > 0 ? ". Нет ответа: " + string.Join(", ", dead) : "") + ".";
             Rebuild();
         }
         finally { Comparing = false; }

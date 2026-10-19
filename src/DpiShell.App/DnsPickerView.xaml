@@ -56,6 +56,8 @@
             <TextBlock Text="{Binding Copied}" Style="{StaticResource Hint}" FontSize="13" VerticalAlignment="Center" Margin="6,0,0,0"
                        Visibility="{Binding HasCopied, Converter={StaticResource Vis}}" />
         </WrapPanel>
+        <TextBlock Text="{Binding CompareSummary}" Style="{StaticResource Hint}" FontSize="13" TextWrapping="Wrap" Margin="0,4,0,0"
+                   Visibility="{Binding HasCompareSummary, Converter={StaticResource Vis}}" />
         <CheckBox Content="Если защищённый не отвечает — обычный DNS" IsChecked="{Binding Fallback}" Margin="0,8,0,0"
                   Visibility="{Binding ShowFallback, Converter={StaticResource Vis}}" />
 

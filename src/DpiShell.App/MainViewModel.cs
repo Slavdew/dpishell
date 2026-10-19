@@ -987,6 +987,10 @@ public sealed partial class MainViewModel : Observable
     bool _dnsChecking;
     public bool DnsChecking { get => _dnsChecking; private set { if (Set(ref _dnsChecking, value)) CommandManager.InvalidateRequerySuggested(); } }
 
+    bool _dnsDetailsOpen;
+    /// <summary>«Подробнее: ответы DNS» раскрыт: открывается сам после «Проверить DNS» — итог там.</summary>
+    public bool DnsDetailsOpen { get => _dnsDetailsOpen; set => Set(ref _dnsDetailsOpen, value); }
+
     public ICommand CheckDnsCmd { get; }
 
     /// <summary>Сравнить системный DNS с DoH (без прав). Тихо: без Busy, ошибки — в сводку DNS.</summary>
@@ -1010,6 +1014,7 @@ public sealed partial class MainViewModel : Observable
                 : DnsSpoofed ? "DNS провайдера подменяет адреса сайтов."
                 : list.All(c => c.Doh.Length == 0) ? "Защищённый DNS не ответил — сравнить не с чем."
                 : "Подмены нет.";
+            if (DnsRows.Count > 0) DnsDetailsOpen = true;
         }
         catch (Exception e) { DnsSummary = Texts.Friendly(e); }
         finally { DnsChecking = false; }

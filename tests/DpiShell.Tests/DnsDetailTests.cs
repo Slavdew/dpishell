@@ -89,6 +89,10 @@ public sealed class DnsDetailTests : IDisposable
         Assert.Equal("google", pc.Selected!.Id);   // выбор не сбился
         Assert.Equal("38 мс", Info(pc.Selected, "Ответ с этого ПК"));
         Assert.Equal("Сравнить скорость", pc.CompareText);
+        // Итог виден строкой, не только в закрытом списке: первым — самый быстрый.
+        Assert.True(pc.HasCompareSummary);
+        Assert.StartsWith("Быстрее всех: " + pc.Options.Single(o => o.Id == "google").Title + " 38 мс", pc.CompareSummary);
+        Assert.Contains("Нет ответа: " + pc.Options.Single(o => o.Id == "quad9").Title, pc.CompareSummary);
     }
 
     [Fact]
