@@ -13,8 +13,8 @@ public enum StatusKind { Off, On, Busy, Error }
 
 public static class Pages
 {
-    // «Сайты» (свои адреса и исключения), «Игры и IP-списки», «Починить адреса» (hosts), «DNS»; порядок вкладок — по номерам.
-    public const int Home = 0, Select = 1, Sites = 2, Net = 3, Hosts = 4, Dns = 5, Diag = 6, Router = 7, Settings = 8, About = 9;
+    // «Сайты» (свои адреса и исключения), «Игры и программы» (запись подключений, профили, игровой режим, IP-списки), «Починить адреса» (hosts), «DNS»; порядок вкладок — по номерам.
+    public const int Home = 0, Select = 1, Sites = 2, Apps = 3, Hosts = 4, Dns = 5, Diag = 6, Router = 7, Settings = 8, About = 9;
 }
 
 /// <summary>
@@ -41,7 +41,9 @@ public sealed partial class MainViewModel : Observable
     public HelperLink Helper { get; }
     public WindowSettings Settings { get; }
     public RouterViewModel Router { get; }
-    /// <summary>«Игры и IP-списки» (09-features-spec §1–2).</summary>
+    /// <summary>Подключения программ: «Настроить под игру» и «Отладка подключений» (ТЗ 13).</summary>
+    public AppsViewModel Apps { get; }
+    /// <summary>Игровой режим и IP-списки — на вкладке «Игры и программы», в «Дополнительно» (09-features-spec §1–2).</summary>
     public NetViewModel Net { get; }
     /// <summary>«Починить адреса» — hosts (09-features-spec §3).</summary>
     public HostsViewModel Hosts { get; }
@@ -132,6 +134,16 @@ public sealed partial class MainViewModel : Observable
             AfterChange = RefreshStatusAsync,
         };
         Net.Notify += s => Notify?.Invoke(s);
+        Apps = new AppsViewModel(helper)
+        {
+            Guard = Guard,
+            Need = NeedHelperAsync,
+            Say = s => Message = s,
+            Fail = Fail,
+            Confirm = s => Confirm(s),
+            AfterChange = RefreshStatusAsync,
+        };
+        Apps.DetailRequested += () => { _detailOpened = true; Raise(nameof(ShowAdvanced)); };
         Hosts = new HostsViewModel(helper)
         {
             Need = NeedHelperAsync,
@@ -305,6 +317,7 @@ public sealed partial class MainViewModel : Observable
         }
         ReloadChoices();
         Net.Refresh();
+        Apps.StatusChanged();
         Hosts.RefreshNow();
         UpdateStatus();
     }
@@ -322,7 +335,7 @@ public sealed partial class MainViewModel : Observable
             if (!Busy && !IsLoading && Message.Length > 0 && Message != ReadyText) Message = ReadyText;   // сообщение от давнего действия не едет по вкладкам
             if (IsLoading) return;
             if (was == Pages.Sites) _ = SaveDraftOnLeaveAsync();
-            if (value == Pages.Net) _ = RefreshNetAsync();
+            if (value == Pages.Apps) _ = RefreshNetAsync();
             if (value == Pages.Hosts) _ = Hosts.RefreshAsync();
             if (value == Pages.Router) _ = Router.RefreshRouterPageAsync();   // и «Роутер: что мешает» — внутри
             if (value == Pages.Dns && DnsRows.Count == 0) _ = CheckDnsAsync();
@@ -334,6 +347,7 @@ public sealed partial class MainViewModel : Observable
     {
         await FetchAsync(full: true);
         Net.Refresh();
+        await Apps.RefreshAsync();
     }
 
     bool _busy;
@@ -1653,6 +1667,24 @@ public sealed partial class MainViewModel : Observable
             Raise(nameof(ThemeDark));
         }
     }
+
+    bool _detailOpened;
+    /// <summary>
+    /// «Показывать инструменты для опытных» (Настройки): раздел «Отладка подключений» на вкладке «Игры и программы».
+    /// «Подробнее» в простом режиме открывает его и без галочки — до перезапуска окна.
+    /// </summary>
+    public bool ShowAdvancedSetting
+    {
+        get => Settings.ShowAdvanced;
+        set
+        {
+            if (Settings.ShowAdvanced == value) return;
+            Settings.ShowAdvanced = value;
+            SaveSettings();
+            Raise(); Raise(nameof(ShowAdvanced));
+        }
+    }
+    public bool ShowAdvanced => Settings.ShowAdvanced || _detailOpened;
 
     // Переключатели: снятие отметки (её снимает соседний) ничего не меняет.
     public bool ThemeAuto { get => Theme == ThemeManager.Auto; set { if (value) Theme = ThemeManager.Auto; } }

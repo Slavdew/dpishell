@@ -40,6 +40,12 @@ public enum ArgKind
     PublicHostEntries,
     /// <summary>Номера строк hosts с отпечатком текста «номер:хеш» (12 hex) — как их выдал аудит.</summary>
     HostLineIds,
+    /// <summary>Целое число от 0 до MaxItems.</summary>
+    Int,
+    /// <summary>Порты «443,27015-27030» — цифры, запятые, дефис; разбор и предел — <see cref="AppProfiles.NormalizePorts"/>.</summary>
+    Ports,
+    /// <summary>Номер профиля программы: p и 8 шестнадцатеричных цифр.</summary>
+    ProfileId,
 }
 
 public sealed record ArgSpec(string Name, ArgKind Kind, bool Required = false, string[]? Choices = null, int MaxItems = 0);
@@ -56,6 +62,7 @@ public sealed record HelperCall(long Id, CommandSpec Spec, IReadOnlyDictionary<s
 {
     public string Cmd => Spec.Name;
     public bool Bool(string name, bool fallback = false) => Args.TryGetValue(name, out var v) ? (bool)v : fallback;
+    public int Int(string name) => Args.TryGetValue(name, out var v) ? (int)v : 0;
     public string? Str(string name) => Args.TryGetValue(name, out var v) ? (string)v : null;
     public IReadOnlyList<string>? List(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyList<string>)v : null;
     public IReadOnlyDictionary<string, string>? Map(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyDictionary<string, string>)v : null;
@@ -144,6 +151,20 @@ public static partial class HelperCommands
         new("strategy_delete", true, false, new ArgSpec("strategy", ArgKind.StrategyId, Required: true)),
         // Проверка сайтов только для одной стратегии (вставленной): тот же Selector, один кандидат.
         new("strategy_check", true, true, new ArgSpec("strategy", ArgKind.StrategyId, Required: true), new ArgSpec("groups", ArgKind.GroupIds)),
+        // Подключения программ (ТЗ 13). Запись — только чтение: «процесс → удалённый адрес:порт/протокол» на срок до 5 минут, окну отдаётся итог.
+        // Профиль программы — только порты, адреса и номер варианта из готовых стратегий; командной строки и путей команды не принимают.
+        new("rec_start", true, false,
+            new ArgSpec("mode", ArgKind.Choice, Required: true, Choices: ["new", "process"]),
+            new ArgSpec("pid", ArgKind.Int, MaxItems: 4_194_304), new ArgSpec("driver", ArgKind.Bool)),
+        new("rec_status", false, false),
+        new("rec_stop", true, false),
+        new("app_profiles", false, false),
+        new("app_profile_set", true, false,
+            new ArgSpec("id", ArgKind.ProfileId), new ArgSpec("title", ArgKind.Title, Required: true),
+            new ArgSpec("tcp", ArgKind.Ports), new ArgSpec("udp", ArgKind.Ports),
+            new ArgSpec("addresses", ArgKind.Lines, Required: true, MaxItems: AppProfiles.MaxAddresses),
+            new ArgSpec("variant", ArgKind.Int, Required: true, MaxItems: AppProfiles.MaxVariants - 1)),
+        new("app_profile_remove", true, false, new ArgSpec("id", ArgKind.ProfileId, Required: true)),
     ];
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);
@@ -218,6 +239,15 @@ public static partial class HelperCommands
             if (!custom && (args.ContainsKey("ips") || args.ContainsKey("doh")))
                 throw new HelperRequestException(id, "dns_set: ips и doh — только при preset = custom.");
         }
+        // rec_start: pid нужен только для режима «process» (и тогда обязателен).
+        if (spec.Name == "rec_start")
+        {
+            bool process = (string)args["mode"] == "process";
+            if (process != args.ContainsKey("pid"))
+                throw new HelperRequestException(id, process ? "rec_start: для режима process нужен pid." : "rec_start: pid — только для режима process.");
+        }
+        if (spec.Name == "app_profile_set" && !args.ContainsKey("tcp") && !args.ContainsKey("udp"))
+            throw new HelperRequestException(id, "app_profile_set: нужны порты TCP или UDP.");
         return new HelperCall(id, spec, args);
     }
 
@@ -343,6 +373,26 @@ public static partial class HelperCommands
             {
                 var str = String(id, Where(), v, StrategyExchange.MaxTitle);
                 if (str.Any(char.IsControl)) throw new HelperRequestException(id, $"{Where()}: управляющие знаки в названии.");
+                return str;
+            }
+
+            case ArgKind.Int:
+            {
+                if (v is not JsonValue iv || !iv.TryGetValue<int>(out var n) || n < 0 || n > s.MaxItems)
+                    throw new HelperRequestException(id, $"{Where()}: нужно целое число от 0 до {s.MaxItems}.");
+                return n;
+            }
+
+            case ArgKind.Ports:
+            {
+                var str = String(id, Where(), v, 200);
+                return AppProfiles.NormalizePorts(str) ?? throw new HelperRequestException(id, $"{Where()}: порты записаны неверно (пример: 443,27015-27030).");
+            }
+
+            case ArgKind.ProfileId:
+            {
+                var str = String(id, Where(), v, 16);
+                if (!AppProfiles.IsValidId(str)) throw new HelperRequestException(id, $"{Where()}: неверный номер профиля.");
                 return str;
             }
 

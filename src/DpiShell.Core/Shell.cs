@@ -236,6 +236,7 @@ public sealed class Shell
         var s = FindStrategy(strategyId) ?? throw new ArgumentException($"Нет стратегии {strategyId}");
         // Список «По списку» удалён/изменён антивирусом — вернуть из поставки, иначе winws не стартует без файла.
         if (CurrentOptions.Ipset == IpsetMode.List && !IpLists.HasList) IpLists.SeedFromPackage();
+        SyncAppProfileFiles();   // файлы адресов профилей программ должны быть на диске до запуска winws
         var args = WinwsArgs.Build(s, Paths, CurrentOptions);
         if (ServiceMode)
         {
@@ -535,6 +536,78 @@ public sealed class Shell
         if (args.SequenceEqual(WinwsArgs.Build(s, Paths, CurrentOptions))) return false;
         Enable(id);
         return true;
+    }
+
+    // ---------- профили программ (ТЗ 13, docs/dev/architecture.md «Подключения программ») ----------
+
+    /// <summary>Варианты параметров профиля: как у текущей стратегии, потом у остальных.</summary>
+    public IReadOnlyList<ProfileVariant> ProfileVariants() => AppProfiles.Variants(AllStrategies, State.StrategyId);
+
+    /// <summary>
+    /// Создать профиль (id пуст) или заменить (id есть). Порты и адреса приводятся к каноническому виду, параметры берутся из варианта —
+    /// из числа готовых, окно своих параметров не передаёт. Работающая оптимизация перезапускается на той же стратегии.
+    /// </summary>
+    public AppProfile SetAppProfile(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant)
+    {
+        var variants = ProfileVariants();
+        if (variant < 0 || variant >= variants.Count) throw new InvalidOperationException("Такого варианта параметров нет.");
+        var v = variants[variant];
+        string tcp = tcpPorts is null or "" ? "" : AppProfiles.NormalizePorts(tcpPorts) ?? throw new InvalidOperationException("Порты TCP записаны неверно.");
+        string udp = udpPorts is null or "" ? "" : AppProfiles.NormalizePorts(udpPorts) ?? throw new InvalidOperationException("Порты UDP записаны неверно.");
+        var verdict = IpsetValidator.Validate(string.Join('\n', addresses), IpsetKind.User);
+        var existing = id is null ? null : State.AppProfiles.FirstOrDefault(p => p.Id == id);
+        if (id is not null && existing is null) throw new InvalidOperationException("Такого профиля нет.");
+        var profile = new AppProfile
+        {
+            Id = id ?? AppProfiles.NewId(), Title = title.Trim(), TcpPorts = tcp, UdpPorts = udp, Addresses = [.. verdict.Entries],
+            TcpDesync = tcp.Length > 0 ? v.Tcp : "", UdpDesync = udp.Length > 0 ? v.Udp : "", Variant = v.Index,
+            CreatedAt = existing?.CreatedAt ?? DateTime.Now,
+        };
+        if (AppProfiles.Problem(profile) is { } problem) throw new InvalidOperationException(problem);
+        if (existing is null && State.AppProfiles.Count >= AppProfiles.MaxProfiles)
+            throw new InvalidOperationException($"Профилей уже {AppProfiles.MaxProfiles} — удалите ненужный.");
+        if (existing is not null) State.AppProfiles[State.AppProfiles.IndexOf(existing)] = profile; else State.AppProfiles.Add(profile);
+        State.Save(Paths);
+        SyncAppProfileFiles();
+        ReapplyIfActive();
+        return profile;
+    }
+
+    /// <summary>«Вернуть как было»: профиль и его файл удаляются, оптимизация перезапускается без него. False — такого профиля нет.</summary>
+    public bool RemoveAppProfile(string id)
+    {
+        var p = State.AppProfiles.FirstOrDefault(x => x.Id == id);
+        if (p is null) return false;
+        State.AppProfiles.Remove(p);
+        State.Save(Paths);
+        SyncAppProfileFiles();
+        ReapplyIfActive();
+        return true;
+    }
+
+    /// <summary>«Удалить полностью»: все профили и файлы.</summary>
+    public void ClearAppProfiles()
+    {
+        State.AppProfiles.Clear();
+        State.Save(Paths);
+        SyncAppProfileFiles();
+    }
+
+    /// <summary>Файлы адресов профилей — ровно по state.json: недостающие пишутся, лишние (app-*.txt) удаляются.</summary>
+    public void SyncAppProfileFiles()
+    {
+        Directory.CreateDirectory(Paths.Lists);
+        var want = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in State.AppProfiles.Where(p => AppProfiles.Problem(p) is null))
+        {
+            var name = AppProfiles.FileName(p.Id);
+            want.Add(name);
+            var path = Path.Combine(Paths.Lists, name);
+            var text = AppProfiles.FileText(p);
+            if (!File.Exists(path) || File.ReadAllText(path) != text) File.WriteAllText(path, text);
+        }
+        foreach (var f in Directory.GetFiles(Paths.Lists, "app-*.txt"))
+            if (!want.Contains(Path.GetFileName(f))) { try { File.Delete(f); } catch (IOException) { } }
     }
 
     public void SaveState() => State.Save(Paths);

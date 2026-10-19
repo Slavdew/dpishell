@@ -352,6 +352,14 @@ public sealed class HelperServer : IAsyncDisposable
             case "dns_set":
                 return await Task.Run(() => b.DnsSetAsync(c.Str("preset")!, c.List("ips"), c.Str("doh"), c.Bool("fallback"), ct), ct);
             case "dns_restore": return await Task.Run(() => b.DnsRestoreAsync(ct), ct);
+            case "rec_start":
+                return await Task.Run(() => b.RecStart(c.Str("mode") == "process" ? RecordingMode.Process : RecordingMode.NewProcesses, c.Int("pid"), c.Bool("driver", true)), ct);
+            case "rec_status": return await Task.Run(b.RecStatus, ct);
+            case "rec_stop": return await Task.Run(b.RecStop, ct);
+            case "app_profiles": return await Task.Run(b.AppProfilesInfo, ct);
+            case "app_profile_set":
+                return await Task.Run(() => b.AppProfileSet(c.Str("id"), c.Str("title")!, c.Str("tcp"), c.Str("udp"), c.List("addresses")!, c.Int("variant")), ct);
+            case "app_profile_remove": return new { removed = await Task.Run(() => b.AppProfileRemove(c.Str("id")!), ct) };
         }
         // Белый список и диспетчер должны совпадать — тест проверяет, что сюда не попасть.
         throw new HelperRequestException(c.Id, $"Команда «{c.Cmd}» не поддерживается.");

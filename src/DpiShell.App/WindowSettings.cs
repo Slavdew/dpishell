@@ -27,6 +27,8 @@ public sealed class WindowSettings
     /// когда он не отвечает (обновление, перезагрузка): тогда при старте окно не оставляет и не включает обход на ПК. null — не живёт.
     /// </summary>
     public RouterBypassMark? RouterBypass { get; set; }
+    /// <summary>Показывать инструменты для опытных (пока — «Отладка подключений» на вкладке «Игры и программы»).</summary>
+    public bool ShowAdvanced { get; set; }
     /// <summary>Подсказку «свернулась в трей» уже показывали.</summary>
     public bool TrayHintShown { get; set; }
     /// <summary>Окно при входе в Windows (в трее). Null — не выбирали: по режиму работы (architecture.md «Автозапуск»).</summary>

@@ -76,6 +76,9 @@ public class HelperChannelTests
             ["hosts_try"] = new { entries = new[] { "0.0.0.0 ads.example.com" } },
             ["hosts_user_set"] = new { entries = new[] { "140.82.121.3 github.com" } },
             ["hosts_comment"] = new { ids = new[] { "4:0123456789ab" } },
+            ["rec_start"] = new { mode = "new" },
+            ["app_profile_set"] = new { title = "Игра", tcp = "443", addresses = new[] { "203.0.113.50" }, variant = 0 },
+            ["app_profile_remove"] = new { id = "p0a1b2c3d" },
         };
         foreach (var cmd in HelperCommands.Specs.Keys.Where(k => k != "cancel"))
             await c.CallAsync(cmd, args.GetValueOrDefault(cmd));

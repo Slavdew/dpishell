@@ -369,4 +369,24 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
         CallAsync<DnsSetResult>("dns_set", new { preset, ips, doh, fallback }, null, ct);
 
     public Task<DnsSetResult> DnsRestoreAsync(CancellationToken ct = default) => CallAsync<DnsSetResult>("dns_restore", null, null, ct);
+
+    // ---------- подключения программ (ТЗ 13, протокол 1.4) ----------
+
+    /// <summary>Начать запись: процессы, запущенные после этого (pid не нужен), или выбранный процесс с дочерними. driver = false — без драйвера, только TCP.</summary>
+    public Task<RecordingStatus> RecStartAsync(RecordingMode mode, int? pid = null, bool driver = true, CancellationToken ct = default) =>
+        CallAsync<RecordingStatus>("rec_start", new { mode = mode == RecordingMode.Process ? "process" : "new", pid, driver }, null, ct);
+
+    public Task<RecordingStatus> RecStatusAsync(CancellationToken ct = default) => CallAsync<RecordingStatus>("rec_status", null, null, ct);
+
+    /// <summary>«Готово»: запись останавливается, помощник отдаёт записанное и забывает его.</summary>
+    public Task<RecordingResult> RecStopAsync(CancellationToken ct = default) => CallAsync<RecordingResult>("rec_stop", null, null, ct);
+
+    public Task<AppProfilesInfo> AppProfilesAsync(CancellationToken ct = default) => CallAsync<AppProfilesInfo>("app_profiles", null, null, ct);
+
+    /// <summary>Создать профиль (id = null) или заменить. Параметры оптимизации — номер варианта из <see cref="AppProfilesInfo.Variants"/>.</summary>
+    public Task<AppProfileInfo> AppProfileSetAsync(string? id, string title, string? tcp, string? udp, IReadOnlyList<string> addresses, int variant, CancellationToken ct = default) =>
+        CallAsync<AppProfileInfo>("app_profile_set", new { id, title, tcp = string.IsNullOrEmpty(tcp) ? null : tcp, udp = string.IsNullOrEmpty(udp) ? null : udp, addresses, variant }, null, ct);
+
+    public async Task<bool> AppProfileRemoveAsync(string id, CancellationToken ct = default) =>
+        (await CallAsync("app_profile_remove", new { id }, null, ct)).GetProperty("removed").GetBoolean();
 }

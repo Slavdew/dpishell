@@ -169,6 +169,7 @@ public class HelperProtocolTests
             "details", "choose", "tcp_timestamps_on", "data_update", "dns_status", "dns_set", "dns_restore",
             "strategy_add", "strategy_delete", "strategy_check",
             "hosts_try", "hosts_audit", "hosts_user_set", "hosts_comment", "hosts_uncomment", "hosts_restore",
+            "rec_start", "rec_status", "rec_stop", "app_profiles", "app_profile_set", "app_profile_remove",
         ];
         Assert.Equal(spec.Order(), HelperCommands.Specs.Keys.Order());
         // Команды DNS описаны в helper-protocol §3 (часть старых там записана сокращённо: hosts_check/preview/…).
@@ -181,7 +182,7 @@ public class HelperProtocolTests
             cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.Contains($"Текущая версия — `{HelperProtocol.Api}`", doc);
         // Только чтение — не занимает «одну операцию за раз».
-        Assert.Equal(["cancel", "details", "dns_status", "hosts_preview", "read_results", "status"],
+        Assert.Equal(["app_profiles", "cancel", "details", "dns_status", "hosts_preview", "read_results", "rec_status", "status"],
             HelperCommands.Specs.Values.Where(s => !s.Exclusive).Select(s => s.Name).Order());
     }
 

@@ -150,7 +150,7 @@ public sealed partial class WindowSmokeTests
     }).GetAwaiter().GetResult();
 
     static readonly (int Page, string Name)[] AllPages =
-        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Sites, "sites"), (Pages.Net, "net"), (Pages.Hosts, "hosts"), (Pages.Dns, "dns"), (Pages.Diag, "diag"), (Pages.Settings, "settings"), (Pages.About, "about")];
+        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Sites, "sites"), (Pages.Apps, "apps"), (Pages.Hosts, "hosts"), (Pages.Dns, "dns"), (Pages.Diag, "diag"), (Pages.Settings, "settings"), (Pages.About, "about")];
 
     [Fact]
     public void MainWindow_OpensAndAllPagesBind_WithoutErrors()
@@ -162,7 +162,7 @@ public sealed partial class WindowSmokeTests
             var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
             var w = Open(vm);
             var tabs = Find<TabControl>(w)!;
-            foreach (var page in new[] { Pages.Select, Pages.Sites, Pages.Net, Pages.Hosts, Pages.Dns, Pages.Diag, Pages.Router, Pages.Settings, Pages.About, Pages.Home })
+            foreach (var page in new[] { Pages.Select, Pages.Sites, Pages.Apps, Pages.Hosts, Pages.Dns, Pages.Diag, Pages.Router, Pages.Settings, Pages.About, Pages.Home })
             {
                 vm.Page = page;
                 Pump();
@@ -719,11 +719,11 @@ public sealed partial class WindowSmokeTests
                         Snap(w, Path.Combine(snapDir, $"{theme}-settings-end.png"));
                         stv.ScrollToHome();
                     }
-                    if (page == Pages.Net && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } nv)
+                    if (page == Pages.Apps && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } nv)
                     {
                         nv.ScrollToEnd();
                         Pump();
-                        Snap(w, Path.Combine(snapDir, $"{theme}-net-end.png"));
+                        Snap(w, Path.Combine(snapDir, $"{theme}-apps-end.png"));
                         nv.ScrollToHome();
                     }
                     if (page == Pages.Hosts && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } hostsScroll)
@@ -1284,7 +1284,7 @@ public sealed partial class WindowSmokeTests
     public void InfoButtons_EveryDocSection_HasButton_WithDocText()
     {
         var doc = DocInfoTexts();
-        Assert.Equal(14, doc.Count);
+        Assert.Equal(16, doc.Count);
         using var tmp = new TempDir();
         using var fake = new FakeRouter { KillSwitch = true };   // «Сторож» в «Проверять сам» — у роутера со сторожем
         var seen = new Dictionary<string, string>();
@@ -1297,6 +1297,8 @@ public sealed partial class WindowSmokeTests
             vm.Router.CustomAddress = fake.Address;
             vm.Router.PcTimestamps = () => true;
             Task.Run(() => vm.Router.ConnectAsync("secret")).GetAwaiter().GetResult();
+            vm.ShowAdvancedSetting = true;   // «Отладка подключений» видна только для опытных
+            vm.Net.ListsOpen = true;         // IP-списки — в свёрнутом «Дополнительно»
             var w = Open(vm);
             foreach (var (page, _) in AllPages.Append((Pages.Router, "router")))
             {
@@ -1533,6 +1535,148 @@ public sealed partial class WindowSmokeTests
             ], false));
             File.Move(file, Path.Combine(shell.Paths.Results, $"2026-10-1{5 + run}_10-00-00.json"), overwrite: true);
         }
+    }
+
+    static void PumpUntil(Func<bool> cond, string what)
+    {
+        for (int i = 0; i < 400 && !cond(); i++) { Pump(); Thread.Sleep(15); }
+        if (!cond()) throw new Exception("Не дождались: " + what);
+    }
+
+    /// <summary>
+    /// «Игры и программы» (ТЗ 13) в обеих темах, настоящий помощник над временной папкой и подменой источника записи:
+    /// светлая — простой режим от «Начать» до вопроса «Заработало?»; тёмная — «Отладка подключений» (включена в «Настройках»):
+    /// запись, список с галочками, сохранённый профиль. «Дополнительно» (IP-списки) свёрнуто. Снимки — DPISHELL_SNAPSHOTS.
+    /// </summary>
+    [Fact]
+    public void AppsPage_SimpleAndAdvanced_Work_InBothThemes()
+    {
+        using var tmp = new TempDir();
+        var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
+        if (snapDir is not null) Directory.CreateDirectory(snapDir);
+        var errors = WithBindingErrors(() =>
+        {
+            foreach (var theme in new[] { ThemeManager.Light, ThemeManager.Dark })
+            {
+                ThemeManager.Apply(theme);
+                bool dark = theme == ThemeManager.Dark;
+                var shell = new Shell(new AppPaths(tmp.Sub("root-" + theme), Repo.Data));
+                shell.Data.Seed();
+                var flows = new FakeFlowSource();
+                var procs = new FakeProcesses(new ProcInfo(4, 0, "System"), new ProcInfo(900, 4, "chrome.exe"));
+                var f = new HelperFixture(backend: PcHelper.Over(shell, flows, procs));
+                var link = Task.Run(f.LinkAsync).GetAwaiter().GetResult();
+                var settings = TestWindow.Settings(shell);
+                settings.ShowAdvanced = dark;
+                var vm = TestWindow.Model(shell, link, settings);
+                vm.Apps.ListProcesses = () => [new(900, "chrome.exe", "Новая вкладка"), new(2000, "game.exe", "Моя игра")];
+                vm.ApplyHelperData();
+                var w = Open(vm);
+                SetProp(vm, "IsLoading", false);
+                vm.Page = Pages.Apps;
+                PumpUntil(() => vm.Apps.Variants.Count > 0, "варианты параметров от помощника");
+                var tabs = Find<TabControl>(w)!;
+                bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
+                Button? Btn(string content) => Find<Button>(tabs, b => b.IsVisible && b.Content as string == content);
+
+                // Раскладка: сверху «Игры и программы» и «Настроить под игру», ниже игровой режим, IP-списки — в свёрнутом «Дополнительно».
+                if (!Visible(t => t.Text == "Игры и программы") || !Visible(t => t.Text == "Настроить под игру")) throw new Exception("Нет заголовков вкладки");
+                if (!Visible(t => t.Text == "Игровой режим")) throw new Exception("Нет игрового режима");
+                var more = Find<Expander>(tabs, e => e.Header as string == "Дополнительно: IP-списки и свои подсети")
+                    ?? throw new Exception("Нет «Дополнительно»");
+                if (more.IsExpanded) throw new Exception("«Дополнительно» должно быть свёрнуто");
+                if (Visible(t => t.Text == "Свои подсети")) throw new Exception("Свои подсети видны в свёрнутом блоке");
+                if (!Visible(t => t.Text.Contains("Vanguard"))) throw new Exception("Предупреждение про античиты не видно");
+                if (Btn("Начать") is null) throw new Exception("Нет кнопки «Начать»");
+                // «Отладка подключений» — только для опытных.
+                bool advVisible = Visible(t => t.Text == "Отладка подключений");
+                if (advVisible != dark) throw new Exception($"«Отладка подключений» видна = {advVisible}, ждали {dark}");
+                if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-idle.png"));
+
+                if (!dark)
+                {
+                    // Простой режим: Начать → (игра запускается) → Готово → применено → «Заработало?».
+                    Btn("Начать")!.Command.Execute(null);
+                    PumpUntil(() => vm.Apps.IsRecording, "запись");
+                    procs.List.Add(new ProcInfo(2000, 4, "game.exe"));
+                    flows.Push("udp", "203.0.113.50", 27015, 2000);
+                    flows.Push("udp", "203.0.113.51", 27016, 2000);
+                    flows.Push("tcp", "198.51.100.7", 443, 2000, FlowHint.Established);
+                    flows.Push("tcp", "198.51.100.60", 443, 900);   // браузер — шум
+                    Task.Run(() => vm.Apps.TickAsync()).GetAwaiter().GetResult();
+                    Pump();
+                    if (!Visible(t => t.Text.StartsWith("Идёт запись"))) throw new Exception("Нет строки «Идёт запись»");
+                    if (Btn("Готово") is null || Btn("Отмена") is null) throw new Exception("Нет «Готово» / «Отмена»");
+                    if (Btn("Начать") is not null) throw new Exception("«Начать» не спрятана во время записи");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-recording.png"));
+                    Btn("Готово")!.Command.Execute(null);
+                    PumpUntil(() => vm.Apps.IsCheck, "применение и вопрос");
+                    Pump();
+                    if (!Visible(t => t.Text.StartsWith("Применено:") && t.Text.Contains("Заработало?"))) throw new Exception("Нет вопроса «Заработало?»");
+                    foreach (var b in new[] { "Да, заработало", "Нет", "Стало хуже" })
+                        if (Btn(b) is null) throw new Exception("Нет кнопки «" + b + "»");
+                    if (!Visible(t => t.Text == "Профили программ")) throw new Exception("Профиль не в списке");
+                    if (Btn("Вернуть как было") is null) throw new Exception("Нет «Вернуть как было»");
+                    if (!Visible(t => t.Text.StartsWith("Оптимизация сейчас выключена"))) throw new Exception("Нет подсказки, что оптимизация выключена");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-simple-check.png"));
+                    Btn("Да, заработало")!.Command.Execute(null);
+                    Pump();
+                    if (!Visible(t => t.Text.StartsWith("Готово: профиль включён"))) throw new Exception("Нет итога");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-simple-done.png"));
+                }
+                else
+                {
+                    // Продвинутый режим: запись → список с галочками → сохранение.
+                    vm.Apps.RefreshProcesses();
+                    Btn("Записать")!.Command.Execute(null);
+                    PumpUntil(() => vm.Apps.AdvRecording, "запись");
+                    procs.List.Add(new ProcInfo(2000, 4, "game.exe"));
+                    flows.Push("udp", "203.0.113.50", 27015, 2000);
+                    flows.Push("udp", "203.0.113.51", 27016, 2000);
+                    flows.Push("tcp", "198.51.100.7", 443, 2000, FlowHint.Established);
+                    flows.Push("udp", "192.168.1.1", 53, 2000);
+                    flows.Push("tcp", "198.51.100.60", 443, 900);
+                    Btn("Стоп")!.Command.Execute(null);
+                    PumpUntil(() => vm.Apps.HasRows, "список подключений");
+                    Pump();
+                    var grid = Find<DataGrid>(tabs, g => g.IsVisible && g.Items.Count > 0 && g.Items[0] is FlowRow) ?? throw new Exception("Нет таблицы подключений");
+                    if (grid.Items.Count != 5) throw new Exception("В таблице " + grid.Items.Count + " строк, ждали 5");
+                    var boxes = FindAll<CheckBox>(grid, c => c.IsVisible && c.DataContext is FlowRow).ToList();
+                    if (boxes.Count != 5 || boxes.Count(c => c.IsChecked == true) != 3) throw new Exception("Галочки по умолчанию: " + boxes.Count(c => c.IsChecked == true) + " из " + boxes.Count);
+                    if (!Visible(t => t.Text.StartsWith("TCP 443 · UDP 27015-27016"))) throw new Exception("Нет предпросмотра профиля");
+                    foreach (var b in new[] { "Отсечь шум", "Отметить все", "Снять все", "Сохранить профиль" })
+                        if (Btn(b) is null) throw new Exception("Нет кнопки «" + b + "»");
+                    if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-advanced.png"));
+                    boxes.First(c => ((FlowRow)c.DataContext).Address == "203.0.113.51").IsChecked = false;   // человек снял одну
+                    Pump();
+                    if (!Visible(t => t.Text.StartsWith("TCP 443 · UDP 27015 ·"))) throw new Exception("Предпросмотр не пересчитался");
+                    Btn("Сохранить профиль")!.Command.Execute(null);
+                    PumpUntil(() => vm.Apps.Profiles.Count == 1, "профиль сохранён");
+                    Pump();
+                    if (!Visible(t => t.Text == "Профили программ")) throw new Exception("Нет списка профилей");
+                    if (Btn("Другие параметры") is null) throw new Exception("Для опытных нет «Другие параметры»");
+                    if (snapDir is not null)
+                    {
+                        Snap(w, Path.Combine(snapDir, $"{theme}-apps-advanced-saved.png"));
+                        if (Find<ScrollViewer>(tabs, s => s.IsVisible && s.ScrollableHeight > 0) is { } sv)
+                        {
+                            sv.ScrollToEnd();
+                            Pump();
+                            Snap(w, Path.Combine(snapDir, $"{theme}-apps-advanced-end.png"));
+                            sv.ScrollToHome();
+                        }
+                    }
+                }
+                // «Дополнительно» раскрывается и показывает IP-списки.
+                more.IsExpanded = true;
+                Pump();
+                if (!Visible(t => t.Text == "Свои подсети")) throw new Exception("После раскрытия нет «Свои подсети»");
+                if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-more.png"));
+                Close(w);
+                Stop(vm, f);
+            }
+        });
+        Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
 
     /// <summary>Состояние ПК (его хранит помощник): режимы IP-списка и игр, копия hosts — во временной папке.</summary>

@@ -236,6 +236,73 @@ public sealed class FakeHelperBackend : IHelperBackend
         ClientsGone.TrySetResult();
     }
 
+    // ---------- подключения программ ----------
+
+    /// <summary>Что отдаст rec_stop. По умолчанию — игра с UDP-сервером, браузер и служба Windows (шум).</summary>
+    public RecordingResult RecValue { get; set; } = SampleRecording();
+    public bool RecActive { get; private set; }
+    public IReadOnlyList<ProfileVariant> VariantsValue { get; set; } =
+    [
+        new(0, "как у «Alt 9» (сейчас выбрана)", "--dpi-desync=fake --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n3", WinwsArgs.GameUdpDefault),
+        new(1, "как у «Alt 10»", "--dpi-desync=multisplit --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n3", WinwsArgs.GameUdpDefault),
+        new(2, "как у «Alt 11»", "--dpi-desync=syndata --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n4", WinwsArgs.GameUdpDefault),
+    ];
+    public List<AppProfileInfo> ProfilesValue { get; } = [];
+
+    public static RecordingResult SampleRecording() => new("new", false, 42, true, false, false, [],
+    [
+        new("udp", "203.0.113.50", 27015, 4100, "game.exe", true, 30, 5.2, ""),
+        new("udp", "203.0.113.51", 27016, 4100, "game.exe", true, 12, 5.4, ""),
+        new("tcp", "198.51.100.7", 443, 4100, "game.exe", true, 4, 3.1, "works"),
+        new("tcp", "198.51.100.9", 443, 4200, "chrome.exe", true, 9, 8.0, "works"),
+        new("udp", "192.168.1.1", 53, 4100, "game.exe", true, 3, 1.0, ""),
+        new("tcp", "198.51.100.200", 443, 700, "svchost.exe", false, 5, 0.5, "works"),
+    ]);
+
+    public RecordingStatus RecStart(RecordingMode mode, int pid, bool useDriver)
+    {
+        Call($"rec_start {mode} {pid} {useDriver}");
+        if (RecActive) throw new InvalidOperationException("Запись уже идёт.");
+        RecActive = true;
+        return new(true, true, 0, 0, 0, useDriver, []);
+    }
+
+    public RecordingStatus RecStatus()
+    {
+        Call("rec_status");
+        return new(RecActive, RecActive, 3, RecValue.Flows.Count, 2, true, []);
+    }
+
+    public RecordingResult RecStop()
+    {
+        Call("rec_stop");
+        if (!RecActive) throw new InvalidOperationException("Запись не идёт.");
+        RecActive = false;
+        return RecValue;
+    }
+
+    public AppProfilesInfo AppProfilesInfo()
+    {
+        Call("app_profiles");
+        return new([.. ProfilesValue], VariantsValue, new(RecActive, RecActive, 0, 0, 0, true, []));
+    }
+
+    public AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant)
+    {
+        Call($"app_profile_set {id} {title} {tcpPorts} {udpPorts} {addresses.Count} {variant}");
+        var info = new AppProfileInfo(id ?? "p0000000" + (ProfilesValue.Count + 1), title, tcpPorts ?? "", udpPorts ?? "", addresses, variant,
+            VariantsValue[variant].Title, DateTime.Now);
+        ProfilesValue.RemoveAll(p => p.Id == info.Id);
+        ProfilesValue.Add(info);
+        return info;
+    }
+
+    public bool AppProfileRemove(string id)
+    {
+        Call("app_profile_remove " + id);
+        return ProfilesValue.RemoveAll(p => p.Id == id) > 0;
+    }
+
     /// <summary>Что отвечает dns_status (dns_set/dns_restore меняют Current).</summary>
     public DnsStatusInfo DnsValue { get; set; } = new("auto", false, false, true, false,
         [new DnsAdapterInfo("Ethernet", "ethernet", true, [], false)], ["Radmin VPN"]);
@@ -344,12 +411,15 @@ public sealed class NoSetup : IHelperSetup
 /// <summary>Настоящий помощник над временной папкой — для тестов окна: службы машины не трогает (sc, WMI — подмены).</summary>
 public static class PcHelper
 {
-    public static ShellHelperBackend Over(Shell shell) => new(shell)
+    public static ShellHelperBackend Over(Shell shell, FakeFlowSource? flows = null, IProcessCatalog? processes = null) => new(shell)
     {
         InspectService = () => new ServiceInfo(SvcState.NotInstalled, null, null, false),
         IsActive = () => false,
         FindForeign = () => [],
         DnsSystem = new FakeDnsSystem(),
+        // Запись подключений: настоящий драйвер и список процессов машины в тестах не трогаем.
+        RecorderSources = _ => [flows ?? new FakeFlowSource()],
+        Processes = processes ?? new FakeProcesses(),
     };
 }
 

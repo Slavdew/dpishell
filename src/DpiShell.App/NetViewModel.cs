@@ -53,6 +53,10 @@ public sealed class NetViewModel : Observable
         Refresh();
     }
 
+    bool _listsOpen;
+    /// <summary>Раскрыто «Дополнительно» (IP-списки, свои подсети). Раскрывается само, пока идут «Все адреса»: отсчёт должен быть виден.</summary>
+    public bool ListsOpen { get => _listsOpen; set => Set(ref _listsOpen, value); }
+
     bool _busy;
     /// <summary>Своя операция экрана идёт (или главная занята) — кнопки не нажимаются.</summary>
     public bool IsBusy { get => _busy; set { if (Set(ref _busy, value)) { Raise(nameof(CanEdit)); Raise(nameof(GameCanToggle)); CommandManager.InvalidateRequerySuggested(); } } }
@@ -69,6 +73,7 @@ public sealed class NetViewModel : Observable
             UserText = string.Join(Environment.NewLine, d.UserIpset);
             ExcludeText = string.Join(Environment.NewLine, d.UserIpsetExclude);
         }
+        if (AnyActive) ListsOpen = true;
         foreach (var p in new[] { nameof(IpsetOff), nameof(IpsetList), nameof(IpsetAny), nameof(AnyActive), nameof(AnyText), nameof(ListText),
                      nameof(HasList), nameof(GameOn), nameof(GameCanToggle), nameof(GameStatus), nameof(GameHint), nameof(UserHint) })
             Raise(p);
@@ -297,7 +302,10 @@ public sealed class NetViewModel : Observable
         }
     }
 
-    public string GameHint => "Если игра или программа после включения стала работать хуже — выключите. Игры с защитой от читов (Vanguard, FACEIT, Easy Anti-Cheat) могут не работать при драйвере перехвата.";
+    /// <summary>Предупреждение про античиты: общее для игрового режима и записи подключений.</summary>
+    public const string AntiCheatNote = "Игры с защитой от читов (Vanguard, FACEIT, Easy Anti-Cheat) могут не работать при драйвере перехвата.";
+
+    public string GameHint => "Если игра или программа после включения стала работать хуже — выключите. " + AntiCheatNote;
 
     public async Task SetGameAsync(bool on)
     {

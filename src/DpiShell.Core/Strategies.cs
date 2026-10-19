@@ -30,7 +30,7 @@ public sealed record StrategyCatalog(string Engine, int Version, string Source, 
 /// Что сверх стратегии включено пользователем: режим IP-списка и игровой режим (architecture.md «IP-списки и игровой режим»).
 /// Default — как при подборе: IP-список выключен (заглушка), игровой режим выключен.
 /// </summary>
-public sealed record BuildOptions(IpsetMode Ipset = IpsetMode.Off, GameMode Game = GameMode.Off)
+public sealed record BuildOptions(IpsetMode Ipset = IpsetMode.Off, GameMode Game = GameMode.Off, IReadOnlyList<AppProfile>? Profiles = null)
 {
     public static readonly BuildOptions Default = new();
 
@@ -44,7 +44,9 @@ public sealed record BuildOptions(IpsetMode Ipset = IpsetMode.Off, GameMode Game
         var mode = ParseIpset(s.IpsetMode);
         if (mode == IpsetMode.Any && (s.IpsetAnyUntil is not { } until || until <= utcNow))
             mode = ParseIpset(s.IpsetModeBeforeAny) is var back && back != IpsetMode.Any ? back : IpsetMode.Off;
-        return new(mode, ParseGame(s.GameMode));
+        // Профили программ (ТЗ 13): в state.json их мог тронуть кто угодно — в командную строку идут только прошедшие проверку.
+        var profiles = s.AppProfiles.Where(p => AppProfiles.Problem(p) is null).Take(AppProfiles.MaxProfiles).ToList();
+        return new(mode, ParseGame(s.GameMode), profiles.Count > 0 ? profiles : null);
     }
 
     public static IpsetMode ParseIpset(string? s) => s switch { "list" => IpsetMode.List, "any" => IpsetMode.Any, _ => IpsetMode.Off };
@@ -211,13 +213,37 @@ public static class WinwsArgs
         };
 
         var roles = ActiveRoles(s, o);
+        // Профили программ: порты профиля добавляются в фильтр WinDivert (иначе пакеты не дойдут до winws), .
+        var profiles = (o.Profiles ?? []).Where(pr => AppProfiles.Problem(pr) is null).ToList();
+        string Wf(string baseWf, bool game, IEnumerable<string> extra)
+        {
+            var parts = new List<string> { baseWf };
+            if (game) parts.Add(GamePorts);
+            parts.AddRange(extra.Where(e => e.Length > 0));   // пересечение с игровым диапазоном фильтру WinDivert не мешает
+            return string.Join(',', parts);
+        }
         // WinDivert отдаёт winws верхние порты только при включённом игровом режиме — иначе это лишняя нагрузка на CPU.
         var args = new List<string>
         {
-            $"--wf-tcp={WfTcp}" + (roles.ContainsKey("game_tcp") ? "," + GamePorts : ""),
-            $"--wf-udp={WfUdp}" + (roles.ContainsKey("game_udp") ? "," + GamePorts : ""),
+            $"--wf-tcp={Wf(WfTcp, roles.ContainsKey("game_tcp"), profiles.Select(pr => pr.TcpPorts))}",
+            $"--wf-udp={Wf(WfUdp, roles.ContainsKey("game_udp"), profiles.Select(pr => pr.UdpPorts))}",
         };
         bool first = true;
+        // Профили программ идут ПЕРВЫМИ: winws берёт первый подходящий профиль, а общие роли (general, quic) ловили бы те же порты.
+        foreach (var pr in profiles)
+        {
+            foreach (var (ports, desync, isTcp) in new[] { (pr.TcpPorts, pr.TcpDesync, true), (pr.UdpPorts, pr.UdpDesync, false) })
+            {
+                if (ports.Length == 0) continue;
+                if (!first) args.Add("--new");
+                first = false;
+                args.Add($"--filter-{(isTcp ? "tcp" : "udp")}={ports}");
+                args.Add($"--ipset={L(AppProfiles.FileName(pr.Id))}");
+                args.AddRange(ipsetExclude);
+                args.AddRange(desync.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => t.Replace("{fake}/", p.Fake + Path.DirectorySeparatorChar)));
+            }
+        }
         foreach (var role in RoleOrder)
         {
             if (!roles.TryGetValue(role, out var desync)) continue;

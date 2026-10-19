@@ -37,7 +37,7 @@ public partial class MainWindow : Window
 
         // «Все адреса — 10 минут»: обратный отсчёт и возврат по сроку (и когда окно в трее).
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _clock.Tick += (_, _) => vm.Net.Tick();
+        _clock.Tick += (_, _) => { vm.Net.Tick(); _ = vm.Apps.TickAsync(); };
         _clock.Start();
         vm.Notify += s => _tray.Hint(s);
 

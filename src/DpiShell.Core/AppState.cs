@@ -44,6 +44,9 @@ public sealed class AppState
     /// <summary>Когда последний раз перепроверяли записи hosts (локальное время) — окно делает это раз в сутки и при старте.</summary>
     public DateTime? HostsCheckedAt { get; set; }
 
+    /// <summary>Профили программ (ТЗ 13, «Игры и программы»): порты и адреса игры и параметры оптимизации для них. «Вернуть как было» — удалить профиль.</summary>
+    public List<AppProfile> AppProfiles { get; set; } = [];
+
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
     public static AppState Load(AppPaths p)

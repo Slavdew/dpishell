@@ -67,8 +67,19 @@ public interface IHelperBackend : IHelperCatalog
     void DeleteStrategy(string strategyId);
     /// <summary>Проверка сайтов для одной стратегии (прогон подбора из одного кандидата).</summary>
     Task<SelectionReport> CheckStrategyAsync(string strategyId, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct);
-    /// <summary>Все окна отключились от канала: в режиме без службы winws гасится.</summary>
+    /// <summary>Все окна отключились от канала: в режиме без службы winws гасится; запись подключений останавливается.</summary>
     void OnClientsGone();
+
+    // ---------- подключения программ (ТЗ 13) ----------
+    /// <summary>Начать запись подключений. pid — только для режима Process. useDriver = false: без драйвера перехвата (только TCP).</summary>
+    RecordingStatus RecStart(RecordingMode mode, int pid, bool useDriver);
+    RecordingStatus RecStatus();
+    /// <summary>Остановить и отдать записанное; записи не было — исключение.</summary>
+    RecordingResult RecStop();
+    AppProfilesInfo AppProfilesInfo();
+    /// <summary>Создать (id = null) или заменить профиль; параметры берутся из варианта готовых стратегий.</summary>
+    AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant);
+    bool AppProfileRemove(string id);
 }
 
 /// <summary>Ответ на status: всё, что окну без прав нужно для экранов.</summary>
@@ -85,6 +96,12 @@ public sealed record HelperStatus(
     // Api — версия протокола «мажор.минор», Commands — белый список этого помощника (helper-protocol §6). Заполняет сервер;
     // помощник до 1.1 их не присылает (null = «1.0», список неизвестен).
 }
+
+/// <summary>Профиль программы для окна. Addresses — как записаны в профиле (до 500).</summary>
+public sealed record AppProfileInfo(string Id, string Title, string TcpPorts, string UdpPorts, IReadOnlyList<string> Addresses, int Variant, string VariantTitle, DateTime CreatedAt);
+
+/// <summary>Ответ app_profiles: профили, варианты параметров (как у текущей стратегии первым) и запись, если она идёт.</summary>
+public sealed record AppProfilesInfo(IReadOnlyList<AppProfileInfo> Profiles, IReadOnlyList<ProfileVariant> Variants, RecordingStatus Recording);
 
 public sealed record StrategyInfo(string Id, string Title, string Source);
 public sealed record GroupInfo(string Id, string Title, int Targets);
@@ -428,6 +445,8 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
         shell.StopOwnProcess();
         shell.Service.Remove();
         shell.RestoreTcpTimestamps();
+        DropRecording();
+        shell.ClearAppProfiles();
         shell.State.Enabled = false;
         shell.SaveState();
     }
@@ -451,7 +470,89 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
     public void OnClientsGone()
     {
         if (!shell.ServiceMode) shell.StopOwnProcess();
+        DropRecording();   // окна нет — записывать некому
     }
+
+    // ---------- запись подключений и профили программ ----------
+
+    readonly object _recLock = new();
+    ConnectionRecorder? _rec;
+    Timer? _recTimer;
+
+    /// <summary>Источники записи; в тестах — подмена. По умолчанию: таблица TCP и (если можно) драйвер WinDivert, слой FLOW, только чтение.</summary>
+    public Func<bool, IReadOnlyList<IFlowSource>>? RecorderSources { get; init; }
+    /// <summary>Список процессов для записи; в тестах — подмена.</summary>
+    public IProcessCatalog Processes { get; init; } = new ToolhelpProcessCatalog();
+
+    IReadOnlyList<IFlowSource> Sources(bool useDriver)
+    {
+        if (RecorderSources is { } custom) return custom(useDriver);
+        var list = new List<IFlowSource> { new TcpTableSource() };
+        if (useDriver) list.Add(new WinDivertFlowSource(Path.Combine(shell.Paths.Core, "WinDivert.dll")));
+        return list;
+    }
+
+    public RecordingStatus RecStart(RecordingMode mode, int pid, bool useDriver)
+    {
+        lock (_recLock)
+        {
+            if (_rec is not null) throw new InvalidOperationException("Запись уже идёт.");
+            if (mode == RecordingMode.Process && !Processes.Snapshot().Any(p => p.Pid == pid))
+                throw new InvalidOperationException("Такого процесса сейчас нет.");
+            // Драйвер перехвата — только при целых файлах ядра (WinDivert.dll берётся по полному пути из папки ядра).
+            if (useDriver && RecorderSources is null && shell.Installer.Check().State != CoreState.Ok) useDriver = false;
+            var rec = new ConnectionRecorder(mode, pid, Sources(useDriver), Processes);
+            rec.Start();
+            _rec = rec;
+            _recTimer = new Timer(_ => rec.Tick(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+            return rec.Status();
+        }
+    }
+
+    public RecordingStatus RecStatus()
+    {
+        lock (_recLock)
+        {
+            _rec?.Tick();
+            return _rec?.Status() ?? new(false, false, 0, 0, 0, false, []);
+        }
+    }
+
+    public RecordingResult RecStop()
+    {
+        lock (_recLock)
+        {
+            var rec = _rec ?? throw new InvalidOperationException("Запись не идёт.");
+            rec.Stop();
+            var r = rec.Result();
+            DropRecording();
+            return r;
+        }
+    }
+
+    void DropRecording()
+    {
+        lock (_recLock)
+        {
+            _recTimer?.Dispose(); _recTimer = null;
+            _rec?.Dispose(); _rec = null;
+        }
+    }
+
+    static AppProfileInfo Info(AppProfile p, IReadOnlyList<ProfileVariant> variants) =>
+        new(p.Id, p.Title, p.TcpPorts, p.UdpPorts, p.Addresses, p.Variant,
+            variants.FirstOrDefault(v => v.Index == p.Variant)?.Title ?? $"вариант {p.Variant + 1}", p.CreatedAt);
+
+    public AppProfilesInfo AppProfilesInfo()
+    {
+        var variants = shell.ProfileVariants();
+        return new([.. shell.State.AppProfiles.Select(p => Info(p, variants))], variants, RecStatus());
+    }
+
+    public AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant) =>
+        Info(shell.SetAppProfile(id, title, tcpPorts, udpPorts, addresses, variant), shell.ProfileVariants());
+
+    public bool AppProfileRemove(string id) => shell.RemoveAppProfile(id);
 
     /// <summary>Смена DNS в системе; в тестах — подмена в памяти (реестр и сеть машины не трогаются).</summary>
     public IDnsSystem DnsSystem { get; init; } = new WindowsDnsSystem();
