@@ -441,6 +441,72 @@ public sealed partial class WindowSmokeTests
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
 
+    /// <summary>
+    /// Итог подбора со смешанной стратегией (docs/research/mixed-strategies.md, шаг 1): карточка «Подходит: Смешанная · …» с пояснением,
+    /// строка в таблице и в списке на главной (удалить и отправить на роутер можно, метки «найдена» нет). Снимки в обеих темах.
+    /// </summary>
+    [Fact]
+    public void Select_MixedStrategy_ResultAndHomeRow_BindAndSnap()
+    {
+        using var tmp = new TempDir();
+        var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
+        var errors = WithBindingErrors(() =>
+        {
+            foreach (var theme in new[] { ThemeManager.Light, ThemeManager.Dark })
+            {
+                ThemeManager.Apply(theme);
+                var shell = new Shell(new AppPaths(tmp.Sub("root-" + theme), Repo.Data));
+                var vm = TestWindow.Model(shell);
+                var groups = shell.DefaultTargets.Groups.Where(g => g.Id is "youtube" or "discord").ToList();
+                var singles = shell.Catalog.Strategies.Take(6).ToList();
+                // Одиночные открывают одну из двух групп, смешанная — обе.
+                TargetVerdict V(TargetGroup g, Target t, bool ok) => new(g.Id, t, ok, 0.4,
+                    new[] { SslProtocols.Tls13, SslProtocols.Tls12 }.Select(v => new ProbeResult(t, v, ok ? ProbeOutcome.Ok : ProbeOutcome.Timeout, 0.4, 0, ok ? "HTTP 200" : "таймаут")).ToList());
+                for (int i = 0; i < singles.Count; i++)
+                {
+                    var verdicts = groups.SelectMany(g => g.Targets.Select(t => V(g, t, (g.Id == "youtube") == (i % 2 == 0)))).ToList();
+                    vm.Scores.Add(new ScoreRow(DpiShell.Core.Selector.Score(singles[i], groups, verdicts), vm.Names));
+                }
+                var mix = new Strategy("mix-alt-alt10", MixBuilder.MakeTitle(singles[0], singles[1]), "mix", new(singles[1].Roles), new() { ["youtube"] = singles[0].Id, ["discord"] = singles[1].Id });
+                var mixScore = DpiShell.Core.Selector.Score(mix, groups, groups.SelectMany(g => g.Targets.Select(t => V(g, t, true))).ToList());
+                vm.Scores.Insert(0, new ScoreRow(mixScore, vm.Names) { IsBest = true });
+                SetProp(vm, "ResultText", "Подходит: " + mix.Title);
+                SetProp(vm, "ResultHint", "одной стратегии на всё не нашлось — собрана смешанная; без оптимизации не открывалось: YouTube, Discord.");
+                vm.StrategyChoices.Add(new(mix.Id, mix.Title, "YouTube ✓ · Discord ✓ · проверено 20.10 в 14:30", false) { Source = "mix" });
+                vm.StrategyChoices.Add(new(singles[0].Id, singles[0].Title, "YouTube ✓ · Discord ✗ · проверено 20.10 в 14:30", false));
+                var w = Open(vm);
+                w.Height = 700;
+                SetProp(vm, "IsLoading", false);
+                vm.Page = Pages.Select;
+                Pump();
+                var tabs = Find<TabControl>(w)!;
+                bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
+                if (!Visible(t => t.Text.StartsWith("Подходит: Смешанная · YouTube — "))) throw new Exception("Нет карточки «Подходит: Смешанная · …»");
+                if (!Visible(t => t.Text.Contains("собрана смешанная"))) throw new Exception("Нет пояснения, откуда смешанная");
+                if (!Visible(t => t.Text.StartsWith("Смешанная · YouTube — "))) throw new Exception("Нет строки смешанной в таблице");
+                if (Visible(t => t.Text is "найдена" or "вставлена" or "своя")) throw new Exception("У смешанной лишняя метка источника");
+                if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-select-mix.png")); }
+
+                SetProp(vm, "ShowStrategies", true);
+                vm.Page = Pages.Home;
+                Pump();
+                var home = Find<TabControl>(w)!;
+                var row = vm.StrategyChoices.First(c => c.Id == mix.Id);
+                if (!row.Removable || row.Personal) throw new Exception("Смешанная должна удаляться и не быть «своей»");
+                if (row.EditText != "Сделать копию и изменить") throw new Exception("Смешанная правится копией: " + row.EditText);
+                vm.StrategyChoices.Move(vm.StrategyChoices.IndexOf(row), 0);
+                row.ShowParams = true;
+                Pump();
+                if (Find<TextBlock>(home, t => t.IsVisible && t.Text.StartsWith("Смешанная · YouTube — ")) is null) throw new Exception("Нет смешанной в списке на главной");
+                if (Find<Button>(home, b => b.Content as string == "Удалить" && b.IsVisible) is null) throw new Exception("Нет «Удалить» у смешанной");
+                if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-home-mix.png"));
+                row.ShowParams = false;
+                Close(w);
+            }
+        });
+        Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
+    }
+
     static void Collect<T>(DependencyObject root, List<T> into) where T : DependencyObject
     {
         if (root is T t) into.Add(t);

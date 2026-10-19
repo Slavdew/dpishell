@@ -36,7 +36,7 @@ public sealed record SelectorProgress(int Index, int Total, string Message, Stra
 /// Последовательный подбор: служба стоит, для каждой стратегии поднимается свой winws, проверяются цели, процесс убивается.
 /// Цели, которые открываются и без обхода, из оценки выбрасываются (как в blockcheck).
 /// </summary>
-public sealed class Selector(AppPaths paths, HttpProbe probe)
+public class Selector(AppPaths paths, HttpProbe probe)
 {
     public TimeSpan Settle { get; init; } = TimeSpan.FromSeconds(1);
     public int ProbeParallelism { get; init; } = 8;
@@ -77,7 +77,7 @@ public sealed class Selector(AppPaths paths, HttpProbe probe)
 
     public async Task<SelectionReport> RunAsync(
         IReadOnlyList<Strategy> strategies, IReadOnlyList<TargetGroup> groups, bool quick,
-        IProgress<SelectorProgress>? progress = null, CancellationToken ct = default)
+        IProgress<SelectorProgress>? progress = null, CancellationToken ct = default, bool mix = false)
     {
         progress?.Report(new(0, strategies.Count, "Проверка без оптимизации…"));
         var baseline = await CheckGroupsAsync(groups, ct);
@@ -99,10 +99,23 @@ public sealed class Selector(AppPaths paths, HttpProbe probe)
             if (quick && score.Perfect) break;
             await Task.Delay(300, ct);
         }
+        var report = new SelectionReport(baseline, blocked, scores, false);
+        if (!mix) return report;
+
+        // Одной стратегии на всё не нашлось — собрать смешанную из вердиктов этого же прогона и проверить её одним прогоном.
+        // Берётся в отчёт, только если лучше лучшей одиночной; иначе всё как было.
+        if (MixBuilder.Build(report) is not { } plan) return report;
+        progress?.Report(new(strategies.Count, strategies.Count + 1, "Смешанная: " + plan.Mix.Title));
+        StrategyScore mixScore;
+        try { mixScore = await RunOneAsync(plan.Mix, blocked, ct); }
+        catch (OperationCanceledException) { return report with { Cancelled = true }; }
+        if (!MixBuilder.BeatsSingle(mixScore, report.Best)) return report;
+        scores.Add(mixScore);
+        progress?.Report(new(strategies.Count + 1, strategies.Count + 1, $"{plan.Mix.Title}: {mixScore.GroupsPassed}/{mixScore.GroupsTotal}", mixScore));
         return new(baseline, blocked, scores, false);
     }
 
-    public async Task<StrategyScore> RunOneAsync(Strategy s, IReadOnlyList<TargetGroup> groups, CancellationToken ct)
+    public virtual async Task<StrategyScore> RunOneAsync(Strategy s, IReadOnlyList<TargetGroup> groups, CancellationToken ct)
     {
         var args = WinwsArgs.Build(s, paths);
         using var w = WinwsProcess.Start(paths, args);

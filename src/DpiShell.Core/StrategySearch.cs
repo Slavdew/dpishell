@@ -324,6 +324,27 @@ public static class UserStrategies
         return s;
     }
 
+    /// <summary>
+    /// Сохранить смешанную (<see cref="MixBuilder"/>): id по частям, повтор заменяет прежнюю. Держим не больше <see cref="MixBuilder.MaxKept"/> последних;
+    /// выбранная сейчас (<paramref name="keepId"/>) не удаляется. Роли берутся из уже проверенных стратегий, но проверяются ещё раз.
+    /// </summary>
+    public static void AddMix(AppPaths p, Strategy mix, string? keepId = null)
+    {
+        if (!MixBuilder.IsMix(mix.Source)) throw new ArgumentException("Нужна смешанная стратегия (source mix)");
+        if (StrategyExchange.CheckRoles(mix.Roles) is { } problem) throw new InvalidDataException(problem);
+        WinwsArgs.Validate(mix);
+        var all = Load(p);
+        all.RemoveAll(x => x.Id == mix.Id);
+        all.Add(mix);
+        var mixes = all.Where(x => MixBuilder.IsMix(x.Source)).ToList();
+        while (mixes.Count > MixBuilder.MaxKept && mixes.FirstOrDefault(x => x.Id != keepId && x.Id != mix.Id) is { } old)
+        {
+            all.Remove(old);
+            mixes.Remove(old);
+        }
+        Save(p, all);
+    }
+
     /// <summary>Удалить свою (или вставленную) стратегию. Найденные поиском тоже можно, готовые из каталога здесь не лежат.</summary>
     public static bool Remove(AppPaths p, string id)
     {

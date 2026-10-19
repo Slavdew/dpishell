@@ -346,7 +346,10 @@ public sealed class Shell
         {
             using var doh = new DohResolver();
             var report = await new Selector(Paths, NewProbe(doh)).RunAsync(
-                StrategyStats.Order(AllStrategies, StrategyStats.LoadDetailed(Paths)), WithControl(groups ?? SelectedGroups(), DefaultTargets), quick, progress, ct);
+                StrategyStats.Order(AllStrategies, StrategyStats.LoadDetailed(Paths)), WithControl(groups ?? SelectedGroups(), DefaultTargets), quick, progress, ct, mix: true);
+            // Смешанная, которая оказалась лучше одиночных, — в файл своих стратегий (окно применяет её по id, как любую лучшую).
+            foreach (var m in report.Scores.Where(x => x.Strategy.Source == MixBuilder.Source && x.Error is null))
+                UserStrategies.AddMix(Paths, m.Strategy, State.StrategyId);
             ResultStore.Save(Paths, report);
             return report;
         });

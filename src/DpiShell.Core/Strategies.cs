@@ -8,7 +8,8 @@ namespace DpiShell.Core;
 /// Фильтры (порты, списки) ролям назначает <see cref="WinwsArgs"/>, а не каталог: так каталог
 /// нельзя использовать, чтобы направить winws на чужие файлы.
 /// </summary>
-public sealed record Strategy(string Id, string Title, string Source, Dictionary<string, string> Roles);
+/// <param name="Parts">Только у source "mix" (<see cref="MixBuilder"/>): из какой стратегии взята часть для каждой группы целей («youtube» → id, «discord» → id). У остальных null.</param>
+public sealed record Strategy(string Id, string Title, string Source, Dictionary<string, string> Roles, Dictionary<string, string>? Parts = null);
 
 public sealed record StrategyCatalog(string Engine, int Version, string Source, List<Strategy> Strategies)
 {

@@ -1437,6 +1437,7 @@ public sealed partial class MainViewModel : Observable
         var notes = new List<string>();
         if (!best.Perfect) notes.Add($"работают {best.GroupsPassed} из {best.GroupsTotal} групп");
         if (r.Cancelled) notes.Add("подбор остановлен, проверены не все стратегии");
+        if (MixBuilder.IsMix(best.Strategy.Source)) notes.Insert(0, "одной стратегии на всё не нашлось — собрана смешанная");
         var blocked = string.Join(", ", r.TestedGroups.Select(g => g.Title));
         notes.Add("без оптимизации не открывалось: " + blocked);
         ResultHint = string.Join("; ", notes) + "." + (regression.Length > 0 ? " " + regression : "");

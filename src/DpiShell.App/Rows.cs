@@ -29,12 +29,12 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
     public string Title { get; } = title;
     public string Stats { get; } = stats;
     public bool Found { get; } = found;
-    /// <summary>Откуда стратегия: flowseal (готовая), search (найдена), user (своя), pasted (вставлена).</summary>
+    /// <summary>Откуда стратегия: flowseal (готовая), search (найдена), mix (смешанная: «Смешанная · …» в названии), user (своя), pasted (вставлена).</summary>
     public string Source { get; init; } = found ? "search" : "flowseal";
     /// <summary>Своя или вставленная: меняется «Изменить», удаляется.</summary>
     public bool Personal => UserStrategies.IsPersonal(Source);
     /// <summary>Лежит в файле своих стратегий (найденная, своя, вставленная): удаляется, уходит на роутер.</summary>
-    public bool Removable => Source == "search" || Personal;
+    public bool Removable => Source is "search" or "mix" || Personal;
     /// <summary>Метка у названия; пусто — готовая.</summary>
     public string Label => Source switch { "search" => "найдена поиском", "pasted" => "вставлена", "user" => "своя", _ => "" };
     public bool HasLabel => Label.Length > 0;
