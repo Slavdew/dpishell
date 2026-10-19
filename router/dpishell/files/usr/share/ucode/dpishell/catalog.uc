@@ -71,8 +71,27 @@ function subst(tok, opts) {
 function build(strategy, roles, opts) {
 	if (!MODES[opts.mode])
 		die(`неизвестный режим ${opts.mode}`);
-	let args = [];
-	for (let role in roles.roles) {
+	let args = [], adv = opts.advanced;
+	// Продвинутый режим: строки «сайты → стратегия» — первыми профилями (первое совпадение), с десинком роли general
+	// стратегии строки и, если у неё есть quic, — UDP 443 с тем же списком. Домены уже проверены valid_domain_line.
+	for (let r in adv?.rows ?? []) {
+		let doms = join(',', r.domains);
+		for (let pair in [['general', '--filter-tcp=80,443'], ['quic', '--filter-udp=443']]) {
+			let desync = r.strategy.roles?.[pair[0]];
+			if (desync == null)
+				continue;
+			if (length(args))
+				push(args, '--new');
+			push(args, pair[1], `--hostlist-domains=${doms}`);
+			for (let t in split(trim(desync), /[ ]+/))
+				if (length(t))
+					push(args, subst(t, opts));
+		}
+	}
+	// «Остальные адреса — напрямую»: роли каталога не включаются.
+	let catalog_roles = adv?.others == 'direct' ? [] : roles.roles;
+	let direct = length(adv?.direct ?? []) ? `--hostlist-exclude-domains=${join(',', adv.direct)}` : null;
+	for (let role in catalog_roles) {
 		let desync = strategy.roles[role.id];
 		// Роли функций (игровой режим) — только когда функция включена.
 		if (desync == null || (role.feature && !opts.features?.[role.feature]))
@@ -85,6 +104,9 @@ function build(strategy, roles, opts) {
 		if (set)
 			for (let t in roles.list_sets[set])
 				push(args, subst(t, opts));
+		// Строки «напрямую» — мимо всех ролей каталога (в т.ч. «Все сайты»).
+		if (direct)
+			push(args, direct);
 		for (let t in split(trim(desync), /[ ]+/))
 			if (length(t))
 				push(args, subst(t, opts));
@@ -105,7 +127,8 @@ function render_config(strategy, roles, opts) {
 		'# Создано DpiShell. Ручные правки перезапишутся.',
 		`# strategy=${strategy.id} mode=${opts.mode}`,
 		'FWTYPE=nftables',
-		'NFQWS_ENABLE=1',
+		// Нечего обрабатывать (продвинутый режим: остальные напрямую и ни одной строки со стратегией) — nfqws не нужен.
+		`NFQWS_ENABLE=${length(tokens) ? 1 : 0}`,
 		`NFQWS_PORTS_TCP=${roles.ports.tcp}${opts.features?.game ? ',' + roles.ports.game : ''}`,
 		`NFQWS_PORTS_UDP=${roles.ports.udp}${opts.features?.game ? ',' + roles.ports.game : ''}`,
 		'NFQWS_TCP_PKT_OUT=9',

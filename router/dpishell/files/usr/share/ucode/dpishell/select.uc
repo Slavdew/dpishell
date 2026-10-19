@@ -44,7 +44,9 @@ function zapret_stop() {
 }
 
 // Группы для проверки: выбранные из targets.json + «Свои адреса» роутера; контрольная — всегда, если есть в данных.
-function load_groups(selected, mode) {
+// with_adv — для подбора: строки продвинутого режима со стратегией «auto» — свои группы adv-<номер строки> (цель — первый
+// домен строки). В оценку стратегии они не входят (score), по ним подбор выбирает стратегию строки (resolve_adv).
+function load_groups(selected, mode, with_adv) {
 	let data = cat.load_json(`${st.P.share}/targets.json`);
 	let groups = [];
 	for (let g in data.groups) {
@@ -62,6 +64,12 @@ function load_groups(selected, mode) {
 			push(groups, { id: 'user', title: 'Свои адреса',
 				targets: map(user, u => ({ url: u.url, required: u.important === true })) });
 	}
+	let a = with_adv ? st.advanced() : null;
+	if (a?.enabled)
+		for (let i = 0; i < length(a.rows); i++)
+			if (a.rows[i].strategy == 'auto' && length(a.rows[i].domains))
+				push(groups, { id: `adv-${i}`, title: a.rows[i].domains[0], adv: true,
+					targets: [{ url: `https://${a.rows[i].domains[0]}/`, required: true }] });
 	return groups;
 }
 
@@ -122,6 +130,8 @@ function score(groups, verdicts) {
 		let vs = filter(verdicts, v => v.group == g.id);
 		if (!length(vs))
 			continue;
+		if (g.adv)
+			continue;
 		if (g.control) {
 			for (let v in vs)
 				if (v.required && !v.ok)
@@ -132,7 +142,7 @@ function score(groups, verdicts) {
 		if (length(filter(vs, v => v.required && !v.ok)) == 0 && length(filter(vs, v => v.ok)) > 0)
 			passed++;
 	}
-	let normal = filter(verdicts, v => !filter(groups, g => g.id == v.group && g.control)[0]);
+	let normal = filter(verdicts, v => !filter(groups, g => g.id == v.group && (g.control || g.adv))[0]);
 	let ok = filter(normal, v => v.ok);
 	let sum = 0;
 	for (let v in ok) sum += v.seconds;
@@ -158,7 +168,7 @@ function better(a, b) {
 }
 
 function zapret_apply_for(strat, s) {
-	return st.write_zapret_config_for(strat, s) ?? zapret_restart();
+	return st.write_zapret_config_for(strat, s, true) ?? zapret_restart();
 }
 
 function zapret_apply(strategy_id, s) {
@@ -305,6 +315,39 @@ function save_found(list) {
 // сделанного прогона и собираем роли группы из неё. Роли частей: YouTube — google; Discord — discord_tcp (у каталожных его
 // нет — берём их general), discord_udp, discord_media; свои — general, quic, ipset_*, game_*. Стратегии с ошибкой (ломают
 // обычные сайты) не берём. null — смешивать нечего (все группы лучше всего у одной стратегии).
+// Лучшая для группы g стратегия прогона: доля открывшихся целей группы, затем время; с ошибкой (ломает обычные сайты) и
+// кандидаты поиска не берутся. null — ни у кого ничего не открылось.
+function group_best(rows, g) {
+	let best = null, bs = null;
+	for (let r in rows) {
+		if (r.error != null || r.candidate) continue;
+		let vs = filter(r.verdicts ?? [], v => v.group == g);
+		if (!length(vs)) continue;
+		let ok = filter(vs, v => v.ok), sum = 0;
+		for (let v in ok) sum += v.seconds;
+		let sc = { share: 1.0 * length(ok) / length(vs), t: length(ok) ? 1.0 * sum / length(ok) : 99 };
+		if (!bs || sc.share > bs.share || (sc.share == bs.share && sc.t < bs.t)) { best = r.id; bs = sc; }
+	}
+	return best && bs.share > 0 ? best : null;
+}
+
+// Строки «auto» продвинутого режима: стратегия строки — лучшая по её группе adv-<i> (mixed-strategies.md §6).
+// Строка, у которой не открылось ничего, остаётся без resolved — идёт по текущей стратегии.
+function resolve_adv(rows) {
+	let a = st.advanced();
+	if (!a.enabled)
+		return;
+	let changed = false;
+	for (let i = 0; i < length(a.rows); i++) {
+		if (a.rows[i].strategy != 'auto')
+			continue;
+		let best = group_best(rows, `adv-${i}`);
+		if (best != a.rows[i].resolved) { a.rows[i].resolved = best; changed = true; }
+	}
+	if (changed)
+		st.write_atomic(st.ADVANCED, sprintf('%J\n', a));
+}
+
 const MIX_ROLES = { youtube: ['google'], discord: ['discord_tcp', 'discord_udp', 'discord_media'],
 	user: ['general', 'quic', 'ipset_udp', 'ipset_tcp', 'game_tcp', 'game_udp'] };
 
@@ -314,17 +357,8 @@ function mix_from(rows, list, groups) {
 		return null;
 	let pick = {};
 	for (let g in gids) {
-		let best = null, bs = null;
-		for (let r in rows) {
-			if (r.error != null || r.candidate) continue;
-			let vs = filter(r.verdicts ?? [], v => v.group == g);
-			if (!length(vs)) continue;
-			let ok = filter(vs, v => v.ok), sum = 0;
-			for (let v in ok) sum += v.seconds;
-			let sc = { share: 1.0 * length(ok) / length(vs), t: length(ok) ? 1.0 * sum / length(ok) : 99 };
-			if (!bs || sc.share > bs.share || (sc.share == bs.share && sc.t < bs.t)) { best = r.id; bs = sc; }
-		}
-		if (best && bs.share > 0) pick[g] = best;
+		let best = group_best(rows, g);
+		if (best) pick[g] = best;
 	}
 	let ids = uniq(values(pick));
 	if (length(keys(pick)) < 2 || length(ids) < 2)
@@ -516,7 +550,7 @@ function deep_search(p, groups, s, ts_was, cache) {
 function select_run(args) {
 	let s = st.settings();
 	let prev = { enabled: s.enabled, strategy: s.strategy };
-	let groups = load_groups(args.groups, s.mode);
+	let groups = load_groups(args.groups, s.mode, true);
 	let ts_was = ts_get();
 	let deep = args.depth == 'deep';
 	let p = { running: true, started_by: args.started_by ?? 'app', depth: deep ? 'deep' : 'main', index: 0, total: 0, eta_s: null,
@@ -615,6 +649,9 @@ function select_run(args) {
 			progress(p);
 		}
 	}
+	// 5. Строки «auto» продвинутого режима — до включения итога: config итога пишется уже с их стратегиями.
+	if (!deep)
+		resolve_adv(rows);
 	p = finish(p, rows, groups, s, ts_was, restore);
 	if (note) {
 		p.message = `${p.message}. ${note}`;
@@ -648,4 +685,4 @@ function check_run(source, light) {
 	return { last_check: lc, fail_streak: streak };
 }
 
-export { load_groups, items_of, run_checks, score, select_run, check_run, mix_from, PROGRESS, CANCEL };
+export { load_groups, items_of, run_checks, score, select_run, check_run, mix_from, resolve_adv, PROGRESS, CANCEL };

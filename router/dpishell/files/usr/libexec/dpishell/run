@@ -232,6 +232,9 @@ else if (cmd == 'revert') {
 			let cur = st.read_json(st.PENDING, null);
 			if (cur?.token != p.token) exit(0);
 		}
+	// Прежние настройки продвинутого режима (advanced_set с confirm_s) — до записи config.
+	if (p.advanced != null)
+		st.write_atomic(st.ADVANCED, sprintf('%J\n', p.advanced));
 	if (p.revert_to == 'off')
 		system('/usr/libexec/dpishell/off revert');
 	else {

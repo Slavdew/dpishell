@@ -61,12 +61,16 @@ function trial_arg(a) {
 	return c;
 }
 
-function trial_start(c, s) {
+// advanced — прежние настройки продвинутого режима (advanced_set): откат возвращает и их. При цепочке включений
+// откат идёт к самому первому состоянию — его advanced тоже не перезаписываем.
+function trial_start(c, s, advanced) {
 	if (c == null)
 		return;
 	let prev = st.read_json(st.PENDING, null);
 	let revert_to = prev ? prev.revert_to : (s.enabled && s.strategy ? s.strategy : 'off');
-	st.write_atomic(st.PENDING, sprintf('%J\n', { until: time() + c, revert_to, token: `${time()}-${c}-${s.strategy}` }));
+	let adv = prev ? prev.advanced : advanced;
+	st.write_atomic(st.PENDING, sprintf('%J\n', { until: time() + c, revert_to, token: `${time()}-${c}-${s.strategy}`,
+		...(adv != null ? { advanced: adv } : {}) }));
 	spawn('revert');
 }
 
@@ -176,6 +180,7 @@ const methods = {
 				schedule: s.schedule, jobs: jobs(), warnings: warnings(s), update: update_status(),
 				pending_confirm: st.pending_confirm(), last_off: s.enabled ? null : st.last_off(),
 				watchdog: guard_status(s),
+				advanced: ((a) => ({ enabled: a.enabled, rows: length(a.rows) }))(st.advanced()),
 			};
 		}
 	},
@@ -515,6 +520,66 @@ methods.confirm = {
 	call: function() {
 		if (unlink(st.PENDING))
 			st.write_status_json();
+		return {};
+	}
+};
+
+// Продвинутый режим (router-api §5.2, mixed-strategies.md §6): строки «сайты → стратегия» и режим остальных адресов.
+// resolved у «auto» — итог подбора для строки, до подбора — текущая стратегия; у «direct» — null.
+methods.advanced_get = {
+	call: function() {
+		let a = st.advanced(), s = st.settings();
+		return { enabled: a.enabled, others: a.others, rows: map(a.rows, r => ({ domains: r.domains, strategy: r.strategy,
+			resolved: r.strategy == 'direct' ? null : r.strategy == 'auto' ? (r.resolved ?? s.strategy ?? null) : r.strategy })) };
+	}
+};
+
+methods.advanced_set = {
+	args: { enabled: false, others: 'others', rows: [], confirm_s: 180 },
+	call: function(req) {
+		let b = busy(); if (b) return b;
+		let a = req.args;
+		if (type(a.enabled) != 'bool')
+			return err('invalid', 'enabled: true/false', 'enabled');
+		if (index(st.ADV_OTHERS, a.others) < 0)
+			return err('invalid', 'Остальные адреса: direct, lists или all', 'others');
+		let rows = lines_of(a.rows);
+		if (!rows || length(rows) > 20)
+			return err('invalid', 'rows: список, не больше 20 строк', 'rows');
+		let c = trial_arg(a); if (type(c) == 'object') return c;
+		let prev = st.advanced(), out = [];
+		for (let i = 0; i < length(rows); i++) {
+			let r = rows[i], doms = lines_of(r?.domains);
+			if (!doms || !length(doms) || length(doms) > 50)
+				return err('invalid', 'В строке от 1 до 50 сайтов', `rows[${i}].domains`);
+			let clean = [];
+			for (let j = 0; j < length(doms); j++) {
+				let d = lc(trim(`${doms[j]}`));
+				// В --hostlist-domains — через запятую: «^» и пробелы туда не годятся, только имя.
+				if (!st.valid_domain_line(d) || index(d, '^') >= 0)
+					return err('invalid', 'Домен вида example.com', `rows[${i}].domains[${j}]`);
+				push(clean, d);
+			}
+			let sid = r.strategy ?? 'auto';
+			if (type(sid) != 'string' || (sid != 'auto' && sid != 'direct' && !cat.find(st.catalogs(), sid)))
+				return err('invalid', 'Стратегия: auto, direct или id из списка', `rows[${i}].strategy`);
+			// resolved подбора сохраняется, пока строка та же (те же сайты и «auto»).
+			let old = filter(prev.rows, x => x.strategy == 'auto' && join(',', x.domains) == join(',', clean))[0];
+			push(out, { domains: clean, strategy: sid, ...(sid == 'auto' && old?.resolved ? { resolved: old.resolved } : {}) });
+		}
+		let s = st.settings(), before = { enabled: s.enabled, strategy: s.strategy };
+		let prev_file = st.read_json(st.ADVANCED, null) ?? { enabled: false, others: 'lists', rows: [] };
+		st.ensure_dirs();
+		if (!st.write_atomic(st.ADVANCED, sprintf('%J\n', { enabled: a.enabled, others: a.others, rows: out })))
+			return err('failed', 'Не удалось сохранить');
+		if (s.enabled && s.strategy) {
+			let e = st.write_zapret_config(s.strategy, s);
+			if (e) return err('failed', e);
+			let z = zapret('restart');
+			if (z) return z;
+			trial_start(c, before, prev_file);
+		}
+		st.write_status_json();
 		return {};
 	}
 };
