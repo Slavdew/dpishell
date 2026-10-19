@@ -331,6 +331,14 @@ public sealed class HelperServer : IAsyncDisposable
             case "hosts_apply": return await Task.Run(b.HostsApply, ct);
             case "hosts_revert": return await Task.Run(b.HostsRevert, ct);
             case "hosts_recheck": return await Task.Run(() => b.HostsRecheckAsync(ct), ct);
+            case "hosts_try":
+                return await Task.Run(() => b.HostsTryAsync(Entries(c, "entries"), new SyncProgress<HostsCheckProgress>(p => progress(p)), ct), ct);
+            case "hosts_audit":
+                return await Task.Run(() => b.HostsAuditAsync(new SyncProgress<HostsCheckProgress>(p => progress(p)), ct), ct);
+            case "hosts_user_set": return await Task.Run(() => b.HostsUserSetAsync(Entries(c, "entries"), ct), ct);
+            case "hosts_comment": return await Task.Run(() => b.HostsComment(c.List("ids")!), ct);
+            case "hosts_uncomment": return await Task.Run(b.HostsUncomment, ct);
+            case "hosts_restore": return await Task.Run(b.HostsRestore, ct);
             case "stop_foreign": return await Task.Run(b.StopForeign, ct);
             case "core_repair": await Task.Run(() => b.CoreRepairAsync(log, ct), ct); return null;
             case "remove_all": await Task.Run(b.RemoveAll, ct); return null;
@@ -348,6 +356,10 @@ public sealed class HelperServer : IAsyncDisposable
         // Белый список и диспетчер должны совпадать — тест проверяет, что сюда не попасть.
         throw new HelperRequestException(c.Id, $"Команда «{c.Cmd}» не поддерживается.");
     }
+
+    /// <summary>Пары «адрес имя», уже приведённые проверкой запроса к каноническому виду.</summary>
+    static IReadOnlyList<HostsEntry> Entries(HelperCall c, string name) =>
+        [.. (c.List(name) ?? []).Select(s => HostsPaste.TryEntry(s, false, out var e) ? e : throw new HelperRequestException(c.Id, $"{c.Cmd}: {name}: не пара «адрес имя»."))];
 
     void Log(string message) => _o.Log?.Invoke(message);
 

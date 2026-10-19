@@ -283,4 +283,174 @@ public sealed class FeatureViewModelTests
         Assert.Contains("github.com устарел", notice);
         Assert.DoesNotContain("140.82.121.3", File.ReadAllText(hosts));
     }
+
+    // ---------- ТЗ 12: примерить строки, свои строки, проверка hosts ----------
+
+    const string Guide = "127.0.0.1 localhost\r\n0.0.0.0 ads.example.com\r\n";
+
+    [Fact]
+    public async Task Hosts_Try_Verdicts_WriteSelected_RestoreAll_ByteForByte()
+    {
+        using var t = new TempDir();
+        var (shell, vm, hosts, questions, f) = await Hosts(t, "github.com@140.82.121.3");
+        await using var _f = f;
+        File.WriteAllText(hosts, Guide);
+        var original = File.ReadAllBytes(hosts);
+
+        vm.PasteText = "# гайд\r\n140.82.121.3 github.com\r\n0.0.0.0 gone.example.com\r\n9.9.9.9 dead.example.com\r\nпросто текст\r\n";
+        await vm.TryAsync();
+        Assert.Equal(["Поможет", "Не поможет", "Блокирует"], vm.TryRows.Select(r => r.Verdict));
+        Assert.Equal(["Строка чинит", "Нужна оптимизация, не hosts", "Блокировка (ничего не меняет)"], vm.TryRows.Select(r => r.Reason));
+        Assert.True(vm.TryRows[0].Selected);                                   // чинящая отмечена
+        Assert.False(vm.TryRows[1].CanSelect || vm.TryRows[2].CanSelect);     // остальные записать нельзя
+        Assert.Equal("Записать выбранные (1)", vm.WriteSelectedText);
+        Assert.StartsWith("Проверено строк: 3. поможет: 1", vm.TrySummary);
+        Assert.Contains("Пропущено строк без адреса или имени: 1", vm.TrySummary);
+        Assert.Equal(original, File.ReadAllBytes(hosts));                      // примерка файл не меняет
+
+        vm.TryRows[0].Selected = false;
+        Assert.Equal("Записать выбранные", vm.WriteSelectedText);
+        vm.TryRows[0].Selected = true;
+        await vm.WriteSelectedAsync();
+        Assert.Contains("DpiShell user", questions.Last());
+        Assert.Contains("HostsFileHijack", questions.Last());
+        var text = File.ReadAllText(hosts);
+        Assert.Contains("140.82.121.3 github.com  # dpishell-user", text);
+        Assert.DoesNotContain("gone.example.com", text);
+        Assert.StartsWith(Guide, text);
+        Assert.Single(vm.UserRows);
+        Assert.Equal("github.com → 140.82.121.3", vm.UserRows[0].Text);
+        Assert.True(vm.HasOurs);
+        Assert.False(shell.State.HostsFix);   // блок проверенных адресов — отдельная функция, она не включилась
+
+        // Другая программа дописала строку; «Вернуть как было» — исходник плюс её строка.
+        File.AppendAllText(hosts, "8.8.4.4 other.app.example\r\n");
+        await vm.RestoreAllAsync();
+        Assert.Equal([.. original, .. "8.8.4.4 other.app.example\r\n"u8.ToArray()], File.ReadAllBytes(hosts));
+        Assert.Empty(vm.UserRows);
+        Assert.False(vm.HasOurs);
+    }
+
+    [Fact]
+    public async Task Hosts_Try_EmptyPaste_SaysWhy_WithoutHelper()
+    {
+        using var t = new TempDir();
+        var (_, vm, _, _, f) = await Hosts(t);
+        await using var _f = f;
+        vm.PasteText = "просто текст";
+        await vm.TryAsync();
+        Assert.Empty(vm.TryRows);
+        Assert.Contains("Не нашла ни одной строки", vm.TrySummary);
+    }
+
+    [Fact]
+    public async Task Hosts_RemoveUser_OneByOne_KeepsOthers()
+    {
+        using var t = new TempDir();
+        var (_, vm, hosts, _, f) = await Hosts(t, "github.com@140.82.121.3", "github.com@140.82.121.4");
+        await using var _f = f;
+        vm.PasteText = "140.82.121.3 github.com\r\n140.82.121.4 github.com";
+        await vm.TryAsync();
+        await vm.WriteSelectedAsync();
+        Assert.Equal(2, vm.UserRows.Count);
+
+        await vm.RemoveUserAsync(vm.UserRows[0]);
+        Assert.Single(vm.UserRows);
+        var left = File.ReadAllText(hosts);
+        Assert.DoesNotContain("140.82.121.3", left);
+        Assert.Contains("140.82.121.4 github.com", left);
+
+        await vm.RemoveUserAsync(null);
+        Assert.Equal("127.0.0.1 localhost\r\n", File.ReadAllText(hosts));
+        Assert.False(vm.HasUserRows);
+    }
+
+    [Fact]
+    public async Task Hosts_Audit_Comment_OnlyChosen_AndUncomment()
+    {
+        using var t = new TempDir();
+        // DNS (185.199.108.133) для github открывается, старый адрес из hosts — нет: строка «Сломает».
+        var (_, vm, hosts, questions, f) = await Hosts(t, "github.com@185.199.108.133");
+        await using var _f = f;
+        File.WriteAllText(hosts, Guide + "140.82.112.4 github.com\r\n");
+        var original = File.ReadAllBytes(hosts);
+
+        await vm.AuditAsync();
+        var bad = Assert.Single(vm.AuditRows, r => r.CanSelect);
+        Assert.Equal("Сломает", bad.Verdict);
+        Assert.Equal("Сайт перестанет открываться", bad.Reason);
+        Assert.False(bad.Selected);                                   // решает человек: по умолчанию ничего не отмечено
+        Assert.False(vm.CommentCmd.CanExecute(null));
+        Assert.StartsWith("Мешают строки: 1.", vm.AuditSummary);
+        Assert.Equal(original, File.ReadAllBytes(hosts));
+
+        vm.SelectProblemsCmd.Execute(null);
+        Assert.True(bad.Selected);
+        Assert.Equal("Закомментировать выбранные (1)", vm.CommentText);
+        await vm.CommentAsync();
+        Assert.Contains("# DpiShell off", questions.Last());
+        var text = File.ReadAllText(hosts);
+        Assert.Contains($"# DpiShell off {DateTime.Now:yyyy-MM-dd}: 140.82.112.4 github.com", text);
+        Assert.Contains("0.0.0.0 ads.example.com\r\n", text);        // чужая строка рядом не тронута
+        Assert.Single(vm.OffRows);
+        Assert.DoesNotContain(vm.AuditRows, r => r.CanSelect);
+        Assert.True(vm.HasOurs);
+
+        await vm.UncommentAsync();
+        Assert.Equal(original, File.ReadAllBytes(hosts));
+        Assert.Empty(vm.OffRows);
+    }
+
+    [Fact]
+    public async Task Hosts_Comment_WithoutAudit_IsRefusedByHelper_AndFileUntouched()
+    {
+        using var t = new TempDir();
+        var (_, _, hosts, _, f) = await Hosts(t);
+        await using var _f = f;
+        File.WriteAllText(hosts, Guide);
+        await using var c = await f.ConnectAsync();
+        var id = HostsText.LineId(2, "0.0.0.0 ads.example.com");
+        var e = await Assert.ThrowsAsync<HelperException>(() => c.HostsCommentAsync([id]));
+        Assert.Contains("проверьте hosts", e.Message);
+        Assert.Equal(Guide, File.ReadAllText(hosts));
+
+        // И после аудита: «не мешает» (заглушка на сайт, который не открывался) — не из мешающих, не трогаем.
+        await c.HostsAuditAsync();
+        var r = await c.HostsCommentAsync([id]);
+        Assert.False(r.Changed);
+        Assert.Contains("не из последней проверки", r.Skipped[0]);
+        Assert.Equal(Guide, File.ReadAllText(hosts));
+    }
+
+    [Fact]
+    public async Task Hosts_StaleUserLine_NotifiesOnce_ShowsWarning_AndIsNotRemoved()
+    {
+        using var t = new TempDir();
+        var (shell, vm, hosts, _, f) = await Hosts(t, "github.com@140.82.121.3");
+        await using var _f = f;
+        vm.PasteText = "140.82.121.3 github.com";
+        await vm.TryAsync();
+        await vm.WriteSelectedAsync();
+        Assert.DoesNotContain(vm.Warnings, w => w.Contains("больше не работает"));
+
+        // Адрес перестал отвечать; прошли сутки.
+        shell.Hosts = new HostsManager(shell.Paths, hosts, new Probe(), new Dns("185.199.108.133"), new NoRdap(), () => []);
+        shell.State.HostsCheckedAt = DateTime.Now.AddDays(-2);
+        await vm.RefreshAsync();
+        var notices = new List<string>();
+        vm.Notify += s => notices.Add(s);
+        await vm.RecheckIfDueAsync();
+        Assert.Single(notices);
+        Assert.Contains("Адрес для github.com больше не работает", notices[0]);
+        Assert.Contains("140.82.121.3 github.com", File.ReadAllText(hosts));      // сами не убираем
+        Assert.Contains(vm.Warnings, w => w.StartsWith("Адрес для github.com больше не работает"));
+        Assert.True(vm.UserRows[0].Stale);
+
+        // Завтра то же самое — тревога на экране остаётся, но уведомления второй раз нет.
+        shell.State.HostsCheckedAt = DateTime.Now.AddDays(-2);
+        await vm.RefreshAsync();
+        await vm.RecheckIfDueAsync();
+        Assert.Single(notices);
+        Assert.Contains(vm.Warnings, w => w.Contains("github.com больше не работает"));
+    }
 }

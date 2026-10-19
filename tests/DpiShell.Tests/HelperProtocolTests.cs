@@ -86,6 +86,69 @@ public class HelperProtocolTests
         Assert.Contains("больше", Rejected($$$"""{"id":1,"cmd":"user_targets_set","args":{"lines":[{{{lines}}}]}}"""));
     }
 
+    /// <summary>ТЗ 12 (API 1.4): пары «адрес имя» и «номер:хеш» — строгий разбор, никаких путей и произвольного текста.</summary>
+    [Fact]
+    public void Hosts_tools_take_strict_pairs_and_line_ids()
+    {
+        var t = Parse("""{"id":1,"cmd":"hosts_try","args":{"entries":["0.0.0.0 Ads.Example.com","140.82.121.3 github.com","140.82.121.3 github.com"]}}""");
+        Assert.Equal(["0.0.0.0 ads.example.com", "140.82.121.3 github.com"], t.List("entries"));   // канонический вид, без повторов
+        var u = Parse("""{"id":2,"cmd":"hosts_user_set","args":{"entries":["2606:4700::1111 one.one.one.one"]}}""");
+        Assert.Equal(["2606:4700::1111 one.one.one.one"], u.List("entries"));
+        Assert.Empty(Parse("""{"id":3,"cmd":"hosts_user_set","args":{"entries":[]}}""").List("entries")!);   // пусто — «убрать все свои»
+        var c = Parse("""{"id":4,"cmd":"hosts_comment","args":{"ids":["12:0123456789ab","3:abcdefabcdef"]}}""");
+        Assert.Equal(["12:0123456789ab", "3:abcdefabcdef"], c.List("ids"));
+        Assert.Equal("hosts_audit", Parse("""{"id":5,"cmd":"hosts_audit"}""").Cmd);
+        Assert.Equal("hosts_restore", Parse("""{"id":6,"cmd":"hosts_restore"}""").Cmd);
+    }
+
+    [Theory]
+    [InlineData("""{"id":1,"cmd":"hosts_user_set","args":{"entries":["0.0.0.0 github.com"]}}""", "не пара")]           // только публичные адреса
+    [InlineData("""{"id":1,"cmd":"hosts_user_set","args":{"entries":["192.168.1.5 nas.example.com"]}}""", "не пара")]
+    [InlineData("""{"id":1,"cmd":"hosts_user_set","args":{"entries":["127.0.0.1 github.com"]}}""", "не пара")]
+    [InlineData("""{"id":1,"cmd":"hosts_user_set","args":{"entries":["fe80::1%12 github.com"]}}""", "не пара")]
+    [InlineData("""{"id":1,"cmd":"hosts_try","args":{"entries":["1.2.3.4 github.com extra"]}}""", "не пара")]
+    [InlineData("""{"id":1,"cmd":"hosts_try","args":{"entries":["1.2.3.4 C:\\Windows\\x"]}}""", "не пара")]
+    [InlineData("""{"id":1,"cmd":"hosts_try","args":{"entries":["1.2.3.4 *.github.com"]}}""", "не пара")]
+    [InlineData("""{"id":1,"cmd":"hosts_try","args":{"entries":["1.2.3.4 localhost"]}}""", "не пара")]
+    [InlineData("""{"id":1,"cmd":"hosts_try","args":{"entries":["1.2.3.4\ngithub.com"]}}""", "не пара")]
+    [InlineData("""{"id":1,"cmd":"hosts_try","args":{"entries":"1.2.3.4 github.com"}}""", "список строк")]
+    [InlineData("""{"id":1,"cmd":"hosts_try","args":{}}""", "обязательного")]
+    [InlineData("""{"id":1,"cmd":"hosts_try","args":{"entries":[],"path":"C:\\hosts"}}""", "лишнее поле")]
+    [InlineData("""{"id":1,"cmd":"hosts_comment","args":{"ids":["12"]}}""", "не «номер:отпечаток»")]
+    [InlineData("""{"id":1,"cmd":"hosts_comment","args":{"ids":["12:ABCDEF012345"]}}""", "не «номер:отпечаток»")]
+    [InlineData("""{"id":1,"cmd":"hosts_comment","args":{"ids":["0:abcdef012345"]}}""", "не «номер:отпечаток»")]
+    [InlineData("""{"id":1,"cmd":"hosts_comment","args":{"ids":["1:abcdef012345; calc"]}}""", "не «номер:отпечаток»")]
+    [InlineData("""{"id":1,"cmd":"hosts_comment","args":{"ids":["1:abcdef012345","1:abcdef012345"]}}""", "дважды")]
+    [InlineData("""{"id":1,"cmd":"hosts_comment","args":{"text":"0.0.0.0 x"}}""", "лишнее поле")]
+    [InlineData("""{"id":1,"cmd":"hosts_audit","args":{"file":"hosts"}}""", "лишнее поле")]
+    [InlineData("""{"id":1,"cmd":"hosts_restore","args":{"backup":"x.bak"}}""", "лишнее поле")]
+    [InlineData("""{"id":1,"cmd":"hosts_uncomment","args":{"ids":[]}}""", "лишнее поле")]
+    public void Hosts_tools_reject_bad_arguments(string json, string why) =>
+        Assert.Contains(why, Rejected(json), StringComparison.OrdinalIgnoreCase);
+
+    [Fact]
+    public void Hosts_tools_limit_500_entries()
+    {
+        string Many(int n, Func<int, string> f) => string.Join(",", Enumerable.Range(0, n).Select(i => $"\"{f(i)}\""));
+        var ok500 = Many(500, i => $"1.2.3.4 h{i}.example.com");
+        var bad501 = Many(501, i => $"1.2.3.4 h{i}.example.com");
+        var ids501 = Many(501, i => $"{i + 1}:abcdef012345");
+        Assert.Equal(500, Parse($$$"""{"id":1,"cmd":"hosts_user_set","args":{"entries":[{{{ok500}}}]}}""").List("entries")!.Count);
+        Assert.Contains("больше", Rejected($$$"""{"id":1,"cmd":"hosts_user_set","args":{"entries":[{{{bad501}}}]}}"""));
+        Assert.Contains("больше", Rejected($$$"""{"id":1,"cmd":"hosts_comment","args":{"ids":[{{{ids501}}}]}}"""));
+    }
+
+    [Fact]
+    public void Hosts_tools_flags_exclusive_and_long()
+    {
+        foreach (var cmd in new[] { "hosts_try", "hosts_audit", "hosts_user_set", "hosts_comment", "hosts_uncomment", "hosts_restore" })
+            Assert.True(HelperCommands.Specs[cmd].Exclusive, cmd);   // меняют файл или грузят сеть — по одной
+        Assert.True(HelperCommands.Specs["hosts_try"].Long);
+        Assert.True(HelperCommands.Specs["hosts_audit"].Long);
+        Assert.True(HelperCommands.Specs["hosts_user_set"].Long);   // повторная проверка адресов — можно отменить
+        Assert.False(HelperCommands.Specs["hosts_comment"].Long);
+    }
+
     [Fact]
     public void Content_and_cidr_lines_pass()
     {
@@ -105,6 +168,7 @@ public class HelperProtocolTests
             "hosts_apply", "hosts_revert", "hosts_recheck", "stop_foreign", "core_repair", "remove_all", "clear_history", "read_results",
             "details", "choose", "tcp_timestamps_on", "data_update", "dns_status", "dns_set", "dns_restore",
             "strategy_add", "strategy_delete", "strategy_check",
+            "hosts_try", "hosts_audit", "hosts_user_set", "hosts_comment", "hosts_uncomment", "hosts_restore",
         ];
         Assert.Equal(spec.Order(), HelperCommands.Specs.Keys.Order());
         // Команды DNS описаны в helper-protocol §3 (часть старых там записана сокращённо: hosts_check/preview/…).
@@ -113,6 +177,8 @@ public class HelperProtocolTests
         // Список команд в status — тот же белый список; версия протокола — та, что записана в helper-protocol §6.
         Assert.Equal(HelperCommands.Specs.Keys.Order(StringComparer.Ordinal), HelperCommands.Names);
         Assert.All(["strategy_add {title, roles, source}", "strategy_delete {strategy}", "strategy_check {strategy, groups?}"], cmd => Assert.Contains("`" + cmd + "`", doc));
+        Assert.All(["hosts_try {entries}", "hosts_audit", "hosts_user_set {entries}", "hosts_comment {ids}", "hosts_uncomment", "hosts_restore"],
+            cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.Contains($"Текущая версия — `{HelperProtocol.Api}`", doc);
         // Только чтение — не занимает «одну операцию за раз».
         Assert.Equal(["cancel", "details", "dns_status", "hosts_preview", "read_results", "status"],

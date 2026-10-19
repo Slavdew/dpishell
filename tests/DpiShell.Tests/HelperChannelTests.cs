@@ -73,6 +73,9 @@ public class HelperChannelTests
             ["strategy_add"] = new { title = "Моя", roles = new { general = "--dpi-desync=fake --dpi-desync-repeats=6" }, source = "user" },
             ["strategy_delete"] = new { strategy = "found-1" },
             ["strategy_check"] = new { strategy = "found-1", groups = new[] { "youtube" } },
+            ["hosts_try"] = new { entries = new[] { "0.0.0.0 ads.example.com" } },
+            ["hosts_user_set"] = new { entries = new[] { "140.82.121.3 github.com" } },
+            ["hosts_comment"] = new { ids = new[] { "4:0123456789ab" } },
         };
         foreach (var cmd in HelperCommands.Specs.Keys.Where(k => k != "cancel"))
             await c.CallAsync(cmd, args.GetValueOrDefault(cmd));

@@ -190,6 +190,66 @@ public sealed partial class WindowSmokeTests
     }
 
     /// <summary>
+    /// «Починить адреса» (ТЗ 12): вкладка длинная — разделы свёрнуты, кроме первого; якоря сверху раскрывают раздел; строки вердиктов
+    /// отрисованы, галочки только там, где с ними можно что-то сделать; «Закомментировать» не активна, пока ничего не отмечено.
+    /// </summary>
+    [Fact]
+    public void Hosts_Page_SectionsCollapsed_AnchorsOpenThem_RowsRender()
+    {
+        using var tmp = new TempDir();
+        var errors = WithBindingErrors(() =>
+        {
+            ThemeManager.Apply(ThemeManager.Light);
+            var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
+            var w = Open(vm);
+            vm.Page = Pages.Hosts;
+            Pump();
+            var tabs = Find<TabControl>(w)!;
+            string[] names = ["HostsListSection", "HostsTrySection", "HostsUserSection", "HostsAuditSection"];
+            Expander Section(string n) => (Expander)(w.FindName(n) ?? throw new Exception("Нет раздела " + n));
+            if (!Section(names[0]).IsExpanded || names.Skip(1).Any(n => Section(n).IsExpanded))
+                throw new Exception("По умолчанию раскрыт только первый раздел вкладки «Починить адреса»");
+            var ys = names.Select(n => Section(n).TranslatePoint(new Point(0, 0), w).Y).ToList();
+            if (!ys.SequenceEqual(ys.Order())) throw new Exception("Разделы стоят не в порядке якорей: " + string.Join(", ", ys));
+
+            foreach (var n in names.Skip(1))
+            {
+                var anchor = Find<Button>(tabs, b => b.Tag as string == n) ?? throw new Exception("Нет якоря " + n);
+                ((System.Windows.Automation.Provider.IInvokeProvider)new System.Windows.Automation.Peers.ButtonAutomationPeer(anchor)).Invoke();
+                Pump();
+                if (!Section(n).IsExpanded) throw new Exception("Якорь не раскрыл раздел " + n);
+            }
+
+            var live = new EndpointCheck(EndpointOutcome.Ok, 0.2, "HTTP 200");
+            vm.Hosts.ShowTry(new HostsTryReport(
+            [
+                new("github.com", "140.82.121.3", HostsTryVerdict.Helps, live, "GITHUB", DnsMatch.SameNet, DnsState.Fails, ""),
+                new("discord.com", "162.159.138.232", HostsTryVerdict.NotNeeded, live, null, DnsMatch.Same, DnsState.Works, ""),
+                new("gist.github.com", "0.0.0.0", HostsTryVerdict.Breaks, null, null, DnsMatch.Differs, DnsState.Works, ""),
+            ], 0, false, 3, DateTime.Now));
+            vm.Hosts.ShowAudit(new HostsTryReport(
+            [
+                new("github.com", "140.82.112.4", HostsTryVerdict.Breaks, null, null, DnsMatch.Differs, DnsState.Works, "", 3, "3:0123456789ab"),
+                new("ads.example.com", "0.0.0.0", HostsTryVerdict.Blocks, null, null, DnsMatch.Unknown, DnsState.Fails, "", 4, "4:abcdefabcdef"),
+            ], 0, false, 2, DateTime.Now));
+            Pump();
+
+            int Boxes(string section) => FindAll<CheckBox>(Section(section), c => c.IsVisible && System.Windows.Automation.AutomationProperties.GetName(c) == "Выбрать строку").Count();
+            if (Boxes("HostsTrySection") != 1) throw new Exception($"Галочка нужна только у «Поможет»: {Boxes("HostsTrySection")}");
+            if (Boxes("HostsAuditSection") != 1) throw new Exception($"Галочка нужна только у мешающей строки: {Boxes("HostsAuditSection")}");
+            if (vm.Hosts.CommentCmd.CanExecute(null)) throw new Exception("«Закомментировать» активна, хотя ничего не отмечено");
+            vm.Hosts.AuditRows.First(r => r.CanSelect).Selected = true;
+            if (!vm.Hosts.CommentCmd.CanExecute(null)) throw new Exception("«Закомментировать» не активна после выбора строки");
+            // Ничего не вылезает за правый край окна.
+            foreach (var n in names)
+                if (Section(n).TranslatePoint(new Point(Section(n).ActualWidth, 0), w).X > w.ActualWidth + 1)
+                    throw new Exception("Раздел шире окна: " + n);
+            Close(w);
+        });
+        Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
+    }
+
+    /// <summary>
     /// «Подбор»: после «Применить» крупная карточка итога сворачивается в строку «✓ Включена …» со ссылкой «Подробнее»;
     /// в окне высотой 600 точек видно 5–6 строк таблицы; «Подробнее» возвращает карточку, новый подбор — тоже.
     /// </summary>
@@ -665,6 +725,20 @@ public sealed partial class WindowSmokeTests
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-net-end.png"));
                         nv.ScrollToHome();
+                    }
+                    if (page == Pages.Hosts && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } hostsScroll)
+                    {
+                        // Вкладка длинная: конец (проверка своего hosts, закомментированные) — отдельным снимком.
+                        if (w.FindName("HostsTrySection") is Expander { IsExpanded: true } trySection && hostsScroll.Content is UIElement hostsContent)
+                        {
+                            hostsScroll.ScrollToVerticalOffset(trySection.TranslatePoint(new Point(0, 0), hostsContent).Y - 12);
+                            Pump();
+                            Snap(w, Path.Combine(snapDir, $"{theme}-hosts-try.png"));
+                        }
+                        hostsScroll.ScrollToEnd();
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-hosts-end.png"));
+                        hostsScroll.ScrollToHome();
                     }
                     if (page == Pages.Hosts)
                     {
@@ -1210,7 +1284,7 @@ public sealed partial class WindowSmokeTests
     public void InfoButtons_EveryDocSection_HasButton_WithDocText()
     {
         var doc = DocInfoTexts();
-        Assert.Equal(13, doc.Count);
+        Assert.Equal(14, doc.Count);
         using var tmp = new TempDir();
         using var fake = new FakeRouter { KillSwitch = true };   // «Сторож» в «Проверять сам» — у роутера со сторожем
         var seen = new Dictionary<string, string>();
@@ -1478,7 +1552,13 @@ public sealed partial class WindowSmokeTests
         // тёмная: выключено, а блок от прошлой установки остался.
         var hostsFile = Path.Combine(shell.Paths.Root, "hosts-copy");
         Directory.CreateDirectory(shell.Paths.Root);
-        File.WriteAllText(hostsFile, "127.0.0.1 localhost\r\n0.0.0.0 web.telegram.org\r\n# DpiShell begin v1 2026-10-16\r\n140.82.121.3 github.com\r\n# DpiShell end\r\n");
+        // Свои строки пользователя (одна с устаревшим адресом) и строка, закомментированная нами, — разделы «Мои строки» и «Проверить мой hosts».
+        File.WriteAllText(hostsFile, "127.0.0.1 localhost\r\n0.0.0.0 web.telegram.org\r\n# DpiShell begin v1 2026-10-16\r\n140.82.121.3 github.com\r\n# DpiShell end\r\n" +
+            "# DpiShell user begin 2026-10-17\r\n# Managed by DpiShell (own lines). Every line below is tagged dpishell-user; the app can remove them.\r\n" +
+            "151.101.1.140 example.org  # dpishell-user 2026-10-17 manual\r\n104.16.0.1 updates.discord.com  # dpishell-user 2026-10-17 manual\r\n# DpiShell user end\r\n" +
+            "# DpiShell off 2026-10-18: 1.2.3.4 old.example.com\r\n");
+        Directory.CreateDirectory(Path.Combine(shell.Paths.Root, "hosts"));
+        File.WriteAllText(Path.Combine(shell.Paths.Root, "hosts", "user-stale.json"), """[{"host":"updates.discord.com","ip":"104.16.0.1"}]""");
         shell.Hosts = new HostsManager(shell.Paths, hostsFile);
         shell.State.HostsFix = !dark;
 
@@ -1501,7 +1581,29 @@ public sealed partial class WindowSmokeTests
                     OwnerState.Unknown, null, DnsState.Works, ""),
             ], DateTime.Now);
             vm.Hosts.ShowReport(report, shell.Hosts.Preview(report.ToInstall));
+            // Примерка (все шесть вердиктов) и проверка своего hosts: разделы раскрыты, чтобы они попали на снимок.
+            var okLive = new EndpointCheck(EndpointOutcome.Ok, 0.2, "HTTP 200");
+            vm.Hosts.ShowTry(new HostsTryReport(
+            [
+                new("github.com", "140.82.121.3", HostsTryVerdict.Helps, okLive, "GITHUB", DnsMatch.SameNet, DnsState.Fails, "140.82.112.3: нет ответа"),
+                new("www.github.com", "140.82.121.4", HostsTryVerdict.Helps, okLive, "GITHUB", DnsMatch.SameNet, DnsState.Fails, "140.82.112.3: нет ответа"),
+                new("discord.com", "162.159.138.232", HostsTryVerdict.NotNeeded, okLive, "CLOUDFLARENET", DnsMatch.Same, DnsState.Works, "162.159.138.232: HTTP 200"),
+                new("gist.github.com", "0.0.0.0", HostsTryVerdict.Breaks, null, null, DnsMatch.Differs, DnsState.Works, "140.82.112.4: HTTP 200"),
+                new("web.telegram.org", "149.154.167.220", HostsTryVerdict.Dangerous, new(EndpointOutcome.BadCertificate, 0.3, "чужой сертификат"), "EXAMPLE-NET", DnsMatch.Differs, DnsState.Fails, ""),
+                new("updates.discord.com", "104.16.0.1", HostsTryVerdict.Useless, new(EndpointOutcome.Timeout, 5, "не отвечает"), null, DnsMatch.Unknown, DnsState.Unknown, "DNS не ответил"),
+                new("ads.example.com", "0.0.0.0", HostsTryVerdict.Blocks, null, null, DnsMatch.Unknown, DnsState.Fails, "2.2.2.2: нет ответа"),
+            ], 1, false, 7, DateTime.Now), new HostsPasteResult([], 1, false));
+            vm.Hosts.PasteText = "140.82.121.3 github.com www.github.com\r\n140.82.121.4 raw.githubusercontent.com\r\n0.0.0.0 gist.github.com";
+            vm.Hosts.ShowAudit(new HostsTryReport(
+            [
+                new("github.com", "140.82.112.4", HostsTryVerdict.Breaks, new(EndpointOutcome.Timeout, 5, "не отвечает"), null, DnsMatch.Differs, DnsState.Works, "140.82.121.3: HTTP 200", 3, "3:0123456789ab"),
+                new("web.telegram.org", "0.0.0.0", HostsTryVerdict.Breaks, null, null, DnsMatch.Differs, DnsState.Works, "149.154.167.220: HTTP 200", 2, "2:abcdefabcdef"),
+                new("phish.example.com", "9.9.9.9", HostsTryVerdict.Dangerous, new(EndpointOutcome.BadCertificate, 0.3, "чужой сертификат"), "EXAMPLE-NET", DnsMatch.Unknown, DnsState.Unknown, "DNS не ответил", 9, "9:fedcbafedcba"),
+                new("ads.example.com", "0.0.0.0", HostsTryVerdict.Blocks, null, null, DnsMatch.Unknown, DnsState.Fails, "2.2.2.2: нет ответа", 12, "12:111111111111"),
+            ], 0, false, 4, DateTime.Now));
+            vm.Hosts.AuditRows[0].Selected = true;
         }
+        vm.Hosts.UserOpen = true;
     }
 
     /// <summary>

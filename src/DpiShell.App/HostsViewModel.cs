@@ -42,7 +42,7 @@ public sealed record HostsRow(string Host, string Ip, string Owner, string Live,
 /// Окно без прав (helper-protocol §1): hosts читает и пишет помощник — hosts_check/preview/apply/revert/recheck;
 /// состояние файла — из details. Адресов окно не передаёт: помощник пишет только то, что сам проверил.
 /// </summary>
-public sealed class HostsViewModel : Observable
+public sealed partial class HostsViewModel : Observable
 {
     readonly HelperLink _helper;
     HostsCheckReport? _report;
@@ -62,7 +62,7 @@ public sealed class HostsViewModel : Observable
         _helper = helper;
         Need = () => Task.FromResult(helper.Client);
         CheckCmd = RelayCommand.Async(CheckAsync, () => Enabled && !Busy);
-        StopCmd = new RelayCommand(() => _cts?.Cancel(), () => Checking);
+        StopCmd = new RelayCommand(() => _cts?.Cancel(), () => Checking || Trying || Auditing);
         ApplyCmd = RelayCommand.Async(ApplyAsync, () => Enabled && !Busy && _report is { NothingToFix: false });
         RevertCmd = RelayCommand.Async(RevertAsync, () => !Busy && BlockPresent);
     }
@@ -158,6 +158,7 @@ public sealed class HostsViewModel : Observable
                     list.Add($"В hosts есть чужая запись для {c.Host} — если сайт не откроется, дело может быть в ней.");
             if (!Enabled && s.Block.Present)
                 list.Add("Функция выключена, а записи DpiShell в hosts остались (от прошлой установки). Их можно убрать кнопкой «Вернуть как было».");
+            list.AddRange(StaleWarnings());
             return list;
         }
     }
@@ -185,6 +186,7 @@ public sealed class HostsViewModel : Observable
     {
         _status = _helper.Reader is not null ? _helper.Details?.Hosts : null;
         if (HelperOn) _draftOn = false;   // включено у помощника — черновик больше не нужен
+        RefreshTools();
         RaiseEnabled();
     }
 
@@ -326,7 +328,8 @@ public sealed class HostsViewModel : Observable
     public async Task RecheckIfDueAsync()
     {
         if (Busy) return;
-        if (!HelperOn || _helper.Details?.HostsCheckedAt is { } at && DateTime.Now - at < TimeSpan.FromDays(1) || _helper.Client is not { } c)
+        // Перепроверка идёт, если стоит блок проверенных адресов или есть свои строки (о них только сообщаем, сами не снимаем).
+        if (!(HelperOn || UserRows.Count > 0) || _helper.Details?.HostsCheckedAt is { } at && DateTime.Now - at < TimeSpan.FromDays(1) || _helper.Client is not { } c)
         {
             if (_status is null) await RefreshAsync();   // первый раз — хотя бы состояние (для трея и предупреждений)
             return;
@@ -337,6 +340,8 @@ public sealed class HostsViewModel : Observable
             var r = await c.HostsRecheckAsync();
             foreach (var host in r.Removed.Select(x => x.Host).Distinct())
                 Notify?.Invoke($"Адрес для {host} устарел, убран из hosts.");
+            foreach (var e in r.NewStaleUser ?? [])
+                Notify?.Invoke($"Адрес для {e.Host} больше не работает — уберите строку в «Починить адреса» или подберите новый адрес.");
             if (r.BlockLost) Notify?.Invoke("Записи DpiShell пропали из hosts (Защитник Windows или другой антивирус?). Откройте «Починить адреса», чтобы записать снова.");
         }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); }

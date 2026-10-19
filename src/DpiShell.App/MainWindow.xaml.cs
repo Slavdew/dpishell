@@ -74,6 +74,19 @@ public partial class MainWindow : Window
         if (spot == Spot.PcDns && FindChild<System.Windows.Controls.ComboBox>(target) is { } list) list.IsDropDownOpen = true;
     }
 
+    /// <summary>Якорь вкладки «Починить адреса»: раскрыть раздел и прокрутить к нему.</summary>
+    void HostsAnchor_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string name } || FindName(name) is not System.Windows.Controls.Expander section) return;
+        section.IsExpanded = true;
+        UpdateLayout();
+        DependencyObject? up = section;
+        while (up is not null and not System.Windows.Controls.ScrollViewer) up = System.Windows.Media.VisualTreeHelper.GetParent(up);
+        if (up is System.Windows.Controls.ScrollViewer { Content: UIElement content } sv)
+            sv.ScrollToVerticalOffset(Math.Max(0, section.TranslatePoint(new Point(0, 0), content).Y - 12));
+        else section.BringIntoView();
+    }
+
     static T? FindChild<T>(DependencyObject root) where T : DependencyObject
     {
         if (root is T t) return t;

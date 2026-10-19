@@ -331,6 +331,19 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public Task<HostsWriteResult> HostsApplyAsync(CancellationToken ct = default) => CallAsync<HostsWriteResult>("hosts_apply", null, null, ct);
     public Task<HostsWriteResult> HostsRevertAsync(CancellationToken ct = default) => CallAsync<HostsWriteResult>("hosts_revert", null, null, ct);
     public Task<HostsRecheckResult> HostsRecheckAsync(CancellationToken ct = default) => CallAsync<HostsRecheckResult>("hosts_recheck", null, null, ct);
+
+    // ТЗ 12 (API 1.4): примерка строк, аудит чужих строк, свои строки, комментирование.
+    public Task<HostsTryReport> HostsTryAsync(IReadOnlyList<HostsEntry> entries, IProgress<HostsCheckProgress>? progress = null, CancellationToken ct = default) =>
+        CallAsync<HostsTryReport>("hosts_try", new { entries = entries.Select(e => $"{e.Ip} {e.Host}").ToList() }, Map(progress), ct);
+    public Task<HostsTryReport> HostsAuditAsync(IProgress<HostsCheckProgress>? progress = null, CancellationToken ct = default) =>
+        CallAsync<HostsTryReport>("hosts_audit", null, Map(progress), ct);
+    /// <summary>Поставить ровно эти свои строки (пустой список — убрать все свои).</summary>
+    public Task<HostsUserResult> HostsUserSetAsync(IReadOnlyList<HostsEntry> entries, CancellationToken ct = default) =>
+        CallAsync<HostsUserResult>("hosts_user_set", new { entries = entries.Select(e => $"{e.Ip} {e.Host}").ToList() }, null, ct);
+    public Task<HostsCommentResult> HostsCommentAsync(IReadOnlyList<string> ids, CancellationToken ct = default) =>
+        CallAsync<HostsCommentResult>("hosts_comment", new { ids }, null, ct);
+    public Task<HostsCommentResult> HostsUncommentAsync(CancellationToken ct = default) => CallAsync<HostsCommentResult>("hosts_uncomment", null, null, ct);
+    public Task<HostsRestoreResult> HostsRestoreAsync(CancellationToken ct = default) => CallAsync<HostsRestoreResult>("hosts_restore", null, null, ct);
     public Task<StopForeignResult> StopForeignAsync(CancellationToken ct = default) => CallAsync<StopForeignResult>("stop_foreign", null, null, ct);
     public Task CoreRepairAsync(IProgress<string>? log = null, CancellationToken ct = default) => CallAsync("core_repair", null, MapLog(log), ct);
 

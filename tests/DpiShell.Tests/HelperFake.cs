@@ -179,6 +179,29 @@ public sealed class FakeHelperBackend : IHelperBackend
         return Task.FromResult(new HostsRecheckResult([], [], new HostsWriteResult(false, [], [], null), false));
     }
 
+    public Task<HostsTryReport> HostsTryAsync(IReadOnlyList<HostsEntry> entries, IProgress<HostsCheckProgress> progress, CancellationToken ct)
+    {
+        Call("hosts_try " + string.Join(",", entries));
+        progress.Report(new(entries.Count, entries.Count));
+        return Task.FromResult(new HostsTryReport([], 0, false, 0, DateTime.Now));
+    }
+
+    public Task<HostsTryReport> HostsAuditAsync(IProgress<HostsCheckProgress> progress, CancellationToken ct)
+    {
+        Call("hosts_audit");
+        return Task.FromResult(new HostsTryReport([], 0, false, 0, DateTime.Now));
+    }
+
+    public Task<HostsUserResult> HostsUserSetAsync(IReadOnlyList<HostsEntry> entries, CancellationToken ct)
+    {
+        Call("hosts_user_set " + string.Join(",", entries));
+        return Task.FromResult(new HostsUserResult(false, [], [], [], null));
+    }
+
+    public HostsCommentResult HostsComment(IReadOnlyList<string> ids) { Call("hosts_comment " + string.Join(",", ids)); return new(false, [], [], null); }
+    public HostsCommentResult HostsUncomment() { Call("hosts_uncomment"); return new(false, [], [], null); }
+    public HostsRestoreResult HostsRestore() { Call("hosts_restore"); return new(false, 0, 0, 0, null); }
+
     public StopForeignResult StopForeign() { Call("stop_foreign"); return new(["zapret от Flowseal"], []); }
 
     public async Task CoreRepairAsync(IProgress<string> log, CancellationToken ct)

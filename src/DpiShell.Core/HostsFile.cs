@@ -28,7 +28,7 @@ public sealed record HostsPreview(
 /// Текст hosts как последовательность строк с их собственными переводами строк. Всё вне нашего блока при сборке
 /// возвращается теми же байтами: файл без BOM читается как Latin-1 (байт = символ), UTF-8/UTF-16 с BOM — своей кодировкой.
 /// </summary>
-public sealed class HostsText
+public sealed partial class HostsText
 {
     public const string BeginMark = "# DpiShell begin";
     public const string EndMark = "# DpiShell end";
@@ -155,7 +155,7 @@ public sealed class HostsText
         var list = new List<HostsConflict>();
         for (int i = 0; i < _lines.Count; i++)
         {
-            if (own.Contains(i)) continue;
+            if (own.Contains(i) || IsUserOwned(i)) continue;   // свои строки пользователя — не «чужие»
             foreach (var e in ParseLine(_lines[i].Text))
                 if (HostsRules.IsAllowedHost(e.Host)) list.Add(new HostsConflict(i + 1, e.Host, e.Ip, _lines[i].Text.Trim()));
         }
@@ -271,6 +271,52 @@ public sealed class HostsFileStore(string hostsPath, string backupDir, Action? a
 
     /// <summary>«Вернуть как было»: удалить только наш блок.</summary>
     public HostsWriteResult RemoveBlock() => Apply([]);
+
+    /// <summary>Правка по плану, с повтором, если файл поменяли между чтением и записью. Нет изменений — файл не трогаем.</summary>
+    T Edit<T>(Func<HostsText, HostsPlan<T>> plan, out bool changed, out string? backup)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            var p = plan(Read());
+            changed = p.Changed; backup = null;
+            if (!p.Changed) return p.Info;
+            try
+            {
+                backup = Commit(p.OriginalBytes, p.NewBytes);
+                return p.Info;
+            }
+            catch (ConcurrentEditException) when (attempt == 0) { }
+            catch (ConcurrentEditException) { throw Busy(); }
+        }
+    }
+
+    /// <summary>Поставить ровно эти свои строки пользователя (пустой список — убрать их все). Блок белого списка не трогается.</summary>
+    public (HostsUserChange Change, bool Changed, string? Backup) ApplyUser(IEnumerable<HostsEntry> entries, DateTime? at = null)
+    {
+        var list = entries.ToList();
+        var c = Edit(t => t.PlanUserSet(list, at ?? DateTime.Now), out var changed, out var backup);
+        return (c, changed, backup);
+    }
+
+    public (HostsCommentChange Change, bool Changed, string? Backup) Comment(IEnumerable<string> ids, DateTime? at = null)
+    {
+        var list = ids.ToList();
+        var c = Edit(t => t.PlanComment(list, at ?? DateTime.Now), out var changed, out var backup);
+        return (c, changed, backup);
+    }
+
+    public (IReadOnlyList<HostsOffLine> Restored, bool Changed, string? Backup) Uncomment()
+    {
+        var c = Edit(t => t.PlanUncomment(), out var changed, out var backup);
+        return (c, changed, backup);
+    }
+
+    /// <summary>«Вернуть как было»: оба наших блока и все свои строки долой, закомментированные нами — обратно.</summary>
+    public (HostsRestoreChange Change, bool Changed, string? Backup) RestoreAll()
+    {
+        var c = Edit(t => t.PlanRestoreAll(), out var changed, out var backup);
+        return (c, changed, backup);
+    }
 
     public IReadOnlyList<string> Backups() => Directory.Exists(BackupDir)
         ? [.. Dated(),

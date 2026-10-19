@@ -30,6 +30,18 @@ public interface IHelperBackend : IHelperCatalog
     HostsWriteResult HostsApply();
     HostsWriteResult HostsRevert();
     Task<HostsRecheckResult> HostsRecheckAsync(CancellationToken ct);
+    /// <summary>Примерить строки «адрес имя» (вердикты); hosts не меняется.</summary>
+    Task<HostsTryReport> HostsTryAsync(IReadOnlyList<HostsEntry> entries, IProgress<HostsCheckProgress> progress, CancellationToken ct);
+    /// <summary>Проверить чужие строки hosts (вне блоков DpiShell); запоминает мешающие — только их можно закомментировать.</summary>
+    Task<HostsTryReport> HostsAuditAsync(IProgress<HostsCheckProgress> progress, CancellationToken ct);
+    /// <summary>Поставить ровно эти свои строки пользователя; новые заново проверяются живым подключением.</summary>
+    Task<HostsUserResult> HostsUserSetAsync(IReadOnlyList<HostsEntry> entries, CancellationToken ct);
+    /// <summary>Закомментировать выбранные мешающие строки из последнего аудита.</summary>
+    HostsCommentResult HostsComment(IReadOnlyList<string> ids);
+    /// <summary>Вернуть закомментированные нами строки.</summary>
+    HostsCommentResult HostsUncomment();
+    /// <summary>«Вернуть как было»: блоки DpiShell и свои строки долой, закомментированные — обратно.</summary>
+    HostsRestoreResult HostsRestore();
     StopForeignResult StopForeign();
     Task CoreRepairAsync(IProgress<string> log, CancellationToken ct);
     void RemoveAll();
@@ -350,6 +362,43 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
     {
         var r = await shell.Hosts.RecheckAsync(ct);
         shell.State.HostsCheckedAt = DateTime.Now;
+        shell.SaveState();
+        return r;
+    }
+
+    HostsTryReport? _lastAudit;
+
+    public async Task<HostsTryReport> HostsTryAsync(IReadOnlyList<HostsEntry> entries, IProgress<HostsCheckProgress> progress, CancellationToken ct) =>
+        await shell.Hosts.TryAsync(entries, new Progress<(int Done, int Total)>(p => progress.Report(new(p.Done, p.Total))), ct);
+
+    public async Task<HostsTryReport> HostsAuditAsync(IProgress<HostsCheckProgress> progress, CancellationToken ct)
+    {
+        var report = await shell.Hosts.AuditAsync(new Progress<(int Done, int Total)>(p => progress.Report(new(p.Done, p.Total))), ct);
+        lock (_hostsLock) _lastAudit = report;
+        return report;
+    }
+
+    public async Task<HostsUserResult> HostsUserSetAsync(IReadOnlyList<HostsEntry> entries, CancellationToken ct)
+    {
+        var r = await shell.Hosts.SetUserAsync(entries, ct);
+        shell.State.HostsCheckedAt ??= DateTime.Now;   // отсчёт суток для перепроверки своих строк
+        shell.SaveState();
+        return r;
+    }
+
+    public HostsCommentResult HostsComment(IReadOnlyList<string> ids)
+    {
+        HostsTryReport a;
+        lock (_hostsLock) a = _lastAudit ?? throw new InvalidOperationException("Сначала проверьте hosts.");
+        return shell.Hosts.Comment(ids, a.ProblemIds.ToHashSet());
+    }
+
+    public HostsCommentResult HostsUncomment() => shell.Hosts.Uncomment();
+
+    public HostsRestoreResult HostsRestore()
+    {
+        var r = shell.Hosts.RestoreAll();
+        shell.State.HostsFix = false;
         shell.SaveState();
         return r;
     }

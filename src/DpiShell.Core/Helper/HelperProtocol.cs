@@ -11,7 +11,7 @@ namespace DpiShell.Core.Helper;
 /// <item>Запрос: <c>{"id":1,"cmd":"enable","args":{"strategy":"alt9"}}</c>; отмена: <c>{"id":2,"cmd":"cancel","target":1}</c>.</item>
 /// <item>Ответ: <c>{"id":1,"ok":true,"result":…}</c> или <c>{"id":1,"ok":false,"error":{"code":"invalid","message":"…"}}</c>.</item>
 /// <item>Ход долгой операции: <c>{"id":1,"progress":{…}}</c> — сколько угодно раз до финального ответа.</item>
-/// <item>После подключения помощник первым шлёт <c>{"hello":{"protocol":1,"api":"1.3","version":"…"}}</c> или отказ <c>denied</c> с id 0.</item>
+/// <item>После подключения помощник первым шлёт <c>{"hello":{"protocol":1,"api":"1.4","version":"…"}}</c> или отказ <c>denied</c> с id 0.</item>
 /// </list>
 /// </summary>
 public static class HelperProtocol
@@ -25,7 +25,7 @@ public static class HelperProtocol
     /// Версия протокола «мажор.минор» (helper-protocol §6): минор — добавления без поломок (команды, поля), мажор — несовместимые
     /// изменения. В hello и status; помощник без поля — «1.0». Сравнение — <see cref="HelperCompat"/>.
     /// </summary>
-    public const string Api = "1.3";
+    public const string Api = "1.4";
 
     /// <summary>Предел строки: IP-список (до 4 МБ) с запасом на экранирование JSON. Длиннее — соединение рвётся.</summary>
     public const int MaxLineBytes = 12 * 1024 * 1024;

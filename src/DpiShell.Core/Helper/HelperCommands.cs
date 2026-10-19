@@ -34,6 +34,12 @@ public enum ArgKind
     Title,
     /// <summary>Роли своей стратегии {роль: параметры}: известные роли и параметры из белого списка (WinwsArgs.Problem).</summary>
     Roles,
+    /// <summary>Строки hosts «адрес имя» (адрес любой, в том числе заглушка 0.0.0.0): на выходе канонические строки.</summary>
+    HostEntries,
+    /// <summary>То же, но адрес обязан быть публичным (<see cref="HostsRules.TryParsePublic"/>) — для записи своих строк.</summary>
+    PublicHostEntries,
+    /// <summary>Номера строк hosts с отпечатком текста «номер:хеш» (12 hex) — как их выдал аудит.</summary>
+    HostLineIds,
 }
 
 public sealed record ArgSpec(string Name, ArgKind Kind, bool Required = false, string[]? Choices = null, int MaxItems = 0);
@@ -99,6 +105,14 @@ public static partial class HelperCommands
         new("hosts_apply", true, false),
         new("hosts_revert", true, false),
         new("hosts_recheck", true, true),
+        // Примерка строк, свои строки и комментирование чужих (ТЗ 12, API 1.4). Пути и произвольный текст не принимаются: пары «адрес имя»
+        // и «номер:хеш» проходят строгий разбор; пишет помощник только то, что проверил сам (hosts_user_set — живой проверкой, hosts_comment — по последнему аудиту).
+        new("hosts_try", true, true, new ArgSpec("entries", ArgKind.HostEntries, Required: true, MaxItems: HostsPaste.MaxEntries)),
+        new("hosts_audit", true, true),
+        new("hosts_user_set", true, true, new ArgSpec("entries", ArgKind.PublicHostEntries, Required: true, MaxItems: HostsPaste.MaxEntries)),
+        new("hosts_comment", true, false, new ArgSpec("ids", ArgKind.HostLineIds, Required: true, MaxItems: HostsPaste.MaxEntries)),
+        new("hosts_uncomment", true, false),
+        new("hosts_restore", true, false),
         new("stop_foreign", true, false),
         new("core_repair", true, true),
         new("remove_all", true, false),
@@ -258,6 +272,39 @@ public static partial class HelperCommands
                     // Домены и подсети не содержат ни обратного слеша, ни кавычек, ни управляющих символов.
                     if (ForbiddenInLineRx().IsMatch(line))
                         throw new HelperRequestException(id, $"{Where()}: строка похожа на путь или командную строку.");
+                    list.Add(line);
+                }
+                return list;
+            }
+
+            case ArgKind.HostEntries:
+            case ArgKind.PublicHostEntries:
+            {
+                if (v is not JsonArray arr) throw new HelperRequestException(id, $"{Where()}: нужен список строк.");
+                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, $"{Where()}: больше {s.MaxItems} строк.");
+                var list = new List<string>(arr.Count);
+                foreach (var item in arr)
+                {
+                    if (item is null) throw new HelperRequestException(id, $"{Where()}: пустой элемент.");
+                    var line = String(id, Where(), item, MaxLineLength);
+                    if (!HostsPaste.TryEntry(line, s.Kind == ArgKind.PublicHostEntries, out var e))
+                        throw new HelperRequestException(id, $"{Where()}: «{Short(line)}» — не пара «адрес имя».");
+                    var canon = $"{e.Ip} {e.Host}";
+                    if (!list.Contains(canon)) list.Add(canon);
+                }
+                return list;
+            }
+
+            case ArgKind.HostLineIds:
+            {
+                if (v is not JsonArray arr) throw new HelperRequestException(id, $"{Where()}: нужен список строк.");
+                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, $"{Where()}: больше {s.MaxItems} строк.");
+                var list = new List<string>(arr.Count);
+                foreach (var item in arr)
+                {
+                    var line = item is null ? "" : String(id, Where(), item, 20);
+                    if (!HostsText.TryParseId(line, out _, out _)) throw new HelperRequestException(id, $"{Where()}: «{Short(line)}» — не «номер:отпечаток».");
+                    if (list.Contains(line)) throw new HelperRequestException(id, $"{Where()}: строка указана дважды.");
                     list.Add(line);
                 }
                 return list;
