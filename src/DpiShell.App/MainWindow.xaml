@@ -681,7 +681,7 @@
                                         <local:InfoButton Topic="{x:Static local:InfoTexts.SiteCheck}" Margin="8,0,0,8" />
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBox Text="{Binding SiteUrl, UpdateSourceTrigger=PropertyChanged}" Width="280" Padding="6,4" VerticalAlignment="Center"
+                                        <TextBox Text="{Binding SiteUrl, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" Width="280" Padding="6,4" VerticalAlignment="Center"
                                                  ToolTip="Адрес сайта, например example.com" AutomationProperties.Name="Адрес сайта">
                                             <TextBox.InputBindings>
                                                 <KeyBinding Key="Enter" Command="{Binding SiteCheckCmd}" />
@@ -733,7 +733,7 @@
                                                             <ColumnDefinition Width="Auto" />
                                                             <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
-                                                        <TextBox Text="{Binding Url, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" Padding="6,4" VerticalContentAlignment="Center"
+                                                        <TextBox Text="{Binding Url, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" FontFamily="Consolas" Padding="6,4" VerticalContentAlignment="Center"
                                                                  AutomationProperties.Name="Адрес" />
                                                         <CheckBox Grid.Column="1" Content="важный" IsChecked="{Binding Important}" VerticalAlignment="Center" Margin="14,0,10,0" />
                                                         <Button Grid.Column="2" Content="✕" Style="{StaticResource LinkButton}" ToolTip="Убрать" AutomationProperties.Name="Убрать адрес"
@@ -759,12 +759,12 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
                                     <TextBlock Text="Оптимизировать (домен на строку)" Style="{StaticResource Hint}" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding ListGeneralText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110"
+                                    <TextBox Text="{Binding ListGeneralText, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" AcceptsReturn="True" Height="110"
                                              FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="Оптимизировать" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2">
                                     <TextBlock Text="Исключения (оптимизация их не трогает)" Style="{StaticResource Hint}" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding ListExcludeText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110"
+                                    <TextBox Text="{Binding ListExcludeText, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" AcceptsReturn="True" Height="110"
                                              FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="Исключения" />
                                 </StackPanel>
                             </Grid>
@@ -798,9 +798,9 @@
                                     <StackPanel>
                                         <TextBlock Text="Настроить под игру" Style="{StaticResource H2}" />
                                         <TextBlock Text="{Binding Intro}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="{Binding ShowIntro, Converter={StaticResource Vis}}" />
-                                        <TextBlock Text="{Binding Status}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="{Binding HasStatus, Converter={StaticResource Vis}}" />
-                                        <TextBlock Text="{Binding RecText}" FontFamily="Consolas" Margin="0,4,0,0" Visibility="{Binding IsRecording, Converter={StaticResource Vis}}" />
-                                        <TextBlock Text="{Binding Detail}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="{Binding HasDetail, Converter={StaticResource Vis}}" />
+                                        <TextBlock Text="{Binding Status}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="{Binding HasStatus, Converter={StaticResource Vis}}" local:Demo.Sensitive="True" />
+                                        <TextBlock Text="{Binding RecText}" FontFamily="Consolas" Margin="0,4,0,0" Visibility="{Binding IsRecording, Converter={StaticResource Vis}}" local:Demo.Sensitive="True" />
+                                        <TextBlock Text="{Binding Detail}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="{Binding HasDetail, Converter={StaticResource Vis}}" local:Demo.Sensitive="True" />
                                         <ProgressBar IsIndeterminate="True" Height="6" Margin="0,8,0,0" Visibility="{Binding IsWorking, Converter={StaticResource Vis}}" />
                                         <WrapPanel Margin="0,10,0,0">
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{Binding StartText}" Style="{StaticResource Primary}" Command="{Binding StartCmd}"
@@ -833,8 +833,8 @@
                                                             <Button ContentTemplate="{StaticResource Shield}" Content="Вернуть как было" Command="{Binding RemoveCmd}" />
                                                         </StackPanel>
                                                         <StackPanel>
-                                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                                            <TextBlock Text="{Binding Summary}" Style="{StaticResource Hint}" TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" local:Demo.Sensitive="True" />
+                                                            <TextBlock Text="{Binding Summary}" Style="{StaticResource Hint}" TextTrimming="CharacterEllipsis" local:Demo.Sensitive="True" />
                                                             <TextBlock Style="{StaticResource Hint}"><Run Text="Параметры " /><Run Text="{Binding Variant, Mode=OneWay}" /></TextBlock>
                                                         </StackPanel>
                                                     </DockPanel>
@@ -858,7 +858,7 @@
                                             <DockPanel Margin="0,3,0,3">
                                                 <Button DockPanel.Dock="Right" Content="Обновить" Command="{Binding RefreshProcessesCmd}" Margin="8,0,0,0" IsEnabled="{Binding AdvIdle}" />
                                                 <RadioButton Content="Выбранный процесс:" IsChecked="{Binding AdvByProcess}" VerticalAlignment="Center" Margin="0,0,10,0" IsEnabled="{Binding AdvIdle}" />
-                                                <ComboBox ItemsSource="{Binding Processes}" DisplayMemberPath="Display" SelectedItem="{Binding SelectedProcess}" IsEnabled="{Binding AdvIdle}"
+                                                <ComboBox ItemsSource="{Binding Processes}" DisplayMemberPath="Display" SelectedItem="{Binding SelectedProcess}" IsEnabled="{Binding AdvIdle}" local:Demo.Sensitive="True"
                                                           AutomationProperties.Name="Процесс для записи" />
                                             </DockPanel>
                                             <CheckBox Content="Без драйвера (только TCP)" IsChecked="{Binding AdvNoDriver}" HorizontalAlignment="Left" Margin="0,6,0,0" IsEnabled="{Binding AdvIdle}"
@@ -867,7 +867,7 @@
                                             <WrapPanel Margin="0,10,0,0">
                                                 <Button ContentTemplate="{StaticResource Shield}" Content="Записать" Style="{StaticResource Primary}" Command="{Binding AdvStartCmd}" />
                                                 <Button Content="Стоп" Command="{Binding AdvStopCmd}" />
-                                                <TextBlock Text="{Binding RecText}" FontFamily="Consolas" VerticalAlignment="Center" Margin="4,0,0,8" Visibility="{Binding AdvRecording, Converter={StaticResource Vis}}" />
+                                                <TextBlock Text="{Binding RecText}" FontFamily="Consolas" VerticalAlignment="Center" Margin="4,0,0,8" Visibility="{Binding AdvRecording, Converter={StaticResource Vis}}" local:Demo.Sensitive="True" />
                                             </WrapPanel>
                                         </StackPanel>
                                     </Border>
@@ -891,8 +891,8 @@
                                                             </DataTemplate>
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
-                                                    <DataGridTextColumn Header="Программа" Binding="{Binding Process}" Width="*" />
-                                                    <DataGridTextColumn Header="Адрес" Binding="{Binding Address}" Width="*" />
+                                                    <DataGridTextColumn Header="Программа" Binding="{Binding Process}" Width="*" ElementStyle="{StaticResource SensitiveCell}" />
+                                                    <DataGridTextColumn Header="Адрес" Binding="{Binding Address}" Width="*" ElementStyle="{StaticResource SensitiveCell}" />
                                                     <DataGridTextColumn Header="Порт" Binding="{Binding Port}" Width="60" />
                                                     <DataGridTextColumn Header="Тип" Binding="{Binding Kind}" Width="48" />
                                                     <DataGridTextColumn Header="Состояние" Binding="{Binding State}" Width="82" />
@@ -907,7 +907,7 @@
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel>
                                                     <TextBlock Text="Название профиля" Style="{StaticResource Hint}" Margin="0,0,0,4" />
-                                                    <TextBox Text="{Binding ProfileTitle, UpdateSourceTrigger=PropertyChanged}" Padding="6" MaxLength="60" AutomationProperties.Name="Название профиля" />
+                                                    <TextBox Text="{Binding ProfileTitle, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" Padding="6" MaxLength="60" AutomationProperties.Name="Название профиля" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="2">
                                                     <TextBlock Text="Параметры" Style="{StaticResource Hint}" Margin="0,0,0,4" />
@@ -916,7 +916,7 @@
                                             </Grid>
                                             <DockPanel Margin="0,10,0,0">
                                                 <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="Сохранить профиль" Style="{StaticResource Primary}" Command="{Binding SaveCmd}" VerticalAlignment="Top" />
-                                                <TextBlock Text="{Binding Preview}" Style="{StaticResource Hint}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="4,0,0,8" />
+                                                <TextBlock Text="{Binding Preview}" Style="{StaticResource Hint}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="4,0,0,8" local:Demo.Sensitive="True" />
                                             </DockPanel>
                                         </StackPanel>
                                     </Border>
@@ -1229,7 +1229,7 @@
                                         <TextBlock Text="{Binding ToolsUnavailableText}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding ToolsUnavailable, Converter={StaticResource Vis}}" />
                                         <TextBox Text="{Binding PasteText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AutomationProperties.Name="Строки для примерки"
                                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap"
-                                                 FontFamily="Consolas" FontSize="14" Padding="8" Height="110" />
+                                                 FontFamily="Consolas" FontSize="14" Padding="8" Height="110" local:Demo.Sensitive="True" />
                                         <WrapPanel Margin="0,10,0,0">
                                             <Button ContentTemplate="{StaticResource Shield}" Content="Примерить" Style="{StaticResource Primary}" Command="{Binding TryCmd}" />
                                             <Button Content="Стоп" Command="{Binding StopCmd}" Visibility="{Binding Trying, Converter={StaticResource Vis}}" />
@@ -1265,7 +1265,7 @@
                                                         <Button DockPanel.Dock="Right" Content="Убрать" Style="{StaticResource LinkButton}" VerticalAlignment="Center"
                                                                 Command="{Binding DataContext.RemoveUserCmd, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
                                                         <StackPanel>
-                                                            <TextBlock Text="{Binding Text}" FontFamily="Consolas" FontSize="14" TextWrapping="Wrap" />
+                                                            <TextBlock Text="{Binding Text}" FontFamily="Consolas" FontSize="14" TextWrapping="Wrap" local:Demo.Sensitive="True" />
                                                             <TextBlock Text="{Binding Note}" Style="{StaticResource Hint}" FontSize="12" />
                                                         </StackPanel>
                                                     </DockPanel>
@@ -1309,7 +1309,7 @@
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
                                                         <StackPanel Margin="0,0,0,4">
-                                                            <TextBlock Text="{Binding Text}" FontFamily="Consolas" FontSize="13" TextWrapping="Wrap" />
+                                                            <TextBlock Text="{Binding Text}" FontFamily="Consolas" FontSize="13" TextWrapping="Wrap" local:Demo.Sensitive="True" />
                                                             <TextBlock Text="{Binding Note}" Style="{StaticResource Hint}" FontSize="12" />
                                                         </StackPanel>
                                                     </DataTemplate>

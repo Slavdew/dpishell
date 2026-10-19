@@ -11,14 +11,28 @@
 
 Они видят друг друга по [договору](docs/dev/router-api.md); каждый работает и сам по себе. Установка самой OpenWrt — под ответственность пользователя.
 
+## Как выглядит
+
+Окно Windows-приложения в светлой и тёмной теме. Адреса, имена программ и сети на снимках выдуманы и размыты: снимки сделаны в демо-режиме на подставных данных.
+
+| | Светлая | Тёмная |
+|---|---|---|
+| **Главная** — включить, что открывается, что мешает | <img src="docs/screenshots/home-light.png" width="420" alt="Главная, светлая тема"> | <img src="docs/screenshots/home-dark.png" width="420" alt="Главная, тёмная тема"> |
+| **Подбор** — результат проверки стратегий | <img src="docs/screenshots/select-light.png" width="420" alt="Подбор стратегии, светлая тема"> | <img src="docs/screenshots/select-dark.png" width="420" alt="Подбор стратегии, тёмная тема"> |
+| **Роутер** — состояние и действия | <img src="docs/screenshots/router-light.png" width="420" alt="Роутер, светлая тема"> | <img src="docs/screenshots/router-dark.png" width="420" alt="Роутер, тёмная тема"> |
+| **Игры и программы** — настройка под игру | <img src="docs/screenshots/apps-light.png" width="420" alt="Игры и программы, светлая тема"> | <img src="docs/screenshots/apps-dark.png" width="420" alt="Игры и программы, тёмная тема"> |
+| **DNS** — защищённый DNS этого компьютера | <img src="docs/screenshots/dns-light.png" width="420" alt="DNS, светлая тема"> | <img src="docs/screenshots/dns-dark.png" width="420" alt="DNS, тёмная тема"> |
+| **Информация и обновления** — версии, списки | <img src="docs/screenshots/about-light.png" width="420" alt="Информация и обновления, светлая тема"> | <img src="docs/screenshots/about-dark.png" width="420" alt="Информация и обновления, тёмная тема"> |
+
+Остальные вкладки («Сайты», «Починить адреса», «Диагностика», «Настройки») — в [docs/screenshots/](docs/screenshots/).
+
 ## Скачать (бета)
 
 1. Откройте [страницу последнего выпуска](https://github.com/Slavdew/dpishell/releases/latest) и скачайте `DpiShell-<версия>-portable.zip`.
 2. Распакуйте в любую папку и запустите `DpiShell.exe`. Программа не подписана — Windows SmartScreen может предупредить: «Подробнее» → «Выполнить в любом случае». Если такой кнопки нет — запуск, возможно, ограничивает Smart App Control или политика организации.
 3. Нажмите «Включить». Подробно — [docs/windows/README.md](docs/windows/README.md).
 
-Это бета: если что-то не работает, [напишите](https://github.com/Slavdew/dpishell/issues), что видели (лучше со снимком экрана). Снимки экрана программы появятся в следующих версиях.
-
+Это бета: если что-то не работает, [напишите](https://github.com/Slavdew/dpishell/issues), что видели (лучше со снимком экрана).
 ## Разработчикам
 
 - [Устройство обоих продуктов](docs/dev/architecture.md) — данные, подбор, безопасность, что планируется.

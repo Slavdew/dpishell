@@ -27,6 +27,12 @@
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
 
+        <!-- Ячейка таблицы с личным (процессы, адреса записи): в демо-режиме размывается, см. Demo.cs. -->
+        <Style x:Key="SensitiveCell" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="local:Demo.Sensitive" Value="True" />
+            <Setter Property="Margin" Value="2,0" />
+        </Style>
+
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource Surface}" />
             <Setter Property="BorderBrush" Value="{DynamicResource Line}" />

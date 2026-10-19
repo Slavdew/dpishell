@@ -37,7 +37,13 @@ public sealed partial class WindowSmokeTests
                     settings.UpdatesApp = "99.0";
                     settings.UpdatesCheckedAt = settings.UpdatesOkAt = new DateTime(2026, 10, 17, 12, 0, 0);
                     if (theme == ThemeManager.Dark) shell.State.RunMode = "process";
-                    var (vm, helper) = WithPcHelper(shell, settings);
+                    // Запись подключений «Игр и программ» — на подменённых источнике потоков и списке процессов (выдуманные game.exe/chrome.exe).
+                    var flows = new FakeFlowSource();
+                    var procs = new FakeProcesses(new ProcInfo(4, 0, "System"), new ProcInfo(900, 4, "chrome.exe"));
+                    var helper = new HelperFixture(backend: PcHelper.Over(shell, flows, procs));
+                    var link = Task.Run(helper.LinkAsync).GetAwaiter().GetResult();
+                    var vm = TestWindow.Model(shell, link, settings);
+                    vm.Apps.ListProcesses = () => [new(900, "chrome.exe", "Новая вкладка"), new(2000, "game.exe", "Моя игра")];
                     Fill(vm, shell);
                     // «Сайты»: формат ввода — на example.com (это поле не размыто), список сохранён.
                     vm.TargetsText = "example.com\r\nvideo.example.com\r\nchat.example.org\r\nhttps://cdn.example.net/";
@@ -55,6 +61,9 @@ public sealed partial class WindowSmokeTests
                         Pump();
                         SetProp(vm, "IsLoading", false);
                         typeof(MainViewModel).GetMethod("UpdateStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
+                        // Во временной папке нет файлов ядра («повреждены») — на снимке всё в порядке.
+                        SetProp(vm, "CoreBroken", false);   // CoreText ниже перечитывает строку «Ядро»
+                        SetProp(vm, "CoreText", "в порядке (версия v72.13)");
                         Pump();
                         Snap(w, Path.Combine(dir, $"{theme}-{name}.png"));
                     }
@@ -81,6 +90,42 @@ public sealed partial class WindowSmokeTests
                     vm.Page = Pages.Router;
                     Pump();
                     Snap(w, Path.Combine(dir, $"{theme}-router.png"));
+
+                    // «Игры и программы»: простой режим «Начать» → «Готово» → «Заработало?» (профиль в списке), затем для опытных — запись со списком.
+                    vm.Page = Pages.Apps;
+                    Pump();
+                    var tabs = Find<System.Windows.Controls.TabControl>(w)!;
+                    System.Windows.Controls.Button? Btn(string content) => Find<System.Windows.Controls.Button>(tabs, b => b.IsVisible && b.Content as string == content);
+                    Btn("Начать")!.Command.Execute(null);
+                    PumpUntil(() => vm.Apps.IsRecording, "запись");
+                    procs.List.Add(new ProcInfo(2000, 4, "game.exe"));
+                    flows.Push("udp", "203.0.113.50", 27015, 2000);
+                    flows.Push("tcp", "198.51.100.7", 443, 2000, FlowHint.Established);
+                    Task.Run(() => vm.Apps.TickAsync()).GetAwaiter().GetResult();
+                    Pump();
+                    Btn("Готово")!.Command.Execute(null);
+                    PumpUntil(() => vm.Apps.IsCheck, "применение и вопрос");
+                    Pump();
+                    Snap(w, Path.Combine(dir, $"{theme}-apps-simple.png"));
+                    Btn("Да, заработало")!.Command.Execute(null);
+                    Pump();
+                    vm.ShowAdvancedSetting = true;
+                    Pump();
+                    vm.Apps.RefreshProcesses();
+                    Btn("Записать")!.Command.Execute(null);
+                    PumpUntil(() => vm.Apps.AdvRecording, "запись");
+                    flows.Push("udp", "203.0.113.51", 27016, 2000);
+                    flows.Push("udp", "192.168.1.1", 53, 2000);
+                    flows.Push("tcp", "198.51.100.60", 443, 900);
+                    Btn("Стоп")!.Command.Execute(null);
+                    PumpUntil(() => vm.Apps.HasRows, "список подключений");
+                    Pump();
+                    var grid = Find<System.Windows.Controls.DataGrid>(tabs, g => g.IsVisible && g.Items.Count > 0) ?? throw new Exception("Нет таблицы подключений");
+                    grid.BringIntoView();
+                    if (Find<System.Windows.Controls.ScrollViewer>(tabs, sv => sv.IsVisible && sv.ScrollableHeight > 0) is { } scroll)
+                        scroll.ScrollToVerticalOffset(scroll.ScrollableHeight * 0.55);
+                    Pump();
+                    Snap(w, Path.Combine(dir, $"{theme}-apps-advanced.png"));
                     Close(w);
                     Stop(vm, helper);
                 }
