@@ -224,8 +224,23 @@ public sealed partial class RouterViewModel
     /// <summary>Кнопка метода: вошли, не заняты и роутер этот метод умеет.</summary>
     bool Can(string method) => CanAct && (Compat?.CanCall(method) ?? true);
 
+    // ---------- строка «DpiShell на роутере» на вкладке «Информация и обновления» (только чтение состояния, роутеру ничего не уходит) ----------
+
+    /// <summary>Версия пакета: подключён — из статуса; найден, но не вошли — из поиска; иначе «Не установлено».</summary>
+    public string PackageVersionText => Connected ? (_status?.Version is { Length: > 0 } v ? v : "неизвестно")
+        : Found ? (_detection?.Status?.Version is { Length: > 0 } dv ? dv + " · нужен вход на вкладке «Роутер»" : "найден · нужен вход на вкладке «Роутер»")
+        : "Не установлено";
+    public string PackageUpdateText => UpdateAvailable ? $"Доступно обновление {_status?.Update?.Version}" : "";
+    public bool ShowPackageInstall => !Found && CanInstall;
+
+    void RaiseAbout()
+    {
+        foreach (var n in new[] { nameof(PackageVersionText), nameof(PackageUpdateText), nameof(ShowPackageInstall) }) Raise(n);
+    }
+
     void RaiseCompat()
     {
+        RaiseAbout();
         foreach (var n in new[] { nameof(Compat), nameof(Blocked), nameof(HasCompat), nameof(CompatText), nameof(CompatNeedsApp), nameof(CompatNeedsRouter),
                                   nameof(RouterNewer), nameof(MethodsTip), nameof(CanAct), nameof(ScheduleEditable) })
             Raise(n);
@@ -245,7 +260,7 @@ public sealed partial class RouterViewModel
         return true;
     }
 
-    /// <summary>Страница выпусков программы — выпуск программы (само обновление — в «Настройках» → «Обновления», см. <see cref="GoUpdatesCmd"/>).</summary>
+    /// <summary>Страница выпусков программы — выпуск программы (само обновление — на вкладке «Информация и обновления», см. <see cref="GoUpdatesCmd"/>).</summary>
     public const string AppReleasesUrl = "https://github.com/Slavdew/dpishell/releases/latest";
     public ICommand OpenAppReleasesCmd => _openAppCmd ??= new RelayCommand(() =>
     {
@@ -254,8 +269,8 @@ public sealed partial class RouterViewModel
     });
     ICommand? _openAppCmd;
 
-    /// <summary>«Обновить программу в „Настройках“»: программа обновляется там (карточка «Обновления»), а не отсюда.</summary>
-    public ICommand GoUpdatesCmd => _goUpdatesCmd ??= new RelayCommand(() => Navigate(Pages.Settings));
+    /// <summary>«Обновить программу →»: программа обновляется на вкладке «Информация и обновления» (блок «Версия»), а не отсюда.</summary>
+    public ICommand GoUpdatesCmd => _goUpdatesCmd ??= new RelayCommand(() => Navigate(Pages.About));
     ICommand? _goUpdatesCmd;
 
     // ---------- обновление DpiShell на роутере (ядро договора §5.4) ----------

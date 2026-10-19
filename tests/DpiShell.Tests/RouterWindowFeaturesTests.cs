@@ -701,7 +701,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.True(Count(r, "diag") > before);
     }
 
-    /// <summary>«Обновить программу» с «Роутера» — ссылка в «Настройки», где обновление; страницу выпусков команда по-прежнему открывает.</summary>
+    /// <summary>«Обновить программу» с «Роутера» — ссылка на «Информация и обновления», где обновление; страницу выпусков команда по-прежнему открывает.</summary>
     [Fact]
     public async Task UpdateApp_LinkLeadsToSettings()
     {
@@ -710,7 +710,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         int page = -1;
         vm.Navigate = p => page = p;
         vm.GoUpdatesCmd.Execute(null);
-        Assert.Equal(Pages.Settings, page);
+        Assert.Equal(Pages.About, page);
     }
 
     // ---------- свои адреса роутера пусты (router-api §5.2) ----------

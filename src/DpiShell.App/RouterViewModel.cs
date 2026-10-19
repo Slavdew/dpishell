@@ -306,7 +306,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     /// <summary>
     /// «Установить на роутер» (установка по SSH, router-api §5.4) — место в пустом состоянии готово; кнопка видна, когда окно задаст команду.
     /// </summary>
-    public ICommand? InstallCmd { get => _installCmd; set { if (Set(ref _installCmd, value)) Raise(nameof(CanInstall)); } }
+    public ICommand? InstallCmd { get => _installCmd; set { if (Set(ref _installCmd, value)) { Raise(nameof(CanInstall)); RaiseAbout(); } } }
     public bool CanInstall => InstallCmd is not null;
 
     bool _connected;
@@ -420,7 +420,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         _detection = d;
         if (d is null || d.Found == RouterFound.NotFound) { Status = null; Connected = false; }
         else ClearRemoved();
-        Raise(nameof(Detection)); Raise(nameof(Found)); Raise(nameof(NeedLogin)); Raise(nameof(InstallText));
+        Raise(nameof(Detection)); Raise(nameof(Found)); Raise(nameof(NeedLogin)); Raise(nameof(InstallText)); RaiseAbout();
         UpdateHome();
     }
 

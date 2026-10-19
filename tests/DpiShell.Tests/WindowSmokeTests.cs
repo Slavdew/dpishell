@@ -150,7 +150,7 @@ public sealed class WindowSmokeTests
     }).GetAwaiter().GetResult();
 
     static readonly (int Page, string Name)[] AllPages =
-        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Sites, "sites"), (Pages.Net, "net"), (Pages.Hosts, "hosts"), (Pages.Dns, "dns"), (Pages.Diag, "diag"), (Pages.Settings, "settings")];
+        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Sites, "sites"), (Pages.Net, "net"), (Pages.Hosts, "hosts"), (Pages.Dns, "dns"), (Pages.Diag, "diag"), (Pages.Settings, "settings"), (Pages.About, "about")];
 
     [Fact]
     public void MainWindow_OpensAndAllPagesBind_WithoutErrors()
@@ -162,7 +162,7 @@ public sealed class WindowSmokeTests
             var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
             var w = Open(vm);
             var tabs = Find<TabControl>(w)!;
-            foreach (var page in new[] { Pages.Select, Pages.Sites, Pages.Net, Pages.Hosts, Pages.Dns, Pages.Diag, Pages.Router, Pages.Settings, Pages.Home })
+            foreach (var page in new[] { Pages.Select, Pages.Sites, Pages.Net, Pages.Hosts, Pages.Dns, Pages.Diag, Pages.Router, Pages.Settings, Pages.About, Pages.Home })
             {
                 vm.Page = page;
                 Pump();
@@ -329,6 +329,27 @@ public sealed class WindowSmokeTests
                             throw new Exception("Автозапуск по умолчанию: включён без службы, выключен в режиме службы");
                     }
                     if (page == Pages.Settings) AssertServiceMode(w, vm);
+                    if (page == Pages.Settings || page == Pages.About)
+                    {
+                        // Обновления и версии — только на «Информация и обновления»; в «Настройках» их нет.
+                        var tabsAbout = Find<TabControl>(w)!;
+                        bool Has(string text) => Find<TextBlock>(tabsAbout, t => t.Text == text && t.IsVisible) is not null
+                                                 || Find<Button>(tabsAbout, b => b.Content as string == text && b.IsVisible) is not null;
+                        string[] aboutOnly = ["Версия", "Проверить обновления", "Обновить списки", "Ядро (zapret)", "DpiShell на роутере", "Программа", "Помощник", "Данные"];
+                        foreach (var t in aboutOnly)
+                            if (Has(t) != (page == Pages.About))
+                                throw new Exception($"«{t}»: {(page == Pages.About ? "нет на «Информация и обновления»" : "осталось в «Настройках»")}");
+                        if (page == Pages.Settings && Has("Обновления")) throw new Exception("В «Настройках» осталась карточка «Обновления»");
+                        if (page == Pages.About)
+                        {
+                            if (!Has("Не установлено") && Find<TextBlock>(tabsAbout, t => t.Text == "Не установлено" && t.IsVisible) is null) throw new Exception("Нет строки «Не установлено» для роутера");
+                            if (!Has("Установить на роутер")) throw new Exception("Нет кнопки «Установить на роутер» на «Информация и обновления»");
+                            if (Find<TextBlock>(tabsAbout, t => t.Text.Contains("обход", StringComparison.OrdinalIgnoreCase) && t.IsVisible && t.Text.Contains("zapret")) is not null) throw new Exception("На «Информация и обновления» описана цель");
+                            if (Find<Button>(tabsAbout, b => (b.Content as string ?? "").StartsWith("zapret (bol-van)") && b.IsVisible) is null
+                                || Find<Button>(tabsAbout, b => (b.Content as string ?? "").StartsWith("github.com/Slavdew/dpishell") && b.IsVisible) is null)
+                                throw new Exception("Нет ссылок на zapret и репозиторий");
+                        }
+                    }
                     if (page == Pages.Settings)
                     {
                         // Неактивная ссылка — серая (Muted), а не бледно-синяя: на неё не жмут.
@@ -522,7 +543,7 @@ public sealed class WindowSmokeTests
                         Snap(w, Path.Combine(snapDir, $"{theme}-diag-checks.png"));
                         sv.ScrollToHome();
                     }
-                    // Настройки: конец — «О программе» и «Очистка и удаление».
+                    // Настройки: конец — «Информация и обновления» и «Очистка и удаление».
                     if (page == Pages.Settings && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } stv)
                     {
                         stv.ScrollToEnd();
@@ -772,9 +793,9 @@ public sealed class WindowSmokeTests
                     Pump();
                     var tabs = Find<TabControl>(w)!;
                     if (Find<Button>(tabs, b => b.Content as string == "Обновить программу ↗") is not null) throw new Exception($"Осталась «Обновить программу ↗» ({name})");
-                    if (Find<Button>(tabs, b => (b.Content as string ?? "").StartsWith("Обновить программу в «Настройках»") && b.IsVisible) is not { } toSettings) throw new Exception($"Нет плашки совместимости ({name})");
+                    if (Find<Button>(tabs, b => (b.Content as string ?? "").StartsWith("Обновить программу →") && b.IsVisible) is not { } toSettings) throw new Exception($"Нет плашки совместимости ({name})");
                     toSettings.Command.Execute(null);
-                    if (vm.Page != Pages.Settings) throw new Exception($"Ссылка «Обновить программу» не привела в «Настройки» ({name})");
+                    if (vm.Page != Pages.About) throw new Exception($"Ссылка «Обновить программу» не привела в «Информация и обновления» ({name})");
                     vm.Page = Pages.Router;
                     Pump();
                     if (name == "blocked" && Find<Button>(tabs, b => b.Content as string == "Проверить" && b.IsVisible && b.IsEnabled) is not null)

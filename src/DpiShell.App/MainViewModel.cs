@@ -14,7 +14,7 @@ public enum StatusKind { Off, On, Busy, Error }
 public static class Pages
 {
     // «Сайты» (свои адреса и исключения), «Игры и IP-списки», «Починить адреса» (hosts), «DNS»; порядок вкладок — по номерам.
-    public const int Home = 0, Select = 1, Sites = 2, Net = 3, Hosts = 4, Dns = 5, Diag = 6, Router = 7, Settings = 8;
+    public const int Home = 0, Select = 1, Sites = 2, Net = 3, Hosts = 4, Dns = 5, Diag = 6, Router = 7, Settings = 8, About = 9;
 }
 
 /// <summary>
@@ -84,6 +84,7 @@ public sealed partial class MainViewModel : Observable
         EnableCmd = RelayCommand.Async(EnableAsync, () => !Busy && !IsLoading);
         DisableCmd = RelayCommand.Async(DisableAsync, () => !Busy && !IsLoading);
         GoSelectCmd = new RelayCommand(() => Page = Pages.Select);
+        GoAboutCmd = new RelayCommand(() => Page = Pages.About);
         GoDiagCmd = new RelayCommand(() => Page = Pages.Diag);
         CheckNowCmd = RelayCommand.Async(CheckNowAsync, () => !Busy && !IsLoading && !Checking);
 
@@ -155,7 +156,7 @@ public sealed partial class MainViewModel : Observable
     public bool HasHelperProblem => HelperProblem.Length > 0;
     public string FixHelperText => Helper.State == HelperState.Outdated ? "Обновить помощника" : "Переустановить помощника";
 
-    /// <summary>Состояние помощника — в «Настройках» → «О программе».</summary>
+    /// <summary>Состояние помощника — на вкладке «Информация и обновления».</summary>
     public string HelperText => Helper.State switch
     {
         HelperState.Connected => "работает" + (Helper.Reader?.HelperVersion is { Length: > 0 } v ? $" (версия {v})" : ""),
@@ -322,7 +323,7 @@ public sealed partial class MainViewModel : Observable
             if (value == Pages.Hosts) _ = Hosts.RefreshAsync();
             if (value == Pages.Router) _ = Router.RefreshRouterPageAsync();   // и «Роутер: что мешает» — внутри
             if (value == Pages.Dns && DnsRows.Count == 0) _ = CheckDnsAsync();
-            if (value == Pages.Diag) _ = RefreshDiagAsync();
+            if (value == Pages.Diag || value == Pages.About) _ = RefreshDiagAsync();   // «Информация и обновления» показывает версию ядра
         }
     }
 
@@ -1427,7 +1428,9 @@ public sealed partial class MainViewModel : Observable
     string _serviceText = "", _driverText = "", _coreText = "";
     public string ServiceText { get => _serviceText; private set => Set(ref _serviceText, value); }
     public string DriverText { get => _driverText; private set => Set(ref _driverText, value); }
-    public string CoreText { get => _coreText; private set => Set(ref _coreText, value); }
+    public string CoreText { get => _coreText; private set { if (Set(ref _coreText, value)) Raise(nameof(CoreRowText)); } }
+    /// <summary>Строка «Ядро» на «Информация и обновления»: пустая (ещё не проверяли) — «неизвестно».</summary>
+    public string CoreRowText => string.IsNullOrEmpty(_coreText) ? "неизвестно" : _coreText;
 
     bool _coreBroken;
     public bool CoreBroken { get => _coreBroken; private set => Set(ref _coreBroken, value); }
@@ -1453,8 +1456,30 @@ public sealed partial class MainViewModel : Observable
     });
     ICommand? _openDefenderCmd;
 
-    /// <summary>«Настройки» → «О программе»: версия окна и состояние помощника.</summary>
+    /// <summary>«Информация и обновления» → «Версия»: версия окна и состояние помощника.</summary>
     public string AboutText => $"DpiShell {typeof(MainViewModel).Assembly.GetName().Version?.ToString(3)} · помощник: {HelperText}";
+
+    public string AppVersionText => typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "";
+
+    /// <summary>Переход на вкладку «Информация и обновления» (обновления, версия, лицензии).</summary>
+    public ICommand GoAboutCmd { get; }
+
+    public const string RepoUrl = "https://github.com/Slavdew/dpishell";
+    public const string ZapretUrl = "https://github.com/bol-van/zapret";
+    public static string NoticesPath => Path.Combine(AppContext.BaseDirectory, "THIRD-PARTY-NOTICES.txt");
+    public bool HasNotices => File.Exists(NoticesPath);
+    public ICommand OpenRepoCmd => _openRepoCmd ??= new RelayCommand(() => OpenLink(RepoUrl));
+    ICommand? _openRepoCmd;
+    public ICommand OpenZapretCmd => _openZapretCmd ??= new RelayCommand(() => OpenLink(ZapretUrl));
+    ICommand? _openZapretCmd;
+    public ICommand OpenNoticesCmd => _openNoticesCmd ??= new RelayCommand(() => OpenLink(NoticesPath));
+    ICommand? _openNoticesCmd;
+
+    void OpenLink(string target)
+    {
+        try { Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Fail("Не удалось открыть: " + e.Message); }
+    }
 
     public ICommand RefreshDiagCmd { get; }
     public ICommand RepairCoreCmd { get; }

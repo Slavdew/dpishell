@@ -258,6 +258,8 @@
                                     <DockPanel DataContext="{Binding Updates}">
                                         <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="Обновить списки" Command="{Binding InstallCmd}"
                                                 VerticalAlignment="Center" Margin="12,0,0,0" />
+                                        <Button DockPanel.Dock="Right" Content="К обновлениям →" Style="{StaticResource LinkButton}" Command="{Binding DataContext.GoAboutCmd, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="Версии и обновления" />
                                         <TextBlock Text="{Binding AvailableText}" VerticalAlignment="Center" TextWrapping="Wrap" />
                                     </DockPanel>
                                 </Border>
@@ -1147,8 +1149,8 @@
                                     <WrapPanel Margin="-4,8,0,0">
                                         <Button Content="Обновить роутер" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}" Margin="4,0,8,0"
                                                 Visibility="{Binding CompatNeedsRouter, Converter={StaticResource Vis}}" />
-                                        <Button Content="Обновить программу в «Настройках» →" Style="{StaticResource LinkButton}" Command="{Binding GoUpdatesCmd}" VerticalAlignment="Center" Margin="4,0,8,0"
-                                                ToolTip="Настройки → Обновления" Visibility="{Binding CompatNeedsApp, Converter={StaticResource Vis}}" />
+                                        <Button Content="Обновить программу →" Style="{StaticResource LinkButton}" Command="{Binding GoUpdatesCmd}" VerticalAlignment="Center" Margin="4,0,8,0"
+                                                ToolTip="Вкладка «Информация и обновления»" Visibility="{Binding CompatNeedsApp, Converter={StaticResource Vis}}" />
                                     </WrapPanel>
                                 </StackPanel>
                             </Border>
@@ -1554,36 +1556,6 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Обновления данных (architecture.md «Обновления данных»): проверка раз в день, установка — помощник; программа — ссылкой на релиз. -->
-                            <Border Style="{StaticResource Card}" DataContext="{Binding Updates}">
-                                <StackPanel>
-                                    <TextBlock Text="Обновления" Style="{StaticResource H2}" />
-                                    <TextBlock Text="{Binding StatusText}" Style="{StaticResource Hint}" />
-                                    <TextBlock Text="{Binding AvailableText}" FontWeight="SemiBold" Margin="0,8,0,0" TextWrapping="Wrap"
-                                               Visibility="{Binding DataAvailable, Converter={StaticResource Vis}}" />
-                                    <TextBlock Text="{Binding AppText}" Margin="0,8,0,0" TextWrapping="Wrap"
-                                               Visibility="{Binding AppAvailable, Converter={StaticResource Vis}}" />
-                                    <WrapPanel Margin="0,10,0,0">
-                                        <!-- Списки и программа — разными словами (UX-аудит 2, п. 13). -->
-                                        <Button ContentTemplate="{StaticResource Shield}" Content="Обновить списки" Style="{StaticResource Primary}" Command="{Binding InstallCmd}"
-                                                Visibility="{Binding DataAvailable, Converter={StaticResource Vis}}" />
-                                        <Button Content="{Binding AppButtonText}" Command="{Binding OpenReleaseCmd}"
-                                                Visibility="{Binding AppAvailable, Converter={StaticResource Vis}}" />
-                                        <Button Content="Проверить обновления" Command="{Binding CheckCmd}" />
-                                    </WrapPanel>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- О программе и помощник (helper-protocol): версия, состояние, переустановка. -->
-                            <Border Style="{StaticResource Card}">
-                                <StackPanel>
-                                    <TextBlock Text="О программе" Style="{StaticResource H2}" />
-                                    <TextBlock Text="{Binding AboutText}" Style="{StaticResource Hint}" />
-                                    <Button Content="{Binding FixHelperText}" Command="{Binding FixHelperCmd}" HorizontalAlignment="Left" Margin="0,10,0,0"
-                                            Visibility="{Binding HasHelperProblem, Converter={StaticResource Vis}}" />
-                                </StackPanel>
-                            </Border>
-
                             <!-- Удаление — отдельно, спокойным стилем, с тем, как вернуть (UX-аудит, «Опасные действия», п. 18–19). -->
                             <Border Style="{StaticResource Card}" Margin="0,18,0,14">
                                 <StackPanel>
@@ -1605,6 +1577,98 @@
                                         <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center"
                                                    Text="Окно останется только для просмотра. Вернуть — при первом действии программа предложит поставить помощника снова (один запрос прав)." />
                                     </DockPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- ===== Информация и обновления: версии и обновления (проверка раз в день, списки ставит помощник, программа — ссылкой на релиз), сведения и лицензии. ===== -->
+                <TabItem AutomationProperties.Name="Информация и обновления">
+                    <!-- Не влезает в пункт меню одной строкой (ширина 168) — перенос по смыслу, без многоточия. -->
+                    <TabItem.Header>
+                        <TextBlock>Информация<LineBreak />и обновления</TextBlock>
+                    </TabItem.Header>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Text="Информация и обновления" Style="{StaticResource H1}" />
+
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="Версия" Style="{StaticResource H2}" />
+                                    <Grid Margin="0,4,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0" Text="Программа" Style="{StaticResource Hint}" Margin="0,2,16,2" />
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding AppVersionText}" Margin="0,2,0,2" />
+                                        <TextBlock Grid.Row="1" Text="Помощник" Style="{StaticResource Hint}" Margin="0,2,16,2" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding HelperText}" TextWrapping="Wrap" Margin="0,2,0,2" />
+                                        <TextBlock Grid.Row="2" Text="Данные" Style="{StaticResource Hint}" Margin="0,2,16,2" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Updates.StatusText}" TextWrapping="Wrap" Margin="0,2,0,2" />
+                                        <TextBlock Grid.Row="3" Text="Ядро (zapret)" Style="{StaticResource Hint}" Margin="0,2,16,2" />
+                                        <StackPanel Grid.Row="3" Grid.Column="1">
+                                            <TextBlock Text="{Binding CoreRowText}" TextWrapping="Wrap" Margin="0,2,0,2" />
+                                            <Button ContentTemplate="{StaticResource Shield}" Content="Восстановить" Command="{Binding RepairCoreCmd}" HorizontalAlignment="Left"
+                                                    Visibility="{Binding CoreBroken, Converter={StaticResource Vis}}" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Row="4" Text="DpiShell на роутере" Style="{StaticResource Hint}" Margin="0,2,16,2" />
+                                        <StackPanel Grid.Row="4" Grid.Column="1" DataContext="{Binding Router}">
+                                            <TextBlock Text="{Binding PackageVersionText}" TextWrapping="Wrap" Margin="0,2,0,2" />
+                                            <TextBlock Text="{Binding PackageUpdateText}" FontWeight="SemiBold" Margin="0,2,0,2"
+                                                       Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
+                                            <WrapPanel>
+                                                <Button Content="{Binding UpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}"
+                                                        Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
+                                                <Button Content="Установить на роутер" Style="{StaticResource Primary}" Command="{Binding InstallCmd}"
+                                                        Visibility="{Binding ShowPackageInstall, Converter={StaticResource Vis}}" />
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                    <Button Content="{Binding FixHelperText}" Command="{Binding FixHelperCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                            Visibility="{Binding HasHelperProblem, Converter={StaticResource Vis}}" />
+
+                                    <!-- Обновления данных (architecture.md «Обновления данных»). Списки и программа — разными словами (UX-аудит 2, п. 13). -->
+                                    <StackPanel DataContext="{Binding Updates}">
+                                        <TextBlock Text="{Binding AvailableText}" FontWeight="SemiBold" Margin="0,12,0,0" TextWrapping="Wrap"
+                                                   Visibility="{Binding DataAvailable, Converter={StaticResource Vis}}" />
+                                        <TextBlock Text="{Binding AppText}" Margin="0,8,0,0" TextWrapping="Wrap"
+                                                   Visibility="{Binding AppAvailable, Converter={StaticResource Vis}}" />
+                                        <WrapPanel Margin="0,10,0,0">
+                                            <Button ContentTemplate="{StaticResource Shield}" Content="Обновить списки" Style="{StaticResource Primary}" Command="{Binding InstallCmd}"
+                                                    Visibility="{Binding DataAvailable, Converter={StaticResource Vis}}" />
+                                            <Button Content="{Binding AppButtonText}" Command="{Binding OpenReleaseCmd}"
+                                                    Visibility="{Binding AppAvailable, Converter={StaticResource Vis}}" />
+                                            <Button Content="Проверить обновления" Command="{Binding CheckCmd}" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="Информация" Style="{StaticResource H2}" />
+                                    <WrapPanel Margin="0,4,0,0">
+                                        <TextBlock Text="DpiShell — на основе " VerticalAlignment="Center" />
+                                        <Button Content="zapret (bol-van) ↗" Style="{StaticResource LinkButton}" Command="{Binding OpenZapretCmd}" VerticalAlignment="Center" Margin="0" />
+                                    </WrapPanel>
+                                    <WrapPanel Margin="0,6,0,0">
+                                        <TextBlock Text="Репозиторий: " VerticalAlignment="Center" />
+                                        <Button Content="github.com/Slavdew/dpishell ↗" Style="{StaticResource LinkButton}" Command="{Binding OpenRepoCmd}" VerticalAlignment="Center" Margin="0" />
+                                    </WrapPanel>
+                                    <TextBlock Text="Лицензия — MIT." Margin="0,6,0,0" />
+                                    <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                               Text="Лицензии сторонних компонентов — в файле THIRD-PARTY-NOTICES.txt рядом с программой." />
+                                    <Button Content="Открыть лицензии" Command="{Binding OpenNoticesCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                            Visibility="{Binding HasNotices, Converter={StaticResource Vis}}" />
                                 </StackPanel>
                             </Border>
                         </StackPanel>
