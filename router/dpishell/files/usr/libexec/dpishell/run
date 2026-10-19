@@ -52,9 +52,9 @@ function guard_select() {
 	st.write_atomic(st.WATCHDOG_SELECT, sprintf('%J\n', { at: time(), ok: !!p?.applied, best: p?.applied ? p.best : null }));
 	if (p?.applied) {
 		warn('watchdog_select_failed', null);
-		warn('auto_selected', `Сторож выключил обход, подбор нашёл и включил ${p.best}`);
+		warn('auto_selected', `Сторож выключил оптимизацию, подбор нашёл и включил ${p.best}`);
 	} else
-		warn('watchdog_select_failed', `Сторож выключил обход, подбор не включил стратегию: ${p?.message ?? 'подбор прервался'}. Включите обход или запустите подбор сами`);
+		warn('watchdog_select_failed', `Сторож выключил оптимизацию, подбор не включил стратегию: ${p?.message ?? 'подбор прервался'}. Включите оптимизацию или запустите подбор сами`);
 	st.write_status_json();
 }
 
@@ -128,7 +128,7 @@ function guard() {
 	} else {
 		system('/etc/init.d/zapret restart >/dev/null 2>&1');
 		let iv = min((gs.interval ?? 5) * 2, 20);
-		system(`logger -t dpishell 'Сторож: интернета нет и без обхода — обрыв у провайдера, обход оставлен; следующая проверка через ${iv} мин'`);
+		system(`logger -t dpishell 'Сторож: интернета нет и без оптимизации — обрыв у провайдера, оптимизация оставлена; следующая проверка через ${iv} мин'`);
 		save(false, { interval: iv, next_at: time() + iv * 60 - 30 });
 	}
 	unlink(l);

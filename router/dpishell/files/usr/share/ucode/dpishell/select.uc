@@ -467,7 +467,7 @@ function select_run(args) {
 	let ts_was = ts_get();
 	let deep = args.depth == 'deep';
 	let p = { running: true, started_by: args.started_by ?? 'app', depth: deep ? 'deep' : 'main', index: 0, total: 0, eta_s: null,
-		message: 'Проверка без обхода', rows: [], finished_at: null, cancelled: false, best: null, applied: false, backups: [] };
+		message: 'Проверка без оптимизации', rows: [], finished_at: null, cancelled: false, best: null, applied: false, backups: [] };
 	progress(p);
 	let cache = {};
 	let restore = () => {
@@ -488,7 +488,7 @@ function select_run(args) {
 	groups = baseline_groups(groups, cache);
 	if (!length(filter(groups, g => !g.control))) {
 		restore();
-		p = { ...p, running: false, finished_at: time(), message: 'блокировок не найдено — всё открывается и без обхода' };
+		p = { ...p, running: false, finished_at: time(), message: 'всё открывается и без оптимизации — подбирать нечего' };
 		progress(p);
 		return p;
 	}

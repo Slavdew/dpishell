@@ -36,7 +36,7 @@ return view.extend({
 		if (this.status.__error) {
 			return E('div', {}, [
 				E('h2', {}, 'DpiShell'),
-				api.card('Обход', [api.errorLine(this.status.__error),
+				api.card('Оптимизация', [api.errorLine(this.status.__error),
 					api.line('Если пакет только что установлен — обновите страницу через минуту.', 'dps-muted')])
 			]);
 		}
@@ -55,12 +55,12 @@ return view.extend({
 			apply: E('div', { 'class': 'dps-actions', 'style': 'display:none' }, [
 				api.btn('Применить', function() { return self.applyPending(); }, 'cbi-button-apply'),
 				api.btn('Отмена', function() { self.cancelPending(); }, 'cbi-button-neutral'),
-				E('span', { 'class': 'dps-muted' }, 'Обход для всей сети перезапустится — сайты моргнут на пару секунд.')
+				E('span', { 'class': 'dps-muted' }, 'Оптимизация для всей сети перезапустится — сайты моргнут на пару секунд.')
 			]),
 			modeAll: null, modeLists: null,
 			ts: E('div', { 'class': 'dps-line', 'style': 'display:none' }, [
-				'Компьютерам на Windows нужна настройка — без неё обход для них не работает',
-				api.info('Эта стратегия требует, чтобы Windows отправляла метки времени в соединениях (TCP timestamps); по умолчанию они выключены. Приложение DpiShell на компьютере включает их само. Вручную — в командной строке от администратора: netsh interface tcp set global timestamps=enabled. Телефоны, ТВ и приставки настраивать не нужно.')
+				'Компьютерам на Windows нужна настройка — без неё оптимизация для них не работает',
+				api.info('Эта стратегия требует, чтобы Windows отправляла метки времени в соединениях (TCP timestamps); по умолчанию они выключены. Приложение DpiShell на компьютере включает их само. Вручную — в командной строке от администратора: netsh interface tcp set global timestamps=enabled. Телефоны, ТВ и приставки на большинстве моделей настраивать не нужно.')
 			]),
 			warnings: E('div'),
 			// Включение на пробу (architecture.md «Аварийный выключатель»): без «Да, оставить» роутер сам вернёт прежнее.
@@ -84,7 +84,7 @@ return view.extend({
 
 		// Порядок — как во вкладке «Роутер» окна ПК (UX-аудит, макет страницы роутера).
 		var view = E('div', {}, [
-			E('h2', {}, 'DpiShell — обход блокировок'),
+			E('h2', {}, 'DpiShell — оптимизация соединения'),
 			this.el.update,
 			api.card(null, [
 				E('div', { 'class': 'dps-hero' }, [
@@ -100,23 +100,23 @@ return view.extend({
 				this.el.ts
 			]),
 			api.card('Сайт не открывается', [
-				api.line('Роутер проверит адрес с обходом и без. Если сайт открывается только без обхода — предложит добавить его в исключения.', 'dps-muted'),
+				api.line('Роутер проверит адрес с оптимизацией и без. Если сайт открывается только без оптимизации — предложит добавить его в исключения.', 'dps-muted'),
 				E('div', { 'class': 'dps-actions' }, [this.el.siteUrl, this.el.siteBtn]),
 				this.el.siteResult
 			]),
 			api.card('Настройки', [
-				api.row(['Что обходить', api.info('«Все сайты» — обход для любого сайта, кроме исключений; это основной режим. «Только из списков» — только для сайтов из списков (YouTube, Discord, свои). После смены роутер сам проверяет, что сайты открываются.')],
+				api.row(['Для каких сайтов', api.info('«Все сайты» — оптимизация для любого сайта, кроме исключений; это основной режим. «Только из списков» — только для сайтов из списков (YouTube, Discord, свои). После смены роутер сам проверяет, что сайты открываются.')],
 					E('div', {}, [this.el.modeAll, this.el.modeLists])),
-				api.row(['Стратегия', api.info('Стратегия — способ, которым обход обманывает оборудование провайдера; у разных провайдеров работают разные. Если не знаете, какую выбрать, нажмите «Подобрать» — роутер проверит сам и включит лучшую.')], this.el.strategy),
+				api.row(['Стратегия', api.info('Стратегия — способ, которым оптимизация обманывает оборудование провайдера; у разных провайдеров работают разные. Если не знаете, какую выбрать, нажмите «Подобрать» — роутер проверит сам и включит лучшую.')], this.el.strategy),
 				this.el.apply
 			]),
 			api.card('Проверять сам', [
 				E('label', { 'class': 'dps-check' }, [this.el.schedOn, 'Проверять сайты каждые ', this.el.schedHours]),
 				E('label', { 'class': 'dps-check' }, [this.el.schedAuto, 'Если не помогло — подобрать заново',
-					api.info('Если обход перестал работать и запасные стратегии не помогли, роутер сам запустит быстрый подбор и включит найденную — не чаще раза в 6 часов. Пока идёт подбор (2–3 минуты), сайты в сети могут открываться с перебоями в непредсказуемый момент, поэтому по умолчанию выключено.')]),
-				E('label', { 'class': 'dps-check' }, [this.el.schedWatch, 'Выключать обход, если с ним пропал интернет',
-					api.info('Раз в 5 минут роутер проверяет обычные сайты. Если с обходом они не открываются, а без него открываются — обход выключается, причина видна здесь, и роутер один раз сам подбирает стратегию: нашёл — включает, нет — обход остаётся выключенным до вашего «Включить» или «Подобрать». Если интернета нет и без обхода, это обрыв у провайдера: обход остаётся.')]),
-				E('p', { 'class': 'dps-muted' }, 'Без страницы: на большинстве роутеров с OpenWrt нажатие reset на 2 секунды выключает обход без перезагрузки, но на вашем может работать иначе. Не держите 5 секунд и дольше — обычно это сброс к заводским настройкам.'),
+					api.info('Если оптимизация перестала работать и запасные стратегии не помогли, роутер сам запустит быстрый подбор и включит найденную — не чаще раза в 6 часов. Пока идёт подбор (обычно несколько минут), сайты в сети могут открываться с перебоями в непредсказуемый момент, поэтому по умолчанию выключено.')]),
+				E('label', { 'class': 'dps-check' }, [this.el.schedWatch, 'Выключать оптимизацию, если с ней пропал интернет',
+					api.info('Раз в 5 минут роутер проверяет несколько обычных сайтов. Если с оптимизацией они не открываются, а без неё открываются — обычно оптимизация выключается, причина видна здесь, и роутер один раз сам подбирает стратегию: нашёл — включает, нет — оптимизация остаётся выключенной до вашего «Включить» или «Подобрать». Поломки на других сайтах сторож может не заметить. Если интернета нет и без оптимизации, это обрыв у провайдера: оптимизация остаётся.')]),
+				E('p', { 'class': 'dps-muted' }, 'Без страницы: на большинстве роутеров с OpenWrt нажатие reset на 2 секунды выключает оптимизацию без перезагрузки, но на вашем может работать иначе. Не держите 5 секунд и дольше — обычно это сброс к заводским настройкам.'),
 				this.el.schedMsg
 			]),
 			this.about()
@@ -173,20 +173,20 @@ return view.extend({
 				sub: (p && p.message) || 'Сайты в сети могут открываться с перебоями' };
 		}
 		if (j.core_install)
-			return { kind: 'busy', title: 'Загрузка программы обхода…' };
+			return { kind: 'busy', title: 'Загрузка ядра zapret…' };
 		if (!s.core.installed)
-			return { kind: 'err', title: 'Программа обхода не установлена', sub: 'Нажмите «Загрузить ядро» ниже' };
+			return { kind: 'err', title: 'Ядро zapret не установлено', sub: 'Нажмите «Загрузить ядро» ниже' };
 		if (s.core.hash_ok === false)
-			return { kind: 'err', title: 'Файлы обхода повреждены', sub: 'Нажмите «Восстановить» во вкладке «Диагностика»' };
+			return { kind: 'err', title: 'Файлы zapret повреждены', sub: 'Нажмите «Восстановить» во вкладке «Диагностика»' };
 		var title = this.strategyTitle(s.strategy);
 		if (j.check)
 			return { kind: 'busy', title: 'Идёт проверка сайтов', sub: s.enabled ? title : '' };
 		if (!s.enabled)
-			return { kind: 'off', title: 'Обход выключен', sub: s.strategy ? 'Будет включена ' + title : 'Стратегия не выбрана — «Включить» подберёт её сам' };
+			return { kind: 'off', title: 'Оптимизация выключена', sub: s.strategy ? 'Будет включена ' + title : 'Стратегия не выбрана — «Включить» подберёт её сам' };
 		var lc = s.last_check;
 		if (lc && lc.ok === false)
-			return { kind: 'err', title: 'Обход работает не на всех сайтах', sub: title + ' · проверено в ' + api.time(lc.at) };
-		return { kind: 'ok', title: 'Обход работает', sub: title + (lc && lc.at ? ' · проверено в ' + api.time(lc.at) : ' · ещё не проверялся') };
+			return { kind: 'err', title: 'Оптимизация работает не на всех сайтах', sub: title + ' · проверено в ' + api.time(lc.at) };
+		return { kind: 'ok', title: 'Оптимизация работает', sub: title + (lc && lc.at ? ' · проверено в ' + api.time(lc.at) : ' · ещё не проверялся') };
 	},
 
 	strategyTitle: function(id) {
@@ -230,7 +230,7 @@ return view.extend({
 		this.el.dot.className = 'dps-dot dps-dot-' + st.kind;
 		this.el.toggle.textContent = s.enabled ? 'Выключить' : 'Включить';
 		this.el.toggle.className = 'btn cbi-button dps-big ' + (s.enabled ? 'cbi-button-neutral' : 'cbi-button-positive');
-		this.el.check.title = s.enabled ? '' : 'Сначала включите обход';
+		this.el.check.title = s.enabled ? '' : 'Сначала включите оптимизацию';
 		this.el.toggle.disabled = busy || !s.core.installed;
 		this.el.select.disabled = busy || !s.core.installed;
 		this.el.check.disabled = busy || !s.enabled || j.check;
@@ -434,7 +434,7 @@ return view.extend({
 	stopConflicts: function() {
 		var self = this;
 		this.el.err.textContent = '';
-		if (!window.confirm('Остановить другую программу обхода? Она выключится и не запустится после перезагрузки роутера; включить её снова можно в её настройках.'))
+		if (!window.confirm('Остановить похожую программу? Она выключится и не запустится после перезагрузки роутера; включить её снова можно в её настройках.'))
 			return Promise.resolve();
 		return api.call('diag').then(function(d) {
 			var running = (d.conflicts || []).filter(function(c) { return c.running; });
@@ -564,16 +564,16 @@ return view.extend({
 			dom.content(this.el.siteResult, kids);
 			return;
 		}
-		kids.push(part('С обходом', r.with_bypass), part('Без обхода', r.without_bypass));
+		kids.push(part('С оптимизацией', r.with_bypass), part('Без оптимизации', r.without_bypass));
 		if (r.suggest_exclude) {
 			var host = (r.url || '').replace(/^https?:\/\//i, '').replace(/[:/].*$/, '');
 			kids.push(E('div', { 'class': 'dps-actions' }, [
 				api.btn('Добавить ' + host + ' в исключения', function() { return self.addExclude(host); }, 'cbi-button-apply')
 			]));
 		} else if (r.with_bypass && !r.with_bypass.ok)
-			kids.push(E('div', { 'class': 'dps-muted' }, 'Сайт не открывается и без обхода — дело не в обходе.'));
+			kids.push(E('div', { 'class': 'dps-muted' }, 'Сайт не открывается и без оптимизации — дело не в ней.'));
 		else
-			kids.push(E('div', { 'class': 'dps-muted' }, 'С обходом сайт открывается — исключение не нужно.'));
+			kids.push(E('div', { 'class': 'dps-muted' }, 'С оптимизацией сайт открывается — исключение не нужно.'));
 		dom.content(this.el.siteResult, kids);
 	},
 

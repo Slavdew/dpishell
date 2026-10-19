@@ -17,7 +17,7 @@
     { "id": "quad9", "title": "Quad9", "note": "блокирует вредоносные сайты",
       "resolvers": [ { "doh": "https://dns.quad9.net/dns-query", "bootstrap": ["9.9.9.9", "149.112.112.112", "2620:fe::fe", "2620:fe::9"] } ],
       "plain": ["9.9.9.9", "149.112.112.112"] },
-    { "id": "yandex", "title": "Яндекс", "note": "российский: применяет реестр блокировок",
+    { "id": "yandex", "title": "Яндекс", "note": "российский: по закону может применять реестр блокировок",
       "resolvers": [ { "doh": "https://common.dot.dns.yandex.net/dns-query", "bootstrap": ["77.88.8.8", "77.88.8.1", "2a02:6b8::feed:ff"] } ],
       "plain": ["77.88.8.8", "77.88.8.1"] }
   ]

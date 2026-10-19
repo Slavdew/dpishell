@@ -19,13 +19,13 @@ include $(INCLUDE_DIR)/package.mk
 define Package/dpishell
   SECTION:=net
   CATEGORY:=Network
-  TITLE:=DpiShell — обход DPI для всей сети (zapret) с автоподбором
+  TITLE:=DpiShell — оптимизация соединения для всей сети (zapret) с автоподбором
   DEPENDS:=+curl +unzip +nftables +kmod-nft-queue +kmod-nft-nat +ucode +ucode-mod-fs +ucode-mod-uci +rpcd +rpcd-mod-ucode
   PKGARCH:=all
 endef
 
 define Package/dpishell/description
-  Ставит ядро zapret (nfqws) по закреплённому хешу, подбирает стратегию обхода с самого роутера,
+  Ставит ядро zapret (nfqws) по закреплённому хешу, подбирает стратегию оптимизации с самого роутера,
   применяет её ко всей сети, следит за ней. Управление — страница LuCI и Windows-приложение DpiShell (ubus dpishell).
 endef
 

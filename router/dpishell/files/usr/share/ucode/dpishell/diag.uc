@@ -132,7 +132,7 @@ function site_check(url) {
 	return {
 		running: false, url,
 		with_bypass: { ok: w.ok, detail: w.detail },
-		without_bypass: { ok: wo.ok, detail: length(added) ? wo.detail : 'обход для адреса отключить не удалось' },
+		without_bypass: { ok: wo.ok, detail: length(added) ? wo.detail : 'оптимизацию для адреса отключить не удалось' },
 		suggest_exclude: !w.ok && wo.ok && length(added) > 0,
 	};
 }
