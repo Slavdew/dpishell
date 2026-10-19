@@ -27,6 +27,10 @@ public partial class App : Application
             return;
         }
 
+        // Обновление или откат: эта копия запущена прежней и ждёт её выхода — иначе проверка «одна копия» увидит прежнюю
+        // (architecture.md «Обновление программы»). Возвращает версию, с которой перешли (null — обычный запуск).
+        var updatedFrom = AppUpdater.WaitForPrevious(e.Args, TimeSpan.FromSeconds(30));
+
         // Одна копия: повторный запуск показывает окно уже работающей (она могла быть свёрнута в трей) и выходит;
         // не ответила за 3 с — предложить завершить её (SingleInstance).
         bool first;
@@ -57,6 +61,22 @@ public partial class App : Application
         {
             Shutdown(0);
             return;
+        }
+        // Только что обновлённая версия, которая уже стартовала и не подтвердила запуск, — не запускается: вернуть прежнюю.
+        // Проверка стоит после «одной копии»: лишний двойной щелчок не должен считаться неудачным стартом.
+        var versions = new AppUpdater(new AppUpdateClient(new System.Net.Http.HttpClient(), []), new AppVersionStore());
+        try
+        {
+            if (versions.CheckStartup() is { } back)
+            {
+                System.Diagnostics.Process.Start(back.ToStartInfo())?.Dispose();
+                Shutdown(0);
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            TryLog(ex);   // запись о версиях не читается — работаем как обычно
         }
         _showSignal.Reset();   // просьба, оставшаяся от завершённой копии, — не к нам
         var listener = new Thread(() =>
@@ -111,6 +131,14 @@ public partial class App : Application
             Shutdown(1);
             return;
         }
+        // Окно открылось — эта версия запускается. Итог обновления или отката — на вкладке «Информация и обновления».
+        try
+        {
+            versions.ConfirmStarted();
+            vm.Updates.AnnounceStart(updatedFrom, versions.TakeFailedNotice());
+            _ = Task.Run(() => { try { versions.Store.Prune(AppRelease.CurrentVersion); } catch (Exception ex) { TryLog(ex); } });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { TryLog(ex); }
         _ = vm.InitializeAsync();
     }
 

@@ -227,15 +227,41 @@ public sealed partial class RouterViewModel
     // ---------- строка «DpiShell на роутере» на вкладке «Информация и обновления» (только чтение состояния, роутеру ничего не уходит) ----------
 
     /// <summary>Версия пакета: подключён — из статуса; найден, но не вошли — из поиска; иначе «Не установлено».</summary>
-    public string PackageVersionText => Connected ? (_status?.Version is { Length: > 0 } v ? v : "неизвестно")
+    public string PackageVersionText => Connected ? ConnectedPackageText()
         : Found ? (_detection?.Status?.Version is { Length: > 0 } dv ? dv + " · нужен вход на вкладке «Роутер»" : "найден · нужен вход на вкладке «Роутер»")
         : "Не установлено";
+
+    /// <summary>
+    /// Версия пакета DpiShell; роутер с status.packages (0.2.0-r8) отдаёт и версию страницы LuCI — её добавляем, если отличается
+    /// (две части одного выпуска обновляются разными пакетами). Старый роутер — одна версия из status.version.
+    /// </summary>
+    string ConnectedPackageText()
+    {
+        var main = _status?.Packages?.Dpishell is { Length: > 0 } p ? p : _status?.Version is { Length: > 0 } v ? v : "неизвестно";
+        return _status?.Packages?.LuciAppDpishell is { Length: > 0 } luci && luci != main ? $"{main} · страница LuCI {luci}" : main;
+    }
+
+    /// <summary>
+    /// Строка «Ядро на роутере»: версия, установленная в /opt/zapret, или «не установлено». Закреплённая в пакете отличается — добавляем.
+    /// Нет входа — пусто (строка скрыта); старый роутер без installed_version — версия из пакета.
+    /// </summary>
+    public string RouterCoreText
+    {
+        get
+        {
+            if (!Connected || _status?.Core is not { } core) return "";
+            if (core.ShownVersion is not { } shown) return "не установлено";
+            if (shown.Length == 0) return "установлено";
+            return core.InstalledVersion is { Length: > 0 } && core.Version is { Length: > 0 } pinned && pinned != shown ? $"{shown} · в пакете {pinned}" : shown;
+        }
+    }
+    public bool HasRouterCore => RouterCoreText.Length > 0;
     public string PackageUpdateText => UpdateAvailable ? $"Доступно обновление {_status?.Update?.Version}" : "";
     public bool ShowPackageInstall => !Found && CanInstall;
 
     void RaiseAbout()
     {
-        foreach (var n in new[] { nameof(PackageVersionText), nameof(PackageUpdateText), nameof(ShowPackageInstall) }) Raise(n);
+        foreach (var n in new[] { nameof(PackageVersionText), nameof(PackageUpdateText), nameof(ShowPackageInstall), nameof(RouterCoreText), nameof(HasRouterCore) }) Raise(n);
     }
 
     void RaiseCompat()

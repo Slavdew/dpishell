@@ -117,6 +117,25 @@ public sealed class FakeRouter : IDisposable
         Enabled = false;
     }
 
+    /// <summary>
+    /// status.core.installed_version (роутер 0.2.0-r8): null — поля нет (старый роутер); "none" — ядро не установлено
+    /// (installed: false, installed_version: null); иначе версия, установленная в /opt/zapret.
+    /// </summary>
+    public string? CoreInstalledVersion { get; set; }
+    /// <summary>status.packages (роутер 0.2.0-r8): null — поля нет (старый роутер); иначе версии пакетов, у luci пусто — «luci-app-dpishell»: null.</summary>
+    public (string Dpishell, string? Luci)? Packages { get; set; }
+
+    string CoreInstalledField() => CoreInstalledVersion is null ? "" : $", \"installed_version\": {(CoreInstalledVersion == "none" ? "null" : $"\"{CoreInstalledVersion}\"")}";
+    string PackagesField() => Packages is not { } p ? ""
+        : $" \"packages\": {{ \"dpishell\": \"{p.Dpishell}\", \"luci-app-dpishell\": {(p.Luci is null ? "null" : $"\"{p.Luci}\"")} }},";
+
+    /// <summary>Как роутер 0.2.0-r8: версии пакетов и установленное ядро в status.</summary>
+    public FakeRouter AsR8(string dpishell = "0.2.0-r8", string? luci = "0.2.0-r5", string core = "v72.13")
+    {
+        RouterVersion = dpishell; Packages = (dpishell, luci); CoreInstalledVersion = core;
+        return this;
+    }
+
     string? _updateFrom;
     int _updatePolls;
     string? _updateJob;
@@ -378,7 +397,7 @@ public sealed class FakeRouter : IDisposable
         {
             "status" => $$"""
                 { "api": {{StatusApi}}, "version": "{{RouterVersion}}", "engine": "zapret1",{{Contract020()}}
-                  "core": { "version": "v72.13", "installed": true, "hash_ok": true },
+                  "core": { "version": "v72.13", "installed": {{(CoreInstalledVersion == "none" ? "false" : "true")}}, "hash_ok": true{{CoreInstalledField()}} },{{PackagesField()}}
                   "enabled": {{(Enabled ? "true" : "false")}}, "mode": "{{Mode}}", "strategy": "{{Strategy}}", "backups": ["alt9", "alt13"], "needs_tcp_timestamps": {{(NeedsTcpTimestamps ? "true" : "false")}},
                   "last_check": { "at": "{{CheckedAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture)}}", "source": "timer", "ok": true,
                                   "groups": [ { "id": "youtube", "ok": true }, { "id": "discord", "ok": true } ] },

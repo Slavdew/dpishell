@@ -1651,6 +1651,7 @@
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
                                         <TextBlock Grid.Row="0" Text="Программа" Style="{StaticResource Hint}" Margin="0,2,16,2" />
                                         <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding AppVersionText}" Margin="0,2,0,2" />
@@ -1676,6 +1677,10 @@
                                                         Visibility="{Binding ShowPackageInstall, Converter={StaticResource Vis}}" />
                                             </WrapPanel>
                                         </StackPanel>
+                                        <!-- Ядро, установленное на роутере (status.core.installed_version, роутер 0.2.0-r8); нет входа или старый роутер — строки нет. -->
+                                        <TextBlock Grid.Row="5" Text="Ядро на роутере" Style="{StaticResource Hint}" Margin="0,2,16,2" Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
+                                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Router.RouterCoreText}" TextWrapping="Wrap" Margin="0,2,0,2"
+                                                   Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
                                     </Grid>
                                     <Button Content="{Binding FixHelperText}" Command="{Binding FixHelperCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
                                             Visibility="{Binding HasHelperProblem, Converter={StaticResource Vis}}" />
@@ -1684,14 +1689,47 @@
                                     <StackPanel DataContext="{Binding Updates}">
                                         <TextBlock Text="{Binding AvailableText}" FontWeight="SemiBold" Margin="0,12,0,0" TextWrapping="Wrap"
                                                    Visibility="{Binding DataAvailable, Converter={StaticResource Vis}}" />
+                                        <!-- Программа: подписанное описание выпуска получено — «Что нового» и «Обновить до X» (права не нужны);
+                                             не получено — подсказка и ссылка на страницу релизов. -->
+                                        <StackPanel Margin="0,12,0,0" Visibility="{Binding AppReleaseReady, Converter={StaticResource Vis}}">
+                                            <TextBlock Text="{Binding AppReleaseTitle}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <StackPanel Margin="0,6,0,0" Visibility="{Binding HasAppNotes, Converter={StaticResource Vis}}">
+                                                <TextBlock Text="Что нового" Style="{StaticResource Hint}" Margin="0,0,0,2" />
+                                                <ItemsControl ItemsSource="{Binding AppNotes}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Mode=OneWay, StringFormat=• {0}}" TextWrapping="Wrap" Margin="0,1,0,1" />
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                            <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
+                                                       Text="Файл проверяется по подписи и контрольной сумме, права администратора не нужны. Текущая версия остаётся рядом — к ней можно вернуться." />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding AppOsNote}" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="{Binding HasAppOsNote, Converter={StaticResource Vis}}" />
                                         <TextBlock Text="{Binding AppText}" Margin="0,8,0,0" TextWrapping="Wrap"
-                                                   Visibility="{Binding AppAvailable, Converter={StaticResource Vis}}" />
+                                                   Visibility="{Binding AppHintOnly, Converter={StaticResource Vis}}" />
+                                        <StackPanel Margin="0,8,0,0" Visibility="{Binding AppBusy, Converter={StaticResource Vis}}" AutomationProperties.LiveSetting="Polite">
+                                            <TextBlock Text="{Binding AppProgressText}" TextWrapping="Wrap" />
+                                            <ProgressBar Height="6" IsIndeterminate="True" Margin="0,6,0,0" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding AppNotice}" Margin="0,8,0,0" TextWrapping="Wrap" FontWeight="SemiBold"
+                                                   Visibility="{Binding HasAppNotice, Converter={StaticResource Vis}}" />
+                                        <StackPanel Margin="0,8,0,0" Visibility="{Binding HasAppError, Converter={StaticResource Vis}}" AutomationProperties.LiveSetting="Assertive">
+                                            <TextBlock Text="{Binding AppError}" TextWrapping="Wrap" Foreground="{DynamicResource Danger}" />
+                                            <TextBlock Text="{Binding AppErrorDetails}" Style="{StaticResource Hint}" Margin="0,2,0,0" FontSize="12"
+                                                       Visibility="{Binding HasAppErrorDetails, Converter={StaticResource Vis}}" />
+                                        </StackPanel>
                                         <WrapPanel Margin="0,10,0,0">
                                             <Button ContentTemplate="{StaticResource Shield}" Content="Обновить списки" Style="{StaticResource Primary}" Command="{Binding InstallCmd}"
                                                     Visibility="{Binding DataAvailable, Converter={StaticResource Vis}}" />
+                                            <Button Content="{Binding AppUpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateAppCmd}"
+                                                    Visibility="{Binding AppReleaseReady, Converter={StaticResource Vis}}" />
                                             <Button Content="{Binding AppButtonText}" Command="{Binding OpenReleaseCmd}"
-                                                    Visibility="{Binding AppAvailable, Converter={StaticResource Vis}}" />
+                                                    Visibility="{Binding AppHintOnly, Converter={StaticResource Vis}}" />
                                             <Button Content="Проверить обновления" Command="{Binding CheckCmd}" />
+                                            <Button Content="{Binding RollbackText}" Command="{Binding RollbackCmd}" ToolTip="Запустить прежнюю версию, она сохранена рядом"
+                                                    Visibility="{Binding CanRollback, Converter={StaticResource Vis}}" />
                                         </WrapPanel>
                                     </StackPanel>
                                 </StackPanel>

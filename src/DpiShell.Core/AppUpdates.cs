@@ -260,7 +260,11 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
 /// <param name="Current">Версия, на которую переключились последней.</param>
 /// <param name="Previous">Прежняя версия (её не удаляет очистка) — откат.</param>
 /// <param name="PreviousExe">Где лежит прежняя: папка versions\ или исходная portable-папка пользователя.</param>
-public sealed record AppVersionsState(string? Current = null, string? Previous = null, string? PreviousExe = null);
+/// <param name="Pending">Версия, на которую только что переключились и которая ещё не подтвердила, что запустилась (окно подтверждает после старта).</param>
+/// <param name="PendingStarts">Сколько раз эта версия уже стартовала без подтверждения: второй старт — признак, что она не запускается.</param>
+/// <param name="Failed">Версия, которая не запустилась и с которой вернулись автоматически (окно скажет об этом один раз).</param>
+public sealed record AppVersionsState(string? Current = null, string? Previous = null, string? PreviousExe = null,
+    string? Pending = null, int PendingStarts = 0, string? Failed = null);
 
 /// <summary>
 /// Версии программы рядом с пользователем: <c>%LocalAppData%\DpiShell\versions\X.Y.Z\</c> (portable, права не нужны).
@@ -296,7 +300,8 @@ public sealed class AppVersionStore(string? root = null)
         }
     }
 
-    void Save(AppVersionsState s)
+    /// <summary>Записать состояние целиком (откат неудавшегося переключения, тесты).</summary>
+    public void Save(AppVersionsState s)
     {
         Directory.CreateDirectory(Root);
         var tmp = StateFile + ".tmp";
@@ -350,8 +355,9 @@ public sealed class AppVersionStore(string? root = null)
     }
 
     /// <summary>Запомнить переключение: прежняя версия (и где её exe) — для отката, новая — текущая.</summary>
-    public void RecordSwitch(string fromVersion, string fromExe, string toVersion) =>
-        Save(new(toVersion, fromVersion, fromExe));
+    /// <param name="pending">Новая версия ещё не проверена запуском: если она не стартует, следующий старт вернёт прежнюю.</param>
+    public void RecordSwitch(string fromVersion, string fromExe, string toVersion, bool pending = false) =>
+        Save(new(toVersion, fromVersion, fromExe, pending ? toVersion : null));
 
     /// <summary>
     /// Удалить версии, кроме текущей, прежней и <paramref name="running"/> (запущенную удалить нельзя — exe занят).
@@ -389,7 +395,8 @@ public sealed record RestartPlan(string Exe, string Version, IReadOnlyList<strin
 }
 
 /// <summary>Итог подготовки обновления: версия <paramref name="Version"/> распакована и проверена, или почему нет (Message).</summary>
-public sealed record AppUpdatePrepared(bool Ok, string Message, string? Version = null);
+/// <param name="Details">Технические подробности для «Подробнее» (какой источник, что не совпало); у успеха — null.</param>
+public sealed record AppUpdatePrepared(bool Ok, string Message, string? Version = null, string? Details = null);
 
 /// <summary>
 /// Обновление программы целиком — для окна: <see cref="CheckAsync"/> (раз в день и по кнопке) → <see cref="PrepareAsync"/>
@@ -412,7 +419,27 @@ public sealed class AppUpdater(AppUpdateClient client, AppVersionStore store)
 
     public Task<AppUpdateCheck> CheckAsync(CancellationToken ct = default) => client.CheckAsync(CurrentVersion, ct);
 
-    /// <summary>Скачать архив выпуска, сверить sha256, распаковать в versions\X.Y.Z. Уже распакован — без скачивания.</summary>
+    /// <summary>Сколько свободного места нужно на диске с папкой версий: архив + распаковка (с запасом).</summary>
+    public long RequiredFreeBytes { get; init; } = 600L * 1024 * 1024;
+    /// <summary>Свободно байт на диске папки; null — не узнать (тогда не проверяем). В тестах — подмена.</summary>
+    public Func<string, long?> FreeSpace { get; init; } = DefaultFreeSpace;
+
+    static long? DefaultFreeSpace(string dir)
+    {
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(dir));
+            return root is null ? null : new DriveInfo(root).AvailableFreeSpace;
+        }
+        catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException) { return null; }
+    }
+
+    static long Mb(long bytes) => (bytes + 1024 * 1024 - 1) / (1024 * 1024);
+
+    /// <summary>
+    /// Скачать архив выпуска, сверить sha256, распаковать в versions\X.Y.Z. Уже распакован — без скачивания.
+    /// Работающая программа и её папка не меняются ни при каком исходе: неудача оставляет самое большее пустую папку versions.
+    /// </summary>
     public async Task<AppUpdatePrepared> PrepareAsync(AppUpdateCheck check, IProgress<long>? progress = null, CancellationToken ct = default)
     {
         if (check.Found is not { } found || !check.Available || found.Release.Portable is not { } asset)
@@ -422,6 +449,8 @@ public sealed class AppUpdater(AppUpdateClient client, AppVersionStore store)
         {
             if (!store.IsInstalled(version))
             {
+                if (FreeSpace(store.Root) is { } free && free < RequiredFreeBytes)
+                    return new(false, NoSpace(free));
                 var part = Path.Combine(store.Root, asset.Name + ".part");
                 try
                 {
@@ -432,11 +461,33 @@ public sealed class AppUpdater(AppUpdateClient client, AppVersionStore store)
             }
             return new(true, $"Версия {version} готова — перезапустите программу.", version);
         }
-        catch (Exception e) when (e is SecurityException or IOException or UnauthorizedAccessException or InvalidDataException or HttpRequestException)
+        catch (SecurityException e)
         {
-            return new(false, "Обновление не скачано: " + e.Message);
+            return new(false, "Скачанный файл не прошёл проверку: его контрольная сумма не совпала с подписанным описанием выпуска. Обновление отменено, программа не изменена.", Details: e.Message);
+        }
+        catch (InvalidDataException e)
+        {
+            return new(false, "Архив повреждён или устроен не так, как ждёт программа. Обновление отменено, программа не изменена.", Details: e.Message);
+        }
+        catch (HttpRequestException e)
+        {
+            return new(false, "Нет связи с источником обновлений. Повторите позже — программа не изменена.", Details: e.Message);
+        }
+        catch (IOException e) when (IsDiskFull(e))
+        {
+            return new(false, NoSpace(FreeSpace(store.Root) ?? 0), Details: e.Message);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new(false, $"Не удалось записать файлы в {store.Root}: нет доступа или файл занят. Программа не изменена.", Details: e.Message);
         }
     }
+
+    string NoSpace(long free) =>
+        $"Не хватает места на диске {Path.GetPathRoot(Path.GetFullPath(store.Root))}: нужно около {Mb(RequiredFreeBytes)} МБ, свободно {Mb(free)} МБ. Освободите место и повторите — программа не изменена.";
+
+    // ERROR_DISK_FULL (112) и ERROR_HANDLE_DISK_FULL (39) — младшие 16 бит HResult.
+    public static bool IsDiskFull(IOException e) => (e.HResult & 0xFFFF) is 112 or 39;
 
     /// <summary>
     /// Команда перезапуска на распакованную версию; текущая запоминается как прежняя (откат). Окно запускает
@@ -445,9 +496,15 @@ public sealed class AppUpdater(AppUpdateClient client, AppVersionStore store)
     public RestartPlan RestartInto(string version, bool record = true)
     {
         if (!store.IsInstalled(version)) throw new InvalidOperationException($"версия {version} не распакована");
-        if (record) store.RecordSwitch(CurrentVersion, CurrentExe, version);
+        if (record) store.RecordSwitch(CurrentVersion, CurrentExe, version, pending: true);
         return new(store.ExeFor(version), version, [WaitPidArg, CurrentPid.ToString(System.Globalization.CultureInfo.InvariantCulture), UpdatedFromArg, CurrentVersion]);
     }
+
+    /// <summary>Есть куда откатываться: прежняя версия записана, это не та, что работает, и её exe на месте.</summary>
+    public bool CanRollback => store.State is { Previous: { } p, PreviousExe: { } e } && p != CurrentVersion && File.Exists(e);
+
+    /// <summary>Прежняя версия для подписи кнопки отката; null — откатываться не на что.</summary>
+    public string? PreviousVersion => CanRollback ? store.State.Previous : null;
 
     /// <summary>Откат на прежнюю версию; null — откатываться не на что (её exe нет).</summary>
     public RestartPlan? Rollback()
@@ -457,6 +514,46 @@ public sealed class AppUpdater(AppUpdateClient client, AppVersionStore store)
         // После отката прежняя — та, с которой уходим: можно вернуться обратно.
         store.RecordSwitch(CurrentVersion, CurrentExe, prev);
         return new(exe, prev, [WaitPidArg, CurrentPid.ToString(System.Globalization.CultureInfo.InvariantCulture), UpdatedFromArg, CurrentVersion]);
+    }
+
+    /// <summary>
+    /// Первым делом при запуске переключённой версии (после захвата «одной копии»). Новая версия, которая уже стартовала и не
+    /// подтвердила запуск (<see cref="ConfirmStarted"/>), на втором старте возвращает прежнюю: результат — команда запуска прежней
+    /// (окно её запускает и выходит), версия-неудачница запоминается для сообщения (<see cref="TakeFailedNotice"/>). Нет — null.
+    /// </summary>
+    public RestartPlan? CheckStartup()
+    {
+        var st = store.State;
+        if (st.Pending != CurrentVersion) return null;
+        if (st.PendingStarts < 1)
+        {
+            store.Save(st with { PendingStarts = 1 });
+            return null;
+        }
+        if (st.Previous is { } prev && st.PreviousExe is { } exe && prev != CurrentVersion && File.Exists(exe))
+        {
+            // Прежняя становится текущей; вернуться на неудачную кнопкой не предлагаем.
+            store.Save(new(prev, null, null, Failed: CurrentVersion));
+            return new(exe, prev, [WaitPidArg, CurrentPid.ToString(System.Globalization.CultureInfo.InvariantCulture), UpdatedFromArg, CurrentVersion]);
+        }
+        store.Save(st with { Pending = null, PendingStarts = 0 });   // откатываться некуда — не зацикливаться
+        return null;
+    }
+
+    /// <summary>Окно показалось и работает: версия подтверждена, откат при следующем старте не нужен.</summary>
+    public void ConfirmStarted()
+    {
+        var st = store.State;
+        if (st.Pending == CurrentVersion) store.Save(st with { Pending = null, PendingStarts = 0 });
+    }
+
+    /// <summary>Версия, которая не запустилась и была заменена прежней, — один раз; null — такого не было.</summary>
+    public string? TakeFailedNotice()
+    {
+        var st = store.State;
+        if (st.Failed is not { } f) return null;
+        store.Save(st with { Failed = null });
+        return f;
     }
 
     /// <summary>

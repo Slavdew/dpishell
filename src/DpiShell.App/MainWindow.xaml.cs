@@ -27,6 +27,7 @@ public partial class MainWindow : Window
         _tray = new Tray(vm);
         _tray.OpenRequested += () => ShowFromTray();
         _tray.ExitRequested += () => _ = ExitAsync();
+        vm.Updates.Restart = RestartIntoAsync;
         vm.StatusChanged += () => Icon = Icons.ImageFor(vm.Kind);
 
         // Состояние службы может поменяться и без нас (сбой, чужая программа) — тихо перечитываем.
@@ -173,6 +174,19 @@ public partial class MainWindow : Window
         Log = App.TryLog,
         Shutdown = () => Application.Current?.Shutdown(),
     };
+
+    /// <summary>Запуск другой копии программы; в тестах — подмена (настоящую не запускаем).</summary>
+    internal Action<System.Diagnostics.ProcessStartInfo> StartProcess { get; set; } = psi => System.Diagnostics.Process.Start(psi)?.Dispose();
+
+    /// <summary>
+    /// Обновление и откат: запустить другую копию (она ждёт выхода этой по --wait-pid) и выйти обычным путём —
+    /// с вопросами и уборкой, как «Выход» в трее. Не запустилась — исключение вернётся в «Информация и обновления», окно остаётся.
+    /// </summary>
+    async Task RestartIntoAsync(DpiShell.Core.RestartPlan plan)
+    {
+        StartProcess(plan.ToStartInfo());
+        await ExitAsync();
+    }
 
     Task ExitAsync()
     {

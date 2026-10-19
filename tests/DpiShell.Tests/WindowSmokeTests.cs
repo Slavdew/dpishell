@@ -1504,6 +1504,122 @@ public sealed class WindowSmokeTests
         }
     }
 
+    /// <summary>
+    /// «Информация и обновления» → обновление программы: есть обновление с «Что нового», идёт обновление, ошибка (подменённый архив),
+    /// после обновления (итог, «Вернуть прежнюю версию», версии пакетов и ядро роутера). Без ошибок привязок в обеих темах.
+    /// Снимки: &lt;тема&gt;-about-update-ready|running|download|error|done.png.
+    /// </summary>
+    [Fact]
+    public void About_AppUpdate_States_BindAndSnap()
+    {
+        using var tmp = new TempDir();
+        var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
+        var errors = WithBindingErrors(() =>
+        {
+            foreach (var theme in new[] { ThemeManager.Light, ThemeManager.Dark })
+            {
+                ThemeManager.Apply(theme);
+                int n = 0;
+                MainViewModel? last = null;
+
+                (MainViewModel Vm, MainWindow W, AppVersionStore Store) NewWindow(MapHandler h, string current, Func<RestartPlan, Task> restart)
+                {
+                    var shell = new Shell(new AppPaths(tmp.Sub($"upd-{theme}-{++n}"), Repo.Data));
+                    var settings = TestWindow.Settings(shell);
+                    settings.Theme = theme;
+                    var store = new AppVersionStore(Path.Combine(Path.GetDirectoryName(settings.File)!, "versions"));
+                    var vm = last = TestWindow.Model(shell, settings: settings);
+                    vm.Updates.Http = () => new HttpClient(h, disposeHandler: false);
+                    vm.Updates.AppVersion = current + ".0";
+                    vm.Updates.Confirm = _ => true;
+                    vm.Updates.CreateUpdater = http => new AppUpdater(
+                        new AppUpdateClient(http, [AppUpdateTests.A]) { PerSourceTimeout = TimeSpan.FromSeconds(5), SigningKey = AppUpdateTests.Key.PublicKey, OsVersion = new Version(10, 0, 26200) }, store)
+                    { CurrentVersion = current, CurrentExe = Path.Combine(tmp.Sub("portable"), "DpiShell.exe"), CurrentPid = 4242, FreeSpace = _ => 5L << 30 };
+                    var w = Open(vm);
+                    // Окно подключает свой перезапуск (запуск другой копии и выход) — в тесте он подменён: настоящую копию не запускаем.
+                    vm.Updates.Restart = restart;
+                    SetProp(vm, "IsLoading", false);
+                    vm.Page = Pages.About;
+                    Pump();
+                    return (vm, w, store);
+                }
+                void Until(Func<bool> done, string what)
+                {
+                    for (int i = 0; i < 500 && !done(); i++) { Pump(); Thread.Sleep(10); }
+                    if (!done()) throw new Exception("Не дождались: " + what + " | " + last?.Updates.AppProgressText + " | " + last?.Updates.AppError + " | " + last?.Updates.AppErrorDetails);
+                    Pump();
+                }
+                bool Has(MainWindow w, string text) =>
+                    Find<TextBlock>(w, t => t.Text == text && t.IsVisible) is not null || Find<Button>(w, b => b.Content as string == text && b.IsVisible) is not null;
+                bool HasPart(MainWindow w, string part) => Find<TextBlock>(w, t => t.Text.Contains(part) && t.IsVisible) is not null;
+                void Shot(MainWindow w, string name)
+                {
+                    if (snapDir is null) return;
+                    Directory.CreateDirectory(snapDir);
+                    Snap(w, Path.Combine(snapDir, $"{theme}-about-update-{name}.png"));
+                }
+
+                // 1. Есть обновление: «Что нового» и «Обновить до X» видны до нажатия, отката ещё нет.
+                var (vm, w, _) = NewWindow(AppUpdateTests.Serve(new MapHandler(), AppUpdateTests.A, "1.2.0"), "1.0.0", _ => new TaskCompletionSource().Task);
+                vm.Updates.CheckCmd.Execute(null);
+                Until(() => vm.Updates.AppReleaseReady, "проверка выпуска");
+                foreach (var t in new[] { "Что нового", "• Быстрее подбор", "• Исправлен трей", "Обновить до 1.2.0", "Проверить обновления" })
+                    if (!Has(w, t)) throw new Exception($"Нет «{t}» при доступном обновлении");
+                if (Has(w, "Скачать программу 1.2.0") || HasPart(w, "Вернуть прежнюю")) throw new Exception("Лишние кнопки при доступном обновлении");
+                Shot(w, "ready");
+
+                // 2. Идёт обновление: ход виден, кнопка неактивна. Перезапуск не завершается — как окно за миг до выхода.
+                vm.Updates.UpdateAppCmd.Execute(null);
+                Until(() => vm.Updates.AppProgressText.Contains("Перезапускаю"), "подготовка версии");
+                if (!HasPart(w, "Перезапускаю программу")) throw new Exception("Ход обновления не виден");
+                if (Find<ProgressBar>(w, p => p.IsVisible && p.IsIndeterminate) is null) throw new Exception("Нет полосы хода обновления");
+                if (Find<Button>(w, b => b.Content as string == "Обновить до 1.2.0" && b.IsVisible && b.IsEnabled) is not null) throw new Exception("Кнопка обновления активна во время обновления");
+                Shot(w, "running");
+                typeof(UpdatesViewModel).GetField("_appProgress", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(vm.Updates, "Скачиваю версию 1.2.0: 34 МБ");
+                vm.Updates.Refresh();
+                Pump();
+                if (!HasPart(w, "Скачиваю версию 1.2.0: 34 МБ")) throw new Exception("Ход скачивания не виден");
+                Shot(w, "download");
+                Close(w);
+
+                // 3. Ошибка: архив на сервере подменён — понятная фраза и «Подробнее» мелко, повторить можно.
+                var evil = AppUpdateTests.Serve(new MapHandler(), AppUpdateTests.A, "1.2.0").Ok(AppUpdateTests.A + AppRelease.PortableName("1.2.0"), AppUpdateTests.GoodZip("evil"));
+                var (vm2, w2, store2) = NewWindow(evil, "1.0.0", _ => Task.CompletedTask);
+                vm2.Updates.CheckCmd.Execute(null);
+                Until(() => vm2.Updates.AppReleaseReady, "проверка выпуска (ошибка)");
+                vm2.Updates.UpdateAppCmd.Execute(null);
+                Until(() => vm2.Updates.HasAppError, "ошибка обновления");
+                if (!HasPart(w2, "Скачанный файл не прошёл проверку") || !HasPart(w2, "программа не изменена")) throw new Exception("Нет фразы об ошибке");
+                if (Find<Button>(w2, b => b.Content as string == "Обновить до 1.2.0" && b.IsVisible && b.IsEnabled) is null) throw new Exception("После ошибки нельзя повторить");
+                if (store2.IsInstalled("1.2.0")) throw new Exception("Подменённый архив распакован");
+                Shot(w2, "error");
+                Close(w2);
+
+                // 4. После обновления: итог, «Вернуть прежнюю версию»; роутер с пакетами r8 — версии пакета, страницы и ядра.
+                using var fake = new FakeRouter().As020().AsR8(dpishell: "0.2.0-r8", luci: "0.2.0-r5", core: "v72.13");
+                var (vm3, w3, store3) = NewWindow(new MapHandler(), "1.2.0", _ => Task.CompletedTask);
+                var prev = Path.Combine(tmp.Sub("portable-old"), "DpiShell.exe");
+                Directory.CreateDirectory(Path.GetDirectoryName(prev)!);
+                File.WriteAllText(prev, "exe 1.0.0");
+                store3.Save(new("1.2.0", "1.0.0", prev));
+                vm3.Updates.AnnounceStart("1.0.0", null);
+                vm3.Router.AddressAuto = false;
+                vm3.Router.CustomAddress = fake.Address;
+                vm3.Router.PollInterval = TimeSpan.FromMilliseconds(10);
+                vm3.Router.Gateway = () => "192.168.1.1";
+                vm3.Router.PcTimestamps = () => true;
+                var connect = vm3.Router.ConnectAsync("secret");
+                Until(() => connect.IsCompleted, "вход на роутер");
+                if (!connect.GetAwaiter().GetResult()) throw new Exception("Роутер не принял вход");
+                foreach (var t in new[] { "Программа обновлена до версии 1.2.0.", "Вернуть прежнюю версию (1.0.0)", "0.2.0-r8 · страница LuCI 0.2.0-r5", "Ядро на роутере", "v72.13" })
+                    if (!Has(w3, t)) throw new Exception($"Нет «{t}» после обновления");
+                Shot(w3, "done");
+                Close(w3);
+            }
+        });
+        Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
+    }
+
     static void Snap(Window w, string file)
     {
         var root = (FrameworkElement)VisualTreeHelper.GetChild(w, 0);

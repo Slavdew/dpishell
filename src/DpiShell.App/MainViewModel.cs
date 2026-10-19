@@ -76,6 +76,7 @@ public sealed partial class MainViewModel : Observable
             Say = s => Message = s,
             Confirm = s => Confirm(s),
             AfterInstall = ReloadChoicesAsync,
+            IsBusy = () => Busy,
         };
         Autostart = new Autostart(settings) { Say = s => Message = s, Fail = Fail };
 

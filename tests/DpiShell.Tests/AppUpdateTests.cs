@@ -10,11 +10,11 @@ namespace DpiShell.Tests;
 /// <summary>Обновление программы (architecture.md «Обновление программы»): подпись release.json, выбор архива, sha256, распаковка, откат.</summary>
 public sealed class AppUpdateTests
 {
-    const string A = "https://github.example/releases/latest/download/";
-    const string B = "https://mirror.example/dpishell/";
-    static readonly TestSigner Key = new();
+    internal const string A = "https://github.example/releases/latest/download/";
+    internal const string B = "https://mirror.example/dpishell/";
+    internal static readonly TestSigner Key = new();
 
-    static byte[] Zip(Dictionary<string, string> entries)
+    internal static byte[] Zip(Dictionary<string, string> entries)
     {
         using var ms = new MemoryStream();
         using (var z = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
@@ -26,14 +26,14 @@ public sealed class AppUpdateTests
         return ms.ToArray();
     }
 
-    static byte[] GoodZip(string version) => Zip(new()
+    internal static byte[] GoodZip(string version) => Zip(new()
     {
         ["DpiShell/DpiShell.exe"] = "exe " + version,
         ["DpiShell/data/data.json"] = "{}",
         ["DpiShell/README.txt"] = "readme",
     });
 
-    static byte[] ReleaseJson(string version, byte[] zip, string? tag = null, string? minOs = null, string? asset = null)
+    internal static byte[] ReleaseJson(string version, byte[] zip, string? tag = null, string? minOs = null, string? asset = null)
     {
         var o = new JsonObject
         {
@@ -44,7 +44,7 @@ public sealed class AppUpdateTests
         return Encoding.UTF8.GetBytes(o.ToJsonString() + "\n");
     }
 
-    static MapHandler Serve(MapHandler h, string src, string version, byte[]? zip = null, TestSigner? by = null, byte[]? release = null)
+    internal static MapHandler Serve(MapHandler h, string src, string version, byte[]? zip = null, TestSigner? by = null, byte[]? release = null)
     {
         zip ??= GoodZip(version);
         release ??= ReleaseJson(version, zip);
@@ -53,7 +53,7 @@ public sealed class AppUpdateTests
             .Ok(src + AppRelease.PortableName(version), zip);
     }
 
-    static AppUpdateClient Client(MapHandler h, params string[] sources) =>
+    internal static AppUpdateClient Client(MapHandler h, params string[] sources) =>
         new(new HttpClient(h), sources) { PerSourceTimeout = TimeSpan.FromMilliseconds(300), SigningKey = Key.PublicKey, OsVersion = new Version(10, 0, 26200) };
 
     [Fact]
@@ -145,7 +145,7 @@ public sealed class AppUpdateTests
         var psi = plan.ToStartInfo();
         Assert.False(psi.UseShellExecute);
         Assert.Equal(store.PathFor("1.2.0"), psi.WorkingDirectory);
-        Assert.Equal(new AppVersionsState("1.2.0", "1.0.0", t.Sub("portable\\DpiShell.exe")), store.State);
+        Assert.Equal(new AppVersionsState("1.2.0", "1.0.0", t.Sub("portable\\DpiShell.exe"), Pending: "1.2.0"), store.State);
 
         // Повторная подготовка той же версии — без скачивания.
         int before = h.Requests.Count;
@@ -172,7 +172,9 @@ public sealed class AppUpdateTests
         var up2 = new AppUpdater(Client(bad, A), store2) { CurrentVersion = "1.0.0" };
         var p2 = await up2.PrepareAsync(await up2.CheckAsync());
         Assert.False(p2.Ok);
-        Assert.Contains("sha256", p2.Message);
+        Assert.Contains("контрольная сумма не совпала", p2.Message);
+        Assert.Contains("программа не изменена", p2.Message);
+        Assert.Contains("sha256", p2.Details);
         Assert.False(store2.IsInstalled("1.2.0"));
         Assert.Empty(Directory.EnumerateFiles(store2.Root, "*", SearchOption.AllDirectories));
     }
@@ -226,6 +228,117 @@ public sealed class AppUpdateTests
         Assert.Equal(store.ExeFor("1.1.0"), back.Exe);
         Assert.Equal("1.1.0", back.Version);
         Assert.Equal(new AppVersionsState("1.1.0", "1.2.0", store.ExeFor("1.2.0")), store.State);
+    }
+
+    /// <summary>Мало места: до скачивания, ничего не качается и не пишется, фраза называет диск и числа.</summary>
+    [Fact]
+    public async Task Prepare_NotEnoughSpace_FailsBeforeDownload()
+    {
+        using var t = new TempDir();
+        var store = new AppVersionStore(t.Sub("versions"));
+        var h = Serve(new MapHandler(), A, "1.2.0");
+        var up = new AppUpdater(Client(h, A), store) { CurrentVersion = "1.0.0", FreeSpace = _ => 120L * 1024 * 1024 };
+        var check = await up.CheckAsync();
+        h.Requests.Clear();
+        var p = await up.PrepareAsync(check);
+        Assert.False(p.Ok);
+        Assert.Contains("Не хватает места", p.Message);
+        Assert.Contains("600 МБ", p.Message);
+        Assert.Contains("120 МБ", p.Message);
+        Assert.Contains("программа не изменена", p.Message);
+        Assert.DoesNotContain(h.Requests, r => r.EndsWith(".zip"));
+        Assert.False(store.IsInstalled("1.2.0"));
+
+        // Места хватает — обычная установка.
+        var ok = new AppUpdater(Client(h, A), store) { CurrentVersion = "1.0.0", FreeSpace = _ => 5L * 1024 * 1024 * 1024 };
+        Assert.True((await ok.PrepareAsync(check)).Ok);
+    }
+
+    /// <summary>Диск кончился посреди записи (ERROR_DISK_FULL / ERROR_HANDLE_DISK_FULL) узнаётся по коду, остальные ошибки ввода-вывода — нет.</summary>
+    [Fact]
+    public void DiskFull_RecognizedByHResult()
+    {
+        Assert.True(AppUpdater.IsDiskFull(new IOException("диск полон", unchecked((int)0x80070070))));
+        Assert.True(AppUpdater.IsDiskFull(new IOException("диск полон", unchecked((int)0x80070027))));
+        Assert.False(AppUpdater.IsDiskFull(new IOException("файл занят", unchecked((int)0x80070020))));
+    }
+
+    /// <summary>
+    /// Новая версия, которая стартовала и не подтвердила запуск, на втором старте возвращает прежнюю сама;
+    /// подтверждённая — остаётся. Неудачная запоминается для одного сообщения и не предлагается кнопкой отката.
+    /// </summary>
+    [Fact]
+    public void Startup_UnconfirmedNewVersion_RollsBackOnSecondStart()
+    {
+        using var t = new TempDir();
+        var store = new AppVersionStore(t.Sub("versions"));
+        foreach (var v in new[] { "1.0.0", "1.2.0" })
+        {
+            var zip = t.Sub(v + ".zip");
+            File.WriteAllBytes(zip, GoodZip(v));
+            store.Install(zip, v);
+        }
+        AppUpdater Make(string v) => new(Client(new MapHandler(), A), store) { CurrentVersion = v, CurrentExe = store.ExeFor(v), CurrentPid = 5 };
+
+        // 1.0.0 обновляется до 1.2.0: запись «ждёт подтверждения».
+        Make("1.0.0").RestartInto("1.2.0");
+        Assert.Equal("1.2.0", store.State.Pending);
+
+        // Первый старт 1.2.0 — продолжает; упал до показа окна. Второй — возвращает 1.0.0.
+        Assert.Null(Make("1.2.0").CheckStartup());
+        Assert.Equal(1, store.State.PendingStarts);
+        var back = Make("1.2.0").CheckStartup()!;
+        Assert.Equal(store.ExeFor("1.0.0"), back.Exe);
+        Assert.Equal(["--wait-pid", "5", "--updated-from", "1.2.0"], back.Args);
+        Assert.Equal(new AppVersionsState("1.0.0", null, null, null, 0, "1.2.0"), store.State);
+
+        // Прежняя читает сообщение один раз; кнопки отката на неудачную нет.
+        var old = Make("1.0.0");
+        Assert.False(old.CanRollback);
+        Assert.Equal("1.2.0", old.TakeFailedNotice());
+        Assert.Null(old.TakeFailedNotice());
+    }
+
+    [Fact]
+    public void Startup_ConfirmedVersion_StaysAndNoPendingLeft()
+    {
+        using var t = new TempDir();
+        var store = new AppVersionStore(t.Sub("versions"));
+        foreach (var v in new[] { "1.0.0", "1.2.0" })
+        {
+            var zip = t.Sub(v + ".zip");
+            File.WriteAllBytes(zip, GoodZip(v));
+            store.Install(zip, v);
+        }
+        AppUpdater Make(string v) => new(Client(new MapHandler(), A), store) { CurrentVersion = v, CurrentExe = store.ExeFor(v), CurrentPid = 5 };
+        Make("1.0.0").RestartInto("1.2.0");
+        var run = Make("1.2.0");
+        Assert.Null(run.CheckStartup());
+        run.ConfirmStarted();
+        Assert.Null(store.State.Pending);
+        Assert.Null(Make("1.2.0").CheckStartup());                // следующие запуски — без проверки
+        Assert.True(run.CanRollback);
+        Assert.Equal("1.0.0", run.PreviousVersion);
+
+        // Откат вручную не оставляет «ждёт подтверждения»: прежняя уже проверена.
+        Assert.NotNull(run.Rollback());
+        Assert.Null(store.State.Pending);
+        Assert.Null(Make("1.0.0").CheckStartup());
+    }
+
+    [Fact]
+    public void Startup_NoPreviousExe_DoesNotLoop()
+    {
+        using var t = new TempDir();
+        var store = new AppVersionStore(t.Sub("versions"));
+        var zip = t.Sub("a.zip");
+        File.WriteAllBytes(zip, GoodZip("1.2.0"));
+        store.Install(zip, "1.2.0");
+        // Прежняя portable-папка пользователя исчезла: откатываться некуда — не зацикливаться, а работать как есть.
+        store.Save(new("1.2.0", "1.0.0", t.Sub("gone\\DpiShell.exe"), Pending: "1.2.0", PendingStarts: 1));
+        var up = new AppUpdater(Client(new MapHandler(), A), store) { CurrentVersion = "1.2.0" };
+        Assert.Null(up.CheckStartup());
+        Assert.Null(store.State.Pending);
     }
 
     [Fact]

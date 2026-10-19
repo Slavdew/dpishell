@@ -27,7 +27,21 @@ public sealed record RouterDetection(string Address, RouterFound Found, RouterPu
     public bool CanControl => Found == RouterFound.Ok;
 }
 
-public sealed record RouterCore(string? Version, bool Installed, bool HashOk);
+/// <remarks>
+/// Version — ядро, закреплённое в пакете. InstalledVersion (роутер 0.2.0-r8; старые не отдают) — установленное в /opt/zapret:
+/// null — не установлено или роутер поля не знает (тогда смотрят Installed).
+/// </remarks>
+public sealed record RouterCore(string? Version, bool Installed, bool HashOk, string? InstalledVersion = null)
+{
+    /// <summary>Версия ядра на роутере для окна: установленная, а если роутер её не отдаёт — закреплённая; null — ядра нет.</summary>
+    public string? ShownVersion => !Installed ? null : InstalledVersion is { Length: > 0 } v ? v : Version is { Length: > 0 } p ? p : "";
+}
+
+/// <summary>
+/// status.packages (роутер 0.2.0-r8; старые не отдают): установленные версии пакетов DpiShell, null — пакета нет.
+/// Страница LuCI — отдельный пакет luci-app-dpishell и версия у неё своя.
+/// </summary>
+public sealed record RouterPackages(string? Dpishell = null, [property: System.Text.Json.Serialization.JsonPropertyName("luci-app-dpishell")] string? LuciAppDpishell = null);
 public sealed record RouterGroupCheck(string Id, bool Ok);
 public sealed record RouterLastCheck(DateTime? At, string? Source, bool Ok, List<RouterGroupCheck>? Groups);
 /// <summary>Таймер проверки; hours ∈ 0.5, 1, 3, 6, 12, 24 (редакция §9).</summary>
@@ -94,7 +108,9 @@ public sealed record RouterStatus(
     // С 0.2.0 (ядро договора): есть ли обновление и последнее задание обновления.
     RouterUpdate? Update = null,
     // Аварийный выключатель (§5.1): включение ждёт confirm, последнее выключение без человека, состояние сторожа. Старый роутер — null.
-    RouterPendingConfirm? PendingConfirm = null, RouterLastOff? LastOff = null, RouterWatchdog? Watchdog = null);
+    RouterPendingConfirm? PendingConfirm = null, RouterLastOff? LastOff = null, RouterWatchdog? Watchdog = null,
+    // С 0.2.0-r8: версии установленных пакетов (dpishell, luci-app-dpishell). Старый роутер — null.
+    RouterPackages? Packages = null);
 
 /// <summary>
 /// source: catalog | user; у user id «u-…» — присланные с ПК (strategies_user_set), «r-…» — найденные глубоким поиском на роутере (§9).
