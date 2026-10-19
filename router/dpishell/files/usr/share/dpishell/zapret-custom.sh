@@ -38,9 +38,11 @@ zapret_custom_firewall_nft()
 		all="${all:+$all,}$macs"
 		i=$((i + 1))
 	done
-	# Все прочие из LAN и сам роутер (его проверки и подбор) — основному nfqws.
-	nft add rule inet $ZAPRET_NFT_TABLE dps_pre iifname @lanif ether saddr != "{ $all }" meta mark set meta mark or $fm ct mark set ct mark or $fm
-	nft add rule inet $ZAPRET_NFT_TABLE dps_out meta mark set meta mark or $fm ct mark set ct mark or $fm
+	# Все прочие из LAN и сам роутер (его проверки и подбор) — основному nfqws. Метку соединения им не ставим: входящие
+	# основного zapret берёт без фильтра (всё, что не забрали правила ПК), а ct mark от ICMP самого роутера (ttl expired
+	# на приманках с малым TTL) приписал бы чужому соединению лишний бит (проверено на стенде).
+	nft add rule inet $ZAPRET_NFT_TABLE dps_pre iifname @lanif ether saddr != "{ $all }" meta mark set meta mark or $fm
+	nft add rule inet $ZAPRET_NFT_TABLE dps_out meta mark set meta mark or $fm
 	# Ответы с WAN — метка соединения обратно в пакет (у входящих своей метки нет; nft не складывает две переменные).
 	nft add rule inet $ZAPRET_NFT_TABLE dps_pre iifname @wanif meta mark set ct mark and 0x1f000000
 	nft add rule inet $ZAPRET_NFT_TABLE dps_pre iifname @wanif6 meta mark set ct mark and 0x1f000000
