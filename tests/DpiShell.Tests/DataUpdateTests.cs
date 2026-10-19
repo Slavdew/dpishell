@@ -384,9 +384,9 @@ public sealed partial class DataUpdateTests
         Assert.Equal(files, m.Files.Keys.Order().ToList());
         Assert.Empty(m.Mismatches(Repo.Data));
         var s = UpdateSources.Load(Path.Combine(Repo.Data, UpdateSources.FileName));
-        // Первый — подписанная копия на Pages (job site в router.yml), запасной — raw без подписи.
+        // Подписанная копия на Pages (job site в router.yml); источников без data.json.sig нет — их отбросила бы проверка подписи.
         Assert.Equal("https://slavdew.github.io/dpishell/data/", s.Sources[0]);
-        Assert.StartsWith("https://raw.githubusercontent.com/Slavdew/dpishell/", s.Sources[1]);
+        Assert.DoesNotContain(s.Sources, u => u.Contains("raw.githubusercontent.com"));
         Assert.NotNull(s.ReleasePage);
     }
 
