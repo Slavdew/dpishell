@@ -112,7 +112,9 @@ function injectStyle() {
 		'.dps-preset .btn{padding:0 .6em;font-size:.9em}',
 		'.dps-preset-info{margin-left:1.7em;font-size:.95em;overflow-wrap:anywhere}',
 		'.dps-pre{white-space:pre-wrap;word-break:break-word;max-height:16em;overflow:auto;font-family:monospace;font-size:.9em}',
-		'@media (max-width:480px){.dps-actions .btn,.dps-actions button{flex:1 1 auto}}'
+		'@media (max-width:480px){.dps-actions .btn,.dps-actions button{flex:1 1 auto}}',
+		// Шесть вкладок на телефоне в строку не входят — переносом во вторую строку, без прокрутки вбок.
+		'@media (max-width:700px){#tabmenu .tabs{display:flex;flex-wrap:wrap;overflow:visible;white-space:normal;height:auto}}'
 	].join('\n')));
 }
 

@@ -5,7 +5,7 @@
 'require dom';
 'require dpishell.api as api';
 
-// Вкладка «Обход» — главный экран (architecture.md «Страница роутера»).
+// Вкладка «Оптимизация» — главный экран (architecture.md «Страница роутера»).
 
 var HOURS = [[0.5, '30 мин'], [1, '1 ч'], [3, '3 ч'], [6, '6 ч'], [12, '12 ч'], [24, '24 ч']];
 // Сколько роутер ждёт «Да, оставить» после включения со страницы (router-api.md confirm_s).
@@ -118,8 +118,7 @@ return view.extend({
 					api.info('Раз в 5 минут роутер проверяет несколько обычных сайтов. Если с оптимизацией они не открываются, а без неё открываются — обычно оптимизация выключается, причина видна здесь, и роутер один раз сам подбирает стратегию: нашёл — включает, нет — оптимизация остаётся выключенной до вашего «Включить» или «Подобрать». Поломки на других сайтах сторож может не заметить. Если интернета нет и без оптимизации, это обрыв у провайдера: оптимизация остаётся.')]),
 				E('p', { 'class': 'dps-muted' }, 'Без страницы: на большинстве роутеров с OpenWrt нажатие reset на 2 секунды выключает оптимизацию без перезагрузки, но на вашем может работать иначе. Не держите 5 секунд и дольше — обычно это сброс к заводским настройкам.'),
 				this.el.schedMsg
-			]),
-			this.about()
+			])
 		]);
 
 		this.fillStrategies();
@@ -271,17 +270,6 @@ return view.extend({
 		}
 	},
 
-	// «О программе»: версии пакета, договора с окном ПК и ядра; где код и инструкция.
-	about: function() {
-		var s = this.status, link = function(href, text) { return E('a', { href: href, target: '_blank', rel: 'noopener' }, text); };
-		return api.card('О программе', [
-			api.line('DpiShell ' + (s.version || '—') + ' · договор с приложением на ПК ' + (s.api || '—') +
-				' · ядро zapret ' + ((s.core && s.core.version) || '—'), 'dps-muted'),
-			api.line([link('https://github.com/Slavdew/dpishell', 'Исходный код на GitHub'), ' · ',
-				link('https://github.com/Slavdew/dpishell/blob/master/docs/router/README.md', 'Инструкция для роутера')])
-		]);
-	},
-
 	renderConfirm: function() {
 		var self = this, pc = this.status.pending_confirm;
 		var left = pc ? Math.max(0, Math.round((this.confirmDeadline - Date.now()) / 1000)) : 0;
@@ -296,71 +284,18 @@ return view.extend({
 		this.el.confirm.style.display = '';
 	},
 
-	// Плашка «Доступно обновление» (router-api.md §5): что нового — до трёх строк, кнопка «Обновить».
+	// Плашка «Доступно обновление» (router-api.md §5): обновление — на вкладке «Информация и обновления».
 	renderUpdate: function(u) {
-		var self = this;
-		var key = JSON.stringify([u && u.available, u && u.version, this.updating]);
+		var key = JSON.stringify([u && u.available, u && u.version]);
 		if (key == this.lastUpdateKey)
 			return;
 		this.lastUpdateKey = key;
-		if (this.updating) {
-			this.el.updateStep = E('div', { 'class': 'dps-muted' });
-			dom.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
-				E('span', { 'class': 'spinning' }, 'Обновляю DpiShell… страница перезагрузится сама'), this.el.updateStep]));
-			return;
-		}
-		if (!u || !u.available) {
-			dom.content(this.el.update, []);
-			return;
-		}
-		var notes = (u.notes || []).slice(0, 3);
-		dom.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
+		dom.content(this.el.update, !u || !u.available ? [] : E('div', { 'class': 'alert-message notice' }, [
 			E('div', { 'class': 'dps-warn' }, [
-				E('span', {}, [E('b', {}, 'Доступно обновление DpiShell ' + (u.version || '').replace(/-r\d+$/, '')),
-					notes.length ? E('ul', { 'style': 'margin:.3em 0 0 1.2em' }, notes.map(function(n) { return E('li', {}, n); })) : '']),
-				api.btn('Обновить', function() { return self.updateInstall(); }, 'cbi-button-apply')
+				E('b', {}, 'Доступно обновление DpiShell ' + (u.version || '').replace(/-r\d+$/, '')),
+				api.btn('Подробнее', function() { api.go('about'); }, 'cbi-button-apply')
 			])
 		]));
-	},
-
-	updateInstall: function() {
-		var self = this;
-		this.el.err.textContent = '';
-		return api.call('update_install', { from: 'feed' }).then(function() {
-			self.updating = true;
-			self.renderUpdate(self.status.update);
-			poll.stop();
-			// Пакет меняет сам себя и перезапускает rpcd: ошибки ответа во время обновления — пережидаем.
-			var started = Date.now();
-			var timer = window.setInterval(function() {
-				api.safe('status').then(function(s) {
-					var sec = Math.round((Date.now() - started) / 1000);
-					var j = !s.__error && s.update && s.update.job;
-					// Ход (update_job.step); пока rpcd перезапускается, ответа нет — это и есть перезапуск.
-					if (self.el.updateStep)
-						self.el.updateStep.textContent = (s.__error ? 'Перезапуск служб роутера' :
-							({ download: 'Скачиваю пакеты', install: 'Устанавливаю' + (j && j.target ? ' ' + j.target : ''), restart: 'Перезапуск служб роутера' }[j && j.step] || 'Готовлюсь')) +
-							' · ' + api.duration(sec);
-					if (s.__error && Date.now() - started < 300000)
-						return;
-					if (!s.__error && s.jobs && s.jobs.update)
-						return;
-					window.clearInterval(timer);
-					var job = !s.__error && s.update && s.update.job;
-					if (job && job.ok === false) {
-						self.updating = false;
-						self.status = s;
-						self.el.err.textContent = job.message;
-						self.renderUpdate(s.update);
-						poll.start();
-						return;
-					}
-					window.location.reload();
-				});
-			}, 2000);
-		}, function(e) {
-			self.el.err.textContent = api.text(e);
-		});
 	},
 
 	renderWarnings: function(list) {

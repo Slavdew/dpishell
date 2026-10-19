@@ -53,5 +53,14 @@
 			"type": "view",
 			"path": "dpishell/diag"
 		}
+	},
+
+	"admin/services/dpishell/about": {
+		"title": "Информация и обновления",
+		"order": 6,
+		"action": {
+			"type": "view",
+			"path": "dpishell/about"
+		}
 	}
 }

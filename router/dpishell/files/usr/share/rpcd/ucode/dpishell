@@ -166,7 +166,9 @@ const methods = {
 			let strat = s.strategy ? cat.find(st.catalogs(), s.strategy) : null;
 			return {
 				api: st.API, version: st.VERSION, min_app: st.MIN_APP, methods: implemented(), engine: 'zapret1',
-				core: { version: 'v72.13', installed: st.core_installed(), hash_ok: st.core_installed() && core.verify() },
+				core: { version: 'v72.13', installed: st.core_installed(), hash_ok: st.core_installed() && core.verify(),
+					installed_version: st.core_installed() ? st.read_json(`${st.P.etc}/core-installed.json`, {}).version ?? null : null },
+				packages: { dpishell: upd.installed_version('dpishell'), 'luci-app-dpishell': upd.installed_version('luci-app-dpishell') },
 				enabled: s.enabled, mode: s.mode, strategy: s.strategy, backups: s.backups,
 				needs_tcp_timestamps: strat ? cat.uses_ts(strat) : false,
 				last_check: lc ? { ...lc, at: st.iso(lc.at) } : null, fail_streak: st.read_json(`${st.P.etc}/fail-streak.json`, 0),
