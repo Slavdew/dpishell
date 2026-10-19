@@ -24,7 +24,7 @@ say() {
 	printf '{"running":%s,"ok":%s,"keep_settings":%s,"message":"%s","at":%s}\n' "$1" "$2" "$([ -n "$KEEP" ] && echo true || echo false)" "$3" "$(date +%s)" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
 }
 
-say true null 'Выключаю обход'
+say true null 'Выключаю оптимизацию'
 
 # 1. Фоновые задания (подбор, проверка, DNS) — остановить: подбор держит свой config zapret и метки TCP.
 for l in /tmp/dpishell/*.lock; do

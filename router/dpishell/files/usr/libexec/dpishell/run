@@ -3,7 +3,7 @@
 //   run select '<json args>'   — подбор (select_start)
 //   run check <manual|app>     — полная проверка текущей стратегии
 //   run watch                  — проверка по таймеру: запасные стратегии, автоподбор (architecture.md «Проверка по таймеру и запасные»)
-//   run guard                  — сторож: с обходом пропал интернет, без него есть — выключить
+//   run guard                  — сторож: с обходом пропал интернет, без него есть — выключить и один раз подобрать
 //   run tick                   — cron раз в 5 мин: сторож и раз в 30 мин watch
 //   run revert [now]           — откат включения, не подтверждённого вовремя (confirm_s)
 'use strict';
@@ -37,6 +37,27 @@ function warn(code, text) {
 	st.write_atomic('/tmp/dpishell/warnings.json', sprintf('%J\n', w));
 }
 
+// Подбор после сторожа: один раз, быстрый, все группы (cron tick уже под nice). Найденная стратегия прошла и обычные
+// сайты (группа control) — то, на чём сработал сторож; сломается и она — сторож выключит снова, но подбирать уже не будет,
+// пока человек не включит обход или не запустит подбор (WATCHDOG_SELECT снимают enable/select_start).
+function guard_select() {
+	if (st.read_json(st.WATCHDOG_SELECT, null))
+		return;
+	st.write_atomic(st.WATCHDOG_SELECT, sprintf('%J\n', { at: time(), ok: false }));
+	let ls = lock('select');
+	if (!ls) return;
+	let p = null;
+	try { p = sel.select_run({ mode: 'quick', depth: 'main', started_by: 'watchdog' }); } catch (e) {}
+	unlink(ls);
+	st.write_atomic(st.WATCHDOG_SELECT, sprintf('%J\n', { at: time(), ok: !!p?.applied, best: p?.applied ? p.best : null }));
+	if (p?.applied) {
+		warn('watchdog_select_failed', null);
+		warn('auto_selected', `Сторож выключил оптимизацию, подбор нашёл и включил ${p.best}`);
+	} else
+		warn('watchdog_select_failed', `Сторож выключил оптимизацию, подбор не включил стратегию: ${p?.message ?? 'подбор прервался'}. Включите оптимизацию или запустите подбор сами`);
+	st.write_status_json();
+}
+
 // Сторож (architecture.md «Аварийный выключатель»): обычные сайты (группа control) — только рукопожатие TLS, по одной,
 // до 3 целей. Не открылись дважды подряд — проверка без обхода: открылись — обход мешает, выключить (включит снова только
 // человек); нет — обрыв у провайдера, обход вернуть и проверять реже (5 → 10 → 20 мин, после успеха снова 5).
@@ -44,6 +65,9 @@ function warn(code, text) {
 function guard() {
 	let s = st.settings();
 	if (!s.enabled || !s.schedule.watchdog)
+		return;
+	// Ждёт подтверждения включения — откатит сам по сроку, сторожу не вмешиваться (иначе качели «откат → сторож»).
+	if (st.read_json(st.PENDING, null))
 		return;
 	for (let j in ['select', 'check', 'update', 'core_install', 'dns', 'site_check'])
 		if (st.job_running(j))
@@ -98,10 +122,13 @@ function guard() {
 		let bad = sprintf('%J', map(r, x => ({ url: x.url, detail: x.detail })));
 		system(`/usr/libexec/dpishell/off watchdog '${replace(bad, "'", "'\\''")}'`);
 		save(false);
+		unlink(l);
+		guard_select();
+		return;
 	} else {
 		system('/etc/init.d/zapret restart >/dev/null 2>&1');
 		let iv = min((gs.interval ?? 5) * 2, 20);
-		system(`logger -t dpishell 'Сторож: интернета нет и без обхода — обрыв у провайдера, обход оставлен; следующая проверка через ${iv} мин'`);
+		system(`logger -t dpishell 'Сторож: интернета нет и без оптимизации — обрыв у провайдера, оптимизация оставлена; следующая проверка через ${iv} мин'`);
 		save(false, { interval: iv, next_at: time() + iv * 60 - 30 });
 	}
 	unlink(l);

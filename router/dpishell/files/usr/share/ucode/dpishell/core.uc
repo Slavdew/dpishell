@@ -78,7 +78,7 @@ function foreign_packages() {
 function install(progress) {
 	let fp = foreign_packages();
 	if (length(fp))
-		return `Установлен другой zapret (${join(', ', fp)}) — он занимает /opt/zapret. Удалите его (Сервисы → Дополнения или apk del ${join(' ', fp)}) и повторите.`;
+		return `Установлен другой zapret (${join(', ', fp)}) — он занимает /opt/zapret. Удалите его (Система → Программное обеспечение, название может отличаться, или apk del ${join(' ', fp)}) и повторите.`;
 	let m = manifest();
 	let a = arch();
 	if (!a || !m.nfqws[a])

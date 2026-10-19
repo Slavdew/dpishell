@@ -24,7 +24,7 @@ function busy() {
 // Чужой обход работает — включение и подбор заблокированы (architecture.md «Пакет для роутера»): два обхода обрабатывали бы одни пакеты.
 function conflict() {
 	let running = filter(dg.conflicts(), c => c.running);
-	return length(running) ? err('conflict', `Работает другой обход: ${join(', ', map(running, c => c.name))} — остановите его на вкладке «Диагностика»`) : null;
+	return length(running) ? err('conflict', `Работает похожая программа: ${join(', ', map(running, c => c.name))} — остановите её на вкладке «Диагностика»`) : null;
 }
 
 function sh(cmd) {
@@ -36,7 +36,7 @@ function sh(cmd) {
 
 function zapret(action) {
 	if (!st.core_installed())
-		return err('not_installed', 'Ядро обхода не установлено');
+		return err('not_installed', 'Ядро zapret не установлено');
 	let r = sh(`/etc/init.d/zapret ${action}`);
 	return r.rc == 0 ? null : err('failed', `zapret ${action}: ${trim(r.out)}`);
 }
@@ -70,30 +70,36 @@ function trial_start(c, s) {
 	spawn('revert');
 }
 
-// Человек включил сам — прежние «выключено кнопкой/сторожем/откатом» больше не к месту.
-function clear_off() {
-	unlink(st.LAST_OFF);
-	let w = filter(st.read_json(`${st.P.run}/warnings.json`, []), x => index(['watchdog_off', 'button_off', 'confirm_reverted'], x.code) < 0);
+// Человек включил сам — прежние «выключено кнопкой/сторожем/откатом» больше не к месту. Включил или запустил подбор
+// (only_select) — сторож снова может один раз подобрать сам.
+function clear_off(only_select) {
+	unlink(st.WATCHDOG_SELECT);
+	let codes = only_select ? ['watchdog_select_failed'] : ['watchdog_off', 'button_off', 'confirm_reverted', 'watchdog_select_failed'];
+	if (!only_select)
+		unlink(st.LAST_OFF);
+	let w = filter(st.read_json(`${st.P.run}/warnings.json`, []), x => index(codes, x.code) < 0);
 	st.write_atomic(`${st.P.run}/warnings.json`, sprintf('%J\n', w));
 }
 
 // status.watchdog: жив ли сторож — время и итог последней проверки, через сколько минут следующая (растёт при обрыве).
 function guard_status(s) {
 	let g = st.read_json('/tmp/dpishell/guard.json', null);
-	return { enabled: s.schedule.watchdog, checked_at: st.iso(g?.checked_at), ok: g?.ok ?? null, interval_min: g?.interval ?? 5 };
+	let ws = st.read_json(st.WATCHDOG_SELECT, null);
+	return { enabled: s.schedule.watchdog, checked_at: st.iso(g?.checked_at), ok: g?.ok ?? null, interval_min: g?.interval ?? 5,
+		select: ws ? { at: st.iso(ws.at), ok: !!ws.ok, best: ws.best ?? null } : null };
 }
 
 function warnings(s) {
 	let w = [];
 	if (!st.core_installed())
-		push(w, { code: 'core_missing', text: 'Ядро обхода не установлено' });
+		push(w, { code: 'core_missing', text: 'Ядро zapret не установлено' });
 	let running = filter(dg.conflicts(), c => c.running);
 	if (length(running))
-		push(w, { code: 'conflict', text: `Работает другой обход: ${join(', ', map(running, c => c.name))}` });
+		push(w, { code: 'conflict', text: `Работает похожая программа: ${join(', ', map(running, c => c.name))}` });
 	if (dg.flow_offload())
-		push(w, { code: 'flow_offload', text: 'Включено ускорение сети (flow offloading) — с ним обход не работает' });
+		push(w, { code: 'flow_offload', text: 'Включено ускорение сети (flow offloading) — с ним оптимизация не работает' });
 	if (!s.ipv6 && dg.ipv6_wan())
-		push(w, { code: 'ipv6', text: 'У роутера есть IPv6 от провайдера, а обход работает только для IPv4' });
+		push(w, { code: 'ipv6', text: 'У роутера есть IPv6 от провайдера, а оптимизация работает только для IPv4' });
 	for (let x in st.read_json(`${st.P.run}/warnings.json`, []))
 		push(w, x);
 	let off = s.enabled ? null : st.last_off();
@@ -160,7 +166,9 @@ const methods = {
 			let strat = s.strategy ? cat.find(st.catalogs(), s.strategy) : null;
 			return {
 				api: st.API, version: st.VERSION, min_app: st.MIN_APP, methods: implemented(), engine: 'zapret1',
-				core: { version: 'v72.13', installed: st.core_installed(), hash_ok: st.core_installed() && core.verify() },
+				core: { version: 'v72.13', installed: st.core_installed(), hash_ok: st.core_installed() && core.verify(),
+					installed_version: st.core_installed() ? st.read_json(`${st.P.etc}/core-installed.json`, {}).version ?? null : null },
+				packages: { dpishell: upd.installed_version('dpishell'), 'luci-app-dpishell': upd.installed_version('luci-app-dpishell') },
 				enabled: s.enabled, mode: s.mode, strategy: s.strategy, backups: s.backups,
 				needs_tcp_timestamps: strat ? cat.uses_ts(strat) : false,
 				last_check: lc ? { ...lc, at: st.iso(lc.at) } : null, fail_streak: st.read_json(`${st.P.etc}/fail-streak.json`, 0),
@@ -434,7 +442,7 @@ methods.select_start = {
 	args: { groups: [], mode: 'full', depth: 'main' },
 	call: function(req) {
 		let b = busy() ?? conflict(); if (b) return b;
-		if (!st.core_installed()) return err('not_installed', 'Ядро обхода не установлено');
+		if (!st.core_installed()) return err('not_installed', 'Ядро zapret не установлено');
 		let a = req.args;
 		let groups = a.groups ?? GROUPS;
 		if (type(groups) != 'array' || !length(groups) || length(filter(groups, g => index(GROUPS, g) < 0)))
@@ -445,6 +453,7 @@ methods.select_start = {
 		if (index(['full', 'quick'], a.mode ?? 'full') < 0) return err('invalid', 'Режим: full или quick', 'mode');
 		if (index(['main', 'deep'], a.depth ?? 'main') < 0) return err('invalid', 'Глубина: main или deep', 'depth');
 		let by = a.started_by == 'page' ? 'page' : 'app';
+		clear_off(true);
 		// Начальное состояние — сразу, до фонового задания: select_progress сразу после select_start видит «идёт, 0 из N»,
 		// а не прошлый итог или пустоту (окно ПК принимало это за ошибку и запускало подбор повторно).
 		st.ensure_dirs();
@@ -503,7 +512,7 @@ methods.check_now = {
 	call: function() {
 		let b = busy(); if (b) return b;
 		let s = st.settings();
-		if (!s.enabled) return err('failed', 'Обход выключен — проверять нечего');
+		if (!s.enabled) return err('failed', 'Оптимизация выключена — проверять нечего');
 		if (st.job_running('check')) return { started: true };
 		spawn('check app');
 		return { started: true };

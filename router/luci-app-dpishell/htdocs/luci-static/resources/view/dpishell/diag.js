@@ -30,15 +30,15 @@ return view.extend({
 
 		var view = E('div', {}, [
 			E('h2', {}, 'Диагностика'),
-			api.card('Что мешает обходу', [
-				api.line(['Здесь роутер проверяет, что мешает обходу: другие программы обхода, ускорение сети, подмена DNS. Ничего не меняется без вашей кнопки.',
-					api.info('Зайдите сюда, если обход «Работает», а сайты не открываются, или перед тем, как писать о проблеме. «Сохранить отчёт» собирает сведения о роутере и обходе в файл — без паролей — его можно прикрепить к вопросу.')], 'dps-muted'),
+			api.card('Что мешает оптимизации', [
+				api.line(['Здесь роутер проверяет, что мешает оптимизации: похожие программы, ускорение сети, подмена DNS. Ничего не меняется без вашей кнопки.',
+					api.info('Зайдите сюда, если оптимизация «Работает», а сайты не открываются, или перед тем, как писать о проблеме. «Сохранить отчёт» собирает сведения о роутере и оптимизации в файл — без паролей — его можно прикрепить к вопросу.')], 'dps-muted'),
 				this.el.findings,
 				this.el.err
 			]),
-			api.card('Ядро обхода', [this.el.core]),
+			api.card('Ядро zapret', [this.el.core]),
 			api.card('Отчёт', [
-				api.line('Версии, настройки обхода и DNS, хвост журнала роутера — текстовым файлом.', 'dps-muted'),
+				api.line('Версии, настройки оптимизации и DNS, хвост журнала роутера — текстовым файлом.', 'dps-muted'),
 				E('div', { 'class': 'dps-actions' }, [api.btn('Сохранить отчёт', function() { return self.report(); }, 'cbi-button-action')])
 			]),
 			this.uninstallSection()
@@ -89,15 +89,15 @@ return view.extend({
 			if (!c.running)
 				return;
 			if (c.kind == 'package')
-				return kids.push(finding('warning', 'Установлен другой zapret (пакет ' + c.name + ') — он занимает те же файлы. Удалите его: Сервисы → Дополнения или apk del ' + c.name + '. До этого включение и подбор заблокированы.'));
-			kids.push(finding('warning', 'Работает другой обход: ' + c.name + '. Пока он работает, включение и подбор заблокированы.',
+				return kids.push(finding('warning', 'Установлен другой zapret (пакет ' + c.name + ') — он занимает те же файлы. Удалите его: Система → Программное обеспечение (название может отличаться) или apk del ' + c.name + '. До этого включение и подбор заблокированы.'));
+			kids.push(finding('warning', 'Работает похожая программа: ' + c.name + '. Пока он работает, включение и подбор заблокированы.',
 				api.btn('Остановить', function() { return self.conflictStop(c.name); }, 'cbi-button-remove')));
 		});
 		if (d.flow_offload)
-			kids.push(finding('warning', 'Включено ускорение сети (flow offloading) — с ним обход не работает. «Исправить» передаст ускорение обходу: скорость та же, обход работает.',
+			kids.push(finding('warning', 'Включено ускорение сети (flow offloading) — с ним оптимизация не работает. «Исправить» передаст ускорение zapret: скорость обычно почти не меняется, на быстрых тарифах с аппаратным ускорением может снизиться.',
 				api.btn('Исправить', function() { return self.act('flow_offload_fix'); }, 'cbi-button-apply')));
 		if (d.ipv6_wan)
-			kids.push(finding('notice', 'У роутера есть IPv6 от провайдера, а обход работает только для IPv4 — часть сайтов может открываться мимо него. «Исправить» включит обход и для IPv6.',
+			kids.push(finding('notice', 'У роутера есть IPv6 от провайдера, а оптимизация работает только для IPv4 — часть сайтов может открываться мимо неё. «Исправить» включит её и для IPv6.',
 				api.btn('Исправить', function() { return self.act('ipv6_set', { enabled: true }); }, 'cbi-button-apply')));
 		if (d.dns && d.dns.spoofed)
 			kids.push(finding('warning', 'Провайдер подменяет ответы DNS' + (d.dns.checked_at ? ' (проверено ' + api.time(d.dns.checked_at) + ')' : ''),
@@ -117,11 +117,11 @@ return view.extend({
 		}
 		var c = s.core || {};
 		if (s.jobs && s.jobs.core_install)
-			kids.push(E('div', { 'class': 'spinning' }, 'Загружаем ядро обхода…'));
+			kids.push(E('div', { 'class': 'spinning' }, 'Загружаем ядро zapret…'));
 		else if (!c.installed)
-			kids.push(api.line('Ядро обхода не установлено — без него обход не работает.', 'dps-error'));
+			kids.push(api.line('Ядро zapret не установлено — без него оптимизация не работает.', 'dps-error'));
 		else if (c.hash_ok === false)
-			kids.push(api.line('Файлы обхода повреждены — нажмите «Восстановить».', 'dps-error'));
+			kids.push(api.line('Файлы zapret повреждены — нажмите «Восстановить».', 'dps-error'));
 		else
 			kids.push(api.line('Ядро ' + (c.version || '') + ' установлено, файлы целы', 'dps-ok'));
 		if (!(s.jobs && s.jobs.core_install) && (!c.installed || c.hash_ok === false))
@@ -173,7 +173,7 @@ return view.extend({
 		btn.disabled = true;
 		word.addEventListener('input', function() { btn.disabled = word.value.trim().toLowerCase() != 'удалить'; });
 		this.el.uninstall = E('div', {}, [
-			api.line('Обход выключится, всё, что DpiShell менял в настройках роутера (ускорение сети, DNS, расписание), вернётся как было, пакеты DpiShell и ядро обхода удалятся. Модули ядра и другие пакеты роутера останутся.', 'dps-muted'),
+			api.line('Оптимизация выключится, всё, что DpiShell менял в настройках роутера (ускорение сети, DNS, расписание), вернётся как было, пакеты DpiShell и ядро zapret удалятся. Модули ядра и другие пакеты роутера останутся.', 'dps-muted'),
 			E('label', { 'class': 'dps-radio' }, [keep, 'Сохранить настройки — свои адреса, исключения, найденные стратегии; при повторной установке они вернутся']),
 			E('label', { 'class': 'dps-radio' }, [full, 'Удалить полностью, вместе с настройками']),
 			E('div', { 'class': 'dps-actions' }, [E('span', {}, 'Чтобы подтвердить, введите слово «удалить»: '), word, btn])

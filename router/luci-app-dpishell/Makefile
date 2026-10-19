@@ -19,13 +19,13 @@ define Package/luci-app-dpishell
   SECTION:=luci
   CATEGORY:=LuCI
   SUBMENU:=3. Applications
-  TITLE:=DpiShell — обход блокировок (страница LuCI)
+  TITLE:=DpiShell — оптимизация соединения (страница LuCI)
   DEPENDS:=+dpishell +luci-base
   PKGARCH:=all
 endef
 
 define Package/luci-app-dpishell/description
-  Страница «Службы → DpiShell»: включение обхода, подбор стратегии, исключения, DNS, диагностика.
+  Страница «Службы → DpiShell»: включение оптимизации, подбор стратегии, исключения, DNS, диагностика.
   Короткий адрес: http://192.168.1.1/dpi
 endef
 

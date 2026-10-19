@@ -5,7 +5,7 @@
 'require dom';
 'require dpishell.api as api';
 
-// Вкладка «Обход» — главный экран (architecture.md «Страница роутера»).
+// Вкладка «Оптимизация» — главный экран (architecture.md «Страница роутера»).
 
 var HOURS = [[0.5, '30 мин'], [1, '1 ч'], [3, '3 ч'], [6, '6 ч'], [12, '12 ч'], [24, '24 ч']];
 // Сколько роутер ждёт «Да, оставить» после включения со страницы (router-api.md confirm_s).
@@ -36,7 +36,7 @@ return view.extend({
 		if (this.status.__error) {
 			return E('div', {}, [
 				E('h2', {}, 'DpiShell'),
-				api.card('Обход', [api.errorLine(this.status.__error),
+				api.card('Оптимизация', [api.errorLine(this.status.__error),
 					api.line('Если пакет только что установлен — обновите страницу через минуту.', 'dps-muted')])
 			]);
 		}
@@ -55,12 +55,12 @@ return view.extend({
 			apply: E('div', { 'class': 'dps-actions', 'style': 'display:none' }, [
 				api.btn('Применить', function() { return self.applyPending(); }, 'cbi-button-apply'),
 				api.btn('Отмена', function() { self.cancelPending(); }, 'cbi-button-neutral'),
-				E('span', { 'class': 'dps-muted' }, 'Обход для всей сети перезапустится — сайты моргнут на пару секунд.')
+				E('span', { 'class': 'dps-muted' }, 'Оптимизация для всей сети перезапустится — сайты моргнут на пару секунд.')
 			]),
 			modeAll: null, modeLists: null,
 			ts: E('div', { 'class': 'dps-line', 'style': 'display:none' }, [
-				'Компьютерам на Windows нужна настройка — без неё обход для них не работает',
-				api.info('Эта стратегия требует, чтобы Windows отправляла метки времени в соединениях (TCP timestamps); по умолчанию они выключены. Приложение DpiShell на компьютере включает их само. Вручную — в командной строке от администратора: netsh interface tcp set global timestamps=enabled. Телефоны, ТВ и приставки настраивать не нужно.')
+				'Компьютерам на Windows нужна настройка — без неё оптимизация для них не работает',
+				api.info('Эта стратегия требует, чтобы Windows отправляла метки времени в соединениях (TCP timestamps); по умолчанию они выключены. Приложение DpiShell на компьютере включает их само. Вручную — в командной строке от администратора: netsh interface tcp set global timestamps=enabled. Телефоны, ТВ и приставки на большинстве моделей настраивать не нужно.')
 			]),
 			warnings: E('div'),
 			// Включение на пробу (architecture.md «Аварийный выключатель»): без «Да, оставить» роутер сам вернёт прежнее.
@@ -84,7 +84,7 @@ return view.extend({
 
 		// Порядок — как во вкладке «Роутер» окна ПК (UX-аудит, макет страницы роутера).
 		var view = E('div', {}, [
-			E('h2', {}, 'DpiShell — обход блокировок'),
+			E('h2', {}, 'DpiShell — оптимизация соединения'),
 			this.el.update,
 			api.card(null, [
 				E('div', { 'class': 'dps-hero' }, [
@@ -100,25 +100,25 @@ return view.extend({
 				this.el.ts
 			]),
 			api.card('Сайт не открывается', [
-				api.line('Роутер проверит адрес с обходом и без. Если сайт открывается только без обхода — предложит добавить его в исключения.', 'dps-muted'),
+				api.line('Роутер проверит адрес с оптимизацией и без. Если сайт открывается только без оптимизации — предложит добавить его в исключения.', 'dps-muted'),
 				E('div', { 'class': 'dps-actions' }, [this.el.siteUrl, this.el.siteBtn]),
 				this.el.siteResult
 			]),
 			api.card('Настройки', [
-				api.row(['Что обходить', api.info('«Все сайты» — обход для любого сайта, кроме исключений; это основной режим. «Только из списков» — только для сайтов из списков (YouTube, Discord, свои). После смены роутер сам проверяет, что сайты открываются.')],
+				api.row(['Для каких сайтов', api.info('«Все сайты» — оптимизация для любого сайта, кроме исключений; это основной режим. «Только из списков» — только для сайтов из списков (YouTube, Discord, свои). После смены роутер сам проверяет, что сайты открываются.')],
 					E('div', {}, [this.el.modeAll, this.el.modeLists])),
-				api.row(['Стратегия', api.info('Стратегия — способ, которым обход обманывает оборудование провайдера; у разных провайдеров работают разные. Если не знаете, какую выбрать, нажмите «Подобрать» — роутер проверит сам и включит лучшую.')], this.el.strategy),
+				api.row(['Стратегия', api.info('Стратегия — способ, которым оптимизация обманывает оборудование провайдера; у разных провайдеров работают разные. Если не знаете, какую выбрать, нажмите «Подобрать» — роутер проверит сам и включит лучшую.')], this.el.strategy),
 				this.el.apply
 			]),
 			api.card('Проверять сам', [
 				E('label', { 'class': 'dps-check' }, [this.el.schedOn, 'Проверять сайты каждые ', this.el.schedHours]),
 				E('label', { 'class': 'dps-check' }, [this.el.schedAuto, 'Если не помогло — подобрать заново',
-					api.info('Если обход перестал работать и запасные стратегии не помогли, роутер сам запустит быстрый подбор и включит найденную — не чаще раза в 6 часов. Пока идёт подбор (2–3 минуты), сайты в сети могут открываться с перебоями в непредсказуемый момент, поэтому по умолчанию выключено.')]),
-				E('label', { 'class': 'dps-check' }, [this.el.schedWatch, 'Выключать обход, если с ним пропал интернет',
-					api.info('Раз в 5 минут роутер проверяет обычные сайты. Если с обходом они не открываются, а без него открываются — обход выключается, причина видна здесь. Включить снова — кнопкой «Включить». Если интернета нет и без обхода, это обрыв у провайдера: обход остаётся.')]),
+					api.info('Если оптимизация перестала работать и запасные стратегии не помогли, роутер сам запустит быстрый подбор и включит найденную — не чаще раза в 6 часов. Пока идёт подбор (обычно несколько минут), сайты в сети могут открываться с перебоями в непредсказуемый момент, поэтому по умолчанию выключено.')]),
+				E('label', { 'class': 'dps-check' }, [this.el.schedWatch, 'Выключать оптимизацию, если с ней пропал интернет',
+					api.info('Раз в 5 минут роутер проверяет несколько обычных сайтов. Если с оптимизацией они не открываются, а без неё открываются — обычно оптимизация выключается, причина видна здесь, и роутер один раз сам подбирает стратегию: нашёл — включает, нет — оптимизация остаётся выключенной до вашего «Включить» или «Подобрать». Поломки на других сайтах сторож может не заметить. Если интернета нет и без оптимизации, это обрыв у провайдера: оптимизация остаётся.')]),
+				E('p', { 'class': 'dps-muted' }, 'Без страницы: на большинстве роутеров с OpenWrt нажатие reset на 2 секунды выключает оптимизацию без перезагрузки, но на вашем может работать иначе. Не держите 5 секунд и дольше — обычно это сброс к заводским настройкам.'),
 				this.el.schedMsg
-			]),
-			this.about()
+			])
 		]);
 
 		this.fillStrategies();
@@ -172,20 +172,20 @@ return view.extend({
 				sub: (p && p.message) || 'Сайты в сети могут открываться с перебоями' };
 		}
 		if (j.core_install)
-			return { kind: 'busy', title: 'Загрузка программы обхода…' };
+			return { kind: 'busy', title: 'Загрузка ядра zapret…' };
 		if (!s.core.installed)
-			return { kind: 'err', title: 'Программа обхода не установлена', sub: 'Нажмите «Загрузить ядро» ниже' };
+			return { kind: 'err', title: 'Ядро zapret не установлено', sub: 'Нажмите «Загрузить ядро» ниже' };
 		if (s.core.hash_ok === false)
-			return { kind: 'err', title: 'Файлы обхода повреждены', sub: 'Нажмите «Восстановить» во вкладке «Диагностика»' };
+			return { kind: 'err', title: 'Файлы zapret повреждены', sub: 'Нажмите «Восстановить» во вкладке «Диагностика»' };
 		var title = this.strategyTitle(s.strategy);
 		if (j.check)
 			return { kind: 'busy', title: 'Идёт проверка сайтов', sub: s.enabled ? title : '' };
 		if (!s.enabled)
-			return { kind: 'off', title: 'Обход выключен', sub: s.strategy ? 'Будет включена ' + title : 'Стратегия не выбрана — «Включить» подберёт её сам' };
+			return { kind: 'off', title: 'Оптимизация выключена', sub: s.strategy ? 'Будет включена ' + title : 'Стратегия не выбрана — «Включить» подберёт её сам' };
 		var lc = s.last_check;
 		if (lc && lc.ok === false)
-			return { kind: 'err', title: 'Обход работает не на всех сайтах', sub: title + ' · проверено в ' + api.time(lc.at) };
-		return { kind: 'ok', title: 'Обход работает', sub: title + (lc && lc.at ? ' · проверено в ' + api.time(lc.at) : ' · ещё не проверялся') };
+			return { kind: 'err', title: 'Оптимизация работает не на всех сайтах', sub: title + ' · проверено в ' + api.time(lc.at) };
+		return { kind: 'ok', title: 'Оптимизация работает', sub: title + (lc && lc.at ? ' · проверено в ' + api.time(lc.at) : ' · ещё не проверялся') };
 	},
 
 	strategyTitle: function(id) {
@@ -229,7 +229,7 @@ return view.extend({
 		this.el.dot.className = 'dps-dot dps-dot-' + st.kind;
 		this.el.toggle.textContent = s.enabled ? 'Выключить' : 'Включить';
 		this.el.toggle.className = 'btn cbi-button dps-big ' + (s.enabled ? 'cbi-button-neutral' : 'cbi-button-positive');
-		this.el.check.title = s.enabled ? '' : 'Сначала включите обход';
+		this.el.check.title = s.enabled ? '' : 'Сначала включите оптимизацию';
 		this.el.toggle.disabled = busy || !s.core.installed;
 		this.el.select.disabled = busy || !s.core.installed;
 		this.el.check.disabled = busy || !s.enabled || j.check;
@@ -270,17 +270,6 @@ return view.extend({
 		}
 	},
 
-	// «О программе»: версии пакета, договора с окном ПК и ядра; где код и инструкция.
-	about: function() {
-		var s = this.status, link = function(href, text) { return E('a', { href: href, target: '_blank', rel: 'noopener' }, text); };
-		return api.card('О программе', [
-			api.line('DpiShell ' + (s.version || '—') + ' · договор с приложением на ПК ' + (s.api || '—') +
-				' · ядро zapret ' + ((s.core && s.core.version) || '—'), 'dps-muted'),
-			api.line([link('https://github.com/Slavdew/dpishell', 'Исходный код на GitHub'), ' · ',
-				link('https://github.com/Slavdew/dpishell/blob/master/docs/router/README.md', 'Инструкция для роутера')])
-		]);
-	},
-
 	renderConfirm: function() {
 		var self = this, pc = this.status.pending_confirm;
 		var left = pc ? Math.max(0, Math.round((this.confirmDeadline - Date.now()) / 1000)) : 0;
@@ -295,71 +284,18 @@ return view.extend({
 		this.el.confirm.style.display = '';
 	},
 
-	// Плашка «Доступно обновление» (router-api.md §5): что нового — до трёх строк, кнопка «Обновить».
+	// Плашка «Доступно обновление» (router-api.md §5): обновление — на вкладке «Информация и обновления».
 	renderUpdate: function(u) {
-		var self = this;
-		var key = JSON.stringify([u && u.available, u && u.version, this.updating]);
+		var key = JSON.stringify([u && u.available, u && u.version]);
 		if (key == this.lastUpdateKey)
 			return;
 		this.lastUpdateKey = key;
-		if (this.updating) {
-			this.el.updateStep = E('div', { 'class': 'dps-muted' });
-			dom.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
-				E('span', { 'class': 'spinning' }, 'Обновляю DpiShell… страница перезагрузится сама'), this.el.updateStep]));
-			return;
-		}
-		if (!u || !u.available) {
-			dom.content(this.el.update, []);
-			return;
-		}
-		var notes = (u.notes || []).slice(0, 3);
-		dom.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
+		dom.content(this.el.update, !u || !u.available ? [] : E('div', { 'class': 'alert-message notice' }, [
 			E('div', { 'class': 'dps-warn' }, [
-				E('span', {}, [E('b', {}, 'Доступно обновление DpiShell ' + (u.version || '').replace(/-r\d+$/, '')),
-					notes.length ? E('ul', { 'style': 'margin:.3em 0 0 1.2em' }, notes.map(function(n) { return E('li', {}, n); })) : '']),
-				api.btn('Обновить', function() { return self.updateInstall(); }, 'cbi-button-apply')
+				E('b', {}, 'Доступно обновление DpiShell ' + (u.version || '').replace(/-r\d+$/, '')),
+				api.btn('Подробнее', function() { api.go('about'); }, 'cbi-button-apply')
 			])
 		]));
-	},
-
-	updateInstall: function() {
-		var self = this;
-		this.el.err.textContent = '';
-		return api.call('update_install', { from: 'feed' }).then(function() {
-			self.updating = true;
-			self.renderUpdate(self.status.update);
-			poll.stop();
-			// Пакет меняет сам себя и перезапускает rpcd: ошибки ответа во время обновления — пережидаем.
-			var started = Date.now();
-			var timer = window.setInterval(function() {
-				api.safe('status').then(function(s) {
-					var sec = Math.round((Date.now() - started) / 1000);
-					var j = !s.__error && s.update && s.update.job;
-					// Ход (update_job.step); пока rpcd перезапускается, ответа нет — это и есть перезапуск.
-					if (self.el.updateStep)
-						self.el.updateStep.textContent = (s.__error ? 'Перезапуск служб роутера' :
-							({ download: 'Скачиваю пакеты', install: 'Устанавливаю' + (j && j.target ? ' ' + j.target : ''), restart: 'Перезапуск служб роутера' }[j && j.step] || 'Готовлюсь')) +
-							' · ' + api.duration(sec);
-					if (s.__error && Date.now() - started < 300000)
-						return;
-					if (!s.__error && s.jobs && s.jobs.update)
-						return;
-					window.clearInterval(timer);
-					var job = !s.__error && s.update && s.update.job;
-					if (job && job.ok === false) {
-						self.updating = false;
-						self.status = s;
-						self.el.err.textContent = job.message;
-						self.renderUpdate(s.update);
-						poll.start();
-						return;
-					}
-					window.location.reload();
-				});
-			}, 2000);
-		}, function(e) {
-			self.el.err.textContent = api.text(e);
-		});
 	},
 
 	renderWarnings: function(list) {
@@ -378,6 +314,7 @@ return view.extend({
 				action = api.btn('Загрузить ядро', function() { return self.coreInstall(); }, 'cbi-button-apply');
 				break;
 			case 'auto_select_failed':
+			case 'watchdog_select_failed':
 				action = api.btn('Подобрать', function() { return self.openSelect(); }, 'cbi-button-apply');
 				break;
 			case 'flow_offload':
@@ -432,7 +369,7 @@ return view.extend({
 	stopConflicts: function() {
 		var self = this;
 		this.el.err.textContent = '';
-		if (!window.confirm('Остановить другую программу обхода? Она выключится и не запустится после перезагрузки роутера; включить её снова можно в её настройках.'))
+		if (!window.confirm('Остановить похожую программу? Она выключится и не запустится после перезагрузки роутера; включить её снова можно в её настройках.'))
 			return Promise.resolve();
 		return api.call('diag').then(function(d) {
 			var running = (d.conflicts || []).filter(function(c) { return c.running; });
@@ -562,16 +499,16 @@ return view.extend({
 			dom.content(this.el.siteResult, kids);
 			return;
 		}
-		kids.push(part('С обходом', r.with_bypass), part('Без обхода', r.without_bypass));
+		kids.push(part('С оптимизацией', r.with_bypass), part('Без оптимизации', r.without_bypass));
 		if (r.suggest_exclude) {
 			var host = (r.url || '').replace(/^https?:\/\//i, '').replace(/[:/].*$/, '');
 			kids.push(E('div', { 'class': 'dps-actions' }, [
 				api.btn('Добавить ' + host + ' в исключения', function() { return self.addExclude(host); }, 'cbi-button-apply')
 			]));
 		} else if (r.with_bypass && !r.with_bypass.ok)
-			kids.push(E('div', { 'class': 'dps-muted' }, 'Сайт не открывается и без обхода — дело не в обходе.'));
+			kids.push(E('div', { 'class': 'dps-muted' }, 'Сайт не открывается и без оптимизации — дело не в ней.'));
 		else
-			kids.push(E('div', { 'class': 'dps-muted' }, 'С обходом сайт открывается — исключение не нужно.'));
+			kids.push(E('div', { 'class': 'dps-muted' }, 'С оптимизацией сайт открывается — исключение не нужно.'));
 		dom.content(this.el.siteResult, kids);
 	},
 
