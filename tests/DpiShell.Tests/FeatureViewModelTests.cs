@@ -37,7 +37,7 @@ public sealed class FeatureViewModelTests
         Assert.True(net.GameOn);
         Assert.True(net.IpsetList);
         Assert.Contains(said, s => s.Contains("Включён IP-список"));
-        Assert.StartsWith("Включится вместе с обходом", net.GameStatus);   // обход выключен
+        Assert.StartsWith("Включится вместе с оптимизацией", net.GameStatus);   // оптимизация выключена
         Assert.Contains("подсетей, обновлён", net.ListText);
         Assert.Contains("по списку адресов ниже ↓ (", net.GameStatus);   // подпись-связка с IP-списком
         Assert.EndsWith(" подсетей)", net.GameStatus);

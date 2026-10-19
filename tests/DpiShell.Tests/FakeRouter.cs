@@ -157,7 +157,7 @@ public sealed class FakeRouter : IDisposable
         if (p.RevertTo == "off")
         {
             Enabled = false;
-            LastOffJson = """{ "by": "revert", "at": "2026-10-19T12:03:00Z", "text": "Включение не подтвердили — обход выключен", "targets": [] }""";
+            LastOffJson = """{ "by": "revert", "at": "2026-10-19T12:03:00Z", "text": "Включение не подтвердили — оптимизация выключена", "targets": [] }""";
         }
         else Strategy = p.RevertTo;
         _offWarning = """{ "code": "confirm_reverted", "text": "Включение не подтвердили — роутер вернул прежнее" }""";
@@ -168,10 +168,10 @@ public sealed class FakeRouter : IDisposable
     {
         Enabled = false; Pending = null; WatchdogOk = false; WatchdogCheckedAt = at;
         LastOffJson = $$"""
-            { "by": "watchdog", "at": "{{at}}", "text": "С обходом интернет пропал, без обхода есть",
+            { "by": "watchdog", "at": "{{at}}", "text": "С оптимизацией интернет пропал, без оптимизации есть",
               "targets": [ { "url": "https://www.google.com/generate_204", "detail": "таймаут 5 с" }, { "url": "https://ya.ru/", "detail": "сброс соединения" } ] }
             """;
-        _offWarning = """{ "code": "watchdog_off", "text": "Сторож выключил обход: с ним пропал интернет" }""";
+        _offWarning = """{ "code": "watchdog_off", "text": "Сторож выключил оптимизацию: с ним пропал интернет" }""";
     }
 
     /// <summary>status.watchdog.select как JSON (роутер 0.2.0-r8); null — поля нет (старый роутер). "null" — подбора после сторожа не было.</summary>
@@ -197,7 +197,7 @@ public sealed class FakeRouter : IDisposable
     {
         WatchdogSelectJson = """{ "at": "2026-10-19T11:36:00Z", "ok": false, "best": null }""";
         SelectRunningJob = false; Enabled = false;
-        _offWarning = """{ "code": "watchdog_select_failed", "text": "Подбор после сторожа не нашёл стратегию — обход выключен" }""";
+        _offWarning = """{ "code": "watchdog_select_failed", "text": "Подбор после сторожа не нашёл стратегию — оптимизация выключена" }""";
     }
 
     /// <summary>Короткое нажатие кнопки reset на корпусе — обход выключен.</summary>
@@ -205,7 +205,7 @@ public sealed class FakeRouter : IDisposable
     {
         Enabled = false; Pending = null;
         LastOffJson = """{ "by": "button", "at": "2026-10-19T11:40:00Z", "text": "Выключено кнопкой на корпусе", "targets": [] }""";
-        _offWarning = """{ "code": "button_off", "text": "Обход выключен кнопкой на корпусе" }""";
+        _offWarning = """{ "code": "button_off", "text": "Оптимизация выключена кнопкой на корпусе" }""";
     }
 
     /// <summary>enable / strategy_set / apply с confirm_s при включённом сторожевом договоре — на пробу.</summary>
@@ -358,7 +358,7 @@ public sealed class FakeRouter : IDisposable
         }
         if (ConflictOnEnable && method is "enable" or "select_start")
         {
-            await Write(ctx, Result(0, """{"error":{"code":"conflict","text":"Работает чужой обход"}}"""));
+            await Write(ctx, Result(0, """{"error":{"code":"conflict","text":"Работает чужой оптимизация"}}"""));
             return;
         }
         if (BusyOn == method) { await Write(ctx, Result(0, """{"error":{"code":"busy","text":"Идёт подбор"}}""")); return; }

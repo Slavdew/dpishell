@@ -53,7 +53,7 @@ public class HelperInstallerTests
             Assert.Equal(HelperProtocol.ServiceName, a[1]);
         var f = HelperInstaller.ScFailureArgs();
         Assert.StartsWith("restart/", f[Array.IndexOf(f, "actions=") + 1]);
-        Assert.NotEqual(ServiceManager.Name, HelperProtocol.ServiceName);   // служба обхода остаётся отдельной
+        Assert.NotEqual(ServiceManager.Name, HelperProtocol.ServiceName);   // служба оптимизации остаётся отдельной
     }
 
     [Fact]

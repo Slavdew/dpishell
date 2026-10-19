@@ -122,7 +122,7 @@ public sealed class PcDnsViewModelTests : IDisposable
         var vm = TestWindow.Model(shell, await f.LinkAsync(), settings);
         vm.RecheckAfterDns = () => Task.CompletedTask;
         await vm.RefreshPcDnsAsync();
-        Assert.Contains("Windows 10", vm.PcDns.Note);
+        Assert.Contains("этой версии Windows", vm.PcDns.Note);
         Assert.False(vm.PcDns.ShowFallback);
 
         vm.PcDns.NewName = "Свой"; vm.PcDns.NewIps = "10.0.0.53, 10.0.0.54";

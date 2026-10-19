@@ -79,7 +79,7 @@ public sealed class Selector(AppPaths paths, HttpProbe probe)
         IReadOnlyList<Strategy> strategies, IReadOnlyList<TargetGroup> groups, bool quick,
         IProgress<SelectorProgress>? progress = null, CancellationToken ct = default)
     {
-        progress?.Report(new(0, strategies.Count, "Проверка без обхода…"));
+        progress?.Report(new(0, strategies.Count, "Проверка без оптимизации…"));
         var baseline = await CheckGroupsAsync(groups, ct);
 
         var blocked = KeepForSelection(groups, baseline);

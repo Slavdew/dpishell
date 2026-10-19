@@ -42,9 +42,9 @@ public sealed partial class RouterViewModel
     {
         RouterTrialState.Checking => "Проверяю, что сайты открываются. Если не подтвердить — роутер сам вернёт прежнее "
             + (_trialDeadline is { } d ? "через " + RouterTexts.Countdown(d - UtcNow()) : "скоро") + ".",
-        RouterTrialState.Failed => "Часть сайтов с этого ПК не открылась. Оставить обход?",
+        RouterTrialState.Failed => "Часть сайтов с этого ПК не открылась. Оставить оптимизацию?",
         RouterTrialState.Unknown => "Проверить сайты с этого ПК не удалось. Всё работает?",
-        _ => "Обход на роутере включён на пробу. Всё работает?",
+        _ => "Оптимизация на роутере включена на пробу. Всё работает?",
     };
 
     /// <summary>Кнопки и отсчёт рядом с ними — только когда решает человек (проверка не прошла или её нет).</summary>
@@ -136,7 +136,7 @@ public sealed partial class RouterViewModel
         if (opened == true)
         {
             _trialState = RouterTrialState.Ask;
-            if (await ConfirmCoreAsync()) { Say("Проверено — оставил. " + (done ?? "Обход на роутере включён.")); return; }
+            if (await ConfirmCoreAsync()) { Say("Проверено — оставил. " + (done ?? "Оптимизация на роутере включена.")); return; }
         }
         else _trialState = opened == false ? RouterTrialState.Failed : RouterTrialState.Unknown;
         RaiseTrial();
@@ -152,7 +152,7 @@ public sealed partial class RouterViewModel
     /// <summary>«Да, оставить» — confirm.</summary>
     public async Task KeepTrialAsync()
     {
-        if (await ConfirmCoreAsync()) Say("Оставлено: обход на роутере работает.");
+        if (await ConfirmCoreAsync()) Say("Оставлено: оптимизация на роутере работает.");
     }
 
     /// <summary>«Вернуть как было» — не ждать срока: выключить или вернуть прежнюю стратегию (revert_to), затем снять ожидание.</summary>
@@ -167,7 +167,7 @@ public sealed partial class RouterViewModel
                 await Call(c => c.ConfirmAsync());
                 await RefreshStatusCoreAsync();
             }, changes: false))
-            Say(p.RevertsToOff ? "Вернул как было: обход на роутере выключен." : "Вернул как было: на роутере стратегия " + StrategyTitle(p.RevertTo) + ".");
+            Say(p.RevertsToOff ? "Вернул как было: оптимизация на роутере выключена." : "Вернул как было: на роутере стратегия " + StrategyTitle(p.RevertTo) + ".");
     }
 
     // ---------- выключение без человека: сторож, кнопка, откат (last_off, warnings) ----------
@@ -191,6 +191,8 @@ public sealed partial class RouterViewModel
     public WatchdogSelectState WdState => _wdState;
     /// <summary>Идёт подбор после сторожа.</summary>
     public bool WdRunning => _wdState == WatchdogSelectState.Running;
+    /// <summary>Пока роутер сам подбирает после сторожа, «Включить», «Подобрать» и «Стратегия» не нужны — менять нечего, остаётся «Остановить подбор».</summary>
+    public bool ShowRouterActions => !WdRunning;
     /// <summary>Фраза красная, кроме случая «роутер сам подобрал и включил».</summary>
     public bool OffAlert => _wdState != WatchdogSelectState.Found;
     /// <summary>Подпись возврата: после неудачного подбора роутера «прежняя» — она уже не подошла сторожу.</summary>
@@ -252,7 +254,7 @@ public sealed partial class RouterViewModel
         _offByWatchdog = HasOff && (off is not null ? off.By == "watchdog" : warn?.Code is "watchdog_off" or "watchdog_select_failed" || _wdState != WatchdogSelectState.None);
         _offKey = !HasOff ? "" : off is not null ? off.By + "|" + off.At?.ToUniversalTime().Ticks : warn?.Code ?? "watchdog";
         Raise(nameof(HasOffDetails)); Raise(nameof(CanReEnable)); RaiseOffOffer();
-        Raise(nameof(WdState)); Raise(nameof(WdRunning)); Raise(nameof(OffAlert)); Raise(nameof(ReEnableText));
+        Raise(nameof(WdState)); Raise(nameof(WdRunning)); Raise(nameof(ShowRouterActions)); Raise(nameof(OffAlert)); Raise(nameof(ReEnableText));
     }
 
     // ---------- сторож (schedule.watchdog, status.watchdog) ----------
@@ -268,7 +270,7 @@ public sealed partial class RouterViewModel
         set { if (value != _watchdog) _ = SetScheduleAsync(_scheduleEnabled, _scheduleHours, _autoSelect, value); }
     }
 
-    public const string WatchdogOnText = "Сторож включён: если с обходом пропадёт интернет, роутер выключит обход сам.";
+    public const string WatchdogOnText = "Сторож включён: если с оптимизацией перестанут открываться проверочные сайты, роутер обычно сам выключит её. Поломки на других сайтах он может не заметить.";
 
     /// <summary>«проверено в 14:30 · всё в порядке»; сторож выключен — пусто.</summary>
     public string WatchdogLine
@@ -277,7 +279,7 @@ public sealed partial class RouterViewModel
         {
             if (!_watchdog || _status?.Watchdog is not { Enabled: true } w) return "";
             if (w.CheckedAt is null) return "ещё не проверял";
-            var verdict = w.Ok switch { true => " · всё в порядке", false => " · с обходом пропадал интернет", null => "" };
+            var verdict = w.Ok switch { true => " · всё в порядке", false => " · с оптимизацией пропадал интернет", null => "" };
             return "проверено в " + RouterTexts.Time(w.CheckedAt) + verdict;
         }
     }

@@ -106,7 +106,7 @@ public static class RouterInstallDialog
         var panel = new StackPanel { Margin = new Thickness(24, 20, 24, 18), Width = 460 };
         panel.Children.Add(new TextBlock
         {
-            Text = "DpiShell ставится на роутер с OpenWrt — обход заработает для всех устройств дома. Нужен пароль администратора роутера, тот же, что для входа в его настройки (LuCI).",
+            Text = "DpiShell ставится на роутер с OpenWrt — оптимизация заработает для всех устройств дома. Нужен пароль администратора роутера, обычно тот же, что для входа в его настройки (LuCI).",
             TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10),
         });
 
@@ -217,7 +217,7 @@ public static class RouterUninstallDialog
         var confirm = new StackPanel().Show(nameof(RouterUninstallViewModel.IsConfirm)).Enable(nameof(RouterUninstallViewModel.IsConfirm));
         confirm.Children.Add(new TextBlock
         {
-            Text = "Обход на роутере перестанет работать для всех устройств дома. Что DpiShell менял в настройках роутера (DNS, ускорение сети, расписание), вернётся как было; ядро обхода и пакеты удалятся.",
+            Text = "Оптимизация на роутере перестанет работать для всех устройств дома. Что DpiShell менял в настройках роутера (DNS, ускорение сети, расписание), вернутся значения до DpiShell (если вы меняли их позже сами, эти правки могут быть перезаписаны); ядро zapret и пакеты удалятся.",
             TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12),
         });
         var keep = new RadioButton { Content = "Сохранить настройки — чтобы поставить заново с ними", Margin = new Thickness(0, 2, 0, 2), HorizontalAlignment = HorizontalAlignment.Left };

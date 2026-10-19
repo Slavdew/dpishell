@@ -56,12 +56,12 @@ public sealed class RouterViewModelTests : IDisposable
         // Главная: статус, стратегия, предупреждения.
         Assert.True(vm.Found);
         Assert.True(vm.RouterEnabled);
-        Assert.Equal("Обход делает роутер", vm.HomeTitle);
+        Assert.Equal("Оптимизацию делает роутер", vm.HomeTitle);
         // Есть предупреждение — на главной число и его текст вместо стратегии и времени (UX-аудит 2, п. 7).
         Assert.Equal("· 1 предупреждение", vm.HomeFixText);
-        Assert.Equal("Ускорение сети на роутере мешает обходу", vm.HomeLine);
+        Assert.Equal("Ускорение сети на роутере мешает оптимизации", vm.HomeLine);
         Assert.StartsWith("Стратегия general (ALT10), проверено в ", vm.HomeDetail);   // на вкладке — как было
-        Assert.Equal("Ускорение сети на роутере мешает обходу", vm.Warnings);
+        Assert.Equal("Ускорение сети на роутере мешает оптимизации", vm.Warnings);
         Assert.Equal("Исправить", Assert.Single(vm.WarningRows).Fix);
         Assert.Single(vm.Strategies);
         AssertNoSecretSaid("secret");
@@ -124,7 +124,7 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.Equal(text, vm.ConnectionText);
         Assert.True(vm.Found);
         Assert.True(vm.NeedLogin);
-        Assert.Equal("Обход делает роутер", vm.HomeTitle);
+        Assert.Equal("Оптимизацию делает роутер", vm.HomeTitle);
         Assert.Contains(text.ToLowerInvariant()[..10], vm.HomeDetail);
         Assert.Equal(0, r.Logins);
 
@@ -406,7 +406,7 @@ public sealed class RouterViewModelTests : IDisposable
         await vm.ConnectAsync("secret");
         await vm.RefreshDiagAsync();
         Assert.Equal("zapret2", Assert.Single(vm.Conflicts).Name);
-        Assert.Equal("включено — мешает обходу", vm.FlowOffloadText);
+        Assert.Equal("включено — мешает оптимизации", vm.FlowOffloadText);
         Assert.StartsWith("провайдер подменяет", vm.DnsText);
         await vm.StopConflictAsync("zapret2");
         Assert.Equal("zapret2", r.Calls.Single(c => Method(c) == "conflict_stop")["params"]![3]!["name"]!.GetValue<string>());
@@ -423,7 +423,7 @@ public sealed class RouterViewModelTests : IDisposable
         await vm.ConnectAsync("secret");
         await vm.FixWarningAsync("flow_offload");
         await vm.RefreshDiagAsync();
-        Assert.Equal("передано обходу — не мешает", vm.FlowOffloadText);
+        Assert.Equal("передано оптимизации — не мешает", vm.FlowOffloadText);
     }
 
     [Fact]

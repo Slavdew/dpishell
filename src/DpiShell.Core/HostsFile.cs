@@ -338,7 +338,7 @@ public sealed class HostsFileStore(string hostsPath, string backupDir, Action? a
         // Защитник может отменить правку сразу (HostsFileHijack) — проверяем, что на диске то, что записали.
         if (!ReadBytes().AsSpan().SequenceEqual(newBytes))
             throw new HostsWriteException("Запись в hosts отменена — скорее всего, Защитником Windows (HostsFileHijack) или другой защитой. "
-                + "Если Защитник показал предупреждение, выберите в нём «Разрешить» и повторите." + BackupNote(backup), backup);
+                + "Если Защитник или другой антивирус показал предупреждение, разрешите изменение (название кнопки зависит от версии) и повторите." + BackupNote(backup), backup);
         try { afterWrite?.Invoke(); } catch { }
         return backup;
     }

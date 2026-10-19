@@ -155,9 +155,9 @@ public sealed class RouterClient : IDisposable
     static string AppErrorText(string code) => code switch
     {
         "busy" => "Роутер занят: идёт подбор или проверка",
-        "not_installed" => "На роутере не загружено ядро обхода",
+        "not_installed" => "На роутере не загружено ядро zapret",
         "invalid" => "Роутер отклонил данные",
-        "conflict" => "На роутере работает другой обход",
+        "conflict" => "На роутере работает похожая программа",
         "core_mismatch" => "Файлы ядра на роутере повреждены",
         _ => "Ошибка на роутере",
     };

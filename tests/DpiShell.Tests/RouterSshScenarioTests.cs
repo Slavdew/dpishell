@@ -94,7 +94,7 @@ public class RouterSshScenarioTests
                 # Ключ витрины DpiShell
                 # Витрина пакетов
                 # Пакеты DpiShell и зависимости
-                # Ядро обхода (zapret) — загрузка и проверка хеша
+                # Ядро zapret (zapret) — загрузка и проверка хеша
                 # Проверка
                 {"schema":1,"ok":true,"step":"done","message":"DpiShell установлен. Дальше — «Подобрать»","version":"0.2.0-r3","api":"1.0","core":true}
                 """,
@@ -103,7 +103,7 @@ public class RouterSshScenarioTests
         var r = await new RouterSsh(ssh).InstallAsync(proxyPort: 3128, progress: new LineProgress(steps.Add));
         Assert.StartsWith("https_proxy=http://127.0.0.1:3128 ", ssh.Runs[0].Command);
         Assert.EndsWith("sh -s", ssh.Runs[0].Command);
-        Assert.Equal(["Ключ витрины DpiShell", "Витрина пакетов", "Пакеты DpiShell и зависимости", "Ядро обхода (zapret) — загрузка и проверка хеша", "Проверка"], steps);
+        Assert.Equal(["Ключ витрины DpiShell", "Витрина пакетов", "Пакеты DpiShell и зависимости", "Ядро zapret (zapret) — загрузка и проверка хеша", "Проверка"], steps);
         Assert.True(r.Ok);
         Assert.Equal("0.2.0-r3", r.Version);
         Assert.Equal(new ApiVersion(1, 0), r.Api);

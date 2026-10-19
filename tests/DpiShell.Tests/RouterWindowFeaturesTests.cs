@@ -58,7 +58,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         using var r = new FakeRouter();
         var vm = await Connected(r);
         Assert.True(vm.ModeAll);
-        Assert.StartsWith("Обход для всех сайтов", vm.ModeHint);
+        Assert.StartsWith("Оптимизация для всех сайтов", vm.ModeHint);
         // Как радиокнопки: отметили одну — снялась другая. Запрос — один.
         vm.ModeLists = true;
         vm.ModeAll = false;
@@ -84,9 +84,9 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         await vm.SiteCheckAsync();
         Assert.Equal("https://www.example.org/page", r.SiteCheckUrl);
         Assert.True(Count(r, "site_check_result") >= 3);
-        Assert.Equal("Сайт открывается только без обхода", vm.SiteResult);
+        Assert.Equal("Сайт открывается только без оптимизации", vm.SiteResult);
         Assert.True(vm.SiteSuggestExclude);
-        Assert.Equal("С обходом: не открылся (сброс после 16 КБ). Без обхода: открылся.", vm.SiteDetail);
+        Assert.Equal("С оптимизацией: не открылся (сброс после 16 КБ). Без оптимизации: открылся.", vm.SiteDetail);
 
         await vm.AddSiteToExcludeAsync();
         Assert.Equal(new[] { "example.com", "www.example.org" }, r.Lists["user-exclude"]);
@@ -107,7 +107,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         vm.SiteUrl = "example.com";
         await vm.SiteCheckAsync();
         Assert.Equal("example.com", r.SiteCheckUrl);   // голое имя роутер дополнит сам (§9)
-        Assert.Equal("С обходом сайт открывается", vm.SiteResult);
+        Assert.Equal("С оптимизацией сайт открывается", vm.SiteResult);
         Assert.False(vm.SiteSuggestExclude);
     }
 
@@ -321,7 +321,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         // Простыми словами, без «временных меток» (п. 8); на главной — число и текст первого предупреждения (п. 7).
         Assert.Equal(RouterViewModel.TimestampsNeed, vm.TimestampsNote);
         Assert.Equal("· 2 предупреждения", vm.HomeFixText);   // и ускорение сети у фейкового роутера
-        Assert.Equal("Ускорение сети на роутере мешает обходу", vm.HomeLine);
+        Assert.Equal("Ускорение сети на роутере мешает оптимизации", vm.HomeLine);
         await vm.CheckTimestampsAsync(ask: true);   // кнопка «Включить»
         Assert.True(helper);
         Assert.False(vm.TimestampsNeedAction);
@@ -357,7 +357,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         string? asked = null;
         vm.Confirm = q => { asked = q; return true; };
         await vm.ToggleAsync();
-        Assert.Contains("Выключить обход на этом ПК и включить на роутере?", asked);
+        Assert.Contains("Выключить оптимизацию на этом ПК и включить на роутере?", asked);
         Assert.False(pc);
         Assert.True(r.Enabled);
         Assert.False(vm.BothOn);
@@ -428,9 +428,9 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         string? asked = null;
         vm.Confirm = q => { asked = q; return true; };
         await vm.RouterResumeAsync();
-        Assert.Equal("Подбор закончен. Включить обход на роутере обратно?", asked);
+        Assert.Equal("Подбор закончен. Включить оптимизацию на роутере обратно?", asked);
         Assert.True(r.Enabled);
-        Assert.Equal("Обход снова работает на роутере.", vm.Message);
+        Assert.Equal("Оптимизация снова работает на роутере.", vm.Message);
         // Второй раз не спрашивает: роутер выключали один раз.
         asked = null;
         await vm.RouterResumeAsync();
@@ -461,7 +461,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         await vm.Router.ConnectAsync("secret");
         // Помощника нет — выключить обход ПК нечем: остаётся плашка «включён и здесь, и на роутере» с двумя кнопками.
         Assert.True(vm.Router.BothOn);
-        Assert.NotEqual("Обход перешёл на роутер: на этом ПК выключен.", vm.Message);
+        Assert.NotEqual("Оптимизация перешла на роутер: на этом ПК выключена.", vm.Message);
     }
 
     // ---------- обход «живёт» на роутере: старт окна, роутер не отвечает (живой случай: обновление роутера) ----------
@@ -511,7 +511,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
 
     [Theory]
     [InlineData("AABBCCDDEEFF", true)]    // тот же роутер, просто не отвечает (обновляется) — служба ПК, поднявшаяся с Windows, выключается
-    [InlineData("001122334455", false)]   // другая сеть с тем же адресом шлюза — обход ПК не трогаем
+    [InlineData("001122334455", false)]   // другая сеть с тем же адресом шлюза — оптимизация ПК не трогаем
     [InlineData(null, false)]             // MAC не узнать — не уверены, не трогаем
     public async Task Start_ServiceUp_RouterAbsent_SameRouter_PcOff(string? macNow, bool off)
     {
@@ -519,7 +519,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         var (vm, f, _) = await MainWithHelper(address, Pc(active: true), new RouterBypassMark(address, "AABBCCDDEEFF"), macNow);
         await using var _f = f;
         await vm.InitializeAsync();
-        if (off) await Until(() => vm.Message == "Обход на этом ПК выключен: он работает на роутере, а роутер сейчас не отвечает.");
+        if (off) await Until(() => vm.Message == "Оптимизация на этом ПК выключена: она работает на роутере, а роутер сейчас не отвечает.");
         else await Task.Delay(300);
         Assert.Equal(off, f.Backend.Calls.Contains("disable"));
     }
@@ -560,7 +560,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         f.Backend.StatusValue = Pc(active: true);  // служба ПК поднялась с Windows
         await vm.RefreshStatusAsync();
         await Until(() => f.Backend.Calls.Contains("disable"));
-        await Until(() => vm.Message == "Обход перешёл на роутер: на этом ПК выключен.");
+        await Until(() => vm.Message == "Оптимизация перешла на роутер: на этом ПК выключена.");
     }
 
     [Fact]
@@ -572,7 +572,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         typeof(MainViewModel).GetProperty(nameof(MainViewModel.IsLoading))!.SetValue(vm, false);
         await vm.RefreshStatusAsync();
         await vm.EnableAsync();
-        Assert.Null(settings.RouterBypass);   // человек выбрал обход здесь — при следующем старте его не выключать
+        Assert.Null(settings.RouterBypass);   // человек выбрал оптимизация здесь — при следующем старте его не выключать
     }
 
     // ---------- 7. глубокий поиск на роутере ----------
@@ -635,7 +635,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
     {
         using var r = new FakeRouter
         {
-            WarningsJson = """[ { "code": "flow_offload", "text": "Включён flow offloading" }, { "code": "ipv6", "text": "IPv6 мимо обхода" }, { "code": "switched_backup", "text": "Включена запасная alt9" } ]""",
+            WarningsJson = """[ { "code": "flow_offload", "text": "Включён flow offloading" }, { "code": "ipv6", "text": "IPv6 мимо оптимизации" }, { "code": "switched_backup", "text": "Включена запасная alt9" } ]""",
         };
         var vm = await Connected(r);
         Assert.Equal(new[] { "Исправить", "Исправить", null }, vm.WarningRows.Select(w => w.Fix));
@@ -643,10 +643,10 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.True(vm.FlowOffloadFixable);
         await vm.FixWarningAsync("flow_offload");
         Assert.True(r.FlowOffloadFixed);
-        Assert.Equal("Готово: ускорение сети работает вместе с обходом, скорость та же.", _said[^1]);
+        Assert.Equal("Готово: ускорение сети работает вместе с оптимизацией; скорость обычно почти не меняется.", _said[^1]);
         Assert.Empty(vm.WarningRows);   // роутер больше не предупреждает
 
-        r.WarningsJson = """[ { "code": "ipv6", "text": "IPv6 мимо обхода" } ]""";
+        r.WarningsJson = """[ { "code": "ipv6", "text": "IPv6 мимо оптимизации" } ]""";
         await vm.RefreshAsync();
         await vm.FixWarningAsync("ipv6");
         Assert.True(r.Ipv6Enabled);
@@ -661,7 +661,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
             Enabled = false,
             ConflictOnEnable = true,
             ConflictsJson = """[ { "kind": "package", "name": "zapret-manager-beam", "running": true }, { "kind": "service", "name": "zapret2", "running": true } ]""",
-            WarningsJson = """[ { "code": "conflict", "text": "Работает чужой обход" } ]""",
+            WarningsJson = """[ { "code": "conflict", "text": "Работает чужой оптимизация" } ]""",
         };
         var vm = await Connected(r);
         await vm.ToggleAsync();

@@ -95,7 +95,7 @@ public class HelperChannelTests
         Assert.False(report.Cancelled);
         Assert.Equal("alt9", report.Best?.Strategy.Id);
         Assert.Equal(System.Security.Authentication.SslProtocols.Tls13, report.Scores[0].Verdicts[0].Probes[0].Tls);
-        lock (seen) Assert.Equal(["Проверка без обхода…", "Стратегия Alt 9…"], seen);
+        lock (seen) Assert.Equal(["Проверка без оптимизации…", "Стратегия Alt 9…"], seen);
         Assert.Contains("select True youtube", f.Backend.Calls);
     }
 

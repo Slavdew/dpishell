@@ -187,7 +187,7 @@ public static class RouterSuitability
             stop.Add(new("no_fw4", "Нужен межсетевой экран fw4 (nftables), а на роутере его нет — старая прошивка с iptables или сборка без fw4"));
 
         if (p.Openwrt?.Arch is { } arch && (CoreArch(arch) is not { } ca || coreArches is not null && !coreArches.Contains(ca)))
-            stop.Add(new("arch", $"Процессор роутера ({arch}) не поддерживается ядром обхода"));
+            stop.Add(new("arch", $"Процессор роутера ({arch}) не поддерживается ядром zapret"));
 
         // Сеть: без витрины, GitHub или фида прошивки — ставим через ПК (туннель).
         var net = p.Net ?? new PreflightNet(false, false, false);
@@ -202,7 +202,7 @@ public static class RouterSuitability
             if (unknown && !net.FwFeed)
                 kmodPending = true;   // индекс фида не получить — проверим через туннель (--update)
             else if (unknown)
-                stop.Add(new("kmod_missing", "В фиде прошивки нет модуля kmod-nft-queue — без него обход не работает. Обычно его нет в урезанных сборках: поставьте официальную OpenWrt"));
+                stop.Add(new("kmod_missing", "В фиде прошивки нет модуля kmod-nft-queue — без него оптимизация не работает. Обычно его нет в урезанных сборках: поставьте официальную OpenWrt"));
             else
                 stop.Add(new("kmod_mismatch",
                     $"Модуль kmod-nft-queue ({k!.Version}) собран не под ядро роутера ({p.Kernel}) — так бывает со snapshot, который обновился после прошивки. Обновите прошивку до свежей сборки и повторите"));
@@ -219,9 +219,9 @@ public static class RouterSuitability
         foreach (var f in p.Foreign ?? [])
         {
             if (f.Kind == "package")
-                stop.Add(new("foreign_package", $"Удалите пакет «{f.Name}» (другой обход блокировок): в меню роутера «Система» → «Программное обеспечение», затем повторите."));
+                stop.Add(new("foreign_package", $"Удалите пакет «{f.Name}» (похожая программа): в меню роутера «Система» → «Программное обеспечение» (название может отличаться), затем повторите."));
             else
-                warn.Add(new("foreign_service", $"На роутере работает другой обход ({f.Name}) — после установки DpiShell предложит его остановить"));
+                warn.Add(new("foreign_service", $"На роутере работает похожая программа ({f.Name}) — после установки DpiShell предложит её остановить"));
         }
 
         RouterRelease? chosen = null;

@@ -17,7 +17,7 @@ public sealed class RouterSetupViewModelTests : IDisposable
 
     public void Dispose() => _tmp.Dispose();
 
-    public const string InstallOk = "# Ключ витрины DpiShell\n# Витрина пакетов\n# Пакеты DpiShell и зависимости\n# Ядро обхода (zapret) — загрузка и проверка хеша\n# Проверка\n"
+    public const string InstallOk = "# Ключ витрины DpiShell\n# Витрина пакетов\n# Пакеты DpiShell и зависимости\n# Ядро zapret (zapret) — загрузка и проверка хеша\n# Проверка\n"
                                     + "{\"schema\":1,\"ok\":true,\"step\":\"done\",\"message\":\"DpiShell установлен. Дальше — «Подобрать»\",\"version\":\"0.2.0-r3\",\"api\":\"1.0\",\"core\":true}\n";
     const string AfterClean = """{"schema":1,"mode":"after-uninstall","left":[],"kept":{"settings":false,"https_dns_proxy":false}}""";
 
@@ -146,10 +146,10 @@ public sealed class RouterSetupViewModelTests : IDisposable
     public async Task Install_StepsFollowScriptLines()
     {
         Assert.Equal(0, RouterInstallViewModel.StepOf("Подключение к роутеру"));
-        Assert.Equal(0, RouterInstallViewModel.StepOf("Ядро обхода: загрузка на роутер"));
+        Assert.Equal(0, RouterInstallViewModel.StepOf("Ядро zapret: загрузка на роутер"));
         Assert.Equal(1, RouterInstallViewModel.StepOf("Ключ витрины DpiShell"));
         Assert.Equal(2, RouterInstallViewModel.StepOf("Пакеты DpiShell и зависимости"));
-        Assert.Equal(3, RouterInstallViewModel.StepOf("Ядро обхода (zapret) — загрузка и проверка хеша"));
+        Assert.Equal(3, RouterInstallViewModel.StepOf("Ядро zapret (zapret) — загрузка и проверка хеша"));
         Assert.Equal(4, RouterInstallViewModel.StepOf("Проверка"));
         Assert.Null(RouterInstallViewModel.StepOf("CONNECT github.com:443"));
         await Task.CompletedTask;

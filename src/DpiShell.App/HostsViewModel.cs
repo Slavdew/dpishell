@@ -147,7 +147,7 @@ public sealed class HostsViewModel : Observable
             var list = new List<string>();
             if (_status is not { } s) return list;
             if (s.BlockLost)
-                list.Add("Записи DpiShell пропали из hosts — обычно их убирает Защитник Windows. Нажмите «Проверить адреса» и запишите снова; если Защитник спросит — выберите «Разрешить».");
+                list.Add("Записи DpiShell пропали из hosts — их мог убрать Защитник Windows или другой антивирус. Нажмите «Проверить адреса» и запишите снова; если антивирус спросит — разрешите изменение (название кнопки зависит от версии).");
             if (s.Block.Damaged)
                 list.Add("Блок DpiShell в hosts повреждён (его правили вручную). «Записать» или «Вернуть как было» исправит его.");
             if (s.ReadOnly)
@@ -274,7 +274,7 @@ public sealed class HostsViewModel : Observable
 
     public const string WriteQuestion =
         "Будет изменён системный файл hosts: добавлен блок DpiShell из {0} строк, другие строки не трогаем. Копия сохранена. " +
-        "Защитник Windows может показать предупреждение HostsFileHijack — это реакция на любую правку hosts; выберите в нём «Разрешить». Продолжить?";
+        "Защитник Windows или другой антивирус может показать предупреждение (например, HostsFileHijack) — это реакция на любую правку hosts; разрешите изменение (название кнопки зависит от версии). Продолжить?";
 
     public async Task ApplyAsync()
     {
@@ -337,7 +337,7 @@ public sealed class HostsViewModel : Observable
             var r = await c.HostsRecheckAsync();
             foreach (var host in r.Removed.Select(x => x.Host).Distinct())
                 Notify?.Invoke($"Адрес для {host} устарел, убран из hosts.");
-            if (r.BlockLost) Notify?.Invoke("Записи DpiShell пропали из hosts (Защитник Windows?). Откройте «Починить адреса», чтобы записать снова.");
+            if (r.BlockLost) Notify?.Invoke("Записи DpiShell пропали из hosts (Защитник Windows или другой антивирус?). Откройте «Починить адреса», чтобы записать снова.");
         }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); }
         catch (HelperException e) { Say(e.Message); }

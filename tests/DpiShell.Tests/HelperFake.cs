@@ -84,7 +84,7 @@ public sealed class FakeHelperBackend : IHelperBackend
     public async Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct)
     {
         Call($"select {quick} {string.Join(",", groups ?? [])}");
-        progress.Report(new(0, 2, "Проверка без обхода…"));
+        progress.Report(new(0, 2, "Проверка без оптимизации…"));
         bool cancelled = await HangAsync(() => progress.Report(new(1, 2, "Стратегия Alt 9…")), ct);
         // Как Selector: отмена — частичный отчёт, а не исключение.
         return Report(cancelled);
@@ -117,7 +117,7 @@ public sealed class FakeHelperBackend : IHelperBackend
     public Task<SelectionReport> CheckStrategyAsync(string strategyId, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct)
     {
         Call($"strategy_check {strategyId} {string.Join(",", groups ?? [])}");
-        progress.Report(new(0, 1, "Проверка без обхода…"));
+        progress.Report(new(0, 1, "Проверка без оптимизации…"));
         var r = Report(false);
         return Task.FromResult(r with { Scores = [.. r.Scores.Select(s => s with { Strategy = s.Strategy with { Id = strategyId, Title = "Проверяемая" } })] });
     }

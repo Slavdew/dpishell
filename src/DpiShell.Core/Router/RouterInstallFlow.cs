@@ -52,7 +52,7 @@ public sealed class RouterInstallFlow(ISshConnector connector, RouterReleases re
                 }
             }
 
-            progress?.Report("Ядро обхода: загрузка на роутер");
+            progress?.Report("Ядро zapret: загрузка на роутер");
             var zip = await core.EnsureAsync(http, LocalCoreCandidates, progress, ct);
             await using (var s = File.OpenRead(zip)) await r.UploadCoreAsync(s, core.Manifest.ZipSha256, ct);
 

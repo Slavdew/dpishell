@@ -68,7 +68,7 @@ public sealed partial class ServiceManager(AppPaths paths)
             Stop();
             Check(Sc("config", Name, "binPath=", bin, "start=", "auto"), "перенастроить службу");
         }
-        Sc("description", Name, "Обход DPI (zapret winws), управляется приложением DpiShell");
+        Sc("description", Name, "Оптимизация соединения (zapret winws), управляется приложением DpiShell");
         Sc("failure", Name, "reset=", "60", "actions=", "restart/5000/restart/5000/none/0");
         Check(Sc("start", Name), "запустить службу");
     }

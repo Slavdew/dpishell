@@ -30,7 +30,7 @@ public sealed partial class MainViewModel : Observable
     string? _error;
     string? _coreProblem;
     SvcState _svc = SvcState.Unknown;
-    bool _active;   // обход работает в своём режиме: служба запущена или winws помощника жив
+    bool _active;   // оптимизация работает в своём режиме: служба запущена или winws помощника жив
     string? _draftStrategy;   // выбрана в списке без помощника — включится по «Включить»
     string? _localStrategy;   // без помощника: стратегия из настроек службы DpiShell (реестр читается без прав)
     bool _installing;
@@ -118,7 +118,7 @@ public sealed partial class MainViewModel : Observable
             PcUserTargets = () => Helper.Status?.UserTargets ?? [],
         };
         Router.Changed += UpdateStatus;
-        WireRouterPc();   // обход ПК и роутера вместе не работают (router-api §6) — MainViewModel.Router.cs
+        WireRouterPc();   // оптимизация ПК и роутера вместе не работают (router-api §6) — MainViewModel.Router.cs
         InitPcDns();      // DNS этого компьютера — MainViewModel.Dns.cs
 
         Net = new NetViewModel(helper)
@@ -172,7 +172,7 @@ public sealed partial class MainViewModel : Observable
     public ICommand FixHelperCmd { get; }
     public ICommand UninstallHelperCmd { get; }
 
-    const string ViewOnly = "Без помощника окно работает в режиме просмотра: проверка сайтов, DNS и роутер доступны, менять обход на ПК — нет.";
+    const string ViewOnly = "Без помощника окно работает в режиме просмотра: проверка сайтов, DNS и роутер доступны, менять оптимизацию на ПК — нет.";
 
     void OnHelperChanged()
     {
@@ -197,11 +197,11 @@ public sealed partial class MainViewModel : Observable
         }
         var question = Helper.State switch
         {
-            HelperState.Outdated => "Помощника DpiShell нужно обновить до версии окна: один запрос прав администратора, дальше без вопросов.\n\nОбновить сейчас?",
+            HelperState.Outdated => "Помощника DpiShell нужно обновить до версии окна: обычно один запрос прав администратора, дальше без вопросов (при обновлении или удалении помощника Windows спросит снова).\n\nОбновить сейчас?",
             HelperState.NotResponding => Helper.Problem + "\n\nПереустановить помощника? Это один запрос прав администратора.",
             HelperState.Denied => Helper.Problem + "\n\nПереустановить помощника для вас? Это один запрос прав администратора.",
-            _ => "Нужен помощник DpiShell: один запрос прав администратора, дальше без вопросов.\n\n" +
-                 "Он включает обход, подбирает стратегии и меняет системные настройки по командам этого окна. Установить?",
+            _ => "Нужен помощник DpiShell: обычно один запрос прав администратора, дальше без вопросов (при обновлении или удалении помощника Windows спросит снова).\n\n" +
+                 "Он включает оптимизацию, подбирает стратегии и меняет системные настройки по командам этого окна. Установить?",
         };
         if (!AskHelper(question)) { Message = ViewOnly; return null; }
         return await InstallHelperAsync() ? Helper.Client : null;
@@ -212,7 +212,7 @@ public sealed partial class MainViewModel : Observable
     {
         if (_installing) return false;
         _installing = true;
-        Busy = true; BusyText = "Устанавливаю помощника…"; Message = "Подтвердите запрос прав администратора — он нужен один раз.";
+        Busy = true; BusyText = "Устанавливаю помощника…"; Message = "Подтвердите запрос прав администратора — обычно он нужен один раз.";
         UpdateStatus();
         SetupOutcome r;
         try { r = await Helper.InstallAsync(); }
@@ -239,7 +239,7 @@ public sealed partial class MainViewModel : Observable
 
     async Task UninstallHelperAsync()
     {
-        if (!Confirm("Удалить помощника DpiShell? Нужен один запрос прав администратора. Окно останется в режиме просмотра; служба обхода, если стоит, не удаляется — для этого «Удалить службу полностью»."))
+        if (!Confirm("Удалить помощника DpiShell? Обычно нужен один запрос прав администратора. Окно останется в режиме просмотра; служба оптимизации, если стоит, не удаляется — для этого «Удалить службу полностью»."))
             return;
         Busy = true; BusyText = "Удаляю помощника…"; UpdateStatus();
         try
@@ -743,8 +743,8 @@ public sealed partial class MainViewModel : Observable
     }
 
     public string RunModeHint => ServiceMode
-        ? "Обход работает и без окна, и после перезагрузки"
-        : "Сейчас обход работает, только пока программа открыта (в окне или в трее).";
+        ? "Оптимизация работает и без окна, обычно запускается сама после перезагрузки (если нет — «Диагностика»)"
+        : "Сейчас оптимизация работает, только пока программа открыта (в окне или в трее).";
 
     async Task SetRunModeAsync(bool service)
     {
@@ -812,8 +812,8 @@ public sealed partial class MainViewModel : Observable
             }
             // Обход ПК заработал, а роутер уже «включён» (служба ПК поднялась с Windows, состояние пришло позже ответа роутера) — §6.
             if (_active && Router.Found && Router.RouterEnabled) OnRouterChanged();
-            VpnWarning = vpn.Count == 0 ? "" : $"Включён VPN ({string.Join(", ", vpn)}). С ним обход обычно не нужен, а подбор может показать неверный результат.";
-            ConflictWarning = conflicts.Count == 0 ? "" : $"Мешают другие программы обхода: {string.Join(", ", conflicts.Select(c => c.Name).Distinct())}.";
+            VpnWarning = vpn.Count == 0 ? "" : $"Включён VPN ({string.Join(", ", vpn)}). С ним оптимизация обычно не нужна, а подбор может показать неверный результат.";
+            ConflictWarning = conflicts.Count == 0 ? "" : $"Мешают похожие программы: {string.Join(", ", conflicts.Select(c => c.Name).Distinct())}.";
         }
         catch (Exception e) { Fail(Texts.Friendly(e)); }
         UpdateStatus();
@@ -837,8 +837,8 @@ public sealed partial class MainViewModel : Observable
     static string? CoreProblem(CoreState c) => c switch
     {
         CoreState.Ok => null,
-        CoreState.Missing => "Файлы обхода не найдены (антивирус?). Откройте «Диагностику» → «Восстановить».",
-        _ => "Файлы обхода повреждены (антивирус?). Откройте «Диагностику» → «Восстановить».",
+        CoreState.Missing => "Файлы ядра не найдены (антивирус?). Откройте «Диагностику» → «Восстановить».",
+        _ => "Файлы ядра повреждены (антивирус?). Откройте «Диагностику» → «Восстановить».",
     };
 
     public async Task EnableAsync()
@@ -933,7 +933,7 @@ public sealed partial class MainViewModel : Observable
             // По DoH и, где DNS системы даёт другой адрес, — по пути браузера (BrowserCheck): только эти цели, по очереди.
             var verdicts = ProbeGroups is { } probe ? await probe(groups) : await Task.Run(() => _shell.CheckGroupsAsync(groups));
             await dns;
-            if (gen != _checkGen) return null;   // пока проверяли, обход включили или выключили — итог уже не про это
+            if (gen != _checkGen) return null;   // пока проверяли, оптимизацию включили или выключили — итог уже не про это
             foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, Names));
             result = verdicts;
             // В тех же единицах, что и отметки рядом (п. 5): группы, а не адреса; адреса — в «Подробнее».
@@ -1277,8 +1277,8 @@ public sealed partial class MainViewModel : Observable
     {
         if (!IsRunning) return true;
         return Confirm(
-            "Обход сейчас включён. На время проверки он будет приостановлен, а стратегии будут меняться одна за другой — " +
-            "сайты, звонки и загрузки могут прерываться.\n\nПосле проверки обход включится на лучшей найденной стратегии. Продолжить?");
+            "Оптимизация сейчас включена. На время проверки она будет приостановлена, а стратегии будут меняться одна за другой — " +
+            "сайты, звонки и загрузки могут прерываться.\n\nПосле проверки оптимизация включится на лучшей найденной стратегии. Продолжить?");
     }
 
     public ICommand StopConflictsCmd => _stopConflictsCmd ??= RelayCommand.Async(StopConflictsAsync, () => !Busy && !IsLoading && HasConflicts);
@@ -1289,7 +1289,7 @@ public sealed partial class MainViewModel : Observable
     {
         if (!Confirm(ConflictWarning + "\n\nОстановить их сейчас? Настройки этих программ не меняются — их можно будет запустить снова.")) return;
         StopForeignResult r = new([], []);
-        if (!await WithHelper("Останавливаю другие программы обхода…", async c => r = await c.StopForeignAsync())) return;
+        if (!await WithHelper("Останавливаю похожие программы…", async c => r = await c.StopForeignAsync())) return;
         await RefreshStatusAsync();
         Message = r.Stopped.Count == 0 ? "Нечего останавливать." : "Остановлено: " + string.Join(", ", r.Stopped) + "."
             + (r.ComeBackOnReboot.Count > 0 ? $" Служба {string.Join(", ", r.ComeBackOnReboot)} запустится снова после перезагрузки — удалите её в программе, которая её поставила." : "");
@@ -1306,7 +1306,7 @@ public sealed partial class MainViewModel : Observable
         if (await ApplyAsync(id))
         {
             SetBest(null);   // уже в работе — «Применить» не нужна
-            ResultText = $"Применена: {title} — обход работает.";
+            ResultText = $"Применена: {title} — оптимизация работает.";
             Message = ResultText;
             var row = Scores.FirstOrDefault(s => s.Id == id);
             ResultSummary = $"✓ Включена {title}" + (row is null ? "" : $" · {row.Groups} · {row.Share}");
@@ -1339,7 +1339,7 @@ public sealed partial class MainViewModel : Observable
         OfferDeep = !r.Cancelled && !r.NothingBlocked && !_searching && best is not { Perfect: true };
         if (r.NothingBlocked)
         {
-            ResultText = "Без обхода всё открывается: блокировок нет или включён VPN.";
+            ResultText = "Без оптимизации всё открывается: оптимизация не нужна или включён VPN.";
             return;
         }
         if (best is null)
@@ -1359,7 +1359,7 @@ public sealed partial class MainViewModel : Observable
         if (!best.Perfect) notes.Add($"работают {best.GroupsPassed} из {best.GroupsTotal} групп");
         if (r.Cancelled) notes.Add("подбор остановлен, проверены не все стратегии");
         var blocked = string.Join(", ", r.TestedGroups.Select(g => g.Title));
-        notes.Add("без обхода не открывалось: " + blocked);
+        notes.Add("без оптимизации не открывалось: " + blocked);
         ResultHint = string.Join("; ", notes) + "." + (regression.Length > 0 ? " " + regression : "");
     }
 
@@ -1396,7 +1396,7 @@ public sealed partial class MainViewModel : Observable
             if (await SaveTargetsAsync()) ShowToast("Свои адреса сохранены.");
             return;
         }
-        ShowToast("Свои адреса не сохранены — подбор и обход их не учтут.", "Сохранить", async () => await SaveTargetsAsync());
+        ShowToast("Свои адреса не сохранены — подбор и оптимизация их не учтут.", "Сохранить", async () => await SaveTargetsAsync());
     }
 
     /// <summary>Перед подбором: несохранённые свои адреса — сохранить (помощник уже подключён), иначе подбор их молча не учтёт.</summary>
@@ -1540,7 +1540,7 @@ public sealed partial class MainViewModel : Observable
             if (st is not null)
             {
                 // Стратегию показываем ту, что реально стоит в службе Windows; чужой файл в службе — отдельно.
-                ServiceText = st.RunMode == "process" ? "не используется (обход работает из программы)"
+                ServiceText = st.RunMode == "process" ? "не используется (оптимизация работает из программы)"
                     : Texts.Svc(st.Service)
                     + (st.ServiceStrategy is { } ss ? $" (стратегия: {StrategyTitle(ss)})" : st.StrategyId is { } id && st.Service != SvcState.NotInstalled ? $" (стратегия: {StrategyTitle(id)})" : "")
                     + (st.Service != SvcState.NotInstalled && !st.ServiceOurCore ? " — запускает чужой файл" : "");
@@ -1598,7 +1598,7 @@ public sealed partial class MainViewModel : Observable
     public static string TimestampsLine(bool? enabled) => enabled switch
     {
         true => "включены (нужны части стратегий)",
-        false => "выключены — включатся при включении обхода",
+        false => "выключены — включатся при включении оптимизации",
         _ => "не удалось узнать",
     };
 
@@ -1613,7 +1613,7 @@ public sealed partial class MainViewModel : Observable
         var found = await Task.Run(() => DiscordCache.Find());
         if (found.Folders.Count == 0) { Message = "Кэш Discord не найден — чистить нечего."; return; }
         bool running = await Task.Run(DiscordCache.IsRunning);
-        if (!Confirm($"Удалить кэш Discord ({Mb(found.Bytes)})? Удаляются только папки Cache, Code Cache и GPUCache — вход, настройки и сообщения останутся, "
+        if (!Confirm($"Удалить кэш Discord ({Mb(found.Bytes)})? Удаляются только папки Cache, Code Cache и GPUCache — вход, настройки и сообщения обычно останутся, "
                      + "Discord просто загрузит всё заново."
                      + (running ? "\n\nDiscord сейчас открыт — программа закроет его. После очистки запустите Discord снова." : "")))
             return;
@@ -1671,7 +1671,7 @@ public sealed partial class MainViewModel : Observable
     }
 
     /// <summary>Только без «Обход работает, даже когда программа закрыта» (UX-аудит 2, п. 12): с ней подсказка под галочкой уже всё сказала.</summary>
-    public string CloseHint => ServiceMode ? "" : "Закрытие программы выключит обход.";
+    public string CloseHint => ServiceMode ? "" : "Закрытие программы выключит оптимизацию.";
     public bool HasCloseHint => CloseHint.Length > 0;
 
     /// <summary>Восстановить ядро — помощник останавливает обход, ставит файлы заново и возвращает как было.</summary>
@@ -1686,8 +1686,8 @@ public sealed partial class MainViewModel : Observable
     async Task RemoveServiceAsync()
     {
         if (!Confirm(ServiceMode
-                ? "Удалить службу обхода и драйвер WinDivert? Обход перестанет работать, пока вы снова не нажмёте «Включить»."
-                : "Удалить службу обхода и драйвер WinDivert? Обход из программы, если включён, прервётся до следующего включения."))
+                ? "Удалить службу оптимизации и драйвер WinDivert? Оптимизация перестанет работать, пока вы снова не нажмёте «Включить»."
+                : "Удалить службу оптимизации и драйвер WinDivert? Оптимизация из программы, если включена, прервётся до следующего включения."))
             return;
         if (await WithHelper("Удаляю службу…", async c =>
             {
@@ -1703,7 +1703,7 @@ public sealed partial class MainViewModel : Observable
 
     async Task ClearHistoryAsync()
     {
-        if (!Confirm("Удалить результаты подборов, статистику и логи?\nСвои адреса, найденные стратегии и включённый обход останутся.")) return;
+        if (!Confirm("Удалить результаты подборов, статистику и логи?\nСвои адреса, найденные стратегии и включённая оптимизация останутся.")) return;
         int n = 0;
         if (!await WithHelper("Очищаю историю…", async c => n = await c.ClearHistoryAsync())) return;
         await ReloadChoicesAsync();

@@ -40,7 +40,7 @@ static async Task<int> SelfTest()
     var conflicts = Conflicts.Find(shell.Paths);
     if (conflicts.Count > 0)
     {
-        Console.WriteLine("Сначала выключите другие программы обхода (Flowseal и т. п.) — с ними проверка бессмысленна:");
+        Console.WriteLine("Сначала выключите похожие программы (Flowseal и т. п.) — с ними проверка бессмысленна:");
         foreach (var c in conflicts) Console.WriteLine($"  {c.Name}: {c.Detail}");
         Pause();
         return 2;
@@ -119,7 +119,7 @@ static async Task<int> Run(string cmd, string[] rest)
                     {
                         var progress = new SyncProgress<SelectorProgress>(p => Console.WriteLine($"[{p.Index}/{p.Total}] {p.Message}"));
                         var r = await shell.SelectAsync(rest.Contains("--quick"), null, progress, cts.Token);
-                        if (r.NothingBlocked) { Console.WriteLine("Без обхода всё открывается: блокировок нет или включён VPN."); break; }
+                        if (r.NothingBlocked) { Console.WriteLine("Без оптимизации всё открывается: оптимизация не нужна или включён VPN."); break; }
                         foreach (var s in r.Scores.OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds))
                             Console.WriteLine($"{s.Strategy.Id,-22} группы {s.GroupsPassed}/{s.GroupsTotal} цели {s.TargetShare:P0} {s.AvgSeconds:F2}с {s.Error}");
                         Console.WriteLine(r.Best is null ? "Ни одна стратегия не помогла." : $"Лучшая: {r.Best.Strategy.Id}");

@@ -319,9 +319,9 @@ public static class Texts
     {
         System.Net.Http.HttpRequestException => "Не удалось скачать ядро. Проверьте интернет и повторите (GitHub тоже бывает заблокирован — помогает повтор).",
         SecurityException s => s.Message,
-        ConflictException c => $"Мешают другие программы обхода: {string.Join(", ", c.Conflicts.Select(x => x.Name).Distinct())}. Закройте их и повторите.",
+        ConflictException c => $"Мешают похожие программы: {string.Join(", ", c.Conflicts.Select(x => x.Name).Distinct())}. Закройте их и повторите.",
         UnauthorizedAccessException => "Нет доступа к файлам программы. Возможно, их держит антивирус. " + e.Message,
-        System.ComponentModel.Win32Exception w => "Не удалось запустить программу обхода (антивирус?): " + w.Message,
+        System.ComponentModel.Win32Exception w => "Не удалось запустить ядро zapret (антивирус?): " + w.Message,
         // Помощник старше окна не знает новой команды (у помощников до протокола 1.1 нет списка команд — окно не может
         // заранее выключить кнопку). Живой случай 2026-10-17: «Неизвестная команда «dns_set»» вместо «обновите помощника».
         DpiShell.Core.Helper.HelperException { Code: "invalid" } h when h.Message.StartsWith("Неизвестная команда", StringComparison.Ordinal)

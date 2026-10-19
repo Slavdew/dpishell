@@ -196,7 +196,7 @@ public static class FlowsealBat
             if (roles.ContainsKey(role)) throw new StrategyFormatException($"Два профиля подходят на роль «{role}» — разберите вручную");
             roles[role] = desync;
         }
-        if (roles.Count == 0) throw new StrategyFormatException("В строке запуска нет ни одного профиля с параметрами обхода");
+        if (roles.Count == 0) throw new StrategyFormatException("В строке запуска нет ни одного профиля с параметрами оптимизации");
         if (StrategyExchange.CheckRoles(roles, fakeExists) is { } problem) throw new StrategyFormatException(problem);
         return new("Из .bat Flowseal", roles, FromBat: true);
     }

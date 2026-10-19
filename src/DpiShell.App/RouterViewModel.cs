@@ -91,7 +91,7 @@ public static class RouterTexts
         _ => e.Message,
     };
 
-    public const string Conflict = "На роутере работает другая программа обхода — остановите или удалите её: «Роутер» → «Роутер: что мешает».";
+    public const string Conflict = "На роутере работает похожая программа — остановите или удалите её: «Роутер» → «Роутер: что мешает».";
 
     /// <summary>Выключение без человека (§5.1): сторож, кнопка на корпусе, откат неподтверждённого включения.</summary>
     public static bool IsOffCode(string code) => code is "watchdog_off" or "button_off" or "confirm_reverted" or "watchdog_select_failed";
@@ -105,9 +105,9 @@ public static class RouterTexts
         var when = at is null ? "" : " в " + Time(at);
         return by switch
         {
-            "watchdog" or "watchdog_off" => $"Обход на роутере выключен сторожем{when} — с обходом пропал интернет.",
+            "watchdog" or "watchdog_off" => $"Оптимизация на роутере выключена сторожем{when} — с оптимизацией пропал интернет.",
             "watchdog_select_failed" => RouterViewModel.WatchdogSelectText(RouterViewModel.WatchdogSelectState.Failed, null),
-            "button" or "button_off" => $"Обход на роутере выключен кнопкой на корпусе{when}",
+            "button" or "button_off" => $"Оптимизация на роутере выключена кнопкой на корпусе{when}",
             _ when enabled => $"Роутер вернул прежнюю стратегию{when}: новую не подтвердили вовремя",
             _ => $"Роутер вернул как было{when}: включение не подтвердили вовремя",
         };
@@ -123,9 +123,9 @@ public static class RouterTexts
     /// <summary>Предупреждение status.warnings → строка главной. flow_offload и ipv6 роутер исправляет сам (§9).</summary>
     public static RouterWarningRow Warning(RouterWarning w) => w.Code switch
     {
-        "flow_offload" => new(w.Code, "Ускорение сети на роутере мешает обходу", "Исправить"),
-        "ipv6" => new(w.Code, "Сайты по IPv6 идут мимо обхода", "Исправить"),
-        "conflict" => new(w.Code, "На роутере работает другая программа обхода", "Подробнее"),
+        "flow_offload" => new(w.Code, "Ускорение сети на роутере мешает оптимизации", "Исправить"),
+        "ipv6" => new(w.Code, "Сайты по IPv6 идут мимо оптимизации", "Исправить"),
+        "conflict" => new(w.Code, "На роутере работает похожая программа", "Подробнее"),
         _ => new(w.Code, w.Text ?? w.Code),
     };
 
@@ -213,7 +213,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         DnsPick = new DnsPicker(settings) { Apply = DnsApplyAsync, Restore = DnsRestoreAsync, Enabled = () => Can("dns_set") };
         FixWarningCmd = new RelayCommand(p => { if (p is string code) _ = FixWarningAsync(code); }, p => Can(p as string == "ipv6" ? "ipv6_set" : "flow_offload_fix"));
         StopPcCmd = RelayCommand.Async(StopPcForRouterAsync, () => !Busy);
-        StopRouterCmd = RelayCommand.Async(async () => { if (await DisableAsync()) Say("Обход на роутере выключен — работает этот ПК."); }, () => Can("disable"));
+        StopRouterCmd = RelayCommand.Async(async () => { if (await DisableAsync()) Say("Оптимизация на роутере выключена — работает этот ПК."); }, () => Can("disable"));
         EnableTimestampsCmd = RelayCommand.Async(() => CheckTimestampsAsync(ask: true), () => !Busy);
     }
 
@@ -610,8 +610,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     }
     public bool ModeLists { get => !ModeAll; set => ModeAll = !value; }
     public string ModeHint => ModeAll
-        ? "Обход для всех сайтов. Если какой-то сайт сломался — добавьте его в исключения (выше — «Сайт не открывается»)."
-        : "Обход только для YouTube, Discord и сайтов из списков.";
+        ? "Оптимизация для всех сайтов. Если какой-то сайт сломался — добавьте его в исключения (выше — «Сайт не открывается»)."
+        : "Оптимизация только для YouTube, Discord и сайтов из списков.";
 
     public async Task SetModeAsync(bool all)
     {
@@ -624,7 +624,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                     await Call(c => c.ModeSetAsync(all));
                     await RefreshStatusCoreAsync();
                 }))
-                Say((all ? "Роутер обходит все сайты, кроме исключений." : "Роутер обходит только сайты из списков.") + " Он сам перепроверит, что всё открывается.");
+                Say((all ? "Роутер оптимизирует соединение со всеми сайтами, кроме исключений." : "Роутер оптимизирует соединение только с сайтами из списков.") + " Он сам перепроверит, что всё открывается.");
         }
         finally
         {
@@ -665,7 +665,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         var ok = _status?.LastCheck?.Ok ?? pub?.LastCheckOk;
 
         HomeTitle = Selecting ? "На роутере идёт подбор"
-            : enabled ? "Обход делает роутер" : "На роутере обход выключен";
+            : enabled ? "Оптимизацию делает роутер" : "На роутере оптимизация выключена";
         var parts = new List<string>();
         if (Selecting) parts.Add(SelectProgressText);
         else
@@ -719,15 +719,15 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                         await Call(c => c.FlowOffloadFixAsync());
                         await RefreshStatusCoreAsync();
                     }))
-                    Say("Готово: ускорение сети работает вместе с обходом, скорость та же.");
+                    Say("Готово: ускорение сети работает вместе с оптимизацией; скорость обычно почти не меняется.");
                 break;
             case "ipv6":
-                if (await Guard("Включаю обход по IPv6 на роутере…", async () =>
+                if (await Guard("Включаю оптимизацию по IPv6 на роутере…", async () =>
                     {
                         await Call(c => c.Ipv6SetAsync(true));
                         await RefreshStatusCoreAsync();
                     }))
-                    Say("Готово: обход работает и для сайтов по IPv6.");
+                    Say("Готово: оптимизация работает и для сайтов по IPv6.");
                 break;
             case "conflict":
                 Navigate(Pages.Router);   // сам обновит «Роутер: что мешает»; на вкладке уже — обновим здесь
@@ -769,7 +769,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     async Task StopPcForRouterAsync()
     {
-        if (await StopPc()) Say("Обход на этом ПК выключен — работает роутер.");
+        if (await StopPc()) Say("Оптимизация на этом ПК выключена — работает роутер.");
         RaisePc();
     }
 
@@ -777,7 +777,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task<bool> DisableAsync()
     {
         if (!RouterEnabled) return true;
-        return await Guard("Выключаю обход на роутере…", async () =>
+        return await Guard("Выключаю оптимизацию на роутере…", async () =>
         {
             await Call(c => c.DisableAsync());
             await RefreshStatusCoreAsync();
@@ -788,7 +788,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task<bool> EnableAsync()
     {
         if (RouterEnabled) return true;
-        return await TrialAsync("Включаю обход на роутере…", (c, confirmS) => c.EnableAsync(confirmS), done: null);
+        return await TrialAsync("Включаю оптимизацию на роутере…", (c, confirmS) => c.EnableAsync(confirmS), done: null);
     }
 
     // ---------- временные метки TCP (needs_tcp_timestamps, §6) ----------
@@ -949,22 +949,22 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         // §6: вместе с обходом ПК роутер не работает — включение второго только осознанно и с выключением первого.
         if (enable && PcRunning())
         {
-            if (!Confirm("На этом ПК обход включён. Вместе с роутером он не работает: трафик обрабатывается дважды, и сайты перестают открываться.\n\n"
-                         + "Выключить обход на этом ПК и включить на роутере?")) return;
-            if (!await StopPc()) { Failed("Не удалось выключить обход на этом ПК — на роутере не включаю."); return; }
+            if (!Confirm("На этом ПК оптимизация включена. Вместе с роутером она не работает: трафик обрабатывается дважды, и сайты перестают открываться.\n\n"
+                         + "Выключить оптимизацию на этом ПК и включить на роутере?")) return;
+            if (!await StopPc()) { Failed("Не удалось выключить оптимизацию на этом ПК — на роутере не включаю."); return; }
         }
         if (enable)
         {
             // На пробу (§5.2 confirm_s): проверка с этого ПК решит, оставить ли; без ответа роутер вернёт как было сам.
-            await TrialAsync("Включаю обход на роутере…", (c, confirmS) => c.EnableAsync(confirmS), "Обход на роутере включён.");
+            await TrialAsync("Включаю оптимизацию на роутере…", (c, confirmS) => c.EnableAsync(confirmS), "Оптимизация на роутере включена.");
             return;
         }
-        if (await Guard("Выключаю обход на роутере…", async () =>
+        if (await Guard("Выключаю оптимизацию на роутере…", async () =>
             {
                 await Call(c => c.DisableAsync());
                 await RefreshStatusCoreAsync();
             }))
-            Say("Обход на роутере выключен.");
+            Say("Оптимизация на роутере выключена.");
     }
 
     public async Task ChooseStrategyAsync(string id)
@@ -1602,13 +1602,13 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         bool with = r.WithBypass?.Ok == true, without = r.WithoutBypass?.Ok == true;
         (SiteResult, SiteHint) = (with, without) switch
         {
-            (true, _) => ("С обходом сайт открывается", "Значит, дело не в обходе: попробуйте обновить страницу или другой браузер."),
-            (false, true) => ("Сайт открывается только без обхода", "Добавьте его в исключения — роутер перестанет его трогать."),
-            _ => ("Сайт не открывается и без обхода", "Похоже, он не работает сам или заблокирован по адресу."),
+            (true, _) => ("С оптимизацией сайт открывается", "Значит, дело не в оптимизации: попробуйте обновить страницу или другой браузер."),
+            (false, true) => ("Сайт открывается только без оптимизации", "Добавьте его в исключения — роутер перестанет его трогать."),
+            _ => ("Сайт не открывается и без оптимизации", "Похоже, он не работает сам или недоступен по адресу."),
         };
         SiteSuggestExclude = r.SuggestExclude || (!with && without);
         static string Side(RouterSiteCheckSide? s) => s is null ? "не проверялось" : s.Ok ? "открылся" : "не открылся" + (s.Detail is { Length: > 0 } d ? $" ({d})" : "");
-        SiteDetail = $"С обходом: {Side(r.WithBypass)}. Без обхода: {Side(r.WithoutBypass)}.";
+        SiteDetail = $"С оптимизацией: {Side(r.WithBypass)}. Без оптимизации: {Side(r.WithoutBypass)}.";
     }
 
     /// <summary>«Добавить в исключения»: хост — в user-exclude роутера (lists_set), не трогая остальные строки.</summary>
@@ -1625,7 +1625,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         {
             SiteSuggestExclude = false;
             SiteResult = $"{host} — в исключениях роутера";
-            SiteHint = "Роутер больше не применяет к нему обход.";
+            SiteHint = "Роутер больше не применяет к нему оптимизацию.";
             Say(SiteResult + ".");
         }
     }
@@ -1751,7 +1751,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public Task DnsEnableAsync()
     {
         if (!Confirm("Включить защищённый DNS для всей сети?\n\n"
-                     + "Все устройства дома будут получать настоящие адреса сайтов — провайдер не сможет их подменять. "
+                     + "Все устройства дома будут получать настоящие адреса сайтов — провайдер обычно не подменит их, но может перекрыть сам защищённый DNS. "
                      + "Фильтры провайдера (родительский контроль) перестанут действовать, сайты могут открываться чуть медленнее. "
                      + "Прежние настройки сохранятся: «Вернуть как было» вернёт их."))
             return Task.CompletedTask;
@@ -1829,12 +1829,12 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 foreach (var c in d.Conflicts ?? [])
                     Conflicts.Add(c.Kind == "package"
                         // §9: пакет conflict_stop не останавливает — только удаление.
-                        ? new(c.Name, "установлен пакет, он мешает — удалите его в меню роутера: «Система» → «Программное обеспечение»", CanStop: false)
+                        ? new(c.Name, "установлен пакет, он мешает — удалите его в меню роутера: «Система» → «Программное обеспечение» (название может отличаться)", CanStop: false)
                         : new(c.Name, (c.Kind == "service" ? "служба" : c.Kind) + (c.Running ? ", работает" : ", остановлена")));
                 FlowOffloadText = !d.FlowOffload
-                    ? (d.Flowoffload is "software" or "hardware" ? "передано обходу — не мешает" : "выключено")
-                    : FlowOffloadFixable ? "включено — мешает обходу" : "включено";
-                Ipv6Text = !d.Ipv6Wan ? "нет" : Ipv6Fixable ? "есть — сайты по IPv6 идут мимо обхода" : "есть";
+                    ? (d.Flowoffload is "software" or "hardware" ? "передано оптимизации — не мешает" : "выключено")
+                    : FlowOffloadFixable ? "включено — мешает оптимизации" : "включено";
+                Ipv6Text = !d.Ipv6Wan ? "нет" : Ipv6Fixable ? "есть — сайты по IPv6 идут мимо оптимизации" : "есть";
                 DnsText = d.Dns is null ? "не проверялся"
                     : (d.Dns.Spoofed ? "провайдер подменяет адреса сайтов" : "подмены нет") + (d.Dns.CheckedAt is { } at ? $" (проверено в {RouterTexts.Time(at)})" : "");
                 SpaceText = $"{d.OverlayFreeKb / 1024.0:0.#} МБ" + (d.OverlayFreeKb < 2048 ? " — мало, обновления могут не поместиться" : "");

@@ -554,7 +554,7 @@ public sealed record GameModeChange(bool IpsetSwitched, string? Note);
 
 /// <summary>Работают другие программы обхода (Flowseal, GoodbyeDPI…): подбор с ними бессмысленен.</summary>
 public sealed class ConflictException(IReadOnlyList<Conflict> conflicts)
-    : InvalidOperationException("Мешают другие программы обхода: " + string.Join("; ", conflicts.Select(c => $"{c.Name} ({c.Detail})")))
+    : InvalidOperationException("Мешают похожие программы: " + string.Join("; ", conflicts.Select(c => $"{c.Name} ({c.Detail})")))
 {
     public IReadOnlyList<Conflict> Conflicts { get; } = conflicts;
 }

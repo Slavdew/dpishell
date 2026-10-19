@@ -101,7 +101,7 @@ public sealed class NetViewModel : Observable
     public ICommand TryAnyCmd { get; }
 
     public const string TryAnyQuestion =
-        "На 10 минут обход включится для любого соединения — так видно, поможет ли он вообще. "
+        "На 10 минут оптимизация включится для любого соединения — так видно, поможет ли она вообще. "
         + "Многие сайты в это время могут работать с ошибками; потом режим вернётся сам. Включить?";
 
     /// <summary>
@@ -293,11 +293,11 @@ public sealed class NetViewModel : Observable
             if (_f.Game == GameMode.Off) return AnyActive ? "Выключен. Недоступен, пока включены «Все адреса»." : "Выключен";
             if (_f.GameBlocked) return "Не действует, пока включены «Все адреса» — вернётся сам вместе с обычным режимом.";
             var list = _f.List is { } m ? $"Работает по списку адресов ниже ↓ ({m.Lines:N0} подсетей)" : "Работает по списку адресов ниже ↓";
-            return _helper.Status?.Enabled == true ? list : list.Replace("Работает", "Включится вместе с обходом,");
+            return _helper.Status?.Enabled == true ? list : list.Replace("Работает", "Включится вместе с оптимизацией,");
         }
     }
 
-    public string GameHint => "Если игра или программа после включения стала работать хуже — выключите.";
+    public string GameHint => "Если игра или программа после включения стала работать хуже — выключите. Игры с защитой от читов (Vanguard, FACEIT, Easy Anti-Cheat) могут не работать при драйвере перехвата.";
 
     public async Task SetGameAsync(bool on)
     {

@@ -35,7 +35,7 @@ public static class RouterLoginDialog
         w.SourceInitialized += (_, _) => ThemeManager.SetTitleBar(w);
 
         var panel = new StackPanel { Margin = new Thickness(24, 20, 24, 18), Width = 380 };
-        panel.Children.Add(new TextBlock { Text = "Пароль администратора роутера — тот же, что для входа в его настройки (LuCI).", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
+        panel.Children.Add(new TextBlock { Text = "Пароль администратора роутера — обычно тот же, что для входа в его настройки (LuCI).", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
         var password = new PasswordBox { Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 0, 0, 6) };
         AutomationProperties.SetName(password, "Пароль роутера");
         panel.Children.Add(password);

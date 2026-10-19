@@ -121,7 +121,7 @@ public sealed partial class RouterViewModel
         RouterSshException { Failure: RouterSshFailure.AuthFailed } => "Неверный пароль роутера",
         RouterSshException { Failure: RouterSshFailure.HostKeyChanged } s => s.InnerException is RouterSshException ? s.Message : HostKeyCheck.ChangedText,
         RouterSshException s => s.Message,
-        HttpRequestException => "Не удалось скачать ядро обхода на этот компьютер. Проверьте интернет и повторите.",
+        HttpRequestException => "Не удалось скачать ядро zapret на этот компьютер. Проверьте интернет и повторите.",
         _ => Texts.Friendly(e),
     };
 
@@ -600,7 +600,7 @@ public sealed class RouterInstallViewModel : Observable
     public RouterInstallViewModel(RouterViewModel router)
     {
         _router = router;
-        Steps = [new("Проверка и подготовка"), new("Проверка источника пакетов"), new("Пакеты DpiShell"), new("Ядро обхода"), new("Запуск")];
+        Steps = [new("Проверка и подготовка"), new("Проверка источника пакетов"), new("Пакеты DpiShell"), new("Ядро zapret"), new("Запуск")];
     }
 
     public RouterViewModel Router => _router;
@@ -674,10 +674,10 @@ public sealed class RouterInstallViewModel : Observable
     public static int? StepOf(string line) => line switch
     {
         _ when line.StartsWith("Подключение") || line.StartsWith("Проверка роутера") || line.StartsWith("Интернет роутеру")
-               || line.StartsWith("Ядро обхода: загрузка") || line.StartsWith("Загрузка ядра") => 0,
+               || line.StartsWith("Ядро zapret: загрузка") || line.StartsWith("Загрузка ядра") => 0,
         _ when line.StartsWith("Ключ витрины") || line.StartsWith("Витрина пакетов") => 1,
         _ when line.StartsWith("Пакеты") => 2,
-        _ when line.StartsWith("Ядро обхода") => 3,
+        _ when line.StartsWith("Ядро zapret") => 3,
         "Проверка" => 4,
         _ => null,
     };
@@ -688,7 +688,7 @@ public sealed class RouterInstallViewModel : Observable
     static string FailText(RouterInstallResult r) => r.Step switch
     {
         "packages" => "Не удалось поставить пакеты DpiShell. Чаще всего роутер не достал до витрины пакетов — проверьте интернет на роутере и повторите.",
-        "core" => "Не удалось загрузить ядро обхода на роутер. Повторите установку.",
+        "core" => "Не удалось загрузить ядро zapret на роутер. Повторите установку.",
         "key" => "Источник пакетов не прошёл проверку — установка отменена.",
         _ => r.Message,
     };
@@ -811,7 +811,7 @@ public sealed class RouterInstallViewModel : Observable
         ResultText = $"DpiShell {res.Version} установлен. Подключаюсь…";
         var connected = await _router.ConnectAfterInstallAsync(p.Password);
         ResultText = connected
-            ? $"DpiShell {res.Version} установлен и подключён. Осталось подобрать стратегию — это 2–3 минуты."
+            ? $"DpiShell {res.Version} установлен и подключён. Осталось подобрать стратегию — обычно несколько минут."
             : $"DpiShell {res.Version} установлен. Подключиться не вышло: {_router.ConnectionText}. Нажмите «Войти» на вкладке «Роутер».";
         Stage = RouterInstallStage.Done;
         Raise(nameof(CanGoSelect));

@@ -97,7 +97,7 @@
                                     <Button ContentTemplate="{StaticResource Shield}" Content="{Binding ToggleText}" Style="{StaticResource Primary}" Command="{Binding ToggleCmd}"
                                             MinWidth="150" Padding="24,11" FontSize="15" Margin="0" Visibility="{Binding PcPrimary, Converter={StaticResource Vis}}" />
                                     <Button ContentTemplate="{StaticResource Shield}" Content="{Binding ToggleText}" Command="{Binding ToggleCmd}" Margin="0"
-                                            Visibility="{Binding PcSecondary, Converter={StaticResource Vis}}" ToolTip="Обход уже делает роутер — и для этого ПК тоже" />
+                                            Visibility="{Binding PcSecondary, Converter={StaticResource Vis}}" ToolTip="Оптимизация уже делает роутер — и для этого ПК тоже" />
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -205,7 +205,7 @@
                                                         <!-- «Параметры»: роли и командная строка winws — щелчок стратегию не выбирает. -->
                                                         <Button DockPanel.Dock="Right" Content="{Binding ParamsLinkText}" Style="{StaticResource LinkButton}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
                                                                 Command="{Binding DataContext.ToggleParamsCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"
-                                                                Visibility="{Binding HasParams, Converter={StaticResource Vis}}" ToolTip="Точные параметры обхода и командная строка winws" />
+                                                                Visibility="{Binding HasParams, Converter={StaticResource Vis}}" ToolTip="Точные параметры оптимизации и командная строка winws" />
                                                         <TextBlock Text="{Binding Stats}" Style="{StaticResource Hint}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" />
                                                     </DockPanel>
                                                     <TextBlock Text="{Binding Warning}" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,1,0,0"
@@ -244,7 +244,7 @@
                                 <!-- router-api §6: обход и на ПК, и на роутере — вместе не работают; выключить один. -->
                                 <Border Style="{StaticResource Warn}" Visibility="{Binding ShowBothOn, Converter={StaticResource Vis}}">
                                     <StackPanel DataContext="{Binding Router}">
-                                        <TextBlock Text="Обход включён и здесь, и на роутере — вместе они ломают сайты." />
+                                        <TextBlock Text="Оптимизация включена и здесь, и на роутере — вместе они ломают сайты." />
                                         <WrapPanel Margin="0,8,0,0">
                                             <Button Content="Выключить на ПК" Command="{Binding StopPcCmd}" />
                                             <Button Content="Выключить на роутере" Command="{Binding StopRouterCmd}" />
@@ -261,7 +261,7 @@
 
                                 <Border Style="{StaticResource Warn}" Visibility="{Binding ShowDns, Converter={StaticResource Vis}}">
                                     <StackPanel>
-                                        <TextBlock Text="DNS провайдера подменяет адреса сайтов — из-за этого часть сайтов и программ может не открываться даже с обходом." />
+                                        <TextBlock Text="DNS провайдера подменяет адреса сайтов — из-за этого часть сайтов и программ может не открываться даже с оптимизацией." />
                                         <WrapPanel Margin="0,8,0,0">
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{Binding RecommendedDnsText}" Command="{Binding FixDnsCmd}" ToolTip="{Binding RecommendedDnsHint}" />
                                             <Button Content="Другой DNS" Style="{StaticResource LinkButton}" Command="{Binding ChooseDnsCmd}" VerticalAlignment="Center" Margin="0,0,0,8" />
@@ -612,7 +612,7 @@
                                     <local:InfoButton Topic="{x:Static local:InfoTexts.DomainLists}" />
                                 </StackPanel>
                                 <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center"
-                                           Text="Сайт или адрес на строку. Эти сайты проверяются при подборе и открываются через обход." />
+                                           Text="Сайт или адрес на строку. Эти сайты проверяются при подборе и попадают в список оптимизации." />
                             </DockPanel>
                             <TextBox Grid.Row="1" Text="{Binding TargetsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AutomationProperties.Name="Свои адреса"
                                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap"
@@ -668,7 +668,7 @@
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="Для каких сайтов обход" Style="{StaticResource H2}" />
+                                        <TextBlock Text="Для каких сайтов оптимизация" Style="{StaticResource H2}" />
                                         <local:InfoButton Topic="{x:Static local:InfoTexts.RouterMode}" Margin="8,0,0,8" />
                                     </StackPanel>
                                     <RadioButton Content="Все сайты" IsChecked="{Binding ModeAll}" IsEnabled="{Binding CanAct}" Margin="0,3" HorizontalAlignment="Left" />
@@ -711,7 +711,7 @@
                                 <Button Content="Скопировать с ПК" Command="{Binding CopyFromPcCmd}" />
                             </WrapPanel>
 
-                            <TextBlock Text="Что обходить и что не трогать" Style="{StaticResource H2}" Margin="0,14,0,0" />
+                            <TextBlock Text="Что оптимизировать и что не трогать" Style="{StaticResource H2}" Margin="0,14,0,0" />
                             <Grid Margin="0,4,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -719,12 +719,12 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
-                                    <TextBlock Text="Обходить (домен на строку)" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                    <TextBlock Text="Оптимизировать (домен на строку)" Style="{StaticResource Hint}" Margin="0,0,0,4" />
                                     <TextBox Text="{Binding ListGeneralText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110"
-                                             FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="Обходить" />
+                                             FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="Оптимизировать" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2">
-                                    <TextBlock Text="Исключения (обход их не трогает)" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                    <TextBlock Text="Исключения (оптимизация их не трогает)" Style="{StaticResource Hint}" Margin="0,0,0,4" />
                                     <TextBox Text="{Binding ListExcludeText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110"
                                              FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="Исключения" />
                                 </StackPanel>
@@ -769,21 +769,21 @@
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <!-- «Выкл» выключает и игровой режим (Shell.SetIpsetMode): без списка ему нечего ловить — так и сказано. -->
-                                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,4"><Run Text="Обход сайтов по адресам" /><Run Text=" (" /><Run Text="«Выкл» выключит и игровой режим" /><Run Text=")" /></TextBlock>
+                                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,4"><Run Text="Оптимизация сайтов по адресам" /><Run Text=" (" /><Run Text="«Выкл» выключит и игровой режим" /><Run Text=")" /></TextBlock>
                                     <WrapPanel IsEnabled="{Binding CanEdit}">
                                         <RadioButton Content="Выкл" IsChecked="{Binding IpsetOff}" Margin="0,3,24,3" />
                                         <RadioButton Content="Только из списков" IsChecked="{Binding IpsetList}" Margin="0,3,24,3" />
                                     </WrapPanel>
                                     <!-- «Все адреса» — проверка с подтверждением, а не третий режим наравне с рабочими (UX-аудит, п. 34). -->
-                                    <Button ContentTemplate="{StaticResource Shield}" Content="Проверить, поможет ли обход (10 мин)" Command="{Binding TryAnyCmd}" HorizontalAlignment="Left"
-                                            Margin="0,8,0,0" ToolTip="На 10 минут — обход для любого соединения; сайты в это время могут работать с ошибками"
+                                    <Button ContentTemplate="{StaticResource Shield}" Content="Проверить, поможет ли оптимизация (10 мин)" Command="{Binding TryAnyCmd}" HorizontalAlignment="Left"
+                                            Margin="0,8,0,0" ToolTip="На 10 минут — оптимизация для любого соединения; сайты в это время могут работать с ошибками"
                                             Visibility="{Binding AnyActive, Converter={StaticResource InvVis}}" IsEnabled="{Binding CanEdit}" />
                                     <Border Style="{StaticResource Warn}" Margin="0,10,0,0" Visibility="{Binding AnyActive, Converter={StaticResource Vis}}">
                                         <DockPanel>
                                             <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="Вернуть сейчас" Command="{Binding StopAnyCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
                                             <StackPanel>
                                                 <TextBlock Text="{Binding AnyText}" FontWeight="SemiBold" />
-                                                <TextBlock Text="Сейчас обход идёт для любого соединения — многие сайты могут работать с ошибками." FontSize="13" Margin="0,2,0,0" />
+                                                <TextBlock Text="Сейчас оптимизация идёт для любого соединения — многие сайты могут работать с ошибками." FontSize="13" Margin="0,2,0,0" />
                                             </StackPanel>
                                         </DockPanel>
                                     </Border>
@@ -1062,7 +1062,7 @@
                             <!-- Обход: одна строка, внутренности (драйвер, файлы, метки TCP) — за «Подробнее» (п. 15). -->
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock><Run Text="Обход: " Foreground="{DynamicResource Muted}" /><Run Text="{Binding ServiceText, Mode=OneWay}" /></TextBlock>
+                                    <TextBlock><Run Text="Оптимизация: " Foreground="{DynamicResource Muted}" /><Run Text="{Binding ServiceText, Mode=OneWay}" /></TextBlock>
                                     <Expander Header="Подробнее" Margin="0,8,0,0">
                                         <Grid Margin="0,6,0,0">
                                             <Grid.ColumnDefinitions>
@@ -1076,7 +1076,7 @@
                                             </Grid.RowDefinitions>
                                             <TextBlock Text="Драйвер" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                             <TextBlock Grid.Column="1" Text="{Binding DriverText}" Margin="0,0,0,6" />
-                                            <TextBlock Grid.Row="1" Text="Файлы обхода" Style="{StaticResource Hint}" Margin="0,0,0,6" />
+                                            <TextBlock Grid.Row="1" Text="Файлы ядра" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                             <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding CoreText}" Margin="0,0,0,6" />
                                             <TextBlock Grid.Row="2" Text="Временные метки TCP" Style="{StaticResource Hint}" />
                                             <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TimestampsText}" />
@@ -1087,10 +1087,10 @@
 
                             <Border Style="{StaticResource Warn}" Visibility="{Binding CoreBroken, Converter={StaticResource Vis}}">
                                 <StackPanel>
-                                    <TextBlock Text="Файлы обхода повреждены — обычно это антивирус." FontWeight="SemiBold" Margin="0,0,0,8" />
+                                    <TextBlock Text="Файлы ядра повреждены — обычно это антивирус." FontWeight="SemiBold" Margin="0,0,0,8" />
                                     <Button ContentTemplate="{StaticResource Shield}" Content="Восстановить" Style="{StaticResource Primary}" Command="{Binding RepairCoreCmd}" HorizontalAlignment="Left" />
                                     <!-- Путь не переписывать руками: «Скопировать путь» и сразу «Безопасность Windows» (п. 16). -->
-                                    <TextBlock Margin="0,4,0,0" Text="Чтобы не повторилось, добавьте папку в исключения Защитника: «Защита от вирусов и угроз» → «Управление настройками» → «Исключения» → «Добавить» → «Папка»." />
+                                    <TextBlock Margin="0,4,0,0" Text="Чтобы снизить вероятность повторения, добавьте папку в исключения Защитника: «Защита от вирусов и угроз» → «Управление настройками» → «Исключения» → «Добавить» → «Папка» (названия могут отличаться); для другого антивируса — в его настройках." />
                                     <TextBlock Text="{Binding CoreFolder}" FontWeight="SemiBold" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding CoreFolder}" />
                                     <WrapPanel Margin="-4,6,0,0">
                                         <Button Content="Скопировать путь" Style="{StaticResource LinkButton}" Command="{Binding CopyCoreFolderCmd}" Margin="0,0,10,0" />
@@ -1101,11 +1101,11 @@
 
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="Другие программы обхода" Style="{StaticResource H2}" />
+                                    <TextBlock Text="Похожие программы" Style="{StaticResource H2}" />
                                     <TextBlock Text="Не найдены." Style="{StaticResource Hint}" Visibility="{Binding ConflictList.Count, Converter={StaticResource Zero}}" />
                                     <ItemsControl ItemsSource="{Binding ConflictList}" />
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
-                                               Text="Перехватывают тот же трафик — обход с ними не работает." />
+                                               Text="Могут перехватывать тот же трафик и мешать оптимизации." />
                                     <Button ContentTemplate="{StaticResource Shield}" Content="Остановить" Command="{Binding StopConflictsCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
                                             Visibility="{Binding ConflictList.Count, Converter={StaticResource NonZero}}" />
                                 </StackPanel>
@@ -1117,7 +1117,7 @@
                                     <TextBlock Text="Не найден." Style="{StaticResource Hint}" Visibility="{Binding VpnList.Count, Converter={StaticResource Zero}}" />
                                     <ItemsControl ItemsSource="{Binding VpnList}" />
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
-                                               Text="При включённом VPN обход обычно не нужен, а подбор показывает неверный результат." />
+                                               Text="При включённом VPN оптимизация обычно не нужна, а подбор может показать неверный результат." />
                                 </StackPanel>
                             </Border>
 
@@ -1235,7 +1235,7 @@
                                 <StackPanel>
                                     <TextBlock Text="{Binding EmptyTitle}" Style="{StaticResource H2}" />
                                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
-                                               Text="Если у вас роутер с OpenWrt, на него можно поставить DpiShell — тогда обход будет работать для всех устройств дома: телефонов, телевизора, приставки. Без роутера всё работает и на одном этом компьютере." />
+                                               Text="Если у вас роутер с OpenWrt (на многие модели с OpenWrt 25.x можно поставить DpiShell) — тогда оптимизация будет работать для всех устройств дома: телефонов, телевизора, приставки. Без роутера всё работает и на одном этом компьютере." />
                                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,8,0,0"
                                                Text="OpenWrt ли у вас: откройте в браузере адрес роутера (обычно 192.168.1.1) — у OpenWrt страница входа называется LuCI." />
                                     <WrapPanel Margin="-4,10,0,0">
@@ -1346,15 +1346,19 @@
                                         <TextBlock Text="{Binding TimestampsNote}" Style="{StaticResource Hint}" FontSize="13" Margin="0,6,0,0" TextWrapping="Wrap"
                                                    ToolTip="{x:Static local:RouterViewModel.TimestampsTerm}" Visibility="{Binding TimestampsDone, Converter={StaticResource Vis}}" />
                                         <WrapPanel Margin="0,12,0,0" Visibility="{Binding Connected, Converter={StaticResource Vis}}">
-                                            <Button Content="{Binding ToggleText}" Command="{Binding ToggleCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True" />
+                                            <Button Content="{Binding ToggleText}" Command="{Binding ToggleCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True"
+                                                    Visibility="{Binding ShowRouterActions, Converter={StaticResource Vis}}" />
                                             <Button Content="Проверить" Command="{Binding CheckCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True" />
-                                            <Button Content="Подобрать на роутере" Command="{Binding GoSelectCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True" />
-                                            <Button Click="RouterStrategy_Click" IsEnabled="{Binding CanAct}" ToolTip="Стратегия на роутере" AutomationProperties.Name="Стратегия на роутере">
+                                            <Button Content="Подобрать на роутере" Command="{Binding GoSelectCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True"
+                                                    Visibility="{Binding ShowRouterActions, Converter={StaticResource Vis}}" />
+                                            <Button Content="Остановить подбор" Command="{Binding StopSelectCmd}" Visibility="{Binding WdRunning, Converter={StaticResource Vis}}" />
+                                            <Button Click="RouterStrategy_Click" IsEnabled="{Binding CanAct}" ToolTip="Стратегия на роутере" AutomationProperties.Name="Стратегия на роутере"
+                                                    Visibility="{Binding ShowRouterActions, Converter={StaticResource Vis}}">
                                                 <TextBlock><Run Text="Стратегия" /><Run Text=" ▾" Foreground="{DynamicResource Muted}" /></TextBlock>
                                             </Button>
                                         </WrapPanel>
                                         <StackPanel Visibility="{Binding NeedLogin, Converter={StaticResource Vis}}" Margin="0,10,0,0">
-                                            <TextBlock Text="Войдите на роутер, чтобы управлять обходом на нём." Style="{StaticResource Hint}" />
+                                            <TextBlock Text="Войдите на роутер, чтобы управлять оптимизацией на нём." Style="{StaticResource Hint}" />
                                             <Button Content="Войти" Command="{Binding LoginCmd}" Style="{StaticResource Primary}" HorizontalAlignment="Left" Margin="0,8,0,0" />
                                         </StackPanel>
                                     </StackPanel>
@@ -1402,7 +1406,7 @@
                                             <TextBlock Grid.Row="3" Text="Свободно места" Style="{StaticResource Hint}" />
                                             <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SpaceText}" />
                                         </Grid>
-                                        <TextBlock Text="Другие программы обхода на роутере" Style="{StaticResource Hint}" Margin="0,12,0,4" />
+                                        <TextBlock Text="Похожие программы на роутере" Style="{StaticResource Hint}" Margin="0,12,0,4" />
                                         <TextBlock Text="Не найдены." Visibility="{Binding Conflicts.Count, Converter={StaticResource Zero}}" />
                                         <ItemsControl ItemsSource="{Binding Conflicts}">
                                             <ItemsControl.ItemTemplate>
@@ -1480,7 +1484,7 @@
                                         <!-- Сторож (schedule.watchdog, status.watchdog): аварийный выключатель на самом роутере. -->
                                         <StackPanel Visibility="{Binding WatchdogAvailable, Converter={StaticResource Vis}}">
                                             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                                <CheckBox Content="Сторож: выключать обход, если с ним пропал интернет" IsChecked="{Binding WatchdogEnabled}" IsEnabled="{Binding CanAct}"
+                                                <CheckBox Content="Сторож: выключать оптимизацию, если с ней пропал интернет" IsChecked="{Binding WatchdogEnabled}" IsEnabled="{Binding CanAct}"
                                                           VerticalAlignment="Center" />
                                                 <local:InfoButton Topic="{x:Static local:InfoTexts.RouterWatchdog}" Margin="8,0,0,0" />
                                             </StackPanel>
@@ -1558,7 +1562,7 @@
                                 <StackPanel>
                                     <TextBlock Text="Работа" Style="{StaticResource H2}" />
                                     <!-- Режим службы (п. 4 аудита): настройка «на один раз», не действие главной. -->
-                                    <CheckBox Content="Обход работает, даже когда программа закрыта" IsChecked="{Binding ServiceMode}" IsEnabled="{Binding CanChoose}" HorizontalAlignment="Left" Margin="0,4,0,0" />
+                                    <CheckBox Content="Оптимизация работает, даже когда программа закрыта" IsChecked="{Binding ServiceMode}" IsEnabled="{Binding CanChoose}" HorizontalAlignment="Left" Margin="0,4,0,0" />
                                     <TextBlock Text="{Binding RunModeHint}" Style="{StaticResource Hint}" Margin="26,2,0,0" />
                                     <!-- Автозапуск окна при входе (architecture.md «Окно, трей, автозапуск»): ключ Run пользователя, окно — в трее. -->
                                     <CheckBox Content="Запускать вместе с Windows (в трее)" IsChecked="{Binding Autostart.Enabled}" Margin="0,12,0,0" HorizontalAlignment="Left" />
@@ -1610,7 +1614,7 @@
                                         <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="Удалить службу полностью" Command="{Binding RemoveServiceCmd}"
                                                 VerticalAlignment="Center" Margin="12,0,0,0" />
                                         <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center"
-                                                   Text="Служба обхода и драйвер WinDivert. Обход перестанет работать; вернуть — кнопкой «Включить» на главной." />
+                                                   Text="Служба оптимизации и драйвер WinDivert. Оптимизация перестанет работать; вернуть — кнопкой «Включить» на главной." />
                                     </DockPanel>
                                     <DockPanel Margin="0,12,0,0" Visibility="{Binding CanUninstallHelper, Converter={StaticResource Vis}}">
                                         <Button DockPanel.Dock="Right" Content="Удалить помощника" Command="{Binding UninstallHelperCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />

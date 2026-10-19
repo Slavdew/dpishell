@@ -93,7 +93,7 @@ public sealed partial class MainViewModel
         PcDns.CurrentText = s.Adapters.Count == 0 ? "Нет подключения Ethernet или Wi-Fi с выходом в интернет."
             : $"Сейчас: {title}{how} · {string.Join(", ", s.Adapters.Select(a => a.Name))}";
         var notes = new List<string>();
-        if (!s.DohSupported) notes.Add("В Windows 10 защищённого DNS нет — только обычный.");
+        if (!s.DohSupported) notes.Add("На этой версии Windows защищённый DNS не поддерживается — только обычный.");
         if (s.Skipped.Count > 0) notes.Add("VPN и виртуальные адаптеры не трогаю: " + string.Join(", ", s.Skipped) + ".");
         PcDns.Note = string.Join(" ", notes);
         PcDns.ShowFallback = s.DohSupported;

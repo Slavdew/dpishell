@@ -10,7 +10,7 @@ namespace DpiShell.Core.Helper;
 public sealed class HelperInstaller(AppPaths paths)
 {
     public const string DisplayName = "DpiShell — помощник";
-    public const string Description = "Выполняет действия DpiShell, которым нужны права администратора (обход DPI, подбор, hosts). Управляется окном DpiShell.";
+    public const string Description = "Выполняет действия DpiShell, которым нужны права администратора (оптимизация соединения, подбор, hosts). Управляется окном DpiShell.";
     public const string OwnerFile = "owner.sid";
 
     public static string HelperDir(AppPaths p) => Path.Combine(p.Root, "helper");

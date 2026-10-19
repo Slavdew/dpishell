@@ -420,7 +420,7 @@ public static class HostsFindText
     {
         var sb = new StringBuilder();
         sb.AppendLine($"# Подбор адресов {r.At:yyyy-MM-dd HH:mm}, режим: {(r.AllMode ? "все DNS" : "до первого рабочего")}, доменов: {r.Domains.Count}");
-        sb.AppendLine("# Результат зависит от того, включён ли сейчас обход (zapret): с ним открывается больше.");
+        sb.AppendLine("# Результат зависит от того, включена ли сейчас оптимизация (zapret): с ней открывается больше.");
         sb.AppendLine();
 
         foreach (var d in r.Domains)
@@ -428,7 +428,7 @@ public static class HostsFindText
             string state = d.WorksVia("Система") ? "открывается и так"
                 : d.Best is { } b ? $"{b.Ip} ({string.Join(", ", b.Sources)}, {b.Check.Seconds:F2} с)"
                 : d.Answers.All(a => a.Ips.Count == 0) ? "имя не найдено ни одним DNS"
-                : "ни один адрес не открылся — hosts не поможет, нужен обход";
+                : "ни один адрес не открылся — hosts не поможет, нужна оптимизация";
             sb.AppendLine($"#  {d.Host,-40} {state}");
         }
 

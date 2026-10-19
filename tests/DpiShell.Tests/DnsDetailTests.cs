@@ -26,7 +26,7 @@ public sealed class DnsDetailTests : IDisposable
         Assert.Equal("рекомендуем", Info(google, "Заметка"));
 
         var yandex = pc.Options.Single(o => o.Id == "yandex");
-        Assert.Equal("российский: применяет реестр блокировок", Info(yandex, "Заметка"));
+        Assert.Equal("российский: может применять реестр запрещённых сайтов", Info(yandex, "Заметка"));
         Assert.Equal("Яндекс (Россия)", Info(yandex, "Кто держит"));
         Assert.Contains("вредоносные", Info(pc.Options.Single(o => o.Id == "quad9"), "Заметка"));
 

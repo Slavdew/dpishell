@@ -34,7 +34,7 @@ public static class SystemChecks
         var bfe = ServiceManager.Query("BFE");
         list.Add(bfe == SvcState.Running
             ? new(true, "Служба BFE", "работает")
-            : new(false, "Служба BFE", "не работает — без неё обход не запустится. Включите службу «Служба базовой фильтрации» (BFE) или проверьте антивирус."));
+            : new(false, "Служба BFE", "не работает — без неё оптимизация не запустится. Включите службу «Служба базовой фильтрации» (BFE) или проверьте антивирус."));
 
         list.Add(ProxyFinding(ReadProxy()));
 
@@ -45,7 +45,7 @@ public static class SystemChecks
         var services = MatchServices(ReadServices()).Where(s => ServiceManager.Query(s.Name) == SvcState.Running).ToList();
         list.Add(services.Count == 0
             ? new(true, "Сетевые службы", "мешающих не найдено")
-            : new(false, "Сетевые службы", $"работают: {string.Join(", ", services.Select(s => s.Title).Distinct())}. Они перехватывают трафик — если обход не работает, отключите их."));
+            : new(false, "Сетевые службы", $"работают: {string.Join(", ", services.Select(s => s.Title).Distinct())}. Они перехватывают трафик — если оптимизация не работает, отключите их."));
 
         var path = PathProblem(AppContext.BaseDirectory) ?? PathProblem(paths.Root);
         list.Add(path is null ? new(true, "Папка программы", "в порядке") : new(false, "Папка программы", path));
@@ -64,7 +64,7 @@ public static class SystemChecks
     static bool Dispose(Process[] ps) { foreach (var p in ps) p.Dispose(); return true; }
 
     public static SystemFinding ProxyFinding((bool Enabled, string? Server) proxy) => proxy.Enabled
-        ? new(false, "Системный прокси", $"включён ({proxy.Server ?? "адрес не указан"}). Через прокси обход может не работать — если он не нужен, выключите: Параметры → Сеть и Интернет → Прокси.")
+        ? new(false, "Системный прокси", $"включён ({proxy.Server ?? "адрес не указан"}). Через прокси оптимизация может не работать — если он не нужен, выключите: Параметры → Сеть и Интернет → Прокси.")
         : new(true, "Системный прокси", "не используется");
 
     static (bool, string?) ReadProxy()

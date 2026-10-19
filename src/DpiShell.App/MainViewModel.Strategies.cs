@@ -156,7 +156,7 @@ public sealed partial class MainViewModel
         var title = StrategyTitle(id);
         if (r.Scores.FirstOrDefault() is not { } score)
         {
-            ResultText = r.Cancelled ? "Проверка остановлена." : r.NothingBlocked ? "Без оптимизации всё открывается: блокировок нет или включён VPN — проверять нечем." : "Проверить не удалось.";
+            ResultText = r.Cancelled ? "Проверка остановлена." : r.NothingBlocked ? "Без оптимизации всё открывается: оптимизация не нужна или включён VPN — проверять нечем." : "Проверить не удалось.";
             PendingCheckId = id;
             return;
         }
