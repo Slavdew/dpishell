@@ -251,6 +251,17 @@ public sealed class WindowSmokeTests
                             throw new Exception("Автозапуск по умолчанию: включён без службы, выключен в режиме службы");
                     }
                     if (page == Pages.Settings) AssertServiceMode(w, vm);
+                    if (page == Pages.Settings)
+                    {
+                        // Неактивная ссылка — серая (Muted), а не бледно-синяя: на неё не жмут.
+                        var dead = new Button { Content = "Ссылка", Style = (Style)w.FindResource("LinkButton"), IsEnabled = false };
+                        ((Panel)((ScrollViewer)((TabItem)Find<TabControl>(w)!.Items[Pages.Settings]).Content).Content).Children.Add(dead);
+                        dead.ApplyTemplate();
+                        Pump();
+                        var muted = (SolidColorBrush)w.FindResource("Muted");
+                        if ((dead.Foreground as SolidColorBrush)?.Color != muted.Color) throw new Exception("Неактивная ссылка не серая");
+                        ((Panel)dead.Parent).Children.Remove(dead);
+                    }
                     // Роутера нет — вкладка всё равно есть: пустое состояние и адрес (UX-аудит п. 47). Ещё не искали — «не проверялся» (UX-аудит 2, п. 10),
                     // и как поставить — ссылка на инструкцию (п. 9).
                     if (page == Pages.Router && (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Роутер не проверялся" && t.IsVisible) is null

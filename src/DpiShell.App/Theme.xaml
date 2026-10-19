@@ -132,8 +132,10 @@
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="B" Property="Background" Value="{DynamicResource AccentSoft}" />
                             </Trigger>
+                            <!-- Неактивная ссылка — серая, без синевы: не похожа на ту, что можно нажать. -->
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="B" Property="Opacity" Value="0.45" />
+                                <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+                                <Setter TargetName="B" Property="Background" Value="Transparent" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
