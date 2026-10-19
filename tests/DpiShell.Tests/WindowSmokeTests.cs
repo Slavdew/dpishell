@@ -335,7 +335,7 @@ public sealed class WindowSmokeTests
                         var tabsAbout = Find<TabControl>(w)!;
                         bool Has(string text) => Find<TextBlock>(tabsAbout, t => t.Text == text && t.IsVisible) is not null
                                                  || Find<Button>(tabsAbout, b => b.Content as string == text && b.IsVisible) is not null;
-                        string[] aboutOnly = ["Версия", "Проверить обновления", "Обновить списки", "Ядро (zapret)", "DpiShell на роутере", "Программа", "Помощник", "Данные"];
+                        string[] aboutOnly = ["Версия", "Проверить обновления", "Обновить списки", "Ядро zapret (bol-van)", "DpiShell на роутере", "Программа", "Помощник", "Данные"];
                         foreach (var t in aboutOnly)
                             if (Has(t) != (page == Pages.About))
                                 throw new Exception($"«{t}»: {(page == Pages.About ? "нет на «Информация и обновления»" : "осталось в «Настройках»")}");

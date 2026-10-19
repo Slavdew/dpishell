@@ -1614,7 +1614,7 @@
                                         <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding HelperText}" TextWrapping="Wrap" Margin="0,2,0,2" />
                                         <TextBlock Grid.Row="2" Text="Данные" Style="{StaticResource Hint}" Margin="0,2,16,2" />
                                         <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Updates.StatusText}" TextWrapping="Wrap" Margin="0,2,0,2" />
-                                        <TextBlock Grid.Row="3" Text="Ядро (zapret)" Style="{StaticResource Hint}" Margin="0,2,16,2" />
+                                        <TextBlock Grid.Row="3" Text="Ядро zapret (bol-van)" Style="{StaticResource Hint}" Margin="0,2,16,2" />
                                         <StackPanel Grid.Row="3" Grid.Column="1">
                                             <TextBlock Text="{Binding CoreRowText}" TextWrapping="Wrap" Margin="0,2,0,2" />
                                             <Button ContentTemplate="{StaticResource Shield}" Content="Восстановить" Command="{Binding RepairCoreCmd}" HorizontalAlignment="Left"

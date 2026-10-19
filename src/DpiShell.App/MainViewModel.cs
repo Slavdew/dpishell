@@ -1430,7 +1430,23 @@ public sealed partial class MainViewModel : Observable
     public string DriverText { get => _driverText; private set => Set(ref _driverText, value); }
     public string CoreText { get => _coreText; private set { if (Set(ref _coreText, value)) Raise(nameof(CoreRowText)); } }
     /// <summary>Строка «Ядро» на «Информация и обновления»: пустая (ещё не проверяли) — «неизвестно».</summary>
-    public string CoreRowText => string.IsNullOrEmpty(_coreText) ? "неизвестно" : _coreText;
+    public string CoreRowText
+    {
+        get
+        {
+            // Версия — из ответа помощника, а пока его нет — из поставки (data\core.json рядом с программой).
+            var version = string.IsNullOrEmpty(_coreVersion) ? _shell.Installer.Manifest.Version : _coreVersion;
+            var state = string.IsNullOrEmpty(_coreText) ? "" : _coreBroken ? _coreText : "в порядке";
+            return (version, state) switch
+            {
+                ({ Length: > 0 }, { Length: > 0 }) => $"{version} · {state}",
+                ({ Length: > 0 }, _) => version,
+                (_, { Length: > 0 }) => state,
+                _ => "неизвестно",
+            };
+        }
+    }
+    string? _coreVersion;
 
     bool _coreBroken;
     public bool CoreBroken { get => _coreBroken; private set => Set(ref _coreBroken, value); }
@@ -1532,6 +1548,7 @@ public sealed partial class MainViewModel : Observable
             if (d is not null)
             {
                 var core = d.Core;
+                _coreVersion = d.CoreVersion;
                 CoreBroken = core.State != CoreState.Ok;
                 CoreText = core.State switch
                 {
