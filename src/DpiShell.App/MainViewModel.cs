@@ -1614,10 +1614,10 @@ public sealed partial class MainViewModel : Observable
         {
             bool ok = !TargetsDirty || await SaveTargetsAsync();
             if (ok && ExcludeDirty) ok = await SaveExcludeAsync();
-            if (ok) ShowToast("Свои сайты сохранены.");
+            if (ok) ShowToast(L.T("sites.toast.saved"));
             return;
         }
-        ShowToast("Свои сайты не сохранены — подбор и оптимизация их не учтут.", "Сохранить", async () => await SaveTargetsAsync());
+        ShowToast(L.T("sites.toast.not_saved"), L.T("sites.save"), async () => await SaveTargetsAsync());
     }
 
     /// <summary>Перед подбором: несохранённые свои сайты — сохранить (помощник уже подключён), иначе подбор их молча не учтёт.</summary>
@@ -1639,7 +1639,7 @@ public sealed partial class MainViewModel : Observable
     {
         var lines = TargetsText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
         UserTargetsResult? r = null;
-        if (!await WithHelper("Сохраняю адреса…", async c =>
+        if (!await WithHelper(L.T("sites.targets.busy.save"), async c =>
             {
                 r = await c.SetUserTargetsAsync(lines);
                 await FetchAsync(full: false);
@@ -1649,8 +1649,8 @@ public sealed partial class MainViewModel : Observable
         if (Groups.FirstOrDefault(g => g.Id == "user") is { } ug) ug.IsChecked = r.Saved.Count > 0;
         TargetsText = string.Join(Environment.NewLine, r.Saved);
         TargetsMessage = r.Rejected.Count == 0
-            ? $"Сохранено сайтов: {r.Saved.Count}."
-            : $"Сохранено сайтов: {r.Saved.Count}. Не распознаны и убраны: {string.Join(", ", r.Rejected)}.";
+            ? L.T("sites.targets.saved", new { n = r.Saved.Count })
+            : L.T("sites.targets.saved_rejected", new { n = r.Saved.Count, rejected = string.Join(", ", r.Rejected) });
         RaiseSitesDirty();
         Router.JointRecheck();   // свои сайты — часть связки: роутеру они уходят сразу, а не через минуту
         return true;

@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using DpiShell.Core.Localization;
 
 namespace DpiShell.Core;
 
@@ -117,11 +118,11 @@ public static partial class AdvancedSites
         {
             if (string.IsNullOrWhiteSpace(r)) continue;
             var d = Domain(r);
-            if (d is null) return (null, $"Строка {row + 1}: Домен вида example.com");
+            if (d is null) return (null, L.T("sites.adv.err.row_not_domain", new { row = row + 1 }));
             if (!list.Contains(d)) list.Add(d);
         }
-        if (list.Count == 0) return (null, $"Строка {row + 1}: нет ни одного сайта.");
-        if (list.Count > MaxDomains) return (null, $"Строка {row + 1}: сайтов больше {MaxDomains}.");
+        if (list.Count == 0) return (null, L.T("sites.adv.err.row_empty", new { row = row + 1 }));
+        if (list.Count > MaxDomains) return (null, L.T("sites.adv.err.row_too_many", new { row = row + 1, max = MaxDomains }));
         return (list, null);
     }
 

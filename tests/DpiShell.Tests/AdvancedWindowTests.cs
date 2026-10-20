@@ -44,8 +44,8 @@ public sealed class AdvancedWindowTests : IDisposable
         var a = vm.AdvancedPc;
         Assert.False(a.Enabled);
         Assert.False(a.ShowEditor);
-        Assert.Equal("Выключено", a.ToggleText);
-        Assert.StartsWith("Сайту из строки можно задать свою стратегию", a.Summary);
+        Assert.Equal(L.T("sites.adv.off"), a.ToggleText);
+        Assert.Equal(L.T("sites.adv.summary.off"), a.Summary);
 
         a.Enabled = true;
         await WaitAsync(() => !a.Busy && a.Enabled && f.Backend.Calls.Any(c => c.StartsWith("advanced_set")));
@@ -64,8 +64,8 @@ public sealed class AdvancedWindowTests : IDisposable
         Assert.Equal(["auto", "direct", "alt9"], f.Backend.LastAdvancedRows.Select(r => r.Strategy));
         Assert.Equal(3, f.Backend.LastAdvancedRows.Count);
         Assert.Contains("3", a.Summary);
-        Assert.Equal("Включено", a.ToggleText);
-        Assert.StartsWith("Строки: 3", a.Summary);
+        Assert.Equal(L.T("sites.adv.on"), a.ToggleText);
+        Assert.Equal(L.T("sites.adv.summary.lists", new { n = 3 }), a.Summary);
         Assert.Equal(3, a.Rows.Count);
         Assert.StartsWith("Авто — сейчас", a.Rows[0].Hint);
         Assert.Contains("не трогает", a.Rows[1].Hint);
@@ -83,7 +83,7 @@ public sealed class AdvancedWindowTests : IDisposable
 
         Assert.False(a.Enabled);
         Assert.True(a.MessageIsError);
-        Assert.Equal("Строка 1: Домен вида example.com", a.Message);
+        Assert.Equal(L.T("sites.adv.err.row_not_domain", new { row = 1 }), a.Message);
         Assert.DoesNotContain(f.Backend.Calls, c => c.StartsWith("advanced_set"));
     }
 
@@ -126,7 +126,7 @@ public sealed class AdvancedWindowTests : IDisposable
         f.Backend.Calls.Clear();
         a.OthersAll = true;
         await a.ApplyAsync();
-        Assert.Contains("сначала включите", a.Message);
+        Assert.Equal(L.T("sites.adv.err.all_needs_running"), a.Message);
         Assert.DoesNotContain(f.Backend.Calls, c => c.StartsWith("advanced_set"));
         await f.DisposeAsync();
 
@@ -175,7 +175,7 @@ public sealed class AdvancedWindowTests : IDisposable
         Assert.Single(shell.Journal.Active(ChangeKinds.Advanced));
 
         a.RevertCmd.Execute(null);
-        await WaitAsync(() => !a.Busy && !AppState.Load(shell.Paths).Advanced.Enabled && a.HasMessage && a.Message.StartsWith("Вернул"));
+        await WaitAsync(() => !a.Busy && !AppState.Load(shell.Paths).Advanced.Enabled && a.HasMessage && a.Message.StartsWith(L.T("sites.adv.undo.restored", new { note = "" }).TrimEnd()));
         Assert.Empty(AppState.Load(shell.Paths).Advanced.Rows);
         Assert.False(a.Enabled);
     }

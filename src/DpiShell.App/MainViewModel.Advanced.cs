@@ -15,9 +15,7 @@ public sealed partial class MainViewModel
     /// <summary>Карточка «Продвинутый режим» на «Сайтах» для этого ПК; у роутера своя — <see cref="RouterViewModel.Advanced"/>.</summary>
     public AdvancedViewModel AdvancedPc { get; private set; } = null!;
 
-    public const string AllQuestion =
-        "«Для всех сайтов»: оптимизация включится для любого сайта, кроме исключений. Часть обычных сайтов может перестать открываться — "
-        + "я проверю их до и после, и если что-то сломается, верну «Как сейчас».\n\nВключить?";
+    public static string AllQuestion => L.T("sites.adv.all_question");
 
     void InitAdvanced()
     {
@@ -27,7 +25,7 @@ public sealed partial class MainViewModel
             Save = SaveAdvancedPcAsync,
             Strategies = () => [.. StrategyChoices.Select(c => new AdvancedChoice(c.Id, c.Title))],
             Unavailable = () => Helper.Reader is { } c && !c.Compat.Supports("advanced_set")
-                ? "Помощник старее окна и не знает этого режима — обновите его на вкладке «Информация и обновления»." : null,
+                ? L.T("sites.helper.outdated_update") : null,
             Revert = RevertAdvancedPcAsync,
             Builtin = new BuiltinLists(Path.Combine(_shell.Paths.Seed, "lists")),
             Say = s => Message = s,
@@ -71,17 +69,17 @@ public sealed partial class MainViewModel
         if (toAll)
         {
             // «Для всех» проверяется на обычных сайтах — значит, оптимизация должна работать, а сайты — открываться сейчас.
-            if (!IsRunning) return new(null, "«Для всех сайтов» проверяется на обычных сайтах, пока оптимизация работает: сначала включите её.");
-            if (newAll && !Confirm(AllQuestion)) return new(null, "Не применено.");
+            if (!IsRunning) return new(null, L.T("sites.adv.err.all_needs_running"));
+            if (newAll && !Confirm(AllQuestion)) return new(null, L.T("sites.adv.err.not_applied"));
             before = await OpenControlSitesAsync();
-            if (before.Count == 0) return new(null, "Обычные сайты сейчас не открываются — проверить «Для всех сайтов» нельзя. Попробуйте позже.");
+            if (before.Count == 0) return new(null, L.T("sites.adv.err.control_closed"));
         }
-        if (await NeedHelperAsync() is not { } c) return new(null, "Без помощника режим не применить.");
-        if (!c.Compat.Supports("advanced_set")) return new(null, AdvancedPc.UnavailableText ?? "Помощник не знает этого режима.");
+        if (await NeedHelperAsync() is not { } c) return new(null, L.T("sites.adv.err.no_helper"));
+        if (!c.Compat.Supports("advanced_set")) return new(null, AdvancedPc.UnavailableText ?? L.T("sites.adv.err.helper_no_mode"));
 
         AdvancedInfo? info = null;
-        if (!await Guard("Применяю…", async () => info = await c.AdvancedSetAsync(next.Enabled, next.Others, Rows(next))))
-            return new(null, _error ?? "Не удалось применить.");
+        if (!await Guard(L.T("sites.adv.busy.apply"), async () => info = await c.AdvancedSetAsync(next.Enabled, next.Others, Rows(next))))
+            return new(null, _error ?? L.T("sites.adv.err.apply_failed"));
 
         string? warn = null;
         if (toAll)
@@ -92,9 +90,12 @@ public sealed partial class MainViewModel
             {
                 // Сломалось то, что открывалось: возвращаем прежний вид (с сохранёнными строками), но не режим «Для всех».
                 var back = next with { Others = prev.Enabled && prev.Others != AdvancedSites.OthersAll ? prev.Others : AdvancedSites.OthersLists };
-                await Guard("Возвращаю как было…", async () => info = await c.AdvancedSetAsync(back.Enabled, back.Others, Rows(back)));
-                warn = "Обычные сайты перестали открываться (" + string.Join(", ", broken.Take(3)) + (broken.Count > 3 ? " и ещё " + (broken.Count - 3) : "")
-                    + ") — вернул «" + (info?.Others == AdvancedSites.OthersDirect ? "Напрямую" : "Только из списков") + "».";
+                await Guard(L.T("sites.adv.busy.restore_mode"), async () => info = await c.AdvancedSetAsync(back.Enabled, back.Others, Rows(back)));
+                var shown = string.Join(", ", broken.Take(3));
+                var mode = L.T(info?.Others == AdvancedSites.OthersDirect ? "sites.adv.choice.direct" : "sites.mode.lists");
+                warn = broken.Count > 3
+                    ? L.T("sites.adv.broken_more", new { sites = shown, n = broken.Count - 3, mode })
+                    : L.T("sites.adv.broken", new { sites = shown, mode });
             }
         }
         await RefreshStatusAsync();
@@ -116,14 +117,14 @@ public sealed partial class MainViewModel
     /// <summary>«Вернуть как было»: откат записи журнала помощника о продвинутом режиме.</summary>
     async Task<string?> RevertAdvancedPcAsync()
     {
-        if (Helper.Reader is { } r && !r.Compat.Supports("changes_list")) return "Помощник старее окна и не ведёт журнал — обновите его.";
-        if (await NeedHelperAsync() is not { } c) return "Без помощника вернуть нечего.";
+        if (Helper.Reader is { } r && !r.Compat.Supports("changes_list")) return L.T("sites.adv.err.old_helper_journal");
+        if (await NeedHelperAsync() is not { } c) return L.T("sites.adv.err.no_helper_revert");
         UndoReport? report = null;
         string? none = null;
-        if (!await Guard("Возвращаю как было…", async () =>
+        if (!await Guard(L.T("sites.adv.busy.revert"), async () =>
             {
                 var item = (await c.ChangesListAsync()).Items.FirstOrDefault(i => i.Kind == ChangeKinds.Advanced);
-                if (item is null) { none = "Записи об изменении нет — вернуть нечего."; return; }
+                if (item is null) { none = L.T("sites.adv.err.no_record"); return; }
                 report = await c.ChangesUndoAsync(item.Id);
             }))
             return _error;

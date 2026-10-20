@@ -62,9 +62,9 @@ public sealed partial class WindowSmokeTests
                 Pump();
                 if (Find<Button>(tabs, b => b.Content as string == "Добавить строку" && b.IsVisible) is null) throw new Exception("Нет «Добавить строку»");
                 if (Find<TextBox>(tabs, t => t.IsVisible && t.Text.Contains("games.example")) is null) throw new Exception("Нет строки с сайтами");
-                if (!Visible(t => t.Text.StartsWith("Авто — сейчас "))) throw new Exception("Нет подсказки «Авто — сейчас …»");
-                if (!Visible(t => t.Text.Contains("youtube.com есть в списке YouTube: ваша строка важнее"))) throw new Exception("Нет подсказки о списке YouTube");
-                if (!Visible(t => t.Text.Contains("не трогает"))) throw new Exception("Нет подсказки у «Напрямую»");
+                if (!Visible(t => t.Text.StartsWith(L.T("sites.adv.hint.auto_now", new { strategy = "" }).TrimEnd()))) throw new Exception("Нет подсказки «Авто — сейчас …»");
+                if (!Visible(t => t.Text.Contains(L.T("sites.adv.hint.builtin", new { site = "youtube.com", list = "YouTube" })))) throw new Exception("Нет подсказки о списке YouTube");
+                if (!Visible(t => t.Text.Contains(L.T("sites.adv.hint.direct")))) throw new Exception("Нет подсказки у «Напрямую»");
                 if (Find<RadioButton>(tabs, r => r.IsVisible && Text(r) == "Только из списков" && r.IsChecked == true) is null) throw new Exception("«Только из списков» должен быть выбран");
                 if (Find<RadioButton>(tabs, r => r.IsVisible && Text(r) == "Для всех сайтов") is null || Find<RadioButton>(tabs, r => r.IsVisible && Text(r) == "Напрямую — без оптимизации") is null)
                     throw new Exception("Нет вариантов «Остальных сайтов»");
@@ -85,7 +85,7 @@ public sealed partial class WindowSmokeTests
                 if (Find<Button>(tabs, b => b.IsVisible && b.Content as string == "Отменить правки") is null) throw new Exception("При правках нет «Отменить правки»");
                 WaitUi(a.ApplyAsync());
                 Pump();
-                if (!Visible(t => t.Text == "Строка 2: Домен вида example.com")) throw new Exception("Нет сообщения об ошибке в строке");
+                if (!Visible(t => t.Text == L.T("sites.adv.err.row_not_domain", new { row = 2 }))) throw new Exception("Нет сообщения об ошибке в строке");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-sites-advanced-error.png"));
                 foreach (var t in FindAll<TextBlock>(tabs, t => t.IsVisible && t.DataContext == a))
                     if (t.Text.Contains("обход", StringComparison.OrdinalIgnoreCase)) throw new Exception("В карточке слово «обход»: " + t.Text);

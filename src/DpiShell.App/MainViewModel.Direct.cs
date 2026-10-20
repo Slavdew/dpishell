@@ -126,18 +126,18 @@ public sealed partial class MainViewModel
     {
         if (Helper.Reader is { } hc && !hc.Compat.Supports("user_exclude_set"))
         {
-            SetExcludeMessage("Помощник старее окна и не знает этого списка — обновите его на вкладке «Информация и обновления».", error: true);
+            SetExcludeMessage(L.T("sites.helper.outdated_update"), error: true);
             Message = ExcludeMessage;
             return false;
         }
         if (lines.Count > AdvancedSites.MaxExclude)
         {
-            SetExcludeMessage($"Не больше {AdvancedSites.MaxExclude} сайтов в списке «Открывать без оптимизации».", error: true);
+            SetExcludeMessage(L.T("sites.exclude.err.max", new { max = AdvancedSites.MaxExclude }), error: true);
             Message = ExcludeMessage;
             return false;
         }
         UserTargetsResult? r = null;
-        if (!await WithHelper("Сохраняю исключения…", async c =>
+        if (!await WithHelper(L.T("sites.exclude.busy.save"), async c =>
             {
                 r = await c.SetUserExcludeAsync([.. lines]);
                 await FetchAsync(full: false);
@@ -146,8 +146,8 @@ public sealed partial class MainViewModel
         _excludeFromHelper = true;
         ExcludeText = string.Join(Environment.NewLine, r.Saved);
         SetExcludeMessage(r.Rejected.Count == 0
-            ? $"Сохранено сайтов без оптимизации: {r.Saved.Count}."
-            : $"Сохранено сайтов без оптимизации: {r.Saved.Count}. Не распознаны и убраны: {string.Join(", ", r.Rejected)}.");
+            ? L.T("sites.exclude.saved", new { n = r.Saved.Count })
+            : L.T("sites.exclude.saved_rejected", new { n = r.Saved.Count, rejected = string.Join(", ", r.Rejected) }));
         RaiseSitesDirty();
         return true;
     }
