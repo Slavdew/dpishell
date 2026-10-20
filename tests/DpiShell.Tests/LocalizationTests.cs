@@ -44,6 +44,26 @@ public sealed class LocalizationTests : IDisposable
         Assert.Equal("gb", En.Info.Flag);
     }
 
+    /// <summary>
+    /// Фразы роутера (область web) — источник один: router/luci-app-dpishell/lang-src/web.json (значение — [ru, en]).
+    /// Окно держит только нужные ему ключи; тексты обязаны совпадать дословно, иначе окно и страница роутера разойдутся.
+    /// </summary>
+    [Fact]
+    public void Web_area_matches_router_source()
+    {
+        var src = Path.Combine(Directory.GetParent(Src)!.FullName, "router", "luci-app-dpishell", "lang-src", "web.json");
+        using var router = JsonDocument.Parse(File.ReadAllText(src));
+        foreach (var (lang, i) in new[] { ("ru", 0), ("en", 1) })
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(LangDir, lang, "web.json")));
+            foreach (var p in doc.RootElement.EnumerateObject().Where(p => !p.Name.StartsWith('_')))
+            {
+                Assert.True(router.RootElement.TryGetProperty(p.Name, out var pair), $"{lang}/web.json: ключа {p.Name} нет в {src}");
+                Assert.Equal(pair[i].GetRawText(), p.Value.GetRawText());
+            }
+        }
+    }
+
     [Fact]
     public void Area_files_are_the_same_in_ru_and_en_and_keys_start_with_area()
     {
