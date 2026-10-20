@@ -1,164 +1,823 @@
 {
   "_comment": "Свои строки страницы LuCI (область web.*): ru и en рядом. Общие с окном ПК ключи (router.*, select.*, sites.*, dns.*, home.*, common.* …) берутся из языковых файлов ПК — список в shared-keys.txt. Сборка: python -I router/tools/lang-build.py. Правила текста и словарь — docs/localization.md.",
-  "web.about.api": ["Протокол связи с ПК", "PC link protocol"],
-  "web.about.based_on": ["DpiShell на основе", "DpiShell is based on"],
-  "web.about.checking": ["Проверка обновлений…", "Checking for updates…"],
-  "web.about.daily": ["Обновления проверяются раз в сутки.", "Updates are checked once a day."],
-  "web.about.guide": ["Инструкция", "Guide"],
-  "web.about.info": ["Информация", "Information"],
-  "web.about.lang_problems": ["Свои переводы", "Custom translations"],
-  "web.about.lang_problems_hint": ["Эти файлы или строки не взяты — вместо них английский текст:", "These files or lines were not used — English text is shown instead:"],
-  "web.about.license": ["Лицензия MIT.", "MIT License."],
-  "web.about.luci": ["Страница LuCI", "LuCI page"],
-  "web.about.no_updates": ["Обновлений нет · проверено {time}", "No updates · checked {time}"],
-  "web.about.preparing": ["Подготовка", "Preparing"],
-  "web.about.update_to": ["Обновить до {version}", "Update to {version}"],
-  "web.about.updating": ["Обновление DpiShell… страница перезагрузится автоматически", "Updating DpiShell… the page will reload automatically"],
-  "web.about.version": ["Версия", "Version"],
-  "web.adv.info": ["Выключено — всё как сейчас. Включено — у перечисленных сайтов своя стратегия, остальные — как выбрано ниже. «Авто» — стратегию для строки выберет подбор, до него — текущая. «Напрямую» — оптимизация эти сайты не трогает. Свои строки важнее списков YouTube и Discord: youtube.com в своей строке пойдёт по ней.", "Off — everything stays as is. On — the listed sites get their own strategy, other sites follow the choice below. “Auto” — strategy search picks the row’s strategy; until then the current one is used. “Direct” — optimization does not touch these sites. Your rows take priority over the YouTube and Discord lists: youtube.com in a row follows that row."],
-  "web.adv.others_info": ["«Для всех сайтов» может мешать обычным сайтам — после сохранения проверьте их. «Напрямую» — только ваши строки; остальные сайты — без оптимизации.", "“All sites” may interfere with regular sites — check them after saving. “Direct” — only your rows; other sites go without optimization."],
-  "web.apply": ["Применить", "Apply"],
-  "web.copied": ["Скопировано", "Copied"],
-  "web.core.broken": ["Файлы zapret повреждены", "zapret files are damaged"],
-  "web.core.broken_hint": ["«Восстановить» — на вкладке «Диагностика»", "“Restore” is on the “Diagnostics” tab"],
-  "web.core.broken_long": ["Файлы zapret повреждены — нажмите «Восстановить».", "zapret files are damaged — click “Restore”."],
-  "web.core.broken_short": ["файлы повреждены, «Восстановить» на вкладке «Диагностика»", "files are damaged, “Restore” is on the “Diagnostics” tab"],
-  "web.core.download": ["Загрузить ядро", "Download core"],
-  "web.core.loading": ["Загрузка ядра zapret…", "Downloading zapret core…"],
-  "web.core.missing": ["Ядро zapret не установлено", "zapret core is not installed"],
-  "web.core.missing_hint": ["Нажмите «Загрузить ядро» ниже", "Click “Download core” below"],
-  "web.core.missing_long": ["Ядро zapret не установлено — без него оптимизация не работает.", "zapret core is not installed — optimization does not work without it."],
-  "web.core.ok": ["Ядро {version} установлено, файлы целы", "Core {version} installed, files intact"],
-  "web.core.restore": ["Восстановить", "Restore"],
-  "web.core.title": ["Ядро zapret", "zapret core"],
-  "web.diag.conflict": ["Мешает похожая программа: {name}. Пока она работает, включение и подбор недоступны.", "A similar program interferes: {name}. While it runs, turning on and strategy search are unavailable."],
-  "web.diag.flow": ["Ускорение сети (flow offloading) мешает оптимизации. «Исправить» передаст ускорение zapret: скорость обычно почти не меняется, на быстрых тарифах с аппаратным ускорением может снизиться.", "Network acceleration (flow offloading) interferes with optimization. “Fix” hands acceleration over to zapret: speed usually barely changes, but on fast plans with hardware acceleration it may drop."],
-  "web.diag.intro": ["Роутер проверяет, что мешает оптимизации: похожие программы, ускорение сети, подмена DNS. Без нажатия кнопки ничего не меняется.", "The router checks what interferes with optimization: similar programs, network acceleration, DNS spoofing. Nothing changes until you click a button."],
-  "web.diag.intro_info": ["Пригодится, если оптимизация работает, а сайты не открываются, и перед вопросом о проблеме. «Сохранить отчёт» собирает сведения о роутере и оптимизации в файл (без паролей) — его можно приложить к вопросу.", "Useful when optimization is running but sites do not open, and before asking about a problem. “Save report” collects router and optimization details into a file (no passwords) that can be attached to the question."],
-  "web.diag.ipv6": ["Сайты по IPv6 идут мимо оптимизации: она включена только для IPv4. «Исправить» включит её и для IPv6.", "Sites over IPv6 bypass optimization: it is on for IPv4 only. “Fix” turns it on for IPv6 too."],
-  "web.diag.none": ["Помех не найдено", "Nothing interferes"],
-  "web.diag.package": ["Пакет {name} мешает: другой zapret занимает те же файлы. Удалите его в настройках роутера: «Система» → «Программное обеспечение» (название может отличаться) или apk del {name}. До этого включение и подбор недоступны.", "Package {name} interferes: another zapret uses the same files. Remove it in the router settings: “System” → “Software” (names may differ) or apk del {name}. Until then, turning on and strategy search are unavailable."],
-  "web.diag.report": ["Отчёт", "Report"],
-  "web.diag.report_descr": ["Версии, настройки оптимизации и DNS, хвост журнала роутера — текстовым файлом.", "Versions, optimization and DNS settings, the tail of the router log — as a text file."],
-  "web.diag.space_kb": ["{value} КБ", "{value} KB"],
-  "web.diag.unknown": ["Состояние неизвестно", "State unknown"],
-  "web.dns.addresses": ["Адреса: {ips}", "Addresses: {ips}"],
-  "web.dns.addresses_title": ["Адреса", "Addresses"],
-  "web.dns.boot": ["IP сервера защищённого DNS", "Secure DNS server IP"],
-  "web.dns.boot_hint": ["Нужны, если в адресе защищённого DNS имя, а не IP", "Needed if the secure DNS address contains a name, not an IP"],
-  "web.dns.choose_other": ["Выберите другой DNS, чтобы применить", "Choose another DNS to apply"],
-  "web.dns.cons1": ["Запросы DNS уйдут к Google и Cloudflare в зашифрованном виде: провайдер обычно не сможет их подменить, но может заблокировать сам защищённый DNS — тогда роутер вернёт DNS провайдера.", "DNS queries go to Google and Cloudflare encrypted: the ISP usually cannot spoof them, but can block secure DNS itself — then the router switches back to the ISP’s DNS."],
-  "web.dns.cons2": ["Перестанут действовать фильтры провайдера (например, родительский контроль у провайдера).", "ISP filters (such as ISP parental controls) will stop working."],
-  "web.dns.cons3": ["Сайты могут открываться чуть медленнее.", "Sites may open slightly slower."],
-  "web.dns.cons4": ["Если оба защищённых сервера станут недоступны, роутер временно вернёт DNS провайдера и предупредит.", "If both secure servers become unavailable, the router temporarily switches back to the ISP’s DNS and warns about it."],
-  "web.dns.cons5": ["Устройства с жёстко прописанным DNS (часть ТВ и приставок) идут мимо роутера — на них это не повлияет.", "Devices with hard-coded DNS (some TVs and set-top boxes) bypass the router — this will not affect them."],
-  "web.dns.cons6": ["Имена устройств домашней сети обычно продолжают работать.", "Home network device names usually keep working."],
-  "web.dns.current_mark": ["{title} — сейчас", "{title} — current"],
-  "web.dns.doh": ["Защищённый: {url}", "Secure: {url}"],
-  "web.dns.enable_note": ["Прежние настройки вернёт кнопка «Вернуть как было». Включение обычно занимает около минуты: роутер ставит пакет и проверяет, что DNS отвечает.", "“Revert” restores the previous settings. Turning on usually takes about a minute: the router installs a package and checks that DNS responds."],
-  "web.dns.enable_what": ["Для всей домашней сети. Что изменится:", "For the whole home network. What changes:"],
-  "web.dns.intro": ["Некоторые провайдеры подменяют ответы DNS — тогда оптимизация может не помогать приложениям на телефонах и ТВ. DNS здесь меняется для всей сети.", "Some ISPs spoof DNS responses — then optimization may not help apps on phones and TVs. DNS here changes for the whole network."],
-  "web.dns.intro_info": ["«Проверить DNS» сравнивает ответы DNS провайдера с эталонными (Google и Cloudflare по шифрованному каналу). Если ответы подменяются — включите защищённый DNS. Браузеры с собственным защищённым DNS это не затрагивает. Если после включения что-то пропало — «Вернуть как было».", "“Check DNS” compares the ISP’s DNS responses with reference ones (Google and Cloudflare over an encrypted channel). If responses are spoofed, turn on secure DNS. Browsers with their own secure DNS are not affected. If something stops working after turning it on, use “Revert”."],
-  "web.dns.ips_hint": ["До 4, через запятую", "Up to 4, comma-separated"],
-  "web.dns.not_checked": ["Не проверялся. Нажмите «Проверить DNS».", "Not checked. Click “Check DNS”."],
-  "web.dns.note.default": ["по умолчанию: два сервера разных компаний", "default: two servers from different companies"],
-  "web.dns.note.provider": ["как было до DpiShell", "as before DpiShell"],
-  "web.dns.note.quad9": ["блокирует вредоносные сайты", "blocks malicious sites"],
-  "web.dns.note.yandex": ["российский: по закону может применять реестр блокировок", "Russian: may apply the national block list by law"],
-  "web.dns.optional": ["Необязательно", "Optional"],
-  "web.dns.owner.cloudflare": ["Cloudflare, США", "Cloudflare, USA"],
-  "web.dns.owner.google": ["Google, США", "Google, USA"],
-  "web.dns.owner.provider": ["Адреса выдаёт провайдер, ответы он может подменять", "Addresses come from the ISP, which may spoof responses"],
-  "web.dns.owner.quad9": ["Quad9, некоммерческий фонд, Швейцария", "Quad9, non-profit foundation, Switzerland"],
-  "web.dns.owner.yandex": ["Яндекс", "Yandex"],
-  "web.dns.preset.provider": ["От провайдера", "From the ISP"],
-  "web.dns.preset.yandex": ["Яндекс", "Yandex"],
-  "web.dns.provider": ["DNS провайдера", "ISP’s DNS"],
-  "web.dns.running": ["Выполняется…", "In progress…"],
-  "web.dns.state_unknown": ["Состояние DNS неизвестно", "DNS state unknown"],
-  "web.dns.what_changes": ["Что изменится при защищённом DNS", "What changes with secure DNS"],
-  "web.done": ["готово", "done"],
-  "web.err.generic": ["Ошибка", "Error"],
-  "web.err.network": ["Нет связи с роутером", "No connection to the router"],
-  "web.err.ubus": ["Ошибка роутера (код {code})", "Router error (code {code})"],
-  "web.err.ubus_2": ["Роутер не принял запрос", "The router rejected the request"],
-  "web.err.ubus_4": ["Пакет DpiShell не установлен или устарел", "The DpiShell package is not installed or is outdated"],
-  "web.err.ubus_5": ["Роутер не ответил", "The router did not respond"],
-  "web.err.ubus_6": ["Нет доступа", "Access denied"],
-  "web.err.ubus_7": ["Роутер не ответил вовремя", "The router did not respond in time"],
-  "web.line_err": ["Строка {n}: {error}", "Line {n}: {error}"],
-  "web.main.check_needs_on": ["Сначала включите оптимизацию", "Turn on optimization first"],
-  "web.main.checked": ["проверено {time}", "checked {time}"],
-  "web.main.conflict_more": ["Работает {name} — подробнее в «Диагностике».", "{name} is running — see “Diagnostics”."],
-  "web.main.disable": ["Выключить", "Turn off"],
-  "web.main.just_installed": ["Если пакет только что установлен — обновите страницу через минуту.", "If the package was just installed, refresh the page in a minute."],
-  "web.main.not_selected": ["Не выбрана — «Подобрать»", "Not selected — “Find strategy”"],
-  "web.main.off_no_strategy": ["Стратегия не выбрана — «Включить» запустит подбор", "No strategy selected — “Turn on” starts a strategy search"],
-  "web.main.opt_stats": ["{name} — всё открыто в {passed} из {runs} подборов", "{name} — everything opened in {passed} of {runs} searches"],
-  "web.main.remove_pkg": ["Удалите пакет {name} (apk del {name}).", "Remove package {name} (apk del {name})."],
-  "web.main.reselect_info": ["При неудаче включится запасная стратегия. Если и запасные не помогли — быстрый подбор: 2–3 мин, не чаще раза в 6 ч; в это время сайты на всех устройствах прерываются. Поэтому по умолчанию выключено.", "On failure a backup strategy is turned on. If backups do not help either — a quick search: 2–3 min, at most once every 6 h; sites on all devices are interrupted meanwhile. That is why it is off by default."],
-  "web.main.reset_note": ["Без страницы: на большинстве роутеров с OpenWrt нажатие reset на 2 с выключает оптимизацию без перезагрузки, на некоторых — иначе. Не держите 5 с и дольше: обычно это сброс к заводским настройкам.", "Without this page: on most OpenWrt routers pressing reset for 2 s turns optimization off without a reboot; on some it works differently. Do not hold it for 5 s or longer: that is usually a factory reset."],
-  "web.main.restart_note": ["Оптимизация перезапустится — сайты прервутся на пару секунд.", "Optimization will restart — sites will be interrupted for a couple of seconds."],
-  "web.main.select_other": ["Подобрать другую стратегию", "Find another strategy"],
-  "web.main.select_sub": ["Сайты в сети могут открываться с перебоями", "Sites on the network may open intermittently"],
-  "web.main.stop_confirm": ["Остановить и отключить похожую программу? Она перехватывает тот же трафик, что и DpiShell. После перезагрузки роутера не запустится; включить снова — в её настройках.", "Stop and disable the similar program? It intercepts the same traffic as DpiShell. It will not start after a router reboot; turn it back on in its own settings."],
-  "web.main.strategy_info": ["Стратегия — способ, которым оптимизация обманывает оборудование провайдера; у разных провайдеров работают разные. Какую выбрать — покажет «Подобрать»: лучшая включится автоматически.", "A strategy is the way optimization tricks the ISP’s equipment; different ISPs need different ones. “Find strategy” shows which one to use: the best one turns on automatically."],
-  "web.main.title": ["DpiShell — оптимизация соединения", "DpiShell — connection optimization"],
-  "web.main.trial_ask": ["Всё работает? Иначе через {time} роутер вернёт как было.", "Is everything working? Otherwise the router will revert in {time}."],
-  "web.main.ts_info": ["Временные метки TCP (TCP timestamps), в Windows по умолчанию выключены. Без них часть сайтов с компьютера может не открываться. Программа DpiShell на ПК включает их автоматически; вручную — в командной строке от администратора: netsh interface tcp set global timestamps=enabled. Телефоны, ТВ и приставки обычно настраивать не нужно.", "TCP timestamps are off by default in Windows. Without them some sites may not open from the computer. The DpiShell app on the PC turns them on automatically; manually — in an administrator command prompt: netsh interface tcp set global timestamps=enabled. Phones, TVs and set-top boxes usually need no setup."],
-  "web.main.ts_need": ["Стратегии нужна настройка Windows на компьютерах", "The strategy needs a Windows setting on computers"],
-  "web.main.watchdog_info": ["Раз в 5 минут проверяются несколько обычных сайтов. Если с оптимизацией они не открываются, а без неё открываются — оптимизация обычно выключается автоматически, причина видна здесь, и один раз запускается подбор: стратегия найдена — включается, нет — оптимизация выключена до «Включить» или «Подобрать». Сбои на других сайтах сторож может не заметить. Если интернета нет и без оптимизации — это обрыв у провайдера, оптимизация остаётся включённой.", "Every 5 minutes a few regular sites are checked. If they do not open with optimization but open without it, optimization is usually turned off automatically, the reason is shown here, and a strategy search runs once: if a strategy is found it is turned on, otherwise optimization stays off until “Turn on” or “Find strategy”. The watchdog may miss failures on other sites. If there is no internet even without optimization, it is an ISP outage and optimization stays on."],
-  "web.min_sec": ["{m} мин {s} с", "{m} min {s} s"],
-  "web.save": ["Сохранить", "Save"],
-  "web.saved": ["Сохранено", "Saved"],
-  "web.sec": ["{n} с", "{n} s"],
-  "web.select.applied": ["включена", "on"],
-  "web.select.best": ["лучшая", "best"],
-  "web.select.candidates": ["Проверено вариантов: {n}", "Variants checked: {n}"],
-  "web.select.check_one": ["Проверить только её", "Check only this one"],
-  "web.select.checked_one": ["Проверка {time}: {name}", "Check {time}: {name}"],
-  "web.select.done": ["Подбор завершён {time}.", "Strategy search finished {time}."],
-  "web.select.intro": ["Роутер перебирает стратегии и проверяет, открываются ли YouTube, Discord и свои сайты. Страницу можно закрыть — подбор идёт на роутере. В конце лучшая стратегия включается автоматически.", "The router goes through strategies and checks whether YouTube, Discord and your sites open. The page can be closed — the search runs on the router. At the end the best strategy turns on automatically."],
-  "web.select.intro_info": ["Полный — все стратегии, выбор лучшей; быстрый — до первой рабочей, начиная с прежних. Если готовые не помогли, «Искать глубже» создаёт и проверяет новые стратегии — до 15 минут. Во время подбора оптимизация для всей сети несколько раз переключается — сайты и игры будут прерываться.", "Full — all strategies, the best one is chosen; quick — until the first working one, starting with the previous ones. If the ready-made ones do not help, “Deep search” generates and tests new strategies — up to 15 minutes. During the search optimization for the whole network switches several times — sites and games will be interrupted."],
-  "web.select.ip_blocked": ["не ответил ни с одной стратегией, похоже на блокировку по адресу", "did not respond with any strategy, looks like an IP block"],
-  "web.select.mode_info": ["Полный проверяет все стратегии и показывает таблицу — так видно самую надёжную. Быстрый — до первой рабочей. Лучшая стратегия включается автоматически.", "Full checks all strategies and shows a table — so the most reliable one is visible. Quick — until the first working one. The best strategy turns on automatically."],
-  "web.select.needs_ts": ["нужна настройка Windows", "needs a Windows setting"],
-  "web.select.no_groups": ["Выберите хотя бы одну группу", "Select at least one group"],
-  "web.select.none_yet": ["Пока ни одна стратегия не проверена", "No strategy checked yet"],
-  "web.select.not_started": ["Подбор не запущен", "Strategy search not started"],
-  "web.select.problem": ["не открылось: {list}", "did not open: {list}"],
-  "web.select.problem_more": ["не открылось: {list} и ещё {n}", "did not open: {list} and {n} more"],
-  "web.select.result_applied": ["Включена: {name}", "Turned on: {name}"],
-  "web.select.stopped": ["Подбор остановлен {time}.", "Strategy search stopped {time}."],
-  "web.select.v_fail": ["нет — {host}: {detail}", "no — {host}: {detail}"],
-  "web.select.v_ok": ["да — {host}: {detail}", "yes — {host}: {detail}"],
-  "web.select.warn_off": ["Подбор обычно занимает несколько минут. Сайты в сети в это время могут открываться с перебоями.", "A strategy search usually takes a few minutes. Sites on the network may open intermittently meanwhile."],
-  "web.select.warn_on": ["На время подбора оптимизация для всей сети переключается между стратегиями, сайты на устройствах могут открываться с перебоями.", "During the search optimization for the whole network switches between strategies; sites on devices may open intermittently."],
-  "web.site.excluded_hint_main": ["Список — на вкладке «Сайты». Роутер больше не применяет к сайту оптимизацию.", "The list is on the “Sites” tab. The router no longer applies optimization to the site."],
-  "web.site.hint": ["Адрес проверяется с оптимизацией и без. Если сайт открывается только без неё — его можно добавить в исключения.", "The address is checked with and without optimization. If the site opens only without it, it can be added to exclusions."],
-  "web.sites.add_target": ["Добавить сайт", "Add site"],
-  "web.sites.addr_err": ["Адрес {n}: {error}", "Address {n}: {error}"],
-  "web.sites.adv_reverted": ["Возвращено как было.", "Reverted."],
-  "web.sites.builtin": ["Встроенные списки", "Built-in lists"],
-  "web.sites.builtin_descr": ["Исключения: сайты, которым оптимизация мешает (банки, госуслуги и другие). Обновляются вместе с пакетом, править нельзя.", "Exclusions: sites that optimization interferes with (banks, government services and others). Updated with the package, cannot be edited."],
-  "web.sites.exclude_descr": ["Открывать без оптимизации: сайты, которые она ломает. Домен на строку, например example.com.", "Open without optimization: sites it breaks. One domain per line, e.g. example.com."],
-  "web.sites.exclude_info": ["Строка example.com закрывает и все поддомены (video.example.com). Только сам домен, без поддоменов — строка с ^: ^example.com. Сюда же попадают сайты, добавленные в «Сайт не открывается».", "The line example.com also covers all subdomains (video.example.com). For the domain itself only, without subdomains, start the line with ^: ^example.com. Sites added via “Site does not open” also land here."],
-  "web.sites.general_descr": ["Сайты, для которых нужна оптимизация, кроме YouTube и Discord. Домен на строку. Действует в режиме «Только из списков».", "Sites that need optimization besides YouTube and Discord. One domain per line. Applies in “Lists only” mode."],
-  "web.sites.general_info": ["Домены из «Своих сайтов» ниже попадают сюда автоматически. Сайты, которые и так открываются, добавлять не нужно: пользы нет, а изредка оптимизация им мешает.", "Domains from “My sites” below are added here automatically. No need to add sites that already open: there is no benefit, and optimization occasionally interferes with them."],
-  "web.sites.mode_all_done": ["Оптимизация для всех сайтов, кроме исключений. Сайты будут перепроверены автоматически.", "Optimization for all sites except exclusions. Sites will be rechecked automatically."],
-  "web.sites.mode_lists_done": ["Оптимизация только для сайтов из списков. Сайты будут перепроверены автоматически.", "Optimization only for sites from the lists. Sites will be rechecked automatically."],
-  "web.sites.show_list": [{"one": "Показать список — {n} строка", "few": "Показать список — {n} строки", "many": "Показать список — {n} строк", "other": "Показать список — {n} строки"}, {"one": "Show list — {n} line", "other": "Show list — {n} lines"}],
-  "web.sites.targets_descr": ["Сайты, которые должны открываться, кроме YouTube и Discord. Роутер проверяет их при подборе и проверке по расписанию — для всех устройств дома. До 50 адресов.", "Sites that must open besides YouTube and Discord. The router checks them during strategy searches and scheduled checks — for all devices at home. Up to 50 addresses."],
-  "web.sites.targets_info": ["Без «важного» стратегия не считается рабочей. Домены отсюда автоматически попадают в «Оптимизировать». Если сайт перестал открываться после добавления — уберите его или добавьте в исключения.", "Without an “important” site a strategy is not considered working. Domains from here are added to “Optimize” automatically. If a site stopped opening after being added, remove it or add it to exclusions."],
-  "web.src.app": ["с ПК", "from the PC"],
-  "web.src.manual": ["вручную", "manually"],
-  "web.src.timer": ["по расписанию", "on schedule"],
-  "web.uninst.busy": ["Удаление DpiShell… страницу не закрывайте", "Uninstalling DpiShell… do not close the page"],
-  "web.uninst.button": ["Удалить DpiShell", "Uninstall DpiShell"],
-  "web.uninst.confirm": ["Для подтверждения введите «{word}»:", "To confirm, type “{word}”:"],
-  "web.uninst.done": ["DpiShell удалён. Страницу можно закрыть.", "DpiShell uninstalled. The page can be closed."],
-  "web.uninst.done_kept": ["DpiShell удалён. Настройки сохранены — вернутся при установке заново. Страницу можно закрыть.", "DpiShell uninstalled. Settings were kept and will return on reinstall. The page can be closed."],
-  "web.uninst.intro": ["Оптимизация перестанет работать на всех устройствах дома. Настройки роутера, которые менял DpiShell (DNS, ускорение сети, расписание), вернутся к прежним — ваши более поздние правки в них могут пропасть. Ядро zapret и пакеты DpiShell удалятся; модули ядра и другие пакеты роутера останутся.", "Optimization will stop working on all devices at home. Router settings changed by DpiShell (DNS, network acceleration, schedule) will return to their previous values — your later edits to them may be lost. zapret core and DpiShell packages will be removed; kernel modules and other router packages stay."],
-  "web.uninst.too_long": ["Удаление идёт дольше обычного — обновите страницу через минуту.", "Uninstalling takes longer than usual — refresh the page in a minute."],
-  "web.uninst.word": ["удалить", "remove"]
+  "web.about.api": [
+    "Протокол связи с ПК",
+    "PC link protocol"
+  ],
+  "web.about.based_on": [
+    "DpiShell на основе",
+    "DpiShell is based on"
+  ],
+  "web.about.checking": [
+    "Проверка обновлений…",
+    "Checking for updates…"
+  ],
+  "web.about.daily": [
+    "Обновления проверяются раз в сутки.",
+    "Updates are checked once a day."
+  ],
+  "web.about.guide": [
+    "Инструкция",
+    "Guide"
+  ],
+  "web.about.info": [
+    "Информация",
+    "Information"
+  ],
+  "web.about.lang_problems": [
+    "Свои переводы",
+    "Custom translations"
+  ],
+  "web.about.lang_problems_hint": [
+    "Эти файлы или строки не взяты — вместо них английский текст:",
+    "These files or lines were not used — English text is shown instead:"
+  ],
+  "web.about.license": [
+    "Лицензия MIT.",
+    "MIT License."
+  ],
+  "web.about.luci": [
+    "Страница LuCI",
+    "LuCI page"
+  ],
+  "web.about.no_updates": [
+    "Обновлений нет · проверено {time}",
+    "No updates · checked {time}"
+  ],
+  "web.about.preparing": [
+    "Подготовка",
+    "Preparing"
+  ],
+  "web.about.update_to": [
+    "Обновить до {version}",
+    "Update to {version}"
+  ],
+  "web.about.updating": [
+    "Обновление DpiShell… страница перезагрузится автоматически",
+    "Updating DpiShell… the page will reload automatically"
+  ],
+  "web.about.version": [
+    "Версия",
+    "Version"
+  ],
+  "web.adv.info": [
+    "Выключено — всё как сейчас. Включено — у перечисленных сайтов своя стратегия, остальные — как выбрано ниже. «Авто» — стратегию для строки выберет подбор, до него — текущая. «Напрямую» — оптимизация эти сайты не трогает. Свои строки важнее списков YouTube и Discord: youtube.com в своей строке пойдёт по ней.",
+    "Off — everything stays as is. On — the listed sites get their own strategy, other sites follow the choice below. “Auto” — strategy search picks the row’s strategy; until then the current one is used. “Direct” — optimization does not touch these sites. Your rows take priority over the YouTube and Discord lists: youtube.com in a row follows that row."
+  ],
+  "web.adv.others_info": [
+    "«Для всех сайтов» может мешать обычным сайтам — после сохранения проверьте их. «Напрямую» — только ваши строки; остальные сайты — без оптимизации.",
+    "“All sites” may interfere with regular sites — check them after saving. “Direct” — only your rows; other sites go without optimization."
+  ],
+  "web.apply": [
+    "Применить",
+    "Apply"
+  ],
+  "web.copied": [
+    "Скопировано",
+    "Copied"
+  ],
+  "web.core.broken": [
+    "Файлы zapret повреждены",
+    "zapret files are damaged"
+  ],
+  "web.core.broken_hint": [
+    "«Восстановить» — на вкладке «Диагностика»",
+    "“Restore” is on the “Diagnostics” tab"
+  ],
+  "web.core.broken_long": [
+    "Файлы zapret повреждены — нажмите «Восстановить».",
+    "zapret files are damaged — click “Restore”."
+  ],
+  "web.core.broken_short": [
+    "файлы повреждены, «Восстановить» на вкладке «Диагностика»",
+    "files are damaged, “Restore” is on the “Diagnostics” tab"
+  ],
+  "web.core.download": [
+    "Загрузить ядро",
+    "Download core"
+  ],
+  "web.core.loading": [
+    "Загрузка ядра zapret…",
+    "Downloading zapret core…"
+  ],
+  "web.core.missing": [
+    "Ядро zapret не установлено",
+    "zapret core is not installed"
+  ],
+  "web.core.missing_hint": [
+    "Нажмите «Загрузить ядро» ниже",
+    "Click “Download core” below"
+  ],
+  "web.core.missing_long": [
+    "Ядро zapret не установлено — без него оптимизация не работает.",
+    "zapret core is not installed — optimization does not work without it."
+  ],
+  "web.core.ok": [
+    "Ядро {version} установлено, файлы целы",
+    "Core {version} installed, files intact"
+  ],
+  "web.core.restore": [
+    "Восстановить",
+    "Restore"
+  ],
+  "web.core.title": [
+    "Ядро zapret",
+    "zapret core"
+  ],
+  "web.diag.conflict": [
+    "Мешает похожая программа: {name}. Пока она работает, включение и подбор недоступны.",
+    "A similar program interferes: {name}. While it runs, turning on and strategy search are unavailable."
+  ],
+  "web.diag.flow": [
+    "Ускорение сети (flow offloading) мешает оптимизации. «Исправить» передаст ускорение zapret: скорость обычно почти не меняется, на быстрых тарифах с аппаратным ускорением может снизиться.",
+    "Network acceleration (flow offloading) interferes with optimization. “Fix” hands acceleration over to zapret: speed usually barely changes, but on fast plans with hardware acceleration it may drop."
+  ],
+  "web.diag.intro": [
+    "Роутер проверяет, что мешает оптимизации: похожие программы, ускорение сети, подмена DNS. Без нажатия кнопки ничего не меняется.",
+    "The router checks what interferes with optimization: similar programs, network acceleration, DNS spoofing. Nothing changes until you click a button."
+  ],
+  "web.diag.intro_info": [
+    "Пригодится, если оптимизация работает, а сайты не открываются, и перед вопросом о проблеме. «Сохранить отчёт» собирает сведения о роутере и оптимизации в файл (без паролей) — его можно приложить к вопросу.",
+    "Useful when optimization is running but sites do not open, and before asking about a problem. “Save report” collects router and optimization details into a file (no passwords) that can be attached to the question."
+  ],
+  "web.diag.ipv6": [
+    "Сайты по IPv6 идут мимо оптимизации: она включена только для IPv4. «Исправить» включит её и для IPv6.",
+    "Sites over IPv6 bypass optimization: it is on for IPv4 only. “Fix” turns it on for IPv6 too."
+  ],
+  "web.diag.none": [
+    "Помех не найдено",
+    "Nothing interferes"
+  ],
+  "web.diag.package": [
+    "Пакет {name} мешает: другой zapret занимает те же файлы. Удалите его в настройках роутера: «Система» → «Программное обеспечение» (название может отличаться) или apk del {name}. До этого включение и подбор недоступны.",
+    "Package {name} interferes: another zapret uses the same files. Remove it in the router settings: “System” → “Software” (names may differ) or apk del {name}. Until then, turning on and strategy search are unavailable."
+  ],
+  "web.diag.report": [
+    "Отчёт",
+    "Report"
+  ],
+  "web.diag.report_descr": [
+    "Версии, настройки оптимизации и DNS, хвост журнала роутера — текстовым файлом.",
+    "Versions, optimization and DNS settings, the tail of the router log — as a text file."
+  ],
+  "web.diag.space_kb": [
+    "{value} КБ",
+    "{value} KB"
+  ],
+  "web.diag.unknown": [
+    "Состояние неизвестно",
+    "State unknown"
+  ],
+  "web.dns.addresses": [
+    "Адреса: {ips}",
+    "Addresses: {ips}"
+  ],
+  "web.dns.addresses_title": [
+    "Адреса",
+    "Addresses"
+  ],
+  "web.dns.boot": [
+    "IP сервера защищённого DNS",
+    "Secure DNS server IP"
+  ],
+  "web.dns.boot_hint": [
+    "Нужны, если в адресе защищённого DNS имя, а не IP",
+    "Needed if the secure DNS address contains a name, not an IP"
+  ],
+  "web.dns.choose_other": [
+    "Выберите другой DNS, чтобы применить",
+    "Choose another DNS to apply"
+  ],
+  "web.dns.cons1": [
+    "Запросы DNS уйдут к Google и Cloudflare в зашифрованном виде: провайдер обычно не сможет их подменить, но может заблокировать сам защищённый DNS — тогда роутер вернёт DNS провайдера.",
+    "DNS queries go to Google and Cloudflare encrypted: the ISP usually cannot spoof them, but can block secure DNS itself — then the router switches back to the ISP’s DNS."
+  ],
+  "web.dns.cons2": [
+    "Перестанут действовать фильтры провайдера (например, родительский контроль у провайдера).",
+    "ISP filters (such as ISP parental controls) will stop working."
+  ],
+  "web.dns.cons3": [
+    "Сайты могут открываться чуть медленнее.",
+    "Sites may open slightly slower."
+  ],
+  "web.dns.cons4": [
+    "Если оба защищённых сервера станут недоступны, роутер временно вернёт DNS провайдера и предупредит.",
+    "If both secure servers become unavailable, the router temporarily switches back to the ISP’s DNS and warns about it."
+  ],
+  "web.dns.cons5": [
+    "Устройства с жёстко прописанным DNS (часть ТВ и приставок) идут мимо роутера — на них это не повлияет.",
+    "Devices with hard-coded DNS (some TVs and set-top boxes) bypass the router — this will not affect them."
+  ],
+  "web.dns.cons6": [
+    "Имена устройств домашней сети обычно продолжают работать.",
+    "Home network device names usually keep working."
+  ],
+  "web.dns.current_mark": [
+    "{title} — сейчас",
+    "{title} — current"
+  ],
+  "web.dns.doh": [
+    "Защищённый: {url}",
+    "Secure: {url}"
+  ],
+  "web.dns.enable_note": [
+    "Прежние настройки вернёт кнопка «Вернуть как было». Включение обычно занимает около минуты: роутер ставит пакет и проверяет, что DNS отвечает.",
+    "“Revert” restores the previous settings. Turning on usually takes about a minute: the router installs a package and checks that DNS responds."
+  ],
+  "web.dns.enable_what": [
+    "Для всей домашней сети. Что изменится:",
+    "For the whole home network. What changes:"
+  ],
+  "web.dns.intro": [
+    "Некоторые провайдеры подменяют ответы DNS — тогда оптимизация может не помогать приложениям на телефонах и ТВ. DNS здесь меняется для всей сети.",
+    "Some ISPs spoof DNS responses — then optimization may not help apps on phones and TVs. DNS here changes for the whole network."
+  ],
+  "web.dns.intro_info": [
+    "«Проверить DNS» сравнивает ответы DNS провайдера с эталонными (Google и Cloudflare по шифрованному каналу). Если ответы подменяются — включите защищённый DNS. Браузеры с собственным защищённым DNS это не затрагивает. Если после включения что-то пропало — «Вернуть как было».",
+    "“Check DNS” compares the ISP’s DNS responses with reference ones (Google and Cloudflare over an encrypted channel). If responses are spoofed, turn on secure DNS. Browsers with their own secure DNS are not affected. If something stops working after turning it on, use “Revert”."
+  ],
+  "web.dns.ips_hint": [
+    "До 4, через запятую",
+    "Up to 4, comma-separated"
+  ],
+  "web.dns.not_checked": [
+    "Не проверялся. Нажмите «Проверить DNS».",
+    "Not checked. Click “Check DNS”."
+  ],
+  "web.dns.note.default": [
+    "по умолчанию: два сервера разных компаний",
+    "default: two servers from different companies"
+  ],
+  "web.dns.note.provider": [
+    "как было до DpiShell",
+    "as before DpiShell"
+  ],
+  "web.dns.note.quad9": [
+    "блокирует вредоносные сайты",
+    "blocks malicious sites"
+  ],
+  "web.dns.note.yandex": [
+    "российский: по закону может применять реестр блокировок",
+    "Russian: may apply the national block list by law"
+  ],
+  "web.dns.optional": [
+    "Необязательно",
+    "Optional"
+  ],
+  "web.dns.owner.cloudflare": [
+    "Cloudflare, США",
+    "Cloudflare, USA"
+  ],
+  "web.dns.owner.google": [
+    "Google, США",
+    "Google, USA"
+  ],
+  "web.dns.owner.provider": [
+    "Адреса выдаёт провайдер, ответы он может подменять",
+    "Addresses come from the ISP, which may spoof responses"
+  ],
+  "web.dns.owner.quad9": [
+    "Quad9, некоммерческий фонд, Швейцария",
+    "Quad9, non-profit foundation, Switzerland"
+  ],
+  "web.dns.owner.yandex": [
+    "Яндекс",
+    "Yandex"
+  ],
+  "web.dns.preset.provider": [
+    "От провайдера",
+    "From the ISP"
+  ],
+  "web.dns.preset.yandex": [
+    "Яндекс",
+    "Yandex"
+  ],
+  "web.dns.provider": [
+    "DNS провайдера",
+    "ISP’s DNS"
+  ],
+  "web.dns.running": [
+    "Выполняется…",
+    "In progress…"
+  ],
+  "web.dns.state_unknown": [
+    "Состояние DNS неизвестно",
+    "DNS state unknown"
+  ],
+  "web.dns.what_changes": [
+    "Что изменится при защищённом DNS",
+    "What changes with secure DNS"
+  ],
+  "web.done": [
+    "готово",
+    "done"
+  ],
+  "web.err.arch": [
+    "Архитектура роутера не поддерживается",
+    "The router architecture is not supported"
+  ],
+  "web.err.boot": [
+    "Укажите IP сервера защищённого DNS",
+    "Enter the secure DNS server IP"
+  ],
+  "web.err.busy_dns": [
+    "Идёт настройка DNS",
+    "DNS setup in progress"
+  ],
+  "web.err.busy_select": [
+    "Идёт подбор",
+    "Strategy search in progress"
+  ],
+  "web.err.busy_update": [
+    "Обновление уже идёт",
+    "An update is already in progress"
+  ],
+  "web.err.check_off": [
+    "Оптимизация выключена — проверять нечего",
+    "Optimization is off — nothing to check"
+  ],
+  "web.err.conflict": [
+    "Работает похожая программа: {names} — остановите её на вкладке «Диагностика»",
+    "A similar program is running: {names} — stop it on the “Diagnostics” tab"
+  ],
+  "web.err.doh": [
+    "Адрес защищённого DNS вида https://сервер/dns-query",
+    "A secure DNS address like https://server/dns-query"
+  ],
+  "web.err.doh_or_plain": [
+    "Нужен адрес защищённого DNS или обычные адреса DNS",
+    "A secure DNS address or plain DNS addresses are needed"
+  ],
+  "web.err.domain": [
+    "Домен вида example.com",
+    "A domain like example.com"
+  ],
+  "web.err.generic": [
+    "Ошибка",
+    "Error"
+  ],
+  "web.err.ips4": [
+    "До 4 адресов IPv4/IPv6",
+    "Up to 4 IPv4/IPv6 addresses"
+  ],
+  "web.err.list_ro": [
+    "Этот список менять нельзя",
+    "This list cannot be changed"
+  ],
+  "web.err.max50": [
+    "Не больше 50 адресов",
+    "No more than 50 addresses"
+  ],
+  "web.err.network": [
+    "Нет связи с роутером",
+    "No connection to the router"
+  ],
+  "web.err.no_strategy": [
+    "Стратегия не выбрана и подборов ещё не было — запустите подбор",
+    "No strategy selected and no searches yet — run a strategy search"
+  ],
+  "web.err.no_strategy_id": [
+    "Нет такой стратегии",
+    "No such strategy"
+  ],
+  "web.err.no_user_sites": [
+    "Своих сайтов на роутере нет — добавьте их или выберите другие группы",
+    "There are no own sites on the router — add some or choose other groups"
+  ],
+  "web.err.row_sites": [
+    "В строке от 1 до 50 сайтов",
+    "1 to 50 sites per row"
+  ],
+  "web.err.row_strategy": [
+    "Стратегия: «Авто», «Напрямую» или стратегия из списка",
+    "Strategy: “Auto”, “Direct” or one from the list"
+  ],
+  "web.err.save": [
+    "Не удалось сохранить",
+    "Could not save"
+  ],
+  "web.err.site": [
+    "Адрес вида example.com",
+    "An address like example.com"
+  ],
+  "web.err.subnet": [
+    "Подсеть вида 1.2.3.0/24",
+    "A subnet like 1.2.3.0/24"
+  ],
+  "web.err.title40": [
+    "Название до 40 символов",
+    "Name up to 40 characters"
+  ],
+  "web.err.ubus": [
+    "Ошибка роутера (код {code})",
+    "Router error (code {code})"
+  ],
+  "web.err.ubus_2": [
+    "Роутер не принял запрос",
+    "The router rejected the request"
+  ],
+  "web.err.ubus_4": [
+    "Пакет DpiShell не установлен или устарел",
+    "The DpiShell package is not installed or is outdated"
+  ],
+  "web.err.ubus_5": [
+    "Роутер не ответил",
+    "The router did not respond"
+  ],
+  "web.err.ubus_6": [
+    "Нет доступа",
+    "Access denied"
+  ],
+  "web.err.ubus_7": [
+    "Роутер не ответил вовремя",
+    "The router did not respond in time"
+  ],
+  "web.err.url": [
+    "Адрес вида https://example.com/",
+    "An address like https://example.com/"
+  ],
+  "web.line_err": [
+    "Строка {n}: {error}",
+    "Line {n}: {error}"
+  ],
+  "web.main.check_needs_on": [
+    "Сначала включите оптимизацию",
+    "Turn on optimization first"
+  ],
+  "web.main.checked": [
+    "проверено {time}",
+    "checked {time}"
+  ],
+  "web.main.conflict_more": [
+    "Работает {name} — подробнее в «Диагностике».",
+    "{name} is running — see “Diagnostics”."
+  ],
+  "web.main.disable": [
+    "Выключить",
+    "Turn off"
+  ],
+  "web.main.just_installed": [
+    "Если пакет только что установлен — обновите страницу через минуту.",
+    "If the package was just installed, refresh the page in a minute."
+  ],
+  "web.main.not_selected": [
+    "Не выбрана — «Подобрать»",
+    "Not selected — “Find strategy”"
+  ],
+  "web.main.off_no_strategy": [
+    "Стратегия не выбрана — «Включить» запустит подбор",
+    "No strategy selected — “Turn on” starts a strategy search"
+  ],
+  "web.main.opt_stats": [
+    "{name} — всё открыто в {passed} из {runs} подборов",
+    "{name} — everything opened in {passed} of {runs} searches"
+  ],
+  "web.main.remove_pkg": [
+    "Удалите пакет {name} (apk del {name}).",
+    "Remove package {name} (apk del {name})."
+  ],
+  "web.main.reselect_info": [
+    "При неудаче включится запасная стратегия. Если и запасные не помогли — быстрый подбор: 2–3 мин, не чаще раза в 6 ч; в это время сайты на всех устройствах прерываются. Поэтому по умолчанию выключено.",
+    "On failure a backup strategy is turned on. If backups do not help either — a quick search: 2–3 min, at most once every 6 h; sites on all devices are interrupted meanwhile. That is why it is off by default."
+  ],
+  "web.main.reset_note": [
+    "Без страницы: на большинстве роутеров с OpenWrt нажатие reset на 2 с выключает оптимизацию без перезагрузки, на некоторых — иначе. Не держите 5 с и дольше: обычно это сброс к заводским настройкам.",
+    "Without this page: on most OpenWrt routers pressing reset for 2 s turns optimization off without a reboot; on some it works differently. Do not hold it for 5 s or longer: that is usually a factory reset."
+  ],
+  "web.main.restart_note": [
+    "Оптимизация перезапустится — сайты прервутся на пару секунд.",
+    "Optimization will restart — sites will be interrupted for a couple of seconds."
+  ],
+  "web.main.select_other": [
+    "Подобрать другую стратегию",
+    "Find another strategy"
+  ],
+  "web.main.select_sub": [
+    "Сайты в сети могут открываться с перебоями",
+    "Sites on the network may open intermittently"
+  ],
+  "web.main.stop_confirm": [
+    "Остановить и отключить похожую программу? Она перехватывает тот же трафик, что и DpiShell. После перезагрузки роутера не запустится; включить снова — в её настройках.",
+    "Stop and disable the similar program? It intercepts the same traffic as DpiShell. It will not start after a router reboot; turn it back on in its own settings."
+  ],
+  "web.main.strategy_info": [
+    "Стратегия — способ, которым оптимизация обманывает оборудование провайдера; у разных провайдеров работают разные. Какую выбрать — покажет «Подобрать»: лучшая включится автоматически.",
+    "A strategy is the way optimization tricks the ISP’s equipment; different ISPs need different ones. “Find strategy” shows which one to use: the best one turns on automatically."
+  ],
+  "web.main.title": [
+    "DpiShell — оптимизация соединения",
+    "DpiShell — connection optimization"
+  ],
+  "web.main.trial_ask": [
+    "Всё работает? Иначе через {time} роутер вернёт как было.",
+    "Is everything working? Otherwise the router will revert in {time}."
+  ],
+  "web.main.ts_info": [
+    "Временные метки TCP (TCP timestamps), в Windows по умолчанию выключены. Без них часть сайтов с компьютера может не открываться. Программа DpiShell на ПК включает их автоматически; вручную — в командной строке от администратора: netsh interface tcp set global timestamps=enabled. Телефоны, ТВ и приставки обычно настраивать не нужно.",
+    "TCP timestamps are off by default in Windows. Without them some sites may not open from the computer. The DpiShell app on the PC turns them on automatically; manually — in an administrator command prompt: netsh interface tcp set global timestamps=enabled. Phones, TVs and set-top boxes usually need no setup."
+  ],
+  "web.main.ts_need": [
+    "Стратегии нужна настройка Windows на компьютерах",
+    "The strategy needs a Windows setting on computers"
+  ],
+  "web.main.watchdog_info": [
+    "Раз в 5 минут проверяются несколько обычных сайтов. Если с оптимизацией они не открываются, а без неё открываются — оптимизация обычно выключается автоматически, причина видна здесь, и один раз запускается подбор: стратегия найдена — включается, нет — оптимизация выключена до «Включить» или «Подобрать». Сбои на других сайтах сторож может не заметить. Если интернета нет и без оптимизации — это обрыв у провайдера, оптимизация остаётся включённой.",
+    "Every 5 minutes a few regular sites are checked. If they do not open with optimization but open without it, optimization is usually turned off automatically, the reason is shown here, and a strategy search runs once: if a strategy is found it is turned on, otherwise optimization stays off until “Turn on” or “Find strategy”. The watchdog may miss failures on other sites. If there is no internet even without optimization, it is an ISP outage and optimization stays on."
+  ],
+  "web.min_sec": [
+    "{m} мин {s} с",
+    "{m} min {s} s"
+  ],
+  "web.msg.apply_failed": [
+    "Не удалось включить {name}: {error}",
+    "Could not turn on {name}: {error}"
+  ],
+  "web.msg.baseline": [
+    "Проверка без оптимизации",
+    "Checking without optimization"
+  ],
+  "web.msg.checking": [
+    "{name}",
+    "{name}"
+  ],
+  "web.msg.deep_none": [
+    "Глубокий поиск: подходящей стратегии не нашлось. Всё возвращено как было.",
+    "Deep search: no suitable strategy found. Everything was restored."
+  ],
+  "web.msg.interrupted": [
+    "Подбор прервался",
+    "Strategy search was interrupted"
+  ],
+  "web.msg.limited": [
+    "Провайдер, похоже, временно ограничил соединения — продолжите поиск позже",
+    "The ISP seems to be limiting connections temporarily — continue the search later"
+  ],
+  "web.msg.one_ok": [
+    "{name}: всё открывается",
+    "{name}: everything opens"
+  ],
+  "web.msg.one_partial": [
+    "{name}: открывается {ok} из {total}",
+    "{name}: {ok} of {total} open"
+  ],
+  "web.msg.search_stopped": [
+    "Поиск остановлен",
+    "Search stopped"
+  ],
+  "web.msg.select_stopped": [
+    "Подбор остановлен",
+    "Strategy search stopped"
+  ],
+  "web.msg.time_limit": [
+    "Поиск ограничен 15 минутами",
+    "The search is limited to 15 minutes"
+  ],
+  "web.msg.with_note": [
+    "{message}. {note}",
+    "{message}. {note}"
+  ],
+  "web.save": [
+    "Сохранить",
+    "Save"
+  ],
+  "web.saved": [
+    "Сохранено",
+    "Saved"
+  ],
+  "web.sec": [
+    "{n} с",
+    "{n} s"
+  ],
+  "web.select.applied": [
+    "включена",
+    "on"
+  ],
+  "web.select.best": [
+    "лучшая",
+    "best"
+  ],
+  "web.select.candidates": [
+    "Проверено вариантов: {n}",
+    "Variants checked: {n}"
+  ],
+  "web.select.check_one": [
+    "Проверить только её",
+    "Check only this one"
+  ],
+  "web.select.checked_one": [
+    "Проверка {time}: {name}",
+    "Check {time}: {name}"
+  ],
+  "web.select.done": [
+    "Подбор завершён {time}.",
+    "Strategy search finished {time}."
+  ],
+  "web.select.intro": [
+    "Роутер перебирает стратегии и проверяет, открываются ли YouTube, Discord и свои сайты. Страницу можно закрыть — подбор идёт на роутере. В конце лучшая стратегия включается автоматически.",
+    "The router goes through strategies and checks whether YouTube, Discord and your sites open. The page can be closed — the search runs on the router. At the end the best strategy turns on automatically."
+  ],
+  "web.select.intro_info": [
+    "Полный — все стратегии, выбор лучшей; быстрый — до первой рабочей, начиная с прежних. Если готовые не помогли, «Искать глубже» создаёт и проверяет новые стратегии — до 15 минут. Во время подбора оптимизация для всей сети несколько раз переключается — сайты и игры будут прерываться.",
+    "Full — all strategies, the best one is chosen; quick — until the first working one, starting with the previous ones. If the ready-made ones do not help, “Deep search” generates and tests new strategies — up to 15 minutes. During the search optimization for the whole network switches several times — sites and games will be interrupted."
+  ],
+  "web.select.ip_blocked": [
+    "не ответил ни с одной стратегией, похоже на блокировку по адресу",
+    "did not respond with any strategy, looks like an IP block"
+  ],
+  "web.select.mode_info": [
+    "Полный проверяет все стратегии и показывает таблицу — так видно самую надёжную. Быстрый — до первой рабочей. Лучшая стратегия включается автоматически.",
+    "Full checks all strategies and shows a table — so the most reliable one is visible. Quick — until the first working one. The best strategy turns on automatically."
+  ],
+  "web.select.needs_ts": [
+    "нужна настройка Windows",
+    "needs a Windows setting"
+  ],
+  "web.select.no_groups": [
+    "Выберите хотя бы одну группу",
+    "Select at least one group"
+  ],
+  "web.select.none_yet": [
+    "Пока ни одна стратегия не проверена",
+    "No strategy checked yet"
+  ],
+  "web.select.not_started": [
+    "Подбор не запущен",
+    "Strategy search not started"
+  ],
+  "web.select.problem": [
+    "не открылось: {list}",
+    "did not open: {list}"
+  ],
+  "web.select.problem_more": [
+    "не открылось: {list} и ещё {n}",
+    "did not open: {list} and {n} more"
+  ],
+  "web.select.result_applied": [
+    "Включена: {name}",
+    "Turned on: {name}"
+  ],
+  "web.select.stopped": [
+    "Подбор остановлен {time}.",
+    "Strategy search stopped {time}."
+  ],
+  "web.select.v_fail": [
+    "нет — {host}: {detail}",
+    "no — {host}: {detail}"
+  ],
+  "web.select.v_ok": [
+    "да — {host}: {detail}",
+    "yes — {host}: {detail}"
+  ],
+  "web.select.warn_off": [
+    "Подбор обычно занимает несколько минут. Сайты в сети в это время могут открываться с перебоями.",
+    "A strategy search usually takes a few minutes. Sites on the network may open intermittently meanwhile."
+  ],
+  "web.select.warn_on": [
+    "На время подбора оптимизация для всей сети переключается между стратегиями, сайты на устройствах могут открываться с перебоями.",
+    "During the search optimization for the whole network switches between strategies; sites on devices may open intermittently."
+  ],
+  "web.site.excluded_hint_main": [
+    "Список — на вкладке «Сайты». Роутер больше не применяет к сайту оптимизацию.",
+    "The list is on the “Sites” tab. The router no longer applies optimization to the site."
+  ],
+  "web.site.hint": [
+    "Адрес проверяется с оптимизацией и без. Если сайт открывается только без неё — его можно добавить в исключения.",
+    "The address is checked with and without optimization. If the site opens only without it, it can be added to exclusions."
+  ],
+  "web.sites.add_target": [
+    "Добавить сайт",
+    "Add site"
+  ],
+  "web.sites.addr_err": [
+    "Адрес {n}: {error}",
+    "Address {n}: {error}"
+  ],
+  "web.sites.adv_reverted": [
+    "Возвращено как было.",
+    "Reverted."
+  ],
+  "web.sites.builtin": [
+    "Встроенные списки",
+    "Built-in lists"
+  ],
+  "web.sites.builtin_descr": [
+    "Исключения: сайты, которым оптимизация мешает (банки, госуслуги и другие). Обновляются вместе с пакетом, править нельзя.",
+    "Exclusions: sites that optimization interferes with (banks, government services and others). Updated with the package, cannot be edited."
+  ],
+  "web.sites.exclude_descr": [
+    "Открывать без оптимизации: сайты, которые она ломает. Домен на строку, например example.com.",
+    "Open without optimization: sites it breaks. One domain per line, e.g. example.com."
+  ],
+  "web.sites.exclude_info": [
+    "Строка example.com закрывает и все поддомены (video.example.com). Только сам домен, без поддоменов — строка с ^: ^example.com. Сюда же попадают сайты, добавленные в «Сайт не открывается».",
+    "The line example.com also covers all subdomains (video.example.com). For the domain itself only, without subdomains, start the line with ^: ^example.com. Sites added via “Site does not open” also land here."
+  ],
+  "web.sites.general_descr": [
+    "Сайты, для которых нужна оптимизация, кроме YouTube и Discord. Домен на строку. Действует в режиме «Только из списков».",
+    "Sites that need optimization besides YouTube and Discord. One domain per line. Applies in “Lists only” mode."
+  ],
+  "web.sites.general_info": [
+    "Домены из «Своих сайтов» ниже попадают сюда автоматически. Сайты, которые и так открываются, добавлять не нужно: пользы нет, а изредка оптимизация им мешает.",
+    "Domains from “My sites” below are added here automatically. No need to add sites that already open: there is no benefit, and optimization occasionally interferes with them."
+  ],
+  "web.sites.mode_all_done": [
+    "Оптимизация для всех сайтов, кроме исключений. Сайты будут перепроверены автоматически.",
+    "Optimization for all sites except exclusions. Sites will be rechecked automatically."
+  ],
+  "web.sites.mode_lists_done": [
+    "Оптимизация только для сайтов из списков. Сайты будут перепроверены автоматически.",
+    "Optimization only for sites from the lists. Sites will be rechecked automatically."
+  ],
+  "web.sites.show_list": [
+    {
+      "one": "Показать список — {n} строка",
+      "few": "Показать список — {n} строки",
+      "many": "Показать список — {n} строк",
+      "other": "Показать список — {n} строки"
+    },
+    {
+      "one": "Show list — {n} line",
+      "other": "Show list — {n} lines"
+    }
+  ],
+  "web.sites.targets_descr": [
+    "Сайты, которые должны открываться, кроме YouTube и Discord. Роутер проверяет их при подборе и проверке по расписанию — для всех устройств дома. До 50 адресов.",
+    "Sites that must open besides YouTube and Discord. The router checks them during strategy searches and scheduled checks — for all devices at home. Up to 50 addresses."
+  ],
+  "web.sites.targets_info": [
+    "Без «важного» стратегия не считается рабочей. Домены отсюда автоматически попадают в «Оптимизировать». Если сайт перестал открываться после добавления — уберите его или добавьте в исключения.",
+    "Without an “important” site a strategy is not considered working. Domains from here are added to “Optimize” automatically. If a site stopped opening after being added, remove it or add it to exclusions."
+  ],
+  "web.src.app": [
+    "с ПК",
+    "from the PC"
+  ],
+  "web.src.manual": [
+    "вручную",
+    "manually"
+  ],
+  "web.src.timer": [
+    "по расписанию",
+    "on schedule"
+  ],
+  "web.uninst.busy": [
+    "Удаление DpiShell… страницу не закрывайте",
+    "Uninstalling DpiShell… do not close the page"
+  ],
+  "web.uninst.button": [
+    "Удалить DpiShell",
+    "Uninstall DpiShell"
+  ],
+  "web.uninst.confirm": [
+    "Для подтверждения введите «{word}»:",
+    "To confirm, type “{word}”:"
+  ],
+  "web.uninst.done": [
+    "DpiShell удалён. Страницу можно закрыть.",
+    "DpiShell uninstalled. The page can be closed."
+  ],
+  "web.uninst.done_kept": [
+    "DpiShell удалён. Настройки сохранены — вернутся при установке заново. Страницу можно закрыть.",
+    "DpiShell uninstalled. Settings were kept and will return on reinstall. The page can be closed."
+  ],
+  "web.uninst.intro": [
+    "Оптимизация перестанет работать на всех устройствах дома. Настройки роутера, которые менял DpiShell (DNS, ускорение сети, расписание), вернутся к прежним — ваши более поздние правки в них могут пропасть. Ядро zapret и пакеты DpiShell удалятся; модули ядра и другие пакеты роутера останутся.",
+    "Optimization will stop working on all devices at home. Router settings changed by DpiShell (DNS, network acceleration, schedule) will return to their previous values — your later edits to them may be lost. zapret core and DpiShell packages will be removed; kernel modules and other router packages stay."
+  ],
+  "web.uninst.too_long": [
+    "Удаление идёт дольше обычного — обновите страницу через минуту.",
+    "Uninstalling takes longer than usual — refresh the page in a minute."
+  ],
+  "web.uninst.word": [
+    "удалить",
+    "remove"
+  ],
+  "web.warn.auto_select_failed": [
+    "Автоподбор не нашёл рабочую стратегию — оставлена прежняя",
+    "Automatic search found no working strategy — the previous one stays"
+  ],
+  "web.warn.auto_selected": [
+    "Автоподбор включил {name}",
+    "Automatic search turned on {name}"
+  ],
+  "web.warn.conflict": [
+    "Мешает похожая программа: {names}",
+    "A similar program interferes: {names}"
+  ],
+  "web.warn.dns_fallback": [
+    "Защищённый DNS недоступен — временно работает DNS провайдера",
+    "Secure DNS is unavailable — the ISP’s DNS is temporarily in use"
+  ],
+  "web.warn.dns_spoofed": [
+    "Провайдер подменяет адреса сайтов — приложения вне браузера могут не работать",
+    "The ISP is spoofing site addresses — apps outside the browser may not work"
+  ],
+  "web.warn.select_failed": [
+    "Подбор прервался: {error}",
+    "Strategy search was interrupted: {error}"
+  ],
+  "web.warn.switched_backup": [
+    "Стратегия перестала работать — включена запасная {name}",
+    "The strategy stopped working — backup {name} is on"
+  ]
 }

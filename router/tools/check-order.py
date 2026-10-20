@@ -40,6 +40,12 @@ for f in ROOT.rglob('*'):
         if re.search(rb'[\x00-\x08\x0b-\x1f]', line.rstrip(b'\r').replace(b'\t', b'')):
             print(f'{f.relative_to(ROOT)}:{i + 1}: управляющий символ — потерянный обратный слеш?')
             bad += 1
+# Перенос строки сразу за «'%J» / «"%J» — тоже след heredoc («\n» стал настоящим переводом строки; 2026-10-20, трижды).
+for f in files:
+    for i, l in enumerate(f.read_text(encoding='utf-8').split('\n')):
+        if re.search(r"""['"]%J$""", l):
+            print(f'{f.relative_to(ROOT)}:{i + 1}: перевод строки внутри «%J…» — вместо \\n настоящий перенос?')
+            bad += 1
 # Ключ витрины, встроенный в установщик окна ПК, — тот же, что в router/keys (иначе установка откажет по sha256).
 key = (ROOT / 'keys/dpishell.pem').read_text(encoding='utf-8').strip()
 inst = (ROOT / 'tools/dpishell-install.sh').read_text(encoding='utf-8')

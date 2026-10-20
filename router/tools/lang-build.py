@@ -39,7 +39,11 @@ def pc_texts(lang):
 
 def used_keys():
     keys = set(DYNAMIC)
-    files = glob.glob(os.path.join(RES, 'view', 'dpishell', '*.js')) + [os.path.join(RES, 'dpishell', 'api.js')]
+    # Ключи сообщений роутера (key в warnings, ошибках, ходе подбора) — тоже в словарь: их переводят страница и окно ПК.
+    back = os.path.join(ROOT, 'router', 'dpishell', 'files')
+    files = (glob.glob(os.path.join(RES, 'view', 'dpishell', '*.js')) + [os.path.join(RES, 'dpishell', 'api.js')] +
+             glob.glob(os.path.join(back, 'usr', 'share', 'ucode', 'dpishell', '*.uc')) +
+             [os.path.join(back, 'usr', 'share', 'rpcd', 'ucode', 'dpishell'), os.path.join(back, 'usr', 'libexec', 'dpishell', 'run')])
     for p in files:
         s = open(p, encoding='utf-8').read()
         for k in re.findall(r"'((?:%s)\.[\w.]+)'" % '|'.join(PREFIXES), s):

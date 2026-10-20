@@ -16,6 +16,7 @@ import * as dg from 'dpishell.diag';
 import * as dns from 'dpishell.dns';
 import * as upd from 'dpishell.update';
 import * as pr from 'dpishell.probe';
+import * as cat from 'dpishell.catalog';
 
 const cmd = ARGV[0];
 
@@ -30,11 +31,17 @@ function lock(name) {
 	return f;
 }
 
-function warn(code, text) {
+// Предупреждение: text — готовый русский (старые окна), key/params — ключ общего словаря и сырые параметры
+// (router-api.md §9, 2026-10-20). text null — снять предупреждение с этим кодом.
+function warn(code, text, key, params) {
 	let w = filter(st.read_json('/tmp/dpishell/warnings.json', []), x => x.code != code);
 	if (text)
-		push(w, { code, text });
+		push(w, { code, text, ...(key ? { key, params: params ?? {} } : {}) });
 	st.write_atomic('/tmp/dpishell/warnings.json', sprintf('%J\n', w));
+}
+
+function title_of(id) {
+	return cat.find(st.catalogs(), id)?.title ?? id;
 }
 
 // Подбор после сторожа: один раз, быстрый, все группы (cron tick уже под nice). Найденная стратегия прошла и обычные
@@ -52,9 +59,11 @@ function guard_select() {
 	st.write_atomic(st.WATCHDOG_SELECT, sprintf('%J\n', { at: time(), ok: !!p?.applied, best: p?.applied ? p.best : null }));
 	if (p?.applied) {
 		warn('watchdog_select_failed', null);
-		warn('auto_selected', `Сторож выключил оптимизацию, подбор нашёл и включил ${p.best}`);
+		warn('auto_selected', `Сторож выключил оптимизацию: пропал интернет. Роутер подобрал и включил ${title_of(p.best)}.`,
+			'router.wd.select_found', { name: title_of(p.best) });
 	} else
-		warn('watchdog_select_failed', `Сторож выключил оптимизацию, подбор не включил стратегию: ${p?.message ?? 'подбор прервался'}. Включите оптимизацию или запустите подбор сами`);
+		warn('watchdog_select_failed', 'Сторож выключил оптимизацию: пропал интернет, а подходящей стратегии не нашлось. Включить снова — вручную.',
+			'router.wd.select_failed');
 	st.write_status_json();
 }
 
@@ -166,7 +175,7 @@ function watch() {
 	// Есть ли новая версия DpiShell — раз в сутки (router-api.md §5, status.update).
 	if (!st.job_running('update'))
 		try { upd.check_daily(); } catch (x) {}
-	if (dw == 'dns_fallback') warn('dns_fallback', 'Защищённый DNS недоступен — временно работает DNS провайдера');
+	if (dw == 'dns_fallback') warn('dns_fallback', 'Защищённый DNS недоступен — временно работает DNS провайдера', 'web.warn.dns_fallback');
 	else if (dw == 'dns_back') warn('dns_fallback', null);
 	let s = st.settings();
 	if (!s.schedule.enabled || !s.enabled || st.job_running('select')) return;
@@ -186,7 +195,7 @@ function watch() {
 		if (!st.write_zapret_config(next, s) && system('/etc/init.d/zapret restart >/dev/null 2>&1') == 0) {
 			st.uci_set({ strategy: next, backups: slice(backups, 1) });
 			st.write_atomic(`${st.P.etc}/fail-streak.json`, '0\n');
-			warn('switched_backup', `Стратегия перестала работать — включена запасная ${next}`);
+			warn('switched_backup', `Стратегия перестала работать — включена запасная ${title_of(next)}`, 'web.warn.switched_backup', { name: title_of(next) });
 			st.write_status_json();
 		}
 		return;
@@ -203,9 +212,9 @@ function watch() {
 	let p = sel.select_run({ mode: 'quick', depth: 'main', started_by: 'timer' });
 	unlink(ls);
 	if (p.applied)
-		warn('auto_selected', `Автоподбор включил ${p.best}`);
+		warn('auto_selected', `Автоподбор включил ${title_of(p.best)}`, 'web.warn.auto_selected', { name: title_of(p.best) });
 	else
-		warn('auto_select_failed', 'Автоподбор не нашёл рабочую стратегию — оставлена прежняя');
+		warn('auto_select_failed', 'Автоподбор не нашёл рабочую стратегию — оставлена прежняя', 'web.warn.auto_select_failed');
 }
 
 if (cmd == 'select') {
@@ -213,7 +222,7 @@ if (cmd == 'select') {
 	if (!l) exit(1);
 	let args = {};
 	try { args = json(ARGV[1] ?? '{}'); } catch (e) {}
-	try { sel.select_run(args); } catch (e) { warn('select_failed', `Подбор прервался: ${e}`); }
+	try { sel.select_run(args); } catch (e) { warn('select_failed', `Подбор прервался: ${e}`, 'web.warn.select_failed', { error: `${e}` }); }
 	unlink(l);
 }
 else if (cmd == 'check') {
@@ -262,7 +271,7 @@ else if (cmd == 'revert') {
 			system('/etc/init.d/zapret enable; /etc/init.d/zapret restart >/dev/null 2>&1');
 		st.uci_set({ strategy: p.revert_to, enabled: 1 });
 		unlink(st.PENDING);
-		warn('confirm_reverted', `Включение не подтверждено — возвращена стратегия ${p.revert_to}`);
+		warn('confirm_reverted', 'Новая стратегия отменена: не подтвердили вовремя', 'router.off.revert_strategy_at', { time: time() });
 		st.write_status_json();
 	}
 }
@@ -284,8 +293,7 @@ else if (cmd == 'dns_analyze' || cmd == 'dns_enable' || cmd == 'dns_restore' || 
 	let l = lock('dns');
 	if (!l) exit(1);
 	let job = '/tmp/dpishell/dns_job.json';
-	st.write_atomic(job, sprintf('%J
-', { action: cmd, running: true }));
+	st.write_atomic(job, sprintf('%J\n', { action: cmd, running: true }));
 	let e = null;
 	try {
 		if (cmd == 'dns_analyze') dns.analyze();
@@ -294,10 +302,10 @@ else if (cmd == 'dns_analyze' || cmd == 'dns_enable' || cmd == 'dns_restore' || 
 		else if (cmd == 'dns_set') { e = dns.apply(st.read_json('/tmp/dpishell/dns_set.json', {}).preset); if (!e) dns.analyze(); }
 		else e = dns.restore();
 	} catch (x) { e = `${x}`; }
-	st.write_atomic(job, sprintf('%J
-', { action: cmd, running: false, ok: !e, message: e ?? 'Готово', at: time() }));
+	st.write_atomic(job, sprintf('%J\n', { action: cmd, running: false, ok: !e, message: e ?? 'Готово', at: time() }));
 	let ds = st.read_json('/etc/dpishell/dns-status.json', {});
-	warn('dns_spoofed', ds.spoofed && dns.status().mode != 'doh' ? 'DNS провайдера подменяет адреса — приложения вне браузера могут не работать' : null);
+	warn('dns_spoofed', ds.spoofed && dns.status().mode != 'doh' ? 'Провайдер подменяет адреса сайтов — приложения вне браузера могут не работать' : null,
+		'web.warn.dns_spoofed');
 	unlink(l);
 }
 else if (cmd == 'site_check') {

@@ -169,3 +169,13 @@ common.nav.select
 common.nav.dns
 common.nav.diag
 common.nav.about
+router.off.button_at
+router.off.revert_enable_at
+router.off.revert_strategy_at
+router.off.watchdog_at
+router.select.starting
+router.warn.flow_offload
+router.warn.ipv6
+router.wd.select_failed
+router.wd.select_found
+select.result.nothing_blocked
