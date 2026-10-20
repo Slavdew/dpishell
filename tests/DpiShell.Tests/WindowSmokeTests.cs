@@ -53,7 +53,7 @@ public sealed partial class WindowSmokeTests
 
     static readonly object Gate = new();
 
-    static void RunUi(Action body)
+    internal static void RunUi(Action body)
     {
         lock (Gate)
         {
@@ -67,7 +67,7 @@ public sealed partial class WindowSmokeTests
         }
     }
 
-    static List<string> WithBindingErrors(Action body)
+    internal static List<string> WithBindingErrors(Action body)
     {
         var errors = new BindingErrors();
         RunUi(() =>
@@ -81,7 +81,7 @@ public sealed partial class WindowSmokeTests
         return errors.Lines;
     }
 
-    static T? Find<T>(DependencyObject root, Func<T, bool>? match = null) where T : DependencyObject
+    internal static T? Find<T>(DependencyObject root, Func<T, bool>? match = null) where T : DependencyObject
     {
         if (root is T t && (match is null || match(t))) return t;
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
@@ -89,7 +89,7 @@ public sealed partial class WindowSmokeTests
         return null;
     }
 
-    static IEnumerable<T> FindAll<T>(DependencyObject root, Func<T, bool>? match = null) where T : DependencyObject
+    internal static IEnumerable<T> FindAll<T>(DependencyObject root, Func<T, bool>? match = null) where T : DependencyObject
     {
         if (root is T t && (match is null || match(t))) yield return t;
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
@@ -105,10 +105,10 @@ public sealed partial class WindowSmokeTests
         t.GetAwaiter().GetResult();
     }
 
-    static void Pump() => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+    internal static void Pump() => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
 
     /// <summary>Окно за экраном, без активации и панели задач. Таймеры окна остановлены: они ходят в sc.exe.</summary>
-    static MainWindow Open(MainViewModel vm)
+    internal static MainWindow Open(MainViewModel vm)
     {
         var w = new MainWindow(vm)
         {
@@ -123,7 +123,7 @@ public sealed partial class WindowSmokeTests
     }
 
     /// <summary>Спрятать окно и убрать значок из трея (иначе висит до конца процесса).</summary>
-    static void Close(MainWindow w)
+    internal static void Close(MainWindow w)
     {
         w.Hide();
         (Field(w, "_tray") as IDisposable)?.Dispose();
@@ -132,7 +132,7 @@ public sealed partial class WindowSmokeTests
     static object? Field(object o, string name) =>
         o.GetType().GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.GetValue(o);
 
-    static void SetProp(object o, string name, object? value) => o.GetType().GetProperty(name)!.SetValue(o, value);
+    internal static void SetProp(object o, string name, object? value) => o.GetType().GetProperty(name)!.SetValue(o, value);
 
     /// <summary>Окно с настоящим помощником над временной папкой этого Shell (подключён до открытия окна).</summary>
     static (MainViewModel, HelperFixture) WithPcHelper(Shell shell, WindowSettings settings)
@@ -1375,7 +1375,7 @@ public sealed partial class WindowSmokeTests
     /// Разделы docs/info-texts.md: заголовок «## …» → текст (обратные кавычки разметки убраны). Абзацы — через пустую строку «\n\n»:
     /// первый — ответ «когда включать» (UX-аудит, п. 25), в карточке он жирный.
     /// </summary>
-    static Dictionary<string, string> DocInfoTexts()
+    internal static Dictionary<string, string> DocInfoTexts()
     {
         var root = Directory.GetParent(Repo.Data)!.FullName;
         var map = new Dictionary<string, string>();
@@ -1409,7 +1409,7 @@ public sealed partial class WindowSmokeTests
     public void InfoButtons_EveryDocSection_HasButton_WithDocText()
     {
         var doc = DocInfoTexts();
-        Assert.Equal(19, doc.Count);
+        Assert.Equal(InfoTexts.All.Count, doc.Count);
         using var tmp = new TempDir();
         using var fake = new FakeRouter { KillSwitch = true };   // «Сторож» в «Проверять сам» — у роутера со сторожем
         var seen = new Dictionary<string, string>();
@@ -1431,7 +1431,7 @@ public sealed partial class WindowSmokeTests
                 Pump();
                 var buttons = new List<InfoButton>();
                 Collect(Find<TabControl>(w)!, buttons);
-                foreach (var b in buttons.Where(b => b.IsVisible)) seen[b.Topic ?? ""] = b.Text;
+                foreach (var b in buttons.Where(b => b.IsVisible)) seen[InfoTexts.Title(b.Topic)] = b.Text;
             }
             // «Сайты» роутера: «Сайт не открывается» и «Для каких сайтов обход» — с переключателем «На роутере».
             vm.Router.TargetsOnRouter = true;
@@ -1439,7 +1439,7 @@ public sealed partial class WindowSmokeTests
             Pump();
             var routerSites = new List<InfoButton>();
             Collect(Find<TabControl>(w)!, routerSites);
-            foreach (var b in routerSites.Where(b => b.IsVisible)) seen[b.Topic ?? ""] = b.Text;
+            foreach (var b in routerSites.Where(b => b.IsVisible)) seen[InfoTexts.Title(b.Topic)] = b.Text;
             Close(w);
         });
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
@@ -1530,9 +1530,12 @@ public sealed partial class WindowSmokeTests
     static void AssertServiceMode(Window w, MainViewModel vm)
     {
         var mode = Find<CheckBox>(Find<TabControl>(w)!, c => BindingOperations.GetBinding(c, ToggleButton.IsCheckedProperty)?.Path.Path == "ServiceMode")
-            ?? throw new Exception("Нет галочки «Оптимизация работает, даже когда программа закрыта»");
-        if (mode.Content as string != "Оптимизация работает, даже когда программа закрыта") throw new Exception($"Галочка режима называется «{mode.Content}»");
+            ?? throw new Exception("Нет галочки «Режим службы»");
+        if (mode.Content as string != "Режим службы") throw new Exception($"Галочка режима называется «{mode.Content}»");
         if (mode.IsChecked != (vm.Helper.Status?.RunMode != "process")) throw new Exception("Галочка режима не совпадает с режимом помощника");
+        // Пояснение под галочкой — коротко, без первого лица: что будет в этом режиме.
+        var hint = vm.ServiceMode ? "Оптимизация работает без окна и запускается после перезагрузки" : "Оптимизация работает, только пока программа открыта";
+        if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == hint && t.IsVisible) is null) throw new Exception($"Под галочкой режима нет «{hint}»");
     }
 
     static void AssertPage(Window w, bool dark)
@@ -2073,8 +2076,8 @@ public sealed partial class WindowSmokeTests
                 var clean = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Очистка и удаление")!;
                 var tabsRoot = Find<TabControl>(w)!;
                 if (Card().TranslatePoint(new Point(0, 0), tabsRoot).Y >= clean.TranslatePoint(new Point(0, 0), tabsRoot).Y)
-                    throw new Exception("«Что сделала DpiShell» должна стоять над «Очисткой и удалением»");
-                if (!Has("Что сделала DpiShell") || !Has("Отменить всё") || !Has("Вернутся значения, которые были до DpiShell; ваши более поздние правки не трогаем."))
+                    throw new Exception("«Изменения DpiShell» должны стоять над «Очисткой и удалением»");
+                if (!Has("Изменения DpiShell") || !Has("Отменить всё") || !Has("Вернутся значения, которые были до DpiShell; более поздние правки не затрагиваются."))
                     throw new Exception("В карточке нет заголовка, кнопки или обещания");
                 if (!Has("Пока ничего: DpiShell ещё не меняла настройки этого компьютера.")) throw new Exception("Нет пустого состояния");
                 if (Find<Button>(Card(), b => b.Content as string == "Отменить всё")!.IsEnabled) throw new Exception("«Отменить всё» активна при пустом журнале");
@@ -2090,7 +2093,15 @@ public sealed partial class WindowSmokeTests
                 WaitUi(vm.Changes.RefreshAsync());
                 Pump();
                 if (vm.Changes.Items.Count != 4 || !Find<Button>(Card(), b => b.Content as string == "Отменить всё")!.IsEnabled) throw new Exception("Список записей не появился");
-                if (!Has("DNS этого компьютера: Google — Ethernet")) throw new Exception("Нет строки записи");
+                // Список свёрнут, в заголовке — число пунктов; «Отменить всё» доступна и так. Раскрывается — строки видны.
+                var list = (Expander)w.FindName("ChangesList")!;
+                if (list.IsExpanded || list.Header as string != "4 пункта") throw new Exception($"Список изменений не свёрнут или заголовок «{list.Header}»");
+                if (Has("DNS этого компьютера: Google — Ethernet")) throw new Exception("Строки видны в свёрнутом списке");
+                ScrollToCard();
+                Shot("collapsed");
+                list.IsExpanded = true;
+                Pump();
+                if (!vm.Changes.ListOpen || !Has("DNS этого компьютера: Google — Ethernet")) throw new Exception("Нет строки записи");
                 ScrollToCard();
                 Shot("list");
 
@@ -2118,7 +2129,7 @@ public sealed partial class WindowSmokeTests
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
 
-    static void Snap(Window w, string file)
+    internal static void Snap(Window w, string file)
     {
         var root = (FrameworkElement)VisualTreeHelper.GetChild(w, 0);
         Save(root, file);
@@ -2136,7 +2147,7 @@ public sealed partial class WindowSmokeTests
         return bmp;
     }
 
-    static void Save(FrameworkElement e, string file)
+    internal static void Save(FrameworkElement e, string file)
     {
         var enc = new PngBitmapEncoder();
         enc.Frames.Add(BitmapFrame.Create(Render(e)));

@@ -27,7 +27,6 @@ public sealed record ChangeReportRow(string Title, string Status, string Note, s
 /// </summary>
 public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window) : Observable
 {
-    static readonly CultureInfo Ru = new("ru-RU");
 
     public ObservableCollection<ChangeRow> Items { get; } = [];
     public ObservableCollection<ChangeReportRow> Report { get; } = [];
@@ -38,7 +37,14 @@ public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window)
     /// <summary>Одна операция за раз под строкой состояния окна (MainViewModel.Guard).</summary>
     public Func<string, Func<Task>, Task<bool>> Guard { get; set; } = async (_, work) => { await work(); return true; };
 
-    public const string Promise = "Вернутся значения, которые были до DpiShell; ваши более поздние правки не трогаем.";
+    public static string Promise => L.T("settings.changes.hint");
+
+    /// <summary>Заголовок свёрнутого списка: «5 пунктов».</summary>
+    public string CountText => L.Plural("settings.changes.count", Items.Count);
+
+    bool _listOpen;
+    /// <summary>Список пунктов раскрыт (по умолчанию свёрнут; «Отменить всё» видна и так).</summary>
+    public bool ListOpen { get => _listOpen; set => Set(ref _listOpen, value); }
 
     public ChangeUndoEngine WindowEngine => window;
 
@@ -64,7 +70,7 @@ public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window)
     public ICommand UndoAllCmd => _undoAll ??= RelayCommand.Async(() => UndoAllAsync(), () => HasItems);
     ICommand? _undoAll;
 
-    static string When(DateTime utc) => utc.ToLocalTime().ToString("d MMMM yyyy, HH:mm", Ru);
+    static string When(DateTime utc) => L.LongDate(utc.ToLocalTime()) + ", " + L.Time(utc.ToLocalTime());
 
     /// <summary>Перечитать оба журнала.</summary>
     public async Task RefreshAsync()
@@ -91,7 +97,7 @@ public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window)
 
     void RaiseShape()
     {
-        Raise(nameof(HasItems)); Raise(nameof(ShowEmpty)); Raise(nameof(HasReport));
+        Raise(nameof(HasItems)); Raise(nameof(ShowEmpty)); Raise(nameof(HasReport)); Raise(nameof(CountText));
         CommandManager.InvalidateRequerySuggested();
     }
 

@@ -53,6 +53,22 @@ public sealed partial class MainViewModel : Observable
     public Autostart Autostart { get; }
     /// <summary>«Отменить всё, что сделала DpiShell» (Настройки): журнал помощника и журнал окна.</summary>
     public ChangesViewModel Changes { get; }
+    /// <summary>Язык окна: значок внизу меню, «Настройки» → «Язык», шаблон перевода (docs/localization.md).</summary>
+    public LangViewModel Lang { get; }
+    /// <summary>«Выгрузить шаблон перевода» («Настройки» → «Для опытных»): файл рядом с window.json, папка открывается.</summary>
+    public ICommand ExportLangTemplateCmd => _exportLangCmd ??= new RelayCommand(() =>
+    {
+        try
+        {
+            var file = Lang.ExportTemplate();
+            Message = L.T("settings.lang.template.saved", new { path = file });
+            OpenFolderAction(Path.GetDirectoryName(file)!);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Fail(Texts.Friendly(e)); }
+    });
+    ICommand? _exportLangCmd;
+    /// <summary>Открыть папку в Проводнике (в тестах подменяется).</summary>
+    public Action<string> OpenFolderAction { get; set; }
     /// <summary>Вкладка «Прокси»: системный прокси Windows, свои прокси, проверка.</summary>
     public ProxyViewModel Proxy { get; }
     /// <summary>Уведомление в трей (окно может быть свёрнуто): «Все адреса» закончились, адрес в hosts устарел.</summary>
@@ -91,6 +107,7 @@ public sealed partial class MainViewModel : Observable
             IsBusy = () => Busy,
         };
         Autostart = new Autostart(settings) { Say = s => Message = s, Fail = Fail };
+        Lang = new LangViewModel(settings);
 
         RetryCmd = RelayCommand.Async(InitializeAsync, () => ShowLoadActions);
         OpenWithoutHelperCmd = RelayCommand.Async(OpenWithoutHelperAsync, () => ShowLoadActions);
@@ -114,6 +131,7 @@ public sealed partial class MainViewModel : Observable
 
         RefreshDiagCmd = RelayCommand.Async(RefreshDiagAsync, () => !IsLoading && !DiagRefreshing);
         RepairCoreCmd = RelayCommand.Async(RepairCoreAsync, () => !Busy && !IsLoading);
+        OpenFolderAction = OpenFolder;
         OpenLogsCmd = new RelayCommand(() => OpenFolder(Path.Combine(WindowSettings.DefaultDir, "logs")));
         OpenResultsCmd = RelayCommand.Async(OpenResultsAsync);
         RemoveServiceCmd = RelayCommand.Async(RemoveServiceAsync, () => !Busy && !IsLoading);
@@ -433,7 +451,7 @@ public sealed partial class MainViewModel : Observable
         }
     }
 
-    public const string ReadyText = "Готово.";
+    public static string ReadyText => L.T("common.ready");
     /// <summary>Сколько сообщение висит в строке состояния, прежде чем вернётся «Готово.».</summary>
     public TimeSpan MessageLifetime { get; set; } = TimeSpan.FromSeconds(10);
 
@@ -677,7 +695,7 @@ public sealed partial class MainViewModel : Observable
         Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); RaiseSitesDirty();
         Router.PcChanged();
         Raise(nameof(StrategyHeader));
-        Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint)); Raise(nameof(HasCloseHint));
+        RaiseRunMode();
         // Автозапуск по умолчанию следует за режимом — когда режим известен (помощник ответил).
         if (Live is not null) Autostart.OnRunMode(ServiceMode);
         Updates.Refresh();
@@ -846,9 +864,27 @@ public sealed partial class MainViewModel : Observable
         set { if (value != ServiceMode) _ = SetRunModeAsync(value); }
     }
 
-    public string RunModeHint => ServiceMode
-        ? "Оптимизация работает и без окна, обычно запускается сама после перезагрузки (если нет — «Диагностика»)"
-        : "Сейчас оптимизация работает, только пока программа открыта (в окне или в трее).";
+    public string RunModeHint => L.T(ServiceMode ? "settings.service.on" : "settings.service.off");
+
+    /// <summary>
+    /// Главная, под «Включить»: без службы — кнопка «Установить службу»; в режиме службы — надпись. «Служба установлена» — только когда
+    /// служба Windows уже есть (её создаёт первое включение оптимизации); до этого честнее «Режим службы».
+    /// </summary>
+    public bool ShowInstallService => !ServiceMode;
+    public bool ShowServiceInstalled => ServiceMode;
+    public string ServiceStateText => L.T(ServiceExists ? "home.service.installed" : "home.service.mode");
+    public string ServiceStateTip => ServiceExists ? "" : L.T("home.service.mode.tip");
+    public bool HasServiceStateTip => !ServiceExists;
+    bool ServiceExists => _svc is not (SvcState.NotInstalled or SvcState.Unknown);
+    /// <summary>«Установить службу»: режим службы через помощника (нет помощника — предложит поставить, как у других действий).</summary>
+    public ICommand InstallServiceCmd => _installServiceCmd ??= RelayCommand.Async(() => SetRunModeAsync(true), () => !Busy && !IsLoading);
+    ICommand? _installServiceCmd;
+
+    void RaiseRunMode()
+    {
+        Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint)); Raise(nameof(HasCloseHint));
+        Raise(nameof(ShowInstallService)); Raise(nameof(ShowServiceInstalled)); Raise(nameof(ServiceStateText)); Raise(nameof(ServiceStateTip)); Raise(nameof(HasServiceStateTip));
+    }
 
     async Task SetRunModeAsync(bool service)
     {
@@ -858,7 +894,7 @@ public sealed partial class MainViewModel : Observable
             await FetchAsync(full: false);
         });
         // И при отказе (идёт другая операция, нет помощника) — галочка показывает настоящий режим.
-        Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint)); Raise(nameof(HasCloseHint));
+        RaiseRunMode();
         await RefreshStatusAsync();
     }
 
@@ -1082,7 +1118,7 @@ public sealed partial class MainViewModel : Observable
             // В тех же единицах, что и отметки рядом (п. 5): группы, а не адреса; адреса — в «Подробнее».
             CheckSummary = $"Открывается {CheckGroups.Count(g => g.Ok)} из {CheckGroups.Count}";
             // «Было» — итог до включения: виден, чтобы не гадать, помогло ли.
-            CheckedAt = $"в {DateTime.Now:HH:mm}" + (Covered && _checkWas is { } w ? $" · было {w.Ok} из {w.Total}" : "");
+            CheckedAt = $"в {L.Time(DateTime.Now)}" + (Covered && _checkWas is { } w ? $" · было {w.Ok} из {w.Total}" : "");
         }
         catch (Exception e)
         {
@@ -1773,7 +1809,7 @@ public sealed partial class MainViewModel : Observable
             Findings.Clear();
             foreach (var f in findings) Findings.Add(new FindingRow(f.Ok, f.Title, f.Text, f.Go));
             OnHelperChanged();
-            DiagUpdated = $"обновлено в {DateTime.Now:HH:mm}";
+            DiagUpdated = $"обновлено в {L.Time(DateTime.Now)}";
         }
         catch (Exception e) { Fail(Texts.Friendly(e)); }
         finally { DiagRefreshing = false; }
@@ -1876,8 +1912,8 @@ public sealed partial class MainViewModel : Observable
         Raise(nameof(CloseTray)); Raise(nameof(CloseExit));
     }
 
-    /// <summary>Только без «Обход работает, даже когда программа закрыта» (UX-аудит 2, п. 12): с ней подсказка под галочкой уже всё сказала.</summary>
-    public string CloseHint => ServiceMode ? "" : "Закрытие программы выключит оптимизацию.";
+    /// <summary>Только без «Режима службы» (UX-аудит 2, п. 12): с ней подсказка под галочкой уже всё сказала.</summary>
+    public string CloseHint => ServiceMode ? "" : L.T("settings.close.hint");
     public bool HasCloseHint => CloseHint.Length > 0;
 
     /// <summary>Восстановить ядро — помощник останавливает обход, ставит файлы заново и возвращает как было.</summary>

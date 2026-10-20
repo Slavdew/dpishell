@@ -85,7 +85,7 @@ public sealed class ChangesWindowTests : IDisposable
 
         f.Backend.UndoAnswer = UndoStatus.Restored;
         Assert.True(await vm.Changes.UndoAllAsync());
-        Assert.Contains("Вернутся значения, которые были до DpiShell; ваши более поздние правки не трогаем.", asked);
+        Assert.Contains("Вернутся значения, которые были до DpiShell; более поздние правки не затрагиваются.", asked);
         Assert.DoesNotContain("обход", asked, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("changes_undo_all", f.Backend.Calls);
         Assert.Equal(3, vm.Changes.Report.Count);

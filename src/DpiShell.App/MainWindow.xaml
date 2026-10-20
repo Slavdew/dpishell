@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:DpiShell.App"
+        xmlns:l="clr-namespace:DpiShell.App"
         Title="DpiShell" Height="640" Width="960" MinHeight="480" MinWidth="760"
         Background="{DynamicResource Page}" Foreground="{DynamicResource Text}" FontFamily="Segoe UI" FontSize="14"
         WindowStartupLocation="CenterScreen">
@@ -27,7 +28,7 @@
             <TabControl Style="{StaticResource Nav}" SelectedIndex="{Binding Page}">
 
                 <!-- ===== Главная ===== -->
-                <TabItem Header="Главная">
+                <TabItem Header="{l:T common.nav.home}">
                     <!-- UX-аудит, «Главная»: одно главное действие — выключатель, итог проверки — в карточке состояния;
                          ниже роутер одной строкой, помехи (раскрыта только самая важная) и, по «Сменить стратегию», список стратегий. -->
                     <Grid>
@@ -81,7 +82,7 @@
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{Binding RecommendedDnsText}" Command="{Binding FixDnsCmd}" ToolTip="{Binding RecommendedDnsHint}"
                                                     HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="{Binding ShowBrowserDnsFix, Converter={StaticResource Vis}}" />
                                         </StackPanel>
-                                        <Expander Header="Подробнее" Margin="0,6,0,0" Visibility="{Binding CheckRows.Count, Converter={StaticResource NonZero}}">
+                                        <Expander Header="{l:T common.more}" Margin="0,6,0,0" Visibility="{Binding CheckRows.Count, Converter={StaticResource NonZero}}">
                                             <ItemsControl ItemsSource="{Binding CheckRows}" ItemTemplate="{StaticResource VerdictRow}" Margin="0,4,0,0" />
                                         </Expander>
                                     </StackPanel>
@@ -113,6 +114,16 @@
                                     </StackPanel>
                                     <TextBlock Text="{Binding DirectMessage}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,6,0,0"
                                                Visibility="{Binding HasDirectMessage, Converter={StaticResource Vis}}" />
+                                </StackPanel>
+                                <!-- Служба (решение владельца): без неё — «Установить службу», с ней — надпись и «(i)». Под выключателем, прижато к низу справа. -->
+                                <StackPanel Grid.Column="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="16,12,0,0" Orientation="Horizontal">
+                                    <Button ContentTemplate="{StaticResource Shield}" Content="{l:T home.service.install}" Style="{StaticResource LinkButton}" Command="{Binding InstallServiceCmd}"
+                                            ToolTip="{l:T home.service.install.tip}" Visibility="{Binding ShowInstallService, Converter={StaticResource Vis}}" />
+                                    <StackPanel Orientation="Horizontal" Visibility="{Binding ShowServiceInstalled, Converter={StaticResource Vis}}">
+                                        <TextBlock Text="{Binding ServiceStateText}" Style="{StaticResource Hint}" VerticalAlignment="Center" ToolTip="{Binding ServiceStateTip}"
+                                                   ToolTipService.IsEnabled="{Binding HasServiceStateTip}" />
+                                        <local:InfoButton Topic="{x:Static local:InfoTexts.Service}" Margin="6,0,0,0" />
+                                    </StackPanel>
                                 </StackPanel>
                                 <!-- Выключатель. Обход делает роутер — кнопка ПК второстепенная: «Включить и на этом ПК». -->
                                 <StackPanel Grid.Column="2" VerticalAlignment="Top" Margin="16,6,0,0">
@@ -336,7 +347,7 @@
                 </TabItem>
 
                 <!-- ===== Подбор ===== -->
-                <TabItem Header="Подбор">
+                <TabItem Header="{l:T common.nav.select}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -643,7 +654,7 @@
                 </TabItem>
 
                 <!-- ===== Сайты: свои сайты, исключения, «Сайт не открывается», «Для каких сайтов обход» (последние три — только для роутера). ===== -->
-                <TabItem Header="Сайты">
+                <TabItem Header="{l:T common.nav.sites}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -742,7 +753,7 @@
                                         <TextBlock Text="{Binding SiteHint}" Style="{StaticResource Hint}" Margin="0,2,0,0" TextWrapping="Wrap" />
                                         <Button Content="Добавить в исключения" Style="{StaticResource Primary}" Command="{Binding AddExcludeCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
                                                 Visibility="{Binding SiteSuggestExclude, Converter={StaticResource Vis}}" />
-                                        <Expander Header="Подробнее" Margin="0,6,0,0" Visibility="{Binding HasSiteDetail, Converter={StaticResource Vis}}">
+                                        <Expander Header="{l:T common.more}" Margin="0,6,0,0" Visibility="{Binding HasSiteDetail, Converter={StaticResource Vis}}">
                                             <TextBlock Text="{Binding SiteDetail}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" />
                                         </Expander>
                                     </StackPanel>
@@ -840,7 +851,7 @@
                 </TabItem>
 
                 <!-- ===== Игры и программы: запись подключений и профили (ТЗ 13), игровой режим, IP-списки в «Дополнительно» ===== -->
-                <TabItem Header="Игры и программы">
+                <TabItem Header="{l:T common.nav.apps}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <!-- Подключения программ (ТЗ 13): простой режим «Настроить под игру», сохранённые профили, для опытных — «Отладка подключений». -->
@@ -863,7 +874,7 @@
                                             <!-- Коротко: решение «нужна мне UDP или нет» не должно тонуть в четырёх строках про драйвер (UX-аудит 7, п. 15). -->
                                             <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="26,2,0,0"
                                                        Text="Нужен драйвер WinDivert. Игры с защитой от читов могут его заметить — не включайте, если не уверены." />
-                                            <Expander Header="Подробнее" Margin="22,2,0,0" FontSize="13">
+                                            <Expander Header="{l:T common.more}" Margin="22,2,0,0" FontSize="13">
                                                 <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="4,2,0,0"
                                                            Text="Драйвер нужен только на время записи. Без галочки записываются только соединения TCP. Если оптимизация уже включена, драйвер и так работает." />
                                             </Expander>
@@ -1103,7 +1114,7 @@
                 </TabItem>
 
                 <!-- ===== Починить адреса (hosts, 09-features-spec §3; ТЗ 12: примерка строк, свои строки, проверка hosts) ===== -->
-                <TabItem Header="Починить адреса">
+                <TabItem Header="{l:T common.nav.hosts}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel DataContext="{Binding Hosts}">
                             <StackPanel.Resources>
@@ -1121,7 +1132,7 @@
                                             <StackPanel Grid.Column="1">
                                                 <TextBlock FontFamily="Consolas" FontSize="14" TextWrapping="Wrap"><Run Text="{Binding Ip, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding Host, Mode=OneWay}" FontWeight="SemiBold" /></TextBlock>
                                                 <TextBlock Text="{Binding Detail}" Style="{StaticResource Hint}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" />
-                                                <Expander Header="Подробнее" FontSize="12" Margin="0,2,0,0" Visibility="{Binding HasTechnical, Converter={StaticResource Vis}}">
+                                                <Expander Header="{l:T common.more}" FontSize="12" Margin="0,2,0,0" Visibility="{Binding HasTechnical, Converter={StaticResource Vis}}">
                                                     <TextBlock Text="{Binding Technical}" Style="{StaticResource Hint}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" />
                                                 </Expander>
                                             </StackPanel>
@@ -1407,7 +1418,7 @@
                 </TabItem>
 
                 <!-- ===== DNS этого компьютера: проверка подмены и выбор DNS (раньше лежало на «Диагностике» — владелец: неочевидно). ===== -->
-                <TabItem Header="DNS">
+                <TabItem Header="{l:T common.nav.dns}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,4">
@@ -1478,7 +1489,7 @@
                 </TabItem>
 
                 <!-- ===== Прокси: системный прокси Windows, свои прокси, «Включить» / «Очистить» / «Вернуть прежний», проверка. ===== -->
-                <TabItem Header="Прокси">
+                <TabItem Header="{l:T common.nav.proxy}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,4">
@@ -1615,7 +1626,7 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                    <Expander Header="Подробнее" Margin="0,4,0,0">
+                                    <Expander Header="{l:T common.more}" Margin="0,4,0,0">
                                         <ItemsControl ItemsSource="{Binding HintsMore}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
@@ -1631,7 +1642,7 @@
                 </TabItem>
 
                 <!-- ===== Диагностика: только проверки и исправления (UX-аудит п. 12); настройки, обновления, помощник — во вкладке «Настройки». ===== -->
-                <TabItem Header="Диагностика">
+                <TabItem Header="{l:T common.nav.diag}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,4">
@@ -1655,7 +1666,7 @@
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <TextBlock><Run Text="Оптимизация: " Foreground="{DynamicResource Muted}" /><Run Text="{Binding ServiceText, Mode=OneWay}" /></TextBlock>
-                                    <Expander Header="Подробнее" Margin="0,8,0,0">
+                                    <Expander Header="{l:T common.more}" Margin="0,8,0,0">
                                         <Grid Margin="0,6,0,0">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="170" />
@@ -1684,7 +1695,7 @@
                                     <!-- Путь не переписывать руками: «Скопировать путь» и сразу «Безопасность Windows» (п. 16). -->
                                     <TextBlock Text="Чтобы не повторилось, добавьте эту папку в исключения антивируса:" Style="{StaticResource Hint}" Margin="0,6,0,0" TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding CoreFolder}" local:Demo.Sensitive="True" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding CoreFolder}" />
-                                    <Expander Header="Подробнее" Margin="0,4,0,0">
+                                    <Expander Header="{l:T common.more}" Margin="0,4,0,0">
                                         <TextBlock Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
                                                    Text="В Защитнике Windows: «Защита от вирусов и угроз» → «Управление настройками» → «Исключения» → «Добавить» → «Папка» (названия могут отличаться). В другом антивирусе — в его настройках." />
                                     </Expander>
@@ -1763,6 +1774,20 @@
                                 </DockPanel>
                             </Border>
 
+                            <!-- Свои переводы, которые не взяты (битый файл, неверные строки): причина — здесь (docs/localization.md). -->
+                            <Border Style="{StaticResource Card}" DataContext="{Binding Lang}" Visibility="{Binding HasProblems, Converter={StaticResource Vis}}">
+                                <StackPanel>
+                                    <TextBlock Text="{l:T common.lang.problems}" Style="{StaticResource H2}" />
+                                    <ItemsControl ItemsSource="{Binding Problems}" local:Demo.Sensitive="True">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
                             <!-- Для вопроса о проблеме: журнал. («Роутер: что мешает» — на вкладке «Роутер».) -->
                             <WrapPanel>
                                 <Button Content="Папка логов" Command="{Binding OpenLogsCmd}" />
@@ -1774,7 +1799,7 @@
 
                 <!-- ===== Роутер (router-api §5–6): обход, «Роутер: что мешает», DNS для всей сети (режим и «Сайт не открывается» — на «Сайтах»), «Проверять сам», подключение.
                      Видна всегда (п. 47): роутер не найден — пустое состояние, что можно сделать, и адрес. ===== -->
-                <TabItem Header="Роутер">
+                <TabItem Header="{l:T common.nav.router}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Router}">
                         <StackPanel>
                             <TextBlock Text="Роутер" Style="{StaticResource H1}" />
@@ -1820,7 +1845,7 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                    <Expander Header="Подробнее" Margin="0,6,0,0" Visibility="{Binding HasUpdateLog, Converter={StaticResource Vis}}">
+                                    <Expander Header="{l:T common.more}" Margin="0,6,0,0" Visibility="{Binding HasUpdateLog, Converter={StaticResource Vis}}">
                                         <TextBox Text="{Binding UpdateLog, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Padding="6,4" Margin="0,4,0,0"
                                                  MaxHeight="220" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Журнал обновления" />
                                     </Expander>
@@ -1851,7 +1876,7 @@
                                         <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center" Text="DpiShell на роутере уже стоит?" />
                                         <Button Content="Найти" Style="{StaticResource LinkButton}" Command="{Binding FindCmd}" Margin="6,0,0,0" VerticalAlignment="Center" />
                                     </StackPanel>
-                                    <Expander Header="Подробнее" Margin="0,6,0,0">
+                                    <Expander Header="{l:T common.more}" Margin="0,6,0,0">
                                         <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0"
                                                    Text="DpiShell ставится на роутеры с прошивкой OpenWrt (на многие модели с OpenWrt 25.x). Проверить самому: откройте в браузере адрес роутера (обычно 192.168.1.1) — у OpenWrt страница входа называется LuCI." />
                                     </Expander>
@@ -1905,7 +1930,7 @@
                                                         <Button Content="Не сейчас" Command="{Binding DismissOfferCmd}" />
                                                     </WrapPanel>
                                                 </StackPanel>
-                                                <Expander Header="Подробнее" Margin="0,4,0,0" Visibility="{Binding HasOffDetails, Converter={StaticResource Vis}}">
+                                                <Expander Header="{l:T common.more}" Margin="0,4,0,0" Visibility="{Binding HasOffDetails, Converter={StaticResource Vis}}">
                                                     <StackPanel Margin="0,4,0,0">
                                                         <TextBlock Text="{Binding OffDetail}" Style="{StaticResource Hint}" TextWrapping="Wrap"
                                                                    Visibility="{Binding HasOffDetail, Converter={StaticResource Vis}}" />
@@ -2081,7 +2106,7 @@
                                         <!-- Варианты для всей сети — тот же выбор, что для этого компьютера (свои — общие). -->
                                         <local:DnsPickerView x:Name="RouterDnsPicker" DataContext="{Binding DnsPick}" Margin="0,10,0,0"
                                                              Visibility="{Binding DataContext.DnsPresetsAvailable, RelativeSource={RelativeSource AncestorType=Border}, Converter={StaticResource Vis}}" />
-                                        <Expander Header="Подробнее" IsExpanded="{Binding DnsDetailsOpen}" Visibility="{Binding DnsServers.Count, Converter={StaticResource NonZero}}">
+                                        <Expander Header="{l:T common.more}" IsExpanded="{Binding DnsDetailsOpen}" Visibility="{Binding DnsServers.Count, Converter={StaticResource NonZero}}">
                                             <ItemsControl ItemsSource="{Binding DnsServers}" Margin="0,4,0,0">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
@@ -2181,7 +2206,7 @@
                 </TabItem>
 
                 <!-- ===== Настройки (UX-аудит п. 12): работа, вид, обновления, помощник, данные, удаление. ===== -->
-                <TabItem Header="Настройки">
+                <TabItem Header="{l:T common.nav.settings}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <TextBlock Text="Настройки" Style="{StaticResource H1}" />
@@ -2190,7 +2215,7 @@
                                 <StackPanel>
                                     <TextBlock Text="Работа" Style="{StaticResource H2}" />
                                     <!-- Режим службы (п. 4 аудита): настройка «на один раз», не действие главной. -->
-                                    <CheckBox Content="Оптимизация работает, даже когда программа закрыта" IsChecked="{Binding ServiceMode}" IsEnabled="{Binding CanChoose}" HorizontalAlignment="Left" Margin="0,4,0,0" />
+                                    <CheckBox Content="{l:T settings.service.mode}" IsChecked="{Binding ServiceMode}" IsEnabled="{Binding CanChoose}" HorizontalAlignment="Left" Margin="0,4,0,0" />
                                     <TextBlock Text="{Binding RunModeHint}" Style="{StaticResource Hint}" Margin="26,2,0,0" />
                                     <!-- Автозапуск окна при входе (architecture.md «Окно, трей, автозапуск»): ключ Run пользователя, окно — в трее. -->
                                     <CheckBox Content="Запускать вместе с Windows (в трее)" IsChecked="{Binding Autostart.Enabled}" Margin="0,12,0,0" HorizontalAlignment="Left" />
@@ -2209,6 +2234,11 @@
                                     <TextBlock Text="Для опытных" Style="{StaticResource H2}" />
                                     <CheckBox Content="Показывать инструменты для опытных" IsChecked="{Binding ShowAdvancedSetting}" HorizontalAlignment="Left" Margin="0,4,0,0" />
                                     <TextBlock Text="Сейчас это «Отладка подключений» на вкладке «Игры и программы»: запись подключений программы, выбор нужных и сохранение профиля." Style="{StaticResource Hint}" Margin="26,2,0,0" TextWrapping="Wrap" />
+                                    <!-- Шаблон перевода (docs/localization.md): все ключи, английский текст и русский рядом. -->
+                                    <DockPanel Margin="0,12,0,0" Visibility="{Binding ShowAdvancedSetting, Converter={StaticResource Vis}}">
+                                        <Button DockPanel.Dock="Right" Content="{l:T settings.lang.template}" Command="{Binding ExportLangTemplateCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                        <TextBlock Text="{l:T settings.lang.template.hint}" Style="{StaticResource Hint}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    </DockPanel>
                                 </StackPanel>
                             </Border>
 
@@ -2220,6 +2250,30 @@
                                         <RadioButton Content="Светлое" IsChecked="{Binding ThemeLight}" Margin="0,3,24,3" />
                                         <RadioButton Content="Тёмное" IsChecked="{Binding ThemeDark}" Margin="0,3,24,3" />
                                     </WrapPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}" DataContext="{Binding Lang}">
+                                <StackPanel>
+                                    <TextBlock Text="{l:T settings.lang.title}" Style="{StaticResource H2}" />
+                                    <ItemsControl ItemsSource="{Binding Items}" AutomationProperties.Name="{l:T common.lang.name}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <RadioButton GroupName="Language" IsChecked="{Binding IsCurrent}" Margin="0,3,24,3" AutomationProperties.Name="{Binding Name}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <local:FlagIcon Code="{Binding Flag}" />
+                                                        <TextBlock Text="{Binding Name}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </RadioButton>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="{l:T settings.lang.hint}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" />
                                 </StackPanel>
                             </Border>
 
@@ -2242,21 +2296,23 @@
                                     <DockPanel>
                                         <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="Отменить всё" Command="{Binding UndoAllCmd}"
                                                 VerticalAlignment="Center" Margin="12,0,0,0" />
-                                        <TextBlock Text="Что сделала DpiShell" Style="{StaticResource H2}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{l:T settings.changes.title}" Style="{StaticResource H2}" VerticalAlignment="Center" />
                                     </DockPanel>
-                                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap"
-                                               Text="Вернутся значения, которые были до DpiShell; ваши более поздние правки не трогаем." />
+                                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{l:T settings.changes.hint}" />
                                     <TextBlock Text="{Binding EmptyText}" Style="{StaticResource Hint}" Margin="0,8,0,0" Visibility="{Binding ShowEmpty, Converter={StaticResource Vis}}" />
-                                    <ItemsControl ItemsSource="{Binding Items}" Margin="0,8,0,0" Visibility="{Binding HasItems, Converter={StaticResource Vis}}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <DockPanel Margin="0,3">
-                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding When}" Style="{StaticResource Hint}" Margin="12,0,0,0" VerticalAlignment="Top" />
-                                                    <TextBlock Text="{Binding Title}" TextWrapping="Wrap" local:Demo.Sensitive="True" />
-                                                </DockPanel>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
+                                    <Expander x:Name="ChangesList" Header="{Binding CountText}" IsExpanded="{Binding ListOpen}" Margin="0,8,0,0"
+                                              Visibility="{Binding HasItems, Converter={StaticResource Vis}}">
+                                        <ItemsControl ItemsSource="{Binding Items}" Margin="0,4,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <DockPanel Margin="0,3">
+                                                        <TextBlock DockPanel.Dock="Right" Text="{Binding When}" Style="{StaticResource Hint}" Margin="12,0,0,0" VerticalAlignment="Top" />
+                                                        <TextBlock Text="{Binding Title}" TextWrapping="Wrap" local:Demo.Sensitive="True" />
+                                                    </DockPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Expander>
                                     <TextBlock Text="{Binding HelperNote}" Style="{StaticResource Hint}" Margin="0,8,0,0" TextWrapping="Wrap"
                                                Visibility="{Binding HasHelperNote, Converter={StaticResource Vis}}" />
                                     <!-- Отчёт: вернул / уже было как раньше / не тронул (изменено после нас) / не смог — с причиной. -->
@@ -2320,10 +2376,10 @@
                 </TabItem>
 
                 <!-- ===== Информация и обновления: версии и обновления (проверка раз в день, списки ставит помощник, программа — ссылкой на релиз), сведения и лицензии. ===== -->
-                <TabItem AutomationProperties.Name="Информация и обновления">
+                <TabItem AutomationProperties.Name="{l:T common.nav.about}">
                     <!-- Не влезает в пункт меню одной строкой (ширина 168) — перенос по смыслу, без многоточия. -->
                     <TabItem.Header>
-                        <TextBlock>Информация<LineBreak />и обновления</TextBlock>
+                        <TextBlock Text="{l:T common.nav.about.menu}" />
                     </TabItem.Header>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
@@ -2418,13 +2474,13 @@
                                                    Visibility="{Binding HasAppNotice, Converter={StaticResource Vis}}" />
                                         <StackPanel Margin="0,8,0,0" Visibility="{Binding HasAppError, Converter={StaticResource Vis}}" AutomationProperties.LiveSetting="Assertive">
                                             <TextBlock Text="{Binding AppErrorShort}" TextWrapping="Wrap" Foreground="{DynamicResource Danger}" />
-                                            <Expander Header="Подробнее" Margin="0,2,0,0" Visibility="{Binding HasAppErrorMore, Converter={StaticResource Vis}}">
+                                            <Expander Header="{l:T common.more}" Margin="0,2,0,0" Visibility="{Binding HasAppErrorMore, Converter={StaticResource Vis}}">
                                                 <TextBlock Text="{Binding AppErrorMore}" Style="{StaticResource Hint}" Margin="0,2,0,0" FontSize="12" TextWrapping="Wrap" />
                                             </Expander>
-                                            <Button Content="Повторить" Command="{Binding RetryCmd}" HorizontalAlignment="Left" Margin="0,6,0,0" />
+                                            <Button Content="{l:T common.retry}" Command="{Binding RetryCmd}" HorizontalAlignment="Left" Margin="0,6,0,0" />
                                         </StackPanel>
                                         <!-- Ручное скачивание — не рядом с главной кнопкой, а под «Подробнее». -->
-                                        <Expander Header="Подробнее" Margin="0,6,0,0" Visibility="{Binding AppHintOnly, Converter={StaticResource Vis}}">
+                                        <Expander Header="{l:T common.more}" Margin="0,6,0,0" Visibility="{Binding AppHintOnly, Converter={StaticResource Vis}}">
                                             <Button Content="{Binding AppButtonText}" Command="{Binding OpenReleaseCmd}" HorizontalAlignment="Left" Margin="0,4,0,0" />
                                         </Expander>
                                         <WrapPanel Margin="0,10,0,0">
@@ -2503,7 +2559,7 @@
             </Border.Effect>
             <DockPanel>
                 <Button DockPanel.Dock="Right" Content="✕" Style="{StaticResource LinkButton}" Command="{Binding CloseToastCmd}" VerticalAlignment="Center"
-                        Foreground="{DynamicResource Muted}" Margin="4,0,0,0" ToolTip="Закрыть" AutomationProperties.Name="Закрыть сообщение" />
+                        Foreground="{DynamicResource Muted}" Margin="4,0,0,0" ToolTip="{l:T common.close}" AutomationProperties.Name="{l:T common.close_message}" />
                 <Button DockPanel.Dock="Right" Content="{Binding ToastAction}" ContentTemplate="{StaticResource Shield}" Command="{Binding ToastCmd}" VerticalAlignment="Center"
                         Margin="12,0,0,0" Visibility="{Binding HasToastAction, Converter={StaticResource Vis}}" />
                 <TextBlock Text="{Binding Toast}" VerticalAlignment="Center" TextWrapping="Wrap" />
@@ -2529,7 +2585,7 @@
                     </ProgressBar>
                     <!-- Не ответил или отвечает дольше 10 с — выход с первого экрана (UX-аудит, п. 46). -->
                     <WrapPanel Margin="0,4,0,0" Visibility="{Binding ShowLoadActions, Converter={StaticResource Vis}}">
-                        <Button Content="Повторить" Style="{StaticResource Primary}" Command="{Binding RetryCmd}" />
+                        <Button Content="{l:T common.retry}" Style="{StaticResource Primary}" Command="{Binding RetryCmd}" />
                         <Button Content="Открыть без помощника" Command="{Binding OpenWithoutHelperCmd}" ToolTip="Окно — только для просмотра; помощник подключится сам, когда ответит" />
                     </WrapPanel>
                 </StackPanel>
