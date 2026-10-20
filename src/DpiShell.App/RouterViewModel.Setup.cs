@@ -26,9 +26,7 @@ public sealed partial class RouterViewModel
     public Func<string, bool> TrustNewKey { get; set; } = text =>
         System.Windows.Application.Current?.Dispatcher is { } d ? d.Invoke(() => HostKeyDialog.Ask(text)) : false;
 
-    public const string HostKeyText =
-        "Ключ роутера изменился. Так бывает после переустановки прошивки (OpenWrt).\n\n"
-        + "Если вы переустанавливали прошивку — нажмите «Доверять новому». Если нет — нажмите «Отмена»: кто-то может подменять роутер.";
+    public static string HostKeyText => L.T("router.hostkey.text");
 
     /// <summary>
     /// SSH с вопросом о сменившемся ключе. Пароль подошёл — он и есть пароль root (тот же, что для входа в окне и в LuCI):
@@ -43,9 +41,9 @@ public sealed partial class RouterViewModel
             catch (RouterSshException e) when (e.Failure == RouterSshFailure.HostKeyChanged)
             {
                 if (!vm.TrustNewKey(HostKeyText))
-                    throw new RouterSshException(RouterSshFailure.HostKeyChanged, "Ключ роутера изменился — подключение отменено. Если прошивку переустанавливали, повторите и нажмите «Доверять новому».", e);
+                    throw new RouterSshException(RouterSshFailure.HostKeyChanged, L.T("router.hostkey.cancelled"), e);
                 vm._settings.HostKeys.Remove(target.HostKeyId);
-                vm.Say("Новый ключ роутера принят");
+                vm.Say(L.T("router.hostkey.accepted"));
                 session = await vm.SshConnector.ConnectAsync(target, password, ct);
             }
             vm.RememberPassword(password());
@@ -68,13 +66,13 @@ public sealed partial class RouterViewModel
         _settings.RouterPassword = null;
         TrySave();
         RaisePassword();
-        Say("Пароль роутера забыт — на этом компьютере его больше нет");
+        Say(L.T("router.password.forgotten"));
     }, () => HasSavedPassword);
     ICommand? _forgetPasswordCmd;
 
     /// <summary>«Пароль сохранён на этом компьютере» (зашифрован, только для этого пользователя Windows).</summary>
     public string SavedPasswordText => RouterSecrets.Unprotect(_settings.RouterPassword) == ""
-        ? "Пароль не задан — так и запомнено на этом компьютере" : "Пароль сохранён на этом компьютере (зашифрован)";
+        ? L.T("router.password.empty_saved") : L.T("router.password.saved");
 
     void RaisePassword()
     {
@@ -117,11 +115,11 @@ public sealed partial class RouterViewModel
     public static string SshText(Exception e, string? host = null) => e switch
     {
         RouterSshException { Failure: RouterSshFailure.Unreachable } =>
-            $"Роутер{(host is null ? "" : " " + host)} не отвечает по SSH. Проверьте адрес; в настройках роутера (LuCI) — «Система» → «Администрирование» → SSH должен быть включён.",
-        RouterSshException { Failure: RouterSshFailure.AuthFailed } => "Неверный пароль роутера",
+            host is null ? L.T("router.ssh.unreachable") : L.T("router.ssh.unreachable_host", new { address = host }),
+        RouterSshException { Failure: RouterSshFailure.AuthFailed } => L.T("router.ssh.auth_failed"),
         RouterSshException { Failure: RouterSshFailure.HostKeyChanged } s => s.InnerException is RouterSshException ? s.Message : HostKeyCheck.ChangedText,
         RouterSshException s => s.Message,
-        HttpRequestException => "Не удалось скачать ядро zapret на этот компьютер. Проверьте интернет и повторите.",
+        HttpRequestException => L.T("router.ssh.core_download"),
         _ => Texts.Friendly(e),
     };
 
@@ -130,7 +128,7 @@ public sealed partial class RouterViewModel
     /// <summary>Окно показывает диалог установки.</summary>
     public event Action? InstallRequested;
 
-    public string InstallText => Found ? "Установить заново…" : "Установить на роутер…";
+    public string InstallText => Found ? L.T("router.install.reinstall") : L.T("router.install.install");
 
     /// <summary>Новый ход установки для диалога.</summary>
     public RouterInstallViewModel NewInstall() => new(this);
@@ -150,7 +148,7 @@ public sealed partial class RouterViewModel
                 if (await WaitDpishellAsync() > 0) await ReloadAfterRestartAsync();
                 return true;
             }
-            if (_detection?.Found == RouterFound.Ok && ConnectionText.Contains("пароль")) return false;
+            if (_detection?.Found == RouterFound.Ok && _connNeedsPassword) return false;
             if (i >= 3 && DateTime.UtcNow >= deadline) return false;
         }
     }
@@ -192,7 +190,7 @@ public sealed partial class RouterViewModel
         {
             await RefreshStatusCoreAsync();
             if (Compat?.CanCall("strategies") != false) await LoadStrategiesAsync();
-            SetConnection($"Подключено, DpiShell {_status?.Version ?? _detection?.Status?.Version}", ok: true);
+            SetConnection(L.T("router.conn.connected", new { version = _status?.Version ?? _detection?.Status?.Version }), ok: true);
         }
         catch (RouterException e) { Failed(RouterTexts.Friendly(e)); }
     }
@@ -219,7 +217,7 @@ public sealed partial class RouterViewModel
     /// <summary>Роутер новее программы (минор): действия, меняющие настройки, — с подтверждением «под вашу ответственность».</summary>
     public bool RouterNewer => Compat?.Level == RouterCompatLevel.Warning && CompatNeedsApp;
     /// <summary>Подсказка у неактивных кнопок: роутер не умеет этого метода (нет в status.methods).</summary>
-    public string? MethodsTip => Compat is { Level: RouterCompatLevel.Warning, Methods: not null } ? "Неактивно: DpiShell на роутере этого не умеет — обновите его" : null;
+    public string? MethodsTip => Compat is { Level: RouterCompatLevel.Warning, Methods: not null } ? L.T("router.methods_tip") : null;
 
     /// <summary>Кнопка метода: вошли, не заняты и роутер этот метод умеет.</summary>
     bool Can(string method) => CanAct && (Compat?.CanCall(method) ?? true);
@@ -228,8 +226,8 @@ public sealed partial class RouterViewModel
 
     /// <summary>Версия пакета: подключён — из статуса; найден, но не вошли — из поиска; иначе «Не установлено».</summary>
     public string PackageVersionText => Connected ? ConnectedPackageText()
-        : Found ? (_detection?.Status?.Version is { Length: > 0 } dv ? dv + " · нужен вход на вкладке «Роутер»" : "найден · нужен вход на вкладке «Роутер»")
-        : "Не установлено";
+        : Found ? (_detection?.Status?.Version is { Length: > 0 } dv ? L.T("router.pkg.need_login", new { version = dv }) : L.T("router.pkg.found_need_login"))
+        : L.T("router.pkg.not_installed");
 
     /// <summary>
     /// Версия пакета DpiShell; роутер с status.packages (0.2.0-r8) отдаёт и версию страницы LuCI — её добавляем, если отличается
@@ -237,8 +235,8 @@ public sealed partial class RouterViewModel
     /// </summary>
     string ConnectedPackageText()
     {
-        var main = _status?.Packages?.Dpishell is { Length: > 0 } p ? p : _status?.Version is { Length: > 0 } v ? v : "неизвестно";
-        return _status?.Packages?.LuciAppDpishell is { Length: > 0 } luci && luci != main ? $"{main} · страница LuCI {luci}" : main;
+        var main = _status?.Packages?.Dpishell is { Length: > 0 } p ? p : _status?.Version is { Length: > 0 } v ? v : L.T("router.pkg.unknown");
+        return _status?.Packages?.LuciAppDpishell is { Length: > 0 } luci && luci != main ? L.T("router.pkg.luci", new { version = main, luci }) : main;
     }
 
     /// <summary>
@@ -250,13 +248,13 @@ public sealed partial class RouterViewModel
         get
         {
             if (!Connected || _status?.Core is not { } core) return "";
-            if (core.ShownVersion is not { } shown) return "не установлено";
-            if (shown.Length == 0) return "установлено";
-            return core.InstalledVersion is { Length: > 0 } && core.Version is { Length: > 0 } pinned && pinned != shown ? $"{shown} · в пакете {pinned}" : shown;
+            if (core.ShownVersion is not { } shown) return L.T("router.core.not_installed");
+            if (shown.Length == 0) return L.T("router.core.installed");
+            return core.InstalledVersion is { Length: > 0 } && core.Version is { Length: > 0 } pinned && pinned != shown ? L.T("router.core.in_package", new { version = shown, pinned }) : shown;
         }
     }
     public bool HasRouterCore => RouterCoreText.Length > 0;
-    public string PackageUpdateText => UpdateAvailable ? $"Доступно обновление {_status?.Update?.Version}" : "";
+    public string PackageUpdateText => UpdateAvailable ? L.T("router.update.available", new { version = _status?.Update?.Version }) : "";
     public bool ShowPackageInstall => !Found && CanInstall;
 
     void RaiseAbout()
@@ -274,7 +272,7 @@ public sealed partial class RouterViewModel
         Requery();
     }
 
-    public const string RiskText = "DpiShell на роутере новее этой программы. Менять его настройки отсюда можно, но под вашу ответственность: программа может не знать его новых правил. Продолжить?";
+    public static string RiskText => L.T("router.risk.text");
     bool _riskAccepted;
 
     /// <summary>Роутер новее — один раз за сеанс спросить «под вашу ответственность».</summary>
@@ -291,7 +289,7 @@ public sealed partial class RouterViewModel
     public ICommand OpenAppReleasesCmd => _openAppCmd ??= new RelayCommand(() =>
     {
         try { OpenUrl(AppReleasesUrl); }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Failed("Не удалось открыть браузер: " + e.Message); }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Failed(L.T("router.err.browser", new { error = e.Message })); }
     });
     ICommand? _openAppCmd;
 
@@ -311,8 +309,8 @@ public sealed partial class RouterViewModel
     public TimeSpan UpdateStuckAfter { get; set; } = TimeSpan.FromMinutes(4);
 
     /// <summary>Шаги обновления на роутере (status.update.job.step) — подписи для «Скачиваю → Устанавливаю → Перезапуск службы → Готово».</summary>
-    static readonly (string Id, string Title)[] UpdateStepNames =
-        [("download", "Скачиваю"), ("install", "Устанавливаю"), ("restart", "Перезапуск службы"), ("done", "Готово")];
+    static readonly (string Id, string Key)[] UpdateStepNames =
+        [("download", "router.update.step.download"), ("install", "router.update.step.install"), ("restart", "router.update.step.restart"), ("done", "router.update.step.done")];
 
     string? _updateStep;
     DateTime _updateStarted;
@@ -328,7 +326,7 @@ public sealed partial class RouterViewModel
             if (!Updating || current < 0) return [];
             bool finished = UpdateStepNames[current].Id == "done";
             return UpdateStepNames.Select((x, i) => (x, i, done: i < current || finished))
-                .Select(s => new UpdateStepRow((s.done ? "✓ " : "") + s.x.Title, s.i == current, s.done, s.i == UpdateStepNames.Length - 1)).ToList();
+                .Select(s => new UpdateStepRow((s.done ? "✓ " : "") + L.T(s.x.Key), s.i == current, s.done, s.i == UpdateStepNames.Length - 1)).ToList();
         }
     }
     public bool HasUpdateSteps => UpdateSteps.Count > 0;
@@ -338,7 +336,7 @@ public sealed partial class RouterViewModel
     public bool HasUpdateLog => UpdateLog.Length > 0;
 
     /// <summary>Прошлое обновление не завершилось (версия прежняя) — кнопка «Повторить».</summary>
-    public string UpdateButtonText => _updateFailed ? "Повторить" : "Обновить";
+    public string UpdateButtonText => _updateFailed ? L.T("common.retry") : L.T("router.update.update");
 
     /// <summary>Очередной ответ status во время обновления: шаг, журнал, прошедшее время.</summary>
     void ShowUpdateJob(RouterUpdateJob? job)
@@ -360,15 +358,15 @@ public sealed partial class RouterViewModel
     /// <summary>«Обновить роутер»: update_install из витрины и ждать status.update.job; true — обновлено.</summary>
     public async Task<bool> UpdateRouterAsync()
     {
-        if (Busy) { Say("Подождите: роутер ещё выполняет прошлую команду"); return false; }
-        if (!Connected) { Say("Сначала подключитесь к роутеру"); return false; }
+        if (Busy) { Say(L.T("router.guard.busy")); return false; }
+        if (!Connected) { Say(L.T("router.guard.not_connected")); return false; }
         Busy = true;
         _updateStep = null;
         _updateFailed = false;
         UpdateLog = "";
         _updateStarted = DateTime.UtcNow;
         Updating = true;
-        Say("Обновляю DpiShell на роутере…");
+        Say(L.T("router.update.busy"));
         var target = _status?.Update?.Version;
         try
         {
@@ -377,25 +375,26 @@ public sealed partial class RouterViewModel
             if (job is { Running: true })   // завис: роутер отвечает, версия прежняя — повторить, а не качать через ПК поверх идущего apk
             {
                 _updateFailed = true;
-                Failed("Обновление не завершилось: роутер отвечает, но версия DpiShell прежняя" + (_status?.Version is { } v ? $" ({v})" : "") + ". Можно повторить.");
+                Failed(_status?.Version is { } v ? L.T("router.update.same_version_v", new { version = v }) : L.T("router.update.same_version"));
                 return false;
             }
             // Роутер не достал витрину — пакеты через этот ПК: скачать, проверить подпись и хеши, положить по SSH, from: "local".
             if (_status?.Update?.Version is { } version && Compat?.CanCall("update_install") != false)
             {
-                Say("Роутер не достал витрину пакетов — загружаю обновление через этот компьютер…");
+                Say(L.T("router.update.via_pc"));
                 job = await UpdateLocalAsync(version);
                 if (job?.Ok == true) return await UpdatedAsync(job);
             }
             _updateFailed = true;
-            Failed((job is { Running: true } ? "Обновление не завершилось" : "Обновить DpiShell на роутере не удалось")
-                + (job is { Running: false, Message.Length: > 0 } ? ": " + job.Message : ""));
+            Failed(job is { Running: true } ? L.T("router.update.not_finished")
+                : job is { Message.Length: > 0 } ? L.T("router.update.failed_msg", new { message = job.Message })
+                : L.T("router.update.failed"));
             return false;
         }
         catch (RouterException e) { Failed(RouterTexts.Friendly(e)); return false; }
         catch (Exception e) when (e is RouterSshException or HttpRequestException or DpiShell.Core.SecurityException or IOException or UnauthorizedAccessException)
         {
-            Failed("Обновить через этот компьютер не удалось: " + (e is HttpRequestException ? "не скачались пакеты, проверьте интернет" : SshText(e)));
+            Failed(L.T("router.update.pc_failed", new { reason = e is HttpRequestException ? L.T("router.update.pc_no_packages") : SshText(e) }));
             return false;
         }
         finally { Busy = false; Updating = false; RaiseUpdate(); }
@@ -415,8 +414,8 @@ public sealed partial class RouterViewModel
         var dir = Path.Combine(Path.GetDirectoryName(_settings.File)!, "router-update");
         if (Directory.Exists(dir)) Directory.Delete(dir, true);
         var files = await RouterUpdatePackages.DownloadAsync(Http, LoadReleases(), version, dir, ReleaseKey);
-        var address = SetupAddress() ?? throw new RouterSshException(RouterSshFailure.Unreachable, "Не удалось узнать адрес роутера");
-        var pw = SshPassword(null, false) ?? throw new RouterSshException(RouterSshFailure.AuthFailed, "Нет сохранённого пароля роутера — войдите заново");
+        var address = SetupAddress() ?? throw new RouterSshException(RouterSshFailure.Unreachable, L.T("router.err.no_address"));
+        var pw = SshPassword(null, false) ?? throw new RouterSshException(RouterSshFailure.AuthFailed, L.T("router.err.no_saved_password"));
         await using (var ssh = await Ssh.ConnectAsync(new RouterSshTarget(address), () => pw))
             await new RouterSsh(ssh).UploadUpdateAsync(files);
         return await UpdateFromAsync(RouterUpdateSource.Local, version);
@@ -428,9 +427,11 @@ public sealed partial class RouterViewModel
     public bool UpdateAvailable => _status?.Update is { Available: true } && !Updating;
     public bool ShowUpdate => UpdateAvailable || Updating;
     /// <summary>Идёт — «Обновляю DpiShell на роутере… 1:23» (прошедшее время: видно, что не зависло); не завершилось — так и сказано.</summary>
-    public string UpdateTitle => Updating ? $"Обновляю DpiShell на роутере… прошло {DateTime.UtcNow - _updateStarted:m\\:ss}"
-        : _updateFailed ? $"Обновление до {_status?.Update?.Version} не завершилось" + (_status?.Version is { Length: > 0 } cur ? $" — работает прежняя {cur}" : "")
-        : $"Доступно обновление {_status?.Update?.Version}";
+    public string UpdateTitle => Updating ? L.T("router.update.title_running", new { time = (DateTime.UtcNow - _updateStarted).ToString("m\\:ss") })
+        : _updateFailed ? (_status?.Version is { Length: > 0 } cur
+            ? L.T("router.update.title_failed_cur", new { version = _status?.Update?.Version, current = cur })
+            : L.T("router.update.title_failed", new { version = _status?.Update?.Version }))
+        : L.T("router.update.available", new { version = _status?.Update?.Version });
     public string UpdateNotes => string.Join("\n", (_status?.Update?.Notes ?? []).Select(n => "• " + n));
     public bool HasUpdateNotes => UpdateNotes.Length > 0 && !Updating;
 
@@ -451,7 +452,7 @@ public sealed partial class RouterViewModel
     {
         if (Busy || !Connected) return;
         Busy = true;
-        Say("Проверяю обновления DpiShell на роутере…");
+        Say(L.T("router.update.check_busy"));
         try
         {
             var before = _status?.Update?.CheckedAt;
@@ -464,7 +465,7 @@ public sealed partial class RouterViewModel
                 Status = s;
                 if (s.Jobs?.Update != true && s.Update?.CheckedAt != before) break;
             }
-            Say(_status?.Update is { Available: true } u ? $"Доступно обновление DpiShell для роутера: {u.Version}" : "Обновлений нет — на роутере последняя версия DpiShell");
+            Say(_status?.Update is { Available: true } u ? L.T("router.update.available_say", new { version = u.Version }) : L.T("router.update.none"));
         }
         catch (RouterException e) { Failed(RouterTexts.Friendly(e)); }
         finally { Busy = false; }
@@ -479,7 +480,7 @@ public sealed partial class RouterViewModel
         await Task.Delay(PollInterval * 3);
         if (await WaitDpishellAsync() < 0)
         {
-            Say("DpiShell на роутере обновлён, но роутер ещё перезапускается — обновите вкладку через минуту");
+            Say(L.T("router.update.restarting"));
             return true;
         }
         if (Compat?.CanCall("strategies") != false)
@@ -492,8 +493,8 @@ public sealed partial class RouterViewModel
     bool Updated(RouterUpdateJob job)
     {
 
-        SetConnection($"Подключено, DpiShell {_status?.Version}", ok: true);
-        Say(job.Message is { Length: > 0 } m ? m : $"DpiShell на роутере обновлён до {_status?.Version}");
+        SetConnection(L.T("router.conn.connected", new { version = _status?.Version }), ok: true);
+        Say(job.Message is { Length: > 0 } m ? m : L.T("router.update.done", new { version = _status?.Version }));
         return true;
     }
 
@@ -525,12 +526,12 @@ public sealed partial class RouterViewModel
                 if (DateTime.UtcNow - started < UpdateStuckAfter) continue;
                 bool updated = target is not null ? s.Version == target : s.Version != versionBefore;
                 return updated
-                    ? new RouterUpdateJob("update", job?.From, false, true, $"DpiShell на роутере обновлён до {s.Version} (роутер не дописал итог)", Log: job?.Log)
+                    ? new RouterUpdateJob("update", job?.From, false, true, L.T("router.update.done_no_summary", new { version = s.Version }), Log: job?.Log)
                     : (job ?? new RouterUpdateJob("update", null, true, null, null)) with { Running = true };
             }
             if (job is not null && (sawRunning || job != before)) return job;
         }
-        throw new RouterException(RouterFailure.NoResponse, "Обновление на роутере идёт дольше обычного — проверьте позже");
+        throw new RouterException(RouterFailure.NoResponse, L.T("router.update.too_long"));
     }
 
     // ---------- «Удалить DpiShell с роутера» ----------
@@ -572,7 +573,7 @@ public sealed partial class RouterViewModel
                 if (await r.ReadUninstallResultAsync(ct) is { Running: false } res)
                     return (new RouterUninstallOutcome(res, await r.AfterUninstallAsync(ct)), null);
                 if (DateTime.UtcNow - started > UninstallTimeout)
-                    throw new RouterSshException(RouterSshFailure.Failed, "Удаление идёт дольше обычного — посмотрите позже: если DpiShell пропал с роутера, всё в порядке");
+                    throw new RouterSshException(RouterSshFailure.Failed, L.T("router.uninstall.too_long"));
                 await Task.Delay(PollInterval, ct);
             }
         }
@@ -590,7 +591,7 @@ public sealed partial class RouterViewModel
         _removed = true;
         try { await DetectAsync(); }
         catch (RouterException) { SetDetection(null); }
-        if (!Found) SetConnection("DpiShell с роутера удалён");
+        if (!Found) SetConnection(L.T("router.empty.removed"));
         Raise(nameof(EmptyTitle));
     }
 
@@ -626,7 +627,7 @@ public sealed class RouterInstallViewModel : Observable
     public RouterInstallViewModel(RouterViewModel router)
     {
         _router = router;
-        Steps = [new("Проверка и подготовка"), new("Проверка источника пакетов"), new("Пакеты DpiShell"), new("Ядро zapret"), new("Запуск")];
+        Steps = [new(L.T("router.install.step.prepare")), new(L.T("router.install.step.feed")), new(L.T("router.install.step.packages")), new(L.T("router.install.step.core")), new(L.T("router.install.step.start"))];
     }
 
     public RouterViewModel Router => _router;
@@ -660,7 +661,7 @@ public sealed class RouterInstallViewModel : Observable
     public bool ShowCheckPlain => ShowCheck && !Unsuitable;
     public bool ShowCheckPrimary => ShowCheck && Unsuitable;
     /// <summary>После сбоя установки главная кнопка — «Повторить».</summary>
-    public string InstallText => Stage == RouterInstallStage.Failed ? "Повторить" : "Установить";
+    public string InstallText => Stage == RouterInstallStage.Failed ? L.T("common.retry") : L.T("router.install.go");
     public bool IsDone => Stage == RouterInstallStage.Done;
     public bool CanGoSelect => IsDone && _router.Connected;
     bool _installStarted;
@@ -679,7 +680,7 @@ public sealed class RouterInstallViewModel : Observable
     public string TunnelNote { get => _tunnelNote; private set { if (Set(ref _tunnelNote, value)) Raise(nameof(HasTunnelNote)); } }
     public bool HasTunnelNote => TunnelNote.Length > 0;
 
-    public const string TunnelText = "У роутера нет прямого доступа к пакетам или GitHub — установка пойдёт через интернет этого компьютера. Это нормально.";
+    public static string TunnelText => L.T("router.tunnel.text");
 
     string _progress = "";
     public string ProgressText { get => _progress; private set => Set(ref _progress, value); }
@@ -704,26 +705,14 @@ public sealed class RouterInstallViewModel : Observable
         }
     }
 
-    /// <summary>Строка хода → шаг диалога (0..4); null — служебная строка (только в журнал).</summary>
-    public static int? StepOf(string line) => line switch
-    {
-        _ when line.StartsWith("Подключение") || line.StartsWith("Проверка роутера") || line.StartsWith("Интернет роутеру")
-               || line.StartsWith("Ядро zapret: загрузка") || line.StartsWith("Загрузка ядра") => 0,
-        _ when line.StartsWith("Ключ витрины") || line.StartsWith("Витрина пакетов") => 1,
-        _ when line.StartsWith("Пакеты") => 2,
-        _ when line.StartsWith("Ядро zapret") => 3,
-        "Проверка" => 4,
-        _ => null,
-    };
-
     /// <summary>Шаг сценария из итога (step) → шаг диалога.</summary>
     static int StepOfResult(string step) => step switch { "key" or "feed" => 1, "packages" => 2, "core" => 3, "status" or "done" => 4, _ => 0 };
 
     static string FailText(RouterInstallResult r) => r.Step switch
     {
-        "packages" => "Не удалось поставить пакеты DpiShell. Чаще всего роутер не достал до витрины пакетов — проверьте интернет на роутере и повторите.",
-        "core" => "Не удалось загрузить ядро zapret на роутер. Повторите установку.",
-        "key" => "Источник пакетов не прошёл проверку — установка отменена.",
+        "packages" => L.T("router.install.fail_packages"),
+        "core" => L.T("router.install.fail_core"),
+        "key" => L.T("router.install.fail_key"),
         _ => r.Message,
     };
 
@@ -734,24 +723,24 @@ public sealed class RouterInstallViewModel : Observable
         Steps[i].State = state;
     }
 
-    void OnProgress(string line)
+    void OnProgress(string line) => Log("# " + line);
+
+    /// <summary>Установщик сообщил шаг (код, не текст): отметка в списке и подпись шага в строке хода.</summary>
+    void OnStep(RouterInstallStepCode code)
     {
-        Log("# " + line);
-        if (StepOf(line) is { } i)
-        {
-            Step(i);
-            ProgressText = line;
-        }
+        var i = (int)code;
+        Step(i);
+        ProgressText = Steps[i].Title;
     }
 
     (RouterSshTarget Target, string Password)? Prepare(string? typed, bool noPassword)
     {
         ErrorText = "";
         var address = _router.SetupAddress();
-        if (address is null) { ErrorText = "Не удалось узнать адрес роутера — укажите его в «Дополнительно»"; return null; }
+        if (address is null) { ErrorText = L.T("router.addr.unknown"); return null; }
         if (_router.SshPassword(typed, noPassword) is not { } pw)
         {
-            ErrorText = "Введите пароль роутера или отметьте «Пароль не задан»";
+            ErrorText = L.T("router.install.need_password");
             return null;
         }
         return (new RouterSshTarget(address), pw);
@@ -763,7 +752,7 @@ public sealed class RouterInstallViewModel : Observable
         if (Working || Prepare(password, noPassword) is not { } p) return false;
         Stage = RouterInstallStage.Checking;
         VerdictTitle = ""; VerdictText = ""; TunnelNote = "";
-        ProgressText = "Проверяю роутер…";
+        ProgressText = L.T("router.install.checking");
         Log($"Проверка роутера {p.Target.Host}");
         _cts = new();
         try
@@ -786,8 +775,8 @@ public sealed class RouterInstallViewModel : Observable
         _verdict = v;
         VerdictOk = v.CanInstall;
         VerdictTitle = v.CanInstall
-            ? v.AlreadyInstalled ? $"Роутер подходит. DpiShell {v.InstalledVersion} уже стоит — установка обновит его." : $"Роутер подходит — можно ставить DpiShell {v.Release?.Version}."
-            : "Роутер не подходит";
+            ? v.AlreadyInstalled ? L.T("router.install.verdict_updated", new { version = v.InstalledVersion }) : L.T("router.install.verdict_ok", new { version = v.Release?.Version })
+            : L.T("router.install.verdict_bad");
         var lines = v.Blockers.Select(b => "• " + b.Text)
             .Concat(v.Warnings.Where(w => w.Code is not ("tunnel" or "installed")).Select(w => "• " + w.Text));
         VerdictText = string.Join("\n", lines);
@@ -813,7 +802,7 @@ public sealed class RouterInstallViewModel : Observable
         try
         {
             var pw = p.Password;
-            o = await _router.Flow().InstallAsync(p.Target, () => pw, new SyncProgress(OnProgress), _cts.Token);
+            o = await _router.Flow().InstallAsync(p.Target, () => pw, new SyncProgress(OnProgress), _cts.Token, new SyncSteps(OnStep));
         }
         catch (Exception e) when (e is RouterSshException or IOException or HttpRequestException or OperationCanceledException or UnauthorizedAccessException
                                       or DpiShell.Core.SecurityException or InvalidDataException)
@@ -830,7 +819,7 @@ public sealed class RouterInstallViewModel : Observable
             Steps[0].State = RouterInstallStep.Failed;
             ShowVerdict(o.Verdict);
             Stage = RouterInstallStage.Failed;
-            ErrorText = "Роутер не подходит — ничего не установлено.";
+            ErrorText = L.T("router.install.not_compatible");
             return false;
         }
         Log(res.Message);
@@ -839,18 +828,18 @@ public sealed class RouterInstallViewModel : Observable
             Step(StepOfResult(res.Step), RouterInstallStep.Failed);
             Stage = RouterInstallStage.Failed;
             ErrorText = FailText(res);
-            _router.Failed("Установка на роутер не удалась");
+            _router.Failed(L.T("router.install.failed"));
             return false;
         }
         foreach (var s in Steps) s.State = RouterInstallStep.Done;
-        ResultText = $"DpiShell {res.Version} установлен. Подключаюсь…";
+        ResultText = L.T("router.install.installed_connecting", new { version = res.Version });
         var connected = await _router.ConnectAfterInstallAsync(p.Password);
         ResultText = connected
-            ? $"DpiShell {res.Version} установлен и подключён. Осталось подобрать стратегию — обычно несколько минут."
-            : $"DpiShell {res.Version} установлен. Подключиться не вышло: {_router.ConnectionText}. Нажмите «Войти» на вкладке «Роутер».";
+            ? L.T("router.install.installed_connected", new { version = res.Version })
+            : L.T("router.install.installed_not_connected", new { version = res.Version, reason = _router.ConnectionText });
         Stage = RouterInstallStage.Done;
         Raise(nameof(CanGoSelect));
-        _router.Say(connected ? "DpiShell установлен на роутер и подключён." : "DpiShell установлен на роутер.");
+        _router.Say(connected ? L.T("router.install.say_connected") : L.T("router.install.say_installed"));
         return true;
     }
 
@@ -874,7 +863,7 @@ public sealed class RouterInstallViewModel : Observable
     void Fail(Exception e, string host)
     {
         Stage = RouterInstallStage.Failed;
-        ErrorText = e is OperationCanceledException ? "Прервано." : RouterViewModel.SshText(e, host);
+        ErrorText = e is OperationCanceledException ? L.T("router.install.cancelled") : RouterViewModel.SshText(e, host);
         Log("Ошибка: " + e.Message);
         Raise(nameof(HasDetails));
     }
@@ -885,6 +874,11 @@ public sealed class RouterInstallViewModel : Observable
     sealed class SyncProgress(Action<string> report) : IProgress<string>
     {
         public void Report(string value) => report(value);
+    }
+
+    sealed class SyncSteps(Action<RouterInstallStepCode> report) : IProgress<RouterInstallStepCode>
+    {
+        public void Report(RouterInstallStepCode value) => report(value);
     }
 }
 
@@ -953,15 +947,15 @@ public sealed class RouterUninstallViewModel(RouterViewModel router) : Observabl
         if (!CanRemove) return false;
         ErrorText = "";
         var address = router.SetupAddress();
-        if (address is null) { ErrorText = "Не удалось узнать адрес роутера — укажите его в «Дополнительно»"; return false; }
+        if (address is null) { ErrorText = L.T("router.addr.unknown"); return false; }
         if (router.SshPassword(password, noPassword) is not { } pw)
         {
-            ErrorText = "Введите пароль роутера или отметьте «Пароль не задан»";
+            ErrorText = L.T("router.install.need_password");
             return false;
         }
         var target = new RouterSshTarget(address);
         Stage = RouterUninstallStage.Working;
-        ProgressText = "Удаляю DpiShell с роутера…";
+        ProgressText = L.T("router.uninstall.busy");
         _cts = new();
         router.SetBusy(true);
         RouterUninstallOutcome? o = null;
@@ -987,7 +981,7 @@ public sealed class RouterUninstallViewModel(RouterViewModel router) : Observabl
             router.SetBusy(false);
             ProgressText = "";
             Stage = RouterUninstallStage.Failed;
-            ErrorText = e is OperationCanceledException ? "Прервано." : RouterViewModel.SshText(e, target.Host);
+            ErrorText = e is OperationCanceledException ? L.T("router.install.cancelled") : RouterViewModel.SshText(e, target.Host);
             Raise(nameof(HasDetails));
             return false;
         }
@@ -998,15 +992,15 @@ public sealed class RouterUninstallViewModel(RouterViewModel router) : Observabl
         {
             // Удаление запущено через API, а по SSH не зайти — итог не проверить.
             Log("SSH: " + sshError?.Message);
-            ResultTitle = "Удаление запущено";
-            LeftText = "Проверить, что осталось, не удалось: " + RouterViewModel.SshText(sshError!, target.Host);
+            ResultTitle = L.T("router.uninstall.started");
+            LeftText = L.T("router.uninstall.left_unknown_ssh", new { reason = RouterViewModel.SshText(sshError!, target.Host) });
             Clean = false;
         }
         else if (o.Result.Ok != true)
         {
             Log(o.Result.Message ?? "Удаление не удалось");
             Stage = RouterUninstallStage.Failed;
-            ErrorText = "Удалить не получилось: " + (o.Result.Message ?? "роутер не сообщил причину");
+            ErrorText = L.T("router.uninstall.failed", new { reason = o.Result.Message ?? L.T("router.uninstall.no_reason") });
             Raise(nameof(HasDetails));
             await router.AfterUninstallAsync();
             return false;
@@ -1016,12 +1010,12 @@ public sealed class RouterUninstallViewModel(RouterViewModel router) : Observabl
             Log(o.Result.Message ?? "Удалено");
             var left = o.Left?.Left ?? [];
             Clean = o.Left?.Clean == true;
-            ResultTitle = Clean ? "DpiShell удалён. Ничего не осталось." : "DpiShell удалён";
+            ResultTitle = Clean ? L.T("router.uninstall.clean") : L.T("router.uninstall.done");
             var lines = left.Select(l => "• " + l.What + (string.IsNullOrEmpty(l.Detail) ? "" : " — " + l.Detail)).ToList();
-            if (lines.Count > 0) lines.Insert(0, "Осталось на роутере:");
-            if (o.Left?.Kept?.Settings == true) lines.Add("Настройки сохранены — вернутся при установке заново.");
-            if (o.Left?.Kept?.HttpsDnsProxy == true) lines.Add("Пакет защищённого DNS оставлен: его ставили не через DpiShell.");
-            if (o.Left is null) lines.Add("Проверить, что осталось, не удалось.");
+            if (lines.Count > 0) lines.Insert(0, L.T("router.uninstall.left_header"));
+            if (o.Left?.Kept?.Settings == true) lines.Add(L.T("router.uninstall.kept_settings"));
+            if (o.Left?.Kept?.HttpsDnsProxy == true) lines.Add(L.T("router.uninstall.kept_dns_pkg"));
+            if (o.Left is null) lines.Add(L.T("router.uninstall.left_unknown"));
             LeftText = string.Join("\n", lines);
         }
         Stage = RouterUninstallStage.Done;
