@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Management;
 using System.Text.RegularExpressions;
+using DpiShell.Core.Localization;
 
 namespace DpiShell.Core;
 
@@ -13,18 +14,18 @@ public sealed record ZapretInstance(
     public string OwnerTitle => Owner switch
     {
         ZapretOwner.DpiShell => "DpiShell",
-        ZapretOwner.Flowseal => "zapret от Flowseal",
+        ZapretOwner.Flowseal => L.T("diag.conflict.owner_flowseal"),
         ZapretOwner.GoodbyeDpi => "GoodbyeDPI",
-        _ => "zapret (другая сборка)",
+        _ => L.T("diag.conflict.owner_other"),
     };
 
     /// <summary>Как это выключить — для предупреждения.</summary>
     public string HowToStop => (Owner, Kind) switch
     {
-        (ZapretOwner.Flowseal, "service") => "Запустите service.bat из папки Flowseal от администратора → «Remove Services».",
-        (ZapretOwner.Flowseal, _) => "Закройте свёрнутое окно «zapret: general (…)» на панели задач.",
-        (_, "service") => $"Остановите службу «{Name}» (Службы Windows) или удалите её программой, которая её поставила.",
-        _ => "Закройте программу, которая запустила этот процесс.",
+        (ZapretOwner.Flowseal, "service") => L.T("diag.conflict.stop_flowseal_service"),
+        (ZapretOwner.Flowseal, _) => L.T("diag.conflict.stop_flowseal_window"),
+        (_, "service") => L.T("diag.conflict.stop_service", new { name = Name }),
+        _ => L.T("diag.conflict.stop_process"),
     };
 }
 

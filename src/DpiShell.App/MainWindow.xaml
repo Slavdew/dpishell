@@ -1135,13 +1135,13 @@
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <CheckBox IsChecked="{Binding Selected}" VerticalAlignment="Top" Margin="0,2,0,0" AutomationProperties.Name="Выбрать строку"
+                                            <CheckBox IsChecked="{Binding Selected}" VerticalAlignment="Top" Margin="0,2,0,0" AutomationProperties.Name="{l:T hosts.row.select}"
                                                       Visibility="{Binding CanSelect, Converter={StaticResource Vis}}" />
                                             <StackPanel Grid.Column="1">
                                                 <TextBlock FontFamily="Consolas" FontSize="14" TextWrapping="Wrap"><Run Text="{Binding Ip, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding Host, Mode=OneWay}" FontWeight="SemiBold" /></TextBlock>
-                                                <TextBlock Text="{Binding Detail}" Style="{StaticResource Hint}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                                <TextBox Text="{Binding Detail, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,2,0,0" />
                                                 <Expander Header="{l:T common.more}" FontSize="12" Margin="0,2,0,0" Visibility="{Binding HasTechnical, Converter={StaticResource Vis}}">
-                                                    <TextBlock Text="{Binding Technical}" Style="{StaticResource Hint}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                                    <TextBox Text="{Binding Technical, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,2,0,0" />
                                                 </Expander>
                                             </StackPanel>
                                             <StackPanel Grid.Column="2" Width="190" Margin="12,0,0,0">
@@ -1164,20 +1164,20 @@
                             </StackPanel.Resources>
 
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Починить адреса" Style="{StaticResource H1}" />
+                                <TextBlock Text="{l:T common.nav.hosts}" Style="{StaticResource H1}" />
                                 <local:InfoButton Topic="{x:Static local:InfoTexts.Hosts}" Margin="10,0,0,12" />
                             </StackPanel>
                             <!-- Что внутри и когда нужно: название вкладки не говорит ни про hosts, ни про GitHub (UX-аудит 5, п. 8). -->
                             <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,-6,0,8"
-                                       Text="Если не качаются файлы с GitHub, не открывается Telegram Web или долго запускается Discord. Работает через файл hosts." />
+                                       Text="{l:T hosts.intro}" />
 
                             <!-- Якоря: вкладка длинная, разделы свёрнуты — ссылка раскрывает раздел и прокручивает к нему. -->
                             <WrapPanel Margin="0,-6,0,10">
-                                <TextBlock Text="Перейти:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                <Button Style="{StaticResource LinkButton}" Content="Проверенные адреса" Tag="HostsListSection" Click="HostsAnchor_Click" />
-                                <Button Style="{StaticResource LinkButton}" Content="Примерить строки" Tag="HostsTrySection" Click="HostsAnchor_Click" />
-                                <Button Style="{StaticResource LinkButton}" Content="Мои строки" Tag="HostsUserSection" Click="HostsAnchor_Click" />
-                                <Button Style="{StaticResource LinkButton}" Content="Проверить мой hosts" Tag="HostsAuditSection" Click="HostsAnchor_Click" />
+                                <TextBlock Text="{l:T hosts.goto}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <Button Style="{StaticResource LinkButton}" Content="{l:T hosts.anchor.list}" Tag="HostsListSection" Click="HostsAnchor_Click" />
+                                <Button Style="{StaticResource LinkButton}" Content="{l:T hosts.anchor.try}" Tag="HostsTrySection" Click="HostsAnchor_Click" />
+                                <Button Style="{StaticResource LinkButton}" Content="{l:T hosts.anchor.user}" Tag="HostsUserSection" Click="HostsAnchor_Click" />
+                                <Button Style="{StaticResource LinkButton}" Content="{l:T hosts.audit.title}" Tag="HostsAuditSection" Click="HostsAnchor_Click" />
                             </WrapPanel>
 
                             <!-- Замечания свёрнуты в одну строку «N замечания · Подробнее» (UX-аудит 5, п. 24); раскрываются одним щелчком. -->
@@ -1187,7 +1187,7 @@
                                     <DataTemplate>
                                         <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="6"
                                                 Padding="10,6" Margin="0,0,0,6">
-                                            <TextBlock Text="{Binding}" FontSize="13" TextWrapping="Wrap" />
+                                            <TextBox Text="{Binding Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="13" />
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -1197,7 +1197,7 @@
                             <!-- Всё, что DpiShell изменила в hosts, откатывается одной кнопкой; чужие строки остаются теми же байтами. -->
                             <Border Style="{StaticResource Card}" Padding="14,10" Visibility="{Binding HasOurs, Converter={StaticResource Vis}}">
                                 <DockPanel>
-                                    <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="Вернуть как было" Command="{Binding RestoreAllCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                    <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="{l:T hosts.restore_all}" Command="{Binding RestoreAllCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
                                     <TextBlock Text="{Binding OursText}" TextWrapping="Wrap" VerticalAlignment="Center" />
                                 </DockPanel>
                             </Border>
@@ -1206,23 +1206,23 @@
                             <Border Style="{StaticResource Card}">
                                 <Expander x:Name="HostsListSection" IsExpanded="{Binding ListOpen}">
                                     <Expander.Header>
-                                        <TextBlock Text="GitHub, Telegram и Discord через проверенные адреса" FontSize="15" FontWeight="SemiBold" />
+                                        <TextBlock Text="{l:T hosts.list.title}" FontSize="15" FontWeight="SemiBold" />
                                     </Expander.Header>
                                     <StackPanel Margin="0,10,0,0">
                                         <DockPanel>
-                                            <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="Убрать записи" Command="{Binding RevertCmd}" VerticalAlignment="Top" Margin="12,0,0,0"
+                                            <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="{l:T hosts.remove_entries}" Command="{Binding RevertCmd}" VerticalAlignment="Top" Margin="12,0,0,0"
                                                     Visibility="{Binding BlockPresent, Converter={StaticResource Vis}}" />
                                             <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding Enabled}" HorizontalAlignment="Left" VerticalAlignment="Top">
-                                                <TextBlock Text="Включить" FontSize="15" FontWeight="SemiBold" />
+                                                <TextBlock Text="{l:T hosts.enable}" FontSize="15" FontWeight="SemiBold" />
                                             </CheckBox>
                                         </DockPanel>
                                         <TextBlock Text="{Binding OffHint}" Style="{StaticResource Hint}" Margin="50,4,0,0" Visibility="{Binding Disabled, Converter={StaticResource Vis}}" />
                                         <StackPanel Margin="50,4,0,0" Visibility="{Binding Enabled, Converter={StaticResource Vis}}">
-                                            <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" />
+                                            <TextBox Text="{Binding StatusText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
                                             <ItemsControl ItemsSource="{Binding AppliedLines}" Margin="0,4,0,0">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
-                                                        <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="13" Foreground="{DynamicResource Muted}" />
+                                                        <TextBox Text="{Binding Mode=OneWay}" Style="{StaticResource SelectableText}" FontFamily="Consolas" FontSize="13" Foreground="{DynamicResource Muted}" />
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
@@ -1230,14 +1230,14 @@
 
                                         <StackPanel Margin="0,10,0,0" Visibility="{Binding Enabled, Converter={StaticResource Vis}}">
                                             <WrapPanel>
-                                                <Button ContentTemplate="{StaticResource Shield}" Content="Проверить адреса" Style="{StaticResource Primary}" Command="{Binding CheckCmd}" />
-                                                <Button Content="Стоп" Command="{Binding StopCmd}" Visibility="{Binding Checking, Converter={StaticResource Vis}}" />
+                                                <Button ContentTemplate="{StaticResource Shield}" Content="{l:T hosts.check}" Style="{StaticResource Primary}" Command="{Binding CheckCmd}" />
+                                                <Button Content="{l:T hosts.stop}" Command="{Binding StopCmd}" Visibility="{Binding Checking, Converter={StaticResource Vis}}" />
                                             </WrapPanel>
                                             <StackPanel Visibility="{Binding Checking, Converter={StaticResource Vis}}">
                                                 <ProgressBar Height="8" Maximum="{Binding Total}" Value="{Binding Done, Mode=OneWay}" Margin="0,2,0,4" />
                                                 <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Hint}" Margin="0,0,0,8" />
                                             </StackPanel>
-                                            <TextBlock Text="{Binding Summary}" FontSize="15" FontWeight="SemiBold" Margin="0,2,0,8" TextWrapping="Wrap" Visibility="{Binding HasSummary, Converter={StaticResource Vis}}" />
+                                            <TextBox Text="{Binding Summary, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="15" FontWeight="SemiBold" Margin="0,2,0,8" Visibility="{Binding HasSummary, Converter={StaticResource Vis}}" />
                                         </StackPanel>
 
                                         <DataGrid ItemsSource="{Binding Rows}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
@@ -1255,7 +1255,7 @@
                                             </DataGrid.RowStyle>
                                             <DataGrid.Columns>
                                                 <!-- Две строки на ячейку: таблица помещается в окно минимальной ширины без обрезанных слов. -->
-                                                <DataGridTemplateColumn Header="Сайт и адрес" Width="1.5*">
+                                                <DataGridTemplateColumn Header="{l:T hosts.col.site}" Width="1.5*">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <StackPanel ToolTip="{Binding Host}">
@@ -1265,24 +1265,24 @@
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTemplateColumn Header="Владелец" Width="0.9*">
+                                                <DataGridTemplateColumn Header="{l:T hosts.col.owner}" Width="0.9*">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <TextBlock Text="{Binding Owner}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Owner}" />
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTemplateColumn Header="Проверка" Width="1.3*">
+                                                <DataGridTemplateColumn Header="{l:T hosts.col.check}" Width="1.3*">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <StackPanel>
                                                                 <TextBlock Text="{Binding Live}" TextWrapping="NoWrap" />
-                                                                <TextBlock FontSize="13" Opacity="0.75" TextWrapping="NoWrap"><Run Text="DNS: " /><Run Text="{Binding Dns, Mode=OneWay}" /></TextBlock>
+                                                                <TextBlock FontSize="13" Opacity="0.75" TextWrapping="NoWrap" Text="{Binding DnsLine, Mode=OneWay}" />
                                                             </StackPanel>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
-                                                <DataGridTemplateColumn Header="Итог" Width="2*">
+                                                <DataGridTemplateColumn Header="{l:T hosts.col.result}" Width="2*">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <StackPanel ToolTip="{Binding Reason}">
@@ -1300,11 +1300,11 @@
                                             <DockPanel>
                                                 <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="{Binding ApplyText}" Style="{StaticResource Primary}" Command="{Binding ApplyCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
                                                 <StackPanel>
-                                                    <TextBlock Text="Что изменится в hosts" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                                    <TextBlock Text="{l:T hosts.preview.title}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
                                                     <ItemsControl ItemsSource="{Binding PreviewLines}">
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
-                                                                <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="13" />
+                                                                <TextBox Text="{Binding Mode=OneWay}" Style="{StaticResource SelectableText}" FontFamily="Consolas" FontSize="13" />
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
@@ -1320,32 +1320,32 @@
                                 <Expander x:Name="HostsTrySection" IsExpanded="{Binding TryOpen}">
                                     <Expander.Header>
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="Примерить строки из гайда" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <TextBlock Text="{l:T hosts.try.title}" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
                                             <local:InfoButton Topic="{x:Static local:InfoTexts.HostsTry}" Margin="10,0,0,0" VerticalAlignment="Center" />
                                         </StackPanel>
                                     </Expander.Header>
                                     <StackPanel Margin="0,10,0,0">
                                         <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
-                                                   Text="Вставьте строки вида «адрес имя». Для каждой проверю, отвечает ли адрес, принадлежит ли он этому сайту и открывается ли сайт через DNS. Файл hosts при этом не меняется." />
+                                                   Text="{l:T hosts.try.intro}" />
                                         <TextBlock Text="{Binding ToolsUnavailableText}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding ToolsUnavailable, Converter={StaticResource Vis}}" />
-                                        <TextBox Text="{Binding PasteText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AutomationProperties.Name="Строки для примерки"
+                                        <TextBox Text="{Binding PasteText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AutomationProperties.Name="{l:T hosts.try.input_name}"
                                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap"
                                                  FontFamily="Consolas" FontSize="14" Padding="8" Height="110" local:Demo.Sensitive="True" />
                                         <WrapPanel Margin="0,10,0,0">
-                                            <Button ContentTemplate="{StaticResource Shield}" Content="Примерить" Style="{StaticResource Primary}" Command="{Binding TryCmd}" />
-                                            <Button Content="Стоп" Command="{Binding StopCmd}" Visibility="{Binding Trying, Converter={StaticResource Vis}}" />
-                                            <Button Content="Очистить" Command="{Binding ClearTryCmd}" />
+                                            <Button ContentTemplate="{StaticResource Shield}" Content="{l:T hosts.try.run}" Style="{StaticResource Primary}" Command="{Binding TryCmd}" />
+                                            <Button Content="{l:T hosts.stop}" Command="{Binding StopCmd}" Visibility="{Binding Trying, Converter={StaticResource Vis}}" />
+                                            <Button Content="{l:T hosts.clear}" Command="{Binding ClearTryCmd}" />
                                         </WrapPanel>
                                         <StackPanel Visibility="{Binding Trying, Converter={StaticResource Vis}}">
                                             <ProgressBar Height="8" Maximum="{Binding Total}" Value="{Binding Done, Mode=OneWay}" Margin="0,2,0,4" />
                                             <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Hint}" Margin="0,0,0,8" />
                                         </StackPanel>
-                                        <TextBlock Text="{Binding TrySummary}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,8,0,6" Visibility="{Binding HasTrySummary, Converter={StaticResource Vis}}" />
+                                        <TextBox Text="{Binding TrySummary, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="14" FontWeight="SemiBold" Margin="0,8,0,6" Visibility="{Binding HasTrySummary, Converter={StaticResource Vis}}" />
                                         <ItemsControl ItemsSource="{Binding TryRows}" ItemTemplate="{StaticResource TryRowTemplate}" />
                                         <DockPanel Margin="0,10,0,0" Visibility="{Binding TryRows.Count, Converter={StaticResource NonZero}}">
                                             <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="{Binding WriteSelectedText}" Style="{StaticResource Primary}" Command="{Binding WriteSelectedCmd}" VerticalAlignment="Top" />
                                             <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8"
-                                                       Text="Записываются только строки «Поможет», в отдельный блок «DpiShell user». Адреса со временем меняются — раз в сутки проверю и скажу, если какой-то перестал работать." />
+                                                       Text="{l:T hosts.try.write_note}" />
                                         </DockPanel>
                                     </StackPanel>
                                 </Expander>
@@ -1355,7 +1355,7 @@
                             <Border Style="{StaticResource Card}">
                                 <Expander x:Name="HostsUserSection" IsExpanded="{Binding UserOpen}">
                                     <Expander.Header>
-                                        <TextBlock Text="Мои строки в hosts" FontSize="15" FontWeight="SemiBold" />
+                                        <TextBlock Text="{l:T hosts.user.title}" FontSize="15" FontWeight="SemiBold" />
                                     </Expander.Header>
                                     <StackPanel Margin="0,10,0,0">
                                         <TextBlock Text="{Binding UserHeader}" TextWrapping="Wrap" />
@@ -1363,19 +1363,19 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <DockPanel Margin="0,0,0,6">
-                                                        <Button DockPanel.Dock="Right" Content="Убрать" Style="{StaticResource LinkButton}" VerticalAlignment="Center"
+                                                        <Button DockPanel.Dock="Right" Content="{l:T hosts.user.remove}" Style="{StaticResource LinkButton}" VerticalAlignment="Center"
                                                                 Command="{Binding DataContext.RemoveUserCmd, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
                                                         <StackPanel>
-                                                            <TextBlock Text="{Binding Text}" FontFamily="Consolas" FontSize="14" TextWrapping="Wrap" local:Demo.Sensitive="True" />
+                                                            <TextBox Text="{Binding Text, Mode=OneWay}" Style="{StaticResource SelectableText}" FontFamily="Consolas" FontSize="14" local:Demo.Sensitive="True" />
                                                             <TextBlock Text="{Binding Note}" Style="{StaticResource Hint}" FontSize="12" />
                                                         </StackPanel>
                                                     </DockPanel>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
-                                        <Button Content="Убрать только мои строки" Command="{Binding RemoveAllUserCmd}" HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="{Binding HasUserRows, Converter={StaticResource Vis}}" />
+                                        <Button Content="{l:T hosts.user.remove_all}" Command="{Binding RemoveAllUserCmd}" HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="{Binding HasUserRows, Converter={StaticResource Vis}}" />
                                         <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
-                                                   Text="Это строки, которые вы записали через «Примерить строки». Устаревшие адреса сама не убираю — только предупреждаю." />
+                                                   Text="{l:T hosts.user.note}" />
                                     </StackPanel>
                                 </Expander>
                             </Border>
@@ -1384,33 +1384,33 @@
                             <Border Style="{StaticResource Card}">
                                 <Expander x:Name="HostsAuditSection" IsExpanded="{Binding AuditOpen}">
                                     <Expander.Header>
-                                        <TextBlock Text="Проверить мой hosts" FontSize="15" FontWeight="SemiBold" />
+                                        <TextBlock Text="{l:T hosts.audit.title}" FontSize="15" FontWeight="SemiBold" />
                                     </Expander.Header>
                                     <StackPanel Margin="0,10,0,0">
                                         <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,6"
-                                                   Text="Проверю чужие строки вашего файла hosts: какие из них мешают сайтам открываться. Ничего не меняется, пока вы сами не отметите строки и не нажмёте «Закомментировать»." />
+                                                   Text="{l:T hosts.audit.intro}" />
                                         <TextBlock Text="{Binding ToolsUnavailableText}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding ToolsUnavailable, Converter={StaticResource Vis}}" />
                                         <WrapPanel>
-                                            <Button ContentTemplate="{StaticResource Shield}" Content="Проверить мой hosts" Style="{StaticResource Primary}" Command="{Binding AuditCmd}" />
-                                            <Button Content="Стоп" Command="{Binding StopCmd}" Visibility="{Binding Auditing, Converter={StaticResource Vis}}" />
+                                            <Button ContentTemplate="{StaticResource Shield}" Content="{l:T hosts.audit.title}" Style="{StaticResource Primary}" Command="{Binding AuditCmd}" />
+                                            <Button Content="{l:T hosts.stop}" Command="{Binding StopCmd}" Visibility="{Binding Auditing, Converter={StaticResource Vis}}" />
                                         </WrapPanel>
                                         <StackPanel Visibility="{Binding Auditing, Converter={StaticResource Vis}}">
                                             <ProgressBar Height="8" Maximum="{Binding Total}" Value="{Binding Done, Mode=OneWay}" Margin="0,2,0,4" />
                                             <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Hint}" Margin="0,0,0,8" />
                                         </StackPanel>
-                                        <TextBlock Text="{Binding AuditSummary}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,8,0,6" Visibility="{Binding HasAuditSummary, Converter={StaticResource Vis}}" />
+                                        <TextBox Text="{Binding AuditSummary, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="14" FontWeight="SemiBold" Margin="0,8,0,6" Visibility="{Binding HasAuditSummary, Converter={StaticResource Vis}}" />
                                         <ItemsControl ItemsSource="{Binding AuditRows}" ItemTemplate="{StaticResource TryRowTemplate}" />
                                         <WrapPanel Margin="0,10,0,0" Visibility="{Binding HasProblems, Converter={StaticResource Vis}}">
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{Binding CommentText}" Style="{StaticResource Primary}" Command="{Binding CommentCmd}" />
-                                            <Button Content="Выбрать все мешающие" Command="{Binding SelectProblemsCmd}" />
+                                            <Button Content="{l:T hosts.audit.select_problems}" Command="{Binding SelectProblemsCmd}" />
                                         </WrapPanel>
                                         <StackPanel Margin="0,12,0,0" Visibility="{Binding HasOff, Converter={StaticResource Vis}}">
-                                            <TextBlock Text="Закомментировано DpiShell" FontWeight="SemiBold" />
+                                            <TextBlock Text="{l:T hosts.audit.off_title}" FontWeight="SemiBold" />
                                             <ItemsControl ItemsSource="{Binding OffRows}" Margin="0,4,0,0">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
                                                         <StackPanel Margin="0,0,0,4">
-                                                            <TextBlock Text="{Binding Text}" FontFamily="Consolas" FontSize="13" TextWrapping="Wrap" local:Demo.Sensitive="True" />
+                                                            <TextBox Text="{Binding Text, Mode=OneWay}" Style="{StaticResource SelectableText}" FontFamily="Consolas" FontSize="13" local:Demo.Sensitive="True" />
                                                             <TextBlock Text="{Binding Note}" Style="{StaticResource Hint}" FontSize="12" />
                                                         </StackPanel>
                                                     </DataTemplate>
@@ -1430,9 +1430,9 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,4">
-                                <Button DockPanel.Dock="Right" Content="Проверить DNS" Style="{StaticResource LinkButton}" Command="{Binding CheckDnsCmd}" VerticalAlignment="Top" />
+                                <Button DockPanel.Dock="Right" Content="{l:T dns.check}" Style="{StaticResource LinkButton}" Command="{Binding CheckDnsCmd}" VerticalAlignment="Top" />
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
-                                    <TextBlock Text="DNS" Style="{StaticResource H1}" />
+                                    <TextBlock Text="{l:T common.nav.dns}" Style="{StaticResource H1}" />
                                     <local:InfoButton Topic="{x:Static local:InfoTexts.Dns}" Margin="10,0,0,12" />
                                 </StackPanel>
                             </DockPanel>
@@ -1441,7 +1441,7 @@
                             <Border x:Name="PcDnsCard" Style="{StaticResource Card}">
                                 <StackPanel>
                                     <TextBlock Text="{Binding DnsSummary}" Margin="0,0,0,2" />
-                                    <Expander Header="Подробнее: ответы DNS" Margin="0,4,0,0" IsExpanded="{Binding DnsDetailsOpen}" Visibility="{Binding DnsRows.Count, Converter={StaticResource NonZero}}">
+                                    <Expander Header="{l:T dns.details}" Margin="0,4,0,0" IsExpanded="{Binding DnsDetailsOpen}" Visibility="{Binding DnsRows.Count, Converter={StaticResource NonZero}}">
                                         <StackPanel Margin="0,6,0,0">
                                             <Grid Margin="0,0,0,2">
                                                 <Grid.ColumnDefinitions>
@@ -1450,10 +1450,10 @@
                                                     <ColumnDefinition Width="2*" />
                                                     <ColumnDefinition Width="120" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="Сайт" Style="{StaticResource Hint}" />
-                                                <TextBlock Grid.Column="1" Text="Системный DNS" Style="{StaticResource Hint}" />
-                                                <TextBlock Grid.Column="2" Text="Защищённый DNS" Style="{StaticResource Hint}" />
-                                                <TextBlock Grid.Column="3" Text="Подменён ответ" Style="{StaticResource Hint}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{l:T dns.col.site}" Style="{StaticResource Hint}" />
+                                                <TextBlock Grid.Column="1" Text="{l:T dns.col.system}" Style="{StaticResource Hint}" />
+                                                <TextBlock Grid.Column="2" Text="{l:T dns.col.secure}" Style="{StaticResource Hint}" />
+                                                <TextBlock Grid.Column="3" Text="{l:T dns.col.spoofed}" Style="{StaticResource Hint}" TextTrimming="CharacterEllipsis" />
                                             </Grid>
                                             <ItemsControl ItemsSource="{Binding DnsRows}">
                                                 <ItemsControl.ItemTemplate>
@@ -1474,13 +1474,13 @@
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
                                             <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
-                                                       Text="Подбор и проверка берут адреса через защищённый DNS, поэтому подмена на их результат не влияет." />
+                                                       Text="{l:T dns.details.note}" />
                                         </StackPanel>
                                     </Expander>
                                     <!-- DNS этого компьютера (architecture.md «DNS этого компьютера»): вариант в один клик, «Вернуть как было». -->
                                     <Border x:Name="PcDnsPicker" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,12,0,0" Padding="0,12,0,0">
                                         <StackPanel>
-                                            <TextBlock Text="DNS этого компьютера" Style="{StaticResource H2}" />
+                                            <TextBlock Text="{l:T dns.pc.title}" Style="{StaticResource H2}" />
                                             <local:DnsPickerView DataContext="{Binding PcDns}" />
                                         </StackPanel>
                                     </Border>
@@ -1489,8 +1489,8 @@
 
                             <!-- Роутер подключён — DNS для всей сети настраивается там; блок не дублируем. -->
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8" Visibility="{Binding Router.Connected, Converter={StaticResource Vis}}">
-                                <TextBlock Text="DNS для всей сети — на вкладке «Роутер»." Style="{StaticResource Hint}" VerticalAlignment="Center" />
-                                <Button Content="Открыть →" Style="{StaticResource LinkButton}" Command="{Binding GoRouterCmd}" Margin="8,0,0,0" />
+                                <TextBlock Text="{l:T dns.router_note}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                <Button Content="{l:T dns.open}" Style="{StaticResource LinkButton}" Command="{Binding GoRouterCmd}" Margin="8,0,0,0" />
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
@@ -1501,9 +1501,9 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,4">
-                                <Button DockPanel.Dock="Right" Content="Обновить" Style="{StaticResource LinkButton}" Command="{Binding Proxy.RefreshCmd}" VerticalAlignment="Top" />
+                                <Button DockPanel.Dock="Right" Content="{l:T proxy.refresh}" Style="{StaticResource LinkButton}" Command="{Binding Proxy.RefreshCmd}" VerticalAlignment="Top" />
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
-                                    <TextBlock Text="Прокси" Style="{StaticResource H1}" />
+                                    <TextBlock Text="{l:T common.nav.proxy}" Style="{StaticResource H1}" />
                                     <local:InfoButton Topic="{x:Static local:InfoTexts.Proxy}" Margin="10,0,0,12" />
                                 </StackPanel>
                             </DockPanel>
@@ -1511,7 +1511,7 @@
                             <!-- Что стоит сейчас в Windows: пользователь, машина, службы (WinHTTP). Адреса — чувствительные. -->
                             <Border x:Name="ProxyNowCard" Style="{StaticResource Card}" DataContext="{Binding Proxy}">
                                 <StackPanel>
-                                    <TextBlock Text="Сейчас в Windows" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T proxy.now.title}" Style="{StaticResource H2}" />
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="190" />
@@ -1522,17 +1522,17 @@
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
-                                        <TextBlock Text="Для этого пользователя" Style="{StaticResource Hint}" Margin="0,2" />
-                                        <TextBlock Grid.Column="1" Text="{Binding UserLine}" local:Demo.Sensitive="True" TextWrapping="Wrap" Margin="0,2" />
-                                        <TextBlock Grid.Row="1" Text="Для всей машины" Style="{StaticResource Hint}" Margin="0,2" />
-                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MachineLine}" local:Demo.Sensitive="True" TextWrapping="Wrap" Margin="0,2" />
-                                        <TextBlock Grid.Row="2" Text="Для служб Windows" Style="{StaticResource Hint}" Margin="0,2" ToolTip="Прокси WinHTTP: его берут службы и часть программ" />
-                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding WinHttpLine}" local:Demo.Sensitive="True" TextWrapping="Wrap" Margin="0,2" />
+                                        <TextBlock Text="{l:T proxy.for_user}" Style="{StaticResource Hint}" Margin="0,2" />
+                                        <TextBox Grid.Column="1" Text="{Binding UserLine, Mode=OneWay}" Style="{StaticResource SelectableText}" local:Demo.Sensitive="True" Margin="0,2" />
+                                        <TextBlock Grid.Row="1" Text="{l:T proxy.for_machine}" Style="{StaticResource Hint}" Margin="0,2" />
+                                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding MachineLine, Mode=OneWay}" Style="{StaticResource SelectableText}" local:Demo.Sensitive="True" Margin="0,2" />
+                                        <TextBlock Grid.Row="2" Text="{l:T proxy.for_services}" Style="{StaticResource Hint}" Margin="0,2" ToolTip="{l:T proxy.for_services.tip}" />
+                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding WinHttpLine, Mode=OneWay}" Style="{StaticResource SelectableText}" local:Demo.Sensitive="True" Margin="0,2" />
                                     </Grid>
                                     <ItemsControl ItemsSource="{Binding Notes}" Margin="0,6,0,0">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <TextBlock Text="{Binding}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,2" />
+                                                <TextBox Text="{Binding Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Muted}" Margin="0,2" />
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
@@ -1542,11 +1542,11 @@
                             <!-- Свои прокси: список, «Проверить», форма добавления/изменения. -->
                             <Border x:Name="ProxyListCard" Style="{StaticResource Card}" DataContext="{Binding Proxy}">
                                 <StackPanel>
-                                    <TextBlock Text="Мои прокси" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T proxy.list.title}" Style="{StaticResource H2}" />
                                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding ListEmpty, Converter={StaticResource Vis}}"
-                                               Text="Список пуст. Добавьте прокси ниже; формат записи, например: Clash Verge — 127.0.0.1:7897." />
+                                               Text="{l:T proxy.list.empty}" />
                                     <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Margin="0,0,0,8" PreviewMouseWheel="PassWheelToPage"
-                                             AutomationProperties.Name="Мои прокси" Visibility="{Binding ListEmpty, Converter={StaticResource InvVis}}">
+                                             AutomationProperties.Name="{l:T proxy.list.title}" Visibility="{Binding ListEmpty, Converter={StaticResource InvVis}}">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
                                                 <StackPanel>
@@ -1561,7 +1561,7 @@
                                         </ListBox.ItemTemplate>
                                     </ListBox>
 
-                                    <Expander Header="Добавить или изменить" IsExpanded="True">
+                                    <Expander Header="{l:T proxy.form.title}" IsExpanded="True">
                                         <Grid Margin="0,6,0,0">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="170" />
@@ -1575,24 +1575,24 @@
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
-                                            <TextBlock Text="Название" Style="{StaticResource Hint}" VerticalAlignment="Center" />
-                                            <TextBox Grid.Column="1" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" local:Demo.Sensitive="True" AutomationProperties.Name="Название прокси" />
-                                            <TextBlock Grid.Row="1" Text="Адрес и порт" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                            <TextBlock Text="{l:T proxy.form.name}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                            <TextBox Grid.Column="1" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" local:Demo.Sensitive="True" AutomationProperties.Name="{l:T proxy.form.name_field}" />
+                                            <TextBlock Grid.Row="1" Text="{l:T proxy.form.server}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                             <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding EditServer, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" local:Demo.Sensitive="True"
-                                                     ToolTip="Например: 127.0.0.1:7897 или http=127.0.0.1:7897;https=127.0.0.1:7897" AutomationProperties.Name="Адрес прокси" />
-                                            <TextBlock Grid.Row="2" Text="Исключения" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                                     ToolTip="{l:T proxy.form.server.tip}" AutomationProperties.Name="{l:T proxy.form.server_field}" />
+                                            <TextBlock Grid.Row="2" Text="{l:T proxy.form.bypass}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                             <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding EditBypass, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" local:Demo.Sensitive="True"
-                                                     ToolTip="Необязательно. Через «;»: &lt;local&gt;;*.example.com" AutomationProperties.Name="Исключения прокси" />
-                                            <TextBlock Grid.Row="3" Text="Адрес автонастройки (PAC)" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                                     ToolTip="{l:T proxy.form.bypass.tip}" AutomationProperties.Name="{l:T proxy.form.bypass_field}" />
+                                            <TextBlock Grid.Row="3" Text="{l:T proxy.form.pac}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                             <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding EditPac, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" local:Demo.Sensitive="True"
-                                                     ToolTip="Необязательно. Ссылка http:// или https://" AutomationProperties.Name="Адрес автонастройки" />
-                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding FormError}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,0,0,6"
-                                                       Visibility="{Binding HasFormError, Converter={StaticResource Vis}}" />
+                                                     ToolTip="{l:T proxy.form.pac.tip}" AutomationProperties.Name="{l:T proxy.form.pac_field}" />
+                                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding FormError, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Danger}" Margin="0,0,0,6"
+                                                     Visibility="{Binding HasFormError, Converter={StaticResource Vis}}" />
                                             <WrapPanel Grid.Row="5" Grid.Column="1">
-                                                <Button Content="Добавить" Style="{DynamicResource Small}" Command="{Binding AddCmd}" Margin="0,0,8,0" />
-                                                <Button Content="Сохранить изменения" Style="{DynamicResource Small}" Command="{Binding SaveCmd}" Margin="0,0,8,0" Visibility="{Binding IsSelected, Converter={StaticResource Vis}}" />
-                                                <Button Content="Удалить" Style="{DynamicResource Small}" Command="{Binding DeleteCmd}" Margin="0,0,8,0" Visibility="{Binding IsSelected, Converter={StaticResource Vis}}" />
-                                                <Button Content="Очистить поля" Style="{StaticResource LinkButton}" Command="{Binding ClearFormCmd}" />
+                                                <Button Content="{l:T proxy.form.add}" Style="{DynamicResource Small}" Command="{Binding AddCmd}" Margin="0,0,8,0" />
+                                                <Button Content="{l:T proxy.form.save}" Style="{DynamicResource Small}" Command="{Binding SaveCmd}" Margin="0,0,8,0" Visibility="{Binding IsSelected, Converter={StaticResource Vis}}" />
+                                                <Button Content="{l:T proxy.form.delete}" Style="{DynamicResource Small}" Command="{Binding DeleteCmd}" Margin="0,0,8,0" Visibility="{Binding IsSelected, Converter={StaticResource Vis}}" />
+                                                <Button Content="{l:T proxy.form.clear}" Style="{StaticResource LinkButton}" Command="{Binding ClearFormCmd}" />
                                             </WrapPanel>
                                         </Grid>
                                     </Expander>
@@ -1602,31 +1602,31 @@
                             <!-- Применить выбранный: куда, «Включить», «Очистить», «Вернуть прежний», «Проверить». -->
                             <Border x:Name="ProxyApplyCard" Style="{StaticResource Card}" DataContext="{Binding Proxy}">
                                 <StackPanel>
-                                    <TextBlock Text="Куда применить" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T proxy.apply.title}" Style="{StaticResource H2}" />
                                     <StackPanel Margin="0,0,0,6">
-                                        <RadioButton Content="Для этого пользователя" IsChecked="{Binding TargetUser}" Margin="0,0,0,4" ToolTip="Окно меняет само, права администратора не нужны" />
-                                        <RadioButton Content="Для этого пользователя, через помощника" IsChecked="{Binding TargetUserAdmin}" Margin="0,0,0,4" ToolTip="Меняет помощник (запрос прав администратора); нужен, если окно само изменить не может" />
-                                        <RadioButton Content="Для всей машины (права администратора)" IsChecked="{Binding TargetMachine}" ToolTip="Настройки станут общими для всех пользователей этого компьютера" />
+                                        <RadioButton Content="{l:T proxy.for_user}" IsChecked="{Binding TargetUser}" Margin="0,0,0,4" ToolTip="{l:T proxy.for_user.tip}" />
+                                        <RadioButton Content="{l:T proxy.for_user_admin}" IsChecked="{Binding TargetUserAdmin}" Margin="0,0,0,4" ToolTip="{l:T proxy.for_user_admin.tip}" />
+                                        <RadioButton Content="{l:T proxy.for_machine_admin}" IsChecked="{Binding TargetMachine}" ToolTip="{l:T proxy.for_machine_admin.tip}" />
                                     </StackPanel>
-                                    <CheckBox Content="Ещё и для служб Windows" IsChecked="{Binding AlsoWinHttp}" Margin="0,0,0,8"
+                                    <CheckBox Content="{l:T proxy.also_winhttp}" IsChecked="{Binding AlsoWinHttp}" Margin="0,0,0,8"
                                               Visibility="{Binding TargetMachine, Converter={StaticResource Vis}}"
-                                              ToolTip="Прокси WinHTTP берут службы и часть программ, которые не читают системный прокси" />
+                                              ToolTip="{l:T proxy.also_winhttp.tip}" />
                                     <WrapPanel>
-                                        <Button Content="Включить выбранный" Style="{StaticResource Primary}" Command="{Binding EnableCmd}" />
-                                        <Button Content="Выключить прокси" Command="{Binding ClearCmd}" ToolTip="Выключить системный прокси в Windows; прежний запоминается" />
-                                        <Button Content="Вернуть прежний" Command="{Binding RestoreCmd}" Visibility="{Binding HasPrevious, Converter={StaticResource Vis}}" />
-                                        <Button Content="Проверить прокси" Command="{Binding CheckCmd}" ToolTip="Открыть через выбранный прокси соединение к двум сайтам" />
+                                        <Button Content="{l:T proxy.enable}" Style="{StaticResource Primary}" Command="{Binding EnableCmd}" />
+                                        <Button Content="{l:T proxy.disable}" Command="{Binding ClearCmd}" ToolTip="{l:T proxy.disable.tip}" />
+                                        <Button Content="{l:T proxy.restore}" Command="{Binding RestoreCmd}" Visibility="{Binding HasPrevious, Converter={StaticResource Vis}}" />
+                                        <Button Content="{l:T proxy.check}" Command="{Binding CheckCmd}" ToolTip="{l:T proxy.check.tip}" />
                                     </WrapPanel>
-                                    <TextBlock Text="{Binding PreviousText}" local:Demo.Sensitive="True" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0"
-                                               Visibility="{Binding HasPrevious, Converter={StaticResource Vis}}" />
-                                    <TextBlock Text="{Binding CheckText}" local:Demo.Sensitive="True" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="{Binding HasCheck, Converter={StaticResource Vis}}" />
+                                    <TextBox Text="{Binding PreviousText, Mode=OneWay}" local:Demo.Sensitive="True" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Muted}" Margin="0,4,0,0"
+                                             Visibility="{Binding HasPrevious, Converter={StaticResource Vis}}" />
+                                    <TextBox Text="{Binding CheckText, Mode=OneWay}" local:Demo.Sensitive="True" Style="{StaticResource SelectableText}" Margin="0,8,0,0" Visibility="{Binding HasCheck, Converter={StaticResource Vis}}" />
                                 </StackPanel>
                             </Border>
 
                             <!-- Короткие честные подсказки о подводных камнях. -->
                             <Border x:Name="ProxyHintsCard" Style="{StaticResource Card}" DataContext="{Binding Proxy}">
                                 <StackPanel>
-                                    <TextBlock Text="Что стоит знать" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T proxy.hints.title}" Style="{StaticResource H2}" />
                                     <ItemsControl ItemsSource="{Binding Hints}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -1665,7 +1665,7 @@
                                     </Button>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
-                                    <TextBlock Text="Диагностика" Style="{StaticResource H1}" />
+                                    <TextBlock Text="{l:T common.nav.diag}" Style="{StaticResource H1}" />
                                     <local:InfoButton Topic="{x:Static local:InfoTexts.Diag}" Margin="10,0,0,12" />
                                 </StackPanel>
                             </DockPanel>
@@ -1673,7 +1673,10 @@
                             <!-- Обход: одна строка, внутренности (драйвер, файлы, метки TCP) — за «Подробнее» (п. 15). -->
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock><Run Text="Оптимизация: " Foreground="{DynamicResource Muted}" /><Run Text="{Binding ServiceText, Mode=OneWay}" /></TextBlock>
+                                    <DockPanel>
+                                        <TextBlock Text="{l:T diag.optimization.label}" Foreground="{DynamicResource Muted}" DockPanel.Dock="Left" Margin="0,0,6,0" />
+                                        <TextBox Text="{Binding ServiceText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
+                                    </DockPanel>
                                     <Expander Header="{l:T common.more}" Margin="0,8,0,0">
                                         <Grid Margin="0,6,0,0">
                                             <Grid.ColumnDefinitions>
@@ -1685,12 +1688,12 @@
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
-                                            <TextBlock Text="Драйвер" Style="{StaticResource Hint}" Margin="0,0,0,6" />
-                                            <TextBlock Grid.Column="1" Text="{Binding DriverText}" Margin="0,0,0,6" />
-                                            <TextBlock Grid.Row="1" Text="Файлы ядра" Style="{StaticResource Hint}" Margin="0,0,0,6" />
-                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding CoreText}" Margin="0,0,0,6" />
-                                            <TextBlock Grid.Row="2" Text="Временные метки TCP" Style="{StaticResource Hint}" />
-                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TimestampsText}" />
+                                            <TextBlock Text="{l:T diag.driver}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
+                                            <TextBox Grid.Column="1" Text="{Binding DriverText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,0,0,6" />
+                                            <TextBlock Grid.Row="1" Text="{l:T diag.core_files}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
+                                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CoreText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,0,0,6" />
+                                            <TextBlock Grid.Row="2" Text="{l:T diag.timestamps}" Style="{StaticResource Hint}" />
+                                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding TimestampsText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
                                         </Grid>
                                     </Expander>
                                 </StackPanel>
@@ -1698,30 +1701,36 @@
 
                             <Border Style="{StaticResource Warn}" Visibility="{Binding CoreBroken, Converter={StaticResource Vis}}">
                                 <StackPanel>
-                                    <TextBlock Text="Файлы ядра повреждены — обычно это антивирус." FontWeight="SemiBold" Margin="0,0,0,8" />
-                                    <Button ContentTemplate="{StaticResource Shield}" Content="Восстановить" Style="{StaticResource Primary}" Command="{Binding RepairCoreCmd}" HorizontalAlignment="Left" />
+                                    <TextBlock Text="{l:T diag.core_broken}" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                    <Button ContentTemplate="{StaticResource Shield}" Content="{l:T diag.repair}" Style="{StaticResource Primary}" Command="{Binding RepairCoreCmd}" HorizontalAlignment="Left" />
                                     <!-- Путь не переписывать руками: «Скопировать путь» и сразу «Безопасность Windows» (п. 16). -->
-                                    <TextBlock Text="Чтобы не повторилось, добавьте эту папку в исключения антивируса:" Style="{StaticResource Hint}" Margin="0,6,0,0" TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding CoreFolder}" local:Demo.Sensitive="True" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding CoreFolder}" />
+                                    <TextBlock Text="{l:T diag.exclusion_hint}" Style="{StaticResource Hint}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                                    <TextBox Text="{Binding CoreFolder, Mode=OneWay}" Style="{StaticResource SelectableText}" local:Demo.Sensitive="True" FontSize="12" Margin="0,2,0,0" />
                                     <Expander Header="{l:T common.more}" Margin="0,4,0,0">
                                         <TextBlock Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
-                                                   Text="В Защитнике Windows: «Защита от вирусов и угроз» → «Управление настройками» → «Исключения» → «Добавить» → «Папка» (названия могут отличаться). В другом антивирусе — в его настройках." />
+                                                   Text="{l:T diag.defender_path}" />
                                     </Expander>
                                     <WrapPanel Margin="-4,6,0,0">
-                                        <Button Content="Скопировать путь" Style="{StaticResource LinkButton}" Command="{Binding CopyCoreFolderCmd}" Margin="0,0,10,0" />
-                                        <Button Content="Открыть Защитник" Style="{StaticResource LinkButton}" Command="{Binding OpenDefenderCmd}" />
+                                        <Button Content="{l:T diag.copy_path}" Style="{StaticResource LinkButton}" Command="{Binding CopyCoreFolderCmd}" Margin="0,0,10,0" />
+                                        <Button Content="{l:T diag.open_defender}" Style="{StaticResource LinkButton}" Command="{Binding OpenDefenderCmd}" />
                                     </WrapPanel>
                                 </StackPanel>
                             </Border>
 
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="Похожие программы" Style="{StaticResource H2}" />
-                                    <TextBlock Text="Не найдены." Style="{StaticResource Hint}" Visibility="{Binding ConflictList.Count, Converter={StaticResource Zero}}" />
-                                    <ItemsControl ItemsSource="{Binding ConflictList}" local:Demo.Sensitive="True" />
+                                    <TextBlock Text="{l:T diag.conflicts.title}" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T diag.conflicts.none}" Style="{StaticResource Hint}" Visibility="{Binding ConflictList.Count, Converter={StaticResource Zero}}" />
+                                    <ItemsControl ItemsSource="{Binding ConflictList}" local:Demo.Sensitive="True">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBox Text="{Binding Mode=OneWay}" Style="{StaticResource SelectableText}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
-                                               Text="Могут перехватывать тот же трафик и мешать оптимизации." />
-                                    <Button ContentTemplate="{StaticResource Shield}" Content="Остановить" Command="{Binding StopConflictsCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                               Text="{l:T diag.conflicts.note}" />
+                                    <Button ContentTemplate="{StaticResource Shield}" Content="{l:T diag.conflicts.stop}" Command="{Binding StopConflictsCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
                                             Visibility="{Binding ConflictList.Count, Converter={StaticResource NonZero}}" />
                                 </StackPanel>
                             </Border>
@@ -1729,18 +1738,24 @@
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <TextBlock Text="VPN" Style="{StaticResource H2}" />
-                                    <TextBlock Text="Не найден." Style="{StaticResource Hint}" Visibility="{Binding VpnList.Count, Converter={StaticResource Zero}}" />
-                                    <ItemsControl ItemsSource="{Binding VpnList}" local:Demo.Sensitive="True" />
+                                    <TextBlock Text="{l:T diag.vpn.none}" Style="{StaticResource Hint}" Visibility="{Binding VpnList.Count, Converter={StaticResource Zero}}" />
+                                    <ItemsControl ItemsSource="{Binding VpnList}" local:Demo.Sensitive="True">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBox Text="{Binding Mode=OneWay}" Style="{StaticResource SelectableText}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
-                                               Text="При включённом VPN оптимизация обычно не нужна, а подбор может показать неверный результат." />
+                                               Text="{l:T diag.vpn.note}" />
                                 </StackPanel>
                             </Border>
 
                             <!-- Проверки окружения (09-features-spec §4): только показываем, что мешает и что сделать. -->
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="Что ещё может мешать" Style="{StaticResource H2}" />
-                                    <TextBlock Text="Проверяется при обновлении страницы." Style="{StaticResource Hint}" Visibility="{Binding Findings.Count, Converter={StaticResource Zero}}" />
+                                    <TextBlock Text="{l:T diag.findings.title}" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T diag.findings.empty}" Style="{StaticResource Hint}" Visibility="{Binding Findings.Count, Converter={StaticResource Zero}}" />
                                     <ItemsControl ItemsSource="{Binding Findings}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -1753,9 +1768,9 @@
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock x:Name="M" Text="{Binding Mark}" FontWeight="Bold" Foreground="{DynamicResource Ok}" />
                                                     <TextBlock Grid.Column="1" Text="{Binding Title}" Style="{StaticResource Hint}" />
-                                                    <TextBlock Grid.Column="2" Text="{Binding Text}" local:Demo.Sensitive="True" TextWrapping="Wrap" />
+                                                    <TextBox Grid.Column="2" Text="{Binding Text, Mode=OneWay}" Style="{StaticResource SelectableText}" local:Demo.Sensitive="True" />
                                                     <!-- «Системный прокси включён» → вкладка «Прокси». -->
-                                                    <Button Grid.Column="3" Content="Открыть Прокси →" Style="{StaticResource LinkButton}" Margin="10,0,0,0" VerticalAlignment="Top"
+                                                    <Button Grid.Column="3" Content="{l:T diag.open_proxy}" Style="{StaticResource LinkButton}" Margin="10,0,0,0" VerticalAlignment="Top"
                                                             Command="{Binding DataContext.GoProxyCmd, RelativeSource={RelativeSource AncestorType=TabControl}}"
                                                             Visibility="{Binding HasGo, Converter={StaticResource Vis}}" />
                                                 </Grid>
@@ -1773,11 +1788,11 @@
                             <!-- Решение 5: кэш Discord — кнопкой, с подтверждением (открытый Discord закрывается). -->
                             <Border Style="{StaticResource Card}">
                                 <DockPanel>
-                                    <Button DockPanel.Dock="Right" Content="Очистить кэш Discord" Command="{Binding ClearDiscordCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                    <Button DockPanel.Dock="Right" Content="{l:T diag.discord.clear}" Command="{Binding ClearDiscordCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
                                     <StackPanel>
-                                        <TextBlock Text="Discord долго подключается" Style="{StaticResource H2}" />
+                                        <TextBlock Text="{l:T diag.discord.title}" Style="{StaticResource H2}" />
                                         <TextBlock Style="{StaticResource Hint}"
-                                                   Text="После смены стратегии Discord может помнить неудачные попытки. Очистка удаляет только его временные файлы — вход и настройки останутся." />
+                                                   Text="{l:T diag.discord.note}" />
                                     </StackPanel>
                                 </DockPanel>
                             </Border>
@@ -1798,8 +1813,8 @@
 
                             <!-- Для вопроса о проблеме: журнал. («Роутер: что мешает» — на вкладке «Роутер».) -->
                             <WrapPanel>
-                                <Button Content="Папка логов" Command="{Binding OpenLogsCmd}" />
-                                <Button Content="Папка результатов" Command="{Binding OpenResultsCmd}" />
+                                <Button Content="{l:T diag.open_logs}" Command="{Binding OpenLogsCmd}" />
+                                <Button Content="{l:T diag.open_results}" Command="{Binding OpenResultsCmd}" />
                             </WrapPanel>
                         </StackPanel>
                     </ScrollViewer>

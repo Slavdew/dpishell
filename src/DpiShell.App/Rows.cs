@@ -272,12 +272,12 @@ public sealed class ScoreRow(StrategyScore s, GroupNames? names = null, Func<str
 /// <summary>Строка сравнения DNS на вкладке «DNS».</summary>
 public sealed record DnsRow(string Host, string System, string Doh, bool Spoofed)
 {
-    public string Mark => Spoofed ? "подменён" : "";
+    public string Mark => Spoofed ? L.T("dns.row.spoofed") : "";
 
     public static DnsRow From(DnsComparison c) => new(
         c.Host,
-        c.System.Length > 0 ? Ips(c.System) : "имени нет",
-        c.Doh.Length > 0 ? Ips(c.Doh) : "нет ответа",
+        c.System.Length > 0 ? Ips(c.System) : L.T("dns.row.no_name"),
+        c.Doh.Length > 0 ? Ips(c.Doh) : L.T("dns.no_answer"),
         c.Spoofed);
 
     static string Ips(IPAddress[] a) => string.Join(", ", a.Take(2)) + (a.Length > 2 ? " …" : "");
@@ -295,12 +295,12 @@ public static class Texts
 {
     public static string Svc(SvcState s) => s switch
     {
-        SvcState.NotInstalled => "не установлена",
-        SvcState.Stopped => "остановлена",
-        SvcState.StartPending => "запускается",
-        SvcState.StopPending => "останавливается",
-        SvcState.Running => "работает",
-        _ => "неизвестно",
+        SvcState.NotInstalled => L.T("diag.svc.not_installed"),
+        SvcState.Stopped => L.T("diag.svc.stopped"),
+        SvcState.StartPending => L.T("diag.svc.starting"),
+        SvcState.StopPending => L.T("diag.svc.stopping"),
+        SvcState.Running => L.T("diag.svc.running"),
+        _ => L.T("diag.svc.unknown"),
     };
 
     public static string Outcome(ProbeOutcome o) => o switch

@@ -1174,7 +1174,7 @@ public sealed partial class MainViewModel : Observable
     /// <summary>Системный DNS подменяет адреса проверяемых сайтов (docs/research/dns.md).</summary>
     public bool DnsSpoofed { get => _dnsSpoofed; private set { if (Set(ref _dnsSpoofed, value)) RaiseIssues(); } }
 
-    string _dnsSummary = "Ещё не проверялось.";
+    string _dnsSummary = L.T("dns.summary.initial");
     public string DnsSummary { get => _dnsSummary; private set => Set(ref _dnsSummary, value); }
 
     bool _dnsChecking;
@@ -1191,7 +1191,7 @@ public sealed partial class MainViewModel : Observable
     {
         if (DnsChecking || IsLoading) return;
         DnsChecking = true;
-        DnsSummary = "Проверяю…";
+        DnsSummary = L.T("dns.summary.checking");
         try
         {
             var hosts = CheckedGroups().SelectMany(g => g.Targets).Select(t => new Uri(t.Url).Host).Distinct().ToList();
@@ -1203,10 +1203,10 @@ public sealed partial class MainViewModel : Observable
             DnsRows.Clear();
             foreach (var c in list) DnsRows.Add(DnsRow.From(c));
             DnsSpoofed = list.Any(c => c.Spoofed);
-            DnsSummary = list.Length == 0 ? "Нечего проверять: не выбраны группы."
-                : DnsSpoofed ? "DNS провайдера подменяет адреса сайтов."
-                : list.All(c => c.Doh.Length == 0) ? "Защищённый DNS не ответил — сравнить не с чем."
-                : "Подмены нет.";
+            DnsSummary = list.Length == 0 ? L.T("dns.summary.no_groups")
+                : DnsSpoofed ? L.T("dns.summary.spoofed")
+                : list.All(c => c.Doh.Length == 0) ? L.T("dns.summary.no_secure")
+                : L.T("dns.summary.clean");
             if (DnsRows.Count > 0) DnsDetailsOpen = true;
         }
         catch (Exception e) { DnsSummary = Texts.Friendly(e); }
@@ -1694,8 +1694,8 @@ public sealed partial class MainViewModel : Observable
     /// <summary>Путь для исключения Защитника — не переписывать руками (п. 16 аудита).</summary>
     public ICommand CopyCoreFolderCmd => _copyCoreFolderCmd ??= new RelayCommand(() =>
     {
-        try { Clipboard.SetText(CoreFolder); Message = "Путь скопирован: " + CoreFolder; }
-        catch (System.Runtime.InteropServices.ExternalException) { Fail("Не удалось скопировать — буфер обмена занят другой программой."); }
+        try { Clipboard.SetText(CoreFolder); Message = L.T("diag.say.path_copied", new { path = CoreFolder }); }
+        catch (System.Runtime.InteropServices.ExternalException) { Fail(L.T("diag.err.copy_busy")); }
     });
     ICommand? _copyCoreFolderCmd;
 
@@ -1703,7 +1703,7 @@ public sealed partial class MainViewModel : Observable
     public ICommand OpenDefenderCmd => _openDefenderCmd ??= new RelayCommand(() =>
     {
         try { Process.Start(new ProcessStartInfo("windowsdefender://threatsettings") { UseShellExecute = true }); }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Fail("Не удалось открыть «Безопасность Windows»: " + e.Message); }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Fail(L.T("diag.err.defender", new { error = e.Message })); }
     });
     ICommand? _openDefenderCmd;
 
@@ -1741,7 +1741,7 @@ public sealed partial class MainViewModel : Observable
     bool _diagRefreshing;
     /// <summary>Идёт обновление «Диагностики» — кнопка показывает «Проверяю…» и не нажимается.</summary>
     public bool DiagRefreshing { get => _diagRefreshing; private set { if (Set(ref _diagRefreshing, value)) { Raise(nameof(RefreshButtonText)); CommandManager.InvalidateRequerySuggested(); } } }
-    public string RefreshButtonText => DiagRefreshing ? "Проверяю…" : "Проверить снова";
+    public string RefreshButtonText => DiagRefreshing ? L.T("diag.refreshing") : L.T("diag.refresh");
 
     string _diagUpdated = "";
     public string DiagUpdated { get => _diagUpdated; private set => Set(ref _diagUpdated, value); }
@@ -1765,16 +1765,19 @@ public sealed partial class MainViewModel : Observable
             if (st is not null)
             {
                 // Стратегию показываем ту, что реально стоит в службе Windows; чужой файл в службе — отдельно.
-                ServiceText = st.RunMode == "process" ? "не используется (оптимизация работает из программы)"
-                    : Texts.Svc(st.Service)
-                    + (st.ServiceStrategy is { } ss ? $" (стратегия: {StrategyTitle(ss)})" : st.StrategyId is { } id && st.Service != SvcState.NotInstalled ? $" (стратегия: {StrategyTitle(id)})" : "")
-                    + (st.Service != SvcState.NotInstalled && !st.ServiceOurCore ? " — запускает чужой файл" : "");
+                var state = Texts.Svc(st.Service);
+                var strategy = st.ServiceStrategy is { } ss ? StrategyTitle(ss) : st.StrategyId is { } id && st.Service != SvcState.NotInstalled ? StrategyTitle(id) : null;
+                var foreign = st.Service != SvcState.NotInstalled && !st.ServiceOurCore;
+                ServiceText = st.RunMode == "process" ? L.T("diag.service.process")
+                    : strategy is not null
+                        ? L.T(foreign ? "diag.service.with_strategy_foreign" : "diag.service.with_strategy", new { state, strategy })
+                        : foreign ? L.T("diag.service.foreign", new { state }) : state;
                 (_svc, _active) = (st.Service, st.Active);
                 _coreProblem = CoreProblem(st.Core);
             }
             else
             {
-                ServiceText = Texts.Svc(svc) + (local is { } l ? $" (стратегия: {StrategyTitle(l)})" : "");
+                ServiceText = local is { } l ? L.T("diag.service.with_strategy", new { state = Texts.Svc(svc), strategy = StrategyTitle(l) }) : Texts.Svc(svc);
                 (_svc, _active) = (svc, svc == SvcState.Running);
                 _localStrategy = local;
                 _coreProblem = null;
@@ -1788,19 +1791,19 @@ public sealed partial class MainViewModel : Observable
                 _coreMissing = core.State == CoreState.Missing;
                 CoreText = core.State switch
                 {
-                    CoreState.Ok => $"в порядке (версия {d.CoreVersion})",
-                    CoreState.Missing => "не найдено — возможно, удалено антивирусом",
-                    _ => "изменено, возможно антивирусом: " + string.Join(", ", core.BadFiles),
+                    CoreState.Ok => L.T("diag.core.ok", new { version = d.CoreVersion }),
+                    CoreState.Missing => L.T("diag.core.missing"),
+                    _ => L.T("diag.core.changed", new { files = string.Join(", ", core.BadFiles) }),
                 };
-                if (core.ExtraFiles.Count > 0) CoreText += $"; лишние файлы: {string.Join(", ", core.ExtraFiles)}";
+                if (core.ExtraFiles.Count > 0) CoreText = L.T("diag.core.extra", new { text = CoreText, files = string.Join(", ", core.ExtraFiles) });
             }
             else
             {
                 CoreBroken = false;
-                CoreText = Helper.State == HelperState.NotInstalled ? "проверяет помощник — он не установлен" : "проверяет помощник — он не отвечает";
+                CoreText = Helper.State == HelperState.NotInstalled ? L.T("diag.core.no_helper") : L.T("diag.core.helper_down");
             }
             ConflictList.Clear();
-            foreach (var c in conflicts) ConflictList.Add($"{c.Name}. {c.Detail}");
+            foreach (var c in conflicts) ConflictList.Add(L.T("diag.conflict.line", new { name = c.Name, detail = c.Detail }));
             VpnList.Clear();
             foreach (var v in vpn) VpnList.Add(v);
             UpdateStatus();
@@ -1811,7 +1814,7 @@ public sealed partial class MainViewModel : Observable
             Findings.Clear();
             foreach (var f in findings) Findings.Add(new FindingRow(f.Ok, f.Title, f.Text, f.Go));
             OnHelperChanged();
-            DiagUpdated = $"обновлено в {L.Time(DateTime.Now)}";
+            DiagUpdated = L.T("diag.updated", new { time = L.Time(DateTime.Now) });
         }
         catch (Exception e) { Fail(Texts.Friendly(e)); }
         finally { DiagRefreshing = false; }
@@ -1823,9 +1826,9 @@ public sealed partial class MainViewModel : Observable
 
     public static string TimestampsLine(bool? enabled) => enabled switch
     {
-        true => "включены (нужны части стратегий)",
-        false => "выключены — включатся при включении оптимизации",
-        _ => "не удалось узнать",
+        true => L.T("diag.timestamps.on"),
+        false => L.T("diag.timestamps.off"),
+        _ => L.T("diag.timestamps.unknown"),
     };
 
     /// <summary>Проверки окружения (09-features-spec §4): ✓ — в порядке, ⚠ — что мешает и что сделать.</summary>
@@ -1837,22 +1840,24 @@ public sealed partial class MainViewModel : Observable
     async Task ClearDiscordAsync()
     {
         var found = await Task.Run(() => DiscordCache.Find());
-        if (found.Folders.Count == 0) { Message = "Кэш Discord не найден — чистить нечего."; return; }
+        if (found.Folders.Count == 0) { Message = L.T("diag.discord.not_found"); return; }
         bool running = await Task.Run(DiscordCache.IsRunning);
-        if (!Confirm($"Удалить кэш Discord ({Mb(found.Bytes)})? Удаляются только папки Cache, Code Cache и GPUCache — вход, настройки и сообщения обычно останутся, "
-                     + "Discord просто загрузит всё заново."
-                     + (running ? "\n\nDiscord сейчас открыт — программа закроет его. После очистки запустите Discord снова." : "")))
+        if (!Confirm(L.T(running ? "diag.discord.confirm_running" : "diag.discord.confirm", new { size = Mb(found.Bytes) })))
             return;
         DiscordCacheInfo? r = null;
-        if (await Guard("Очищаю кэш Discord…", async () => r = await Task.Run(() =>
+        if (await Guard(L.T("diag.discord.busy"), async () => r = await Task.Run(() =>
             {
                 if (running) DiscordCache.Close();
                 return DiscordCache.Clear();
             })) && r is not null)
-            Message = $"Кэш Discord очищен: {Mb(r.Bytes)}." + (r.Failed.Count > 0 ? $" Не удалось удалить файлов: {r.Failed.Count} — они заняты." : "");
+            Message = r.Failed.Count > 0
+                ? L.T("diag.discord.cleared_failed", new { size = Mb(r.Bytes), n = r.Failed.Count })
+                : L.T("diag.discord.cleared", new { size = Mb(r.Bytes) });
     }
 
-    static string Mb(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / 1024.0 / 1024:0.#} МБ" : $"{Math.Max(1, bytes / 1024)} КБ";
+    static string Mb(long bytes) => bytes >= 1024 * 1024
+        ? L.T("diag.size.mb", new { n = (bytes / 1024.0 / 1024).ToString("0.#", L.Culture) })
+        : L.T("diag.size.kb", new { n = Math.Max(1, bytes / 1024) });
 
     // ---------- оформление (настройки окна — %LocalAppData%) ----------
 
@@ -1964,7 +1969,7 @@ public sealed partial class MainViewModel : Observable
         await FetchAsync(full: true);
         if (Helper.Reader is null || Helper.Results is not { } r)
         {
-            Message = "Результаты подборов хранит помощник — появятся после первого подбора.";
+            Message = L.T("diag.results.no_helper");
             return;
         }
         var dir = Path.Combine(WindowSettings.DefaultDir, "results");
@@ -1980,7 +1985,7 @@ public sealed partial class MainViewModel : Observable
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Fail(Texts.Friendly(e)); return; }
-        if (r.Results.Count == 0) Message = "Подборов ещё не было.";
+        if (r.Results.Count == 0) Message = L.T("diag.results.none");
         OpenFolder(dir);
     }
 

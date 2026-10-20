@@ -532,6 +532,32 @@
             </Setter>
         </Style>
 
+        <!-- Значения (адреса, версии, тексты ошибок и предупреждений): выглядят как текст, но выделяются и копируются.
+             Привязку Text писать с Mode=OneWay; хост содержимого — Border (ScrollViewer съел бы колесо страницы). -->
+        <Style x:Key="SelectableText" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="ContextMenu">
+                <Setter.Value>
+                    <ContextMenu>
+                        <MenuItem Command="ApplicationCommands.Copy" Header="{l:T common.copy}" />
+                    </ContextMenu>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="PART_ContentHost" Background="Transparent" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Пароль роутера: как поле ввода (у системного шаблона светлый фон в тёмной теме). -->
         <Style TargetType="PasswordBox">
             <Setter Property="Background" Value="{DynamicResource InputBack}" />

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.Win32;
+using DpiShell.Core.Localization;
 
 namespace DpiShell.Core;
 
@@ -18,13 +19,13 @@ public sealed record SystemFinding(bool Ok, string Title, string Text, string? G
 public static class SystemChecks
 {
     /// <summary>Службы, которые перехватывают трафик и ломают обход (как у Flowseal: подстрока имени или описания).</summary>
-    public static readonly IReadOnlyList<(string Pattern, string Title)> InterferingServices =
+    public static IReadOnlyList<(string Pattern, string Title)> InterferingServices =>
     [
-        ("Killer", "Killer Network (сетевые утилиты ноутбуков Dell/MSI)"),
+        ("Killer", L.T("diag.find.svc_killer")),
         ("Connectivity Network", "Intel Connectivity Network Service"),
-        ("TracSrvWrapper", "Check Point (VPN/защита)"),
+        ("TracSrvWrapper", L.T("diag.find.svc_checkpoint")),
         ("EPWD", "Check Point Endpoint Security"),
-        ("SmartByte", "SmartByte (ускоритель сети Dell)"),
+        ("SmartByte", L.T("diag.find.svc_smartbyte")),
     ];
 
     /// <summary>Домены YouTube, чьи строки в hosts ломают его (заглушки «блокировщиков» и старые «ускорители»).</summary>
@@ -37,29 +38,29 @@ public static class SystemChecks
 
         var bfe = ServiceManager.Query("BFE");
         list.Add(bfe == SvcState.Running
-            ? new(true, "Служба BFE", "работает")
-            : new(false, "Служба BFE", "не работает — без неё оптимизация не запустится. Включите службу «Служба базовой фильтрации» (BFE) или проверьте антивирус."));
+            ? new(true, L.T("diag.find.bfe.title"), L.T("diag.find.ok_running"))
+            : new(false, L.T("diag.find.bfe.title"), L.T("diag.find.bfe.bad")));
 
         list.Add(ProxyFinding(ReadProxy()));
 
         list.Add(Process.GetProcessesByName("AdguardSvc") is { Length: > 0 } ag && Dispose(ag)
-            ? new(false, "Adguard", "запущен — он тоже перехватывает трафик. Если сайты не открываются, выключите в нём фильтрацию HTTPS или закройте его.")
-            : new(true, "Adguard", "не запущен"));
+            ? new(false, "Adguard", L.T("diag.find.adguard.bad"))
+            : new(true, "Adguard", L.T("diag.find.adguard.ok")));
 
         var services = MatchServices(ReadServices()).Where(s => ServiceManager.Query(s.Name) == SvcState.Running).ToList();
         list.Add(services.Count == 0
-            ? new(true, "Сетевые службы", "мешающих не найдено")
-            : new(false, "Сетевые службы", $"работают: {string.Join(", ", services.Select(s => s.Title).Distinct())}. Они перехватывают трафик — если оптимизация не работает, отключите их."));
+            ? new(true, L.T("diag.find.services.title"), L.T("diag.find.services.ok"))
+            : new(false, L.T("diag.find.services.title"), L.T("diag.find.services.bad", new { list = string.Join(", ", services.Select(s => s.Title).Distinct()) })));
 
         var path = PathProblem(AppContext.BaseDirectory) ?? PathProblem(paths.Root);
-        list.Add(path is null ? new(true, "Папка программы", "в порядке") : new(false, "Папка программы", path));
+        list.Add(path is null ? new(true, L.T("diag.find.folder.title"), L.T("diag.find.folder.ok")) : new(false, L.T("diag.find.folder.title"), path));
 
         try
         {
             var yt = YoutubeLinesOutsideBlock(File.ReadAllBytes(hostsPath ?? HostsFileStore.SystemHostsPath));
             list.Add(yt.Count == 0
-                ? new(true, "hosts", "лишних строк для YouTube нет")
-                : new(false, "hosts", $"есть строки для YouTube от другой программы: {string.Join("; ", yt.Take(3))}{(yt.Count > 3 ? " …" : "")}. Из-за них YouTube может не открываться — уберите их из файла hosts."));
+                ? new(true, "hosts", L.T("diag.find.hosts.ok"))
+                : new(false, "hosts", L.T("diag.find.hosts.bad", new { lines = string.Join("; ", yt.Take(3)) + (yt.Count > 3 ? " …" : "") })));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         return list;
@@ -68,8 +69,8 @@ public static class SystemChecks
     static bool Dispose(Process[] ps) { foreach (var p in ps) p.Dispose(); return true; }
 
     public static SystemFinding ProxyFinding((bool Enabled, string? Server) proxy) => proxy.Enabled
-        ? new(false, "Системный прокси", $"включён ({proxy.Server ?? "адрес не указан"}). Через прокси оптимизация может не работать — если он не нужен, выключите.", SystemFinding.GoProxy)
-        : new(true, "Системный прокси", "не используется");
+        ? new(false, L.T("diag.find.proxy.title"), L.T("diag.find.proxy.on", new { server = proxy.Server ?? L.T("diag.find.proxy.no_server") }), SystemFinding.GoProxy)
+        : new(true, L.T("diag.find.proxy.title"), L.T("diag.find.proxy.off"));
 
     /// <summary>Действующий системный прокси: настройки пользователя или, если политика делает их общими, настройки машины. Автонастройка — как «включён».</summary>
     static (bool, string?) ReadProxy()
@@ -117,9 +118,9 @@ public static class SystemChecks
     public static string? PathProblem(string path)
     {
         if (path.Contains("OneDrive", StringComparison.OrdinalIgnoreCase))
-            return $"лежит в OneDrive ({path}) — синхронизация может блокировать файлы ядра. Перенесите программу, например, в C:\\Program Files.";
+            return L.T("diag.find.folder.onedrive", new { path });
         if (path.Any(c => c > 127))
-            return $"в пути есть русские или другие не латинские буквы ({path}) — ядро может не запуститься. Перенесите программу в папку с латинским именем.";
+            return L.T("diag.find.folder.non_ascii", new { path });
         return null;
     }
 

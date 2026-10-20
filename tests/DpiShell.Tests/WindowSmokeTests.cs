@@ -1556,7 +1556,7 @@ public sealed partial class WindowSmokeTests
     }
 
     /// <summary>Вкладка «Прокси» для снимков: свой прокси включён в реестре (память), два прокси в списке, прежний запомнен, проверка прошла.</summary>
-    static void FillProxy(MainViewModel vm)
+    internal static void FillProxy(MainViewModel vm)
     {
         var reg = (MemoryProxyRegistry)vm.Proxy.Registry;
         reg.Values[(ProxyKey.UserSettings, "", ProxyNames.Enable)] = 1;
@@ -1573,7 +1573,7 @@ public sealed partial class WindowSmokeTests
     }
 
     /// <summary>Наполнение: строки таблиц и плашки — для проверки главной и для снимков. В памяти и во временной папке.</summary>
-    static void Fill(MainViewModel vm, Shell shell)
+    internal static void Fill(MainViewModel vm, Shell shell)
     {
         var strategies = shell.Catalog.Strategies.Take(6).ToList();
         // Статистика — настоящими файлами подборов: помощник отдаёт её окну (read_results), список строит само окно.
