@@ -702,6 +702,10 @@
         <Style TargetType="ComboBoxItem">
             <Setter Property="Foreground" Value="{DynamicResource Text}" />
             <Setter Property="Padding" Value="8,6" />
+            <!-- Явно: системный стиль берёт выравнивание привязкой к родительскому ItemsControl, и при пересборке пунктов (смена языка)
+                 она пишет «Cannot find source for binding» — шум, который ловят тесты привязок. -->
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBoxItem">
