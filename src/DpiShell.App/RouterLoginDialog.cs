@@ -20,7 +20,7 @@ public static class RouterLoginDialog
         owner = owner is { IsVisible: true } ? owner : null;
         var w = new Window
         {
-            Title = "Вход на роутер",
+            Title = L.T("router.login.title"),
             SizeToContent = SizeToContent.WidthAndHeight,
             ResizeMode = ResizeMode.NoResize,
             WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
@@ -35,23 +35,23 @@ public static class RouterLoginDialog
         w.SourceInitialized += (_, _) => ThemeManager.SetTitleBar(w);
 
         var panel = new StackPanel { Margin = new Thickness(24, 20, 24, 18), Width = 380 };
-        panel.Children.Add(new TextBlock { Text = "Пароль администратора роутера — обычно тот же, что для входа в его настройки (LuCI).", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
+        panel.Children.Add(new TextBlock { Text = L.T("router.login.intro"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
         var password = new PasswordBox { Padding = new Thickness(6, 4, 6, 4), Margin = new Thickness(0, 0, 0, 6) };
-        AutomationProperties.SetName(password, "Пароль роутера");
+        AutomationProperties.SetName(password, L.T("router.password.name"));
         panel.Children.Add(password);
 
         var error = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 4), Visibility = Visibility.Collapsed };
         error.SetResourceReference(TextBlock.ForegroundProperty, "Danger");
         panel.Children.Add(error);
         // У свежей OpenWrt пароль root не задан (UX-аудит 2, п. 11): явный выбор, а не «пустое поле», — пустое поле значит «взять сохранённый».
-        var noPassword = new CheckBox { Content = "Пароль не задан (свежая OpenWrt)", Margin = new Thickness(0, 2, 0, 6), HorizontalAlignment = HorizontalAlignment.Left };
+        var noPassword = new CheckBox { Content = L.T("router.password.none"), Margin = new Thickness(0, 2, 0, 6), HorizontalAlignment = HorizontalAlignment.Left };
         noPassword.Checked += (_, _) => { password.Clear(); password.IsEnabled = false; };
         noPassword.Unchecked += (_, _) => { password.IsEnabled = true; password.Focus(); };
         panel.Children.Add(noPassword);
         // «Поле пустое — вход с сохранённым» — только когда сохранённый есть.
         var note = new TextBlock
         {
-            Text = "Пароль хранится зашифрованным и только на этом компьютере." + (router.HasSavedPassword ? " Поле пустое — вход с сохранённым." : ""),
+            Text = L.T(router.HasSavedPassword ? "router.login.stored_saved" : "router.login.stored"),
             TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 10),
         };
         if (Application.Current?.TryFindResource("Hint") is Style hint) note.Style = hint;
@@ -60,7 +60,7 @@ public static class RouterLoginDialog
         panel.Children.Add(AddressExpander(router));
 
         var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
-        var login = new Button { Content = "Войти", IsDefault = true };
+        var login = new Button { Content = L.T("router.login"), IsDefault = true };
         if (Application.Current?.TryFindResource("Primary") is Style primary) login.Style = primary;
         var cancel = new Button { Content = L.T("common.cancel"), IsCancel = true };
         buttons.Children.Add(login);
@@ -96,16 +96,16 @@ public static class RouterLoginDialog
         auto.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, nameof(RouterViewModel.AddressAuto));
         address.Children.Add(auto);
         var customRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
-        var custom = new RadioButton { Content = "Свой:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        var custom = new RadioButton { Content = L.T("router.address.custom"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
         custom.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, nameof(RouterViewModel.AddressCustom));
-        var customText = new TextBox { Width = 200, Padding = new Thickness(6, 4, 6, 4), ToolTip = "IP или имя роутера, например 192.168.1.1" };
+        var customText = new TextBox { Width = 200, Padding = new Thickness(6, 4, 6, 4), ToolTip = L.T("router.address.tip") };
         customText.SetBinding(TextBox.TextProperty, new Binding(nameof(RouterViewModel.CustomAddress)) { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged });
         customText.SetBinding(UIElement.IsEnabledProperty, nameof(RouterViewModel.AddressCustom));
-        AutomationProperties.SetName(customText, "Адрес роутера");
+        AutomationProperties.SetName(customText, L.T("router.address.name"));
         customRow.Children.Add(custom);
         customRow.Children.Add(customText);
         address.Children.Add(customRow);
-        return new Expander { Header = "Дополнительно: адрес роутера", Content = address, Margin = new Thickness(0, 0, 0, 16), DataContext = router };
+        return new Expander { Header = L.T("router.address.header"), Content = address, Margin = new Thickness(0, 0, 0, 16), DataContext = router };
 
     }
 }
