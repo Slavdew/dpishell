@@ -486,7 +486,7 @@ public sealed class RouterSetupViewModelTests : IDisposable
         var conn = new FakeSshConnector(ssh);
         var vm = Make(r, conn);
         Assert.True(await vm.ConnectAsync("secret"));
-        Assert.Equal(L.T("router.password.saved"), vm.SavedPasswordText);
+        Assert.Equal(L.T("settings.router.password_saved"), vm.SavedPasswordText);
         Assert.True(vm.ForgetPasswordCmd.CanExecute(null));
         vm.ForgetPasswordCmd.Execute(null);
         Assert.Null(Settings.RouterPassword);

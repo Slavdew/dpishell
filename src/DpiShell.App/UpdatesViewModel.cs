@@ -77,24 +77,24 @@ public sealed class UpdatesViewModel : Observable
     public string? CurrentVersion => _helper.Reader is not null && _helper.Status?.DataVersion is { } v ? v : _packageVersion;
 
     public bool DataAvailable => _s.UpdatesData is { } v && DataManifest.CompareVersions(v, CurrentVersion) > 0;
-    public string AvailableText => DataAvailable ? $"Доступно обновление списков от {Day(_s.UpdatesData)}" : "";
+    public string AvailableText => DataAvailable ? L.T("about.lists.available", new { date = Day(_s.UpdatesData) }) : "";
 
     /// <summary>Известно, что вышла версия новее (из подписанного описания выпуска или подсказки манифеста данных).</summary>
     public bool AppAvailable => _s.UpdatesApp is { } a && DataUpdateCheck.IsOlder(AppVersion, a);
     /// <summary>Подсказка без проверенного описания выпуска (его не получили): обновить из окна нельзя — только ссылка на страницу релизов.</summary>
     public bool AppHintOnly => AppAvailable && !AppReleaseReady;
-    public string AppText => AppHintOnly ? $"Вышла версия {_s.UpdatesApp}. Нажмите «Проверить обновления» — после проверки подлинности появится кнопка обновления." : "";
+    public string AppText => AppHintOnly ? L.T("about.app.hint_only", new { version = _s.UpdatesApp }) : "";
     /// <summary>Одна главная кнопка по состоянию: выпуск проверен — «Обновить до X», иначе «Проверить обновления».</summary>
     public bool ShowCheckButton => !AppReleaseReady;
     /// <summary>«Скачать программу 99.0» — рядом с «Обновить списки» видно, что это разные вещи (UX-аудит 2, п. 13).</summary>
-    public string AppButtonText => $"Скачать программу {_s.UpdatesApp}";
+    public string AppButtonText => L.T("about.app.download_button", new { version = _s.UpdatesApp });
 
     // ---------- обновление программы кнопкой ----------
 
     /// <summary>Есть выпуск новее с верной подписью, подходящий этому компьютеру: можно обновить из окна.</summary>
     public bool AppReleaseReady => _appCheck is { Available: true } c && c.Version is { } v && AppRelease.IsOlder(Three(AppVersion), v);
-    public string AppReleaseTitle => AppReleaseReady ? $"Вышла версия {_appCheck!.Version} (сейчас {Three(AppVersion)})" : "";
-    public string AppUpdateButtonText => $"Обновить до {_appCheck?.Version}";
+    public string AppReleaseTitle => AppReleaseReady ? L.T("about.app.release_title", new { version = _appCheck!.Version, current = Three(AppVersion) }) : "";
+    public string AppUpdateButtonText => L.T("about.app.update_button", new { version = _appCheck?.Version });
     /// <summary>«Что нового» — из подписанного описания выпуска, показывается до обновления.</summary>
     public IReadOnlyList<string> AppNotes => AppReleaseReady ? _appCheck!.Changes : [];
     public bool HasAppNotes => AppNotes.Count > 0;
@@ -128,10 +128,10 @@ public sealed class UpdatesViewModel : Observable
     public string AppNotice => _appNotice;
     public bool HasAppNotice => _appNotice.Length > 0;
     /// <summary>Новая версия есть, но требует более новую Windows.</summary>
-    public string AppOsNote => _appCheck is { Newer: true, OsTooOld: true, Version: { } v } ? $"Версия {v} требует более новую Windows — на этом компьютере её поставить нельзя." : "";
+    public string AppOsNote => _appCheck is { Newer: true, OsTooOld: true, Version: { } v } ? L.T("about.app.os_too_old", new { version = v }) : "";
     public bool HasAppOsNote => AppOsNote.Length > 0;
     public bool CanRollback => _canRollback;
-    public string RollbackText => $"Вернуть прежнюю версию ({_previousVersion})";
+    public string RollbackText => L.T("about.app.rollback_button", new { version = _previousVersion });
 
     /// <summary>«0.9.2.0» → «0.9.2»: версии выпусков — X.Y.Z.</summary>
     static string Three(string v) => System.Version.TryParse(v, out var x) ? $"{x.Major}.{x.Minor}.{Math.Max(x.Build, 0)}" : v;
@@ -173,11 +173,11 @@ public sealed class UpdatesViewModel : Observable
     {
         get
         {
-            var data = CurrentVersion is { } v ? $"Списки от {Day(v)}" : "Списки из поставки";
-            if (_checking) return data + " · проверяю…";
-            if (_s.UpdatesCheckedAt is not { } at) return data + " · проверка раз в день при запуске";
-            if (_s.UpdatesOkAt is { } ok && ok >= at) return data + $" · проверено {When(ok)}";
-            return data + $" · последняя попытка {When(at)} — источники не ответили";
+            var lists = CurrentVersion is { } v ? L.T("about.status.lists_dated", new { date = Day(v) }) : L.T("about.status.lists_bundled");
+            if (_checking) return L.T("about.status.checking", new { lists });
+            if (_s.UpdatesCheckedAt is not { } at) return L.T("about.status.daily", new { lists });
+            if (_s.UpdatesOkAt is { } ok && ok >= at) return L.T("about.status.ok", new { lists, when = When(ok) });
+            return L.T("about.status.failed", new { lists, when = When(at) });
         }
     }
 
@@ -234,13 +234,13 @@ public sealed class UpdatesViewModel : Observable
         if (c.Found is null)
         {
             // Подпись не сошлась — не молчать: человек должен знать, почему обновления нет.
-            if (c.Errors.Any(x => x.Contains("подпись", StringComparison.Ordinal)))
-                SetAppError("Описание выпуска программы не прошло проверку подписи — обновление не предлагается. Скачать программу можно со страницы релизов.", string.Join("; ", c.Errors));
+            if (c.SignatureFailed)
+                SetAppError(L.T("about.app.signature_failed"), string.Join("; ", c.Errors));
             return null;
         }
         if (!_appBusy) { _appError = ""; _appErrorDetails = ""; }
         _s.UpdatesApp = c.Available ? c.Version : null;
-        if (c.Available) return $"Вышла версия {c.Version} — кнопка «Обновить до {c.Version}» на вкладке «Информация и обновления».";
+        if (c.Available) return L.T("about.app.found_new", new { version = c.Version });
         return c.OsTooOld ? AppOsNote : null;
     }
 
@@ -262,12 +262,12 @@ public sealed class UpdatesViewModel : Observable
                 var c = DataUpdateCheck.Compare(got.Manifest, CurrentVersion, AppVersion);
                 _s.UpdatesData = c.DataNewer ? c.DataVersion : null;
                 _s.UpdatesApp = c.AppNewer ? c.AppVersion : null;
-                say = c.DataNewer ? $"Доступно обновление списков от {Day(c.DataVersion)}."
-                    : c.NeedsNewApp ? "Новые списки требуют новую версию программы — скачайте её со страницы релизов."
-                    : c.AppNewer ? $"Списки последние. Вышла версия программы {c.AppVersion}."
-                    : "Обновлений нет.";
+                say = c.DataNewer ? L.T("about.check.lists_new", new { date = Day(c.DataVersion) })
+                    : c.NeedsNewApp ? L.T("about.check.needs_new_app")
+                    : c.AppNewer ? L.T("about.check.app_newer", new { version = c.AppVersion })
+                    : L.T("about.check.no_updates");
             }
-            else say = "Источники обновлений не ответили — проверю при следующем запуске. " + string.Join("; ", r.Errors);
+            else say = L.T("about.check.sources_failed", new { errors = string.Join("; ", r.Errors) });
             // Программа — отдельно от данных: у неё свой подписанный release.json (подсказка манифеста остаётся запасной).
             var app = await CheckAppAsync(http);
             if (!quiet) Say(app is null ? say : DataAvailable ? say + " " + app : app);
@@ -285,10 +285,10 @@ public sealed class UpdatesViewModel : Observable
         if (await Need() is not { } c) return;
         DataUpdateResult? r = null;
         var progress = new Progress<string>(Say);
-        await Guard("Обновляю списки…", async () =>
+        await Guard(L.T("about.lists.busy"), async () =>
         {
             r = await c.UpdateDataAsync(false, progress);
-            if (r.NeedsConfirm && Confirm(r.Message + "\n\nПрименить новый IP-список?")) r = await c.UpdateDataAsync(true, progress);
+            if (r.NeedsConfirm && Confirm(L.T("about.lists.confirm_ip", new { message = r.Message }))) r = await c.UpdateDataAsync(true, progress);
             await AfterInstall();
         });
         if (r is null) return;
@@ -310,13 +310,13 @@ public sealed class UpdatesViewModel : Observable
         if (_appCheck is not { Available: true } check || check.Version is not { } version || _appBusy) return;
         if (IsBusy())
         {
-            SetAppError("Сейчас идёт другая операция — дождитесь её конца и нажмите «Обновить» снова: после перезапуска она бы оборвалась.");
+            SetAppError(L.T("about.app.busy_update"));
             return;
         }
         _appNotice = "";
         SetAppError("");
         SetAppBusy(true);
-        _appProgress = $"Скачиваю версию {version}…";
+        _appProgress = L.T("about.app.downloading", new { version });
         Refresh();
         bool restarted = false;
         try
@@ -329,7 +329,7 @@ public sealed class UpdatesViewModel : Observable
                 var mb = bytes / (1024 * 1024);
                 if (mb == shown) return;
                 shown = mb;
-                _appProgress = $"Скачиваю версию {version}: {mb} МБ";
+                _appProgress = L.T("about.app.downloading_mb", new { version, mb });
                 Raise(nameof(AppProgressText));
             });
             var prepared = await up.PrepareAsync(check, progress);
@@ -339,7 +339,7 @@ public sealed class UpdatesViewModel : Observable
                 SetAppError(prepared.Message, prepared.Details);
                 return;
             }
-            _appProgress = $"Версия {version} проверена и распакована. Перезапускаю программу…";
+            _appProgress = L.T("about.app.restarting", new { version });
             Refresh();
             var before = up.Store.State;
             var plan = up.RestartInto(version);
@@ -353,13 +353,13 @@ public sealed class UpdatesViewModel : Observable
                 // Новая копия не запустилась — вернуть запись о переключении: прежняя версия продолжает работать.
                 up.Store.Save(before);
                 _appProgress = "";
-                SetAppError($"Версия {version} готова, но запустить её не вышло: {StartProblem(e)} Прежняя версия продолжает работать.", e.ToString());
+                SetAppError(L.T("about.app.start_failed", new { version, reason = StartProblem(e) }), e.ToString());
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             _appProgress = "";
-            SetAppError("Обновление не вышло: " + Texts.Friendly(e) + " Программа не изменена.", e.ToString());
+            SetAppError(L.T("about.app.update_failed", new { error = Texts.Friendly(e) }), e.ToString());
         }
         finally
         {
@@ -377,15 +377,15 @@ public sealed class UpdatesViewModel : Observable
         if (!up.CanRollback)
         {
             RefreshRollback();
-            SetAppError("Прежней версии не нашлось — её файлы удалены или перенесены.");
+            SetAppError(L.T("about.app.no_previous"));
             return;
         }
         if (IsBusy())
         {
-            SetAppError("Сейчас идёт другая операция — дождитесь её конца и повторите.");
+            SetAppError(L.T("about.app.busy_retry"));
             return;
         }
-        if (!Confirm($"Вернуться к версии {up.PreviousVersion}? Программа перезапустится; настройки и списки сохранятся."))
+        if (!Confirm(L.T("about.app.rollback_confirm", new { version = up.PreviousVersion })))
             return;
         SetAppError("");
         _appNotice = "";
@@ -396,10 +396,10 @@ public sealed class UpdatesViewModel : Observable
             var before = up.Store.State;
             if (up.Rollback() is not { } plan)
             {
-                SetAppError("Прежней версии не нашлось — её файлы удалены или перенесены.");
+                SetAppError(L.T("about.app.no_previous"));
                 return;
             }
-            _appProgress = $"Возвращаю версию {plan.Version}…";
+            _appProgress = L.T("about.app.rolling_back", new { version = plan.Version });
             Refresh();
             try
             {
@@ -410,7 +410,7 @@ public sealed class UpdatesViewModel : Observable
             {
                 up.Store.Save(before);
                 _appProgress = "";
-                SetAppError($"Не удалось запустить версию {plan.Version}: {StartProblem(e)} Текущая версия продолжает работать.", e.ToString());
+                SetAppError(L.T("about.app.rollback_start_failed", new { version = plan.Version, reason = StartProblem(e) }), e.ToString());
             }
         }
         finally
@@ -423,7 +423,7 @@ public sealed class UpdatesViewModel : Observable
     /// <summary>Почему не запустилась другая копия: Win32Exception — словами (антивирус, повреждённый файл), остальное — как есть.</summary>
     static string StartProblem(Exception e)
     {
-        var text = e is System.ComponentModel.Win32Exception ? "Windows не запустила файл — возможно, его заблокировал антивирус." : e.Message;
+        var text = e is System.ComponentModel.Win32Exception ? L.T("about.app.start_problem_win32") : e.Message;
         return text.EndsWith('.') ? text : text + ".";
     }
 
@@ -439,10 +439,10 @@ public sealed class UpdatesViewModel : Observable
     public void AnnounceStart(string? from, string? failedVersion)
     {
         var now = Three(AppVersion);
-        string? text = failedVersion is not null ? $"Версия {failedVersion} не запустилась, поэтому открыта прежняя версия {now}. Повторить обновление можно кнопкой на этой вкладке."
+        string? text = failedVersion is not null ? L.T("about.app.start_failed_back", new { version = failedVersion, current = now })
             : from is null ? null
-            : AppRelease.IsOlder(from, now) ? $"Программа обновлена до версии {now}."
-            : $"Возвращена версия {now}.";
+            : AppRelease.IsOlder(from, now) ? L.T("about.app.updated", new { version = now })
+            : L.T("about.app.rolled_back", new { version = now });
         _appNotice = text ?? "";
         RefreshRollback();
         Refresh();
@@ -460,5 +460,5 @@ public sealed class UpdatesViewModel : Observable
         version is not null && DateOnly.TryParseExact(version.Split('.')[0], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)
             ? L.Date(d.ToDateTime(TimeOnly.MinValue)) : version ?? "";
 
-    static string When(DateTime t) => $"{L.DayMonth(t)} в {L.Time(t)}";
+    static string When(DateTime t) => L.T("about.when", new { date = L.DayMonth(t), time = L.Time(t) });
 }

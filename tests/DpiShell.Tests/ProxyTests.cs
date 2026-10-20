@@ -951,15 +951,15 @@ public sealed class ProxyViewModelTests : IDisposable
         reg.Values[(ProxyKey.MachineSettings, "", ProxyNames.Enable)] = 1;
         await vm.RefreshAsync();
         Assert.Equal(2, vm.Notes.Count);
-        Assert.Contains(vm.Notes, n => n.Contains("общие для всех"));
-        Assert.Contains(vm.Notes, n => n.Contains("политикой"));
+        Assert.Contains(L.T("proxy.note.machine_wide"), vm.Notes);
+        Assert.Contains(L.T("proxy.note.policy_blocked"), vm.Notes);
         Assert.Contains("10.1.1.1:3128", vm.MachineLine);
 
         string? said = null;
         vm.Say = s => said = s;
         Add(vm, "Clash", "127.0.0.1:7897");
         await vm.EnableAsync(vm.Items[0]);
-        Assert.Contains("не подействуют", said);   // для одного пользователя при общих настройках
+        Assert.Equal(L.T("proxy.say.policy_suffix", new { message = L.T("proxy.out.user_on") }), said);   // для одного пользователя при общих настройках
     }
 
     [Fact]
@@ -967,14 +967,14 @@ public sealed class ProxyViewModelTests : IDisposable
     {
         var (vm, reg, _, _, _) = Make();
         await vm.RefreshAsync();
-        Assert.Equal("выключен", vm.UserLine);
-        Assert.Equal("напрямую", vm.WinHttpLine);
+        Assert.Equal(L.T("proxy.off"), vm.UserLine);
+        Assert.Equal(L.T("proxy.winhttp.direct"), vm.WinHttpLine);
         reg.Values[(ProxyKey.UserSettings, "", ProxyNames.Pac)] = "http://p.example/p.pac";
         var blob = new byte[24]; blob[8] = 0x0D;
         reg.Values[(ProxyKey.UserSettings, "", ProxyNames.ConnectionsBlob)] = blob;
         await vm.RefreshAsync();
-        Assert.Contains("автонастройка http://p.example/p.pac", vm.UserLine);
-        Assert.Contains("автоматически определять", vm.UserLine);
+        Assert.Contains(L.T("proxy.line.pac", new { value = "http://p.example/p.pac" }), vm.UserLine);
+        Assert.Contains(L.T("proxy.line.autodetect"), vm.UserLine);
     }
 
     [Fact]

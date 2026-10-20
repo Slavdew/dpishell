@@ -100,7 +100,7 @@ public sealed class HomeViewModelTests : IDisposable
         f.Backend.StatusValue = Status(active: true);
         await vm.EnableAsync();   // проверка идёт сама
         Assert.Equal("Открывается не всё", vm.StatusTitle);   // жёлтый, а не зелёный «Работает»
-        Assert.StartsWith("Оптимизация работает. Не открывается: Discord", vm.StatusDetail);
+        Assert.StartsWith(L.T("home.status.partial_plain", new { groups = "Discord" }), vm.StatusDetail);
 
         on = true;
         await vm.CheckNowAsync();
@@ -165,7 +165,7 @@ public sealed class HomeViewModelTests : IDisposable
         Assert.False(vm.ShowLoadActions);
         for (int i = 0; i < 300 && !vm.LoadSlow; i++) await Task.Delay(10);
         Assert.True(vm.ShowLoadActions);
-        Assert.StartsWith("Помощник отвечает дольше обычного", vm.LoadingText);
+        Assert.Equal(L.T("shell.loading.slow"), vm.LoadingText);
         Assert.True(vm.RetryCmd.CanExecute(null));
         Assert.True(vm.OpenWithoutHelperCmd.CanExecute(null));
         // «Повторить» — заново, с новым сроком; прежнее ожидание отменено и заставку не трогает.
@@ -195,7 +195,7 @@ public sealed class HomeViewModelTests : IDisposable
         var check = vm.CheckNowAsync();
         Assert.True(vm.Checking);
         Assert.True(vm.HasCheck);
-        Assert.Equal("Проверяю…", vm.CheckSummary);
+        Assert.Equal(L.T("home.check.running"), vm.CheckSummary);
 
         // Пока проверяли, обход выключился (из трея, сбой) — итог про включённый не показываем.
         f.Backend.StatusValue = Status(active: false);
@@ -237,7 +237,7 @@ public sealed class HomeViewModelTests : IDisposable
         // Чужого адреса нет, просто не открылось через DNS Windows — без слов «подмена» и «браузер».
         hostsIp = null; sysIp = "173.194.220.91";
         await vm.CheckNowAsync();
-        Assert.StartsWith("⚠ Программы, которые берут адрес у Windows", vm.BrowserWarning);
+        Assert.Equal("⚠ " + L.T("home.browser.windows_only", new { groups = "YouTube" }), vm.BrowserWarning);
         Assert.DoesNotContain("подмен", vm.BrowserWarning);
         Assert.True(vm.ShowBrowserDnsFix);
     }

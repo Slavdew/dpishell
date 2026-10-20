@@ -43,7 +43,7 @@ public sealed partial class WindowSmokeTests
                 vm.Page = Pages.Router;
                 Pump();
                 var tabs = Find<TabControl>(w)!;
-                bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
+                bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
                 CheckBox Switch() => Find<CheckBox>(tabs, c => c.IsVisible && System.Windows.Automation.AutomationProperties.GetName(c) == L.T("router.joint.title"))
                                      ?? throw new Exception("Нет переключателя «Совместная работа с роутером»");
 
@@ -91,7 +91,7 @@ public sealed partial class WindowSmokeTests
                 vm.Page = Pages.Sites;
                 Pump();
                 tabs = Find<TabControl>(w)!;
-                if (!Visible(t => t.Text.Contains("youtube.com — ведёт роутер, на этом ПК не применяется."))) throw new Exception("У строки с youtube.com нет пометки «ведёт роутер»");
+                if (!Visible(t => t.Text.Contains(L.T("sites.adv.hint.router_owned", new { sites = "youtube.com" })))) throw new Exception("У строки с youtube.com нет пометки «ведёт роутер»");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-sites-joint.png"));
 
                 // Роутер пропал: ПК сразу работает сам, переключатель показывает «Выключено» (связки нет), ждать роутер можно перестать.

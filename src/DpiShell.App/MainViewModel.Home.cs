@@ -52,7 +52,7 @@ public sealed partial class MainViewModel
             if (value) ShowRequested?.Invoke(Spot.Strategies);
         }
     }
-    public string StrategiesLinkText => ShowStrategies ? "Скрыть стратегии" : "Показать стратегии";
+    public string StrategiesLinkText => L.T(ShowStrategies ? "home.strategies.hide" : "home.strategies.show");
     public ICommand ToggleStrategiesCmd => _toggleStrategiesCmd ??= new RelayCommand(() => ShowStrategies = !ShowStrategies);
     ICommand? _toggleStrategiesCmd;
 
@@ -93,7 +93,9 @@ public sealed partial class MainViewModel
             var parts = bad.GroupBy(r => r.Browser).Select(g =>
             {
                 var groups = string.Join(", ", g.Select(r => r.Group).Distinct());
-                return g.Key == BrowserPath.WindowsOnlyReason ? $"{g.Key}: {groups}." : $"В браузере не откроется: {groups} — {g.Key}.";
+                // Причина — константа ядра: по её значению выбираем целую фразу (не склейку).
+                return L.T(g.Key == BrowserPath.WindowsOnlyReason ? "home.browser.windows_only" : g.Key == BrowserPath.HostsReason ? "home.browser.hosts" : "home.browser.dns",
+                    new { groups });
             });
             return "⚠ " + string.Join(" ", parts);
         }
@@ -143,15 +145,10 @@ public sealed partial class MainViewModel
     public string IssuesTitle => Plural(Issues().Count);
 
     /// <summary>«Ещё 2» — сколько скрыто (одна уже видна): числа сходятся с заголовком.</summary>
-    public string IssuesToggleText => ShowAllIssues ? "Свернуть" : $"Ещё {Issues().Count - 1}";
+    public string IssuesToggleText => ShowAllIssues ? L.T("home.issues.collapse") : L.T("home.issues.more", new { n = Issues().Count - 1 });
 
-    /// <summary>«Нашлась 1 помеха», «Нашлось 3 помехи», «Нашлось 5 помех».</summary>
-    public static string Plural(int n)
-    {
-        int d = n % 10, h = n % 100;
-        if (d == 1 && h != 11) return $"Нашлась {n} помеха";
-        return d is >= 2 and <= 4 && h is < 12 or > 14 ? $"Нашлось {n} помехи" : $"Нашлось {n} помех";
-    }
+    /// <summary>«Нашлась 1 помеха», «Нашлось 3 помехи», «Нашлось 5 помех» (формы числа — по языку).</summary>
+    public static string Plural(int n) => L.Plural("home.issues.title", n);
 
     void RaiseIssues()
     {

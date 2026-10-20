@@ -50,14 +50,14 @@ public sealed partial class MainViewModel
 
     public void CopyStrategy(string? id)
     {
-        if (StrategyOf(id) is not { } s) { Fail("Эту стратегию окно не видит — подключите помощника и повторите."); return; }
+        if (StrategyOf(id) is not { } s) { Fail(L.T("select.unavailable")); return; }
         try
         {
             CopyText(StrategyExchange.Encode(DisplayTitleOf(s), s.Roles));
-            ShowToast("Стратегия скопирована — её можно вставить в DpiShell");
+            ShowToast(L.T("select.copied"));
         }
         catch (StrategyFormatException e) { Fail(e.Message + "."); }
-        catch (System.Runtime.InteropServices.ExternalException) { Fail("Не удалось скопировать — буфер обмена занят другой программой."); }
+        catch (System.Runtime.InteropServices.ExternalException) { Fail(L.T("select.clipboard_busy")); }
     }
 
     // ---------- вставить ----------
@@ -66,25 +66,25 @@ public sealed partial class MainViewModel
     {
         string? text;
         try { text = ReadText(); }
-        catch (System.Runtime.InteropServices.ExternalException) { Fail("Не удалось прочитать буфер обмена — он занят другой программой."); return; }
+        catch (System.Runtime.InteropServices.ExternalException) { Fail(L.T("select.clipboard_read_busy")); return; }
         ParsedStrategy parsed;
         try { parsed = StrategyExchange.Parse(text, FakeExists); }
-        catch (StrategyFormatException e) { Fail("Не вставлено. " + e.Message + "."); return; }
-        await SavePersonalAsync(parsed.Title, parsed.Roles, "pasted", "Вставлена");
+        catch (StrategyFormatException e) { Fail(L.T("select.paste.failed", new { reason = e.Message })); return; }
+        await SavePersonalAsync(parsed.Title, parsed.Roles, "pasted", "select.paste.pasted");
     }
 
     /// <summary>Сохранить у помощника и показать на «Подборе» как не проверенную: дальше «Проверить».</summary>
-    async Task SavePersonalAsync(string title, IReadOnlyDictionary<string, string> roles, string source, string verb)
+    async Task SavePersonalAsync(string title, IReadOnlyDictionary<string, string> roles, string source, string resultKey)
     {
         Strategy? added = null;
-        if (!await WithHelper("Сохраняю стратегию…", async c =>
+        if (!await WithHelper(L.T("select.saving"), async c =>
             {
                 added = await c.StrategyAddAsync(title, roles, source);
                 await FetchAsync(full: true);
             }) || added is null)
             return;
         ReloadChoices();
-        PresentUnchecked(added, verb);
+        PresentUnchecked(added, resultKey);
     }
 
     string? _pendingCheck;
@@ -92,7 +92,8 @@ public sealed partial class MainViewModel
     public string? PendingCheckId { get => _pendingCheck; private set { if (Set(ref _pendingCheck, value)) Raise(nameof(HasPendingCheck)); } }
     public bool HasPendingCheck => _pendingCheck is not null;
 
-    void PresentUnchecked(Strategy s, string verb)
+    /// <param name="resultKey">Ключ строки итога с {name}: «Вставлена: …» или «Сохранена: …».</param>
+    void PresentUnchecked(Strategy s, string resultKey)
     {
         var title = DisplayTitleOf(s);
         _titles[s.Id] = title;
@@ -105,8 +106,8 @@ public sealed partial class MainViewModel
         SetBest(null);
         OfferDeep = false;
         PendingCheckId = s.Id;
-        ResultText = $"{verb}: {title}";
-        ResultHint = "Ещё не проверена. «Проверить» откроет ваши сайты через эту стратегию — только её. Без проверки включать не стоит.";
+        ResultText = L.T(resultKey, new { name = title });
+        ResultHint = L.T("select.pending_hint");
         Page = Pages.Select;
     }
 
@@ -118,25 +119,25 @@ public sealed partial class MainViewModel
         if (await NeedHelperAsync() is not { } c) return;
         if (!await SaveDraftBeforeSelectAsync()) return;
         if (TakeGroups() is not { } ids) return;
-        if (IsRunning && !Confirm("Оптимизация сейчас включена. На время проверки она будет приостановлена — сайты и звонки могут прерываться. После проверки всё вернётся как было.\n\nПродолжить?")) return;
+        if (IsRunning && !Confirm(L.T("select.confirm.pause_check"))) return;
         if (!await RouterGateAsync(select: true)) return;
 
         var title = StrategyTitle(id) is { Length: > 0 } t ? t : id;
-        ResultText = $"Проверяю: {title}";
+        ResultText = L.T("select.checking_one", new { name = title });
         ResultHint = "";
         SetBest(null);
         SelectProgressMax = 1; SelectProgress = 0; SelectIndeterminate = true;
-        SelectProgressText = "Подготовка…";
+        SelectProgressText = L.T("select.preparing");
         using var cts = new CancellationTokenSource();
         _selectCts = cts;
         Selecting = true;
         var progress = new Progress<SelectorProgress>(p => { SelectProgressText = p.Message; UpdateStatus(); });
         try
         {
-            await Guard("Проверка стратегии…", async () =>
+            await Guard(L.T("select.busy.check"), async () =>
             {
                 try { ShowOneReport(id, await c.StrategyCheckAsync(id, ids, progress, cts.Token)); }
-                catch (OperationCanceledException) { ResultText = "Проверка остановлена."; PendingCheckId = id; }
+                catch (OperationCanceledException) { ResultText = L.T("select.check.stopped"); PendingCheckId = id; }
             });
         }
         finally
@@ -156,7 +157,7 @@ public sealed partial class MainViewModel
         var title = StrategyTitle(id);
         if (r.Scores.FirstOrDefault() is not { } score)
         {
-            ResultText = r.Cancelled ? "Проверка остановлена." : r.NothingBlocked ? "Без оптимизации всё открывается: оптимизация не нужна или включён VPN — проверять нечем." : "Проверить не удалось.";
+            ResultText = L.T(r.Cancelled ? "select.check.stopped" : r.NothingBlocked ? "select.check.nothing_blocked" : "select.check.unable");
             PendingCheckId = id;
             return;
         }
@@ -169,13 +170,13 @@ public sealed partial class MainViewModel
         if (row.Usable)
         {
             SetBest(id);
-            ResultText = $"Проверена: {title} — открылось {row.Share}";
-            ResultHint = $"Работают {row.Groups} групп. Теперь можно «Применить».";
+            ResultText = L.T("select.checked.ok", new { name = title, share = row.Share });
+            ResultHint = L.T("select.checked.hint", new { groups = row.Groups });
         }
         else
         {
-            ResultText = $"Не помогла: {title}";
-            ResultHint = row.ErrorFull is { Length: > 0 } e ? e + "." : "Ни одна группа не открылась.";
+            ResultText = L.T("select.checked.bad", new { name = title });
+            ResultHint = row.ErrorFull is { Length: > 0 } e ? e + "." : L.T("select.checked.none");
         }
     }
 
@@ -184,7 +185,7 @@ public sealed partial class MainViewModel
     public async Task ApplySelectedAsync()
     {
         if (SelectedScore is not { } row) return;
-        if (row.Unchecked && !Confirm("Стратегия не проверена: на ваших сайтах она может не работать. Включить всё равно?")) return;
+        if (row.Unchecked && !Confirm(L.T("select.confirm.unchecked"))) return;
         await ApplyAsync(row.Id);
     }
 
@@ -193,21 +194,21 @@ public sealed partial class MainViewModel
     {
         if (Helper.Status?.Strategies.FirstOrDefault(s => s.Id == id) is not { } info || !UserStrategies.IsPersonal(info.Source)) return true;
         if (Helper.Results?.Stats.TryGetValue(id, out var st) == true && st.Runs > 0) return true;
-        return Confirm($"Стратегия «{StrategyTitle(id)}» не проверена: на ваших сайтах она может не работать. Включить всё равно?");
+        return Confirm(L.T("home.strategy.unchecked_confirm", new { name = StrategyTitle(id) }));
     }
 
     // ---------- изменить ----------
 
     public async Task EditStrategyAsync(string? id)
     {
-        if (StrategyOf(id) is not { } s) { Fail("Эту стратегию окно не видит — подключите помощника и повторите."); return; }
+        if (StrategyOf(id) is not { } s) { Fail(L.T("select.unavailable")); return; }
         bool copy = !UserStrategies.IsPersonal(s.Source);
         var shown = DisplayTitleOf(s);
-        var first = copy ? "Копия: " + shown : shown + " 2";
+        var first = copy ? L.T("select.edit.copy_title", new { name = shown }) : shown + " 2";
         var editor = new StrategyEditor(shown, StrategyExchange.CleanTitle(first), s.Roles, copy, FakeExists).Start();
         if (!EditStrategy(editor) || !editor.Saved) return;
         var (title, roles) = editor.Result;
-        await SavePersonalAsync(title, roles, "user", "Сохранена");
+        await SavePersonalAsync(title, roles, "user", "select.edit.saved");
     }
 
     // ---------- удалить ----------
@@ -215,9 +216,9 @@ public sealed partial class MainViewModel
     public async Task DeleteStrategyAsync(string? id)
     {
         if (StrategyOf(id) is not { } s || s.Source is "flowseal") return;
-        if (CurrentStrategyId == s.Id) { Fail("Эта стратегия сейчас выбрана — сначала выберите другую."); return; }
-        if (!Confirm($"Удалить стратегию «{DisplayTitleOf(s)}»? Вернуть её можно будет только вставкой из копии.")) return;
-        if (!await WithHelper("Удаляю стратегию…", async c =>
+        if (CurrentStrategyId == s.Id) { Fail(L.T("select.delete.current")); return; }
+        if (!Confirm(L.T("select.delete.confirm", new { name = DisplayTitleOf(s) }))) return;
+        if (!await WithHelper(L.T("select.deleting"), async c =>
             {
                 await c.StrategyDeleteAsync(s.Id);
                 await FetchAsync(full: true);
@@ -226,6 +227,6 @@ public sealed partial class MainViewModel
         if (Scores.FirstOrDefault(r => r.Id == s.Id) is { } row) Scores.Remove(row);
         if (PendingCheckId == s.Id) { PendingCheckId = null; ResultText = ""; ResultHint = ""; }
         ReloadChoices();
-        ShowToast("Стратегия удалена");
+        ShowToast(L.T("select.deleted"));
     }
 }

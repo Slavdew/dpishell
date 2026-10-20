@@ -63,7 +63,7 @@ public sealed class MixWindowTests : IDisposable
         var (vm, f) = await RunAsync(Score(Single("alt"), false, false), partial);
         await using var _ = f;
 
-        Assert.Contains("одной стратегии на всё не нашлось — собрана смешанная", vm.ResultHint);
+        Assert.StartsWith(L.T("select.note.mix").Substring(0, 1).ToUpperInvariant() + L.T("select.note.mix").Substring(1), vm.ResultHint);
     }
 
     [Fact]

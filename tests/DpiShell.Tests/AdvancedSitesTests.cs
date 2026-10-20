@@ -344,7 +344,7 @@ public sealed class AdvancedSitesTests : IDisposable
     }
 
     [Theory]
-    [InlineData("lists", "bad domain", "auto", "Домен вида example.com")]
+    [InlineData("lists", "bad domain", "auto", "нужен домен вида example.com")]
     [InlineData("lists", "example.com", "no-such-strategy", "такой стратегии нет")]
     [InlineData("lists", "example.com", "--wf-raw=x", "такой стратегии нет")]
     [InlineData("wide", "example.com", "auto", "Остальные адреса")]

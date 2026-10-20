@@ -143,15 +143,12 @@ public sealed class AdvancedViewModel : Observable
     }
 
     /// <summary>Подпись переключателя — состояние («Включено» / «Выключено»), как у остальных переключателей окна.</summary>
-    public string ToggleText => _enabled ? "Включено" : "Выключено";
+    public string ToggleText => L.T(_enabled ? "sites.adv.on" : "sites.adv.off");
 
     /// <summary>Редактор виден, пока режим включён; выключенный — одна строка «строк сохранено».</summary>
     public bool ShowEditor => _enabled && Available;
     public bool ShowStored => !_enabled && Available && Rows.Count > 0;
-    public string StoredText => $"Режим выключен, работает как обычно. {Plural(Rows.Count, "строка сохранена", "строки сохранены", "строк сохранено")}: {Rows.Count}.";
-
-    static string Plural(int n, string one, string few, string many) =>
-        n % 10 == 1 && n % 100 != 11 ? one : n % 10 is >= 2 and <= 4 && n % 100 is < 12 or > 14 ? few : many;
+    public string StoredText => L.T("sites.adv.stored", new { n = Rows.Count });
 
     public bool OthersDirect { get => _others == AdvancedSites.OthersDirect; set { if (value) SetOthers(AdvancedSites.OthersDirect); } }
     public bool OthersLists { get => _others == AdvancedSites.OthersLists; set { if (value) SetOthers(AdvancedSites.OthersLists); } }
@@ -167,11 +164,9 @@ public sealed class AdvancedViewModel : Observable
 
     public string OthersHint => _others switch
     {
-        AdvancedSites.OthersDirect => "Работают только ваши строки, остальные сайты идут напрямую.",
-        AdvancedSites.OthersAll => IsRouter
-            ? "Может мешать обычным сайтам — после сохранения проверьте их."
-            : "Может мешать обычным сайтам. Включается, только когда оптимизация работает, и после проверки обычных сайтов: если они перестанут открываться, вернётся «Только из списков».",
-        _ => "Остальные сайты — как обычно: YouTube, Discord и ваши сайты из списков.",
+        AdvancedSites.OthersDirect => L.T("sites.adv.others_hint.direct"),
+        AdvancedSites.OthersAll => L.T(IsRouter ? "sites.adv.others_hint.all_router" : "sites.adv.others_hint.all_pc"),
+        _ => L.T("sites.adv.others_hint.lists"),
     };
 
     public bool Busy { get => _busy; private set { if (Set(ref _busy, value)) { Raise(nameof(CanEdit)); CommandManager.InvalidateRequerySuggested(); } } }
@@ -186,11 +181,11 @@ public sealed class AdvancedViewModel : Observable
     public bool MessageIsError { get => _error; private set => Set(ref _error, value); }
 
     /// <summary>Сводка сохранённого: «Строк: 3 · остальные сайты: только из списков».</summary>
-    public string Summary => !_saved.Enabled ? "Сайту из строки можно задать свою стратегию; остальные работают как обычно."
-        : $"{Plural(_saved.Rows.Count, "Строка", "Строки", "Строк")}: {_saved.Rows.Count} · остальные сайты: " + _saved.Others switch
+    public string Summary => !_saved.Enabled ? L.T("sites.adv.summary.off")
+        : L.T(_saved.Others switch
         {
-            AdvancedSites.OthersDirect => "напрямую", AdvancedSites.OthersAll => "для всех сайтов", _ => "только из списков",
-        };
+            AdvancedSites.OthersDirect => "sites.adv.summary.direct", AdvancedSites.OthersAll => "sites.adv.summary.all", _ => "sites.adv.summary.lists",
+        }, new { n = _saved.Rows.Count });
 
     public ICommand AddRowCmd { get; }
     public ICommand RemoveRowCmd { get; }
@@ -199,7 +194,7 @@ public sealed class AdvancedViewModel : Observable
     public ICommand RevertCmd { get; }
     public bool CanRevert => CanRevertNow() && (_saved.Enabled || _saved.Rows.Count > 0);
 
-    public string AddText => Rows.Count >= AdvancedSites.MaxRows ? $"Строк уже {AdvancedSites.MaxRows}" : "Добавить строку";
+    public string AddText => Rows.Count >= AdvancedSites.MaxRows ? L.T("sites.adv.add_max", new { n = AdvancedSites.MaxRows }) : L.T("sites.adv.add");
 
     // ---------- чтение ----------
 
@@ -243,9 +238,9 @@ public sealed class AdvancedViewModel : Observable
     /// <summary>Список «Стратегия»: Авто, Напрямую, стратегии; стратегия строки, которой уже нет, остаётся видимой.</summary>
     void RebuildChoices(AdvancedState? s = null)
     {
-        List<AdvancedChoice> list = [new(AdvancedSites.Auto, "Авто"), new(AdvancedSites.Direct, "Напрямую"), .. Strategies()];
+        List<AdvancedChoice> list = [new(AdvancedSites.Auto, L.T("sites.adv.choice.auto")), new(AdvancedSites.Direct, L.T("sites.adv.choice.direct")), .. Strategies()];
         foreach (var id in (s ?? _saved).Rows.Select(r => r.Strategy).Concat(Rows.Select(r => r.Strategy)).Distinct())
-            if (list.All(c => c.Id != id)) list.Add(new(id, id + " (не найдена)"));
+            if (list.All(c => c.Id != id)) list.Add(new(id, L.T("sites.adv.choice.missing", new { id })));
         if (Choices.Select(c => c).SequenceEqual(list)) return;
         Choices.Clear();
         foreach (var c in list) Choices.Add(c);
@@ -262,20 +257,20 @@ public sealed class AdvancedViewModel : Observable
             switch (r.Strategy)
             {
                 case AdvancedSites.Auto:
-                    parts.Add(r.Resolved is { } id ? "Авто — сейчас " + TitleOf(id) : "Авто — до подбора идёт по текущей стратегии");
+                    parts.Add(r.Resolved is { } id ? L.T("sites.adv.hint.auto_now", new { strategy = TitleOf(id) }) : L.T("sites.adv.hint.auto_pending"));
                     break;
                 case AdvancedSites.Direct:
-                    parts.Add("Оптимизация эти сайты не трогает.");
+                    parts.Add(L.T("sites.adv.hint.direct"));
                     break;
             }
             var routerOwned = RouterOwned();
             var theirs = routerOwned.Count == 0 ? [] : r.Parsed.Where(d => AdvancedSites.Domain(d) is { } n && JointRules.OwnedBy(n, routerOwned)).ToList();
             if (theirs.Count > 0)
-                parts.Add($"{string.Join(", ", theirs.Take(3))} — ведёт роутер, на этом ПК не применяется.");
+                parts.Add(L.T("sites.adv.hint.router_owned", new { sites = string.Join(", ", theirs.Take(3)) }));
             else if (Builtin is { } b)
             {
                 var covered = r.Parsed.Select(d => (d, list: AdvancedSites.Domain(d) is { } n ? b.Covering(n) : null)).FirstOrDefault(x => x.list is not null);
-                if (covered.list is not null) parts.Add($"{covered.d} есть в списке {covered.list}: ваша строка важнее.");
+                if (covered.list is not null) parts.Add(L.T("sites.adv.hint.builtin", new { site = covered.d, list = covered.list }));
             }
             // Несколько фраз — каждая с точкой («Авто — сейчас X. youtube.com — ведёт роутер, …»).
             r.Hint = string.Join(" ", parts.Count > 1 ? parts.Select(p => p.EndsWith('.') ? p : p + ".") : parts);
@@ -321,7 +316,7 @@ public sealed class AdvancedViewModel : Observable
             if (problem is not null) return (null, problem);
             rows.Add(new(domains!, r.Strategy, null));
         }
-        if (rows.Count > AdvancedSites.MaxRows) return (null, $"Строк больше {AdvancedSites.MaxRows}.");
+        if (rows.Count > AdvancedSites.MaxRows) return (null, L.T("sites.adv.err.too_many_rows", new { max = AdvancedSites.MaxRows }));
         return (new(_enabled, _others, rows), null);
     }
 
@@ -332,25 +327,25 @@ public sealed class AdvancedViewModel : Observable
         var (state, problem) = Draft();
         if (state is null)
         {
-            Message = problem ?? "Не удалось разобрать строки."; MessageIsError = true;
+            Message = problem ?? L.T("sites.adv.err.parse"); MessageIsError = true;
             if (fromToggle) RevertToggle();
             return;
         }
-        Busy = true; Message = fromToggle && state.Enabled ? "Включаю…" : "Применяю…"; MessageIsError = false;
+        Busy = true; Message = L.T(fromToggle && state.Enabled ? "sites.adv.busy.enable" : "sites.adv.busy.apply"); MessageIsError = false;
         AdvancedSaveResult res;
         try { res = await Save(state, _saved); }
         catch (Exception e) when (e is not OutOfMemoryException) { res = new(null, Texts.Friendly(e)); }
         finally { Busy = false; }
         if (res.State is null)
         {
-            Message = res.Error is { Length: > 0 } err ? err : "Не применено."; MessageIsError = true;
+            Message = res.Error is { Length: > 0 } err ? err : L.T("sites.adv.err.not_applied"); MessageIsError = true;
             if (fromToggle) RevertToggle();
             return;
         }
         Take(res.State);
         var done = res.State.Enabled
-            ? $"Свои настройки для сайтов включены: {Plural(res.State.Rows.Count, "строка", "строки", "строк")} {res.State.Rows.Count}."
-            : "Свои настройки для сайтов выключены: всё работает как обычно, строки сохранены.";
+            ? L.T("sites.adv.done.on", new { n = res.State.Rows.Count })
+            : L.T("sites.adv.done.off");
         Message = res.Error is { Length: > 0 } warn ? warn : done; MessageIsError = false;
         Say(done);
     }
@@ -364,23 +359,23 @@ public sealed class AdvancedViewModel : Observable
     }
 
     /// <summary>Итог отката одной записи журнала — фраза для карточки.</summary>
-    public static string UndoText(UndoItem? u) => u is null ? "Вернуть нечего." : u.Status switch
+    public static string UndoText(UndoItem? u) => u is null ? L.T("sites.adv.undo.none") : u.Status switch
     {
-        UndoStatus.Restored => "Вернул как было. " + u.Note,
-        UndoStatus.AlreadyBack => "Уже как было.",
-        UndoStatus.ChangedByOthers => "Настройки изменены после этой записи — не трогаю: " + u.Note,
-        _ => "Не получилось вернуть: " + u.Note,
+        UndoStatus.Restored => L.T("sites.adv.undo.restored", new { note = u.Note }),
+        UndoStatus.AlreadyBack => L.T("sites.adv.undo.already"),
+        UndoStatus.ChangedByOthers => L.T("sites.adv.undo.changed", new { note = u.Note }),
+        _ => L.T("sites.adv.undo.failed", new { note = u.Note }),
     };
 
     async Task RevertAsync()
     {
-        Busy = true; Message = "Возвращаю как было…"; MessageIsError = false;
+        Busy = true; Message = L.T("sites.adv.busy.revert"); MessageIsError = false;
         string? text;
         try { text = await Revert(); }
         catch (Exception e) when (e is not OutOfMemoryException) { text = Texts.Friendly(e); }
         finally { Busy = false; }
         await RefreshAsync(force: true);
-        Message = text ?? "Нечего возвращать."; MessageIsError = false;
+        Message = text ?? L.T("sites.adv.nothing_to_revert"); MessageIsError = false;
         if (text is not null) Say(text);
     }
 }

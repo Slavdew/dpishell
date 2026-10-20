@@ -209,7 +209,7 @@ public sealed class VerdictDetailTests
             ["alt2"] = new(1, 5, 5, Streak: 7),   // прошла и сейчас — подсказки нет
             ["old"] = new(1, 9, 9),               // старые записи без групп: серии нет
         };
-        Assert.Equal("Стратегия «general (alt)», работавшая последние 5 раз, сейчас не открывает Discord — похоже, провайдер изменил правила или сеть сбоит. Можно поискать новые.",
+        Assert.Equal(L.Plural("select.regression", 5, new { name = "general (alt)", failed = L.T("select.failed.not_opening", new { groups = "Discord" }) }),
             StrategyChoice.Regression(before, report, "alt2", names));
         Assert.Contains("последние 3 раза", StrategyChoice.Regression(new Dictionary<string, StrategyStats.Stat> { ["alt"] = new(1, 3, 3, Streak: 3) }, report, null, names));
         Assert.Equal("", StrategyChoice.Regression(new Dictionary<string, StrategyStats.Stat> { ["alt"] = new(1, 2, 2, Streak: 2) }, report, null, names));

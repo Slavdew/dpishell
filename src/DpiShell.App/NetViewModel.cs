@@ -32,7 +32,7 @@ public sealed class NetViewModel : Observable
     /// <summary>Выбор файла списка (в тестах подменяется). Null — отказались.</summary>
     public Func<string?> PickFile { get; set; } = () =>
     {
-        var d = new Microsoft.Win32.OpenFileDialog { Title = "IP-список", Filter = "Текстовые файлы (*.txt)|*.txt|Все файлы|*.*" };
+        var d = new Microsoft.Win32.OpenFileDialog { Title = L.T("apps.ipset.file.title"), Filter = L.T("apps.ipset.file.filter") };
         return d.ShowDialog() == true ? d.FileName : null;
     };
     /// <summary>Уведомление в трей: «Все адреса» закончились сами.</summary>
@@ -81,9 +81,9 @@ public sealed class NetViewModel : Observable
     }
 
     /// <summary>Единое имя десятиминутной проверки по всем адресам (не режим наравне с «Только из списков»).</summary>
-    public const string AnyName = "Все адреса на 10 минут (проверка)";
+    public static string AnyName => L.T("apps.ipset.any_name");
 
-    static string Title(IpsetMode m) => m switch { IpsetMode.List => "Только из списков", IpsetMode.Any => AnyName, _ => "Выкл" };
+    static string Title(IpsetMode m) => m switch { IpsetMode.List => L.T("apps.ipset.lists"), IpsetMode.Any => AnyName, _ => L.T("apps.ipset.off") };
 
     // ---------- режим IP-списка ----------
 
@@ -101,16 +101,14 @@ public sealed class NetViewModel : Observable
             if (!AnyActive) return "";
             var left = (_f.AnyUntilUtc ?? DateTime.UtcNow) - DateTime.UtcNow;
             if (left < TimeSpan.Zero) left = TimeSpan.Zero;
-            return $"{AnyName}: осталось {(int)left.TotalMinutes}:{left.Seconds:00}. Потом сам вернётся режим «{Title(_f.ReturnTo)}».";
+            return L.T("apps.ipset.any_text", new { time = $"{(int)left.TotalMinutes}:{left.Seconds:00}", mode = Title(_f.ReturnTo) });
         }
     }
 
     public ICommand StopAnyCmd { get; }
     public ICommand TryAnyCmd { get; }
 
-    public const string TryAnyQuestion =
-        "На 10 минут оптимизация включится для любого соединения — так видно, поможет ли она вообще. "
-        + "Многие сайты в это время могут работать с ошибками; потом режим вернётся сам. Включить?";
+    public static string TryAnyQuestion => L.T("apps.ipset.try_any_question");
 
     /// <summary>
     /// «Все адреса» — не третий режим наравне с рабочими, а проверка «поможет ли обход» с подтверждением (UX-аудит, п. 34):
@@ -125,13 +123,13 @@ public sealed class NetViewModel : Observable
     public Task SetModeAsync(IpsetMode mode)
     {
         var gameWasOn = _f.Game != GameMode.Off;
-        return Run("Применяю…", c => c.SetIpsetModeAsync(mode),
-            mode == IpsetMode.Off && gameWasOn ? "Готово. Игровой режим выключен: без IP-списка он не работает." : "Готово.");
+        return Run(L.T("apps.busy.apply"), c => c.SetIpsetModeAsync(mode),
+            L.T(mode == IpsetMode.Off && gameWasOn ? "apps.ipset.game_off" : "common.ready"));
     }
 
-    Task StartAnyAsync() => Run("Применяю…", c => c.StartAllAddressesAsync(), "Проверка по всем адресам включена на 10 минут, потом режим вернётся сам.");
+    Task StartAnyAsync() => Run(L.T("apps.busy.apply"), c => c.StartAllAddressesAsync(), L.T("apps.ipset.any_started"));
 
-    Task StopAnyAsync() => Run("Возвращаю обычный режим…", c => c.StopAllAddressesAsync(), "Готово.");
+    Task StopAnyAsync() => Run(L.T("apps.busy.revert_mode"), c => c.StopAllAddressesAsync(), L.T("common.ready"));
 
     /// <summary>Команда помощника под Guard; после — состояние заново (и при отказе: переключатели показывают правду).</summary>
     async Task Run(string busy, Func<HelperClient, Task> work, string done)
@@ -161,13 +159,13 @@ public sealed class NetViewModel : Observable
         try
         {
             // Занята другая операция — Guard откажет, попробуем на следующем тике.
-            await Guard("Возвращаю обычный режим…", async () => reverted = await c.StopAllAddressesAsync());
+            await Guard(L.T("apps.busy.revert_mode"), async () => reverted = await c.StopAllAddressesAsync());
         }
         finally { _reverting = false; }
         await AfterChange();
         Refresh();
         if (!reverted) return;
-        var msg = $"Проверка по всем адресам закончилась (10 минут) — вернулся режим «{Title(_f.Ipset)}».";
+        var msg = L.T("apps.ipset.any_ended", new { mode = Title(_f.Ipset) });
         Say(msg);
         Notify?.Invoke(msg);
     }
@@ -177,8 +175,8 @@ public sealed class NetViewModel : Observable
     public bool HasList => _f.List is not null;
 
     public string ListText => _f.List is { } m
-        ? $"{m.Lines:N0} подсетей, обновлён {L.Date((m.Updated ?? m.InstalledAt).ToLocalTime())}, покрывает {m.Ipv4Share * 100:0.#} % адресов интернета"
-        : "Список не загружен. «Обновить список» скачает его.";
+        ? L.T("apps.ipset.list_info", new { lines = m.Lines.ToString("N0", L.Culture), date = L.Date((m.Updated ?? m.InstalledAt).ToLocalTime()), share = (m.Ipv4Share * 100).ToString("0.#", L.Culture) })
+        : L.T("apps.ipset.list_missing");
 
     string _updateNote = "";
     /// <summary>Итог последнего обновления: что не вышло и когда пробовали.</summary>
@@ -189,7 +187,7 @@ public sealed class NetViewModel : Observable
     public ICommand LoadFileCmd { get; }
 
     /// <summary>По манифесту из поставки: сильно изменившийся список — вопрос «Применить?» и повтор с подтверждением.</summary>
-    Task UpdateFromManifestAsync() => UpdateAsync("Обновляю IP-список…", (c, confirmed) => c.UpdateIpsetFromManifestAsync(confirmed, new Progress<string>(Say)));
+    Task UpdateFromManifestAsync() => UpdateAsync(L.T("apps.busy.update_list"), (c, confirmed) => c.UpdateIpsetFromManifestAsync(confirmed, new Progress<string>(Say)));
 
     /// <summary>Файл читает окно (он в профиле пользователя), помощник получает содержимое и прогоняет валидатор — путей не принимает.</summary>
     Task UpdateFromFileAsync()
@@ -198,12 +196,12 @@ public sealed class NetViewModel : Observable
         string content;
         try
         {
-            if (new FileInfo(file).Length > IpsetValidator.MaxBytes) { Say("Файл слишком большой для IP-списка."); return Task.CompletedTask; }
+            if (new FileInfo(file).Length > IpsetValidator.MaxBytes) { Say(L.T("apps.ipset.file_big")); return Task.CompletedTask; }
             content = File.ReadAllText(file);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Failed(Texts.Friendly(e)); return Task.CompletedTask; }
-        if (content.Length == 0) { Say("Файл пустой."); return Task.CompletedTask; }
-        return UpdateAsync("Проверяю список из файла…", (c, confirmed) => c.UpdateIpsetFromContentAsync(content, confirmed));
+        if (content.Length == 0) { Say(L.T("apps.ipset.file_empty")); return Task.CompletedTask; }
+        return UpdateAsync(L.T("apps.busy.check_file"), (c, confirmed) => c.UpdateIpsetFromContentAsync(content, confirmed));
     }
 
     async Task UpdateAsync(string busy, Func<HelperClient, bool, Task<IpsetUpdateSummary>> update)
@@ -216,7 +214,7 @@ public sealed class NetViewModel : Observable
             await Guard(busy, async () =>
             {
                 r = await update(c, false);
-                if (r.NeedsConfirm && Confirm(r.Message.EndsWith('?') ? r.Message : r.Message + "\n\nПрименить?"))
+                if (r.NeedsConfirm && Confirm(r.Message.EndsWith('?') ? r.Message : r.Message + L.T("apps.ipset.apply_suffix")))
                     r = await update(c, true);
             });
         }
@@ -224,8 +222,8 @@ public sealed class NetViewModel : Observable
         await AfterChange();
         Refresh();
         if (r is null) return;
-        UpdateNote = r.Applied ? "" : r.NeedsConfirm ? "Новый список не применён — оставлен прежний." : $"{r.Message} Последняя попытка: {L.Date(DateTime.Now)} {L.Time(DateTime.Now)}.";
-        Say(r.Applied ? r.Message : r.NeedsConfirm ? "Оставлен прежний IP-список." : r.Message);
+        UpdateNote = r.Applied ? "" : r.NeedsConfirm ? L.T("apps.ipset.not_applied") : L.T("apps.ipset.last_try", new { message = r.Message, time = $"{L.Date(DateTime.Now)} {L.Time(DateTime.Now)}" });
+        Say(r.Applied ? r.Message : r.NeedsConfirm ? L.T("apps.ipset.kept") : r.Message);
     }
 
     // ---------- свои подсети ----------
@@ -237,9 +235,7 @@ public sealed class NetViewModel : Observable
     string _userMessage = "";
     public string UserMessage { get => _userMessage; private set => Set(ref _userMessage, value); }
 
-    public string UserHint => _f.Ipset == IpsetMode.List
-        ? "Подсеть на строку, например 203.0.113.0/24 или один адрес. Действуют сразу после «Сохранить»."
-        : "Подсеть на строку, например 203.0.113.0/24 или один адрес. Действуют в режиме «Только из списков».";
+    public string UserHint => L.T(_f.Ipset == IpsetMode.List ? "apps.subnets.hint_active" : "apps.subnets.hint_inactive");
 
     public ICommand SaveUserCmd { get; }
 
@@ -254,18 +250,17 @@ public sealed class NetViewModel : Observable
         bool ok;
         try
         {
-            ok = await Guard("Сохраняю подсети…", async () =>
+            ok = await Guard(L.T("apps.busy.save_subnets"), async () =>
             {
                 foreach (var exclude in new[] { false, true })
                 {
                     var lines = Lines(exclude ? ExcludeText : UserText);
                     var v = await c.WriteUserIpsetAsync(lines, exclude);
                     if (v.NeedsConfirm && Confirm(string.Join("\n", v.Confirm))) v = await c.WriteUserIpsetAsync(lines, exclude, confirmed: true);
-                    var what = exclude ? "Исключения" : "Свои подсети";
-                    if (!v.Accepted) { notes.Add($"{what} не сохранены: {string.Join(" ", v.Errors)}"); continue; }
-                    if (v.NeedsConfirm) { notes.Add($"{what} не сохранены."); continue; }
+                    if (!v.Accepted) { notes.Add(L.T(exclude ? "apps.subnets.exclude_failed" : "apps.subnets.user_failed", new { errors = string.Join(" ", v.Errors) })); continue; }
+                    if (v.NeedsConfirm) { notes.Add(L.T(exclude ? "apps.subnets.exclude_unconfirmed" : "apps.subnets.user_unconfirmed")); continue; }
                     if (exclude) excluded = v.Entries; else saved = v.Entries;
-                    if (v.Problems.Count > 0) notes.Add($"Не приняты ({v.Dropped}): {string.Join("; ", v.Problems.Take(5))}{(v.Problems.Count > 5 ? " …" : "")}");
+                    if (v.Problems.Count > 0) notes.Add(L.T("apps.subnets.rejected", new { n = v.Dropped, problems = string.Join("; ", v.Problems.Take(5)) + (v.Problems.Count > 5 ? " …" : "") }));
                 }
             });
         }
@@ -276,9 +271,9 @@ public sealed class NetViewModel : Observable
         await _helper.FetchAsync(full: true);
         await AfterChange();
         Refresh();
-        UserMessage = $"Сохранено: своих подсетей {saved}, исключений {excluded}." + (notes.Count > 0 ? " " + string.Join(" ", notes) : "");
+        UserMessage = L.T("apps.subnets.saved", new { saved, excluded }) + (notes.Count > 0 ? " " + string.Join(" ", notes) : "");
         // Свои подсети действуют только в режиме «Только из списков»: не заставлять искать переключатель — предложить одной кнопкой.
-        if (saved > 0 && _f.Ipset == IpsetMode.Off && Confirm("Свои подсети действуют только в режиме «Только из списков». Включить его?"))
+        if (saved > 0 && _f.Ipset == IpsetMode.Off && Confirm(L.T("apps.subnets.enable_question")))
             await SetModeAsync(IpsetMode.List);
     }
 
@@ -298,18 +293,20 @@ public sealed class NetViewModel : Observable
     {
         get
         {
-            if (_f.Game == GameMode.Off) return AnyActive ? "Выключен. Включить нельзя, пока идёт проверка по всем адресам." : "Выключен";
-            if (_f.GameBlocked) return "Сейчас не работает: идёт проверка по всем адресам (ниже, в «Дополнительно»). Вернётся сам, когда она закончится.";
-            var list = _f.List is { } m ? $"Работает по списку адресов ниже ↓ ({m.Lines:N0} подсетей)" : "Работает по списку адресов ниже ↓";
-            return _helper.Status?.Enabled == true ? list : list.Replace("Работает", "Включится вместе с оптимизацией,");
+            if (_f.Game == GameMode.Off) return L.T(AnyActive ? "apps.game.status.off_blocked" : "apps.game.status.off");
+            if (_f.GameBlocked) return L.T("apps.game.status.paused");
+            var running = _helper.Status?.Enabled == true;
+            return _f.List is { } m
+                ? L.T(running ? "apps.game.status.running_n" : "apps.game.status.pending_n", new { lines = m.Lines.ToString("N0", L.Culture) })
+                : L.T(running ? "apps.game.status.running" : "apps.game.status.pending");
         }
     }
 
     /// <summary>Предупреждение про античиты: общее для игрового режима и записи подключений.</summary>
-    public const string AntiCheatNote = "Игры с защитой от читов (Vanguard, FACEIT, Easy Anti-Cheat) могут не работать, пока загружен драйвер оптимизации (WinDivert): он перехватывает сетевые пакеты.";
+    public static string AntiCheatNote => L.T("apps.anticheat");
 
     // Предупреждение про античиты — одно на вкладку, под заголовком «Игры и программы» (AppsViewModel.Anti).
-    public string GameHint => "Если игра или программа после включения стала работать хуже — выключите.";
+    public string GameHint => L.T("apps.game.hint");
 
     public async Task SetGameAsync(bool on)
     {
@@ -319,12 +316,12 @@ public sealed class NetViewModel : Observable
         bool ok;
         try
         {
-            ok = await Guard(on ? "Включаю игровой режим…" : "Выключаю игровой режим…", async () =>
+            ok = await Guard(L.T(on ? "apps.busy.game_on" : "apps.busy.game_off"), async () =>
                 change = await c.SetGameModeAsync(on ? GameMode.TcpUdp : GameMode.Off, new Progress<string>(Say)));
         }
         finally { IsBusy = false; }
         await AfterChange();
         Refresh();
-        if (ok) Say(change?.Note ?? "Готово.");
+        if (ok) Say(change?.Note ?? L.T("common.ready"));
     }
 }

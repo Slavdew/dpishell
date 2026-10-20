@@ -37,8 +37,7 @@ public sealed partial class MainViewModel
             Restore = RestorePcDnsAsync,
             Enabled = () => !Busy && !IsLoading,
         };
-        PcDns.SetPresets(DnsPresets.All.Select(p => new DnsOption(p.Id, p.Title, PresetDetail(p), false, p.Ips, p.Doh,
-            Owner: p.Owner, Note: PresetNote(p.Id, p.Note))).ToList());
+        SetPcPresets();
         FixDnsCmd = RelayCommand.Async(() => ApplyPcDnsAsync(PcDns.Options.First(o => o.Id == RecommendedDns)), () => !Busy && !IsLoading);
         // «Другой DNS» — сразу к выбору, а не в начало вкладки «DNS» (UX-аудит 2, п. 4): окно прокручивает к карточке и раскрывает список.
         ChooseDnsCmd = new RelayCommand(() => { Page = Pages.Dns; ShowRequested?.Invoke(Spot.PcDns); });
@@ -47,19 +46,30 @@ public sealed partial class MainViewModel
         Router.DnsPick.CustomChanged += PcDns.Reload;
     }
 
+    string? _presetsLang;
+
+    /// <summary>Названия, заметки и описания вариантов зависят от языка: список строится заново, когда язык сменился.</summary>
+    void SetPcPresets()
+    {
+        _presetsLang = L.Current;
+        PcDns.SetPresets(DnsPresets.All.Select(p => new DnsOption(p.Id, p.Title, PresetDetail(p), false, p.Ips, p.Doh,
+            Owner: p.Owner, Note: PresetNote(p.Id, p.Note))).ToList());
+    }
+
     static string PresetDetail(DnsPreset p)
     {
-        if (p.Id == DnsPresets.Auto) return "адреса DNS — от роутера или провайдера";
+        if (p.Id == DnsPresets.Auto) return L.T("dns.preset.auto_detail");
         var v4 = string.Join(", ", p.Ips.Where(ip => !DnsValues.IsIpv6(ip)));
-        return v4 + (p.Doh is null ? "" : Windows11 ? " · защищённый" : " · без шифрования") + (p.Note is { } n ? " · " + n : "");
+        var head = p.Doh is null ? v4 : L.T(Windows11 ? "dns.preset.detail_secure" : "dns.preset.detail_plain", new { ips = v4 });
+        return head + (p.Note is { } n ? " · " + n : "");
     }
 
     /// <summary>Заметка варианта: «рекомендуем» у рекомендуемого (ПК и роутер), затем своя заметка пресета.</summary>
     public static string? PresetNote(string id, string? note) =>
-        id == RecommendedDns ? "рекомендуем" + (note is { Length: > 0 } ? " · " + note : "") : note;
+        id == RecommendedDns ? L.T("dns.preset.note_recommended") + (note is { Length: > 0 } ? " · " + note : "") : note;
 
-    public string RecommendedDnsText => "Включить защищённый DNS";
-    public string RecommendedDnsHint => DnsPresets.Find(RecommendedDns)!.Title + ", для Ethernet и Wi-Fi. Вернуть — кнопкой в сообщении после смены или вкладка «DNS».";
+    public string RecommendedDnsText => L.T("dns.recommended.text");
+    public string RecommendedDnsHint => L.T("dns.recommended.hint", new { name = DnsPresets.Find(RecommendedDns)!.Title });
 
     /// <summary>Что сейчас на адаптерах: у помощника (там же «есть что вернуть») или прочитать самим.</summary>
     public async Task RefreshPcDnsAsync()
@@ -74,27 +84,28 @@ public sealed partial class MainViewModel
         catch (Exception e) when (e is HelperException or HelperUnavailableException or IOException or UnauthorizedAccessException
                                      or InvalidOperationException or System.Security.SecurityException)
         {
-            PcDns.CurrentText = "Не удалось прочитать DNS: " + Texts.Friendly(e);
+            PcDns.CurrentText = L.T("dns.status.read_failed", new { error = Texts.Friendly(e) });
         }
     }
 
     public void ShowPcDns(DnsStatusInfo s)
     {
+        if (_presetsLang != L.Current) SetPcPresets();
         var first = s.Adapters.FirstOrDefault();
         var v4 = first?.Servers.Where(ip => !DnsValues.IsIpv6(ip)).ToHashSet() ?? [];
         var own = s.Current is DnsPresets.Custom or "other" ? PcDns.FindCustom(o => o.Ips.ToHashSet().SetEquals(v4)) : null;
         var title = own?.Title ?? s.Current switch
         {
-            DnsPresets.Auto => "как у провайдера",
-            "other" or DnsPresets.Custom => "свои настройки" + (v4.Count > 0 ? $" ({string.Join(", ", v4)})" : ""),
+            DnsPresets.Auto => L.T("dns.status.provider"),
+            "other" or DnsPresets.Custom => v4.Count > 0 ? L.T("dns.status.custom_ips", new { ips = string.Join(", ", v4) }) : L.T("dns.status.custom"),
             var id => DnsPresets.Find(id)?.Title ?? id,
         };
-        var how = s.Current == DnsPresets.Auto ? "" : s.Encrypted ? (s.Fallback ? ", защищённый (можно обычный)" : ", защищённый") : ", без шифрования";
-        PcDns.CurrentText = s.Adapters.Count == 0 ? "Нет подключения Ethernet или Wi-Fi с выходом в интернет."
-            : $"Сейчас: {title}{how} · {string.Join(", ", s.Adapters.Select(a => a.Name))}";
+        var currentKey = s.Current == DnsPresets.Auto ? "dns.current" : s.Encrypted ? (s.Fallback ? "dns.current.secure_fallback" : "dns.current.secure") : "dns.current.plain";
+        PcDns.CurrentText = s.Adapters.Count == 0 ? L.T("dns.status.no_connection")
+            : L.T(currentKey, new { title, adapters = string.Join(", ", s.Adapters.Select(a => a.Name)) });
         var notes = new List<string>();
-        if (!s.DohSupported) notes.Add("На этой версии Windows защищённый DNS не поддерживается — только обычный.");
-        if (s.Skipped.Count > 0) notes.Add("VPN и виртуальные адаптеры не трогаю: " + string.Join(", ", s.Skipped) + ".");
+        if (!s.DohSupported) notes.Add(L.T("dns.note.no_doh"));
+        if (s.Skipped.Count > 0) notes.Add(L.T("dns.note.skipped", new { list = string.Join(", ", s.Skipped) }));
         PcDns.Note = string.Join(" ", notes);
         PcDns.ShowFallback = s.DohSupported;
         PcDns.CanRestore = s.CanRestore;
@@ -107,7 +118,7 @@ public sealed partial class MainViewModel
     public async Task ApplyPcDnsAsync(DnsOption o)
     {
         DnsSetResult? r = null;
-        await WithHelper("Меняю DNS…", async c =>
+        await WithHelper(L.T("dns.busy.change"), async c =>
         {
             PcDns.Working = true;
             try
@@ -122,15 +133,15 @@ public sealed partial class MainViewModel
         if (r is null) return;
         // Без подтверждения, но с быстрым путём назад (UX-аудит, «Опасные действия»). Тост — сразу (UX-аудит 2, п. 14):
         // «Вернуть» доступен, пока идёт проверка; её итог дописывается в тот же тост.
-        int? toast = r.Ok && PcDns.CanRestore ? ShowToast($"DNS изменён: {o.Title} · проверяю…", "Вернуть", RestorePcDnsAsync) : null;
+        int? toast = r.Ok && PcDns.CanRestore ? ShowToast(L.T("dns.toast.changed_checking", new { title = o.Title }), L.T("dns.toast.undo"), RestorePcDnsAsync) : null;
         await AfterDnsChangeAsync(r);
-        if (toast is { } id) UpdateToast(id, $"DNS изменён: {o.Title}. Проверка DNS: {DnsSummary}");
+        if (toast is { } id) UpdateToast(id, L.T("dns.toast.changed_checked", new { title = o.Title, summary = DnsSummary }));
     }
 
     public async Task RestorePcDnsAsync()
     {
         DnsSetResult? r = null;
-        await WithHelper("Возвращаю DNS…", async c =>
+        await WithHelper(L.T("dns.busy.restore"), async c =>
         {
             PcDns.Working = true;
             try { r = await c.DnsRestoreAsync(); ShowPcDns(r.Status); }
@@ -152,6 +163,6 @@ public sealed partial class MainViewModel
         else if (IsLoading) return;
         else if (CheckedGroups().Count > 0) await CheckNowAsync();
         else await CheckDnsAsync();
-        Message = r.Message + " Проверка DNS: " + DnsSummary;
+        Message = L.T("dns.after_change", new { message = r.Message, summary = DnsSummary });
     }
 }

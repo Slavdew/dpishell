@@ -10,30 +10,32 @@ public sealed record HostsRow(string Host, string Ip, string Owner, string Live,
 {
     public static HostsRow From(HostsCheckRow r) => new(
         r.Host, r.Ip,
-        r.OwnerName ?? (r.Owner == OwnerState.Unknown ? "не узнать" : "—"),
-        r.Live is null ? "не проверялся" : r.Live.Ok ? "✓ подтверждён" : r.Live.Outcome == EndpointOutcome.BadCertificate ? "✗ чужой сайт" : "✗ не отвечает",
+        r.OwnerName ?? (r.Owner == OwnerState.Unknown ? L.T("hosts.row.owner_unknown") : "—"),
+        r.Live is null ? L.T("hosts.row.live.none") : r.Live.Ok ? L.T("hosts.row.live.ok") : r.Live.Outcome == EndpointOutcome.BadCertificate ? L.T("hosts.row.live.foreign") : L.T("hosts.row.live.down"),
         r.Live?.Ok == true,
-        r.Dns switch { DnsState.Works => "✓ работает", DnsState.Fails => "✗ не работает", _ => "?" },
+        r.Dns switch { DnsState.Works => L.T("hosts.row.dns.works"), DnsState.Fails => L.T("hosts.row.dns.fails"), _ => "?" },
         r.Verdict switch
         {
-            HostsVerdict.Install => "записать",
-            HostsVerdict.NotNeeded => "не нужно",
-            _ => "не подходит",
+            HostsVerdict.Install => L.T("hosts.row.verdict.install"),
+            HostsVerdict.NotNeeded => L.T("hosts.row.verdict.not_needed"),
+            _ => L.T("hosts.row.verdict.bad"),
         },
         Why(r),
         r.Install);
 
+    public string DnsLine => L.T("hosts.col.dns", new { value = Dns });
+
     static string Why(HostsCheckRow r) => r.Verdict switch
     {
-        HostsVerdict.Install => "адрес из DNS не открывается, этот — да",
-        HostsVerdict.NotNeeded => "через DNS и так открывается",
-        HostsVerdict.Unreachable => "адрес не отвечает" + Detail(r.Live?.Detail),
-        HostsVerdict.BadCertificate => "по этому адресу отвечает другой сайт",
-        HostsVerdict.OwnerMismatch => $"сеть принадлежит другой компании ({r.OwnerName})",
-        _ => r.DnsDetail.Length > 0 ? r.DnsDetail : "не из разрешённого списка",
+        HostsVerdict.Install => L.T("hosts.row.why.install"),
+        HostsVerdict.NotNeeded => L.T("hosts.row.why.not_needed"),
+        HostsVerdict.Unreachable => string.IsNullOrWhiteSpace(r.Live?.Detail)
+            ? L.T("hosts.row.why.unreachable")
+            : L.T("hosts.row.why.unreachable_detail", new { detail = r.Live!.Detail!.Trim().TrimEnd('.') }),
+        HostsVerdict.BadCertificate => L.T("hosts.row.why.bad_cert"),
+        HostsVerdict.OwnerMismatch => L.T("hosts.row.why.owner_mismatch", new { owner = r.OwnerName }),
+        _ => r.DnsDetail.Length > 0 ? r.DnsDetail : L.T("hosts.row.why.not_allowed"),
     };
-
-    static string Detail(string? d) => string.IsNullOrWhiteSpace(d) ? "" : $" ({d.Trim().TrimEnd('.')})";
 }
 
 /// <summary>
@@ -97,7 +99,7 @@ public sealed partial class HostsViewModel : Observable
         set
         {
             if (value == Enabled) return;
-            if (!value && BlockPresent && !Confirm("Убрать записи DpiShell из файла hosts? Другие строки файла не меняются."))
+            if (!value && BlockPresent && !Confirm(L.T("hosts.confirm.remove_block")))
             {
                 Raise();
                 return;
@@ -109,7 +111,7 @@ public sealed partial class HostsViewModel : Observable
     }
 
     public bool Disabled => !Enabled;
-    public string OffHint => "Выключено. Включите, если не качаются файлы с GitHub, не открывается веб-версия Telegram или Discord запускается несколько минут.";
+    public string OffHint => L.T("hosts.off_hint");
 
     void RaiseEnabled()
     {
@@ -129,11 +131,12 @@ public sealed partial class HostsViewModel : Observable
     {
         get
         {
-            if (_status is null) return _helper.Reader is null ? "Состояние файла hosts покажет помощник DpiShell." : "";
+            if (_status is null) return _helper.Reader is null ? L.T("hosts.status.no_helper") : "";
             var n = _status.Block.Entries.Count;
-            if (n == 0) return _status.Block.Present ? "Блок DpiShell в hosts пустой." : "Ничего не записано — hosts без изменений.";
-            var at = _status.AppliedAt is { } a ? $" {L.Date(a)} в {L.Time(a)}" : "";
-            return $"Записано адресов: {n}{at}. Проверка раз в день; устаревшие убираются сами.";
+            if (n == 0) return _status.Block.Present ? L.T("hosts.status.block_empty") : L.T("hosts.status.nothing");
+            return _status.AppliedAt is { } a
+                ? L.T("hosts.status.written_at", new { n, date = L.Date(a), time = L.Time(a) })
+                : L.T("hosts.status.written", new { n });
         }
     }
 
@@ -147,17 +150,17 @@ public sealed partial class HostsViewModel : Observable
             var list = new List<string>();
             if (_status is not { } s) return list;
             if (s.BlockLost)
-                list.Add("Записи DpiShell пропали из hosts — их мог убрать Защитник Windows или другой антивирус. Нажмите «Проверить адреса» и запишите снова; если антивирус спросит — разрешите изменение (название кнопки зависит от версии).");
+                list.Add(L.T("hosts.warn.lost"));
             if (s.Block.Damaged)
-                list.Add("Блок DpiShell в hosts повреждён (его правили вручную). «Записать» или «Вернуть как было» исправит его.");
+                list.Add(L.T("hosts.warn.damaged"));
             if (s.ReadOnly)
-                list.Add("Файл hosts помечен «только чтение». При записи программа снимет эту отметку и вернёт её обратно.");
+                list.Add(L.T("hosts.warn.read_only"));
             // Функция выключена — нашей записи нет и чужая никому не мешает: плашку не показываем.
             if (Enabled)
                 foreach (var c in s.Conflicts.GroupBy(c => c.Host).Select(g => g.First()))
-                    list.Add($"В hosts есть чужая запись для {c.Host} — если сайт не откроется, дело может быть в ней.");
+                    list.Add(L.T("hosts.warn.foreign", new { host = c.Host }));
             if (!Enabled && s.Block.Present)
-                list.Add("Функция выключена, а записи DpiShell в hosts остались (от прошлой установки). Их можно убрать кнопкой «Вернуть как было».");
+                list.Add(L.T("hosts.warn.off_with_block"));
             list.AddRange(StaleWarnings());
             return list;
         }
@@ -165,13 +168,7 @@ public sealed partial class HostsViewModel : Observable
 
     public bool HasWarnings => Warnings.Count > 0;
     /// <summary>Заголовок свёрнутого списка замечаний: первый экран вкладки начинается с действия, а не с тревог.</summary>
-    public string WarningsHeader => Warnings.Count switch
-    {
-        0 => "",
-        1 => "1 замечание",
-        var n when n % 10 is >= 2 and <= 4 && n / 10 != 1 => $"{n} замечания",
-        var n => $"{n} замечаний",
-    };
+    public string WarningsHeader => Warnings.Count is var n && n == 0 ? "" : L.Plural("hosts.warnings_header", n);
 
     /// <summary>Перечитать состояние hosts у помощника (details; файл может держать антивирус — помощник читает в фоне).</summary>
     public async Task RefreshAsync()
@@ -213,9 +210,9 @@ public sealed partial class HostsViewModel : Observable
 
     public bool CanWrite => _report is { NothingToFix: false };
     /// <summary>Число на кнопке — столько же, сколько строк в «Что изменится» (добавленные и убранные), а не адресов в отчёте.</summary>
-    public string ApplyText => _report is not { NothingToFix: false } r ? "Записать"
-        : _preview is { } p ? (p.Changed ? $"Записать адресов: {p.Added.Count + p.Removed.Count}" : "Записать")
-        : $"Записать адресов: {r.ToInstall.Count}";
+    public string ApplyText => _report is not { NothingToFix: false } r ? L.T("hosts.apply")
+        : _preview is { } p ? (p.Changed ? L.T("hosts.apply_n", new { n = p.Added.Count + p.Removed.Count }) : L.T("hosts.apply"))
+        : L.T("hosts.apply_n", new { n = r.ToInstall.Count });
 
     public ICommand CheckCmd { get; }
     public ICommand StopCmd { get; }
@@ -230,8 +227,8 @@ public sealed partial class HostsViewModel : Observable
         using var cts = new CancellationTokenSource();
         _cts = cts;
         Rows.Clear(); PreviewLines.Clear(); SetReport(null); Summary = "";
-        Done = 0; Total = 1; ProgressText = "Проверяю адреса…";
-        var progress = new Progress<HostsCheckProgress>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = $"Проверено {p.Done} из {p.Total}"; });
+        Done = 0; Total = 1; ProgressText = L.T("hosts.progress.check");
+        var progress = new Progress<HostsCheckProgress>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = L.T("hosts.progress.done", new { done = p.Done, total = p.Total }); });
         try
         {
             var report = await c.HostsCheckAsync(progress, cts.Token);
@@ -246,7 +243,7 @@ public sealed partial class HostsViewModel : Observable
             ShowReport(report, preview);
             if (previewError is not null) PreviewLines.Add(previewError);
         }
-        catch (OperationCanceledException) { Summary = "Проверка остановлена."; }
+        catch (OperationCanceledException) { Summary = L.T("hosts.stopped"); }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); Summary = e.Message; }
         catch (Exception e) { Summary = Texts.Friendly(e); }
         finally { _cts = null; Busy = false; Checking = false; ProgressText = ""; }
@@ -264,14 +261,14 @@ public sealed partial class HostsViewModel : Observable
         PreviewLines.Clear();
         if (report.NothingToFix)
         {
-            Summary = "Нечего чинить: всё открывается и так.";
+            Summary = L.T("hosts.summary.nothing");
             return;
         }
-        Summary = $"Подходят адресов: {report.ToInstall.Count}. Остальные не нужны или не прошли проверку.";
+        Summary = L.T("hosts.summary.to_install", new { n = report.ToInstall.Count });
         if (preview is not { } p) return;
         foreach (var e in p.Added) PreviewLines.Add($"+ {e.Ip} {e.Host}");
         foreach (var e in p.Removed) PreviewLines.Add($"− {e.Ip} {e.Host}");
-        if (!p.Changed) PreviewLines.Add("Эти адреса уже записаны — менять нечего.");
+        if (!p.Changed) PreviewLines.Add(L.T("hosts.preview.already"));
     }
 
     void SetReport(HostsCheckReport? r)
@@ -282,22 +279,18 @@ public sealed partial class HostsViewModel : Observable
         CommandManager.InvalidateRequerySuggested();
     }
 
-    public const string WriteQuestion =
-        "Будет изменён системный файл hosts: добавлен блок DpiShell из {0} строк, другие строки не трогаем. Копия сохранена. " +
-        "Защитник Windows или другой антивирус может показать предупреждение (например, HostsFileHijack) — это реакция на любую правку hosts; разрешите изменение (название кнопки зависит от версии). Продолжить?";
-
     public async Task ApplyAsync()
     {
         if (_report is not { NothingToFix: false } report) return;
         var lines = _preview?.BlockLines.Count ?? report.ToInstall.Count + 3;
-        if (!Confirm(string.Format(WriteQuestion, lines))) return;
+        if (!Confirm(L.T("hosts.confirm.write", new { n = lines }))) return;
         if (await Need() is not { } c) return;
         Busy = true;
         try
         {
             await c.HostsApplyAsync();
             _draftOn = false;   // помощник включил функцию сам
-            Say($"Записано {report.ToInstall.Count}, проверка раз в день; устаревшие убираются сами.");
+            Say(L.T("hosts.say.written", new { n = report.ToInstall.Count }));
             PreviewLines.Clear();
             SetReport(null);
             Summary = "";
@@ -312,14 +305,14 @@ public sealed partial class HostsViewModel : Observable
 
     async Task RevertAsync(bool ask)
     {
-        if (ask && !Confirm("Убрать записи DpiShell из файла hosts? Другие строки файла не меняются.")) return;
+        if (ask && !Confirm(L.T("hosts.confirm.remove_block"))) return;
         if (await Need() is not { } c) { RefreshNow(); return; }
         Busy = true;
         try
         {
             var r = await c.HostsRevertAsync();
             _draftOn = false;
-            Say(r.Changed ? "Готово: записи DpiShell убраны из hosts." : "Записей DpiShell в hosts нет.");
+            Say(r.Changed ? L.T("hosts.say.reverted") : L.T("hosts.say.no_entries"));
         }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); Say(e.Message); }
         catch (HelperException e) { Say(e.Message); }
@@ -347,10 +340,10 @@ public sealed partial class HostsViewModel : Observable
         {
             var r = await c.HostsRecheckAsync();
             foreach (var host in r.Removed.Select(x => x.Host).Distinct())
-                Notify?.Invoke($"Адрес для {host} устарел, убран из hosts.");
+                Notify?.Invoke(L.T("hosts.notify.stale_removed", new { host }));
             foreach (var e in r.NewStaleUser ?? [])
-                Notify?.Invoke($"Адрес для {e.Host} больше не работает — уберите строку в «Починить адреса» или подберите новый адрес.");
-            if (r.BlockLost) Notify?.Invoke("Записи DpiShell пропали из hosts (Защитник Windows или другой антивирус?). Откройте «Починить адреса», чтобы записать снова.");
+                Notify?.Invoke(L.T("hosts.notify.user_stale", new { host = e.Host }));
+            if (r.BlockLost) Notify?.Invoke(L.T("hosts.notify.lost"));
         }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); }
         catch (HelperException e) { Say(e.Message); }

@@ -30,9 +30,9 @@ public sealed record DnsOption(string Id, string Title, string Detail, bool Cust
             var lines = new List<DnsInfoLine>();
             if (V4.Any()) lines.Add(new("IPv4", string.Join(", ", V4)));
             if (V6.Any()) lines.Add(new("IPv6", string.Join(", ", V6)));
-            if (DohAll.Count > 0) lines.Add(new("Адрес защищённого DNS", string.Join(Environment.NewLine, DohAll)));
-            if (Owner is { Length: > 0 }) lines.Add(new("Оператор", Owner));
-            if (Ping.Length > 0) lines.Add(new("Ответ с этого ПК", Ping));
+            if (DohAll.Count > 0) lines.Add(new(L.T("dns.picker.doh_address"), string.Join(Environment.NewLine, DohAll)));
+            if (Owner is { Length: > 0 }) lines.Add(new(L.T("dns.picker.operator"), Owner));
+            if (Ping.Length > 0) lines.Add(new(L.T("dns.picker.response_time"), Ping));
             return lines;
         }
     }
@@ -61,8 +61,8 @@ public sealed class DnsPicker : Observable
         ApplyCmd = RelayCommand.Async(() => Selected is { } o ? Apply(o) : Task.CompletedTask, () => !Working && Selected is not null && Selected.Id != CurrentId && Enabled());
         RestoreCmd = RelayCommand.Async(() => Restore(), () => !Working && CanRestore && Enabled());
         AddCustomCmd = new RelayCommand(AddCustom);
-        CopyIpsCmd = new RelayCommand(() => { if (Selected is { } o) Copy(o.CopyIps, "Адреса"); }, () => Selected is { Ips.Count: > 0 });
-        CopyDohCmd = new RelayCommand(() => { if (Selected is { } o) Copy(o.CopyDoh, "Адрес защищённого DNS"); }, () => Selected is { Doh: not null });
+        CopyIpsCmd = new RelayCommand(() => { if (Selected is { } o) Copy(o.CopyIps, L.T("dns.picker.copied.ips")); }, () => Selected is { Ips.Count: > 0 });
+        CopyDohCmd = new RelayCommand(() => { if (Selected is { } o) Copy(o.CopyDoh, L.T("dns.picker.copied.doh")); }, () => Selected is { Doh: not null });
         CompareCmd = RelayCommand.Async(() => CompareAsync(), () => !Comparing && Options.Any(o => o.Doh is not null));
         RemoveCustomCmd = new RelayCommand(p => RemoveCustom(p as DnsOption), p => p is DnsOption { Custom: true });
         Rebuild();
@@ -118,16 +118,16 @@ public sealed class DnsPicker : Observable
     public ICommand CopyDohCmd { get; }
     public ICommand CompareCmd { get; }
 
-    void Copy(string text, string what)
+    void Copy(string text, string copiedText)
     {
-        try { CopyText(text); Copied = what + " — в буфере обмена"; }
-        catch (Exception e) when (e is System.Runtime.InteropServices.COMException or System.Runtime.InteropServices.ExternalException) { Copied = "Буфер обмена занят — повторите"; }
+        try { CopyText(text); Copied = copiedText; }
+        catch (Exception e) when (e is System.Runtime.InteropServices.COMException or System.Runtime.InteropServices.ExternalException) { Copied = L.T("dns.picker.clipboard_busy"); }
     }
 
     readonly Dictionary<string, string> _ping = [];
     bool _comparing;
     public bool Comparing { get => _comparing; private set { if (Set(ref _comparing, value)) { Raise(nameof(CompareText)); CommandManager.InvalidateRequerySuggested(); } } }
-    public string CompareText => Comparing ? "Сравниваю…" : "Сравнить скорость";
+    public string CompareText => Comparing ? L.T("dns.picker.comparing") : L.T("dns.picker.compare");
 
     string _compareSummary = "";
     /// <summary>Итог «Сравнить»: варианты от быстрого к медленному; пусто — не сравнивали.</summary>
@@ -150,12 +150,13 @@ public sealed class DnsPicker : Observable
             }).ToList();
             var results = await Task.WhenAll(jobs);
             foreach (var (g, ms) in results)
-                foreach (var o in g) _ping[o.Id] = ms is { } v ? $"{v:0} мс" : "нет ответа";
+                foreach (var o in g) _ping[o.Id] = ms is { } v ? L.T("dns.picker.ping", new { ms = $"{v:0}" }) : L.T("dns.no_answer");
             // Итог — строкой под кнопкой: время в закрытом списке без подсказки не найти.
-            var fast = results.Where(r => r.ms is not null).OrderBy(r => r.ms).Select(r => $"{r.g.First().Title} {r.ms:0} мс").ToList();
+            var fast = results.Where(r => r.ms is not null).OrderBy(r => r.ms).Select(r => L.T("dns.picker.compare.item", new { title = r.g.First().Title, ms = $"{r.ms:0}" })).ToList();
             var dead = results.Where(r => r.ms is null).Select(r => r.g.First().Title).ToList();
-            CompareSummary = (fast.Count > 0 ? "Быстрее всех: " + string.Join(" · ", fast) : "Ни один защищённый DNS не ответил")
-                + (dead.Count > 0 && fast.Count > 0 ? ". Нет ответа: " + string.Join(", ", dead) : "") + ".";
+            CompareSummary = fast.Count == 0 ? L.T("dns.picker.compare.none")
+                : dead.Count > 0 ? L.T("dns.picker.compare.fastest_dead", new { fast = string.Join(" · ", fast), dead = string.Join(", ", dead) })
+                : L.T("dns.picker.compare.fastest", new { fast = string.Join(" · ", fast) });
             Rebuild();
         }
         finally { Comparing = false; }
@@ -231,7 +232,7 @@ public sealed class DnsPicker : Observable
         Options.Clear();
         foreach (var p in _presets) Options.Add(WithPing(p));
         foreach (var c in _s.DnsCustom)
-            Options.Add(WithPing(new DnsOption(CustomId(c.Name), c.Name, string.Join(", ", c.Ips) + (c.Doh is null ? " · без шифрования" : " · защищённый"), true, c.Ips, c.Doh)));
+            Options.Add(WithPing(new DnsOption(CustomId(c.Name), c.Name, L.T(c.Doh is null ? "dns.picker.custom_detail_plain" : "dns.picker.custom_detail_secure", new { ips = string.Join(", ", c.Ips) }), true, c.Ips, c.Doh)));
         Selected = Options.FirstOrDefault(o => o.Id == (keep ?? CurrentId)) ?? Options.FirstOrDefault(o => o.Id == CurrentId);
         Raise(nameof(HasCustom));
     }
@@ -257,19 +258,19 @@ public sealed class DnsPicker : Observable
     public void AddCustom()
     {
         var name = NewName.Trim();
-        if (!DnsValues.IsTitle(name)) { NewError = "Название — до 40 символов, без кавычек."; return; }
+        if (!DnsValues.IsTitle(name)) { NewError = L.T("dns.picker.err.title"); return; }
         if (_s.DnsCustom.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)) || _presets.Any(p => string.Equals(p.Title, name, StringComparison.OrdinalIgnoreCase)))
-        { NewError = "Такое название уже есть."; return; }
+        { NewError = L.T("dns.picker.err.duplicate"); return; }
         var parts = NewIps.Split([',', ' ', ';'], StringSplitOptions.RemoveEmptyEntries);
         var ips = new List<string>();
         foreach (var p in parts)
         {
-            if (DnsValues.NormalizeIp(p) is not { } ip || DnsValues.IsIpv6(ip)) { NewError = $"«{p}» — не адрес IPv4 (четыре числа через точку)."; return; }
+            if (DnsValues.NormalizeIp(p) is not { } ip || DnsValues.IsIpv6(ip)) { NewError = L.T("dns.picker.err.not_ipv4", new { value = p }); return; }
             if (!ips.Contains(ip)) ips.Add(ip);
         }
-        if (ips.Count is 0 or > 2) { NewError = "Нужен один или два адреса IPv4."; return; }
+        if (ips.Count is 0 or > 2) { NewError = L.T("dns.picker.err.ip_count"); return; }
         var doh = NewDoh.Trim();
-        if (doh.Length > 0 && !DnsValues.IsDohTemplate(doh)) { NewError = "Защищённый DNS — адрес вида https://сервер/путь."; return; }
+        if (doh.Length > 0 && !DnsValues.IsDohTemplate(doh)) { NewError = L.T("dns.picker.err.doh"); return; }
         var entry = new DnsCustomEntry(name, ips, doh.Length > 0 ? doh : null);
         _s.DnsCustom.Add(entry);
         Save();

@@ -151,7 +151,7 @@ public sealed class FirstRunAuditTests : IDisposable
 
         Assert.Contains("user_exclude_set old.example,bank.example", f.Backend.Calls);
         Assert.Contains("bank.example", vm.DirectMessage);
-        Assert.Contains("на этом ПК", vm.DirectMessage);
+        Assert.Equal(L.T("home.direct.done_pc", new { site = "bank.example" }), vm.DirectMessage);
         Assert.DoesNotContain("обход", vm.DirectMessage, StringComparison.OrdinalIgnoreCase);
         Assert.Equal("bank.example", vm.DirectMessage.Split(' ')[0]);
         Assert.Equal("old.example" + Environment.NewLine + "bank.example", vm.ExcludeText);

@@ -41,14 +41,14 @@ public sealed partial class WindowSmokeTests
                 WaitUi(vm.CheckNowAsync());
                 Pump();
                 var tabs = Find<TabControl>(w)!;
-                bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
+                bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
                 Button? Link(string content) => Find<Button>(tabs, b => b.IsVisible && b.Content as string == content);
 
                 // Выключено: «Открывается 1 из 2», главная кнопка одна, ссылка про сломавшийся сайт спрятана (чинить пока нечего).
                 if (!Visible(t => t.Text == "Открывается 1 из 2")) throw new Exception("До включения нет итога проверки");
                 if (Link("Не помогло? → Подобрать") is null) throw new Exception("Нет ссылки «Не помогло? → Подобрать»");
                 if (Link("Сайт не открывается?") is not null) throw new Exception("«Сайт не открывается?» видна, пока оптимизация выключена");
-                if (Link(L.T("router.select")) is not null) throw new Exception("«Подобрать на роутере» видна без роутера");
+                if (Link(L.T("home.find_on_router")) is not null) throw new Exception("«Подобрать на роутере» видна без роутера");
                 int primary = FindAll<Button>(tabs, b => b.IsVisible && b.Style == (Style)w.FindResource("Primary")).Count();
                 if (primary != 1) throw new Exception($"На Главной главных (синих) кнопок {primary}, ждали 1");
 
@@ -78,8 +78,10 @@ public sealed partial class WindowSmokeTests
                 WaitUi(vm.OpenDirectAsync());
                 Pump();
                 if (!f.Backend.Calls.Contains("user_exclude_set bank.example")) throw new Exception("Сайт не ушёл в список исключений ПК: " + string.Join(" | ", f.Backend.Calls));
-                if (!Visible(t => t.Text.StartsWith("bank.example теперь открывается без оптимизации (на этом ПК)"))) throw new Exception("Нет ответа под ссылками");
+                if (!Visible(t => t.Text == L.T("home.direct.done_pc", new { site = "bank.example" }))) throw new Exception("Нет ответа под ссылками");
                 foreach (var t in FindAll<TextBlock>(tabs, t => t.IsVisible && t.Text.Contains("bank.example")))
+                    if (t.Text.Contains("обход", StringComparison.OrdinalIgnoreCase)) throw new Exception("В ответе запретное слово: " + t.Text);
+                foreach (var t in FindAll<TextBox>(tabs, t => t.IsVisible && t.IsReadOnly && t.Text.Contains("bank.example")))
                     if (t.Text.Contains("обход", StringComparison.OrdinalIgnoreCase)) throw new Exception("В ответе запретное слово: " + t.Text);
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-home-site-fix.png"));
 

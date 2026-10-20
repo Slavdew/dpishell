@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using DpiShell.Core.Localization;
 
 namespace DpiShell.Core;
 
@@ -152,10 +153,21 @@ public static class Conflicts
         catalog ??= LoadCatalog(paths);
         return ZapretDetector.Find(paths, catalog)
             .Where(z => z.Owner != ZapretOwner.DpiShell)
-            .Select(z => new Conflict(z.Kind,
-                z.OwnerTitle + (z.Kind == "service" ? $" (служба {z.Name})" : "") + (z.Strategy is { } st ? $", стратегия {st.Title}" : ""),
-                z.HowToStop))
+            .Select(z => new Conflict(z.Kind, ConflictName(z), z.HowToStop))
             .ToList();
+    }
+
+    static string ConflictName(ZapretInstance z)
+    {
+        var service = z.Kind == "service";
+        var owner = z.OwnerTitle;
+        return (service, z.Strategy) switch
+        {
+            (true, { } st) => L.T("diag.conflict.name_service_strategy", new { owner, service = z.Name, strategy = st.Title }),
+            (true, null) => L.T("diag.conflict.name_service", new { owner, service = z.Name }),
+            (false, { } st) => L.T("diag.conflict.name_strategy", new { owner, strategy = st.Title }),
+            _ => L.T("diag.conflict.name", new { owner }),
+        };
     }
 
     static IReadOnlyList<Strategy> LoadCatalog(AppPaths paths)

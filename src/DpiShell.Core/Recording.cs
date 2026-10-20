@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using DpiShell.Core.Localization;
 
 namespace DpiShell.Core;
 
@@ -114,7 +115,7 @@ public sealed class ConnectionRecorder : IDisposable
         {
             _notes.AddRange(errors);
             if (opened == 0) { Dispose(); throw new InvalidOperationException("Запись не началась. " + string.Join(" ", errors)); }
-            if (!_udp) _notes.Add("UDP не записывается: без драйвера Windows не показывает, куда идёт UDP. Записаны только TCP-подключения.");
+            if (!_udp) _notes.Add(L.T("apps.core.note.udp_no_driver"));
             _running = true;
         }
     }
@@ -242,10 +243,10 @@ public static class FlowNoise
 
     public static string? Reason(RecordedFlow f, bool skipProcessNames)
     {
-        if (!IPAddress.TryParse(f.Address, out var ip)) return "не адрес";
-        if (IsLocal(ip)) return "локальная сеть";
-        if (NoisePorts.Contains(f.Port)) return "служебный порт";
-        if (!skipProcessNames && NoiseProcesses.Contains(Path.GetFileNameWithoutExtension(f.Process))) return "системная служба или браузер";
+        if (!IPAddress.TryParse(f.Address, out var ip)) return L.T("apps.core.reason.not_address");
+        if (IsLocal(ip)) return L.T("apps.core.reason.local");
+        if (NoisePorts.Contains(f.Port)) return L.T("apps.core.reason.service_port");
+        if (!skipProcessNames && NoiseProcesses.Contains(Path.GetFileNameWithoutExtension(f.Process))) return L.T("apps.core.reason.system_or_browser");
         return null;
     }
 

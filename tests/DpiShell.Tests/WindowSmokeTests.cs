@@ -89,6 +89,14 @@ public sealed partial class WindowSmokeTests
         return null;
     }
 
+    /// <summary>
+    /// Видимый текст окна: TextBlock или выделяемый TextBox (стиль SelectableText) — тест не должен знать, что из них.
+    /// У TextBox условие получает TextBlock-двойник с тем же Text, ToolTip, TextWrapping и DataContext.
+    /// </summary>
+    internal static bool VisibleText(DependencyObject root, Func<TextBlock, bool> m) =>
+        Find<TextBlock>(root, t => t.IsVisible && m(t)) is not null
+        || FindAll<TextBox>(root, b => b.IsVisible && b.IsReadOnly).Any(b => m(new TextBlock { Text = b.Text, ToolTip = b.ToolTip, TextWrapping = b.TextWrapping, DataContext = b.DataContext }));
+
     internal static IEnumerable<T> FindAll<T>(DependencyObject root, Func<T, bool>? match = null) where T : DependencyObject
     {
         if (root is T t && (match is null || match(t))) yield return t;
@@ -97,7 +105,7 @@ public sealed partial class WindowSmokeTests
     }
 
     /// <summary>Дождаться задачи на потоке окна, прокачивая очередь (её продолжения идут через Dispatcher).</summary>
-    static void WaitUi(Task t)
+    internal static void WaitUi(Task t)
     {
         var frame = new DispatcherFrame();
         t.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
@@ -135,7 +143,7 @@ public sealed partial class WindowSmokeTests
     internal static void SetProp(object o, string name, object? value) => o.GetType().GetProperty(name)!.SetValue(o, value);
 
     /// <summary>Окно с настоящим помощником над временной папкой этого Shell (подключён до открытия окна).</summary>
-    static (MainViewModel, HelperFixture) WithPcHelper(Shell shell, WindowSettings settings)
+    internal static (MainViewModel, HelperFixture) WithPcHelper(Shell shell, WindowSettings settings)
     {
         var f = new HelperFixture(backend: PcHelper.Over(shell));
         // Канал — в фоне: поток окна здесь занят, а продолжения клиента иначе ждали бы его.
@@ -143,7 +151,7 @@ public sealed partial class WindowSmokeTests
         return (TestWindow.Model(shell, link, settings), f);
     }
 
-    static void Stop(MainViewModel vm, HelperFixture f) => Task.Run(async () =>
+    internal static void Stop(MainViewModel vm, HelperFixture f) => Task.Run(async () =>
     {
         await vm.Helper.DisposeAsync();
         await f.DisposeAsync();
@@ -284,7 +292,7 @@ public sealed partial class WindowSmokeTests
                 vm.Page = Pages.Select;
                 Pump();
                 var tabs = Find<TabControl>(w)!;
-                bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
+                bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
                 int VisibleRows()
                 {
                     var grid = Find<DataGrid>(tabs, g => g.IsVisible && g.Items.Contains(vm.Scores[0]))!;
@@ -384,7 +392,7 @@ public sealed partial class WindowSmokeTests
                     vm.Page = Pages.Select;
                     Pump();
                     var tabs = Find<TabControl>(w)!;
-                    bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
+                    bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
                     if (Find<Button>(tabs, b => b.Content as string == "Проверить" && b.IsVisible) is null) throw new Exception("Нет кнопки «Проверить»");
                     if (Find<Button>(tabs, b => b.Content as string == "Применить" && b.IsVisible) is not null) throw new Exception("«Применить» до проверки");
                     if (Find<Button>(tabs, b => b.Content as string == "Вставить стратегию" && b.IsVisible) is null) throw new Exception("Нет ссылки «Вставить стратегию»");
@@ -397,7 +405,7 @@ public sealed partial class WindowSmokeTests
                     // Выбрана готовая — то же действие называется «Сделать копию и изменить».
                     vm.SelectedScore = vm.Scores.First(r => r.Id == strategies[0].Id);
                     Pump();
-                    if (Find<Button>(tabs, b => b.Content as string == "Сделать копию и изменить" && b.IsVisible) is null) throw new Exception("У готовой нет «Сделать копию и изменить»");
+                    if (Find<Button>(tabs, b => b.Content as string == L.T("select.edit_copy") && b.IsVisible) is null) throw new Exception("У готовой нет «Изменить копию»");
                     vm.SelectedScore = vm.Scores.First(r => r.Id == id);
 
                     // Главная: список стратегий, у вставленной — метка и в «Параметрах» «Изменить» / «Удалить».
@@ -435,7 +443,7 @@ public sealed partial class WindowSmokeTests
                     Pump();
                     if (editor.CanSave) throw new Exception("Правка с чужим параметром разрешена");
                     if (Find<Button>(host, b => b.Content as string == "Сохранить")?.IsEnabled != false) throw new Exception("«Сохранить» активна при ошибке");
-                    if (Find<TextBlock>(host, t => t.IsVisible && t.Text.Contains("Параметр --wf-raw не разрешён")) is null) throw new Exception("Нет причины в окне правки");
+                    if (!VisibleText(host, t => t.Text.Contains("Параметр --wf-raw не разрешён"))) throw new Exception("Нет причины в окне правки");
                     if (snapDir is not null) Snap(host, Path.Combine(snapDir, $"{theme}-edit-strategy-error.png"));
                     host.Close();
                     Close(w);
@@ -491,7 +499,7 @@ public sealed partial class WindowSmokeTests
                 vm.Page = Pages.Select;
                 Pump();
                 var tabs = Find<TabControl>(w)!;
-                bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
+                bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
                 if (!Visible(t => t.Text.StartsWith("Подходит: Смешанная · YouTube — "))) throw new Exception("Нет карточки «Подходит: Смешанная · …»");
                 if (!Visible(t => t.Text.Contains("собрана смешанная"))) throw new Exception("Нет пояснения, откуда смешанная");
                 if (!Visible(t => t.Text.StartsWith("Смешанная · YouTube — "))) throw new Exception("Нет строки смешанной в таблице");
@@ -499,7 +507,7 @@ public sealed partial class WindowSmokeTests
                 if (Find<Button>(tabs, b => b.Content as string == "Применить" && b.IsVisible) is null) throw new Exception("В карточке итога нет «Применить»");
                 if (Find<Button>(tabs, b => b.Content as string == "Применить лучшую" && b.IsVisible && b.IsEnabled) is null) throw new Exception("«Применить лучшую» неактивна");
                 if (Visible(t => t.Text.StartsWith("Не нашлось стратегии для всего"))) throw new Exception("Фраза «Не нашлось стратегии для всего» при лучшей «2 из 2»");
-                if (Find<TextBlock>(tabs, t => t.IsVisible && t.Text.StartsWith("Подходит: Смешанная") && t.ToolTip is string tip && tip.Contains("general (ALT")) is null) throw new Exception("У названия смешанной нет подсказки с составом");
+                if (!VisibleText(tabs, t => t.Text.StartsWith("Подходит: Смешанная") && t.ToolTip is string tip && tip.Contains("general (ALT"))) throw new Exception("У названия смешанной нет подсказки с составом");
                 if (Find<TextBlock>(tabs, t => t.IsVisible && t.Text.StartsWith("Смешанная · YouTube — ") && t.TextWrapping == TextWrapping.Wrap) is null) throw new Exception("Название смешанной в таблице обрезается, а не переносится");
                 if (Visible(t => t.Text is "Группы" or "Открылось") || Find<DataGridColumnHeader>(tabs, h => h.IsVisible && h.Content as string == "Сервисы") is null) throw new Exception("Колонка «Группы» не переименована в «Сервисы»");
                 if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-select-mix.png")); }
@@ -510,7 +518,7 @@ public sealed partial class WindowSmokeTests
                 var home = Find<TabControl>(w)!;
                 var row = vm.StrategyChoices.First(c => c.Id == mix.Id);
                 if (!row.Removable || row.Personal) throw new Exception("Смешанная должна удаляться и не быть «своей»");
-                if (row.EditText != "Сделать копию и изменить") throw new Exception("Смешанная правится копией: " + row.EditText);
+                if (row.EditText != L.T("home.edit_copy")) throw new Exception("Смешанная правится копией: " + row.EditText);
                 vm.StrategyChoices.Move(vm.StrategyChoices.IndexOf(row), 0);
                 row.ShowParams = true;
                 Pump();
@@ -567,7 +575,7 @@ public sealed partial class WindowSmokeTests
                     // Помощник молчит дольше 10 с — выход с заставки (UX-аудит, п. 46).
                     var text = vm.LoadingText;
                     SetProp(vm, "LoadSlow", true);
-                    SetProp(vm, "LoadingText", "Помощник отвечает дольше обычного. Можно подождать, повторить или открыть окно без него — только для просмотра.");
+                    SetProp(vm, "LoadingText", L.T("shell.loading.slow"));
                     Pump();
                     Snap(w, Path.Combine(snapDir, $"{theme}-loading-slow.png"));
                     SetProp(vm, "LoadSlow", false);
@@ -591,8 +599,9 @@ public sealed partial class WindowSmokeTests
                         // Обновления и версии — только на «Информация и обновления»; в «Настройках» их нет.
                         var tabsAbout = Find<TabControl>(w)!;
                         bool Has(string text) => Find<TextBlock>(tabsAbout, t => t.Text == text && t.IsVisible) is not null
+                                                 || Find<TextBox>(tabsAbout, t => t.Text == text && t.IsVisible) is not null
                                                  || Find<Button>(tabsAbout, b => b.Content as string == text && b.IsVisible) is not null;
-                        string[] aboutOnly = ["Версия", "Проверить обновления", "Обновить списки", "Ядро zapret (bol-van)", "DpiShell на роутере", "Программа", "Помощник", "Данные"];
+                        string[] aboutOnly = [L.T("about.version.title"), L.T("about.app.check_button"), L.T("about.lists.update"), L.T("about.row.core"), L.T("about.row.router"), L.T("about.row.app"), L.T("about.row.helper"), L.T("about.row.data")];
                         foreach (var t in aboutOnly)
                             if (Has(t) != (page == Pages.About))
                                 throw new Exception($"«{t}»: {(page == Pages.About ? "нет на «Информация и обновления»" : "осталось в «Настройках»")}");
@@ -693,10 +702,10 @@ public sealed partial class WindowSmokeTests
                         var more = Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Подробнее" && e.IsVisible)!;
                         more.IsExpanded = true;
                         Pump();
-                        if (Find<TextBlock>(more, t => t.Text.Contains("TLS 1.3 и TLS 1.2: 301 → ") && t.IsVisible) is null) throw new Exception("В «Подробнее» проверки нет подробностей по TLS");
+                        if (!VisibleText(more, t => t.Text.Contains("TLS 1.3 и TLS 1.2: 301 → "))) throw new Exception("В «Подробнее» проверки нет подробностей по TLS");
                         // Адреса разошлись — оба пути с адресами: программа (DoH) и путь через DNS Windows.
-                        if (Find<TextBlock>(more, t => t.Text.Contains("Через Windows (DNS Windows: 195.208.4.1)") && t.IsVisible) is null) throw new Exception("В «Подробнее» нет пути через DNS Windows");
-                        if (Find<TextBlock>(w, t => t.Text.StartsWith("⚠ В браузере не откроется: YouTube") && t.IsVisible) is null) throw new Exception("В итоге нет ⚠ про браузер");
+                        if (!VisibleText(more, t => t.Text.Contains("Через Windows (DNS Windows: 195.208.4.1)"))) throw new Exception("В «Подробнее» нет пути через DNS Windows");
+                        if (!VisibleText(w, t => t.Text.StartsWith("⚠ В браузере не откроется: YouTube"))) throw new Exception("В итоге нет ⚠ про браузер");
                         Snap(w, Path.Combine(snapDir, $"{theme}-home-check-detail.png"));
                         more.IsExpanded = false;
                         Pump();
@@ -774,7 +783,7 @@ public sealed partial class WindowSmokeTests
                     if (page == Pages.Sites)
                     {
                         // Роутера нет: только свои сайты ПК — без карточек роутера и заглушек про исключения.
-                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", "Исключения (оптимизация их не трогает)", L.T("router.diag.title") })
+                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", L.T("sites.router.lists.exclude"), L.T("router.diag.title") })
                             if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» на «Сайтах» без роутера");
                         if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Открывать без оптимизации" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет списка «Открывать без оптимизации»");
                         if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Свои сайты" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет поля своих сайтов ПК");
@@ -956,7 +965,7 @@ public sealed partial class WindowSmokeTests
                         // Роутер — одной строкой со ссылкой на вкладку; обход делает он — кнопка ПК второстепенная.
                         if (Find<TextBlock>(tabs, t => t.Text == "Оптимизация работает на роутере" && t.IsVisible) is null) throw new Exception("На главной нет строки роутера");
                         if (Find<Button>(tabs, b => b.Content as string == "Подробнее →" && b.IsVisible) is null) throw new Exception("У строки роутера нет ссылки на вкладку");
-                        if (Find<Button>(tabs, b => b.Content as string == "Включить и на этом ПК" && b.IsVisible && b.Style != (Style)w.FindResource("Primary")) is null)
+                        if (Find<Button>(tabs, b => b.Content as string == L.T("home.toggle.on_pc") && b.IsVisible && b.Style != (Style)w.FindResource("Primary")) is null)
                             throw new Exception("При оптимизации на роутере кнопка ПК должна быть второстепенной «Включить и на этом ПК»");
                         if (Find<ComboBox>(tabs) is not null) throw new Exception("На главной появился выпадающий список");
                         vm.ShowStrategies = true;
@@ -968,7 +977,7 @@ public sealed partial class WindowSmokeTests
                     if (page == Pages.Select)
                     {
                         if (Find<TextBlock>(tabs, t => t.Text.StartsWith("✓ Включена на роутере") && t.IsVisible) is null
-                            || Find<TextBlock>(tabs, t => t.Text.StartsWith("Включена на роутере") && t.IsVisible) is not null
+                            || VisibleText(tabs, t => t.Text.StartsWith("Включена на роутере"))
                             || Find<Button>(tabs, b => b.Content as string == "Применить выбранную" && b.IsVisible && b.IsEnabled) is null)
                             throw new Exception("На «Подборе» нет свёрнутого итога роутера или «Применить выбранную»");
                         if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-router-select-collapsed.png")); }
@@ -981,8 +990,8 @@ public sealed partial class WindowSmokeTests
                         if (Find<Button>(tabs, b => b.Content as string == "Подробнее" && b.IsVisible && b.DataContext == router) is not { } rmore) throw new Exception("У свёрнутого итога роутера нет «Подробнее»");
                         rmore.Command.Execute(null);
                         Pump();
-                        if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Включена на роутере") && t.IsVisible) is null) throw new Exception("«Подробнее» не раскрыло итог роутера");
-                        if (Find<TextBlock>(tabs, t => t.Text == rBlocked && t.IsVisible) is null) throw new Exception("В «Подробнее» роутера нет строки про блокировку по адресу");
+                        if (!VisibleText(tabs, t => t.Text.StartsWith("Включена на роутере"))) throw new Exception("«Подробнее» не раскрыло итог роутера");
+                        if (!VisibleText(tabs, t => t.Text == rBlocked)) throw new Exception("В «Подробнее» роутера нет строки про блокировку по адресу");
                         if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-select-blocked-expanded.png"));
                         SetProp(router, "AddressNote", "");
                         Pump();
@@ -1001,8 +1010,8 @@ public sealed partial class WindowSmokeTests
                     if (page == Pages.Sites)
                     {
                         // «Сайты» с роутером: «Сайт не открывается» наверху, «Для каких сайтов обход», свои сайты и исключения (не в раскрывашке).
-                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", "Свои сайты", "Исключения (оптимизация их не трогает)", "Сайт открывается только без оптимизации" })
-                            if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is null) throw new Exception($"На вкладке «Сайты» нет «{text}»");
+                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", "Свои сайты", L.T("sites.router.lists.exclude"), "Сайт открывается только без оптимизации" })
+                            if (!VisibleText(tabs, t => t.Text == text)) throw new Exception($"На вкладке «Сайты» нет «{text}»");
                         if (Find<TextBox>(tabs, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Исключения" && t.IsVisible) is null) throw new Exception("На «Сайтах» не видно поля исключений");
                         if (Find<Button>(tabs, b => b.Content as string == "Добавить в исключения" && b.IsVisible) is null) throw new Exception("Нет «Добавить в исключения»");
                         if (Find<Expander>(tabs, e => (e.Header as string ?? "").StartsWith("Списки роутера") && e.IsVisible) is not null) throw new Exception("Исключения снова спрятаны в раскрывашке");
@@ -1157,7 +1166,7 @@ public sealed partial class WindowSmokeTests
                     var tabs = Find<TabControl>(w)!;
                     if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Сторож выключил оптимизацию") && t.Text.Contains("с ней пропал интернет") && t.IsVisible) is null) throw new Exception("На главной нет фразы о стороже");
                     if (Find<Button>(tabs, b => b.Content as string == L.T("router.trial.reenable") && b.IsVisible && b.IsEnabled) is null) throw new Exception("На главной нет «Попробовать снова»");
-                    if (Find<Button>(tabs, b => b.Content as string == L.T("router.select") && b.IsVisible && b.IsEnabled) is null) throw new Exception("В плашке главной нет «Подобрать заново»");
+                    if (Find<Button>(tabs, b => b.Content as string == L.T("home.find_on_router") && b.IsVisible && b.IsEnabled) is null) throw new Exception("В плашке главной нет «Подобрать заново»");
                     if (Find<Button>(tabs, b => b.Content as string == "Включить снова") is not null) throw new Exception("Осталась «Включить снова»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-home.png"));
                     vm.Page = Pages.Router;
@@ -1534,7 +1543,7 @@ public sealed partial class WindowSmokeTests
         if (mode.Content as string != "Режим службы") throw new Exception($"Галочка режима называется «{mode.Content}»");
         if (mode.IsChecked != (vm.Helper.Status?.RunMode != "process")) throw new Exception("Галочка режима не совпадает с режимом помощника");
         // Пояснение под галочкой — коротко, без первого лица: что будет в этом режиме.
-        var hint = vm.ServiceMode ? "Оптимизация работает без окна и запускается после перезагрузки" : "Оптимизация работает, только пока программа открыта";
+        var hint = L.T(vm.ServiceMode ? "settings.run_mode.hint_service" : "settings.run_mode.hint_process");
         if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == hint && t.IsVisible) is null) throw new Exception($"Под галочкой режима нет «{hint}»");
     }
 
@@ -1547,7 +1556,7 @@ public sealed partial class WindowSmokeTests
     }
 
     /// <summary>Вкладка «Прокси» для снимков: свой прокси включён в реестре (память), два прокси в списке, прежний запомнен, проверка прошла.</summary>
-    static void FillProxy(MainViewModel vm)
+    internal static void FillProxy(MainViewModel vm)
     {
         var reg = (MemoryProxyRegistry)vm.Proxy.Registry;
         reg.Values[(ProxyKey.UserSettings, "", ProxyNames.Enable)] = 1;
@@ -1564,7 +1573,7 @@ public sealed partial class WindowSmokeTests
     }
 
     /// <summary>Наполнение: строки таблиц и плашки — для проверки главной и для снимков. В памяти и во временной папке.</summary>
-    static void Fill(MainViewModel vm, Shell shell)
+    internal static void Fill(MainViewModel vm, Shell shell)
     {
         var strategies = shell.Catalog.Strategies.Take(6).ToList();
         // Статистика — настоящими файлами подборов: помощник отдаёт её окну (read_results), список строит само окно.
@@ -1723,7 +1732,7 @@ public sealed partial class WindowSmokeTests
                 vm.Page = Pages.Apps;
                 PumpUntil(() => vm.Apps.Variants.Count > 0, "варианты параметров от помощника");
                 var tabs = Find<TabControl>(w)!;
-                bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
+                bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
                 Button? Btn(string content) => Find<Button>(tabs, b => b.IsVisible && b.Content as string == content);
 
                 // Раскладка: сверху «Игры и программы» и «Настроить под игру», ниже игровой режим, IP-списки — в свёрнутом «Дополнительно».
@@ -1741,8 +1750,8 @@ public sealed partial class WindowSmokeTests
                     var anti = Find<TextBlock>(tabs, t => t.IsVisible && t.Text.Contains("Vanguard"))!;
                     if (Y(anti) <= Y(Btn("Начать")!)) throw new Exception("Плашка про античиты выше кнопки «Начать» — она должна быть под карточкой");
                     if (!Visible(t => t.Text.StartsWith("Нужен драйвер WinDivert.") && t.Text.Length < 130)) throw new Exception("Нет короткого пояснения у галки UDP");
-                    if (Visible(t => t.Text.Contains("Без галочки записываются"))) throw new Exception("Детали про драйвер видны без «Подробнее»");
-                    if (Find<Expander>(tabs, e => e.IsVisible && e.Header as string == "Подробнее" && e.Content is TextBlock tb && tb.Text.Contains("Без галочки записываются")) is null)
+                    if (Visible(t => t.Text == L.T("apps.rec.udp_more"))) throw new Exception("Детали про драйвер видны без «Подробнее»");
+                    if (Find<Expander>(tabs, e => e.IsVisible && e.Header as string == "Подробнее" && e.Content is TextBlock tb && tb.Text == L.T("apps.rec.udp_more")) is null)
                         throw new Exception("Детали про UDP не под «Подробнее»");
                     if (Btn("Включить оптимизацию") is not null) throw new Exception("«Включить оптимизацию» видна до настройки профиля");
                 }
@@ -1763,7 +1772,7 @@ public sealed partial class WindowSmokeTests
                     flows.Push("tcp", "198.51.100.60", 443, 900);   // браузер — шум
                     Task.Run(() => vm.Apps.TickAsync()).GetAwaiter().GetResult();
                     Pump();
-                    if (!Visible(t => t.Text.StartsWith("Идёт запись"))) throw new Exception("Нет строки «Идёт запись»");
+                    if (!Visible(t => t.Text == L.T("apps.rec.status"))) throw new Exception("Нет строки «Идёт запись»");
                     if (Btn("Готово") is null || Btn("Отмена") is null) throw new Exception("Нет «Готово» / «Отмена»");
                     if (Btn("Начать") is not null) throw new Exception("«Начать» не спрятана во время записи");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-recording.png"));
@@ -1775,7 +1784,7 @@ public sealed partial class WindowSmokeTests
                         if (Btn(b) is null) throw new Exception("Нет кнопки «" + b + "»");
                     if (!Visible(t => t.Text == "Профили программ")) throw new Exception("Профиль не в списке");
                     if (Btn("Вернуть как было") is null) throw new Exception("Нет «Вернуть как было»");
-                    if (!Visible(t => t.Text.StartsWith("Оптимизация сейчас выключена"))) throw new Exception("Нет подсказки, что оптимизация выключена");
+                    if (!Visible(t => t.Text == L.T("apps.off_hint"))) throw new Exception("Нет подсказки, что оптимизация выключена");
                     if (Btn("Включить оптимизацию") is null) throw new Exception("Нет «Включить оптимизацию» рядом с подсказкой");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-simple-check.png"));
                     Btn("Да, заработало")!.Command.Execute(null);
@@ -1957,8 +1966,10 @@ public sealed partial class WindowSmokeTests
                     Pump();
                 }
                 bool Has(MainWindow w, string text) =>
-                    Find<TextBlock>(w, t => t.Text == text && t.IsVisible) is not null || Find<Button>(w, b => b.Content as string == text && b.IsVisible) is not null;
-                bool HasPart(MainWindow w, string part) => Find<TextBlock>(w, t => t.Text.Contains(part) && t.IsVisible) is not null;
+                    Find<TextBlock>(w, t => t.Text == text && t.IsVisible) is not null || Find<TextBox>(w, t => t.Text == text && t.IsVisible) is not null
+                    || Find<Button>(w, b => b.Content as string == text && b.IsVisible) is not null;
+                bool HasPart(MainWindow w, string part) => Find<TextBlock>(w, t => t.Text.Contains(part) && t.IsVisible) is not null
+                    || Find<TextBox>(w, t => t.Text.Contains(part) && t.IsVisible) is not null;
                 void Shot(MainWindow w, string name)
                 {
                     if (snapDir is null) return;
@@ -1970,23 +1981,23 @@ public sealed partial class WindowSmokeTests
                 var (vm, w, _) = NewWindow(AppUpdateTests.Serve(new MapHandler(), AppUpdateTests.A, "1.2.0"), "1.0.0", _ => new TaskCompletionSource().Task);
                 vm.Updates.CheckCmd.Execute(null);
                 Until(() => vm.Updates.AppReleaseReady, "проверка выпуска");
-                foreach (var t in new[] { "Что нового", "• Быстрее подбор", "• Исправлен трей", "Обновить до 1.2.0" })
+                foreach (var t in new[] { L.T("about.app.whats_new"), "• Быстрее подбор", "• Исправлен трей", L.T("about.app.update_button", new { version = "1.2.0" }) })
                     if (!Has(w, t)) throw new Exception($"Нет «{t}» при доступном обновлении");
-                if (Has(w, "Проверить обновления")) throw new Exception("Две главные кнопки: «Проверить обновления» рядом с «Обновить до X»");
-                if (Has(w, "Скачать программу 1.2.0") || HasPart(w, "Вернуть прежнюю")) throw new Exception("Лишние кнопки при доступном обновлении");
+                if (Has(w, L.T("about.app.check_button"))) throw new Exception("Две главные кнопки: «Проверить обновления» рядом с «Обновить до X»");
+                if (Has(w, L.T("about.app.download_button", new { version = "1.2.0" })) || HasPart(w, L.T("about.app.rollback_button", new { version = "" }).Trim())) throw new Exception("Лишние кнопки при доступном обновлении");
                 Shot(w, "ready");
 
                 // 2. Идёт обновление: ход виден, кнопка неактивна. Перезапуск не завершается — как окно за миг до выхода.
                 vm.Updates.UpdateAppCmd.Execute(null);
-                Until(() => vm.Updates.AppProgressText.Contains("Перезапускаю"), "подготовка версии");
-                if (!HasPart(w, "Перезапускаю программу")) throw new Exception("Ход обновления не виден");
+                Until(() => vm.Updates.AppProgressText == L.T("about.app.restarting", new { version = "1.2.0" }), "подготовка версии");
+                if (!HasPart(w, L.T("about.app.restarting", new { version = "1.2.0" }))) throw new Exception("Ход обновления не виден");
                 if (Find<ProgressBar>(w, p => p.IsVisible && p.IsIndeterminate) is null) throw new Exception("Нет полосы хода обновления");
-                if (Find<Button>(w, b => b.Content as string == "Обновить до 1.2.0" && b.IsVisible && b.IsEnabled) is not null) throw new Exception("Кнопка обновления активна во время обновления");
+                if (Find<Button>(w, b => b.Content as string == L.T("about.app.update_button", new { version = "1.2.0" }) && b.IsVisible && b.IsEnabled) is not null) throw new Exception("Кнопка обновления активна во время обновления");
                 Shot(w, "running");
-                typeof(UpdatesViewModel).GetField("_appProgress", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(vm.Updates, "Скачиваю версию 1.2.0: 34 МБ");
+                typeof(UpdatesViewModel).GetField("_appProgress", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(vm.Updates, L.T("about.app.downloading_mb", new { version = "1.2.0", mb = 34 }));
                 vm.Updates.Refresh();
                 Pump();
-                if (!HasPart(w, "Скачиваю версию 1.2.0: 34 МБ")) throw new Exception("Ход скачивания не виден");
+                if (!HasPart(w, L.T("about.app.downloading_mb", new { version = "1.2.0", mb = 34 }))) throw new Exception("Ход скачивания не виден");
                 Shot(w, "download");
                 Close(w);
 
@@ -2000,7 +2011,7 @@ public sealed partial class WindowSmokeTests
                 if (!HasPart(w2, "Скачанный файл не прошёл проверку") || HasPart(w2, "sha256")) throw new Exception("Нет первой фразы об ошибке или технический хвост на виду");
                 if (!vm2.Updates.AppErrorMore.Contains("программа не изменена") || !vm2.Updates.AppErrorMore.Contains("sha256")) throw new Exception("Остаток и хвост не под «Подробнее»");
                 if (Find<Button>(w2, b => b.Content as string == "Повторить" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Повторить» под ошибкой");
-                if (Find<Button>(w2, b => b.Content as string == "Обновить до 1.2.0" && b.IsVisible && b.IsEnabled) is null) throw new Exception("После ошибки нельзя повторить");
+                if (Find<Button>(w2, b => b.Content as string == L.T("about.app.update_button", new { version = "1.2.0" }) && b.IsVisible && b.IsEnabled) is null) throw new Exception("После ошибки нельзя повторить");
                 if (store2.IsInstalled("1.2.0")) throw new Exception("Подменённый архив распакован");
                 Shot(w2, "error");
                 Close(w2);
@@ -2021,7 +2032,7 @@ public sealed partial class WindowSmokeTests
                 var connect = vm3.Router.ConnectAsync("secret");
                 Until(() => connect.IsCompleted, "вход на роутер");
                 if (!connect.GetAwaiter().GetResult()) throw new Exception("Роутер не принял вход");
-                foreach (var t in new[] { "Программа обновлена до версии 1.2.0.", "Вернуть прежнюю версию (1.0.0)", "0.2.0-r8 · страница LuCI 0.2.0-r5", "Ядро на роутере", "v72.13" })
+                foreach (var t in new[] { L.T("about.app.updated", new { version = "1.2.0" }), L.T("about.app.rollback_button", new { version = "1.0.0" }), "0.2.0-r8 · страница LuCI 0.2.0-r5", "Ядро на роутере", "v72.13" })
                     if (!Has(w3, t)) throw new Exception($"Нет «{t}» после обновления");
                 Shot(w3, "done");
                 Close(w3);
@@ -2073,14 +2084,14 @@ public sealed partial class WindowSmokeTests
                 }
 
                 // Карточка стоит над «Очисткой и удалением».
-                var clean = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Очистка и удаление")!;
+                var clean = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == L.T("settings.cleanup.title"))!;
                 var tabsRoot = Find<TabControl>(w)!;
                 if (Card().TranslatePoint(new Point(0, 0), tabsRoot).Y >= clean.TranslatePoint(new Point(0, 0), tabsRoot).Y)
                     throw new Exception("«Изменения DpiShell» должны стоять над «Очисткой и удалением»");
-                if (!Has("Изменения DpiShell") || !Has("Отменить всё") || !Has("Вернутся значения, которые были до DpiShell; более поздние правки не затрагиваются."))
+                if (!Has(L.T("settings.changes.title")) || !Has(L.T("settings.changes.undo_all")) || !Has(L.T("settings.changes.promise")))
                     throw new Exception("В карточке нет заголовка, кнопки или обещания");
-                if (!Has("Пока ничего: DpiShell ещё не меняла настройки этого компьютера.")) throw new Exception("Нет пустого состояния");
-                if (Find<Button>(Card(), b => b.Content as string == "Отменить всё")!.IsEnabled) throw new Exception("«Отменить всё» активна при пустом журнале");
+                if (!Has(L.T("settings.changes.empty"))) throw new Exception("Нет пустого состояния");
+                if (Find<Button>(Card(), b => b.Content as string == L.T("settings.changes.undo_all"))!.IsEnabled) throw new Exception("«Отменить всё» активна при пустом журнале");
                 ScrollToCard();
                 Shot("empty");
 
@@ -2092,10 +2103,10 @@ public sealed partial class WindowSmokeTests
                 vm.Autostart.Recorder.Begin(ChangeKinds.Autostart, "Включён запуск окна вместе с Windows (свёрнутым в трей)", null, null);
                 WaitUi(vm.Changes.RefreshAsync());
                 Pump();
-                if (vm.Changes.Items.Count != 4 || !Find<Button>(Card(), b => b.Content as string == "Отменить всё")!.IsEnabled) throw new Exception("Список записей не появился");
+                if (vm.Changes.Items.Count != 4 || !Find<Button>(Card(), b => b.Content as string == L.T("settings.changes.undo_all"))!.IsEnabled) throw new Exception("Список записей не появился");
                 // Список свёрнут, в заголовке — число пунктов; «Отменить всё» доступна и так. Раскрывается — строки видны.
                 var list = (Expander)w.FindName("ChangesList")!;
-                if (list.IsExpanded || list.Header as string != "4 пункта") throw new Exception($"Список изменений не свёрнут или заголовок «{list.Header}»");
+                if (list.IsExpanded || list.Header as string != L.Plural("settings.changes.count", 4)) throw new Exception($"Список изменений не свёрнут или заголовок «{list.Header}»");
                 if (Has("DNS этого компьютера: Google — Ethernet")) throw new Exception("Строки видны в свёрнутом списке");
                 ScrollToCard();
                 Shot("collapsed");
@@ -2115,10 +2126,10 @@ public sealed partial class WindowSmokeTests
                     new("5", "Включены временные метки TCP (настройка Windows)", now.AddMinutes(-4), UndoStatus.AlreadyBack, "настройка уже выключена"),
                 ]);
                 Pump();
-                if (!Has("Не тронул: изменено после DpiShell") || !Has("Не смог") || !Has("Уже было как раньше") || !Has("Вернул"))
+                if (!Has(L.T("settings.changes.status_skipped")) || !Has(L.T("settings.changes.status_failed")) || !Has(L.T("settings.changes.status_same")) || !Has(L.T("settings.changes.status_restored")))
                     throw new Exception("В отчёте нет всех четырёх исходов");
-                if (Find<TextBlock>(Card(), t => t.Text.StartsWith("Пункты «не тронул»") && t.IsVisible) is null) throw new Exception("Нет вопроса про изменённое после нас");
-                if (FindAll<TextBlock>(Card()).Any(t => t.Text.Contains("обход", StringComparison.OrdinalIgnoreCase))) throw new Exception("В карточке осталось слово «обход»");
+                if (Find<TextBlock>(Card(), t => t.Text == L.T("settings.changes.question") && t.IsVisible) is null) throw new Exception("Нет вопроса про изменённое после нас");
+                if (FindAll<TextBlock>(Card()).Any(t => System.Text.RegularExpressions.Regex.IsMatch(t.Text, @"\bобход", System.Text.RegularExpressions.RegexOptions.IgnoreCase))) throw new Exception("В карточке осталось слово «обход»");
                 ScrollToCard();
                 Shot("report");
 

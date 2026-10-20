@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using DpiShell.Core.Localization;
 
 namespace DpiShell.Core;
 
@@ -82,16 +83,16 @@ public sealed class ProxyManager(IProxyRegistry reg, IWinHttpProxy winHttp)
     /// <param name="kind"><see cref="ChangeKinds.ProxyUser"/> для окна, <see cref="ChangeKinds.ProxyUserAdmin"/> для помощника.</param>
     public ProxyOutcome ApplyUser(string? sid, ProxySettings next, string kind)
     {
-        if (sid is not null && !reg.UserHiveLoaded(sid)) return new(false, "Настройки этого пользователя сейчас не загружены в Windows — войдите в систему и повторите.");
+        if (sid is not null && !reg.UserHiveLoaded(sid)) return new(false, L.T("proxy.out.hive"));
         var before = ProxyRegistryIo.Read(reg, ProxyKey.UserSettings, sid);
-        if (before == next) return new(true, "Так уже и стоит.");
+        if (before == next) return new(true, L.T("proxy.out.already"));
         var error = Journal(kind, Title(kind, next), sid, ProxySnapshot.ToJson(before, sid), ProxySnapshot.ToJson(next, sid),
             () => ProxySnapshot.ToJson(ProxyRegistryIo.Read(reg, ProxyKey.UserSettings, sid), sid),
             () => ProxyRegistryIo.Write(reg, ProxyKey.UserSettings, sid, next));
         Notifier.Changed();
         var now = ProxyRegistryIo.Read(reg, ProxyKey.UserSettings, sid);
-        if (now != next) return new(false, error is null ? "Windows не приняла настройки." : "Не удалось записать: " + error, now != before);
-        return new(true, next.IsOn ? "Системный прокси включён для пользователя." : "Системный прокси выключен для пользователя.", true);
+        if (now != next) return new(false, error is null ? L.T("proxy.out.rejected") : L.T("proxy.out.write_failed", new { error }), now != before);
+        return new(true, next.IsOn ? L.T("proxy.out.user_on") : L.T("proxy.out.user_off"), true);
     }
 
     static string Title(string kind, ProxySettings next) => (kind, next.IsOn) switch
@@ -112,7 +113,7 @@ public sealed class ProxyManager(IProxyRegistry reg, IWinHttpProxy winHttp)
         var beforeW = winHttp.Get();
         // Включаем — настройки общие для всех (ProxySettingsPerUser=0); выключаем — политику оставляем как есть.
         int? nextPer = next.IsOn ? 0 : beforePer;
-        if (before == next && beforePer == nextPer && (winhttp is null || beforeW == winhttp)) return new(true, "Так уже и стоит.");
+        if (before == next && beforePer == nextPer && (winhttp is null || beforeW == winhttp)) return new(true, L.T("proxy.out.already"));
 
         bool trackW = winhttp is not null;
         JsonObject Snap(ProxySettings s, int? per, WinHttpInfo? w) => ProxySnapshot.ToJson(s, null, true, per, trackW ? w : null);
@@ -129,17 +130,17 @@ public sealed class ProxyManager(IProxyRegistry reg, IWinHttpProxy winHttp)
         var nowSet = ProxyRegistryIo.Read(reg, ProxyKey.MachineSettings);
         var nowW = winHttp.Get();
         bool ok = nowSet == next && ProxyRegistryIo.PerUserPolicy(reg) == nextPer && (winhttp is null || nowW == winhttp);
-        if (!ok) return new(false, error is null ? "Windows не приняла настройки." : "Не удалось записать: " + error, true);
+        if (!ok) return new(false, error is null ? L.T("proxy.out.rejected") : L.T("proxy.out.write_failed", new { error }), true);
 
         if (!next.IsOn && before.IsOn) Backup?.Save(new ProxyBackup(before, trackW && !beforeW.IsDirect ? beforeW : null));
-        return new(true, next.IsOn ? "Системный прокси включён для всей машины." : "Системный прокси выключен для всей машины.", true);
+        return new(true, next.IsOn ? L.T("proxy.out.machine_on") : L.T("proxy.out.machine_off"), true);
     }
 
     /// <summary>«Вернуть прежний»: поставить то, что было до последнего «Очистить» (и WinHTTP, если его тоже меняли).</summary>
     public ProxyOutcome RestoreMachine()
     {
         var b = Backup?.Load();
-        if (b is null) return new(false, "Прежнего прокси машины нет: до «Очистить» он не был включён.");
+        if (b is null) return new(false, L.T("proxy.out.no_previous"));
         var r = ApplyMachine(b.Machine, b.WinHttp);
         if (r.Ok) Backup!.Forget();
         return r;

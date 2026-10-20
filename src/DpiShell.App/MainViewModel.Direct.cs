@@ -42,27 +42,27 @@ public sealed partial class MainViewModel
     {
         if (DataStore.NormalizeDomain(DirectSite) is not { } host)
         {
-            DirectMessage = "Впишите адрес сайта, например bank.example.";
+            DirectMessage = L.T("home.direct.empty");
             return;
         }
-        var where = new List<string>();
+        bool pc = false, router = false;
         if (_active)
         {
             if (!await AddPcExcludeAsync(host)) return;
-            where.Add("на этом ПК");
+            pc = true;
         }
         if (Router.Found && Router.RouterEnabled)
         {
             if (!await Router.ExcludeHostAsync(host))
             {
                 // Роутер не принял (нет входа, старая версия) — ПК уже сделан, об остальном скажет строка состояния роутера.
-                DirectMessage = where.Count == 0 ? "На роутере не получилось: войдите на роутер (вкладка «Роутер») и повторите." : $"{host} открывается без оптимизации {where[0]}, а на роутере не получилось — войдите на роутер и повторите.";
+                DirectMessage = L.T(pc ? "home.direct.router_failed_pc" : "home.direct.router_failed", new { site = host });
                 return;
             }
-            where.Add("на роутере");
+            router = true;
         }
         DirectSite = "";
-        DirectMessage = $"{host} теперь открывается без оптимизации ({string.Join(" и ", where)}). Вернуть можно в списке «Открывать без оптимизации» на вкладке «Сайты».";
+        DirectMessage = L.T(pc && router ? "home.direct.done_both" : pc ? "home.direct.done_pc" : "home.direct.done_router", new { site = host });
         Message = DirectMessage;
     }
 
@@ -126,18 +126,18 @@ public sealed partial class MainViewModel
     {
         if (Helper.Reader is { } hc && !hc.Compat.Supports("user_exclude_set"))
         {
-            SetExcludeMessage("Помощник старее окна и не знает этого списка — обновите его на вкладке «Информация и обновления».", error: true);
+            SetExcludeMessage(L.T("sites.helper.outdated_update"), error: true);
             Message = ExcludeMessage;
             return false;
         }
         if (lines.Count > AdvancedSites.MaxExclude)
         {
-            SetExcludeMessage($"Не больше {AdvancedSites.MaxExclude} сайтов в списке «Открывать без оптимизации».", error: true);
+            SetExcludeMessage(L.T("sites.exclude.err.max", new { max = AdvancedSites.MaxExclude }), error: true);
             Message = ExcludeMessage;
             return false;
         }
         UserTargetsResult? r = null;
-        if (!await WithHelper("Сохраняю исключения…", async c =>
+        if (!await WithHelper(L.T("sites.exclude.busy.save"), async c =>
             {
                 r = await c.SetUserExcludeAsync([.. lines]);
                 await FetchAsync(full: false);
@@ -146,8 +146,8 @@ public sealed partial class MainViewModel
         _excludeFromHelper = true;
         ExcludeText = string.Join(Environment.NewLine, r.Saved);
         SetExcludeMessage(r.Rejected.Count == 0
-            ? $"Сохранено сайтов без оптимизации: {r.Saved.Count}."
-            : $"Сохранено сайтов без оптимизации: {r.Saved.Count}. Не распознаны и убраны: {string.Join(", ", r.Rejected)}.");
+            ? L.T("sites.exclude.saved", new { n = r.Saved.Count })
+            : L.T("sites.exclude.saved_rejected", new { n = r.Saved.Count, rejected = string.Join(", ", r.Rejected) }));
         RaiseSitesDirty();
         return true;
     }

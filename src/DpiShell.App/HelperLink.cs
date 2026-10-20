@@ -46,7 +46,7 @@ public sealed class ElevatedSelf : IHelperSetup
     public async Task<SetupOutcome> RunElevatedAsync(string arguments)
     {
         var exe = Environment.ProcessPath;
-        if (exe is null) return new(SetupResult.Failed, "Не найден файл программы.");
+        if (exe is null) return new(SetupResult.Failed, L.T("shell.helper.exe_missing"));
         Process? p;
         try
         {
@@ -54,7 +54,7 @@ public sealed class ElevatedSelf : IHelperSetup
         }
         catch (Win32Exception e) when (e.NativeErrorCode == ErrorCancelled) { return new(SetupResult.Declined); }
         catch (Win32Exception e) { return new(SetupResult.Failed, e.Message); }
-        if (p is null) return new(SetupResult.Failed, "Установка не запустилась.");
+        if (p is null) return new(SetupResult.Failed, L.T("shell.helper.install_not_started"));
         using (p)
         {
             await p.WaitForExitAsync();
@@ -134,7 +134,7 @@ public sealed class HelperLink : IAsyncDisposable
             if (IsOlder(c.HelperVersion, WindowVersion))
             {
                 State = HelperState.Outdated;
-                Problem = "Помощник DpiShell старее окна — его нужно обновить (один запрос прав).";
+                Problem = L.T("shell.helper.connect_outdated");
             }
             else { State = HelperState.Connected; Problem = ""; }
         }
@@ -152,7 +152,7 @@ public sealed class HelperLink : IAsyncDisposable
         {
             // Окно без помощника работает в режиме просмотра — что бы ни случилось при подключении.
             State = HelperState.NotResponding;
-            Problem = "Помощник DpiShell не отвечает: " + e.Message;
+            Problem = L.T("shell.helper.not_responding", new { reason = e.Message });
         }
         Changed?.Invoke();
         return Ready;
@@ -168,7 +168,7 @@ public sealed class HelperLink : IAsyncDisposable
         {
             if (_quiet || !ReferenceEquals(sender, _client)) return;
             State = HelperState.NotResponding;
-            Problem = "Помощник DpiShell перестал отвечать.";
+            Problem = L.T("shell.helper.stopped");
             Changed?.Invoke();
         });
     }
@@ -178,7 +178,7 @@ public sealed class HelperLink : IAsyncDisposable
     {
         if (_quiet) return;
         State = e.Reason == HelperUnavailableReason.NotInstalled ? HelperState.NotInstalled : HelperState.NotResponding;
-        Problem = State == HelperState.NotInstalled ? "" : "Помощник DpiShell перестал отвечать.";
+        Problem = State == HelperState.NotInstalled ? "" : L.T("shell.helper.stopped");
         Changed?.Invoke();
     }
 
@@ -207,7 +207,7 @@ public sealed class HelperLink : IAsyncDisposable
             while (true)
             {
                 if (await ConnectAsync(ct)) return r;
-                if (DateTime.UtcNow >= until) return new(SetupResult.Failed, Problem.Length > 0 ? Problem : "Помощник установлен, но не отвечает.");
+                if (DateTime.UtcNow >= until) return new(SetupResult.Failed, Problem.Length > 0 ? Problem : L.T("shell.helper.installed_silent"));
                 await Task.Delay(500, ct);
             }
         }

@@ -496,7 +496,7 @@ public sealed partial class DataUpdateTests
 
         await vm.CheckIfDueAsync();
         Assert.True(vm.DataAvailable);
-        Assert.Equal("Доступно обновление списков от 01.12.2026", vm.AvailableText);
+        Assert.Equal(L.T("about.lists.available", new { date = "01.12.2026" }), vm.AvailableText);
         Assert.True(vm.AppAvailable);
         Assert.Contains("проверено 17.10 в 12:00", vm.StatusText);
         Assert.Equal("2026-12-01", WindowSettings.Load(settings.File).UpdatesData);
@@ -512,7 +512,7 @@ public sealed partial class DataUpdateTests
         vm.Http = () => new HttpClient(down, disposeHandler: false);
         now = now.AddDays(1);
         await vm.CheckIfDueAsync();
-        Assert.Contains("последняя попытка 18.10 в 15:00", vm.StatusText);
+        Assert.Contains(L.T("about.status.failed", new { lists = "", when = L.T("about.when", new { date = "18.10", time = "15:00" }) }).Trim(' ', '·'), vm.StatusText);
         Assert.True(vm.DataAvailable);
     }
 

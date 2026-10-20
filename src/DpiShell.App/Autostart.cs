@@ -63,14 +63,14 @@ public sealed class Autostart(WindowSettings settings) : Observable
     public UndoOutcome Undo(ChangeEntry e)
     {
         var now = Store.Get(ValueName);
-        if (now is null) return UndoOutcome.Already("запуска вместе с Windows уже нет");
-        if (now != e.After?["command"]?.GetValue<string>()) return UndoOutcome.Changed("запись автозапуска изменена после DpiShell");
+        if (now is null) return UndoOutcome.Already(L.T("settings.autostart.undo_already"));
+        if (now != e.After?["command"]?.GetValue<string>()) return UndoOutcome.Changed(L.T("settings.autostart.undo_changed"));
         settings.Autostart = false;   // явный выбор: иначе по умолчанию (режим без службы) ключ вернётся при следующем запуске
         try { settings.Save(); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         try { Store.Remove(ValueName); }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException) { return UndoOutcome.Fail(ex.Message); }
         Raise(nameof(Enabled));
-        return UndoOutcome.Restored("запуск вместе с Windows выключен");
+        return UndoOutcome.Restored(L.T("settings.autostart.undo_restored"));
     }
 
     /// <summary>Хранилище ключа Run; App ставит реестр, по умолчанию — память.</summary>
@@ -99,8 +99,8 @@ public sealed class Autostart(WindowSettings settings) : Observable
     }
 
     public string Hint => _serviceMode == false
-        ? "Программа запустится свёрнутой в трей — с ней включится и оптимизация."
-        : "Программа запустится свёрнутой в трей. Оптимизация стартует и без неё.";
+        ? L.T("settings.autostart.hint_process")
+        : L.T("settings.autostart.hint_service");
 
     /// <summary>Режим помощника стал известен или сменился — выбор по умолчанию следует за ним.</summary>
     public void OnRunMode(bool service)
@@ -129,7 +129,7 @@ public sealed class Autostart(WindowSettings settings) : Observable
                     var json = new System.Text.Json.Nodes.JsonObject { ["command"] = Command };
                     string rec = "";
                     if (Recorder.Active(ChangeKinds.Autostart).FirstOrDefault() is { } open) Recorder.Update(open.Id, json);
-                    else rec = Recorder.Begin(ChangeKinds.Autostart, "Включён запуск окна вместе с Windows (свёрнутым в трей)",
+                    else rec = Recorder.Begin(ChangeKinds.Autostart, L.T("settings.autostart.journal_on"),
                         new System.Text.Json.Nodes.JsonObject { ["command"] = null }, json);
                     try { Store.Set(ValueName, Command); }
                     catch { Recorder.Abort(rec); throw; }
@@ -139,12 +139,12 @@ public sealed class Autostart(WindowSettings settings) : Observable
             else if (Store.Get(ValueName) is not null)
             {
                 Store.Remove(ValueName);
-                Recorder.Close(ChangeKinds.Autostart, "запуск вместе с Windows выключен в «Настройках»");
+                Recorder.Close(ChangeKinds.Autostart, L.T("settings.autostart.journal_off"));
             }
         }
         catch (Exception e) when (e is UnauthorizedAccessException or IOException or System.Security.SecurityException)
         {
-            Failed("Не удалось изменить автозапуск: " + e.Message);
+            Failed(L.T("settings.autostart.failed", new { error = e.Message }));
         }
     }
 }

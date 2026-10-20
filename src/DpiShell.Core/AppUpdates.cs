@@ -93,7 +93,8 @@ public sealed record FetchedRelease(AppRelease Release, string Source, byte[] By
 /// <param name="Found">Описание выпуска с верной подписью; null — ни один источник не дал годного (причины — в Errors).</param>
 /// <param name="Newer">Выпуск новее этой программы.</param>
 /// <param name="OsTooOld">Выпуск новее, но требует более новую Windows (<c>min_os</c>) — не предлагать.</param>
-public sealed record AppUpdateCheck(FetchedRelease? Found, bool Newer, bool OsTooOld, string Current, IReadOnlyList<string> Errors)
+/// <param name="SignatureFailed">Хотя бы у одного источника подпись описания выпуска не сошлась (признак для окна, не текст ошибки).</param>
+public sealed record AppUpdateCheck(FetchedRelease? Found, bool Newer, bool OsTooOld, string Current, IReadOnlyList<string> Errors, bool SignatureFailed = false)
 {
     /// <summary>Предложить обновление: есть новее, Windows подходит и архив для неё в выпуске есть.</summary>
     public bool Available => Newer && !OsTooOld && Found?.Release.Portable is not null;
@@ -123,6 +124,7 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
     public async Task<AppUpdateCheck> CheckAsync(string current, CancellationToken ct = default)
     {
         var errors = new List<string>();
+        bool badSignature = false;
         if (sources.Count == 0) return new(null, false, false, current, ["Не заданы адреса выпусков (update-sources.json)."]);
         foreach (var src in sources)
         {
@@ -140,6 +142,7 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
             if (!ReleaseSignature.Verify(bytes, sig, SigningKey))
             {
                 errors.Add($"{Host(src)}: подпись описания выпуска не совпала — источник отброшен");
+                badSignature = true;
                 continue;
             }
             AppRelease r;
@@ -151,9 +154,9 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
             }
             bool newer = AppRelease.IsOlder(current, r.Version);
             bool osOld = r.MinOs is { } min && Version.TryParse(min, out var mv) && OsVersion < mv;
-            return new(new(r, src, bytes, sig), newer, newer && osOld, current, errors);
+            return new(new(r, src, bytes, sig), newer, newer && osOld, current, errors, badSignature);
         }
-        return new(null, false, false, current, errors);
+        return new(null, false, false, current, errors, badSignature);
     }
 
     /// <summary>

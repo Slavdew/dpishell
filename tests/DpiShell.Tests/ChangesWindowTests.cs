@@ -85,13 +85,13 @@ public sealed class ChangesWindowTests : IDisposable
 
         f.Backend.UndoAnswer = UndoStatus.Restored;
         Assert.True(await vm.Changes.UndoAllAsync());
-        Assert.Contains("Вернутся значения, которые были до DpiShell; более поздние правки не затрагиваются.", asked);
+        Assert.Equal(L.T("settings.changes.confirm"), asked);
         Assert.DoesNotContain("обход", asked, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("changes_undo_all", f.Backend.Calls);
         Assert.Equal(3, vm.Changes.Report.Count);
         // Ключа Run в тесте нет вовсе (память пуста) — «уже было как раньше»; остальное вернул помощник.
-        Assert.Equal(["Уже было как раньше", "Вернул", "Вернул"], vm.Changes.Report.Select(r => r.Status));
-        Assert.StartsWith("Вернул: 2 · уже было как раньше: 1", vm.Changes.Summary);
+        Assert.Equal([L.T("settings.changes.status_same"), L.T("settings.changes.status_restored"), L.T("settings.changes.status_restored")], vm.Changes.Report.Select(r => r.Status));
+        Assert.Equal(L.T("settings.changes.summary", new { restored = 2, same = 1, skipped = 0, failed = 0 }), vm.Changes.Summary);
         Assert.Empty(vm.Changes.Items);
         Assert.True(vm.Changes.ShowEmpty == false && vm.Changes.HasReport);
     }
@@ -120,14 +120,14 @@ public sealed class ChangesWindowTests : IDisposable
             new("3", "Метки TCP", at.AddMinutes(-2), UndoStatus.AlreadyBack, ""),
             new("4", "Автозапуск", at.AddMinutes(-3), UndoStatus.Restored, ""),
         ]);
-        Assert.Equal(["Не тронул: изменено после DpiShell", "Не смог", "Уже было как раньше", "Вернул"], vm.Report.Select(r => r.Status));
+        Assert.Equal([L.T("settings.changes.status_skipped"), L.T("settings.changes.status_failed"), L.T("settings.changes.status_same"), L.T("settings.changes.status_restored")], vm.Report.Select(r => r.Status));
         Assert.Equal(["skip", "fail", "same", "ok"], vm.Report.Select(r => r.Mark));
-        Assert.Equal("Вернул: 1 · уже было как раньше: 1 · не тронул: 1 · не смог: 1", vm.Summary);
+        Assert.Equal(L.T("settings.changes.summary", new { restored = 1, same = 1, skipped = 1, failed = 1 }), vm.Summary);
         Assert.True(vm.HasQuestion);
         vm.Show([new("4", "Автозапуск", at, UndoStatus.Restored, "")]);
         Assert.False(vm.HasQuestion);
         vm.Show([]);
-        Assert.Equal("Отменять было нечего.", vm.Summary);
+        Assert.Equal(L.T("settings.changes.summary_none"), vm.Summary);
     }
 
     [Fact]
@@ -155,14 +155,14 @@ public sealed class ChangesWindowTests : IDisposable
         vm.Confirm = s => { questions.Add(s); return true; };
         await Uninstall(vm);
         Assert.Contains("changes_undo_all", f.Backend.Calls);
-        Assert.Contains("Перед удалением помощника отменить всё", questions[0]);
-        Assert.Contains("Удалить помощника DpiShell?", questions[1]);
+        Assert.Equal(L.T("shell.helper.uninstall_undo_first", new { count = 1 }), questions[0]);
+        Assert.Equal(L.T("shell.helper.uninstall_confirm"), questions[1]);
 
         // «Нет» на первый вопрос — помощник удаляется как раньше, настройки остаются.
         await using var g = new HelperFixture();
         g.Backend.ChangesValue.Add(Info("cccccccccccc", "DNS", 5));
         var vm2 = TestWindow.Model(NewShell(), await g.LinkAsync());
-        vm2.Confirm = s => !s.StartsWith("Перед удалением");
+        vm2.Confirm = s => s != L.T("shell.helper.uninstall_undo_first", new { count = 1 });
         await Uninstall(vm2);
         Assert.DoesNotContain("changes_undo_all", g.Backend.Calls);
     }
