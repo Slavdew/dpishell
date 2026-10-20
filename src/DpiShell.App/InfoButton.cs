@@ -37,7 +37,8 @@ public sealed class InfoButton : Button
     {
         UpdateName();
         // Язык сменили — имя для диктора по-новому (карточка и так собирается при каждом открытии).
-        Loaded += (_, _) => L.Changed += UpdateName;
+        // Loaded у WPF бывает и повторно без Unloaded — сначала снять, чтобы подписка была одна.
+        Loaded += (_, _) => { L.Changed -= UpdateName; L.Changed += UpdateName; };
         Unloaded += (_, _) => L.Changed -= UpdateName;
         _text = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 420, FontSize = 13.5, LineHeight = 20 };
         _text.SetResourceReference(TextBlock.ForegroundProperty, "Text");
