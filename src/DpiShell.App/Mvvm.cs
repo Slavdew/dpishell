@@ -42,6 +42,16 @@ public abstract class Observable : INotifyPropertyChanged
     /// <summary>Пересборка строк модели при смене языка не удалась (модель уже закрыта, чужой поток): окну это не мешает, тесты следят.</summary>
     public static event Action<object, Exception>? LanguageHandlerFailed;
 
+    /// <summary>Только для тестов: живые модели сейчас.</summary>
+    public static HashSet<Observable> Snapshot() => [.. Live.Select(x => x.Key)];
+
+    /// <summary>Только для тестов: забыть модели, появившиеся после <paramref name="before"/>. Закрытое окно теста держит модель в памяти ещё долго,
+    /// а смена языка пересобирала бы и её.</summary>
+    public static void ForgetSince(HashSet<Observable> before)
+    {
+        foreach (var o in Live.Select(x => x.Key).Where(o => !before.Contains(o)).ToArray()) Live.Remove(o);
+    }
+
     /// <summary>Язык сменился: пересобрать строки, которые модель хранит готовыми (состояние, подписи списков), из данных. Сообщения последних действий не трогать.</summary>
     protected virtual void OnLanguageChanged() { }
 

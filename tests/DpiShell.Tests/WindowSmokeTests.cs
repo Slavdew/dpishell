@@ -60,11 +60,34 @@ public sealed partial class WindowSmokeTests
             Exception? error = null;
             Ui.Value.Invoke(() =>
             {
+                var before = Observable.Snapshot();
                 try { body(); }
                 catch (Exception e) { error = e; }
+                finally { Release(); Observable.ForgetSince(before); }
             });
             if (error is not null) throw new Exception("Окно упало: " + error.Message, error);
         }
+    }
+
+    // Окна, открытые телом RunUi: после него их закрывают по-настоящему. Скрытое окно остаётся в Application.Windows, держит модель
+    // в памяти, и каждая следующая смена языка пересобирает все такие «мёртвые» модели (так полный прогон растянулся с 2 до 17 минут).
+    static readonly List<MainWindow> Opened = [];
+
+    static void Release()
+    {
+        var windows = Opened.ToArray();
+        Opened.Clear();
+        foreach (var w in windows)
+        {
+            try
+            {
+                typeof(MainWindow).GetField("_exiting", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.SetValue(w, true);
+                (Field(w, "_tray") as IDisposable)?.Dispose();
+                w.Close();
+            }
+            catch (InvalidOperationException) { /* уже закрыто */ }
+        }
+        if (windows.Length > 0) { GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); }
     }
 
     internal static List<string> WithBindingErrors(Action body)
@@ -127,6 +150,7 @@ public sealed partial class WindowSmokeTests
             (Field(w, name) as DispatcherTimer)?.Stop();
         w.Show();
         Pump();
+        Opened.Add(w);
         return w;
     }
 

@@ -98,4 +98,40 @@ public sealed class LangWindowTests : IDisposable
         });
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
+
+    /// <summary>Предел смены языка в окне со всеми вкладками (на практике — порядка 0,05–0,1 с); с запасом на медленную машину.</summary>
+    const int SwitchLimitMs = 1000;
+
+    [Fact]
+    public void Switching_language_with_all_pages_built_is_fast()
+    {
+        using var tmp = new TempDir();
+        long ru2en = 0, en2ru = 0;
+        var errors = WithBindingErrors(() =>
+        {
+            ThemeManager.Apply(ThemeManager.Light);
+            L.Set(L.Ru);
+            var shell = new Shell(new AppPaths(tmp.Sub("root"), Repo.Data));
+            var vm = TestWindow.Model(shell);
+            var w = Open(vm);
+            SetProp(vm, "IsLoading", false);
+            // Все вкладки построены (страницы создаются при первом показе), как у человека, обошедшего программу.
+            foreach (var page in new[] { Pages.Select, Pages.Sites, Pages.Apps, Pages.Hosts, Pages.Dns, Pages.Proxy, Pages.Diag, Pages.Router, Pages.Settings, Pages.About, Pages.Home })
+            {
+                vm.Page = page;
+                WindowSmokeTests.Pump();
+            }
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            L.Set(L.En);
+            WindowSmokeTests.Pump();
+            ru2en = sw.ElapsedMilliseconds;
+            sw.Restart();
+            L.Set(L.Ru);
+            WindowSmokeTests.Pump();
+            en2ru = sw.ElapsedMilliseconds;
+            Close(w);
+        });
+        Assert.True(errors.Count == 0, "Ошибки привязок: " + string.Join("; ", errors));
+        Assert.True(ru2en < SwitchLimitMs && en2ru < SwitchLimitMs, $"Смена языка медленная: ru→en {ru2en} мс, en→ru {en2ru} мс, предел {SwitchLimitMs} мс");
+    }
 }
