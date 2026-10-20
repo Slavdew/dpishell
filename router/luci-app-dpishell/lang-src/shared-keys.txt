@@ -195,3 +195,4 @@ dns.preset.owner_quad9
 dns.preset.owner_yandex
 dns.preset.note_quad9
 dns.preset.note_yandex
+common.close

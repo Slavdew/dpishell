@@ -4,6 +4,7 @@
 'require poll';
 'require dom';
 'require dpishell.api as api';
+'require dpishell.transfer as xfer';
 
 // Вкладка «Диагностика» (architecture.md «Диагностика роутера»): чужие обходы, flow offloading, IPv6, DNS, ядро, отчёт.
 // Названия — как в окне ПК («Что мешает» на вкладке «Роутер»), матрица ПК×роутер п. 46–51.
@@ -42,6 +43,15 @@ return view.extend({
 			api.card(api.t('web.diag.report'), [
 				api.line(api.t('web.diag.report_descr'), 'dps-muted'),
 				E('div', { 'class': 'dps-actions' }, [api.btn(api.t('router.diag.save_report'), function() { return self.report(); }, 'cbi-button-action')])
+			]),
+			// Выгрузка и загрузка своих настроек (docs/settings-export.md, общий формат с окном ПК; там — «Настройки»,
+			// здесь — рядом с отчётом: страницы «Настройки» у роутера нет).
+			api.card(api.t('web.xfer.title'), [
+				api.line([api.t('web.xfer.descr'), api.info(api.t('web.xfer.info'))], 'dps-muted'),
+				E('div', { 'class': 'dps-actions' }, [
+					api.btn(api.t('web.xfer.export'), function() { return xfer.exportDialog().catch(function(e) { self.el.err.textContent = api.text(e); }); }, 'cbi-button-action'),
+					api.btn(api.t('web.xfer.import'), function() { xfer.importDialog(function() { self.reload(); }); }, 'cbi-button-neutral')
+				])
 			]),
 			this.uninstallSection()
 		]);

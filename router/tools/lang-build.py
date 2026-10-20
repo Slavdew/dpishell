@@ -22,7 +22,8 @@ PREFIXES = ('web', 'router', 'home', 'select', 'sites', 'dns', 'diag', 'about', 
 DYNAMIC = (['router.schedule.opt.' + x for x in ('30m', '1h', '3h', '6h', '12h', '24h')] +
            ['web.err.ubus'] + ['web.err.ubus_%d' % i for i in (2, 4, 5, 6, 7)] + ['web.dns.cons%d' % i for i in range(1, 7)] +
            ['router.dns.job.' + x for x in ('dns_analyze', 'dns_enable', 'dns_restore', 'dns_set')] +
-           ['router.update.step.' + x for x in ('download', 'install', 'restart')])
+           ['router.update.step.' + x for x in ('download', 'install', 'restart')] +
+           ['web.xfer.sec.' + x for x in ('sites', 'optimize', 'exclude', 'strategies', 'advanced', 'subnets', 'dns', 'mode', 'apps', 'hosts')])
 
 
 def read_json(p):
@@ -41,13 +42,16 @@ def used_keys():
     keys = set(DYNAMIC)
     # Ключи сообщений роутера (key в warnings, ошибках, ходе подбора) — тоже в словарь: их переводят страница и окно ПК.
     back = os.path.join(ROOT, 'router', 'dpishell', 'files')
-    files = (glob.glob(os.path.join(RES, 'view', 'dpishell', '*.js')) + [os.path.join(RES, 'dpishell', 'api.js')] +
+    files = (glob.glob(os.path.join(RES, 'view', 'dpishell', '*.js')) + glob.glob(os.path.join(RES, 'dpishell', '*.js')) +
              glob.glob(os.path.join(back, 'usr', 'share', 'ucode', 'dpishell', '*.uc')) +
              [os.path.join(back, 'usr', 'share', 'rpcd', 'ucode', 'dpishell'), os.path.join(back, 'usr', 'libexec', 'dpishell', 'run')])
     for p in files:
         s = open(p, encoding='utf-8').read()
         for k in re.findall(r"'((?:%s)\.[\w.]+)'" % '|'.join(PREFIXES), s):
             # Начало составного ключа ('web.dns.cons' + i) — не ключ.
+            # Имена файлов пакета настроек ('dns.json', 'sites.txt') — не ключи.
+            if k.endswith(('.json', '.txt')):
+                continue
             if not k.endswith('.') and not k.endswith('_') and not any(d != k and d.startswith(k) for d in DYNAMIC):
                 keys.add(k)
     return keys

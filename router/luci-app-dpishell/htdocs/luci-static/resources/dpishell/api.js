@@ -201,6 +201,7 @@ function injectStyle() {
 		'.dps-cr-ok .dps-cr-mark{color:var(--success-color-high,#080)}.dps-cr-bad .dps-cr-mark{color:var(--error-color-high,#c00)}',
 		'.dps-cr-sum{font-size:1.1em;font-weight:600;margin:.3em 0 .5em}',
 		'.dps-cr-sum-ok{color:var(--success-color-high,#080)}.dps-cr-sum-bad{color:var(--error-color-high,#c00)}',
+		'.dps-xfer-row{margin:.2em 0}.dps-xfer-row details{margin-left:1.9em}',
 		'.dps-danger{border:1px solid var(--error-color-high,#c33);border-radius:8px;padding:12px 16px}',
 		// Индикатор опроса LuCI («Обновление» вверху справа): наши страницы опрашивают роутер постоянно, он горит всегда,
 		// и его принимали за незаконченное обновление DpiShell. Ход заданий страницы показывают сами.
