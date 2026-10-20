@@ -27,9 +27,9 @@ public sealed partial class RouterViewModel
             Load = LoadAdvancedAsync,
             Save = SaveAdvancedAsync,
             Strategies = () => [.. Strategies.Select(s => new AdvancedChoice(s.Id, s.Title))],
-            Unavailable = () => !Connected ? "Подключитесь к роутеру."
+            Unavailable = () => !Connected ? L.T("router.adv.connect")
                 : _advancedMissing || Compat?.CanCall("advanced_set") == false
-                    ? "Продвинутого режима на роутере нет: обновите DpiShell на роутере (нужен пакет 0.2.0-r9)." : null,
+                    ? L.T("router.adv.missing") : null,
             CanRevertNow = () => Connected,
             Builtin = new BuiltinLists(Path.Combine(_shell.Paths.Seed, "lists")),
             Say = s => Say(s),
@@ -64,7 +64,7 @@ public sealed partial class RouterViewModel
 
     async Task<AdvancedSaveResult> SaveAdvancedAsync(AdvancedState next, AdvancedState prev)
     {
-        if (!Connected) return new(null, "Сначала подключитесь к роутеру.");
+        if (!Connected) return new(null, L.T("router.adv.connect_first"));
         // Журнал отката: первая запись — ДО действия («было … стало …»); последующие правят «стало» уже после успеха.
         var after = ToConfig(next).ToJson();
         var open = Recorder.Active(ChangeKinds.RouterAdvanced).FirstOrDefault();
@@ -74,7 +74,7 @@ public sealed partial class RouterViewModel
         var rows = ToRows(next);
         _lastFailure = null;
         _advancedBeforeTrial = prev;
-        if (!await TrialAsync("Применяю на роутере…", (c, confirmS) => c.AdvancedSetAsync(next.Enabled, next.Others, rows, confirmS), null))
+        if (!await TrialAsync(L.T("router.apply.busy"), (c, confirmS) => c.AdvancedSetAsync(next.Enabled, next.Others, rows, confirmS), null))
         {
             _advancedBeforeTrial = null;
             if (rec.Length > 0) Recorder.Abort(rec);
@@ -83,28 +83,28 @@ public sealed partial class RouterViewModel
         if (rec.Length > 0)
         {
             Recorder.Done(rec);
-            _advancedRevertJournal = () => Recorder.Close(ChangeKinds.RouterAdvanced, "возвращено кнопкой «Вернуть как было» на плашке");
+            _advancedRevertJournal = () => Recorder.Close(ChangeKinds.RouterAdvanced, L.T("router.adv.journal_restore"));
         }
         else
         {
             var was = open!.After;
             if (AdvancedConfig.FromJson(open.Before).SameChoice(ToConfig(next)))
-                Recorder.Close(ChangeKinds.RouterAdvanced, "возвращён прежний вид");
+                Recorder.Close(ChangeKinds.RouterAdvanced, L.T("router.adv.journal_revert"));
             else
                 Recorder.Update(open.Id, after);
             _advancedRevertJournal = () => Recorder.Update(open.Id, was);
         }
         if (_status?.PendingConfirm is null) { _advancedBeforeTrial = null; _advancedRevertJournal = null; }
         try { return new(ToState(await Call(c => c.AdvancedGetAsync())), null); }
-        catch (RouterException e) { return new(next, "Сохранено, но прочитать итог не удалось: " + RouterTexts.Friendly(e)); }
+        catch (RouterException e) { return new(next, L.T("router.adv.saved_unread", new { error = RouterTexts.Friendly(e) })); }
     }
 
     static string AdvancedTitle(AdvancedState s) =>
-        "Продвинутый режим на роутере " + (s.Enabled ? $"включён, строк: {s.Rows.Count}" : $"выключен, строк: {s.Rows.Count}");
+        L.T(s.Enabled ? "router.adv.title_on" : "router.adv.title_off", new { count = s.Rows.Count });
 
     static string AdvancedFailure(string? text) => text switch
     {
-        null or "" => "Не удалось сохранить на роутере.",
+        null or "" => L.T("router.adv.save_failed"),
         _ => text,
     };
 
@@ -126,18 +126,18 @@ public sealed partial class RouterViewModel
     /// <summary>Откат записи журнала окна: вернуть прежние строки на роутере, если сейчас там то, что поставили мы.</summary>
     public async Task<UndoOutcome> UndoAdvancedAsync(ChangeEntry e)
     {
-        if (!Connected) return UndoOutcome.Fail("роутер не подключён — подключитесь на вкладке «Роутер» и отмените снова");
+        if (!Connected) return UndoOutcome.Fail(L.T("router.undo.not_connected"));
         RouterAdvanced cur;
         try { cur = await Call(c => c.AdvancedGetAsync()); }
         catch (RouterException ex) { return UndoOutcome.Fail(RouterTexts.Friendly(ex)); }
         var was = AdvancedConfig.FromJson(e.Before);
         var ours = AdvancedConfig.FromJson(e.After);
         var now = ToConfig(ToState(cur));
-        if (now.SameChoice(was)) return UndoOutcome.Already("продвинутый режим на роутере уже такой, как был");
-        if (!now.SameChoice(ours)) return UndoOutcome.Changed("продвинутый режим на роутере изменён после DpiShell");
+        if (now.SameChoice(was)) return UndoOutcome.Already(L.T("router.adv.undo_already"));
+        if (!now.SameChoice(ours)) return UndoOutcome.Changed(L.T("router.adv.undo_changed"));
         try { await Call(c => c.AdvancedSetAsync(was.Enabled, was.Others, ToRows(ToState(was)))); }
         catch (RouterException ex) { return UndoOutcome.Fail(RouterTexts.Friendly(ex)); }
         _ = Advanced.RefreshAsync(force: true);
-        return UndoOutcome.Restored("продвинутый режим на роутере как был: " + (was.Enabled ? $"включён, строк: {was.Rows.Count}" : "выключен"));
+        return UndoOutcome.Restored(was.Enabled ? L.T("router.adv.undo_restored_on", new { count = was.Rows.Count }) : L.T("router.adv.undo_restored_off"));
     }
 }

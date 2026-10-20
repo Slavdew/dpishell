@@ -65,21 +65,21 @@ public sealed partial class RouterViewModel
         set
         {
             if (value == JointShown) return;
-            if (value && JointWanted) { Say("Совместная работа включится, когда роутер найдётся."); RaiseJoint(); return; }   // ждёт роутер — включать нечего
+            if (value && JointWanted) { Say(L.T("router.joint.waiting_say")); RaiseJoint(); return; }   // ждёт роутер — включать нечего
             JointWanted = value;
         }
     }
 
     /// <summary>Подпись переключателя — состояние, как у остальных: «Включено» / «Выключено».</summary>
-    public string JointToggleText => JointShown ? "Включено" : "Выключено";
+    public string JointToggleText => JointShown ? L.T("router.joint.on") : L.T("router.joint.off");
 
     /// <summary>Включена, но ждёт роутер: можно перестать ждать.</summary>
     public bool JointWaiting => JointWanted && JointIsFallback;
 
     /// <summary>Пояснение под переключателем — без «выключите, чтобы…»: статус выше уже говорит, кто что ведёт.</summary>
-    public string JointHint => JointWaiting ? "Включится само, когда роутер найдётся."
+    public string JointHint => JointWaiting ? L.T("router.joint.hint_waiting")
         : JointWanted ? ""
-        : "Роутер ведёт YouTube и Discord сам, а этот ПК — свои сайты и строки «Свои настройки для сайтов». Нужен DpiShell на роутере с включённой оптимизацией.";
+        : L.T("router.joint.hint");
     public bool HasJointHint => JointHint.Length > 0;
 
     /// <summary>«Не ждать роутер»: выключить связку, которая ждёт роутера.</summary>
@@ -113,7 +113,7 @@ public sealed partial class RouterViewModel
         {
             if (on)
             {
-                Say("Включаю совместную работу…");
+                Say(L.T("router.joint.busy"));
                 var refuse = await _joint.EnableAsync();
                 if (refuse is not null) { Failed(refuse); return; }
                 SaveJointWanted(true);
@@ -126,7 +126,7 @@ public sealed partial class RouterViewModel
                 bool pcOff = RouterEnabled && Found && PcRunning() && await StopPc();
                 await _joint.StopAsync();
                 SaveJointWanted(false);
-                Say(pcOff ? "Совместная работа выключена. Оптимизацию ведёт роутер, на этом ПК она выключена." : "Совместная работа выключена.");
+                Say(pcOff ? L.T("router.joint.off_pc_off") : L.T("router.joint.off_done"));
             }
         }
         catch (RouterException e) { Failed(RouterTexts.Friendly(e)); }
@@ -160,23 +160,23 @@ public sealed partial class RouterViewModel
     /// <summary>Откат записи журнала окна «связка на роутере»: pc_link_del и выключенный переключатель.</summary>
     public async Task<UndoOutcome> UndoJointAsync(ChangeEntry e)
     {
-        if (_joint is null) return UndoOutcome.Fail("совместная работа не готова — подождите и отмените снова");
+        if (_joint is null) return UndoOutcome.Fail(L.T("router.undo.joint_not_ready"));
         var id = e.After?["id"]?.GetValue<string>();
         if (Connected && id is not null)
         {
             try
             {
                 var links = await Call(c => c.PcLinkGetAsync());
-                if (!links.Items.Any(l => l.Id == id) && !_joint.Wanted) return UndoOutcome.Already("связки этого ПК на роутере уже нет");
+                if (!links.Items.Any(l => l.Id == id) && !_joint.Wanted) return UndoOutcome.Already(L.T("router.undo.joint_already"));
             }
             catch (RouterException) { /* ответит снятие ниже */ }
         }
         else if (!Connected)
-            return UndoOutcome.Fail("роутер не подключён — подключитесь на вкладке «Роутер» и отмените снова");
+            return UndoOutcome.Fail(L.T("router.undo.not_connected"));
         await _joint.StopAsync();
         SaveJointWanted(false);
         RaiseJoint();
-        return UndoOutcome.Restored("роутер больше не пропускает сайты этого ПК");
+        return UndoOutcome.Restored(L.T("router.undo.joint_restored"));
     }
 
     /// <summary>
