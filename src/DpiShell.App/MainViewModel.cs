@@ -634,7 +634,7 @@ public sealed partial class MainViewModel : Observable
 
     /// <summary>Название для показа: автоимя найденной стратегии — по её параметрам (роли у помощника), своё имя — как есть.</summary>
     string ShownTitle(string id, string title) =>
-        StrategyNaming.IsAutoName(title) ? StrategyNaming.DisplayTitle(title, Helper.Details?.Found.FirstOrDefault(f => f.Id == id)?.Roles) : title;
+        StrategyNaming.DisplayTitle(title, Helper.Details?.Found.FirstOrDefault(f => f.Id == id)?.Roles);
 
     /// <summary>Название по id — и готовых, и найденных поиском.</summary>
     string StrategyTitle(string? id)
@@ -828,7 +828,7 @@ public sealed partial class MainViewModel : Observable
     /// <summary>Подсказка к названию в списке: у смешанной — из чего собрана (полными именами), у найденной — прежняя запись с датой.</summary>
     string TipFor(string id, string title) =>
         StrategyOf(id) is { Parts: { } parts } && MixBuilder.Composition(parts, StrategyTitle) is { Length: > 0 } c ? ShownTitle(id, title) + "\n" + c
-        : ShownTitle(id, title) != title ? title : "";
+        : StrategyNaming.Tip(title, Helper.Details?.Found.FirstOrDefault(f => f.Id == id)?.Roles);
 
     /// <summary>Роли стратегии и командная строка winws с режимами, что сейчас у помощника; найденные поиском — от помощника. У смешанной — ещё состав.</summary>
     string ParamsOf(string id)
@@ -1366,8 +1366,9 @@ public sealed partial class MainViewModel : Observable
     readonly AddressBlockTracker _addressBlock = new();
     bool _addressNoteOn;
     /// <summary>«Не открылось ни с одной стратегией: … — похоже на блокировку по адресу…»; пусто, когда таких адресов нет. Собирается из учёта адресов при показе.</summary>
-    public string AddressNote => _addressNoteOn ? _addressBlock.Note() : "";
-    void SetAddressNote(bool on) { _addressNoteOn = on; Raise(nameof(AddressNote)); Raise(nameof(HasAddressNote)); }
+    string? _addressNoteFixed;   // готовая строка — только если её поставили извне (тесты)
+    public string AddressNote { get => _addressNoteFixed ?? (_addressNoteOn ? _addressBlock.Note() : ""); private set { _addressNoteFixed = value; Raise(); Raise(nameof(HasAddressNote)); } }
+    void SetAddressNote(bool on) { _addressNoteFixed = null; _addressNoteOn = on; Raise(nameof(AddressNote)); Raise(nameof(HasAddressNote)); }
     public bool HasAddressNote => AddressNote.Length > 0;
 
     void ResetResults()

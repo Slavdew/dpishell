@@ -30,6 +30,12 @@ public sealed class UpdatesViewModel : Observable
 
     public static readonly TimeSpan Interval = TimeSpan.FromDays(1);
 
+    /// <summary>Смена языка: ход и ошибки обновления программы (тексты Core, сообщения последнего действия) — на языке окна.</summary>
+    protected override void OnLanguageChanged()
+    {
+        Retranslate(ref _appProgress); Retranslate(ref _appError); Retranslate(ref _appErrorDetails); Retranslate(ref _appNotice);
+    }
+
     /// <summary>HTTP для проверки; null — проверка выключена (тесты окна без сети). App ставит настоящий.</summary>
     public Func<HttpClient>? Http { get; set; }
     public Func<string, Func<Task>, Task<bool>> Guard { get; set; } = async (_, w) => { await w(); return true; };

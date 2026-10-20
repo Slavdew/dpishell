@@ -508,5 +508,6 @@
   "router.log.api_failed": "API: {error} — переход на SSH",
   "router.log.uninstall_ssh": "Удаление по SSH ({host})",
   "router.log.uninstall_failed": "Удаление не удалось",
-  "router.log.removed": "Удалено"
+  "router.log.removed": "Удалено",
+  "router.dns.servers_header": "Ответы серверов"
 }

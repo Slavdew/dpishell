@@ -176,7 +176,9 @@ public sealed record RouterSelectProgress(
     bool Running, int Index, int Total, string? Message, List<RouterSelectRow>? Rows,
     DateTime? FinishedAt, string? Best,
     string? StartedBy = null, string? Depth = null, int? EtaS = null,
-    bool Cancelled = false, bool Applied = false, List<string>? Backups = null);
+    bool Cancelled = false, bool Applied = false, List<string>? Backups = null,
+    // message_msg (router-api §9): то же, что Message, фразой { key, params, text } — для окна на другом языке.
+    System.Text.Json.JsonElement? MessageMsg = null);
 
 public sealed record RouterTarget(string Url, bool Important);
 public sealed record RouterTargets(List<RouterTarget> Items);
@@ -220,7 +222,8 @@ public sealed record RouterStarted(bool Started);
 public sealed record RouterUserStrategy(string Id, string Title, Dictionary<string, string> Roles, Dictionary<string, string>? Parts = null);
 
 /// <summary>Ошибка уровня DpiShell (код 0 от ubus, но в ответе `error`).</summary>
-public sealed record RouterAppError(string Code, string? Text, string? Field);
+/// <param name="Key">Ключ словаря окна (новый роутер, router-api §9): текст собирается по нему; <paramref name="Params"/> — подстановки.</param>
+public sealed record RouterAppError(string Code, string? Text, string? Field, string? Key = null, Dictionary<string, System.Text.Json.JsonElement>? Params = null);
 
 public enum RouterFailure
 {

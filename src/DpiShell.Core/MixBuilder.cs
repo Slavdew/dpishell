@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -131,6 +132,9 @@ public static class MixBuilder
     /// <summary>Две части: YouTube и «остальное» (Discord и свои сайты — из одной стратегии).</summary>
     public static string MakeId(Strategy youtube, Strategy rest) => MakeId(youtube, rest, rest);
 
+    /// <summary>Название части на языке окна (для подсказки и «Параметров»).</summary>
+    static string LabelNow(string part) => part switch { YoutubeGroup => "YouTube", DiscordGroup => "Discord", _ => L.T("web.strat.own_sites") };
+
     static string Label(string part) => part switch { YoutubeGroup => "YouTube", DiscordGroup => "Discord", _ => "свои сайты" };
 
     /// <summary>
@@ -139,6 +143,8 @@ public static class MixBuilder
     /// </summary>
     public static string MakeTitle(IReadOnlyList<(string Part, Strategy Strategy)> parts)
     {
+        // Название хранится по-русски независимо от языка окна (на языке окна его показывает StrategyNaming.LocalizeMixed).
+        using var _ = L.Scope(L.Ru);
         var groups = parts.GroupBy(p => p.Strategy.Id).Select(g => (Parts: g.Select(x => x.Part).ToList(), Strategy: g.First().Strategy)).ToList();
         string Name(List<string> ps, bool shortUser) =>
             ps.Count == 2 && ps.Contains(DiscordGroup) && ps.Contains(UserGroup) ? "остальное"
@@ -160,7 +166,7 @@ public static class MixBuilder
         return string.Join("; ", groups.Select(g =>
         {
             var ps = g.ToList();
-            var name = ps.Count == 2 && ps.Contains(DiscordGroup) && ps.Contains(UserGroup) ? "остальное" : string.Join(" и ", ps.Select(Label));
+            var name = ps.Count == 2 && ps.Contains(DiscordGroup) && ps.Contains(UserGroup) ? L.T("web.strat.rest") : string.Join($" {L.T("web.strat.and")} ", ps.Select(LabelNow));
             return $"{name} — {titleOf(g.Key)}";
         }));
     }

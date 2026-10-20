@@ -127,8 +127,11 @@ public sealed class RouterClient : IDisposable
         EnsureOk(res, method);
         if (res.Body?["error"] is JsonObject err)
         {
-            var e = new RouterAppError(err["code"]?.GetValue<string>() ?? "failed", err["text"]?.GetValue<string>(), err["field"]?.GetValue<string>());
-            throw new RouterException(RouterFailure.App, e.Text ?? AppErrorText(e.Code), e);
+            var ps = err["params"] is JsonObject po ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(po.ToJsonString()) : null;
+            var e = new RouterAppError(err["code"]?.GetValue<string>() ?? "failed", err["text"]?.GetValue<string>(), err["field"]?.GetValue<string>(),
+                err["key"]?.GetValue<string>(), ps);
+            // Новый роутер присылает ключ: текст собирается на языке окна; старый — только готовый русский text.
+            throw new RouterException(RouterFailure.App, RouterPhrase.ByKey(e.Key, e.Params) ?? e.Text ?? AppErrorText(e.Code), e);
         }
         return res.Body;
     }

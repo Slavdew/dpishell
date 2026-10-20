@@ -265,10 +265,13 @@ public sealed class FakeHelperBackend : IHelperBackend
     public void RemoveAll() => Call("remove_all");
     public int ClearHistory() { Call("clear_history"); return 3; }
 
+    /// <summary>Что отвечает read_results; по умолчанию — одна стратегия с общей статистикой.</summary>
+    public ResultsSnapshot? ResultsValue { get; set; }
+
     public ResultsSnapshot ReadResults()
     {
         Call("read_results");
-        return new(new Dictionary<string, StrategyStats.Stat> { ["alt9"] = new(0.9, 2, 1) }, []);
+        return ResultsValue ?? new(new Dictionary<string, StrategyStats.Stat> { ["alt9"] = new(0.9, 2, 1) }, []);
     }
 
     public void OnClientsGone()

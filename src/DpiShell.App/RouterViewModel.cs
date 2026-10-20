@@ -158,14 +158,14 @@ public static class RouterTexts
     /// </summary>
     public static string WarningText(RouterWarning w, IReadOnlyList<RouterConflictRow>? conflicts = null)
     {
-        if (w.Key is { Length: > 0 } key && L.Has(key)) return L.T(key, WarningArgs(w));
+        if (RouterPhrase.ByKey(w.Key, w.Params) is { } byKey) return byKey;
         // Старый роутер ключа не присылает: имя стратегии и ошибку берём из его русской фразы по форме (r8: «…включена запасная X», «Автоподбор включил X»).
         string? name = null, error = null;
         if (w.Params is not null && w.Params.TryGetValue("name", out var pn) && pn.ValueKind == System.Text.Json.JsonValueKind.String) name = pn.GetString();
         else if (w.Text is { Length: > 0 } text && OldNameRx.Match(text) is { Success: true } nm) name = nm.Groups[1].Value;
         if (w.Text is { Length: > 0 } t2 && t2.StartsWith("Подбор прервался: ", StringComparison.Ordinal)) error = t2["Подбор прервался: ".Length..];
         if (name is not null) name = StrategyNaming.DisplayTitle(name, null);
-        var at = w.Params is not null && TimeParam(w, "time", "at") is { } wt ? Time(wt) : null;
+        var at = WarningTime(w) is { } wt ? Time(wt) : null;
         // Без имени (форма не узнана) фразу с именем не собрать — остаётся текст роутера.
         if (name is null && w.Code is "auto_selected" or "switched_backup") return w.Text ?? w.Code;
         return w.Code switch
@@ -190,41 +190,9 @@ public static class RouterTexts
 
     static readonly System.Text.RegularExpressions.Regex OldNameRx = new(@"(?:включена запасная|^Автоподбор включил|подобрал и включил) (.+?)\.?$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
-    /// <summary>Подстановки к ключу от роутера: строки как есть, числа — как есть, время (time, *_at) в unix-секундах — «ЧЧ:ММ» по часам ПК.</summary>
-    static Dictionary<string, object?> WarningArgs(RouterWarning w)
-    {
-        var args = ParamArgs(w.Params);
-        if (w.Text is { Length: > 0 }) args["text"] = w.Text;
-        return args;
-    }
+    /// <summary>Когда случилось, если новый роутер прислал время в params (unix-секунды).</summary>
+    public static DateTime? WarningTime(RouterWarning w) => RouterPhrase.Time(w.Params);
 
-    /// <summary>Вложенная фраза { key, params, text }: params → подстановки.</summary>
-    static Dictionary<string, object?> NestedArgs(System.Text.Json.JsonElement phrase) =>
-        phrase.TryGetProperty("params", out var p) && p.ValueKind == System.Text.Json.JsonValueKind.Object
-            ? ParamArgs(p.EnumerateObject().ToDictionary(x => x.Name, x => x.Value)) : [];
-
-    static Dictionary<string, object?> ParamArgs(Dictionary<string, System.Text.Json.JsonElement>? ps)
-    {
-        var args = new Dictionary<string, object?>();
-        foreach (var (name, v) in ps ?? [])
-        {
-            if (v.ValueKind == System.Text.Json.JsonValueKind.Number && v.TryGetInt64(out var n))
-                args[name] = name is "time" or "at" || name.EndsWith("_at", StringComparison.Ordinal) ? Time(DateTimeOffset.FromUnixTimeSeconds(n).UtcDateTime) : n;
-            else if (v.ValueKind == System.Text.Json.JsonValueKind.Object && v.TryGetProperty("key", out var nk) && nk.GetString() is { } nested && L.Has(nested))
-                args[name] = L.T(nested, NestedArgs(v));   // вложенная фраза { key, params, text }
-            else if (v.ValueKind == System.Text.Json.JsonValueKind.Object && v.TryGetProperty("text", out var nt)) args[name] = nt.GetString();
-            else args[name] = v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() : v.ToString();
-        }
-        return args;
-    }
-
-    static DateTime? TimeParam(RouterWarning w, params string[] names)
-    {
-        foreach (var n in names)
-            if (w.Params!.TryGetValue(n, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number && v.TryGetInt64(out var s))
-                return DateTimeOffset.FromUnixTimeSeconds(s).UtcDateTime;
-        return null;
-    }
 
     /// <summary>Хост из адреса для списка исключений: «https://www.example.com/a» → «www.example.com».</summary>
     public static string? Host(string url)
@@ -1313,8 +1281,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     readonly AddressBlockTracker _addressBlock = new();
     bool _addressNoteOn;
     /// <summary>«Не открылось ни с одной стратегией: … — похоже на блокировку по адресу…»; пусто, когда таких адресов нет. Собирается из учёта адресов при показе.</summary>
-    public string AddressNote => _addressNoteOn ? _addressBlock.Note() : "";
-    void SetAddressNote(bool on) { _addressNoteOn = on; Raise(nameof(AddressNote)); Raise(nameof(HasAddressNote)); }
+    string? _addressNoteFixed;   // готовая строка — только если её поставили извне (тесты)
+    public string AddressNote { get => _addressNoteFixed ?? (_addressNoteOn ? _addressBlock.Note() : ""); private set { _addressNoteFixed = value; Raise(); Raise(nameof(HasAddressNote)); } }
+    void SetAddressNote(bool on) { _addressNoteFixed = null; _addressNoteOn = on; Raise(nameof(AddressNote)); Raise(nameof(HasAddressNote)); }
     public bool HasAddressNote => AddressNote.Length > 0;
 
     string _result = "", _resultHint = "";
@@ -1557,7 +1526,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         else if (p.Running)
         {
             var who = p.StartedBy switch { "page" => L.T("router.select.started_page") + " ", "auto" or "timer" or "watchdog" => L.T("router.select.started_auto") + " ", _ => "" };
-            var parts = new[] { p.Message is { Length: > 0 } m ? L.T("router.select.progress_msg", new { index = p.Index, total = p.Total, message = m }) : L.T("router.select.progress", new { index = p.Index, total = p.Total }), Eta(p.EtaS) };
+            var shown = RouterPhrase.FromObject(p.MessageMsg, p.Message);
+            var parts = new[] { shown is { Length: > 0 } m ? L.T("router.select.progress_msg", new { index = p.Index, total = p.Total, message = m }) : L.T("router.select.progress", new { index = p.Index, total = p.Total }), Eta(p.EtaS) };
             SelectProgressText = who + string.Join(" · ", parts.Where(x => x.Length > 0));
         }
         else SelectProgressText = "";

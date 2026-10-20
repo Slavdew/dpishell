@@ -210,7 +210,7 @@ public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, 
             };
             detail = L.T(b.Ok ? "select.check.browser_detail" : "select.check.browser_detail_reason", args);
         }
-        return new(v.Ok, groupTitle(v.GroupId), v.Target.Url, detail, L.T("select.check.time", new { sec = seconds.ToString("0.0", L.Culture) }),
+        return new(v.Ok, groupTitle(v.GroupId), L.Relocalize(v.Target.Url), detail, L.T("select.check.time", new { sec = seconds.ToString("0.0", L.Culture) }),
             note, !v.Ok && (control || v.Target.Required),
             v.BrowserFails ? v.Browser!.Reason : "", Required: !v.Ok && !control && v.Target.Required);
     }
@@ -342,9 +342,25 @@ public static class Texts
     /// у провала — исход словами: «TLS 1.3: загрузка обрывается, получено 16384 из 500000».
     /// </summary>
     public static string ProbeDetail(IEnumerable<ProbeResult> probes) => string.Join(" · ", probes
-        .Select(p => (p.Tls, Text: p.Ok ? p.Detail : p.Detail.Length > 0 ? $"{Outcome(p.Outcome)}, {p.Detail}" : Outcome(p.Outcome)))
+        .Select(p => (p.Tls, Text: p.Ok ? DetailText(p.Detail) : p.Detail.Length > 0 ? $"{Outcome(p.Outcome)}, {DetailText(p.Detail)}" : Outcome(p.Outcome)))
         .GroupBy(x => x.Text)
         .Select(g => $"{TlsList(g.Select(x => Tls(x.Tls)).ToList())}: {g.Key}"));
+
+    /// <summary>
+    /// Подробность проверки (пишет ядро по-русски, хранится в истории): «301 → www.youtube.com/ → 200, 512 КБ» — по звеньям цепочки,
+    /// фразы по шаблонам ключей, единицы («КБ», «байт») отдельно.
+    /// </summary>
+    public static string DetailText(string detail)
+    {
+        if (detail.Length == 0) return detail;
+        return string.Join(" → ", detail.Split(" → ").Select(seg =>
+        {
+            var t = L.Relocalize(seg);
+            if (t != seg) return t;
+            t = System.Text.RegularExpressions.Regex.Replace(seg, @"(\d+) КБ$", m => L.T("core.probe.kb", new { n = m.Groups[1].Value }));
+            return System.Text.RegularExpressions.Regex.Replace(t, @"(\d+) байт$", m => L.T("core.probe.bytes", new { n = m.Groups[1].Value }));
+        }));
+    }
 
     /// <summary>«TLS 1.3 и TLS 1.2» — версий не больше двух.</summary>
     static string TlsList(List<string> tls) => tls.Count == 2 ? L.T("select.probe.and", new { a = tls[0], b = tls[1] }) : string.Join(", ", tls);
@@ -365,6 +381,6 @@ public static class Texts
         DpiShell.Core.Helper.HelperException { Code: "invalid" } h when h.Message.StartsWith("Неизвестная команда", StringComparison.Ordinal)
             => L.T("shell.err.helper_old"),
         AggregateException { InnerException: { } inner } => Friendly(inner),
-        _ => e.Message,
+        _ => L.Relocalize(e.Message),
     };
 }

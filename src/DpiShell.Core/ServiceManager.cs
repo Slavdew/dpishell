@@ -142,9 +142,10 @@ public sealed partial class ServiceManager(AppPaths paths) : IServiceOps
 public sealed record Conflict(string Kind, string Name, string Detail)
 {
     /// <summary>Откуда взято (имя и «как выключить» собираются на языке окна заново); null — тексты готовые.</summary>
-    public ZapretInstance? Source { get; init; }
-    public string NameNow => Source is { } z ? Conflicts.ConflictName(z) : Name;
-    public string DetailNow => Source?.HowToStop ?? Detail;
+    [System.Text.Json.Serialization.JsonIgnore] public ZapretInstance? Source { get; init; }
+    /// <summary>Имя на языке окна: из источника, а у присланного помощником (по-русски) — переводом готовой фразы.</summary>
+    [System.Text.Json.Serialization.JsonIgnore] public string NameNow => Source is { } z ? Conflicts.ConflictName(z) : L.Relocalize(Name);
+    [System.Text.Json.Serialization.JsonIgnore] public string DetailNow => Source?.HowToStop ?? L.Relocalize(Detail);
 }
 
 public static class Conflicts

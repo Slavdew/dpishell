@@ -2129,7 +2129,7 @@
                                         <!-- Варианты для всей сети — тот же выбор, что для этого компьютера (свои — общие). -->
                                         <local:DnsPickerView x:Name="RouterDnsPicker" DataContext="{Binding DnsPick}" Margin="0,10,0,0"
                                                              Visibility="{Binding DataContext.DnsPresetsAvailable, RelativeSource={RelativeSource AncestorType=Border}, Converter={StaticResource Vis}}" />
-                                        <Expander Header="{l:T common.more}" IsExpanded="{Binding DnsDetailsOpen}" Visibility="{Binding DnsServers.Count, Converter={StaticResource NonZero}}">
+                                        <Expander Header="{l:T router.dns.servers_header}" IsExpanded="{Binding DnsDetailsOpen}" Visibility="{Binding DnsServers.Count, Converter={StaticResource NonZero}}">
                                             <ItemsControl ItemsSource="{Binding DnsServers}" Margin="0,4,0,0">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>

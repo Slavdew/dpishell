@@ -66,7 +66,7 @@ public static partial class StrategyNaming
 
     /// <summary>Подсказка к названию: что было записано (с датой поиска), если показано другое имя; иначе пусто.</summary>
     public static string Tip(string title, IReadOnlyDictionary<string, string>? roles) =>
-        DisplayTitle(title, roles) != title ? LocalizeAuto(title) : "";
+        IsAutoName(title) && Name(roles) is not null ? LocalizeAuto(title) : "";
 
     /// <summary>«Новая: fake+multisplit · ts · ×6» по ролям google и general; ролей с приёмом нет — null.</summary>
     public static string? Name(IReadOnlyDictionary<string, string>? roles, string? prefix = null)

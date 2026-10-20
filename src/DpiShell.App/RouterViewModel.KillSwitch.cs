@@ -245,9 +245,10 @@ public sealed partial class RouterViewModel
         OffText = _wdState != WatchdogSelectState.None
             ? WatchdogSelectText(_wdState, StrategyTitle(_status?.Watchdog?.Select?.Best ?? _status?.Strategy))
             : off is not null ? RouterTexts.Off(off.By, off.At)
-            : warn is not null ? RouterTexts.Off(warn.Code, null, RouterEnabled)
+            : warn is not null ? RouterTexts.Off(warn.Code, RouterTexts.WarningTime(warn), RouterEnabled)
             : "";
-        OffDetail = HasOff ? off?.Text ?? warn?.Text ?? "" : "";
+        // Текст выключения приходит от роутера по-русски: известные фразы — на языке окна, остальное как есть.
+        OffDetail = HasOff ? off?.Text is { } offText ? L.Relocalize(offText, own: true) : warn is not null ? RouterTexts.WarningText(warn) : "" : "";
         var targets = HasOff ? off?.Targets ?? [] : [];
         if (!targets.SequenceEqual(OffTargets))
         {

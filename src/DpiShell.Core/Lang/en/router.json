@@ -120,8 +120,8 @@
  "router.mode.busy": "Changing the mode on the router…",
  "router.mode.all_done": "The router optimizes the connection to all sites except exclusions. Sites will be rechecked automatically.",
  "router.mode.lists_done": "The router optimizes the connection only to sites from the lists. Sites will be rechecked automatically.",
- "router.toggle.on": "Turn on for the router",
- "router.toggle.off": "Turn off for the router",
+ "router.toggle.on": "Turn on on router",
+ "router.toggle.off": "Turn off on router",
  "router.strategy.none": "not selected",
  "router.home.selecting": "Strategy search is running on the router",
  "router.home.on": "Optimization is running on the router",
@@ -462,8 +462,8 @@
  "router.select_choice.text": "Optimization is running on the router, so a strategy search on this PC will give a wrong result: strategies will work only “paired” with the router.",
  "router.both_choice.text": "Optimization is already running on the router — for all devices at home, including this PC. They cannot work together: traffic is processed twice.",
  "router.choice.select_router": "Find strategy on the router",
- "router.choice.pause_router": "Turn off on the router during the search",
- "router.choice.swap": "Turn off on the router and on for this PC",
+ "router.choice.pause_router": "Turn off on router during the search",
+ "router.choice.swap": "Turn off on router, turn on for this PC",
  "router.resume.confirm": "Search finished. Turn optimization back on for the router?",
  "router.resume.confirm_pc": "Search finished. Turn optimization back on for the router? It will then be turned off on this PC.",
  "router.resume.done": "Optimization is running on the router again.",
@@ -506,5 +506,6 @@
   "router.log.api_failed": "API: {error} — falling back to SSH",
   "router.log.uninstall_ssh": "Removal over SSH ({host})",
   "router.log.uninstall_failed": "Removal failed",
-  "router.log.removed": "Removed"
+  "router.log.removed": "Removed",
+  "router.dns.servers_header": "Server responses"
 }

@@ -25,6 +25,16 @@ public sealed class LangRouterWindowTests : IDisposable
         using var fake = new FakeRouter
         {
             SelectSteps = 0,
+            // Предупреждения как их шлёт роутер: старый — только code и русский text, новый — ещё key и params (router-api §9).
+            WarningsJson = """
+                [ { "code": "flow_offload", "text": "Включён flow offloading" }, { "code": "ipv6", "text": "IPv6 мимо оптимизации" },
+                  { "code": "dns_spoofed", "text": "Провайдер подменяет адреса сайтов — приложения вне браузера могут не работать" },
+                  { "code": "switched_backup", "text": "Стратегия перестала работать — включена запасная alt9" },
+                  { "code": "auto_selected", "text": "Автоподбор включил general (ALT)", "key": "web.warn.auto_selected", "params": { "name": "general (ALT)" } },
+                  { "code": "dns_fallback", "text": "Защищённый DNS недоступен — временно работает DNS провайдера", "key": "web.warn.dns_fallback" },
+                  { "code": "core_missing", "text": "Ядро zapret не установлено" },
+                  { "code": "brand_new_code", "text": "Что-то новое от роутера" } ]
+                """,
             ConflictsJson = """[ { "kind": "service", "name": "zapret2", "running": true }, { "kind": "package", "name": "zapret-manager-beam", "running": true } ]""",
             SelectRowsJson = """
                 [ { "id": "alt", "group_share": 1.0, "target_share": 0.88, "avg_s": 0.74, "error": null },
