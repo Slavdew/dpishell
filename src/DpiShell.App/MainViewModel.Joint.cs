@@ -53,9 +53,9 @@ public sealed partial class MainViewModel
 
         public async Task<bool> StartAsync(CancellationToken ct)
         {
-            if (vm.CurrentStrategyId is not { } id) { vm.Message = "Выберите стратегию на главной и включите оптимизацию на этом ПК."; return false; }
+            if (vm.CurrentStrategyId is not { } id) { vm.Message = L.T("router.joint.pick_strategy"); return false; }
             // Как «Включить», но без перехода на главную: переключатель стоит на вкладке «Роутер».
-            return await vm.WithHelper("Включаю…", async c =>
+            return await vm.WithHelper(L.T("router.enable.busy_short"), async c =>
             {
                 await c.EnableAsync(id);
                 vm._draftStrategy = null;

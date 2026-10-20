@@ -26,7 +26,7 @@ public sealed partial class MainViewModel
         Router.Changed += OnRouterChanged;
     }
 
-    Task<bool> DisableCoreAsync() => WithHelper("Выключаю…", async c =>
+    Task<bool> DisableCoreAsync() => WithHelper(L.T("router.disable.busy_short"), async c =>
     {
         await c.DisableAsync();
         await RefreshStatusAsync();
@@ -52,18 +52,17 @@ public sealed partial class MainViewModel
         if (!select && await JointBeforeEnableAsync()) return true;
         if (!Router.Connected)
         {
-            var login = Choose("Оптимизация уже работает на роутере — для всех устройств дома, и для этого ПК тоже. "
-                               + "Вместе с роутером оптимизация на ПК не работает: сайты ломаются.\n\nЧтобы управлять оптимизацией на роутере, войдите на него.",
-                ["Войти на роутер"]);
+            var login = Choose(L.T("router.login_choice.text"),
+                [L.T("router.login_choice.button")]);
             if (login == 0) Router.LoginCmd.Execute(null);
             return false;
         }
         var choice = Choose(select
-                ? "Оптимизация сейчас работает на роутере. Подбор на этом ПК при ней даст неверный результат: стратегии будут работать только «в паре» с роутером."
-                : "Оптимизация уже работает на роутере — для всех устройств дома, и для этого ПК тоже. Вместе они не работают: трафик обрабатывается дважды.",
+                ? L.T("router.select_choice.text")
+                : L.T("router.both_choice.text"),
             select
-                ? ["Подобрать на роутере", "Выключить на роутере на время подбора"]
-                : ["Подобрать на роутере", "Выключить на роутере и включить на этом ПК"]);
+                ? [L.T("router.choice.select_router"), L.T("router.choice.pause_router")]
+                : [L.T("router.choice.select_router"), L.T("router.choice.swap")]);
         if (choice == 0)
         {
             Router.SelectOnRouter = true;
@@ -82,9 +81,9 @@ public sealed partial class MainViewModel
         if (!_routerPausedForSelect) return;
         _routerPausedForSelect = false;
         if (!Router.Connected || Router.RouterEnabled) return;
-        if (!Confirm("Подбор закончен. Включить оптимизацию на роутере обратно?" + (IsRunning ? " Тогда на этом ПК она выключится." : ""))) return;
+        if (!Confirm(L.T(IsRunning ? "router.resume.confirm_pc" : "router.resume.confirm"))) return;
         if (IsRunning && !await DisableCoreAsync()) return;
-        if (await Router.EnableAsync()) Message = "Оптимизация снова работает на роутере.";
+        if (await Router.EnableAsync()) Message = L.T("router.resume.done");
     }
 
     /// <summary>
@@ -137,7 +136,7 @@ public sealed partial class MainViewModel
         if ((IsRunning || deferred is not null) && await Router.BypassExpectedButAbsentAsync())
         {
             if (Helper.Client is not null && await DisableCoreAsync())
-                Message = "Оптимизация на этом ПК выключена: она работает на роутере, а роутер сейчас не отвечает.";
+                Message = L.T("router.pc_off_router_silent");
             return;
         }
         if (deferred is not null && Helper.Client is { } c)
@@ -160,7 +159,7 @@ public sealed partial class MainViewModel
         {
             // Помощника нет — выключить нечем: на главной плашка «включён и здесь, и на роутере» с кнопками.
             if (Helper.Client is null) return;
-            if (await DisableCoreAsync()) Message = "Оптимизация перешла на роутер: на этом ПК выключена.";
+            if (await DisableCoreAsync()) Message = L.T("router.moved_to_router");
         }
         finally { _switchingToRouter = false; }
     }
