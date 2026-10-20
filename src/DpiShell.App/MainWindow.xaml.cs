@@ -23,6 +23,10 @@ public partial class MainWindow : Window
         DataContext = _vm = vm;
         Icon = Icons.ImageFor(vm.Kind);
         SourceInitialized += (_, _) => ThemeManager.SetTitleBar(this);
+        // Формат дат и чисел в привязках (StringFormat) — по выбранному языку; сменили язык — сразу.
+        ApplyLanguage();
+        L.Changed += ApplyLanguage;
+        Closed += (_, _) => L.Changed -= ApplyLanguage;
 
         _tray = new Tray(vm);
         _tray.OpenRequested += () => ShowFromTray();
@@ -55,6 +59,12 @@ public partial class MainWindow : Window
 
         // Ссылка ведёт к месту, а не в начало вкладки (UX-аудит 2, п. 2, 4): прокрутить, когда вкладка построится.
         vm.ShowRequested += spot => Dispatcher.BeginInvoke(() => ShowSpot(spot), DispatcherPriority.ContextIdle);
+    }
+
+    void ApplyLanguage()
+    {
+        if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(ApplyLanguage); return; }
+        Language = System.Windows.Markup.XmlLanguage.GetLanguage(L.Culture.IetfLanguageTag);
     }
 
     void Toast_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) => _vm.ToastHovered = true;
