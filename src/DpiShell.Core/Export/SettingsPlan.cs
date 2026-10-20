@@ -148,6 +148,13 @@ public static class SettingsPlanner
         foreach (var id in SettingsSections.All.Where(chosen.Contains))
         {
             var sp = new SectionPlan { Id = id, Risky = SettingsSections.IsRisky(id, clean.Dns) };
+            if (clean.Count(id) == 0)
+            {
+                // Ни одной принятой записи: «заменить» не должно стирать свои настройки ради пустоты — раздел только сообщает, что пропущено.
+                foreach (var p in problems.Where(p => p.Section == id)) sp.Items.Add(new(PlanAction.Skip, p.File ?? "", p.Reason));
+                plans.Add(sp);
+                continue;
+            }
             switch (id)
             {
                 case SettingsSections.Sites: ops.Sites = Merge(sp, current.Sites, clean.Sites!, SettingsSections.MaxSites, mode, x => x); break;

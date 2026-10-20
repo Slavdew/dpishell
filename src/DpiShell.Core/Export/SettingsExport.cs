@@ -204,7 +204,7 @@ public static class SettingsExport
         d.Strategies = [];
         foreach (var st in s.Exportable.OrderBy(x => x.Id, StringComparer.Ordinal))
         {
-            var name = SettingsClean.Unique(SettingsClean.Slug(st.Title, st.Id), used);
+            var name = SettingsClean.Unique(SettingsClean.Slug(st.Title, "strategy"), used);
             names[st.Id] = name;
             d.Strategies.Add(new() { Name = name, Title = st.Title, Roles = new Dictionary<string, string>(st.Roles) });
         }
@@ -220,7 +220,7 @@ public static class SettingsExport
         var appNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         d.Apps = [.. s.Apps.Select(a => new ImportApp
         {
-            Name = SettingsClean.Unique(SettingsClean.Slug(a.Title, a.Id), appNames), Title = a.Title, Tcp = a.TcpPorts, Udp = a.UdpPorts,
+            Name = SettingsClean.Unique(SettingsClean.Slug(a.Title, "app"), appNames), Title = a.Title, Tcp = a.TcpPorts, Udp = a.UdpPorts,
             Addresses = [.. a.Addresses], TcpDesync = a.TcpDesync, UdpDesync = a.UdpDesync,
         })];
         d.Dns = s.Dns is { Choice: not (DnsPresets.Auto or "other" or "") } c ? new DnsChoice { Choice = c.Choice, Ips = c.Ips, Doh = c.Doh } : null;

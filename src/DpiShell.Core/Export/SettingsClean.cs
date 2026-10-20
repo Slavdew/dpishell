@@ -23,20 +23,27 @@ public static partial class SettingsClean
     public static bool IsSafeName(string? name) =>
         name is not null && NameRx().IsMatch(name) && !name.Contains("..") && !name.EndsWith('.');
 
-    /// <summary>Имя для файла из названия: строчная латиница и цифры через «-»; пусто — по запасному.</summary>
+    static readonly Dictionary<char, string> Translit = new()
+    {
+        ['а'] = "a", ['б'] = "b", ['в'] = "v", ['г'] = "g", ['д'] = "d", ['е'] = "e", ['ё'] = "e", ['ж'] = "zh", ['з'] = "z", ['и'] = "i", ['й'] = "y",
+        ['к'] = "k", ['л'] = "l", ['м'] = "m", ['н'] = "n", ['о'] = "o", ['п'] = "p", ['р'] = "r", ['с'] = "s", ['т'] = "t", ['у'] = "u", ['ф'] = "f",
+        ['х'] = "h", ['ц'] = "c", ['ч'] = "ch", ['ш'] = "sh", ['щ'] = "sch", ['ъ'] = "", ['ы'] = "y", ['ь'] = "", ['э'] = "e", ['ю'] = "yu", ['я'] = "ya",
+    };
+
+    /// <summary>Имя для файла из названия: строчная латиница и цифры через «-» (русские буквы — транслитом); пусто — запасное имя.</summary>
     public static string Slug(string? title, string fallback)
     {
         var sb = new System.Text.StringBuilder();
         foreach (var c in (title ?? "").ToLowerInvariant())
         {
             if (c is >= 'a' and <= 'z' or >= '0' and <= '9') sb.Append(c);
+            else if (Translit.TryGetValue(c, out var t)) sb.Append(t);
             else if (sb.Length > 0 && sb[^1] != '-') sb.Append('-');
             if (sb.Length >= 40) break;
         }
         var s = sb.ToString().Trim('-');
         if (s.Length == 0) s = fallback;
-        s = new string([.. s.Where(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.')]).Trim('.', '-');
-        return IsSafeName(s) ? s : "item";
+        return IsSafeName(s) ? s : fallback;
     }
 
     /// <summary>Свободное имя: <paramref name="slug"/>, потом slug-2, slug-3… (без учёта регистра — файловая система Windows).</summary>

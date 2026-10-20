@@ -28,7 +28,7 @@ public sealed class LocalizationTests : IDisposable
     static readonly string[] CodeDirs = ["DpiShell.App", "DpiShell.Core"];
 
     /// <summary>Области: файлы Lang/&lt;язык&gt;/&lt;область&gt;.json (этап 2 — каждая вкладка в своём файле).</summary>
-    static readonly string[] Areas = ["common", "home", "select", "sites", "apps", "hosts", "dns", "proxy", "diag", "router", "settings", "about", "info", "shell", "core"];
+    static readonly string[] Areas = ["common", "home", "select", "sites", "apps", "hosts", "dns", "proxy", "diag", "router", "settings", "about", "info", "shell", "core", "export"];
 
     static LangPack Ru => L.BuiltIn[L.Ru];
     static LangPack En => L.BuiltIn[L.En];
