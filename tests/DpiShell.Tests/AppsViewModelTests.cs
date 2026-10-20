@@ -83,7 +83,7 @@ public sealed class AppsViewModelTests
         // Варианты кончились (в фейке три) — профиль снят, «как было».
         await Run(vm.NoCmd);
         await Until(() => vm.IsFailed, "после последнего «Нет» не отказались");
-        Assert.Contains("Настройки возвращены как были", vm.Status);
+        Assert.Equal(L.Plural("apps.giveup", 3), vm.Status);
         Assert.Contains($"app_profile_remove {id}", f.Backend.Calls);
         Assert.Empty(vm.Profiles);
         Assert.Empty(f.Backend.ProfilesValue);

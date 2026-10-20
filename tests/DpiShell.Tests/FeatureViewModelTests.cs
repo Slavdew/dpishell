@@ -38,9 +38,9 @@ public sealed class FeatureViewModelTests
         Assert.True(net.IpsetList);
         Assert.Contains(said, s => s.Contains("Включён IP-список"));
         Assert.StartsWith("Включится вместе с оптимизацией", net.GameStatus);   // оптимизация выключена
-        Assert.Contains("подсетей, обновлён", net.ListText);
+        Assert.StartsWith(L.T("apps.ipset.list_info", new { lines = "#", date = "", share = "" }).Split('#')[0], net.ListText);
         Assert.Contains("по списку адресов ниже ↓ (", net.GameStatus);   // подпись-связка с IP-списком
-        Assert.EndsWith(" подсетей)", net.GameStatus);
+        Assert.EndsWith(")", net.GameStatus);
 
         // «Выкл» у IP-списка выключает и игры: без списка им нечего ловить.
         await net.SetModeAsync(IpsetMode.Off);

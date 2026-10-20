@@ -783,7 +783,7 @@ public sealed partial class WindowSmokeTests
                     if (page == Pages.Sites)
                     {
                         // Роутера нет: только свои сайты ПК — без карточек роутера и заглушек про исключения.
-                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", "Исключения (оптимизация их не трогает)", "Роутер: что мешает" })
+                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", L.T("sites.router.lists.exclude"), "Роутер: что мешает" })
                             if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» на «Сайтах» без роутера");
                         if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Открывать без оптимизации" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет списка «Открывать без оптимизации»");
                         if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Свои сайты" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет поля своих сайтов ПК");
@@ -1010,8 +1010,8 @@ public sealed partial class WindowSmokeTests
                     if (page == Pages.Sites)
                     {
                         // «Сайты» с роутером: «Сайт не открывается» наверху, «Для каких сайтов обход», свои сайты и исключения (не в раскрывашке).
-                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", "Свои сайты", "Исключения (оптимизация их не трогает)", "Сайт открывается только без оптимизации" })
-                            if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is null) throw new Exception($"На вкладке «Сайты» нет «{text}»");
+                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", "Свои сайты", L.T("sites.router.lists.exclude"), "Сайт открывается только без оптимизации" })
+                            if (!VisibleText(tabs, t => t.Text == text)) throw new Exception($"На вкладке «Сайты» нет «{text}»");
                         if (Find<TextBox>(tabs, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Исключения" && t.IsVisible) is null) throw new Exception("На «Сайтах» не видно поля исключений");
                         if (Find<Button>(tabs, b => b.Content as string == "Добавить в исключения" && b.IsVisible) is null) throw new Exception("Нет «Добавить в исключения»");
                         if (Find<Expander>(tabs, e => (e.Header as string ?? "").StartsWith("Списки роутера") && e.IsVisible) is not null) throw new Exception("Исключения снова спрятаны в раскрывашке");
@@ -1750,8 +1750,8 @@ public sealed partial class WindowSmokeTests
                     var anti = Find<TextBlock>(tabs, t => t.IsVisible && t.Text.Contains("Vanguard"))!;
                     if (Y(anti) <= Y(Btn("Начать")!)) throw new Exception("Плашка про античиты выше кнопки «Начать» — она должна быть под карточкой");
                     if (!Visible(t => t.Text.StartsWith("Нужен драйвер WinDivert.") && t.Text.Length < 130)) throw new Exception("Нет короткого пояснения у галки UDP");
-                    if (Visible(t => t.Text.Contains("Без галочки записываются"))) throw new Exception("Детали про драйвер видны без «Подробнее»");
-                    if (Find<Expander>(tabs, e => e.IsVisible && e.Header as string == "Подробнее" && e.Content is TextBlock tb && tb.Text.Contains("Без галочки записываются")) is null)
+                    if (Visible(t => t.Text == L.T("apps.rec.udp_more"))) throw new Exception("Детали про драйвер видны без «Подробнее»");
+                    if (Find<Expander>(tabs, e => e.IsVisible && e.Header as string == "Подробнее" && e.Content is TextBlock tb && tb.Text == L.T("apps.rec.udp_more")) is null)
                         throw new Exception("Детали про UDP не под «Подробнее»");
                     if (Btn("Включить оптимизацию") is not null) throw new Exception("«Включить оптимизацию» видна до настройки профиля");
                 }
@@ -1772,7 +1772,7 @@ public sealed partial class WindowSmokeTests
                     flows.Push("tcp", "198.51.100.60", 443, 900);   // браузер — шум
                     Task.Run(() => vm.Apps.TickAsync()).GetAwaiter().GetResult();
                     Pump();
-                    if (!Visible(t => t.Text.StartsWith("Идёт запись"))) throw new Exception("Нет строки «Идёт запись»");
+                    if (!Visible(t => t.Text == L.T("apps.rec.status"))) throw new Exception("Нет строки «Идёт запись»");
                     if (Btn("Готово") is null || Btn("Отмена") is null) throw new Exception("Нет «Готово» / «Отмена»");
                     if (Btn("Начать") is not null) throw new Exception("«Начать» не спрятана во время записи");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-recording.png"));
@@ -1784,7 +1784,7 @@ public sealed partial class WindowSmokeTests
                         if (Btn(b) is null) throw new Exception("Нет кнопки «" + b + "»");
                     if (!Visible(t => t.Text == "Профили программ")) throw new Exception("Профиль не в списке");
                     if (Btn("Вернуть как было") is null) throw new Exception("Нет «Вернуть как было»");
-                    if (!Visible(t => t.Text.StartsWith("Оптимизация сейчас выключена"))) throw new Exception("Нет подсказки, что оптимизация выключена");
+                    if (!Visible(t => t.Text == L.T("apps.off_hint"))) throw new Exception("Нет подсказки, что оптимизация выключена");
                     if (Btn("Включить оптимизацию") is null) throw new Exception("Нет «Включить оптимизацию» рядом с подсказкой");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-simple-check.png"));
                     Btn("Да, заработало")!.Command.Execute(null);

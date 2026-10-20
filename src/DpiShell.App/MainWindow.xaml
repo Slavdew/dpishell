@@ -668,11 +668,11 @@
                             <!-- Вкладки «На этом ПК» / «На роутере» — только когда роутер подключён. -->
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,4,0,0" DataContext="{Binding Router}"
                                         Visibility="{Binding Connected, Converter={StaticResource Vis}}">
-                                <RadioButton Content="На этом ПК" IsChecked="{Binding TargetsOnPc}" Margin="0,0,16,0" />
-                                <RadioButton Content="На роутере" IsChecked="{Binding TargetsOnRouter}" />
+                                <RadioButton Content="{l:T sites.target.pc}" IsChecked="{Binding TargetsOnPc}" Margin="0,0,16,0" />
+                                <RadioButton Content="{l:T sites.target.router}" IsChecked="{Binding TargetsOnRouter}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
-                                <TextBlock Text="Сайты" Style="{StaticResource H1}" />
+                                <TextBlock Text="{l:T sites.title}" Style="{StaticResource H1}" />
                                 <local:InfoButton Topic="{x:Static local:InfoTexts.Sites}" Margin="10,0,0,12" />
                             </StackPanel>
                         </DockPanel>
@@ -688,38 +688,38 @@
                             <local:AdvancedView DataContext="{Binding AdvancedPc}" />
                             <DockPanel Margin="0,14,0,10">
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="16,0,0,0">
-                                    <TextBlock Text="Какие списки встроены" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                    <TextBlock Text="{l:T sites.builtin_lists}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                     <local:InfoButton Topic="{x:Static local:InfoTexts.DomainLists}" />
                                 </StackPanel>
                                 <StackPanel>
-                                    <TextBlock Text="Свои сайты" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T sites.my.title}" Style="{StaticResource H2}" />
                                     <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center"
-                                               Text="Сайт или адрес на строку. Эти сайты проверяются при подборе и попадают в список оптимизации." />
+                                               Text="{l:T sites.my.hint}" />
                                 </StackPanel>
                             </DockPanel>
-                            <TextBox Text="{Binding TargetsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AutomationProperties.Name="Свои сайты"
+                            <TextBox Text="{Binding TargetsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AutomationProperties.Name="{l:T sites.my.title}"
                                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" Height="150"
                                      FontFamily="Consolas" FontSize="14" Padding="8" />
                             <!-- Простой список исключений ПК (UX-аудит 7, п. 5): сюда же сайт попадает с Главной по «Сайт не открывается?». Строки «Напрямую» продвинутого режима — отдельно. -->
-                            <TextBlock Text="Открывать без оптимизации" Style="{StaticResource H2}" Margin="0,14,0,0" />
+                            <TextBlock Text="{l:T sites.exclude.title}" Style="{StaticResource H2}" Margin="0,14,0,0" />
                             <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,6"
-                                       Text="Сайт или адрес на строку. Если банк или другой сайт перестал открываться, впишите его сюда: оптимизация его не тронет." />
-                            <TextBox Text="{Binding ExcludeText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AutomationProperties.Name="Открывать без оптимизации" local:Demo.Sensitive="True"
+                                       Text="{l:T sites.exclude.hint}" />
+                            <TextBox Text="{Binding ExcludeText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AutomationProperties.Name="{l:T sites.exclude.title}" local:Demo.Sensitive="True"
                                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" Height="100"
                                      FontFamily="Consolas" FontSize="14" Padding="8" />
-                            <TextBlock Text="{Binding ExcludeMessage}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            <TextBox Text="{Binding ExcludeMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" />
                             </StackPanel>
                             </ScrollViewer>
                             <!-- Одна кнопка и один статус на вкладку (UX-аудит 6, п. 2): сохраняет и свои сайты, и строки «Свои настройки для сайтов». -->
                             <Border Grid.Row="1" Margin="0,4,0,0" Padding="0,8,0,0" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
                                 <DockPanel>
-                                    <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="Сохранить" Style="{StaticResource Primary}" Command="{Binding SaveSitesCmd}" VerticalAlignment="Top" />
+                                    <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="{l:T sites.save}" Style="{StaticResource Primary}" Command="{Binding SaveSitesCmd}" VerticalAlignment="Top" />
                                     <!-- Несохранённое видно (UX-аудит 2, п. 15): подбор берёт сохранённое; при уходе с вкладки и перед подбором свои сайты сохраняются сами. -->
-                                    <TextBlock DockPanel.Dock="Left" Text="Не сохранено" Foreground="{DynamicResource Danger}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,8,8"
-                                               Visibility="{Binding SitesDirty, Converter={StaticResource Vis}}" ToolTip="Подбор учитывает сохранённое. Свои сайты сохраню сам перед подбором и при уходе с вкладки." />
-                                    <TextBlock DockPanel.Dock="Left" Text="Сохранено" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,8,8"
+                                    <TextBlock DockPanel.Dock="Left" Text="{l:T sites.dirty}" Foreground="{DynamicResource Danger}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,8,8"
+                                               Visibility="{Binding SitesDirty, Converter={StaticResource Vis}}" ToolTip="{l:T sites.dirty.tip}" />
+                                    <TextBlock DockPanel.Dock="Left" Text="{l:T sites.saved}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,8,8"
                                                Visibility="{Binding SitesSaved, Converter={StaticResource Vis}}" />
-                                    <TextBlock Text="{Binding TargetsMessage}" Style="{StaticResource Hint}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="4,0,0,8" />
+                                    <TextBox Text="{Binding TargetsMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" VerticalAlignment="Center" Margin="4,0,0,8" />
                                 </DockPanel>
                             </Border>
                         </Grid>
@@ -736,27 +736,27 @@
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="Сайт не открывается" Style="{StaticResource H2}" />
+                                        <TextBlock Text="{l:T sites.check.title}" Style="{StaticResource H2}" />
                                         <local:InfoButton Topic="{x:Static local:InfoTexts.SiteCheck}" Margin="8,0,0,8" />
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBox Text="{Binding SiteUrl, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" Width="280" Padding="6,4" VerticalAlignment="Center"
-                                                 ToolTip="Адрес сайта, например example.com" AutomationProperties.Name="Адрес сайта">
+                                                 ToolTip="{l:T sites.check.url_tip}" AutomationProperties.Name="{l:T sites.check.url_name}">
                                             <TextBox.InputBindings>
                                                 <KeyBinding Key="Enter" Command="{Binding SiteCheckCmd}" />
                                             </TextBox.InputBindings>
                                         </TextBox>
-                                        <Button Content="Проверить" Command="{Binding SiteCheckCmd}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                        <Button Content="{l:T sites.check.button}" Command="{Binding SiteCheckCmd}" Margin="8,0,0,0" VerticalAlignment="Center" />
                                     </StackPanel>
                                     <ProgressBar Height="4" IsIndeterminate="{Binding SiteChecking}" Margin="0,8,0,0" Width="280" HorizontalAlignment="Left"
                                                  Visibility="{Binding SiteChecking, Converter={StaticResource Vis}}" />
                                     <StackPanel Margin="0,10,0,0" Visibility="{Binding HasSiteResult, Converter={StaticResource Vis}}">
-                                        <TextBlock Text="{Binding SiteResult}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding SiteHint}" Style="{StaticResource Hint}" Margin="0,2,0,0" TextWrapping="Wrap" />
-                                        <Button Content="Добавить в исключения" Style="{StaticResource Primary}" Command="{Binding AddExcludeCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                        <TextBox Text="{Binding SiteResult, Mode=OneWay}" Style="{StaticResource SelectableText}" FontWeight="SemiBold" />
+                                        <TextBox Text="{Binding SiteHint, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,2,0,0" />
+                                        <Button Content="{l:T sites.check.add_exclude}" Style="{StaticResource Primary}" Command="{Binding AddExcludeCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
                                                 Visibility="{Binding SiteSuggestExclude, Converter={StaticResource Vis}}" />
                                         <Expander Header="{l:T common.more}" Margin="0,6,0,0" Visibility="{Binding HasSiteDetail, Converter={StaticResource Vis}}">
-                                            <TextBlock Text="{Binding SiteDetail}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                            <TextBox Text="{Binding SiteDetail, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" />
                                         </Expander>
                                     </StackPanel>
                                 </StackPanel>
@@ -769,12 +769,12 @@
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="Для каких сайтов оптимизация" Style="{StaticResource H2}" />
+                                        <TextBlock Text="{l:T sites.mode.title}" Style="{StaticResource H2}" />
                                         <local:InfoButton Topic="{x:Static local:InfoTexts.RouterMode}" Margin="8,0,0,8" />
                                     </StackPanel>
-                                    <RadioButton Content="Только из списков" IsChecked="{Binding ModeLists}" IsEnabled="{Binding CanAct}" Margin="0,3" HorizontalAlignment="Left" />
-                                    <RadioButton Content="Для всех сайтов" IsChecked="{Binding ModeAll}" IsEnabled="{Binding CanAct}" Margin="0,3,0,0" HorizontalAlignment="Left" />
-                                    <TextBlock Text="Может мешать отдельным сайтам (например, банкам) — тогда добавьте их в исключения." Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap" Margin="22,0,0,3" />
+                                    <RadioButton Content="{l:T sites.mode.lists}" IsChecked="{Binding ModeLists}" IsEnabled="{Binding CanAct}" Margin="0,3" HorizontalAlignment="Left" />
+                                    <RadioButton Content="{l:T sites.mode.all}" IsChecked="{Binding ModeAll}" IsEnabled="{Binding CanAct}" Margin="0,3,0,0" HorizontalAlignment="Left" />
+                                    <TextBlock Text="{l:T sites.mode.all_warn}" Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap" Margin="22,0,0,3" />
                                     <TextBlock Text="{Binding ModeHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" />
                                 </StackPanel>
                             </Border>
@@ -782,12 +782,12 @@
                             <!-- Одной карточкой: при прокрутке заголовок и подпись не обрезаются посреди текста, кнопка «Сохранить» отделена линией (UX-аудит 5, п. 25). -->
                             <Border Style="{StaticResource Card}">
                             <StackPanel>
-                            <TextBlock Text="Свои сайты" Style="{StaticResource H2}" />
+                            <TextBlock Text="{l:T sites.my.title}" Style="{StaticResource H2}" />
                             <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10" TextWrapping="Wrap"
-                                       Text="Роутер проверяет эти адреса при подборе — для всех устройств дома. До 50. «Важный» — без него стратегия не считается рабочей." />
+                                       Text="{l:T sites.router.my.hint}" />
                             <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8">
                                 <Grid>
-                                    <TextBlock Text="Адресов нет — добавьте или скопируйте с ПК." Style="{StaticResource Hint}" Margin="14,12"
+                                    <TextBlock Text="{l:T sites.router.targets_empty}" Style="{StaticResource Hint}" Margin="14,12"
                                                Visibility="{Binding Targets.Count, Converter={StaticResource Zero}}" />
                                     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,6" MaxHeight="200">
                                         <ItemsControl ItemsSource="{Binding Targets}">
@@ -800,9 +800,9 @@
                                                             <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
                                                         <TextBox Text="{Binding Url, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" FontFamily="Consolas" Padding="6,4" VerticalContentAlignment="Center"
-                                                                 AutomationProperties.Name="Адрес" />
-                                                        <CheckBox Grid.Column="1" Content="важный" IsChecked="{Binding Important}" VerticalAlignment="Center" Margin="14,0,10,0" />
-                                                        <Button Grid.Column="2" Content="✕" Style="{StaticResource LinkButton}" ToolTip="Убрать" AutomationProperties.Name="Убрать адрес"
+                                                                 AutomationProperties.Name="{l:T sites.router.target.name}" />
+                                                        <CheckBox Grid.Column="1" Content="{l:T sites.router.target.important}" IsChecked="{Binding Important}" VerticalAlignment="Center" Margin="14,0,10,0" />
+                                                        <Button Grid.Column="2" Content="✕" Style="{StaticResource LinkButton}" ToolTip="{l:T sites.router.target.remove}" AutomationProperties.Name="{l:T sites.router.target.remove_name}"
                                                                 Command="{Binding DataContext.RemoveTargetCmd, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
                                                     </Grid>
                                                 </DataTemplate>
@@ -812,13 +812,13 @@
                                 </Grid>
                             </Border>
                             <WrapPanel Margin="0,8,0,0">
-                                <Button Content="Добавить адрес" Command="{Binding AddTargetCmd}" />
-                                <Button Content="Скопировать с ПК" Command="{Binding CopyFromPcCmd}" />
+                                <Button Content="{l:T sites.router.add}" Command="{Binding AddTargetCmd}" />
+                                <Button Content="{l:T sites.router.copy_from_pc}" Command="{Binding CopyFromPcCmd}" />
                             </WrapPanel>
                             </StackPanel>
                             </Border>
 
-                            <TextBlock Text="Что оптимизировать и что не трогать" Style="{StaticResource H2}" Margin="0,14,0,0" />
+                            <TextBlock Text="{l:T sites.router.lists.title}" Style="{StaticResource H2}" Margin="0,14,0,0" />
                             <Grid Margin="0,4,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -826,26 +826,26 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
-                                    <TextBlock Text="Оптимизировать (домен на строку)" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                    <TextBlock Text="{l:T sites.router.lists.general}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
                                     <TextBox Text="{Binding ListGeneralText, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" AcceptsReturn="True" Height="110"
-                                             FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="Оптимизировать" />
+                                             FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="{l:T sites.router.lists.general_name}" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2">
-                                    <TextBlock Text="Исключения (оптимизация их не трогает)" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                    <TextBlock Text="{l:T sites.router.lists.exclude}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
                                     <TextBox Text="{Binding ListExcludeText, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" AcceptsReturn="True" Height="110"
-                                             FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="Исключения" />
+                                             FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="{l:T sites.router.lists.exclude_name}" />
                                 </StackPanel>
                             </Grid>
                             </StackPanel>
                             </ScrollViewer>
                             <Border Grid.Row="1" Margin="0,4,0,0" Padding="0,8,0,0" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
                                 <WrapPanel>
-                                    <Button Content="Сохранить на роутере" Style="{StaticResource Primary}" Command="{Binding SaveTargetsCmd}" />
-                                    <TextBlock Text="Не сохранено" Foreground="{DynamicResource Danger}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,8,8"
+                                    <Button Content="{l:T sites.router.save}" Style="{StaticResource Primary}" Command="{Binding SaveTargetsCmd}" />
+                                    <TextBlock Text="{l:T sites.dirty}" Foreground="{DynamicResource Danger}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,8,8"
                                                Visibility="{Binding SitesDirty, Converter={StaticResource Vis}}" />
-                                    <TextBlock Text="Сохранено" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,8,8"
+                                    <TextBlock Text="{l:T sites.saved}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,8,8"
                                                Visibility="{Binding SitesSaved, Converter={StaticResource Vis}}" />
-                                    <TextBlock Text="{Binding TargetsMessage}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8" />
+                                    <TextBox Text="{Binding TargetsMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" VerticalAlignment="Center" Margin="4,0,0,8" />
                                 </WrapPanel>
                             </Border>
                         </Grid>
@@ -859,50 +859,50 @@
                             <!-- Подключения программ (ТЗ 13): простой режим «Настроить под игру», сохранённые профили, для опытных — «Отладка подключений». -->
                             <StackPanel DataContext="{Binding Apps}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="Игры и программы" Style="{StaticResource H1}" />
+                                    <TextBlock Text="{l:T apps.title}" Style="{StaticResource H1}" />
                                     <local:InfoButton Topic="{x:Static local:InfoTexts.Apps}" Margin="10,0,0,12" />
                                 </StackPanel>
                                 <Border Style="{StaticResource Card}">
                                     <StackPanel>
-                                        <TextBlock Text="Настроить под игру" Style="{StaticResource H2}" />
+                                        <TextBlock Text="{l:T apps.setup.title}" Style="{StaticResource H2}" />
                                         <TextBlock Text="{Binding Intro}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="{Binding ShowIntro, Converter={StaticResource Vis}}" />
-                                        <TextBlock Text="{Binding Status}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="{Binding HasStatus, Converter={StaticResource Vis}}" local:Demo.Sensitive="True" />
+                                        <TextBox Text="{Binding Status, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="15" FontWeight="SemiBold" Margin="0,4,0,0" Visibility="{Binding HasStatus, Converter={StaticResource Vis}}" local:Demo.Sensitive="True" />
                                         <TextBlock Text="{Binding RecText}" FontFamily="Consolas" Margin="0,4,0,0" Visibility="{Binding IsRecording, Converter={StaticResource Vis}}" local:Demo.Sensitive="True" />
-                                        <TextBlock Text="{Binding Detail}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="{Binding HasDetail, Converter={StaticResource Vis}}" local:Demo.Sensitive="True" />
+                                        <TextBox Text="{Binding Detail, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" Visibility="{Binding HasDetail, Converter={StaticResource Vis}}" local:Demo.Sensitive="True" />
                                         <ProgressBar IsIndeterminate="True" Height="6" Margin="0,8,0,0" Visibility="{Binding IsWorking, Converter={StaticResource Vis}}" />
                                         <!-- Драйвер для записи — только по выбору: игры с защитой от читов могут его заметить (AppsViewModel.AdvNoDriver). -->
                                         <StackPanel Margin="0,8,0,0" Visibility="{Binding ShowStart, Converter={StaticResource Vis}}">
-                                            <CheckBox Content="Записывать и голосовой чат, и игровые серверы (UDP)" IsChecked="{Binding WithDriver}" HorizontalAlignment="Left" />
+                                            <CheckBox Content="{l:T apps.rec.udp}" IsChecked="{Binding WithDriver}" HorizontalAlignment="Left" />
                                             <!-- Коротко: решение «нужна мне UDP или нет» не должно тонуть в четырёх строках про драйвер (UX-аудит 7, п. 15). -->
                                             <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="26,2,0,0"
-                                                       Text="Нужен драйвер WinDivert. Игры с защитой от читов могут его заметить — не включайте, если не уверены." />
+                                                       Text="{l:T apps.rec.udp_hint}" />
                                             <Expander Header="{l:T common.more}" Margin="22,2,0,0" FontSize="13">
                                                 <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="4,2,0,0"
-                                                           Text="Драйвер нужен только на время записи. Без галочки записываются только соединения TCP. Если оптимизация уже включена, драйвер и так работает." />
+                                                           Text="{l:T apps.rec.udp_more}" />
                                             </Expander>
                                         </StackPanel>
                                         <WrapPanel Margin="0,10,0,0">
                                             <!-- Профиль сохранён, а оптимизация выключена — включить тут же, не уходя на Главную (UX-аудит 7, п. 16); тогда она главная, «Настроить ещё одну игру» — обычная. -->
-                                            <Button ContentTemplate="{StaticResource Shield}" Content="Включить оптимизацию" Style="{StaticResource Primary}" Command="{Binding EnableCmd}"
+                                            <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.enable}" Style="{StaticResource Primary}" Command="{Binding EnableCmd}"
                                                     Visibility="{Binding ShowEnablePrimary, Converter={StaticResource Vis}}" />
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{Binding StartText}" Style="{StaticResource Primary}" Command="{Binding StartCmd}"
                                                     Visibility="{Binding ShowStartPrimary, Converter={StaticResource Vis}}" />
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{Binding StartText}" Command="{Binding StartCmd}"
                                                     Visibility="{Binding ShowStartPlain, Converter={StaticResource Vis}}" />
-                                            <Button ContentTemplate="{StaticResource Shield}" Content="Готово" Style="{StaticResource Primary}" Command="{Binding FinishCmd}"
+                                            <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.rec.done}" Style="{StaticResource Primary}" Command="{Binding FinishCmd}"
                                                     Visibility="{Binding IsRecording, Converter={StaticResource Vis}}" />
-                                            <Button Content="Отмена" Command="{Binding CancelCmd}" Visibility="{Binding IsRecording, Converter={StaticResource Vis}}" />
-                                            <Button Content="Да, заработало" Style="{StaticResource Primary}" Command="{Binding YesCmd}" Visibility="{Binding IsCheck, Converter={StaticResource Vis}}" />
-                                            <Button Content="Нет" Command="{Binding NoCmd}" Visibility="{Binding IsCheck, Converter={StaticResource Vis}}" />
-                                            <Button Content="Стало хуже" Command="{Binding NoCmd}" Visibility="{Binding IsCheck, Converter={StaticResource Vis}}" />
-                                            <Button Content="Подробнее →" Style="{StaticResource LinkButton}" Command="{Binding MoreCmd}" VerticalAlignment="Center"
+                                            <Button Content="{l:T common.cancel}" Command="{Binding CancelCmd}" Visibility="{Binding IsRecording, Converter={StaticResource Vis}}" />
+                                            <Button Content="{l:T apps.check.yes}" Style="{StaticResource Primary}" Command="{Binding YesCmd}" Visibility="{Binding IsCheck, Converter={StaticResource Vis}}" />
+                                            <Button Content="{l:T apps.check.no}" Command="{Binding NoCmd}" Visibility="{Binding IsCheck, Converter={StaticResource Vis}}" />
+                                            <Button Content="{l:T apps.check.worse}" Command="{Binding NoCmd}" Visibility="{Binding IsCheck, Converter={StaticResource Vis}}" />
+                                            <Button Content="{l:T apps.more}" Style="{StaticResource LinkButton}" Command="{Binding MoreCmd}" VerticalAlignment="Center"
                                                     Visibility="{Binding ShowMore, Converter={StaticResource Vis}}" />
                                         </WrapPanel>
                                         <Border Style="{StaticResource Warn}" Margin="0,10,0,0" Visibility="{Binding ShowOffHint, Converter={StaticResource Vis}}">
                                             <TextBlock Text="{Binding OffHint}" FontSize="13" TextWrapping="Wrap" />
                                         </Border>
                                         <!-- Пока ждём «Заработало?» — обычная кнопка под подсказкой «оптимизация выключена». -->
-                                        <Button ContentTemplate="{StaticResource Shield}" Content="Включить оптимизацию" Command="{Binding EnableCmd}"
+                                        <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.enable}" Command="{Binding EnableCmd}"
                                                 HorizontalAlignment="Left" Margin="0,10,0,0" Visibility="{Binding ShowEnablePlain, Converter={StaticResource Vis}}" />
                                     </StackPanel>
                                 </Border>
@@ -915,20 +915,20 @@
 
                                 <Border Style="{StaticResource Card}" Visibility="{Binding HasProfiles, Converter={StaticResource Vis}}">
                                     <StackPanel>
-                                        <TextBlock Text="Профили программ" Style="{StaticResource H2}" />
+                                        <TextBlock Text="{l:T apps.profiles.title}" Style="{StaticResource H2}" />
                                         <ItemsControl ItemsSource="{Binding Profiles}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <DockPanel Margin="0,6,0,0">
                                                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                                                            <Button Content="Другие параметры" Command="{Binding NextCmd}" Margin="0,0,8,0"
+                                                            <Button Content="{l:T apps.profile.other_variant}" Command="{Binding NextCmd}" Margin="0,0,8,0"
                                                                     Visibility="{Binding DataContext.ShowAdvanced, RelativeSource={RelativeSource AncestorType=TabControl}, Converter={StaticResource Vis}}" />
-                                                            <Button ContentTemplate="{StaticResource Shield}" Content="Вернуть как было" Command="{Binding RemoveCmd}" />
+                                                            <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.profile.revert}" Command="{Binding RemoveCmd}" />
                                                         </StackPanel>
                                                         <StackPanel>
                                                             <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" local:Demo.Sensitive="True" />
-                                                            <TextBlock Text="{Binding Summary}" Style="{StaticResource Hint}" TextTrimming="CharacterEllipsis" local:Demo.Sensitive="True" />
-                                                            <TextBlock Style="{StaticResource Hint}"><Run Text="Параметры " /><Run Text="{Binding Variant, Mode=OneWay}" /></TextBlock>
+                                                            <TextBox Text="{Binding Summary, Mode=OneWay}" Style="{StaticResource SelectableHint}" local:Demo.Sensitive="True" />
+                                                            <TextBox Text="{Binding VariantLabel, Mode=OneWay}" Style="{StaticResource SelectableHint}" />
                                                         </StackPanel>
                                                     </DockPanel>
                                                 </DataTemplate>
@@ -940,26 +940,26 @@
                                 <!-- Отладка подключений: только если в «Настройках» включено «Показывать инструменты для опытных» (или по «Подробнее»). -->
                                 <StackPanel Visibility="{Binding DataContext.ShowAdvanced, RelativeSource={RelativeSource AncestorType=TabControl}, Converter={StaticResource Vis}}">
                                     <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                        <TextBlock Text="Отладка подключений" Style="{StaticResource H1}" FontSize="19" />
+                                        <TextBlock Text="{l:T apps.debug.title}" Style="{StaticResource H1}" FontSize="19" />
                                         <local:InfoButton Topic="{x:Static local:InfoTexts.Debug}" Margin="10,0,0,12" />
                                     </StackPanel>
                                     <Border Style="{StaticResource Card}">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,6"
-                                                       Text="Для опытных: запишите, куда подключается программа, оставьте нужное и сохраните профиль. Запись только читает — ничего не меняет и сама остановится через 5 минут." />
-                                            <RadioButton Content="Всё, что запустится после «Записать»" IsChecked="{Binding AdvNewProcesses}" Margin="0,3,0,3" IsEnabled="{Binding AdvIdle}" />
+                                                       Text="{l:T apps.debug.hint}" />
+                                            <RadioButton Content="{l:T apps.debug.new_processes}" IsChecked="{Binding AdvNewProcesses}" Margin="0,3,0,3" IsEnabled="{Binding AdvIdle}" />
                                             <DockPanel Margin="0,3,0,3">
-                                                <Button DockPanel.Dock="Right" Content="Обновить" Command="{Binding RefreshProcessesCmd}" Margin="8,0,0,0" IsEnabled="{Binding AdvIdle}" />
-                                                <RadioButton Content="Выбранный процесс:" IsChecked="{Binding AdvByProcess}" VerticalAlignment="Center" Margin="0,0,10,0" IsEnabled="{Binding AdvIdle}" />
+                                                <Button DockPanel.Dock="Right" Content="{l:T apps.debug.refresh}" Command="{Binding RefreshProcessesCmd}" Margin="8,0,0,0" IsEnabled="{Binding AdvIdle}" />
+                                                <RadioButton Content="{l:T apps.debug.selected_process}" IsChecked="{Binding AdvByProcess}" VerticalAlignment="Center" Margin="0,0,10,0" IsEnabled="{Binding AdvIdle}" />
                                                 <ComboBox ItemsSource="{Binding Processes}" DisplayMemberPath="Display" SelectedItem="{Binding SelectedProcess}" IsEnabled="{Binding AdvIdle}" local:Demo.Sensitive="True"
-                                                          AutomationProperties.Name="Процесс для записи" />
+                                                          AutomationProperties.Name="{l:T apps.debug.process_name}" />
                                             </DockPanel>
-                                            <CheckBox Content="Без драйвера (только TCP)" IsChecked="{Binding AdvNoDriver}" HorizontalAlignment="Left" Margin="0,6,0,0" IsEnabled="{Binding AdvIdle}"
-                                                      ToolTip="UDP без драйвера не записать: таблица Windows не знает удалённых адресов UDP." />
-                                            <TextBlock Text="Так записываются только соединения TCP, зато игры с защитой от читов не видят лишнего драйвера. Включено по умолчанию." Style="{StaticResource Hint}" Margin="26,2,0,0" TextWrapping="Wrap" />
+                                            <CheckBox Content="{l:T apps.debug.no_driver}" IsChecked="{Binding AdvNoDriver}" HorizontalAlignment="Left" Margin="0,6,0,0" IsEnabled="{Binding AdvIdle}"
+                                                      ToolTip="{l:T apps.debug.no_driver_tip}" />
+                                            <TextBlock Text="{l:T apps.debug.no_driver_hint}" Style="{StaticResource Hint}" Margin="26,2,0,0" TextWrapping="Wrap" />
                                             <WrapPanel Margin="0,10,0,0">
-                                                <Button ContentTemplate="{StaticResource Shield}" Content="Записать" Style="{StaticResource Primary}" Command="{Binding AdvStartCmd}" />
-                                                <Button Content="Стоп" Command="{Binding AdvStopCmd}" />
+                                                <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.debug.record}" Style="{StaticResource Primary}" Command="{Binding AdvStartCmd}" />
+                                                <Button Content="{l:T apps.debug.stop}" Command="{Binding AdvStopCmd}" />
                                                 <TextBlock Text="{Binding RecText}" FontFamily="Consolas" VerticalAlignment="Center" Margin="4,0,0,8" Visibility="{Binding AdvRecording, Converter={StaticResource Vis}}" local:Demo.Sensitive="True" />
                                             </WrapPanel>
                                         </StackPanel>
@@ -967,15 +967,15 @@
 
                                     <Border Style="{StaticResource Card}" Visibility="{Binding HasRows, Converter={StaticResource Vis}}">
                                         <StackPanel>
-                                            <TextBlock Text="Записанные подключения" Style="{StaticResource H2}" />
-                                            <TextBlock Text="{Binding RecapNote}" Style="{StaticResource Hint}" TextWrapping="Wrap" Visibility="{Binding HasRecapNote, Converter={StaticResource Vis}}" />
+                                            <TextBlock Text="{l:T apps.debug.recorded.title}" Style="{StaticResource H2}" />
+                                            <TextBox Text="{Binding RecapNote, Mode=OneWay}" Style="{StaticResource SelectableHint}" Visibility="{Binding HasRecapNote, Converter={StaticResource Vis}}" />
                                             <WrapPanel Margin="0,4,0,6">
-                                                <Button Content="Отсечь шум" Command="{Binding DenoiseCmd}" ToolTip="Вернуть отметки, как поставила бы программа: без служб Windows, браузеров, локальной сети и старого фона" />
-                                                <Button Content="Отметить все" Command="{Binding CheckAllCmd}" />
-                                                <Button Content="Снять все" Command="{Binding UncheckAllCmd}" />
+                                                <Button Content="{l:T apps.debug.denoise}" Command="{Binding DenoiseCmd}" ToolTip="{l:T apps.debug.denoise_tip}" />
+                                                <Button Content="{l:T apps.debug.check_all}" Command="{Binding CheckAllCmd}" />
+                                                <Button Content="{l:T apps.debug.uncheck_all}" Command="{Binding UncheckAllCmd}" />
                                             </WrapPanel>
                                             <DataGrid ItemsSource="{Binding Rows}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" HeadersVisibility="Column"
-                                                      CanUserAddRows="False" MaxHeight="280" MinHeight="90" AutomationProperties.Name="Записанные подключения">
+                                                      CanUserAddRows="False" MaxHeight="280" MinHeight="90" AutomationProperties.Name="{l:T apps.debug.recorded.title}">
                                                 <DataGrid.Columns>
                                                     <DataGridTemplateColumn Header="" Width="32">
                                                         <DataGridTemplateColumn.CellTemplate>
@@ -984,12 +984,18 @@
                                                             </DataTemplate>
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
-                                                    <DataGridTextColumn Header="Программа" Binding="{Binding Process}" Width="*" ElementStyle="{StaticResource SensitiveCell}" />
-                                                    <DataGridTextColumn Header="Адрес" Binding="{Binding Address}" Width="*" ElementStyle="{StaticResource SensitiveCell}" />
-                                                    <DataGridTextColumn Header="Порт" Binding="{Binding Port}" Width="60" />
-                                                    <DataGridTextColumn Header="Тип" Binding="{Binding Kind}" Width="48" />
-                                                    <DataGridTextColumn Header="Состояние" Binding="{Binding State}" Width="82" />
-                                                    <DataGridTextColumn Header="Убрано, потому что" Binding="{Binding Reason}" Width="1.7*" />
+                                                    <DataGridTextColumn Header="{l:T apps.debug.col.process}" Binding="{Binding Process}" Width="*" ElementStyle="{StaticResource SensitiveCell}" />
+                                                    <DataGridTextColumn Header="{l:T apps.debug.col.address}" Binding="{Binding Address}" Width="*" ElementStyle="{StaticResource SensitiveCell}" />
+                                                    <DataGridTextColumn Header="{l:T apps.debug.col.port}" Binding="{Binding Port}" Width="60" />
+                                                    <DataGridTextColumn Header="{l:T apps.debug.col.type}" Binding="{Binding Kind}" Width="48" />
+                                                    <DataGridTextColumn Header="{l:T apps.debug.col.state}" Binding="{Binding State}" Width="82" />
+                                                    <DataGridTextColumn Header="{l:T apps.debug.col.reason}" Binding="{Binding Reason}" Width="1.7*">
+                                                        <DataGridTextColumn.ElementStyle>
+                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                                <Setter Property="TextWrapping" Value="Wrap" />
+                                                            </Style>
+                                                        </DataGridTextColumn.ElementStyle>
+                                                    </DataGridTextColumn>
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                             <Grid Margin="0,10,0,0">
@@ -999,82 +1005,82 @@
                                                     <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel>
-                                                    <TextBlock Text="Название профиля" Style="{StaticResource Hint}" Margin="0,0,0,4" />
-                                                    <TextBox Text="{Binding ProfileTitle, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" Padding="6" MaxLength="60" AutomationProperties.Name="Название профиля" />
+                                                    <TextBlock Text="{l:T apps.debug.profile_name}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                                    <TextBox Text="{Binding ProfileTitle, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" Padding="6" MaxLength="60" AutomationProperties.Name="{l:T apps.debug.profile_name}" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="2">
-                                                    <TextBlock Text="Параметры" Style="{StaticResource Hint}" Margin="0,0,0,4" />
-                                                    <ComboBox ItemsSource="{Binding Variants}" DisplayMemberPath="Title" SelectedIndex="{Binding SelectedVariant}" AutomationProperties.Name="Параметры профиля" />
+                                                    <TextBlock Text="{l:T apps.debug.variant}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                                    <ComboBox ItemsSource="{Binding Variants}" DisplayMemberPath="Title" SelectedIndex="{Binding SelectedVariant}" AutomationProperties.Name="{l:T apps.debug.variant_name}" />
                                                 </StackPanel>
                                             </Grid>
                                             <DockPanel Margin="0,10,0,0">
-                                                <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="Сохранить профиль" Style="{StaticResource Primary}" Command="{Binding SaveCmd}" VerticalAlignment="Top" />
-                                                <TextBlock Text="{Binding Preview}" Style="{StaticResource Hint}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="4,0,0,8" local:Demo.Sensitive="True" />
+                                                <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="{l:T apps.debug.save_profile}" Style="{StaticResource Primary}" Command="{Binding SaveCmd}" VerticalAlignment="Top" />
+                                                <TextBox Text="{Binding Preview, Mode=OneWay}" Style="{StaticResource SelectableHint}" VerticalAlignment="Center" Margin="4,0,0,8" local:Demo.Sensitive="True" />
                                             </DockPanel>
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
                                 <!-- Карточка «Отладка подключений» скрыта: намёк, где её включить (UX-аудит 5, п. 21). -->
-                                <TextBlock Text="Для опытных — в Настройках." Style="{StaticResource Hint}" Margin="0,0,0,12"
+                                <TextBlock Text="{l:T apps.debug.hidden_hint}" Style="{StaticResource Hint}" Margin="0,0,0,12"
                                            Visibility="{Binding DataContext.ShowAdvanced, RelativeSource={RelativeSource AncestorType=TabControl}, Converter={StaticResource InvVis}}" />
                             </StackPanel>
 
                             <StackPanel DataContext="{Binding Net}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="Игровой режим" Style="{StaticResource H1}" />
+                                    <TextBlock Text="{l:T apps.game.title}" Style="{StaticResource H1}" />
                                     <local:InfoButton Topic="{x:Static local:InfoTexts.Game}" Margin="10,0,0,12" />
                                 </StackPanel>
                                 <Border Style="{StaticResource Card}">
                                     <StackPanel>
                                         <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding GameOn}" IsEnabled="{Binding GameCanToggle}" HorizontalAlignment="Left">
-                                            <TextBlock Text="Игры и голосовые программы" FontSize="15" FontWeight="SemiBold" />
+                                            <TextBlock Text="{l:T apps.game.switch}" FontSize="15" FontWeight="SemiBold" />
                                         </CheckBox>
                                         <TextBlock Text="{Binding GameStatus}" Margin="50,6,0,0" />
                                         <TextBlock Text="{Binding GameHint}" Style="{StaticResource Hint}" Margin="50,2,0,0" />
                                         <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="6"
                                                 Padding="10,6" Margin="50,10,0,0" HorizontalAlignment="Left">
-                                            <TextBlock Text="Может вырасти задержка (пинг) в играх и нагрузка на процессор — особенно при торрентах." FontSize="13" />
+                                            <TextBlock Text="{l:T apps.game.warn}" FontSize="13" />
                                         </Border>
                                     </StackPanel>
                                 </Border>
 
                                 <!-- IP-списки и свои подсети правят редко: профиль под программу заполняет их сам. Идут «Все адреса» — раскрыто, чтобы отсчёт был виден. -->
-                                <Expander Header="Дополнительно: IP-списки и свои подсети" Margin="0,6,0,0" IsExpanded="{Binding ListsOpen, Mode=TwoWay}">
+                                <Expander Header="{l:T apps.more_tools}" Margin="0,6,0,0" IsExpanded="{Binding ListsOpen, Mode=TwoWay}">
                                     <StackPanel Margin="0,8,0,0">
                                         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                            <TextBlock Text="IP-списки" Style="{StaticResource H1}" FontSize="19" />
+                                            <TextBlock Text="{l:T apps.ipset.title}" Style="{StaticResource H1}" FontSize="19" />
                                             <local:InfoButton Topic="{x:Static local:InfoTexts.IpLists}" Margin="10,0,0,12" />
                                         </StackPanel>
                                         <Border Style="{StaticResource Card}">
                                             <StackPanel>
                                                 <!-- «Выкл» выключает и игровой режим (Shell.SetIpsetMode): без списка ему нечего ловить — так и сказано. -->
-                                                <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,4"><Run Text="Оптимизация сайтов по адресам" /><Run Text=" (" /><Run Text="«Выкл» выключит и игровой режим" /><Run Text=")" /></TextBlock>
+                                                <TextBlock Text="{l:T apps.ipset.mode_caption}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
                                                 <WrapPanel IsEnabled="{Binding CanEdit}">
-                                                    <RadioButton Content="Выкл" IsChecked="{Binding IpsetOff}" Margin="0,3,24,3" />
-                                                    <RadioButton Content="Только из списков" IsChecked="{Binding IpsetList}" Margin="0,3,24,3" />
+                                                    <RadioButton Content="{l:T apps.ipset.off}" IsChecked="{Binding IpsetOff}" Margin="0,3,24,3" />
+                                                    <RadioButton Content="{l:T apps.ipset.lists}" IsChecked="{Binding IpsetList}" Margin="0,3,24,3" />
                                                 </WrapPanel>
                                                 <!-- «Все адреса» — проверка с подтверждением, а не третий режим наравне с рабочими (UX-аудит, п. 34). -->
-                                                <Button ContentTemplate="{StaticResource Shield}" Content="Проверить, поможет ли оптимизация (10 мин)" Command="{Binding TryAnyCmd}" HorizontalAlignment="Left"
-                                                        Margin="0,8,0,0" ToolTip="На 10 минут — оптимизация для любого соединения; сайты в это время могут работать с ошибками"
+                                                <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.ipset.try_any}" Command="{Binding TryAnyCmd}" HorizontalAlignment="Left"
+                                                        Margin="0,8,0,0" ToolTip="{l:T apps.ipset.try_any_tip}"
                                                         Visibility="{Binding AnyActive, Converter={StaticResource InvVis}}" IsEnabled="{Binding CanEdit}" />
                                                 <Border Style="{StaticResource Warn}" Margin="0,10,0,0" Visibility="{Binding AnyActive, Converter={StaticResource Vis}}">
                                                     <DockPanel>
-                                                        <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="Вернуть сейчас" Command="{Binding StopAnyCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                                        <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="{l:T apps.ipset.stop_any}" Command="{Binding StopAnyCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
                                                         <StackPanel>
                                                             <TextBlock Text="{Binding AnyText}" FontWeight="SemiBold" />
-                                                            <TextBlock Text="Сейчас оптимизация идёт для любого соединения — многие сайты могут работать с ошибками." FontSize="13" Margin="0,2,0,0" />
+                                                            <TextBlock Text="{l:T apps.ipset.any_warn}" FontSize="13" Margin="0,2,0,0" />
                                                         </StackPanel>
                                                     </DockPanel>
                                                 </Border>
                                                 <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,12,0,0" Padding="0,12,0,0">
                                                     <StackPanel>
-                                                        <TextBlock Text="Список адресов — для обоих" Style="{StaticResource Hint}" Margin="0,0,0,2" />
-                                                        <TextBlock Text="{Binding ListText}" />
-                                                        <TextBlock Text="{Binding UpdateNote}" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,4,0,0"
+                                                        <TextBlock Text="{l:T apps.ipset.list_caption}" Style="{StaticResource Hint}" Margin="0,0,0,2" />
+                                                        <TextBox Text="{Binding ListText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
+                                                        <TextBox Text="{Binding UpdateNote, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,4,0,0"
                                                                    Visibility="{Binding HasUpdateNote, Converter={StaticResource Vis}}" />
                                                         <WrapPanel Margin="0,10,0,0">
-                                                            <Button ContentTemplate="{StaticResource Shield}" Content="Обновить список" Command="{Binding UpdateListCmd}" />
-                                                            <Button ContentTemplate="{StaticResource Shield}" Content="Загрузить из файла…" Command="{Binding LoadFileCmd}" />
+                                                            <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.ipset.update}" Command="{Binding UpdateListCmd}" />
+                                                            <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.ipset.load_file}" Command="{Binding LoadFileCmd}" />
                                                         </WrapPanel>
                                                     </StackPanel>
                                                 </Border>
@@ -1083,7 +1089,7 @@
 
                                         <Border Style="{StaticResource Card}">
                                             <StackPanel>
-                                                <TextBlock Text="Свои подсети" Style="{StaticResource H2}" />
+                                                <TextBlock Text="{l:T apps.subnets.title}" Style="{StaticResource H2}" />
                                                 <TextBlock Text="{Binding UserHint}" Style="{StaticResource Hint}" Margin="0,0,0,8" />
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
@@ -1092,19 +1098,19 @@
                                                         <ColumnDefinition Width="*" />
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel>
-                                                        <TextBlock Text="Добавить к списку" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                                        <TextBlock Text="{l:T apps.subnets.add_label}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
                                                         <TextBox Text="{Binding UserText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110" local:Demo.Sensitive="True"
-                                                                 VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="Добавить к списку" />
+                                                                 VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="{l:T apps.subnets.add_label}" />
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="2">
-                                                        <TextBlock Text="Исключения" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                                        <TextBlock Text="{l:T apps.subnets.exclude_label}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
                                                         <TextBox Text="{Binding ExcludeText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110" local:Demo.Sensitive="True"
-                                                                 VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="Исключения" />
+                                                                 VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="{l:T apps.subnets.exclude_label}" />
                                                     </StackPanel>
                                                 </Grid>
                                                 <DockPanel Margin="0,10,0,0">
-                                                    <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="Сохранить" Style="{StaticResource Primary}" Command="{Binding SaveUserCmd}" VerticalAlignment="Top" />
-                                                    <TextBlock Text="{Binding UserMessage}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8" />
+                                                    <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="{l:T apps.subnets.save}" Style="{StaticResource Primary}" Command="{Binding SaveUserCmd}" VerticalAlignment="Top" />
+                                                    <TextBox Text="{Binding UserMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" VerticalAlignment="Center" Margin="4,0,0,8" />
                                                 </DockPanel>
                                             </StackPanel>
                                         </Border>

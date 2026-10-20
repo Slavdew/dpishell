@@ -50,17 +50,18 @@ public sealed class FlowRow : Observable
     public int Port => Flow.Port;
     public string Kind => Flow.Proto.ToUpperInvariant();
     public int Count => Flow.Count;
-    public string State => Flow.State switch { "works" => "работает", "noreply" => "нет ответа", _ => Flow.Proto == "udp" ? "—" : "" };
+    public string State => Flow.State switch { "works" => L.T("apps.flow.state.works"), "noreply" => L.T("apps.flow.state.noreply"), _ => Flow.Proto == "udp" ? "—" : "" };
 }
 
 /// <summary>Сохранённый профиль в списке.</summary>
-public sealed class ProfileRow(AppProfileInfo info)
+public sealed class ProfileRow(AppProfileInfo info) : Observable
 {
     public AppProfileInfo Info { get; } = info;
     public string Id => Info.Id;
     public string Title => Info.Title;
     public string Summary => AppsViewModel.Summarize(Info);
     public string Variant => Info.VariantTitle;
+    public string VariantLabel => L.T("apps.profile.variant", new { variant = Variant });
     public ICommand? RemoveCmd { get; set; }
     public ICommand? NextCmd { get; set; }
 }
@@ -135,12 +136,12 @@ public sealed class AppsViewModel : Observable
     public ICommand NoCmd { get; }
     public ICommand MoreCmd { get; }
 
-    public const string AntiCheat = NetViewModel.AntiCheatNote;
-    public string Intro => "Нажмите «Начать», запустите игру и дойдите до того, что не работает (вход, сервер, голосовой чат). Потом «Готово» — программа сама подберёт параметры для этой игры; остальное она не затрагивает.";
+    public static string AntiCheat => NetViewModel.AntiCheatNote;
+    public string Intro => L.T("apps.intro");
     public string Anti => AntiCheat;
     /// <summary>Вступление — до начала и после неудачи; после «Готово» не повторяется (там итог и «Настроить ещё одну игру»).</summary>
     public bool ShowIntro => Step is AppsStep.Idle or AppsStep.Failed;
-    public string StartText => Step == AppsStep.Done ? "Настроить ещё одну игру" : "Начать";
+    public string StartText => Step == AppsStep.Done ? L.T("apps.start_another") : L.T("apps.start");
 
     string _status = "";
     /// <summary>Главная строка простого режима: что сейчас происходит.</summary>
@@ -159,7 +160,7 @@ public sealed class AppsViewModel : Observable
     public void StatusChanged() { Raise(nameof(OptimizationOff)); Raise(nameof(ShowOffHint)); foreach (var p in new[] { nameof(ShowEnable), nameof(ShowEnablePrimary), nameof(ShowEnablePlain), nameof(ShowStartPrimary), nameof(ShowStartPlain) }) Raise(p); CommandManager.InvalidateRequerySuggested(); }
 
     public bool OptimizationOff => _helper.Status is { Enabled: false };
-    public string OffHint => "Оптимизация сейчас выключена: профиль начнёт работать, когда вы её включите.";
+    public string OffHint => L.T("apps.off_hint");
 
     /// <summary>Включить оптимизацию (как «Включить» на Главной); задаёт окно. Не задана — кнопки нет.</summary>
     public Func<Task>? EnableOptimization { get; set; }
@@ -173,12 +174,15 @@ public sealed class AppsViewModel : Observable
     public ICommand EnableCmd => _enableCmd ??= RelayCommand.Async(async () => { if (EnableOptimization is { } e) await e(); }, () => ShowEnable);
     ICommand? _enableCmd;
 
-    public static string Summarize(AppProfileInfo p)
+    public static string Summarize(AppProfileInfo p) => Summarize(p.TcpPorts, p.UdpPorts, p.Addresses.Count);
+
+    /// <summary>«TCP … · UDP … · адресов: N».</summary>
+    static string Summarize(string tcp, string udp, int addresses)
     {
         var parts = new List<string>();
-        if (p.TcpPorts.Length > 0) parts.Add("TCP " + p.TcpPorts);
-        if (p.UdpPorts.Length > 0) parts.Add("UDP " + p.UdpPorts);
-        parts.Add($"адресов: {p.Addresses.Count}");
+        if (tcp.Length > 0) parts.Add("TCP " + tcp);
+        if (udp.Length > 0) parts.Add("UDP " + udp);
+        parts.Add(L.T("apps.profile.addresses", new { n = addresses }));
         return string.Join(" · ", parts);
     }
 
@@ -225,11 +229,11 @@ public sealed class AppsViewModel : Observable
     {
         if (await Need() is not { } c) return;
         bool removed = false;
-        if (!await Guard("Возвращаю как было…", async () => removed = await c.AppProfileRemoveAsync(id))) return;
+        if (!await Guard(L.T("apps.busy.revert"), async () => removed = await c.AppProfileRemoveAsync(id))) return;
         await AfterChange();
         await RefreshAsync();
         if (Step is AppsStep.Check or AppsStep.Done && _profileId == id) { Step = AppsStep.Idle; Status = ""; Detail = ""; }
-        Say(removed ? "Готово: профиль убран, всё как было." : "Такого профиля уже нет.");
+        Say(L.T(removed ? "apps.profile.removed" : "apps.profile.gone"));
     }
 
     /// <summary>Для опытных: тот же профиль с другим вариантом параметров.</summary>
@@ -238,10 +242,10 @@ public sealed class AppsViewModel : Observable
         var row = Profiles.FirstOrDefault(p => p.Id == id);
         if (row is null || Variants.Count < 2 || await Need() is not { } c) return;
         int next = (row.Info.Variant + 1) % Variants.Count;
-        if (!await Guard("Применяю…", () => c.AppProfileSetAsync(id, row.Info.Title, row.Info.TcpPorts, row.Info.UdpPorts, row.Info.Addresses, next))) return;
+        if (!await Guard(L.T("apps.busy.apply"), () => c.AppProfileSetAsync(id, row.Info.Title, row.Info.TcpPorts, row.Info.UdpPorts, row.Info.Addresses, next))) return;
         await AfterChange();
         await RefreshAsync();
-        Say($"Параметры профиля «{row.Title}»: {Variants[next].Title}.");
+        Say(L.T("apps.profile.variant_changed", new { title = row.Title, variant = Variants[next].Title }));
     }
 
     // ---------- простой режим ----------
@@ -272,8 +276,8 @@ public sealed class AppsViewModel : Observable
             return;
         }
         _recStarted = DateTime.UtcNow;
-        Status = "Идёт запись. Запустите игру и дойдите до того, что не работает.";
-        Detail = "Записываются только программы, запущенные после «Начать». Запись остановится сама через 5 минут.";
+        Status = L.T("apps.rec.status");
+        Detail = L.T("apps.rec.detail");
         RecText = "0:00";
         Step = AppsStep.Recording;
     }
@@ -292,7 +296,7 @@ public sealed class AppsViewModel : Observable
     {
         if (await Need() is not { } c) return;
         Step = AppsStep.Working;
-        Status = "Разбираю запись…"; Detail = "";
+        Status = L.T("apps.busy.parse"); Detail = "";
         RecordingResult rec;
         try { rec = await c.RecStopAsync(); }
         catch (Exception e) when (e is HelperException or HelperUnavailableException) { Failed(Texts.Friendly(e)); return; }
@@ -300,13 +304,13 @@ public sealed class AppsViewModel : Observable
         _draft = AppProfileBuilder.FromRecording(rec);
         if (_draft.IsEmpty)
         {
-            Status = "Не нашлось подходящих подключений.";
-            Detail = "Игра запускалась после «Начать»? Системные службы, браузеры и локальная сеть не учитываются." + Notes(_draft);
+            Status = L.T("apps.rec.nothing");
+            Detail = L.T("apps.rec.nothing_detail") + Notes(_draft);
             Step = AppsStep.Failed;   // тексты — до смены шага: окно и тесты читают их сразу по шагу
             return;
         }
         await RefreshAsync();   // варианты: как у текущей стратегии первым
-        if (Variants.Count == 0) { Failed("Нет готовых параметров для игр."); return; }
+        if (Variants.Count == 0) { Failed(L.T("apps.err.no_variants")); return; }
         await ApplyVariantAsync(_variant);
     }
 
@@ -319,28 +323,29 @@ public sealed class AppsViewModel : Observable
         _attempt++;
         _variant = variant;
         Step = AppsStep.Working;
-        Status = "Применяю параметры…";
+        Status = L.T("apps.busy.apply_settings");
         AppProfileInfo? info = null;
         var d = _draft;
-        bool ok = await Guard("Применяю параметры…", async () =>
+        bool ok = await Guard(L.T("apps.busy.apply_settings"), async () =>
             info = await c.AppProfileSetAsync(_profileId, d.Title, d.TcpPorts, d.UdpPorts, d.Addresses, variant));
-        if (!ok || info is null) { Status = "Не получилось применить."; Detail = "Подробности — в строке состояния внизу."; Step = AppsStep.Failed; return; }
+        if (!ok || info is null) { Status = L.T("apps.err.apply"); Detail = L.T("apps.err.apply_detail"); Step = AppsStep.Failed; return; }
         _profileId = info.Id;
         await AfterChange();
         await RefreshAsync();
-        Status = $"Применено: «{info.Title}» — {Summarize(info)}. Запустите игру ещё раз. Заработало?";
-        Detail = $"Попытка {_attempt} из {MaxAttempts} · параметры {info.VariantTitle}" + Notes(d);
+        Status = L.T("apps.check.applied", new { title = info.Title, summary = Summarize(info) });
+        Detail = L.T("apps.check.attempt", new { attempt = _attempt, max = MaxAttempts, variant = info.VariantTitle }) + Notes(d);
         Step = AppsStep.Check;
     }
 
     void Yes()
     {
         // Одна фраза вместо итога и жёлтой плашки; «Вернуть как было» — в списке профилей ниже.
-        Status = $"Профиль «{_draft?.Title ?? "игра"}» сохранён." + (OptimizationOff ? " Заработает, когда включите оптимизацию." : "");
+        var saved = L.T(OptimizationOff ? "apps.profile.saved_off" : "apps.profile.saved", new { title = _draft?.Title ?? L.T("apps.profile.default_title") });
+        Status = saved;
         Detail = "";
         Step = AppsStep.Done;
         // Строка состояния и карточка говорят одно: сохранён; заработает ли сейчас — зависит от оптимизации на Главной.
-        Say($"Профиль «{_draft?.Title ?? "игра"}» сохранён" + (OptimizationOff ? " — заработает, когда включите оптимизацию." : "."));
+        Say(saved);
     }
 
     /// <summary>«Нет» и «Стало хуже»: следующий вариант; попытки или варианты кончились — профиль убирается, как было.</summary>
@@ -358,14 +363,14 @@ public sealed class AppsViewModel : Observable
     {
         if (_profileId is not null && _helper.Reader is { } c)
         {
-            await Guard("Возвращаю как было…", async () => await c.AppProfileRemoveAsync(_profileId));
+            await Guard(L.T("apps.busy.revert"), async () => await c.AppProfileRemoveAsync(_profileId));
             _profileId = null;
             await AfterChange();
             await RefreshAsync();
         }
         if (_last is not null) LoadRows(_last);
-        Status = $"Не получилось подобрать за {_attempt} попыток. Настройки возвращены как были.";
-        Detail = "«Подробнее» откроет записанные подключения — можно выбрать нужные вручную.";
+        Status = L.Plural("apps.giveup", _attempt);
+        Detail = L.T("apps.giveup_detail");
         Step = AppsStep.Failed;
     }
 
@@ -394,13 +399,13 @@ public sealed class AppsViewModel : Observable
             if (!st.Active)
             {
                 // Помощник перезапустился или запись сорвалась — ничего не записано.
-                Failed("Запись прервалась — помощник перезапускался. Начните заново.");
+                Failed(L.T("apps.rec.interrupted"));
                 return;
             }
             secs = st.Seconds;
-            RecText = $"{(int)secs / 60}:{(int)secs % 60:00} · подключений: {st.Flows}";
+            RecText = L.T("apps.rec.progress", new { time = $"{(int)secs / 60}:{(int)secs % 60:00}", n = st.Flows });
             if (!st.Running)
-                Detail = "Запись остановилась по сроку (5 минут). Нажмите «Готово» — записанное сохранено.";
+                Detail = L.T("apps.rec.expired");
             else if (!st.UdpRecorded && st.Notes.Count > 0)
                 Detail = string.Join(" ", st.Notes);
         }
@@ -479,7 +484,7 @@ public sealed class AppsViewModel : Observable
 
     async Task AdvStartAsync()
     {
-        if (AdvByProcess && SelectedProcess is null) { Say("Выберите процесс в списке или запишите «всё, что запустится после»."); return; }
+        if (AdvByProcess && SelectedProcess is null) { Say(L.T("apps.err.pick_process")); return; }
         if (await Need() is not { } c) return;
         _simple = false;
         try
@@ -550,7 +555,7 @@ public sealed class AppsViewModel : Observable
             row.Changed += Recalc;
             Rows.Add(row);
         }
-        RecapNote = string.Join(" ", rec.Notes) + (rec.Truncated ? " Подключений слишком много — часть не записана." : "");
+        RecapNote = string.Join(" ", rec.Notes) + (rec.Truncated ? " " + L.T("apps.debug.too_many") : "");
         Raise(nameof(HasRows));
         Recalc();
         CommandManager.InvalidateRequerySuggested();
@@ -574,8 +579,8 @@ public sealed class AppsViewModel : Observable
         _advDraft = AppProfileBuilder.FromRecording(_last, [.. Rows.Where(r => r.IsChecked).Select(r => r.Flow)]);
         if (ProfileTitle.Length == 0 || _titleAuto) { _settingAuto = true; ProfileTitle = _advDraft.Title; _settingAuto = false; _titleAuto = true; }
         Preview = _advDraft.IsEmpty
-            ? "Отметьте подключения игры: нужен хотя бы один внешний адрес и порт."
-            : $"{(_advDraft.TcpPorts.Length > 0 ? "TCP " + _advDraft.TcpPorts + " · " : "")}{(_advDraft.UdpPorts.Length > 0 ? "UDP " + _advDraft.UdpPorts + " · " : "")}адресов: {_advDraft.Addresses.Count}";
+            ? L.T("apps.debug.preview_empty")
+            : Summarize(_advDraft.TcpPorts, _advDraft.UdpPorts, _advDraft.Addresses.Count);
         Raise(nameof(CanSave));
         CommandManager.InvalidateRequerySuggested();
     }
@@ -584,12 +589,12 @@ public sealed class AppsViewModel : Observable
     {
         if (_advDraft is not { IsEmpty: false } d || await Need() is not { } c) return;
         if (Variants.Count == 0) await RefreshAsync();
-        if (Variants.Count == 0) { Say("Нет готовых параметров для игр."); return; }
+        if (Variants.Count == 0) { Say(L.T("apps.err.no_variants")); return; }
         int v = Math.Clamp(SelectedVariant, 0, Variants.Count - 1);
         AppProfileInfo? info = null;
-        if (!await Guard("Сохраняю профиль…", async () => info = await c.AppProfileSetAsync(null, ProfileTitle.Trim(), d.TcpPorts, d.UdpPorts, d.Addresses, v))) return;
+        if (!await Guard(L.T("apps.busy.save_profile"), async () => info = await c.AppProfileSetAsync(null, ProfileTitle.Trim(), d.TcpPorts, d.UdpPorts, d.Addresses, v))) return;
         await AfterChange();
         await RefreshAsync();
-        Say($"Профиль «{info?.Title}» сохранён: {(info is null ? "" : Summarize(info))}.");
+        Say(L.T("apps.profile.saved_summary", new { title = info?.Title, summary = info is null ? "" : Summarize(info) }));
     }
 }

@@ -1,4 +1,5 @@
 using System.Net;
+using DpiShell.Core.Localization;
 using System.Text.RegularExpressions;
 
 namespace DpiShell.Core;
@@ -134,7 +135,7 @@ public static partial class AppProfiles
             var udp = s.Roles.GetValueOrDefault("game_udp") ?? WinwsArgs.GameUdpDefault;
             if (tcp is null || WinwsArgs.Problem("game_tcp", tcp) is not null || WinwsArgs.Problem("game_udp", udp) is not null) continue;
             if (!seen.Add((tcp, udp))) continue;
-            result.Add(new(result.Count, s.Id == currentId ? $"как у «{s.Title}» (сейчас выбрана)" : $"как у «{s.Title}»", tcp, udp));
+            result.Add(new(result.Count, L.T(s.Id == currentId ? "apps.core.variant_current" : "apps.core.variant", new { title = s.Title }), tcp, udp));
             if (result.Count >= MaxVariants) break;
         }
         return result;
@@ -167,9 +168,9 @@ public static class AppProfileBuilder
         var background = r.Flows.Where(f => !f.Fresh).Select(f => f.Address).ToHashSet();
         var d = new Dictionary<RecordedFlow, string?>();
         foreach (var f in r.Flows)
-            d[f] = !f.Fresh ? "процесс был до записи"
+            d[f] = !f.Fresh ? L.T("apps.core.reason.before_rec")
                 : FlowNoise.Reason(f, skipProcessNames: processMode)
-                  ?? (background.Contains(f.Address) ? "адрес был до игры" : null);
+                  ?? (background.Contains(f.Address) ? L.T("apps.core.reason.addr_before") : null);
         return d;
     }
 
@@ -184,23 +185,23 @@ public static class AppProfileBuilder
         var sorted = Sort(r);
         foreach (var f in r.Flows)
         {
-            if (selected is not null) { if (selected.Contains(f)) kept.Add(f); else Remove("снято вручную"); continue; }
+            if (selected is not null) { if (selected.Contains(f)) kept.Add(f); else Remove(L.T("apps.core.reason.manual")); continue; }
             if (sorted[f] is { } why) Remove(why); else kept.Add(f);
         }
         if (selected is not null)
         {
             // Ручной выбор тоже не пропускает локальную сеть и служебные порты: профиль на них не имеет смысла.
             var clean = kept.Where(f => FlowNoise.Reason(f, skipProcessNames: true) is null).ToList();
-            if (clean.Count < kept.Count) { removed["локальная сеть или служебный порт"] = kept.Count - clean.Count; kept = clean; }
+            if (clean.Count < kept.Count) { removed[L.T("apps.core.reason.local_port")] = kept.Count - clean.Count; kept = clean; }
         }
 
         var tcp = kept.Where(f => f.Proto == "tcp").Select(f => f.Port).ToList();
         var udp = kept.Where(f => f.Proto == "udp").Select(f => f.Port).ToList();
         var addresses = Addresses(kept, notes);
         var top = kept.GroupBy(f => f.Process).OrderByDescending(g => g.Count()).Select(g => g.Key).ToList();
-        string title = top.Count > 0 ? Path.GetFileNameWithoutExtension(top[0]) : "Программа";
+        string title = top.Count > 0 ? Path.GetFileNameWithoutExtension(top[0]) : L.T("apps.core.default_title");
         if (title.Length > AppProfiles.MaxTitle) title = title[..AppProfiles.MaxTitle];
-        if (!r.UdpRecorded) notes.Add("UDP не записан — профиль только для TCP.");
+        if (!r.UdpRecorded) notes.Add(L.T("apps.core.note.no_udp"));
         return new(title, AppProfiles.CompressPorts(tcp) ?? "", AppProfiles.CompressPorts(udp) ?? "", addresses, removed,
             top.Take(8).ToList(), kept.Count, notes);
     }
@@ -223,7 +224,7 @@ public static class AppProfileBuilder
         var entries = v.Entries.Where(e => Cidr.TryParse(e, false, out var c, out _, out _) && c.Len >= (c.V6 ? 48 : 16)).ToList();
         if (entries.Count > AppProfiles.MaxAddresses)
         {
-            notes.Add($"Адресов больше {AppProfiles.MaxAddresses}: оставлены {AppProfiles.MaxAddresses} — похоже, игра соединяется напрямую между игроками.");
+            notes.Add(L.T("apps.core.note.too_many_addr", new { max = AppProfiles.MaxAddresses }));
             entries = entries.Take(AppProfiles.MaxAddresses).ToList();
         }
         return entries;
