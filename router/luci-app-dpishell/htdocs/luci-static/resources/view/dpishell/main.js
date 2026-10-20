@@ -70,6 +70,7 @@ return view.extend({
 				api.btn(api.t('common.cancel'), function() { self.cancelPending(); }, 'cbi-button-neutral'),
 				E('span', { 'class': 'dps-muted' }, api.t('web.main.restart_note'))
 			]),
+			params: E('div'),
 			ts: E('div', { 'class': 'dps-line', 'style': 'display:none' }, [
 				api.t('web.main.ts_need'),
 				api.info(api.t('web.main.ts_info'))
@@ -110,6 +111,7 @@ return view.extend({
 			api.card(null, [
 				api.row([api.t('router.strategy'), api.info(api.t('web.main.strategy_info'))], this.el.strategy),
 				api.row(api.t('home.order.label'), this.el.order),
+				this.el.params,
 				this.el.apply
 			]),
 			api.siteCheckCard('main'),
@@ -213,6 +215,31 @@ return view.extend({
 			sel.appendChild(E('option', { value: it.id }, label));
 		});
 		sel.value = this.pending || this.status.strategy || '';
+		this.renderParams();
+	},
+
+	// «Параметры» выбранной стратегии — роли и аргументы nfqws (strategies.items[].roles), как на главной окна ПК (матрица п. 8).
+	renderParams: function() {
+		var self = this, id = this.pending || this.status.strategy;
+		var it = (this.strategies.items || []).filter(function(x) { return x.id == id; })[0];
+		var roles = it && it.roles ? Object.keys(it.roles) : [];
+		if (!roles.length) {
+			dom.content(this.el.params, []);
+			return;
+		}
+		var text = roles.map(function(r) { return r + ': ' + it.roles[r]; }).join('\n');
+		var msg = E('span', { 'class': 'dps-muted' });
+		var det = E('details', { 'class': 'dps-details', open: this.paramsOpen ? '' : null,
+			toggle: function() { self.paramsOpen = det.open; } }, [
+			E('summary', { title: api.t('home.params.tip') }, api.t('home.params.show')),
+			E('div', { 'class': 'dps-muted' }, api.t('router.strategy.roles')),
+			E('pre', { 'class': 'dps-pre' }, text),
+			E('div', { 'class': 'dps-actions' }, [api.btn(api.t('home.params.copy'), function() {
+				api.copy(text);
+				msg.textContent = api.t('router.strategy.copied', { name: it.title });
+			}), msg])
+		]);
+		dom.content(this.el.params, det);
 	},
 
 	setOrder: function(v) {
@@ -406,6 +433,7 @@ return view.extend({
 	pend: function(value) {
 		this.pending = (!value || value == (this.status.strategy || '')) ? null : value;
 		this.el.apply.style.display = this.pending ? '' : 'none';
+		this.renderParams();
 	},
 
 	cancelPending: function() {

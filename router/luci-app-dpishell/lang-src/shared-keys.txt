@@ -179,3 +179,8 @@ router.warn.ipv6
 router.wd.select_failed
 router.wd.select_found
 select.result.nothing_blocked
+home.params.show
+home.params.tip
+home.params.copy
+router.strategy.roles
+router.strategy.copied
