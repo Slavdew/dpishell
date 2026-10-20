@@ -137,7 +137,6 @@
   "settings.transfer.sum_none": "без изменений",
   "settings.transfer.skipped": "пропущен",
   "settings.transfer.more": "…и ещё {n}",
-  "settings.transfer.empty_pkg": "В пакете нечего загружать.",
   "settings.transfer.import_busy": "Загрузка настроек…",
   "settings.transfer.import_done": "Загружено: {list}.",
   "settings.transfer.import_nochange": "Изменений нет: всё из пакета уже есть.",

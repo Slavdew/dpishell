@@ -134,7 +134,6 @@
   "settings.transfer.sum_none": "no changes",
   "settings.transfer.skipped": "skipped",
   "settings.transfer.more": "…and {n} more",
-  "settings.transfer.empty_pkg": "Nothing to import in the package.",
   "settings.transfer.import_busy": "Importing settings…",
   "settings.transfer.import_done": "Imported: {list}.",
   "settings.transfer.import_nochange": "No changes: everything from the package is already there.",

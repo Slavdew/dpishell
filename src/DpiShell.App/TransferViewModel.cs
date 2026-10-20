@@ -387,7 +387,7 @@ public sealed class TransferViewModel : Observable
             Func<IReadOnlyList<string>> notesFn = () => notes.Count <= 4 ? notes : [.. notes.Take(3), L.T("settings.transfer.more", new { n = notes.Count - 3 })];
             bool changes = sp?.Changes ?? false;
             var row = new TransferSection(id, sp is null ? () => L.T("settings.transfer.sum_none") : () => Summary(sp), risky, warn, ps.Items,
-                enabled: true, notes: notesFn, linesLabel: risky);
+                enabled: true, notes: notesFn, linesLabel: id == SettingsSections.Hosts);
             // По умолчанию отмечено то, что что-то меняет; hosts и чужой DNS — только сознательно.
             row.IsChecked = was.TryGetValue(id, out var w) ? w : changes && !risky;
             row.Changed += () => Raise(nameof(CanImport));
@@ -425,6 +425,7 @@ public sealed class TransferViewModel : Observable
             foreach (var f in r.Sections.Where(s => !s.Ok))
                 lines.Add(L.T("settings.transfer.section_failed", new { title = SettingsSections.Title(f.Id), reason = f.Message ?? "" }));
             if (r.JournalId is not null) lines.Add(L.T("settings.transfer.undo_hint"));
+            if (lines.Count == 0) lines.Add(L.T("settings.transfer.import_nochange"));
             ImportResultText = string.Join(Environment.NewLine, lines);
             Say(done.Count > 0 ? L.T("settings.transfer.import_done", new { list = string.Join(", ", done) }) : "");
             await AfterImport();

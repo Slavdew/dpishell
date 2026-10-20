@@ -80,7 +80,7 @@
             <TextBlock Text="{Binding BusyText}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
         </DockPanel>
 
-        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="520">
+        <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <!-- ===== Выгрузка ===== -->
                 <StackPanel Visibility="{Binding IsExport, Converter={StaticResource Vis}}">

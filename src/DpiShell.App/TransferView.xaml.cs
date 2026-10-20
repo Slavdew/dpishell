@@ -17,7 +17,12 @@ public sealed class EmptyToVisible : IValueConverter
 /// <summary>Окно «Выгрузить / Загрузить настройки» (<see cref="TransferViewModel"/>).</summary>
 public partial class TransferView : UserControl
 {
-    public TransferView() => InitializeComponent();
+    public TransferView()
+    {
+        InitializeComponent();
+        // Окно по размеру содержимого, но не выше рабочей области: длинный список прокручивается.
+        Scroller.MaxHeight = Math.Max(300, SystemParameters.WorkArea.Height - 230);
+    }
 
     /// <summary>Окно поверх главного. DataContext окна — модель: значок щита (шаблон Shield) смотрит на NeedsHelper окна.</summary>
     public static Window Create(TransferViewModel model)
