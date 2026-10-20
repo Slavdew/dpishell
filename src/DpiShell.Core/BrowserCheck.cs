@@ -11,9 +11,11 @@ public interface IAddressResolver
 }
 
 /// <summary>DNS системы — путь браузера: hosts, затем DNS адаптера (провайдера, если не меняли).</summary>
-public sealed class SystemResolver : IAddressResolver
+public sealed class SystemResolver : IAddressResolver, IResolverSource
 {
     public static readonly SystemResolver Instance = new();
+
+    public string AddressSource => CheckDns.SourceSystem;
 
     public async Task<IPAddress[]> ResolveAsync(string host, CancellationToken ct = default)
     {

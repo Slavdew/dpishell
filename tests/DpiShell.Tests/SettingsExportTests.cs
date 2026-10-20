@@ -549,7 +549,7 @@ public sealed class SettingsExportTests : IDisposable
     [Fact]
     public void Protocol_command_is_exclusive_long_and_the_version_is_raised()
     {
-        Assert.Equal("1.11", HelperProtocol.Api);
+        Assert.Equal("1.12", HelperProtocol.Api);
         Assert.True(HelperCommands.Specs["settings_import"].Exclusive);
         Assert.True(HelperCommands.Specs["settings_import"].Long);
         Assert.False(HelperCommands.Specs["settings_export_read"].Exclusive);

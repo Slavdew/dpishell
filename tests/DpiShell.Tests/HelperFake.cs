@@ -80,6 +80,9 @@ public sealed class FakeHelperBackend : IHelperBackend
         if (TrackEnabled) StatusValue = StatusValue with { Enabled = false, Active = false, Service = SvcState.Stopped };
     }
     public void SetRunMode(bool service) => Call("set_run_mode " + service);
+    /// <summary>Откуда подбор берёт адреса (API 1.12): последнее присланное окном значение.</summary>
+    public string CheckDnsMode { get; private set; } = DpiShell.Core.CheckDns.Secure;
+    public void SetCheckDns(string mode) => CheckDnsMode = mode;
 
     async Task<bool> HangAsync(Action report, CancellationToken ct)
     {

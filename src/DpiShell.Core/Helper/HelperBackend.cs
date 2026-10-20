@@ -14,6 +14,8 @@ public interface IHelperBackend : IHelperCatalog
     void Enable(string strategyId);
     void Disable();
     void SetRunMode(bool service);
+    /// <summary>Откуда подбор и проверки берут адреса сайтов (API 1.12, <see cref="CheckDns"/>): ставится перед командой подбора, если окно её прислало.</summary>
+    void SetCheckDns(string mode);
     Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct);
     Task<SearchReport> SearchAsync(string? baseId, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct);
     void SetIpsetMode(IpsetMode mode);
@@ -286,6 +288,8 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
         WatchdogPolicy.Applied(shell.State, strategyId);
         shell.SaveState();
     }
+
+    public void SetCheckDns(string mode) => shell.CheckDnsMode = CheckDns.Normalize(mode);
 
     public async Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct)
     {

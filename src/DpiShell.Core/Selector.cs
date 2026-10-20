@@ -40,6 +40,9 @@ public sealed record SelectionReport(
     IReadOnlyList<StrategyScore> Scores,
     bool Cancelled)
 {
+    /// <summary>Откуда проверка брала адреса сайтов (<see cref="CheckDns"/>): защищённый DNS, система по выбору или система, потому что DoH не ответил. null — не известно.</summary>
+    public string? AddressSource { get; init; }
+
     public StrategyScore? Best => Scores.Where(s => s.Error is null && s.GroupsPassed > 0)
         .OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds).FirstOrDefault();
 

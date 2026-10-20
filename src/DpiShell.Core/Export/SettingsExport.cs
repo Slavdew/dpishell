@@ -30,11 +30,18 @@ sealed class AppFile
     public string? UdpDesync { get; set; }
 }
 
+sealed class ModeFile
+{
+    public string? Mode { get; set; }
+}
+
 sealed class DnsFile
 {
     public string? Choice { get; set; }
     public List<string>? Ips { get; set; }
     public string? Doh { get; set; }
+    /// <summary>Адреса для поиска сервера DoH (пишет роутер); на ПК проверяются и не используются, в выгрузку ПК не попадают.</summary>
+    public List<string>? Bootstrap { get; set; }
 }
 
 /// <summary>Результат выгрузки: куда записано, какие разделы и что пришлось пропустить.</summary>
@@ -150,6 +157,33 @@ public static class SettingsExport
         };
         WriteText(Path.Combine(folder, SettingsSections.ManifestFile), JsonSerializer.Serialize(manifest, FileJson) + "\n");
         return new(folder, manifest.Sections, skipped);
+    }
+
+    /// <summary>Имя папки пакета (и папки внутри архива): dpishell-settings-ГГГГ-ММ-ДД.</summary>
+    public static string PackageName(DateTime? created = null) => "dpishell-settings-" + (created ?? DateTime.Now).ToString("yyyy-MM-dd");
+
+    /// <summary>
+    /// То же, что <see cref="Write"/>, но одним архивом .zip: внутри папка <see cref="PackageName"/> (так делает и роутер). Пишется во временную папку,
+    /// архив появляется целиком или не появляется; существующий файл заменяется (подтверждение — дело окна).
+    /// </summary>
+    public static ExportResult WriteZip(string zipPath, SettingsState state, IEnumerable<string> sections, ExportMeta? meta = null)
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), "dpishell-export-" + Guid.NewGuid().ToString("N"));
+        var part = zipPath + ".part";
+        try
+        {
+            var folder = Path.Combine(tmp, PackageName(meta?.Created?.ToLocalTime()));
+            var r = Write(folder, state, sections, meta);
+            if (File.Exists(part)) File.Delete(part);
+            System.IO.Compression.ZipFile.CreateFromDirectory(folder, part, System.IO.Compression.CompressionLevel.Optimal, includeBaseDirectory: true);
+            File.Move(part, zipPath, overwrite: true);
+            return new(zipPath, r.Sections, r.Skipped);
+        }
+        finally
+        {
+            try { if (File.Exists(part)) File.Delete(part); } catch (IOException) { }
+            try { if (Directory.Exists(tmp)) Directory.Delete(tmp, true); } catch (IOException) { }
+        }
     }
 
     static HashSet<string> KnownEntries() =>

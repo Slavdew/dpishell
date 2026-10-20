@@ -352,11 +352,13 @@ public sealed class Shell
         bool resolved = false;
         var result = await WithServicePausedAsync(async () =>
         {
-            using var doh = new DohResolver();
+            var doh = NewCheckResolver();
+            using var _ = doh as IDisposable;
             // Строки «auto» продвинутого режима — свои группы целей (по адресу первого сайта): вне оценки стратегии, по ним выбирается лучшая для строки.
             var withRows = (groups ?? SelectedGroups()).Concat(AdvancedSites.Groups(State.Advanced)).ToList();
             var report = await new Selector(Paths, NewProbe(doh)).RunAsync(
                 StrategyStats.Order(AllStrategies, StrategyStats.LoadDetailed(Paths)), WithControl(withRows, DefaultTargets), quick, progress, ct, mix: true);
+            report = report with { AddressSource = AddressSourceOf(doh) };
             // Смешанная, которая оказалась лучше одиночных, — в файл своих стратегий (окно применяет её по id, как любую лучшую).
             foreach (var m in report.Scores.Where(x => x.Strategy.Source == MixBuilder.Source && x.Error is null))
                 UserStrategies.AddMix(Paths, m.Strategy, State.StrategyId);
@@ -384,8 +386,10 @@ public sealed class Shell
         WithServicePausedAsync(async () =>
         {
             var strategy = FindStrategy(strategyId) ?? throw new InvalidOperationException(L.T("core.shell.no_such_strategy"));
-            using var doh = new DohResolver();
+            var doh = NewCheckResolver();
+            using var _ = doh as IDisposable;
             var report = await new Selector(Paths, NewProbe(doh)).RunAsync([strategy], WithControl(groups ?? SelectedGroups(), DefaultTargets), quick: false, progress, ct);
+            report = report with { AddressSource = AddressSourceOf(doh) };
             ResultStore.Save(Paths, report);
             return report;
         });
@@ -396,8 +400,10 @@ public sealed class Shell
         WithServicePausedAsync(async () =>
         {
             var baseStrategy = FindStrategy(baseId ?? State.StrategyId ?? "alt9") ?? Catalog.Strategies[0];
-            using var doh = new DohResolver();
+            var doh = NewCheckResolver();
+            using var _ = doh as IDisposable;
             var report = await new StrategySearch(Paths, () => NewProbe(doh)).RunAsync(baseStrategy, WithControl(groups ?? SelectedGroups(), DefaultTargets), progress, ct);
+            if (report.Final is { } f0) report = report with { Final = f0 with { AddressSource = AddressSourceOf(doh) } };
             if (report.Final is { } f)
             {
                 ResultStore.Save(Paths, f);
@@ -441,14 +447,34 @@ public sealed class Shell
     /// </summary>
     public async Task<IReadOnlyList<TargetVerdict>> CheckGroupsAsync(IReadOnlyList<TargetGroup> groups, CancellationToken ct = default)
     {
-        using var doh = new DohResolver();
+        var doh = NewCheckResolver();
+        using var _ = doh as IDisposable;
         var verdicts = await new Selector(Paths, NewProbe(doh)).CheckGroupsAsync(groups, ct);
-        return await BrowserCheck.AddAsync(verdicts, SystemResolver.Instance, doh,
-            (t, r, token) => new HttpProbe { Resolver = r }.CheckAsync(t, HttpProbe.DefaultTls, token), BrowserCheck.SystemHosts(), ct);
+        // «Как у системы»: проверка и так шла по пути браузера — сравнивать нечего, DoH не трогаем.
+        var result = doh is DohResolver d
+            ? await BrowserCheck.AddAsync(verdicts, SystemResolver.Instance, d,
+                (t, r, token) => new HttpProbe { Resolver = r }.CheckAsync(t, HttpProbe.DefaultTls, token), BrowserCheck.SystemHosts(), ct)
+            : verdicts;
+        LastAddressSource = AddressSourceOf(doh);
+        return result;
     }
 
-    /// <summary>Проверка резолвит цели через DoH: результат зависит от DPI, а не от DNS системы. Кэш DoH живёт один прогон.</summary>
-    public static HttpProbe NewProbe(DohResolver doh) => new() { Resolver = doh };
+    /// <summary>
+    /// Откуда адреса для проверок (<see cref="CheckDns"/>): <see cref="CheckDns.Secure"/> (по умолчанию) или <see cref="CheckDns.System"/>.
+    /// Окно ставит из своих настроек, помощник — из аргумента команды подбора.
+    /// </summary>
+    public string CheckDnsMode { get; set; } = CheckDns.Secure;
+
+    /// <summary>Откуда взяла адреса последняя проверка «Проверить сейчас» (<see cref="IResolverSource.AddressSource"/>); null — проверок ещё не было.</summary>
+    public string? LastAddressSource { get; private set; }
+
+    /// <summary>Резолвер проверок по <see cref="CheckDnsMode"/>. Защищённый DNS не отвечает — проверка сама берёт адрес у системы (<see cref="HttpProbe"/>), пометка — в <see cref="AddressSourceOf"/>.</summary>
+    IAddressResolver NewCheckResolver() => CheckDns.IsSystem(CheckDnsMode) ? SystemResolver.Instance : new DohResolver();
+
+    static string? AddressSourceOf(IAddressResolver r) => (r as IResolverSource)?.AddressSource;
+
+    /// <summary>Проверка резолвит цели через DoH (или как у системы — по настройке): результат зависит от DPI, а не от DNS системы. Кэш DoH живёт один прогон.</summary>
+    public static HttpProbe NewProbe(IAddressResolver resolver) => new() { Resolver = resolver };
 
     /// <summary>Подменяет ли DNS системы адреса проверяемых сайтов (для предупреждения и анализа DNS).</summary>
     public async Task<IReadOnlyList<DnsComparison>> CheckDnsAsync(CancellationToken ct = default)

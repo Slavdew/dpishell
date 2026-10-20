@@ -9,8 +9,20 @@ namespace DpiShell.Core;
 /// Резолв через DNS-over-HTTPS по IP-адресу сервера (сертификаты dns.google и 1.1.1.1 выписаны и на IP).
 /// Нужен, чтобы проверка стратегий не зависела от DNS системы: провайдер подменяет даже ответы 8.8.8.8 по UDP.
 /// </summary>
-public sealed class DohResolver : IAddressResolver, IDisposable
+public sealed class DohResolver : IAddressResolver, IResolverSource, IDisposable
 {
+    /// <summary>Сколько имён подряд-вообще не нашли ни одного отвечающего DoH-сервера, чтобы считать защищённый DNS недоступным.</summary>
+    const int GiveUpAfter = 3;
+    int _failedHosts;
+
+    /// <summary>Хоть для одного имени ни один DoH-сервер не ответил: проверка взяла его адрес у DNS системы (<see cref="Probe"/> переходит на него сама).</summary>
+    public bool FellBack => Volatile.Read(ref _failedHosts) > 0;
+
+    /// <summary>Защищённый DNS не отвечает (три имени без единого ответа): дальше не ждём таймауты, адреса берёт система.</summary>
+    public bool Unreachable => Volatile.Read(ref _failedHosts) >= GiveUpAfter;
+
+    public string AddressSource => FellBack ? CheckDns.SourceFallback : CheckDns.SourceDoh;
+
     static readonly string[] Endpoints =
     [
         "https://8.8.8.8/resolve?name={0}&type=A",
@@ -27,6 +39,7 @@ public sealed class DohResolver : IAddressResolver, IDisposable
     /// <summary>Пустой массив — ни один DoH-сервер не ответил или имени нет.</summary>
     async Task<IPAddress[]> QueryAsync(string host, CancellationToken ct)
     {
+        if (Unreachable) return [];
         foreach (var ep in Endpoints)
         {
             for (int attempt = 0; attempt < 2; attempt++)
@@ -42,6 +55,7 @@ public sealed class DohResolver : IAddressResolver, IDisposable
                 catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException && !ct.IsCancellationRequested) { }
             }
         }
+        Interlocked.Increment(ref _failedHosts);
         return [];
     }
 

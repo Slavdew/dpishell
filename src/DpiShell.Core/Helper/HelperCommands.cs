@@ -104,14 +104,17 @@ public static partial class HelperCommands
     /// <summary>Содержимое IP-списка в символах: предел валидатора (4 МБ) — больше и он не примет.</summary>
     public const int MaxContentChars = (int)IpsetValidator.MaxBytes;
 
+    /// <summary>Откуда подбор берёт адреса сайтов (API 1.12, <see cref="CheckDns"/>); не указан — защищённый DNS.</summary>
+    static readonly ArgSpec DnsArg = new("dns", ArgKind.Choice, Choices: [CheckDns.Secure, CheckDns.System]);
+
     static readonly CommandSpec[] All =
     [
         new("status", false, false),
         new("enable", true, false, new ArgSpec("strategy", ArgKind.StrategyId, Required: true)),
         new("disable", true, false),
         new("set_run_mode", true, false, new ArgSpec("service", ArgKind.Bool, Required: true)),
-        new("select", true, true, new ArgSpec("quick", ArgKind.Bool), new ArgSpec("groups", ArgKind.GroupIds)),
-        new("search", true, true, new ArgSpec("base", ArgKind.StrategyId), new ArgSpec("groups", ArgKind.GroupIds)),
+        new("select", true, true, new ArgSpec("quick", ArgKind.Bool), new ArgSpec("groups", ArgKind.GroupIds), DnsArg),
+        new("search", true, true, new ArgSpec("base", ArgKind.StrategyId), new ArgSpec("groups", ArgKind.GroupIds), DnsArg),
         new("cancel", false, false),
         new("ipset_mode", true, false, new ArgSpec("mode", ArgKind.Choice, Required: true, Choices: ["off", "list"])),
         new("all_addresses_start", true, false),
@@ -170,7 +173,7 @@ public static partial class HelperCommands
             new ArgSpec("source", ArgKind.Choice, Required: true, Choices: ["user", "pasted"])),
         new("strategy_delete", true, false, new ArgSpec("strategy", ArgKind.StrategyId, Required: true)),
         // Проверка сайтов только для одной стратегии (вставленной): тот же Selector, один кандидат.
-        new("strategy_check", true, true, new ArgSpec("strategy", ArgKind.StrategyId, Required: true), new ArgSpec("groups", ArgKind.GroupIds)),
+        new("strategy_check", true, true, new ArgSpec("strategy", ArgKind.StrategyId, Required: true), new ArgSpec("groups", ArgKind.GroupIds), DnsArg),
         // Подключения программ (ТЗ 13). Запись — только чтение: «процесс → удалённый адрес:порт/протокол» на срок до 5 минут, окну отдаётся итог.
         // Профиль программы — только порты, адреса и номер варианта из готовых стратегий; командной строки и путей команды не принимают.
         new("rec_start", true, false,

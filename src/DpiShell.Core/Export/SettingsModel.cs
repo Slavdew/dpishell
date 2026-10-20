@@ -23,6 +23,17 @@ public static class SettingsSections
 
     public static bool IsKnown(string? id) => id is not null && All.Contains(id);
 
+    /// <summary>
+    /// Имена разделов, которые бывают только в чужих пакетах (роутер, docs/settings-export.md «Расширения»): <c>optimize</c> — на ПК это «Свои сайты»,
+    /// <c>mode</c> — режим «все сайты / только из списков» роутера, на ПК такого нет. Окно выгрузки их не знает; в manifest.json при чтении они допустимы.
+    /// </summary>
+    public const string Optimize = "optimize", Mode = "mode";
+
+    /// <summary>Раздел, который может значиться в manifest.json пакета: свои и «чужие» (<see cref="Optimize"/>, <see cref="Mode"/>).</summary>
+    public static bool IsPackageSection(string? id) => IsKnown(id) || id is Optimize or Mode;
+
+    public const string OptimizeFile = "optimize.txt", SitesImportantFile = "sites-important.txt", ModeFile = "mode.json";
+
     /// <summary>Порядок применения: стратегии раньше строк «сайты → стратегия», профили — после стратегий (варианты параметров), hosts и DNS — в конце.</summary>
     public static readonly IReadOnlyList<string> ApplyOrder = [Sites, Exclude, Subnets, Strategies, Apps, Advanced, Hosts, Dns];
 
@@ -65,6 +76,8 @@ public static class SettingsSections
         Subnets => L.T("export.section.subnets"),
         Hosts => L.T("export.section.hosts"),
         Dns => L.T("export.section.dns"),
+        Optimize => L.T("export.section.optimize"),
+        Mode => L.T("export.section.mode"),
         _ => section,
     };
 

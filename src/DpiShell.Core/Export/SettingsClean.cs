@@ -235,6 +235,8 @@ public static partial class SettingsClean
     public static DnsChoice? Dns(DnsChoice raw, List<SectionProblem> problems)
     {
         const string sec = SettingsSections.Dns, file = SettingsSections.DnsFile;
+        // Роутер называет «как у провайдера» provider, а «как задано по умолчанию» — default; на ПК это «Автоматически» (auto).
+        if (raw.Choice is "provider" or "default") raw = new() { Choice = DnsPresets.Auto, Ips = raw.Ips, Doh = raw.Doh };
         if (raw.Choice == DnsPresets.Custom)
         {
             if (raw.Ips is not { Count: > 0 and <= DnsValues.MaxServers }) { problems.Add(new(sec, file, L.T("export.dns.bad_ips", new { max = DnsValues.MaxServers }))); return null; }

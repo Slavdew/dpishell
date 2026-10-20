@@ -16,7 +16,8 @@ public sealed record PackageSection(string Id, string Title, int Count, bool Ris
 /// </summary>
 public sealed class ParsedPackage
 {
-    public string Folder { get; init; } = "";
+    /// <summary>Откуда прочитано: папка или файл .zip.</summary>
+    public string Folder { get; set; } = "";
     public SettingsManifest? Manifest { get; set; }
     public string? Fatal { get; set; }
     public ImportData Data { get; } = new();
@@ -61,14 +62,15 @@ public static class SettingsImport
         m.Created = SettingsExport.CleanLine(m.Created, 40) ?? "";
         m.Provider = SettingsExport.CleanLine(m.Provider, SettingsSections.MaxProvider);
         m.Note = SettingsExport.CleanLine(m.Note, SettingsSections.MaxNote);
-        m.Sections = [.. (m.Sections ?? []).Where(SettingsSections.IsKnown).Distinct()];
+        m.Sections = [.. (m.Sections ?? []).Where(SettingsSections.IsPackageSection).Distinct()];
         pkg.Manifest = m;
 
-        foreach (var id in SettingsSections.All.Where(m.Sections.Contains))
+        // «optimize» из пакета роутера на ПК — те же «Свои сайты»: один раздел из sites.txt и optimize.txt.
+        foreach (var id in SettingsSections.All.Where(id => m.Sections.Contains(id) || id == SettingsSections.Sites && m.Sections.Contains(SettingsSections.Optimize)))
         {
             var problems = new List<SectionProblem>();
             string? skipped = null;
-            try { skipped = ReadSection(folder, id, pkg.Data, problems); }
+            try { skipped = ReadSection(folder, id, pkg.Data, problems, m.Sections); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             { skipped = L.T("export.file.unreadable", new { reason = e.Message }); }
             pkg.Problems.AddRange(problems);
@@ -78,8 +80,20 @@ public static class SettingsImport
             pkg.Sections.Add(new(id, SettingsSections.Title(id), skipped is null ? pkg.Data.Count(id) : 0, SettingsSections.IsRisky(id, pkg.Data.Dns),
                 skipped, skipped is null ? SettingsExport.Describe(pkg.Data, id) : []));
         }
+        // Режим роутера («все сайты / только из списков»): на ПК не применяется — строка с причиной, как «игры» и hosts в окне роутера.
+        if (m.Sections.Contains(SettingsSections.Mode))
+        {
+            string reason;
+            try { reason = ReadMode(folder); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { reason = L.T("export.file.unreadable", new { reason = e.Message }); }
+            pkg.Sections.Add(new(SettingsSections.Mode, SettingsSections.Title(SettingsSections.Mode), 0, false, reason, []));
+        }
         return pkg;
     }
+
+    /// <summary>Прочитать выбранное человеком: папку или архив .zip (<see cref="SettingsZip"/>).</summary>
+    public static ParsedPackage ReadPackage(string path) =>
+        File.Exists(path) ? SettingsZip.Read(path) : Read(path);
 
     /// <summary>Что будет при загрузке выбранных разделов (<see cref="SettingsPlanner.Plan"/>).</summary>
     public static ImportPlan Plan(ParsedPackage package, SettingsState current, IEnumerable<string> sections, ImportMode mode) =>
@@ -105,21 +119,40 @@ public static class SettingsImport
     }
 
     /// <summary>Прочитать раздел в <paramref name="d"/>. Возврат — причина, по которой раздел пропущен целиком (null — прочитан, возможно с замечаниями).</summary>
-    static string? ReadSection(string folder, string id, ImportData d, List<SectionProblem> problems)
+    static string? ReadSection(string folder, string id, ImportData d, List<SectionProblem> problems, IReadOnlyCollection<string> listed)
     {
         switch (id)
         {
             case SettingsSections.Sites:
             {
-                var lines = ReadLinesFile(folder, SettingsSections.SitesFile, SettingsSections.SitesBytes, SettingsSections.MaxSites, out var why);
-                if (lines is null) return why;
-                d.Sites = SettingsClean.Domains(lines, SettingsSections.MaxSites, id, SettingsSections.SitesFile, problems);
+                // sites.txt и (от роутера) optimize.txt — оба «Свои сайты»; sites-important.txt («важные» для проверок роутера) на ПК не нужен и не читается.
+                var files = new List<(string File, bool Wanted)>
+                    { (SettingsSections.SitesFile, listed.Contains(SettingsSections.Sites)), (SettingsSections.OptimizeFile, listed.Contains(SettingsSections.Optimize)) };
+                var all = new List<string>();
+                string? firstWhy = null;
+                bool any = false;
+                foreach (var (file, wanted) in files.Where(f => f.Wanted))
+                {
+                    var lines = ReadLinesFile(folder, file, SettingsSections.SitesBytes, SettingsSections.MaxSites, out var why);
+                    if (lines is null) { firstWhy ??= why; if (files.Count(f => f.Wanted) > 1) problems.Add(new(id, file, why!)); continue; }
+                    any = true;
+                    foreach (var x in SettingsClean.Domains(lines, SettingsSections.MaxSites, id, file, problems))
+                    {
+                        if (all.Contains(x)) continue;
+                        if (all.Count >= SettingsSections.MaxSites) { problems.Add(new(id, file, L.T("export.item.limit", new { max = SettingsSections.MaxSites }))); break; }
+                        all.Add(x);
+                    }
+                }
+                if (!any) return firstWhy;
+                d.Sites = all;
                 return null;
             }
             case SettingsSections.Exclude:
             {
                 var lines = ReadLinesFile(folder, SettingsSections.ExcludeFile, SettingsSections.ExcludeBytes, SettingsSections.MaxExclude, out var why);
                 if (lines is null) return why;
+                // «^домен» у роутера — «только сам домен, без поддоменов»; на ПК исключение действует на домен как есть, «^» снимается.
+                lines = [.. lines.Select(l => l.Text.StartsWith('^') ? (l.Line, l.Text[1..]) : l)];
                 d.Exclude = SettingsClean.Domains(lines, SettingsSections.MaxExclude, id, SettingsSections.ExcludeFile, problems);
                 return null;
             }
@@ -233,8 +266,23 @@ public static class SettingsImport
         try { f = JsonSerializer.Deserialize<DnsFile>(text, StrictFileJson); }
         catch (JsonException) { f = null; }
         if (f?.Choice is null) return L.T("export.file.bad_json");
+        if (f.Bootstrap is not null && (f.Choice != DnsPresets.Custom || f.Bootstrap.Count > DnsValues.MaxServers || f.Bootstrap.Any(a => DnsValues.NormalizeIp(a) is null)))
+            return L.T("export.dns.bad_bootstrap");
         d.Dns = SettingsClean.Dns(new() { Choice = f.Choice, Ips = f.Ips, Doh = f.Doh }, problems);
         return d.Dns is null ? problems.LastOrDefault(p => p.Section == SettingsSections.Dns)?.Reason : null;
+    }
+
+    /// <summary>mode.json роутера ({"mode":"all"|"lists"}): проверяется, но на ПК такого режима нет — раздел показывается пропущенным.</summary>
+    static string ReadMode(string folder)
+    {
+        const string file = SettingsSections.ModeFile;
+        var text = ReadText(Path.Combine(folder, file), file, 1024, 20, out var why);
+        if (text is null) return why ?? L.T("export.file.missing", new { file });
+        ModeFile? m;
+        try { m = JsonSerializer.Deserialize<ModeFile>(text, StrictFileJson); }
+        catch (JsonException) { m = null; }
+        if (m?.Mode is not ("all" or "lists")) return L.T("export.file.bad_json");
+        return L.T("export.mode.router_only");
     }
 
     /// <summary>Файлы папки раздела: только обычные файлы с нужным расширением и безопасным именем, не больше <paramref name="max"/>; остальное — замечания.</summary>
