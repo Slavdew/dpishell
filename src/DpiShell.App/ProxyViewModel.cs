@@ -66,10 +66,13 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
 
     // ---------- что стоит сейчас ----------
 
-    string _userLine = "", _machineLine = "", _winHttpLine = "";
-    public string UserLine { get => _userLine; private set => Set(ref _userLine, value); }
-    public string MachineLine { get => _machineLine; private set => Set(ref _machineLine, value); }
-    public string WinHttpLine { get => _winHttpLine; private set => Set(ref _winHttpLine, value); }
+    // Строки состояния собираются из прочитанного (данные) при показе — на языке окна.
+    string? _readError;
+    public string UserLine => _readError ?? (_now is { } n ? Line(n.User, n.UserAutoDetect) : "");
+    public string MachineLine => _now is { } n ? Line(n.Machine, n.MachineAutoDetect) : "";
+    public string WinHttpLine => _now is not { } n ? "" : n.WinHttp.IsDirect ? L.T("proxy.winhttp.direct") : n.WinHttp.Bypass is { } b ? L.T("proxy.winhttp.bypass", new { proxy = n.WinHttp.Proxy, bypass = b }) : n.WinHttp.Proxy ?? "";
+
+    protected override void OnLanguageChanged() { _checkText.Retranslate(); if (_now is { } n) Show(n); }
     public bool HasNotes => Notes.Count > 0;
     public bool ListEmpty => Items.Count == 0;
 
@@ -90,7 +93,9 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
         try { now = await Task.Run(() => Manager().Overview()); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            UserLine = L.T("proxy.read_failed", new { error = Texts.Friendly(e) });
+            var error = e;
+            _readError = L.T("proxy.read_failed", new { error = Texts.Friendly(error) });
+            Raise(nameof(UserLine));
             return;
         }
         if (helper.Reader is { } c && c.Compat.Supports("proxy_status"))
@@ -106,9 +111,8 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
     public void Show(ProxyOverview now)
     {
         _now = now;
-        UserLine = Line(now.User, now.UserAutoDetect);
-        MachineLine = Line(now.Machine, now.MachineAutoDetect);
-        WinHttpLine = now.WinHttp.IsDirect ? L.T("proxy.winhttp.direct") : now.WinHttp.Bypass is { } b ? L.T("proxy.winhttp.bypass", new { proxy = now.WinHttp.Proxy, bypass = b }) : now.WinHttp.Proxy ?? "";
+        _readError = null;
+        Raise(nameof(UserLine)); Raise(nameof(MachineLine)); Raise(nameof(WinHttpLine));
         Notes.Clear();
         if (now.MachineWide)
             Notes.Add(L.T("proxy.note.machine_wide"));
@@ -266,8 +270,9 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
 
     bool _checking;
     public bool Checking { get => _checking; private set { if (Set(ref _checking, value)) CommandManager.InvalidateRequerySuggested(); } }
-    string _checkText = "";
-    public string CheckText { get => _checkText; private set { if (Set(ref _checkText, value)) Raise(nameof(HasCheck)); } }
+    readonly LiveText _checkText = new();
+    public string CheckText { get => _checkText.Value; private set { _checkText.Set(value); Raise(); Raise(nameof(HasCheck)); } }
+    void CheckTextIs(Func<string> build) { _checkText.Set(build); Raise(nameof(CheckText)); Raise(nameof(HasCheck)); }
     public bool HasCheck => CheckText.Length > 0;
 
     public ICommand CheckCmd => _check ??= RelayCommand.Async(CheckAsync, () => Selected is not null && !Checking);
@@ -277,14 +282,15 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
     {
         if (Selected is not { } row) return;
         Checking = true;
-        CheckText = L.T("proxy.check.progress");
+        CheckTextIs(() => L.T("proxy.check.progress"));
         try
         {
             var r = await CheckProxy(row.Entry.Server, CancellationToken.None);
-            CheckText = L.T("proxy.check.result", new { name = row.Name, summary = r.Summary })
+            var name = row.Name;
+            CheckTextIs(() => L.T("proxy.check.result", new { name, summary = L.Relocalize(r.Summary) })
                 + (r.Probes.Count > 0 && !r.Ok
-                    ? "\n" + string.Join("\n", r.Probes.Select(p => L.T("proxy.check.probe", new { target = p.Target, result = p.Ok ? L.T("proxy.ms", new { ms = p.Ms }) : p.Error })))
-                    : "");
+                    ? "\n" + string.Join("\n", r.Probes.Select(p => L.T("proxy.check.probe", new { target = p.Target, result = p.Ok ? L.T("proxy.ms", new { ms = p.Ms }) : L.Relocalize(p.Error) })))
+                    : ""));
         }
         finally { Checking = false; }
     }

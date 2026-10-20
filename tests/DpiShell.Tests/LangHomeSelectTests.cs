@@ -118,7 +118,7 @@ public sealed class LangHomeSelectTests : IDisposable
             shot(w, $"select-start-{lang}");
 
             // Итог подбора: лучшая не открывает Discord — есть что предложить («Искать глубже»).
-            var scores = strategies.Select((s, i) => Score(s, i != 0 && i != 2)).Append(Score(strategies[0], true) with { Error = "winws: не запустился" }).ToList();
+            var scores = strategies.Select((s, i) => Score(s, i != 0 && i != 2)).Append(Score(strategies[0], true) with { Error = "winws завершился: boom", ErrorCode = StrategyScore.ExitedCode, ErrorArg = "boom" }).ToList();
             var report = new SelectionReport([], groups, scores, false);
             typeof(MainViewModel).GetMethod("ShowReport", Priv)!.Invoke(vm, [report]);
             Pump();

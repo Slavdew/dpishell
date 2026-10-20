@@ -178,6 +178,8 @@ public sealed class NetViewModel : Observable
         ? L.T("apps.ipset.list_info", new { lines = m.Lines.ToString("N0", L.Culture), date = L.Date((m.Updated ?? m.InstalledAt).ToLocalTime()), share = (m.Ipv4Share * 100).ToString("0.#", L.Culture) })
         : L.T("apps.ipset.list_missing");
 
+    protected override void OnLanguageChanged() { Retranslate(ref _updateNote); Retranslate(ref _userMessage); }
+
     string _updateNote = "";
     /// <summary>Итог последнего обновления: что не вышло и когда пробовали.</summary>
     public string UpdateNote { get => _updateNote; private set { if (Set(ref _updateNote, value)) Raise(nameof(HasUpdateNote)); } }

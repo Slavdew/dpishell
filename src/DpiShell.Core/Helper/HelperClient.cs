@@ -143,7 +143,7 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
         if (!IsConnected) throw new HelperUnavailableException(HelperUnavailableReason.Disconnected);
         if (!Compat.Allows(cmd)) throw new HelperException(HelperErrors.Incompatible, Compat.Message ?? HelperErrors.Text(HelperErrors.Incompatible));
         long id = Interlocked.Increment(ref _nextId);
-        var pending = new Pending(progress);
+        var pending = new Pending(progress) { Cmd = cmd };
         _pending[id] = pending;
         var request = new JsonObject { ["id"] = id, ["cmd"] = cmd };
         if (args is not null) request["args"] = args as JsonNode ?? JsonSerializer.SerializeToNode(args, args.GetType(), HelperProtocol.Json);
@@ -211,6 +211,7 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
                 catch (JsonException) { continue; }
                 if (!msg.TryGetProperty("id", out var idEl) || !idEl.TryGetInt64(out var id)) continue;
                 if (!_pending.TryGetValue(id, out var p)) continue;
+                msg = Localized(msg, p.Cmd);
                 if (msg.TryGetProperty("progress", out var prog))
                 {
                     try { p.Progress?.Report(prog); } catch { }
@@ -236,7 +237,7 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
         if (reply.TryGetProperty("error", out var err))
         {
             var code = err.TryGetProperty("code", out var c) ? c.GetString() ?? HelperErrors.Failed : HelperErrors.Failed;
-            var message = err.TryGetProperty("message", out var m) ? m.GetString() ?? HelperErrors.Text(code) : HelperErrors.Text(code);
+            var message = L.FromRu(err.TryGetProperty("message", out var m) ? m.GetString() ?? HelperErrors.Text(code) : HelperErrors.Text(code));
             JsonElement? details = err.TryGetProperty("details", out var d) ? d.Clone() : null;
             return new HelperException(code, message, details);
         }
@@ -255,8 +256,54 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
         if (_readLoop is not null) { try { await _readLoop; } catch { } }
     }
 
+    /// <summary>
+    /// Помощник отвечает по-русски (языка окна он не знает): известные фразы ядра в ответах, ходе и ошибках показываются на языке окна
+    /// (<see cref="L.FromRu"/>). Состояние и результаты проверок (status, details, read_results) не трогаются: это данные, их тексты окно переводит само.
+    /// </summary>
+    static JsonElement Localized(JsonElement msg, string? cmd)
+    {
+        if (L.Current == L.Ru || cmd is "status" or "details" or "read_results") return msg;
+        var node = JsonNode.Parse(msg.GetRawText());
+        if (!LocalizeNode(node)) return msg;
+        using var doc = JsonDocument.Parse(node!.ToJsonString(HelperProtocol.Json));
+        return doc.RootElement.Clone();
+    }
+
+    static bool LocalizeNode(JsonNode? node)
+    {
+        bool changed = false;
+        switch (node)
+        {
+            case JsonObject o:
+                foreach (var (k, v) in o.ToList())
+                {
+                    if (Replace(v) is { } s) { o[k] = s; changed = true; }
+                    else if (LocalizeNode(v)) changed = true;
+                }
+                break;
+            case JsonArray a:
+                for (int i = 0; i < a.Count; i++)
+                {
+                    if (Replace(a[i]) is { } s) { a[i] = s; changed = true; }
+                    else if (LocalizeNode(a[i])) changed = true;
+                }
+                break;
+        }
+        return changed;
+
+        static string? Replace(JsonNode? v)
+        {
+            if (v is not JsonValue jv || !jv.TryGetValue<string>(out var text) || text.Length is 0 or > 600 || !HasCyrillic(text)) return null;
+            var t = L.FromRu(text);
+            return t == text ? null : t;
+        }
+    }
+
+    static bool HasCyrillic(string s) { foreach (var c in s) if (c is >= 'А' and <= 'я' or 'Ё' or 'ё') return true; return false; }
+
     sealed class Pending(IProgress<JsonElement>? progress)
     {
+        public string? Cmd { get; init; }
         public IProgress<JsonElement>? Progress { get; } = progress;
         public TaskCompletionSource<JsonElement> Done { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }

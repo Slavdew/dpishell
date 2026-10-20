@@ -1989,16 +1989,16 @@
                                         <!-- Метки TCP (needs_tcp_timestamps): не смогли включить сами — плашка как у предупреждений и «Включить» со щитом (меняет Windows этого ПК);
                                              включили — серой строкой. Термин — только в подсказке (UX-аудит 2, п. 8). -->
                                         <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="4"
-                                                Padding="8,3" Margin="0,6,0,0" HorizontalAlignment="Left" ToolTip="{x:Static local:RouterViewModel.TimestampsTerm}"
+                                                Padding="8,3" Margin="0,6,0,0" HorizontalAlignment="Left" ToolTip="{l:T router.timestamps.term}"
                                                 Visibility="{Binding TimestampsNeedAction, Converter={StaticResource Vis}}">
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBox Text="{Binding TimestampsNote, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="520" />
                                                 <Button Content="{l:T router.enable}" ContentTemplate="{StaticResource Shield}" Style="{StaticResource LinkButton}" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                        Command="{Binding EnableTimestampsCmd}" ToolTip="{x:Static local:RouterViewModel.TimestampsTerm}" />
+                                                        Command="{Binding EnableTimestampsCmd}" ToolTip="{l:T router.timestamps.term}" />
                                             </StackPanel>
                                         </Border>
                                         <TextBox Text="{Binding TimestampsNote, Mode=OneWay}" Style="{StaticResource SelectableHint}" FontSize="13" Margin="0,6,0,0" TextWrapping="Wrap"
-                                                   ToolTip="{x:Static local:RouterViewModel.TimestampsTerm}" Visibility="{Binding TimestampsDone, Converter={StaticResource Vis}}" />
+                                                   ToolTip="{l:T router.timestamps.term}" Visibility="{Binding TimestampsDone, Converter={StaticResource Vis}}" />
                                         <WrapPanel Margin="0,12,0,0" Visibility="{Binding Connected, Converter={StaticResource Vis}}">
                                             <Button Content="{Binding ToggleText}" Command="{Binding ToggleCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True"
                                                     Visibility="{Binding ShowRouterActions, Converter={StaticResource Vis}}" />

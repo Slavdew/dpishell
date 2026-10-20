@@ -32,16 +32,18 @@ public sealed record ProcessChoice(int Pid, string Name, string Title)
 public sealed class FlowRow : Observable
 {
     bool _checked;
+    readonly string _reason;
+
     public FlowRow(RecordedFlow flow, string? reason, bool isChecked)
     {
         Flow = flow;
-        Reason = reason ?? "";
+        _reason = reason ?? "";
         _checked = isChecked;
     }
 
     public RecordedFlow Flow { get; }
     /// <summary>Почему программа сама бы это убрала («локальная сеть»); пусто — оставила бы.</summary>
-    public string Reason { get; }
+    public string Reason => L.Relocalize(_reason);
     public bool IsChecked { get => _checked; set { if (Set(ref _checked, value)) Changed?.Invoke(); } }
     public event Action? Changed;
 
@@ -60,7 +62,7 @@ public sealed class ProfileRow(AppProfileInfo info) : Observable
     public string Id => Info.Id;
     public string Title => Info.Title;
     public string Summary => AppsViewModel.Summarize(Info);
-    public string Variant => Info.VariantTitle;
+    public string Variant => L.Relocalize(Info.VariantTitle);
     public string VariantLabel => L.T("apps.profile.variant", new { variant = Variant });
     public ICommand? RemoveCmd { get; set; }
     public ICommand? NextCmd { get; set; }
@@ -143,17 +145,20 @@ public sealed class AppsViewModel : Observable
     public bool ShowIntro => Step is AppsStep.Idle or AppsStep.Failed;
     public string StartText => Step == AppsStep.Done ? L.T("apps.start_another") : L.T("apps.start");
 
-    string _status = "";
+    // Строки шага мастера хранятся правилом сборки: после смены языка читаются на новом.
+    readonly LiveText _status = new(), _detail = new(), _recText = new();
     /// <summary>Главная строка простого режима: что сейчас происходит.</summary>
-    public string Status { get => _status; private set { if (Set(ref _status, value)) Raise(nameof(HasStatus)); } }
+    public string Status { get => _status.Value; private set { _status.Set(value); Raise(); Raise(nameof(HasStatus)); } }
+    void StatusIs(Func<string> build) { _status.Set(build); Raise(nameof(Status)); Raise(nameof(HasStatus)); }
+    void DetailIs(Func<string> build) { _detail.Set(build); Raise(nameof(Detail)); Raise(nameof(HasDetail)); }
+    void RecTextIs(Func<string> build) { _recText.Set(build); Raise(nameof(RecText)); }
     public bool HasStatus => Status.Length > 0;
     /// <summary>«Подробнее» — до начала и после неудачи.</summary>
     public bool ShowMore => Step is AppsStep.Idle or AppsStep.Failed;
     public bool ShowOffHint => OptimizationOff && (Step == AppsStep.Check || HasProfiles && Step != AppsStep.Done);   // в «Готово» то же сказано в итоге
 
-    string _detail = "";
     /// <summary>Вторая строка: подробности (попытка, предупреждения записи).</summary>
-    public string Detail { get => _detail; private set { if (Set(ref _detail, value)) Raise(nameof(HasDetail)); } }
+    public string Detail { get => _detail.Value; private set { _detail.Set(value); Raise(); Raise(nameof(HasDetail)); } }
     public bool HasDetail => Detail.Length > 0;
 
     /// <summary>Изменилось состояние оптимизации (status помощника).</summary>
@@ -191,8 +196,10 @@ public sealed class AppsViewModel : Observable
     public ObservableCollection<ProfileRow> Profiles { get; } = [];
     public bool HasProfiles => Profiles.Count > 0;
 
-    IReadOnlyList<ProfileVariant> _variants = [];
-    public IReadOnlyList<ProfileVariant> Variants { get => _variants; private set { _variants = value; Raise(); } }
+    // Варианты приходят от помощника (названия — «как у «general (ALT)»»): хранятся как есть, показываются на языке окна.
+    IReadOnlyList<ProfileVariant> _variantsRaw = [], _variants = [];
+    public IReadOnlyList<ProfileVariant> Variants { get => _variants; private set { _variantsRaw = value; _variants = LocalizeVariants(value); Raise(); } }
+    static IReadOnlyList<ProfileVariant> LocalizeVariants(IReadOnlyList<ProfileVariant> list) => [.. list.Select(v => v with { Title = L.Relocalize(v.Title) })];
 
     /// <summary>Перечитать профили и варианты у помощника. Помощника нет — пусто.</summary>
     public async Task RefreshAsync()
@@ -245,7 +252,7 @@ public sealed class AppsViewModel : Observable
         if (!await Guard(L.T("apps.busy.apply"), () => c.AppProfileSetAsync(id, row.Info.Title, row.Info.TcpPorts, row.Info.UdpPorts, row.Info.Addresses, next))) return;
         await AfterChange();
         await RefreshAsync();
-        Say(L.T("apps.profile.variant_changed", new { title = row.Title, variant = Variants[next].Title }));
+        Say(L.T("apps.profile.variant_changed", new { title = row.Title, variant = L.Relocalize(Variants[next].Title) }));
     }
 
     // ---------- простой режим ----------
@@ -258,9 +265,8 @@ public sealed class AppsViewModel : Observable
     DateTime _recStarted;
     public RecordingResult? LastRecording => _last;
 
-    string _recText = "";
     /// <summary>Пока идёт запись: время и число подключений.</summary>
-    public string RecText { get => _recText; private set => Set(ref _recText, value); }
+    public string RecText { get => _recText.Value; private set { _recText.Set(value); Raise(); } }
 
     async Task StartAsync()
     {
@@ -276,8 +282,8 @@ public sealed class AppsViewModel : Observable
             return;
         }
         _recStarted = DateTime.UtcNow;
-        Status = L.T("apps.rec.status");
-        Detail = L.T("apps.rec.detail");
+        StatusIs(() => L.T("apps.rec.status"));
+        DetailIs(() => L.T("apps.rec.detail"));
         RecText = "0:00";
         Step = AppsStep.Recording;
     }
@@ -296,7 +302,7 @@ public sealed class AppsViewModel : Observable
     {
         if (await Need() is not { } c) return;
         Step = AppsStep.Working;
-        Status = L.T("apps.busy.parse"); Detail = "";
+        StatusIs(() => L.T("apps.busy.parse")); Detail = "";
         RecordingResult rec;
         try { rec = await c.RecStopAsync(); }
         catch (Exception e) when (e is HelperException or HelperUnavailableException) { Failed(Texts.Friendly(e)); return; }
@@ -304,8 +310,9 @@ public sealed class AppsViewModel : Observable
         _draft = AppProfileBuilder.FromRecording(rec);
         if (_draft.IsEmpty)
         {
-            Status = L.T("apps.rec.nothing");
-            Detail = L.T("apps.rec.nothing_detail") + Notes(_draft);
+            var nothing = _draft;
+            StatusIs(() => L.T("apps.rec.nothing"));
+            DetailIs(() => L.T("apps.rec.nothing_detail") + Notes(nothing));
             Step = AppsStep.Failed;   // тексты — до смены шага: окно и тесты читают их сразу по шагу
             return;
         }
@@ -323,25 +330,28 @@ public sealed class AppsViewModel : Observable
         _attempt++;
         _variant = variant;
         Step = AppsStep.Working;
-        Status = L.T("apps.busy.apply_settings");
+        StatusIs(() => L.T("apps.busy.apply_settings"));
         AppProfileInfo? info = null;
         var d = _draft;
         bool ok = await Guard(L.T("apps.busy.apply_settings"), async () =>
             info = await c.AppProfileSetAsync(_profileId, d.Title, d.TcpPorts, d.UdpPorts, d.Addresses, variant));
-        if (!ok || info is null) { Status = L.T("apps.err.apply"); Detail = L.T("apps.err.apply_detail"); Step = AppsStep.Failed; return; }
+        if (!ok || info is null) { StatusIs(() => L.T("apps.err.apply")); DetailIs(() => L.T("apps.err.apply_detail")); Step = AppsStep.Failed; return; }
         _profileId = info.Id;
         await AfterChange();
         await RefreshAsync();
-        Status = L.T("apps.check.applied", new { title = info.Title, summary = Summarize(info) });
-        Detail = L.T("apps.check.attempt", new { attempt = _attempt, max = MaxAttempts, variant = info.VariantTitle }) + Notes(d);
+        var applied = info; var attemptNo = _attempt;
+        StatusIs(() => L.T("apps.check.applied", new { title = applied.Title, summary = Summarize(applied) }));
+        DetailIs(() => L.T("apps.check.attempt", new { attempt = attemptNo, max = MaxAttempts, variant = L.Relocalize(applied.VariantTitle) }) + Notes(d));
         Step = AppsStep.Check;
     }
 
     void Yes()
     {
         // Одна фраза вместо итога и жёлтой плашки; «Вернуть как было» — в списке профилей ниже.
-        var saved = L.T(OptimizationOff ? "apps.profile.saved_off" : "apps.profile.saved", new { title = _draft?.Title ?? L.T("apps.profile.default_title") });
-        Status = saved;
+        var savedTitle = _draft?.Title; var savedOff = OptimizationOff;
+        string Saved() => L.T(savedOff ? "apps.profile.saved_off" : "apps.profile.saved", new { title = savedTitle ?? L.T("apps.profile.default_title") });
+        var saved = Saved();
+        StatusIs(Saved);
         Detail = "";
         Step = AppsStep.Done;
         // Строка состояния и карточка говорят одно: сохранён; заработает ли сейчас — зависит от оптимизации на Главной.
@@ -369,8 +379,9 @@ public sealed class AppsViewModel : Observable
             await RefreshAsync();
         }
         if (_last is not null) LoadRows(_last);
-        Status = L.Plural("apps.giveup", _attempt);
-        Detail = L.T("apps.giveup_detail");
+        var giveupAttempt = _attempt;
+        StatusIs(() => L.Plural("apps.giveup", giveupAttempt));
+        DetailIs(() => L.T("apps.giveup_detail"));
         Step = AppsStep.Failed;
     }
 
@@ -403,11 +414,15 @@ public sealed class AppsViewModel : Observable
                 return;
             }
             secs = st.Seconds;
-            RecText = L.T("apps.rec.progress", new { time = $"{(int)secs / 60}:{(int)secs % 60:00}", n = st.Flows });
+            var shownSecs = secs; var flows = st.Flows;
+            RecTextIs(() => L.T("apps.rec.progress", new { time = $"{(int)shownSecs / 60}:{(int)shownSecs % 60:00}", n = flows }));
             if (!st.Running)
-                Detail = L.T("apps.rec.expired");
+                DetailIs(() => L.T("apps.rec.expired"));
             else if (!st.UdpRecorded && st.Notes.Count > 0)
-                Detail = string.Join(" ", st.Notes);
+            {
+                var notes = st.Notes.ToList();
+                DetailIs(() => string.Join(" ", notes.Select(x => L.Relocalize(x))));
+            }
         }
         catch (Exception e) when (e is HelperException or HelperUnavailableException) { }
     }
@@ -531,13 +546,31 @@ public sealed class AppsViewModel : Observable
     int _selectedVariant;
     public int SelectedVariant { get => _selectedVariant; set => Set(ref _selectedVariant, value); }
 
-    string _preview = "";
+    readonly LiveText _preview = new();
     /// <summary>Что получится из отмеченного.</summary>
-    public string Preview { get => _preview; private set => Set(ref _preview, value); }
+    public string Preview { get => _preview.Value; private set { _preview.Set(value); Raise(); } }
 
-    string _recapNote = "";
-    /// <summary>Что не записалось (например, UDP без драйвера).</summary>
-    public string RecapNote { get => _recapNote; private set { if (Set(ref _recapNote, value)) Raise(nameof(HasRecapNote)); } }
+    /// <summary>Что не записалось (например, UDP без драйвера): из записанного, на языке окна.</summary>
+    public string RecapNote => _last is not { } rec ? "" : string.Join(" ", rec.Notes.Select(x => L.Relocalize(x))) + (rec.Truncated ? " " + L.T("apps.debug.too_many") : "");
+
+    /// <summary>Смена языка: таблица записанного собирается заново (причины «локальная сеть» и т. п.), строки шага — сами.</summary>
+    protected override void OnLanguageChanged()
+    {
+        _status.Retranslate(); _detail.Retranslate(); _recText.Retranslate();
+        if (_variantsRaw.Count > 0)
+        {
+            var selected = SelectedVariant;
+            _variants = LocalizeVariants(_variantsRaw);
+            Raise(nameof(Variants));
+            SelectedVariant = selected;
+        }
+        if (_last is { } rec && Rows.Count > 0)
+        {
+            var checkedFlows = Rows.Where(r => r.IsChecked).Select(r => r.Flow).ToHashSet();
+            LoadRows(rec);
+            foreach (var r in Rows) r.IsChecked = checkedFlows.Contains(r.Flow);
+        }
+    }
     public bool HasRecapNote => RecapNote.Length > 0;
 
     ProfileDraft? _advDraft;
@@ -548,14 +581,16 @@ public sealed class AppsViewModel : Observable
     {
         _last = rec;
         Rows.Clear();
-        var sorted = AppProfileBuilder.Sort(rec);
+        // Причины «программа сама это убрала» — по-русски (так их хранит строка), на языке окна их показывает FlowRow.
+        IReadOnlyDictionary<RecordedFlow, string?> sorted;
+        using (L.Scope(L.Ru)) sorted = AppProfileBuilder.Sort(rec);
         foreach (var f in rec.Flows.OrderBy(f => sorted[f] is null ? 0 : 1).ThenBy(f => f.Process).ThenBy(f => f.Address))
         {
             var row = new FlowRow(f, sorted[f], sorted[f] is null);
             row.Changed += Recalc;
             Rows.Add(row);
         }
-        RecapNote = string.Join(" ", rec.Notes) + (rec.Truncated ? " " + L.T("apps.debug.too_many") : "");
+        Raise(nameof(RecapNote)); Raise(nameof(HasRecapNote));
         Raise(nameof(HasRows));
         Recalc();
         CommandManager.InvalidateRequerySuggested();
@@ -578,9 +613,11 @@ public sealed class AppsViewModel : Observable
         if (_last is null) return;
         _advDraft = AppProfileBuilder.FromRecording(_last, [.. Rows.Where(r => r.IsChecked).Select(r => r.Flow)]);
         if (ProfileTitle.Length == 0 || _titleAuto) { _settingAuto = true; ProfileTitle = _advDraft.Title; _settingAuto = false; _titleAuto = true; }
-        Preview = _advDraft.IsEmpty
+        var draft = _advDraft;
+        _preview.Set(() => draft.IsEmpty
             ? L.T("apps.debug.preview_empty")
-            : Summarize(_advDraft.TcpPorts, _advDraft.UdpPorts, _advDraft.Addresses.Count);
+            : Summarize(draft.TcpPorts, draft.UdpPorts, draft.Addresses.Count));
+        Raise(nameof(Preview));
         Raise(nameof(CanSave));
         CommandManager.InvalidateRequerySuggested();
     }

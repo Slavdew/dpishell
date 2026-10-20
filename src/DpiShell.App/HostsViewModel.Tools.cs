@@ -11,14 +11,15 @@ public sealed class TryRowVm : Observable
     public HostsTryRow Source { get; }
     public string Host => Source.Host;
     public string Ip => Source.Ip;
-    public string Verdict { get; }
-    public string Reason { get; }
-    public string Detail { get; }
+    // Тексты собираются из отчёта при показе — после смены языка читаются на новом.
+    public string Verdict => Kinds().Verdict;
+    public string Reason => Kinds().Reason;
+    public string Detail => Source.Line > 0 ? L.T("hosts.try.detail", new { line = Source.Line, text = Simple(Source) }) : Simple(Source);
     /// <summary>Технические признаки (сертификат, владелец сети, совпадение с DNS) — под «Подробнее» у строки.</summary>
-    public string Technical { get; }
+    public string Technical => Describe(Source);
     public bool HasTechnical => Technical.Length > 0;
     /// <summary>ok — чинит; bad — мешает; warn — не поможет; muted — нейтрально.</summary>
-    public string Tone { get; }
+    public string Tone => Kinds().Tone;
     public bool CanSelect { get; }
     public string? LineId => Source.LineId;
 
@@ -26,10 +27,7 @@ public sealed class TryRowVm : Observable
     public bool Selected { get => _selected; set { if (CanSelect && Set(ref _selected, value)) Changed?.Invoke(); } }
     public event Action? Changed;
 
-    public TryRowVm(HostsTryRow r, bool selectable, bool selected)
-    {
-        Source = r;
-        (Verdict, Reason, Tone) = r.Verdict switch
+    (string Verdict, string Reason, string Tone) Kinds() => Source.Verdict switch
         {
             HostsTryVerdict.Helps => (L.T("hosts.try.verdict.helps"), L.T("hosts.try.reason.helps"), "ok"),
             HostsTryVerdict.NotNeeded => (L.T("hosts.try.verdict.not_needed"), L.T("hosts.try.reason.not_needed"), "muted"),
@@ -38,8 +36,10 @@ public sealed class TryRowVm : Observable
             HostsTryVerdict.Dangerous => (L.T("hosts.try.verdict.dangerous"), L.T("hosts.try.reason.dangerous"), "bad"),
             _ => (L.T("hosts.try.verdict.blocks"), L.T("hosts.try.reason.blocks"), "muted"),
         };
-        Detail = r.Line > 0 ? L.T("hosts.try.detail", new { line = r.Line, text = Simple(r) }) : Simple(r);
-        Technical = Describe(r);
+
+    public TryRowVm(HostsTryRow r, bool selectable, bool selected)
+    {
+        Source = r;
         CanSelect = selectable;
         _selected = selectable && selected;
     }
@@ -75,14 +75,15 @@ public sealed class TryRowVm : Observable
 public sealed record UserRowVm(string Host, string Ip, string Date, bool Stale)
 {
     public string Text => $"{Host} → {Ip}";
-    public string Note => Stale ? L.T("hosts.user.note_stale", new { date = Date }) : Date;
+    /// <summary>Date — ISO как пришла от помощника; дата для показа собирается по языку окна.</summary>
+    public string Note => Stale ? L.T("hosts.user.note_stale", new { date = HostsViewModel.FormatDate(Date) }) : HostsViewModel.FormatDate(Date);
     public HostsEntry Entry => new(Host, Ip);
 }
 
 public sealed record OffRowVm(int Line, string Date, string Original)
 {
     public string Text => Original.Trim();
-    public string Note => L.T("hosts.off.note", new { line = Line, date = Date });
+    public string Note => L.T("hosts.off.note", new { line = Line, date = HostsViewModel.FormatDate(Date) });
 }
 
 /// <summary>
@@ -117,8 +118,9 @@ public sealed partial class HostsViewModel
 
     public ObservableCollection<TryRowVm> TryRows { get; } = [];
 
-    string _trySummary = "";
-    public string TrySummary { get => _trySummary; private set { if (Set(ref _trySummary, value)) Raise(nameof(HasTrySummary)); } }
+    readonly LiveText _trySummary = new();
+    public string TrySummary { get => _trySummary.Value; private set { _trySummary.Set(value); Raise(); Raise(nameof(HasTrySummary)); } }
+    void TrySummaryIs(Func<string> build) { _trySummary.Set(build); Raise(nameof(TrySummary)); Raise(nameof(HasTrySummary)); }
     public bool HasTrySummary => TrySummary.Length > 0;
 
     bool _trying;
@@ -172,7 +174,7 @@ public sealed partial class HostsViewModel
             TryRows.Add(row);
         }
         Raise(nameof(WriteSelectedText));
-        TrySummary = Summarize(report, entries: false, paste);
+        TrySummaryIs(() => Summarize(report, entries: false, paste));
         TryOpen = true;
         CommandManager.InvalidateRequerySuggested();
     }
@@ -222,7 +224,7 @@ public sealed partial class HostsViewModel
             Say(written > 0 ? L.T("hosts.say.user_written", new { n = written }) : L.T("hosts.say.user_none"));
             TrySummary = r.Rejected.Count == 0
                 ? (written > 0 ? L.T("hosts.try.written", new { n = written }) : L.T("hosts.try.already"))
-                : L.T("hosts.try.written_rejected", new { n = written, list = string.Join("; ", r.Rejected.Select(x => L.T("hosts.rejected_item", new { host = x.Host, reason = x.Reason }))) });
+                : L.T("hosts.try.written_rejected", new { n = written, list = string.Join("; ", r.Rejected.Select(x => L.T("hosts.rejected_item", new { host = x.Host, reason = L.FromRu(x.Reason) }))) });
             if (written > 0) { TryRows.Clear(); Raise(nameof(WriteSelectedText)); UserOpen = true; }
         }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); Say(e.Message); }
@@ -265,8 +267,9 @@ public sealed partial class HostsViewModel
     public ObservableCollection<TryRowVm> AuditRows { get; } = [];
     public ObservableCollection<OffRowVm> OffRows { get; } = [];
 
-    string _auditSummary = "";
-    public string AuditSummary { get => _auditSummary; private set { if (Set(ref _auditSummary, value)) Raise(nameof(HasAuditSummary)); } }
+    readonly LiveText _auditSummary = new();
+    public string AuditSummary { get => _auditSummary.Value; private set { _auditSummary.Set(value); Raise(); Raise(nameof(HasAuditSummary)); } }
+    void AuditSummaryIs(Func<string> build) { _auditSummary.Set(build); Raise(nameof(AuditSummary)); Raise(nameof(HasAuditSummary)); }
     public bool HasAuditSummary => AuditSummary.Length > 0;
 
     bool _auditing;
@@ -316,11 +319,11 @@ public sealed partial class HostsViewModel
         }
         Raise(nameof(CommentText)); Raise(nameof(HasProblems));
         int bad = report.Rows.Count(r => r.Problem);
-        AuditSummary = report.Rows.Count == 0
+        AuditSummaryIs(() => report.Rows.Count == 0
             ? L.T("hosts.audit.summary_empty")
             : bad == 0
                 ? L.T("hosts.audit.summary_ok", new { summary = Summarize(report, entries: true, null) })
-                : L.T("hosts.audit.summary_bad", new { n = bad, summary = Summarize(report, entries: true, null) });
+                : L.T("hosts.audit.summary_bad", new { n = bad, summary = Summarize(report, entries: true, null) }));
         AuditOpen = true;
         CommandManager.InvalidateRequerySuggested();
     }
@@ -340,7 +343,7 @@ public sealed partial class HostsViewModel
                     ? L.T("hosts.say.commented_skipped", new { n = r.Commented.Count, skipped = r.Skipped.Count })
                     : L.T("hosts.say.commented", new { n = r.Commented.Count }))
                 : r.Skipped.Count > 0
-                    ? L.T("hosts.say.comment_none_reason", new { reason = r.Skipped[0] })
+                    ? L.T("hosts.say.comment_none_reason", new { reason = L.FromRu(r.Skipped[0]) })
                     : L.T("hosts.say.comment_none"));
             if (r.Commented.Count > 0) AuditSummary = L.T("hosts.audit.commented", new { n = r.Commented.Count });
             foreach (var row in AuditRows.Where(x => ids.Contains(x.LineId ?? "")).ToList()) AuditRows.Remove(row);
@@ -413,15 +416,15 @@ public sealed partial class HostsViewModel
         var stale = (_status?.UserStale ?? []).ToHashSet();
         UserRows.Clear();
         foreach (var l in _status?.UserLines ?? [])
-            UserRows.Add(new UserRowVm(l.Host, l.Ip, FormatDate(l.Date), stale.Contains(new HostsEntry(l.Host, l.Ip))));
+            UserRows.Add(new UserRowVm(l.Host, l.Ip, l.Date, stale.Contains(new HostsEntry(l.Host, l.Ip))));
         OffRows.Clear();
-        foreach (var o in _status?.OffLines ?? []) OffRows.Add(new OffRowVm(o.Line, FormatDate(o.Date), o.Original));
+        foreach (var o in _status?.OffLines ?? []) OffRows.Add(new OffRowVm(o.Line, o.Date, o.Original));
         foreach (var p in new[] { nameof(HasUserRows), nameof(UserHeader), nameof(HasOff), nameof(UncommentText), nameof(HasOurs), nameof(OursText),
                      nameof(ToolsUnavailable), nameof(ToolsUnavailableText) })
             Raise(p);
     }
 
-    static string FormatDate(string iso) => DateTime.TryParse(iso, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? L.Date(d) : iso;
+    internal static string FormatDate(string iso) => DateTime.TryParse(iso, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? L.Date(d) : iso;
 
     /// <summary>«Адрес для X больше не работает — убрать или подобрать новый»: своих строк мы сами не снимаем, только говорим.</summary>
     IEnumerable<string> StaleWarnings() =>

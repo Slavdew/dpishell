@@ -1299,8 +1299,9 @@ public sealed partial class MainViewModel : Observable
     public ICommand ShowResultDetailsCmd => _showResultDetailsCmd ??= new RelayCommand(() => ResultExpanded = true);
     ICommand? _showResultDetailsCmd;
 
-    string _resultHint = "";
-    public string ResultHint { get => _resultHint; private set => Set(ref _resultHint, value); }
+    readonly LiveText _resultHint = new();
+    public string ResultHint { get => _resultHint.Value; private set { _resultHint.Set(value); Raise(); } }
+    void ResultHintIs(Func<string> build) { _resultHint.Set(build); Raise(nameof(ResultHint)); }
 
     string? _bestId, _resultId;
     public bool HasBest => _bestId is not null;
@@ -1363,14 +1364,15 @@ public sealed partial class MainViewModel : Observable
     public bool OfferDeep { get => _offerDeep; private set => Set(ref _offerDeep, value); }
 
     readonly AddressBlockTracker _addressBlock = new();
-    string _addressNote = "";
-    /// <summary>«Не открылось ни с одной стратегией: … — похоже на блокировку по адресу…»; пусто, когда таких адресов нет.</summary>
-    public string AddressNote { get => _addressNote; private set { if (Set(ref _addressNote, value)) Raise(nameof(HasAddressNote)); } }
-    public bool HasAddressNote => _addressNote.Length > 0;
+    bool _addressNoteOn;
+    /// <summary>«Не открылось ни с одной стратегией: … — похоже на блокировку по адресу…»; пусто, когда таких адресов нет. Собирается из учёта адресов при показе.</summary>
+    public string AddressNote => _addressNoteOn ? _addressBlock.Note() : "";
+    void SetAddressNote(bool on) { _addressNoteOn = on; Raise(nameof(AddressNote)); Raise(nameof(HasAddressNote)); }
+    public bool HasAddressNote => AddressNote.Length > 0;
 
     void ResetResults()
     {
-        AddressNote = "";
+        SetAddressNote(false);
         Scores.Clear(); SelectedScore = null;
         ResultText = ""; ResultHint = ""; SetBest(null); _resultId = null; OfferDeep = false;
         ResultSummary = ""; ResultExpanded = false;
@@ -1594,7 +1596,7 @@ public sealed partial class MainViewModel : Observable
         // Готовые не помогли (или помогли не со всем), подбор дошёл до конца — предложить глубокий поиск; после него — уже нет.
         OfferDeep = !r.Cancelled && !r.NothingBlocked && !_searching && best is not { Perfect: true };
         foreach (var s in r.Scores) _addressBlock.Add(s);
-        AddressNote = _addressBlock.Note();
+        SetAddressNote(true);
         // Лучшая не открыла только то, что молчит у всех стратегий, — искать новые ради этого нечего.
         if (OfferDeep && best is not null && _addressBlock.ExplainsAllFailures(best.Verdicts.Where(v => !v.Ok).Select(v => v.Target.Url)))
             OfferDeep = false;
@@ -1619,15 +1621,19 @@ public sealed partial class MainViewModel : Observable
         ResultText = BestTitle(best.Perfect, HasAddressNote, best.Strategy.Title);
         // Подбор дошёл до конца — лучшая сразу ставится в работу (после выхода из Guard, см. AutoApplyAsync).
         if (!r.Cancelled) _autoApplyId = best.Strategy.Id;
-        var notes = new List<string>();
-        if (!best.Perfect) notes.Add(L.T("select.note.partial", new { ok = best.GroupsPassed, total = best.GroupsTotal }));
-        if (r.Cancelled) notes.Add(L.T("select.note.cancelled"));
-        if (MixBuilder.IsMix(best.Strategy.Source)) notes.Insert(0, L.T("select.note.mix"));
-        var blocked = string.Join(", ", r.TestedGroups.Select(g => g.Title));
-        notes.Add(L.T("select.note.blocked", new { groups = blocked }));
-        // Пояснения — фрагменты списка (в обоих языках со строчной): с заглавной начинается фраза целиком.
-        var explain = string.Join("; ", notes) + ".";
-        ResultHint = char.ToUpper(explain[0]) + explain[1..] + (regression.Length > 0 ? " " + regression : "");
+        // Подсказка собирается из данных подбора при показе — на языке окна.
+        ResultHintIs(() =>
+        {
+            var notes = new List<string>();
+            if (!best.Perfect) notes.Add(L.T("select.note.partial", new { ok = best.GroupsPassed, total = best.GroupsTotal }));
+            if (r.Cancelled) notes.Add(L.T("select.note.cancelled"));
+            if (MixBuilder.IsMix(best.Strategy.Source)) notes.Insert(0, L.T("select.note.mix"));
+            var blocked = string.Join(", ", r.TestedGroups.Select(g => Names.Title(g.Id)));
+            notes.Add(L.T("select.note.blocked", new { groups = blocked }));
+            // Пояснения — фрагменты списка (в обоих языках со строчной): с заглавной начинается фраза целиком.
+            var explain = string.Join("; ", notes) + ".";
+            return char.ToUpper(explain[0]) + explain[1..] + (regression.Length > 0 ? " " + L.Relocalize(regression, own: true) : "");
+        });
     }
 
     // ---------- свои сайты ----------
@@ -1751,6 +1757,11 @@ public sealed partial class MainViewModel : Observable
     /// <summary>Смена языка: всё, что окно держит готовой строкой, собирается заново из данных (сообщения последних действий остаются).</summary>
     protected override void OnLanguageChanged()
     {
+        // «Готово.» — не сообщение, а отсутствие сообщения: следует за языком; прочие — последние действия — остаются, фразы ядра переводятся.
+        _message = _message == "" ? "" : L.BuiltIn.Values.Any(p => p.Strings.TryGetValue("common.ready", out var r) && r.Text == _message) ? ReadyText : L.Relocalize(_message, own: true);
+        Retranslate(ref _result); Retranslate(ref _appliedLine); Retranslate(ref _deepText);
+        foreach (var t in new[] { _resultHint, _checkSummary, _dnsSummary, _checkedAt, _timestampsText, _diagUpdated }) t.Retranslate();
+        Retranslate(ref _directMessage); Retranslate(ref _toast); Retranslate(ref _toastAction);
         ComputeStatus();
         RebuildCheckRows();
         RebuildDnsRows();

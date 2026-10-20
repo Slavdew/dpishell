@@ -62,6 +62,9 @@ public sealed class AdvancedRowVm : Observable
     public string Strategy { get => _strategy; set { if (Set(ref _strategy, value)) _edited(); } }
 
     public string Hint { get => _hint; set { if (Set(ref _hint, value)) Raise(nameof(HasHint)); } }
+
+    /// <summary>Список вариантов пересобрался — выбор строки показывается заново.</summary>
+    public void RefreshChoice() => Raise(nameof(Strategy));
     public bool HasHint => _hint.Length > 0;
 
     public static IReadOnlyList<string> Split(string text) =>
@@ -89,6 +92,15 @@ public sealed class AdvancedViewModel : Observable
     }
 
     public bool NoRows => Rows.Count == 0;
+
+    /// <summary>Смена языка: «Авто» / «Напрямую», подсказки под строками и сообщение пересобираются.</summary>
+    protected override void OnLanguageChanged()
+    {
+        RebuildChoices();
+        foreach (var r in Rows) r.RefreshChoice();
+        RefreshHints();
+        if (_message.Length > 0) _message = L.Relocalize(_message, own: true);
+    }
 
     public bool IsRouter { get; }
     /// <summary>На ПК действия идут через помощника — у «Применить» щит.</summary>

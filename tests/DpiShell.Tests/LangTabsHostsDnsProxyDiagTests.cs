@@ -30,17 +30,20 @@ public sealed class LangTabsHostsDnsProxyDiagTests : IDisposable
             Fill(vm, shell);
             FillProxy(vm);
             // Тексты «Диагностики», которые окно строит само по ответам помощника: здесь — как строит их код, а не русские литералы заполнения.
-            SetProp(vm, "ServiceText", L.T("diag.service.with_strategy", new { state = Texts.Svc(SvcState.Running), strategy = "ALT11" }));
-            SetProp(vm, "DriverText", Texts.Svc(SvcState.Running));
-            SetProp(vm, "CoreText", L.T("diag.core.changed", new { files = "winws.exe" }));
-            SetProp(vm, "DnsSummary", L.T("dns.summary.spoofed"));
-            SetProp(vm, "DiagUpdated", L.T("diag.updated", new { time = L.Time(new DateTime(2026, 10, 20, 14, 30, 0)) }));
+            CyrillicScan.SetLive(vm, "ServiceText", () => L.T("diag.service.with_strategy", new { state = Texts.Svc(SvcState.Running), strategy = "ALT11" }));
+            CyrillicScan.SetLive(vm, "DriverText", () => Texts.Svc(SvcState.Running));
+            CyrillicScan.SetLive(vm, "CoreText", () => L.T("diag.core.changed", new { files = "winws.exe" }));
+            CyrillicScan.SetLive(vm, "DnsSummary", () => L.T("dns.summary.spoofed"));
+            CyrillicScan.SetLive(vm, "DiagUpdated", () => L.T("diag.updated", new { time = L.Time(new DateTime(2026, 10, 20, 14, 30, 0)) }));
             vm.Findings.Clear();
-            vm.Findings.Add(new(true, L.T("diag.find.bfe.title"), L.T("diag.find.ok_running")));
-            vm.Findings.Add(new(false, L.T("diag.find.proxy.title"), SystemChecks.ProxyFinding((true, "127.0.0.1:8888")).Text, SystemFinding.GoProxy));
-            vm.Findings.Add(new(false, L.T("diag.find.folder.title"), SystemChecks.PathProblem(@"C:\Users\Иван\OneDrive\DpiShell") ?? ""));
-            vm.ConflictList.Clear();
-            vm.ConflictList.Add(L.T("diag.conflict.line", new { name = L.T("diag.conflict.name_service_strategy", new { owner = L.T("diag.conflict.owner_flowseal"), service = "zapret", strategy = "general (ALT11)" }), detail = L.T("diag.conflict.stop_flowseal_service") }));
+            vm.Findings.Add(new(true, "", "", null, SystemFinding.Of(true, () => (L.T("diag.find.bfe.title"), L.T("diag.find.ok_running")))));
+            vm.Findings.Add(new(false, "", "", SystemFinding.GoProxy, SystemChecks.ProxyFinding((true, "127.0.0.1:8888"))));
+            vm.Findings.Add(new(false, "", "", null, SystemFinding.Of(false, () => (L.T("diag.find.folder.title"), SystemChecks.PathProblem(@"C:\Users\Иван\OneDrive\DpiShell") ?? ""))));
+            for (int i = 0; i < vm.Findings.Count; i++) vm.Findings[i] = vm.Findings[i].Refreshed();
+            // Чужой обход: данные (службы Flowseal), строка собирается на языке окна.
+            var conflict = new Conflict("service", "", "") { Source = new ZapretInstance("service", "zapret", ZapretOwner.Flowseal, null, null, shell.Catalog.Strategies.First(s => s.Title.Contains("ALT11")), null) };
+            typeof(MainViewModel).GetField("_conflictsShown", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(vm, new List<Conflict> { conflict });
+            typeof(MainViewModel).GetMethod("RebuildConflictList", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
             vm.Hosts.PasteText = "140.82.121.3 github.com";
 
             var w = Open(vm);

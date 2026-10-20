@@ -11,11 +11,18 @@ namespace DpiShell.App;
 public sealed class LiveText
 {
     Func<string> _f;
+    string? _fixed;
     public LiveText(Func<string>? build = null) => _f = build ?? (static () => "");
     public string Value => _f();
     public bool IsEmpty => Value.Length == 0;
-    public void Set(string text) => _f = () => text;
-    public void Set(Func<string> build) => _f = build;
+    public void Set(string text) { _fixed = text; _f = () => text; }
+    public void Set(Func<string> build) { _fixed = null; _f = build; }
+
+    /// <summary>Готовая строка (сообщение последнего действия, ошибка) — на языке окна, если это знакомая фраза; правило сборки и так читается заново.</summary>
+    public void Retranslate()
+    {
+        if (_fixed is { Length: > 0 } t && L.Relocalize(t, own: true) is var n && n != t) Set(n);
+    }
 }
 
 public abstract class Observable : INotifyPropertyChanged
@@ -27,13 +34,19 @@ public abstract class Observable : INotifyPropertyChanged
         foreach (var (o, _) in Live.ToArray())
         {
             // Сначала модель пересобирает то, что держит готовой строкой (из своих данных), затем читаются вычисляемые свойства.
-            try { o.OnLanguageChanged(); } catch (Exception e) when (e is InvalidOperationException or System.IO.IOException or NotSupportedException or NullReferenceException or ObjectDisposedException) { }
+            try { o.OnLanguageChanged(); } catch (Exception e) when (e is InvalidOperationException or System.IO.IOException or NotSupportedException or NullReferenceException or ObjectDisposedException) { LanguageHandlerFailed?.Invoke(o, e); }
             o.Raise(string.Empty);
         }
     };
 
+    /// <summary>Пересборка строк модели при смене языка не удалась (модель уже закрыта, чужой поток): окну это не мешает, тесты следят.</summary>
+    public static event Action<object, Exception>? LanguageHandlerFailed;
+
     /// <summary>Язык сменился: пересобрать строки, которые модель хранит готовыми (состояние, подписи списков), из данных. Сообщения последних действий не трогать.</summary>
     protected virtual void OnLanguageChanged() { }
+
+    /// <summary>Сообщение последнего действия, собранное на прежнем языке, — на языке окна (если это знакомая фраза), иначе как есть.</summary>
+    protected static void Retranslate(ref string field) { if (field.Length > 0) field = L.Relocalize(field, own: true); }
 
     protected Observable() => Live.AddOrUpdate(this, null);
 

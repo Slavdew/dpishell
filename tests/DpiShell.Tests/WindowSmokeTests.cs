@@ -1568,7 +1568,7 @@ public sealed partial class WindowSmokeTests
         // Без обращения к помощнику: показываем прочитанное из реестра в памяти (здесь тест окна ждёт поток окна и ответа по каналу не получит).
         vm.Proxy.Show(ProxyOverview.Read(vm.Proxy.Registry, vm.Proxy.WinHttp));
         vm.Proxy.Selected = vm.Proxy.Items[0];
-        vm.Proxy.CheckProxy = (_, _) => Task.FromResult(new ProxyCheckResult(true, "http", [], "работает (HTTP): 2 из 2, ≈140 мс"));
+        vm.Proxy.CheckProxy = (_, _) => Task.FromResult(new ProxyCheckResult(true, "http", [], L.T("proxy.chk.ok", new { kind = "HTTP", ok = 2, total = 2, ms = 140 })));
         Task.Run(vm.Proxy.CheckAsync).GetAwaiter().GetResult();
     }
 
@@ -1653,7 +1653,7 @@ public sealed partial class WindowSmokeTests
         vm.DnsRows.Add(new("www.youtube.com", "195.208.4.1", "142.250.74.46, 142.250.74.78 …", true));
         vm.DnsRows.Add(new("discord.com", "162.159.135.232", "162.159.135.232", false));
         SetProp(vm, "DnsSummary", "DNS провайдера подменяет адреса сайтов.");
-        SetProp(vm, "TimestampsText", MainViewModel.TimestampsLine(true));
+        CyrillicScan.SetLive(vm, "TimestampsText", () => MainViewModel.TimestampsLine(true));
         vm.Findings.Add(new(true, "Служба BFE", "работает"));
         vm.Findings.Add(new(false, "Системный прокси", SystemChecks.ProxyFinding((true, "127.0.0.1:8888")).Text));
         vm.Findings.Add(new(true, "Adguard", "не запущен"));

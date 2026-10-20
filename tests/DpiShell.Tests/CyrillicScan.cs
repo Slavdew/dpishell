@@ -20,6 +20,10 @@ internal static class CyrillicScan
     static readonly string[] Allowed =
     [
         "Иван",
+        // Названия языков — на своём языке.
+        "Русский",
+        // Имена, которые человек вводит сам (в данных теста).
+        "Рабочий",
         // Данные теста, введённые человеком: названия своих стратегий и записей.
         "Стратегия от друга", "Моя правка",
     ];
@@ -43,6 +47,10 @@ internal static class CyrillicScan
         return found.Distinct().ToList();
     }
 
+    /// <summary>Состояние-текст, как его ставит окно: правилом сборки (данные в замыкании), а не готовой строкой.</summary>
+    public static void SetLive(object vm, string property, Func<string> build) =>
+        vm.GetType().GetMethod(property + "Is", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, [build]);
+
     /// <summary>
     /// В английском окне — проверить. В русском — переключить на английский на лету (как «Настройки» → «Язык»), проверить то, что
     /// собрано из данных на прежнем языке и не пересобралось, и вернуть русский.
@@ -52,9 +60,22 @@ internal static class CyrillicScan
         if (L.Current == L.En) { Report(root, where); return; }
         // Диалоги (вход, установка…) строятся один раз и при открытом окне язык не меняют — переключение проверяется на главном окне.
         if (Find<TabControl>(root) is null) return;
-        L.Set(L.En);
-        try { Pump(); Report(root, where + " (после смены языка)"); }
-        finally { L.Set(L.Ru); Pump(); }
+        void Failed(object model, Exception e)
+        {
+            // Ошибки модели, закрытой в прошлом тесте или на чужом потоке, не в счёт; остальные — пересборка не удалась.
+            if (e is NotSupportedException or ObjectDisposedException) return;
+            var log = Environment.GetEnvironmentVariable("DPISHELL_CYR_LOG");
+            var text = $"[{where}] пересборка {model.GetType().Name} при смене языка: {e.GetType().Name}: {e.Message}";
+            if (log is not null) File.AppendAllText(log, text + "\n"); else throw new Exception(text, e);
+        }
+        Observable.LanguageHandlerFailed += Failed;
+        try
+        {
+            L.Set(L.En);
+            Pump();
+            Report(root, where + " (после смены языка)");
+        }
+        finally { Observable.LanguageHandlerFailed -= Failed; L.Set(L.Ru); Pump(); }
     }
 
     static void Report(DependencyObject root, string where)

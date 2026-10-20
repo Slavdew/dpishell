@@ -88,9 +88,27 @@ public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window)
             catch (HelperException e) { HelperNote = e.Message; }
         }
         rows.AddRange(window.List().Items.Select(i => (i.At, i.Title)));
-        Items.Clear();
-        foreach (var (at, title) in rows.OrderByDescending(r => r.At)) Items.Add(new(title, When(at)));
+        _rows = [.. rows.OrderByDescending(r => r.At)];
+        FillItems();
         RaiseShape();
+    }
+
+    // Записи журнала хранятся текстом на языке записи (помощник — по-русски): на языке окна их показывает L.Relocalize.
+    List<(DateTime At, string Title)> _rows = [];
+    IReadOnlyList<UndoItem>? _lastReport;
+
+    void FillItems()
+    {
+        Items.Clear();
+        foreach (var (at, title) in _rows) Items.Add(new(L.Relocalize(title), When(at)));
+    }
+
+    /// <summary>Смена языка: список пунктов и отчёт собираются заново из данных.</summary>
+    protected override void OnLanguageChanged()
+    {
+        Retranslate(ref _helperNote);
+        if (Items.Count > 0) FillItems();
+        if (_lastReport is { } r) Show(r);
     }
 
     void RaiseShape()
@@ -124,15 +142,16 @@ public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window)
 
     public void Show(IReadOnlyList<UndoItem> items)
     {
+        _lastReport = items;
         Report.Clear();
         foreach (var i in items.OrderByDescending(i => i.At))
-            Report.Add(new(i.Title, i.Status switch
+            Report.Add(new(L.Relocalize(i.Title), i.Status switch
             {
                 UndoStatus.Restored => L.T("settings.changes.status_restored"),
                 UndoStatus.AlreadyBack => L.T("settings.changes.status_same"),
                 UndoStatus.ChangedByOthers => L.T("settings.changes.status_skipped"),
                 _ => L.T("settings.changes.status_failed"),
-            }, i.Note, i.Status switch { UndoStatus.Restored => "ok", UndoStatus.AlreadyBack => "same", UndoStatus.ChangedByOthers => "skip", _ => "fail" }));
+            }, L.Relocalize(i.Note), i.Status switch { UndoStatus.Restored => "ok", UndoStatus.AlreadyBack => "same", UndoStatus.ChangedByOthers => "skip", _ => "fail" }));
         int Count(UndoStatus s) => items.Count(i => i.Status == s);
         Summary = items.Count == 0 ? L.T("settings.changes.summary_none")
             : L.T("settings.changes.summary", new

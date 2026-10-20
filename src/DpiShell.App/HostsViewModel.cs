@@ -31,10 +31,10 @@ public sealed record HostsRow(string Host, string Ip, string Owner, string Live,
         HostsVerdict.NotNeeded => L.T("hosts.row.why.not_needed"),
         HostsVerdict.Unreachable => string.IsNullOrWhiteSpace(r.Live?.Detail)
             ? L.T("hosts.row.why.unreachable")
-            : L.T("hosts.row.why.unreachable_detail", new { detail = r.Live!.Detail!.Trim().TrimEnd('.') }),
+            : L.T("hosts.row.why.unreachable_detail", new { detail = L.FromRu(r.Live!.Detail!.Trim().TrimEnd('.')) }),
         HostsVerdict.BadCertificate => L.T("hosts.row.why.bad_cert"),
         HostsVerdict.OwnerMismatch => L.T("hosts.row.why.owner_mismatch", new { owner = r.OwnerName }),
-        _ => r.DnsDetail.Length > 0 ? r.DnsDetail : L.T("hosts.row.why.not_allowed"),
+        _ => r.DnsDetail.Length > 0 ? L.FromRu(r.DnsDetail) : L.T("hosts.row.why.not_allowed"),
     };
 }
 
@@ -203,9 +203,22 @@ public sealed partial class HostsViewModel : Observable
 
     // ---------- проверка → предпросмотр → запись ----------
 
-    string _summary = "";
+    readonly LiveText _summary = new();
     /// <summary>Итог проверки: «Подходят адресов: N» или «Нечего чинить: всё открывается и так».</summary>
-    public string Summary { get => _summary; private set { if (Set(ref _summary, value)) Raise(nameof(HasSummary)); } }
+    public string Summary { get => _summary.Value; private set { _summary.Set(value); Raise(); Raise(nameof(HasSummary)); } }
+    void SummaryIs(Func<string> build) { _summary.Set(build); Raise(nameof(Summary)); Raise(nameof(HasSummary)); }
+
+    /// <summary>Смена языка: таблица проверки и свои/закомментированные строки собираются заново из данных (отчёт и состояние файла).</summary>
+    protected override void OnLanguageChanged()
+    {
+        _summary.Retranslate(); _trySummary.Retranslate(); _auditSummary.Retranslate();
+        if (_report is { } report && Rows.Count > 0)
+        {
+            Rows.Clear();
+            foreach (var r in report.Rows.OrderByDescending(r => r.Install).ThenBy(r => r.Host)) Rows.Add(HostsRow.From(r));
+        }
+        RefreshTools();
+    }
     public bool HasSummary => Summary.Length > 0;
 
     public bool CanWrite => _report is { NothingToFix: false };
@@ -261,10 +274,10 @@ public sealed partial class HostsViewModel : Observable
         PreviewLines.Clear();
         if (report.NothingToFix)
         {
-            Summary = L.T("hosts.summary.nothing");
+            SummaryIs(() => L.T("hosts.summary.nothing"));
             return;
         }
-        Summary = L.T("hosts.summary.to_install", new { n = report.ToInstall.Count });
+        SummaryIs(() => L.T("hosts.summary.to_install", new { n = report.ToInstall.Count }));
         if (preview is not { } p) return;
         foreach (var e in p.Added) PreviewLines.Add($"+ {e.Ip} {e.Host}");
         foreach (var e in p.Removed) PreviewLines.Add($"− {e.Ip} {e.Host}");

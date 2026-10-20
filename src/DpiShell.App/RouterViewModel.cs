@@ -1311,10 +1311,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public string SelectProgressText { get => _progressText; private set { if (Set(ref _progressText, value) && Selecting) UpdateHome(); } }
 
     readonly AddressBlockTracker _addressBlock = new();
-    string _addressNote = "";
-    /// <summary>«Не открылось ни с одной стратегией: … — похоже на блокировку по адресу…»; пусто, когда таких адресов нет.</summary>
-    public string AddressNote { get => _addressNote; private set { if (Set(ref _addressNote, value)) Raise(nameof(HasAddressNote)); } }
-    public bool HasAddressNote => _addressNote.Length > 0;
+    bool _addressNoteOn;
+    /// <summary>«Не открылось ни с одной стратегией: … — похоже на блокировку по адресу…»; пусто, когда таких адресов нет. Собирается из учёта адресов при показе.</summary>
+    public string AddressNote => _addressNoteOn ? _addressBlock.Note() : "";
+    void SetAddressNote(bool on) { _addressNoteOn = on; Raise(nameof(AddressNote)); Raise(nameof(HasAddressNote)); }
+    public bool HasAddressNote => AddressNote.Length > 0;
 
     string _result = "", _resultHint = "";
     public string ResultText { get => _result; private set { if (Set(ref _result, value)) { Raise(nameof(HasResult)); RaiseResultShape(); } } }
@@ -1396,7 +1397,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             if (dropUser) { o = WithoutUser(o, out hint); dropUser = false; }
             if (!await Guard(L.T("router.select.busy"), async () =>
                 {
-                    Scores.Clear(); SelectedScore = null; ResultText = ""; ResultHint = ""; SetBest(null, false); ResultExpanded = false; AddressNote = "";
+                    Scores.Clear(); SelectedScore = null; ResultText = ""; ResultHint = ""; SetBest(null, false); ResultExpanded = false; SetAddressNote(false);
                     if (!deep) _addressBlock.Clear();   // глубокий поиск продолжает счёт проверок прежнего подбора
                     SelectProgress = 0; SelectProgressText = L.T("router.select.preparing");
                     try { await Call(c => c.SelectStartAsync(o.Groups, o.Full, deep)); }
@@ -1598,7 +1599,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         SelectProgress = SelectProgressMax;
         foreach (var row in Scores.Where(x => !x.IsCandidate && x.Row.Error is null))
             foreach (var v in row.Row.Verdicts ?? []) _addressBlock.Add(row.Id, v.Url, v.Ok, !v.Ok && AddressBlockTracker.IsSilent(v.Detail));
-        AddressNote = _addressBlock.Note();
+        SetAddressNote(true);
         if (p.Cancelled)
         {
             SetBest(null, false);
@@ -2177,6 +2178,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     /// <summary>Смена языка: состояние роутера (подключение, главная, предупреждения, меню стратегий, DNS, диагностика) собирается заново из данных.</summary>
     protected override void OnLanguageChanged()
     {
+        Retranslate(ref _result); Retranslate(ref _resultHint); Retranslate(ref _targetsMessage); Retranslate(ref _progressText);
         ComputeHome();
         FillStrategies();
         FillConflicts();
