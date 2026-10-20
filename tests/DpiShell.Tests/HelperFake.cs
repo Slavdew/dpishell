@@ -433,6 +433,21 @@ public sealed class FakeHelperBackend : IHelperBackend
         return new(true, enabled ? "Системный прокси включён для всей машины." : "Системный прокси выключен для всей машины.", ProxyInfo());
     }
 
+    /// <summary>Что отвечает settings_export_read.</summary>
+    public DpiShell.Core.Export.SettingsState SettingsStateValue { get; set; } = new();
+
+    public DpiShell.Core.Export.SettingsState SettingsExportRead()
+    {
+        Call("settings_export_read");
+        return SettingsStateValue;
+    }
+
+    public Task<DpiShell.Core.Export.ImportResult> SettingsImportAsync(string request, CancellationToken ct)
+    {
+        Call("settings_import " + request.Length);
+        return Task.FromResult(new DpiShell.Core.Export.ImportResult([], null));
+    }
+
     public ProxyChangeResult ProxyMachineRestore()
     {
         Call("proxy_machine_restore");

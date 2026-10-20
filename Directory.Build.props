@@ -3,6 +3,6 @@
        release.json. Выпуск — тег windows-v<Version>; CI (.github/workflows/windows.yml) сверяет тег с этим значением.
        Заметки к версии — packaging/release-notes.json (без них тег не выпускается). docs/dev/building.md «Публикация». -->
   <PropertyGroup>
-    <Version>0.9.6</Version>
+    <Version>0.10.0</Version>
   </PropertyGroup>
 </Project>

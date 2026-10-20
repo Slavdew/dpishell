@@ -32,6 +32,8 @@ public static class ChangeKinds
     public const string RouterAdvanced = "router_advanced";
     /// <summary>Связка этого ПК на роутере (pc_link_set) — журнал окна; откат — pc_link_del.</summary>
     public const string RouterJoint = "router_joint";
+    /// <summary>Загрузка своих настроек из папки файлов (помощник, журнал помощника): откат возвращает прежние сайты, исключения, подсети, стратегии и профили; hosts, DNS и продвинутый режим откатываются своими записями.</summary>
+    public const string SettingsImport = "settings_import";
 }
 
 public enum ChangeState

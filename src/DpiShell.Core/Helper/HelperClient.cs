@@ -428,4 +428,14 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
 
     public Task<AdvancedInfo> AdvancedSetAsync(bool enabled, string others, IReadOnlyList<AdvancedRowInput> rows, CancellationToken ct = default) =>
         CallAsync<AdvancedInfo>("advanced_set", new { enabled, others, rows = rows.Select(r => new { domains = r.Domains, strategy = r.Strategy }) }, null, ct);
+
+    // ---------- выгрузка и загрузка своих настроек (API 1.11) ----------
+
+    /// <summary>Свои данные этого ПК из закрытой папки помощника (для <see cref="Export.SettingsExport"/>). Только чтение.</summary>
+    public Task<Export.SettingsState> SettingsExportReadAsync(CancellationToken ct = default) =>
+        CallAsync<Export.SettingsState>("settings_export_read", null, null, ct);
+
+    /// <summary>Загрузить проверенный план. Помощник проверяет его заново, пишет в журнал изменений и возвращает итог по разделам.</summary>
+    public Task<Export.ImportResult> SettingsImportAsync(Export.ImportPlan plan, IProgress<JsonElement>? progress = null, CancellationToken ct = default) =>
+        CallAsync<Export.ImportResult>("settings_import", new { plan = plan.ToRequest() }, progress, ct);
 }

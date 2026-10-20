@@ -112,6 +112,12 @@ public interface IHelperBackend : IHelperCatalog
     ProxyChangeResult ProxyMachineSet(bool enabled, string? server, string? bypass, string? pac, bool winhttp);
     /// <summary>«Вернуть прежний» для машины — из proxy-backup.json помощника.</summary>
     ProxyChangeResult ProxyMachineRestore();
+
+    // ---------- выгрузка и загрузка своих настроек (API 1.11) ----------
+    /// <summary>Свои данные ПК и сведения, нужные для проверки чужого файла. Только чтение; окно без прав читает их только так.</summary>
+    Export.SettingsState SettingsExportRead();
+    /// <summary>Применить план загрузки (JSON <see cref="Export.ImportRequest"/>). Помощник проверяет его сам, сверяет со своим состоянием и пишет в журнал изменений; подделка — исключение.</summary>
+    Task<Export.ImportResult> SettingsImportAsync(string request, CancellationToken ct);
 }
 
 /// <summary>Ответ proxy_status. Previous — что вернёт «Вернуть прежний» для машины (null — нечего).</summary>
@@ -186,7 +192,7 @@ public sealed record HelperDetails(
     CoreCheck Core, string CoreVersion, IReadOnlyList<Strategy> Found);
 
 /// <summary>Помощник над настоящим <see cref="Shell"/> (служба, SYSTEM).</summary>
-public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
+public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
 {
     /// <summary>Сколько последних результатов отдаёт read_results.</summary>
     public const int MaxResults = 30;
@@ -369,14 +375,8 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
     /// <summary>Как «Сохранить» своих сайтов в окне: файл доменов, список целей, группа «Свои» включается.</summary>
     public UserTargetsResult SetUserTargets(IReadOnlyList<string> lines)
     {
-        shell.Paths.EnsureDirectories();
-        var trimmed = lines.Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
-        var rejected = shell.Data.WriteUserDomains(trimmed);
-        var good = trimmed.Where(l => DataStore.NormalizeDomain(l) is not null).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        shell.State.UserTargets = good;
-        if (good.Count > 0 && !shell.State.Groups.Contains("user")) shell.State.Groups.Add("user");
-        shell.SaveState();
-        return new(good, rejected);
+        var (saved, rejected) = shell.SetUserTargets(lines);
+        return new(saved, rejected);
     }
 
     /// <summary>
@@ -669,6 +669,7 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
             e.Register(new AppProfileUndoer(id => shell.State.AppProfiles.FirstOrDefault(p => p.Id == id), shell.RemoveAppProfile));
             e.Register(new AdvancedUndoer(() => shell.State.Advanced, shell.RestoreAdvanced));
             e.Register(new JointUndoer(() => shell.State.Joint, shell.RestoreJointOff));
+            e.Register(new Export.SettingsImportUndoer(shell));
             return _changes = e;
         }
     }

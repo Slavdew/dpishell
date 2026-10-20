@@ -569,6 +569,39 @@ public sealed class Shell
     public IpsetVerdict WriteUserIpset(IEnumerable<string> lines, bool exclude = false, bool confirmed = false) =>
         IpLists.WriteUser(lines, exclude, confirmed);
 
+    /// <summary>Свои сайты: файл доменов, список целей, группа «Свои» включается. Негодные строки отбрасываются и возвращаются.</summary>
+    public (IReadOnlyList<string> Saved, IReadOnlyList<string> Rejected) SetUserTargets(IEnumerable<string> lines)
+    {
+        Paths.EnsureDirectories();
+        var trimmed = lines.Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+        var rejected = Data.WriteUserDomains(trimmed);
+        var good = trimmed.Where(l => DataStore.NormalizeDomain(l) is not null).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        State.UserTargets = good;
+        if (good.Count > 0 && !State.Groups.Contains("user")) State.Groups.Add("user");
+        SaveState();
+        return (good, rejected);
+    }
+
+    /// <summary>
+    /// Профили программ целиком (загрузка настроек и её откат): профили из <paramref name="add"/> добавляются как есть (id и дата сохраняются),
+    /// из <paramref name="removeIds"/> убираются; файлы адресов и работающая оптимизация приводятся в порядок. Журнал не трогается — его ведёт вызывающий.
+    /// </summary>
+    public void ChangeAppProfiles(IEnumerable<string> removeIds, IEnumerable<AppProfile> add)
+    {
+        var ids = removeIds.ToHashSet();
+        State.AppProfiles.RemoveAll(p => ids.Contains(p.Id));
+        foreach (var p in add)
+        {
+            if (AppProfiles.Problem(p) is { } problem) throw new InvalidOperationException(problem);
+            if (State.AppProfiles.Count >= AppProfiles.MaxProfiles) throw new InvalidOperationException($"Профилей уже {AppProfiles.MaxProfiles} — удалите ненужный.");
+            State.AppProfiles.RemoveAll(x => x.Id == p.Id);
+            State.AppProfiles.Add(p);
+        }
+        State.Save(Paths);
+        SyncAppProfileFiles();
+        ReapplyIfActive();
+    }
+
     /// <summary>
     /// «Открывать без оптимизации» (API 1.10): список целиком. Домены — в user-exclude.txt (его читают общие роли и IP-списки) и в состояние (сборка добавляет их
     /// как <c>--hostlist-exclude-domains</c> во все роли каталога, в том числе google и discord_media). Работающий обход перезапускается; не поднялся — список возвращается.

@@ -58,6 +58,8 @@ public enum ArgKind
     AdvancedRows,
     /// <summary>Сайты вида example.com — строгий шаблон (<see cref="AdvancedSites.IsDomain"/>), без повторов; на выходе список строк.</summary>
     Domains,
+    /// <summary>План загрузки настроек (JSON-строка <see cref="Export.ImportRequest"/>): разобран строго, каждая запись проверена теми же правилами, что и при чтении чужих файлов, без правок — подделка отклоняется целиком.</summary>
+    SettingsPlan,
 }
 
 public sealed record ArgSpec(string Name, ArgKind Kind, bool Required = false, string[]? Choices = null, int MaxItems = 0);
@@ -212,6 +214,11 @@ public static partial class HelperCommands
         new("joint_set", true, false,
             new ArgSpec("active", ArgKind.Bool, Required: true),
             new ArgSpec("owned", ArgKind.Domains, MaxItems: JointRules.MaxDomains)),
+        // Выгрузка и загрузка своих настроек папкой файлов (API 1.11, docs/settings-export.md). settings_export_read — только чтение: свои данные из закрытой папки
+        // для окна без прав. settings_import — готовый, уже проверенный окном план; помощник проверяет его ещё раз (окну не доверяет), сам сверяет со своим состоянием,
+        // пишет в журнал изменений («Отменить всё» вернёт прежнее) и применяет разделы теми же проверками, что и обычные команды (домены, белый список winws, публичные адреса hosts).
+        new("settings_export_read", false, false),
+        new("settings_import", true, true, new ArgSpec("plan", ArgKind.SettingsPlan, Required: true)),
     ];
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);
@@ -520,6 +527,14 @@ public static partial class HelperCommands
                     if (!list.Contains(d)) list.Add(d);
                 }
                 return list;
+            }
+
+            case ArgKind.SettingsPlan:
+            {
+                var str = String(id, Where(), v, Export.SettingsSections.MaxRequestChars);
+                if (Export.ImportRequest.TryParse(str, out var why) is not { } req) throw new HelperRequestException(id, $"{Where()}: {why}");
+                if (req.Verify(null) is { } bad) throw new HelperRequestException(id, $"{Where()}: {bad}");
+                return str;
             }
 
             case ArgKind.Roles:
