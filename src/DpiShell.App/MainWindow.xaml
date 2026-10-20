@@ -1831,7 +1831,7 @@
                             <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,12"
                                     Visibility="{Binding HasCompat, Converter={StaticResource Vis}}">
                                 <StackPanel>
-                                    <TextBlock Text="{Binding CompatText}" TextWrapping="Wrap" />
+                                    <TextBox Text="{Binding CompatText, Mode=OneWay}" Style="{StaticResource SelectableText}" TextWrapping="Wrap" />
                                     <WrapPanel Margin="-4,8,0,0">
                                         <Button Content="{l:T router.compat.update_router}" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}" Margin="4,0,8,0"
                                                 Visibility="{Binding CompatNeedsRouter, Converter={StaticResource Vis}}" />
@@ -1847,7 +1847,7 @@
                                     <DockPanel>
                                         <Button DockPanel.Dock="Right" Content="{Binding UpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}" VerticalAlignment="Center"
                                                 Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
-                                        <TextBlock Text="{Binding UpdateTitle}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                        <TextBox Text="{Binding UpdateTitle, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
                                     </DockPanel>
                                     <!-- Шаги (status.update.job.step): «Скачиваю → Устанавливаю → Перезапуск службы → Готово», текущий выделен. -->
                                     <ItemsControl ItemsSource="{Binding UpdateSteps}" Margin="0,6,0,0" Visibility="{Binding HasUpdateSteps, Converter={StaticResource Vis}}">
@@ -1873,7 +1873,7 @@
                                                  MaxHeight="220" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{l:T router.update.log_name}" />
                                     </Expander>
                                     <Expander Header="{l:T router.update.notes}" Margin="0,6,0,0" Visibility="{Binding HasUpdateNotes, Converter={StaticResource Vis}}">
-                                        <TextBlock Text="{Binding UpdateNotes}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                        <TextBox Text="{Binding UpdateNotes, Mode=OneWay}" Style="{StaticResource SelectableText}" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     </Expander>
                                 </StackPanel>
                             </Border>
@@ -1894,7 +1894,7 @@
                                         <Button Content="{l:T router.empty.guide}" Style="{StaticResource LinkButton}" Command="{Binding GuideCmd}" VerticalAlignment="Center"
                                                 ToolTip="{l:T router.empty.guide_tip}" />
                                     </WrapPanel>
-                                    <TextBlock Text="{Binding FitText}" TextWrapping="Wrap" Margin="0,6,0,0" Visibility="{Binding HasFit, Converter={StaticResource Vis}}" />
+                                    <TextBox Text="{Binding FitText, Mode=OneWay}" Style="{StaticResource SelectableText}" TextWrapping="Wrap" Margin="0,6,0,0" Visibility="{Binding HasFit, Converter={StaticResource Vis}}" />
                                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                         <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center" Text="{l:T router.empty.installed_q}" />
                                         <Button Content="{l:T router.find}" Style="{StaticResource LinkButton}" Command="{Binding FindCmd}" Margin="6,0,0,0" VerticalAlignment="Center" />
@@ -1927,7 +1927,7 @@
                                     </Ellipse>
                                     <StackPanel Grid.Column="1">
                                         <TextBlock Text="{Binding HomeTitle}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding HomeDetail}" Style="{StaticResource Hint}" Margin="0,1,0,0" />
+                                        <TextBox Text="{Binding HomeDetail, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,1,0,0" />
                                         <!-- Выключение без человека (last_off: сторож, кнопка на корпусе, откат пробы): фраза, «Подробнее» — что не открылось, «Включить снова». -->
                                         <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="4"
                                                 Padding="10,6" Margin="0,8,0,0" HorizontalAlignment="Left" MaxWidth="640"
@@ -1940,7 +1940,7 @@
                                                         <Button Content="{l:T router.select}" Command="{Binding GoSelectCmd}" Margin="8,0,0,0"
                                                                 Visibility="{Binding OfferSelectButton, Converter={StaticResource Vis}}" />
                                                     </StackPanel>
-                                                    <TextBlock Text="{Binding OffText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                    <TextBox Text="{Binding OffText, Mode=OneWay}" Style="{StaticResource SelectableText}" TextWrapping="Wrap" VerticalAlignment="Center" />
                                                 </DockPanel>
                                                 <!-- Подбор после сторожа идёт: полоса хода (текст хода — строкой карточки выше), как у обычного подбора на роутере. -->
                                                 <ProgressBar Height="8" Maximum="{Binding SelectProgressMax}" Value="{Binding SelectProgress, Mode=OneWay}" Margin="0,8,0,2"
@@ -1955,7 +1955,7 @@
                                                 </StackPanel>
                                                 <Expander Header="{l:T common.more}" Margin="0,4,0,0" Visibility="{Binding HasOffDetails, Converter={StaticResource Vis}}">
                                                     <StackPanel Margin="0,4,0,0">
-                                                        <TextBlock Text="{Binding OffDetail}" Style="{StaticResource Hint}" TextWrapping="Wrap"
+                                                        <TextBox Text="{Binding OffDetail, Mode=OneWay}" Style="{StaticResource SelectableHint}" TextWrapping="Wrap"
                                                                    Visibility="{Binding HasOffDetail, Converter={StaticResource Vis}}" />
                                                         <ItemsControl ItemsSource="{Binding OffTargets}" Margin="0,4,0,0">
                                                             <ItemsControl.ItemTemplate>
@@ -1980,7 +1980,7 @@
                                                             <Button DockPanel.Dock="Right" Content="{Binding Fix}" Style="{StaticResource LinkButton}" Margin="8,0,0,0" VerticalAlignment="Center"
                                                                     Visibility="{Binding HasFix, Converter={StaticResource Vis}}"
                                                                     Command="{Binding DataContext.FixWarningCmd, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding Code}" />
-                                                            <TextBlock Text="{Binding Text}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                                            <TextBox Text="{Binding Text, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" />
                                                         </DockPanel>
                                                     </Border>
                                                 </DataTemplate>
@@ -1992,12 +1992,12 @@
                                                 Padding="8,3" Margin="0,6,0,0" HorizontalAlignment="Left" ToolTip="{x:Static local:RouterViewModel.TimestampsTerm}"
                                                 Visibility="{Binding TimestampsNeedAction, Converter={StaticResource Vis}}">
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding TimestampsNote}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="520" />
+                                                <TextBox Text="{Binding TimestampsNote, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="520" />
                                                 <Button Content="{l:T router.enable}" ContentTemplate="{StaticResource Shield}" Style="{StaticResource LinkButton}" Margin="8,0,0,0" VerticalAlignment="Center"
                                                         Command="{Binding EnableTimestampsCmd}" ToolTip="{x:Static local:RouterViewModel.TimestampsTerm}" />
                                             </StackPanel>
                                         </Border>
-                                        <TextBlock Text="{Binding TimestampsNote}" Style="{StaticResource Hint}" FontSize="13" Margin="0,6,0,0" TextWrapping="Wrap"
+                                        <TextBox Text="{Binding TimestampsNote, Mode=OneWay}" Style="{StaticResource SelectableHint}" FontSize="13" Margin="0,6,0,0" TextWrapping="Wrap"
                                                    ToolTip="{x:Static local:RouterViewModel.TimestampsTerm}" Visibility="{Binding TimestampsDone, Converter={StaticResource Vis}}" />
                                         <WrapPanel Margin="0,12,0,0" Visibility="{Binding Connected, Converter={StaticResource Vis}}">
                                             <Button Content="{Binding ToggleText}" Command="{Binding ToggleCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True"
@@ -2032,9 +2032,9 @@
                                               AutomationProperties.Name="{l:T router.joint.title}">
                                         <TextBlock Text="{Binding JointToggleText}" FontSize="15" FontWeight="SemiBold" />
                                     </CheckBox>
-                                    <TextBlock Text="{Binding JointStatus}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="50,4,0,0"
+                                    <TextBox Text="{Binding JointStatus, Mode=OneWay}" Style="{StaticResource SelectableText}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="50,4,0,0"
                                                Visibility="{Binding HasJointStatus, Converter={StaticResource Vis}}" />
-                                    <TextBlock Text="{Binding JointNotes}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="50,2,0,0" local:Demo.Sensitive="True"
+                                    <TextBox Text="{Binding JointNotes, Mode=OneWay}" Style="{StaticResource SelectableHint}" TextWrapping="Wrap" Margin="50,2,0,0" local:Demo.Sensitive="True"
                                                Visibility="{Binding HasJointNotes, Converter={StaticResource Vis}}" />
                                     <TextBlock Text="{Binding JointHint}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="50,4,0,0"
                                                Visibility="{Binding HasJointHint, Converter={StaticResource Vis}}" />
@@ -2048,7 +2048,7 @@
                                 <StackPanel>
                                     <DockPanel>
                                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
-                                            <TextBlock Text="{Binding DiagUpdated}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                            <TextBox Text="{Binding DiagUpdated, Mode=OneWay}" Style="{StaticResource SelectableHint}" VerticalAlignment="Center" Margin="0,0,10,0" />
                                             <Button Content="{l:T router.diag.save_report}" Style="{StaticResource LinkButton}" Command="{Binding SaveReportCmd}" Margin="0,0,8,0" />
                                             <Button Content="{l:T router.diag.recheck}" Style="{StaticResource LinkButton}" Command="{Binding RefreshDiagCmd}" />
                                         </StackPanel>
@@ -2070,16 +2070,16 @@
                                             <TextBlock Text="{l:T router.diag.flow}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                             <!-- «Исправить» — один раз, в плашке выше: одна проблема показывается один раз (UX-аудит 6, п. 13). -->
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,6">
-                                                <TextBlock Text="{Binding FlowOffloadText}" />
+                                                <TextBox Text="{Binding FlowOffloadText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
                                             </StackPanel>
                                             <TextBlock Grid.Row="1" Text="{l:T router.diag.ipv6}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                             <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,6">
-                                                <TextBlock Text="{Binding Ipv6Text}" />
+                                                <TextBox Text="{Binding Ipv6Text, Mode=OneWay}" Style="{StaticResource SelectableText}" />
                                             </StackPanel>
                                             <TextBlock Grid.Row="2" Text="{l:T common.nav.dns}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
-                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DnsText}" local:Demo.Sensitive="True" Margin="0,0,0,6" />
+                                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding DnsText, Mode=OneWay}" Style="{StaticResource SelectableText}" local:Demo.Sensitive="True" Margin="0,0,0,6" />
                                             <TextBlock Grid.Row="3" Text="{l:T router.diag.space}" Style="{StaticResource Hint}" />
-                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SpaceText}" />
+                                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SpaceText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
                                         </Grid>
                                         <TextBlock Text="{l:T router.diag.conflicts}" Style="{StaticResource Hint}" Margin="0,12,0,4" />
                                         <TextBlock Text="{l:T router.diag.none}" Visibility="{Binding Conflicts.Count, Converter={StaticResource Zero}}" />
@@ -2109,12 +2109,12 @@
                                             <TextBlock Text="{l:T router.dns.title}" Style="{StaticResource H2}" />
                                             <local:InfoButton Topic="{x:Static local:InfoTexts.RouterDns}" Margin="8,0,0,8" />
                                         </StackPanel>
-                                        <TextBlock Text="{Binding DnsState}" FontWeight="SemiBold" TextWrapping="Wrap" Visibility="{Binding DnsLoaded, Converter={StaticResource Vis}}" />
-                                        <TextBlock Text="{Binding DnsHint}" Style="{StaticResource Hint}" Margin="0,2,0,0" TextWrapping="Wrap" Visibility="{Binding HasDnsHint, Converter={StaticResource Vis}}" />
+                                        <TextBox Text="{Binding DnsState, Mode=OneWay}" Style="{StaticResource SelectableText}" FontWeight="SemiBold" TextWrapping="Wrap" Visibility="{Binding DnsLoaded, Converter={StaticResource Vis}}" />
+                                        <TextBox Text="{Binding DnsHint, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,2,0,0" TextWrapping="Wrap" Visibility="{Binding HasDnsHint, Converter={StaticResource Vis}}" />
                                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Visibility="{Binding HasDnsJob, Converter={StaticResource Vis}}">
                                             <ProgressBar Height="4" Width="60" IsIndeterminate="{Binding DnsRunning}" VerticalAlignment="Center" Margin="0,0,8,0"
                                                          Visibility="{Binding DnsRunning, Converter={StaticResource Vis}}" />
-                                            <TextBlock Text="{Binding DnsJobText}" Style="{StaticResource Hint}" TextWrapping="Wrap" />
+                                            <TextBox Text="{Binding DnsJobText, Mode=OneWay}" Style="{StaticResource SelectableHint}" TextWrapping="Wrap" />
                                         </StackPanel>
                                         <WrapPanel Margin="0,10,0,0">
                                             <Button Content="{l:T router.check}" Command="{Binding DnsCheckCmd}" />
@@ -2133,7 +2133,7 @@
                                             <ItemsControl ItemsSource="{Binding DnsServers}" Margin="0,4,0,0">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
-                                                        <TextBlock Text="{Binding}" Style="{StaticResource Hint}" Margin="0,1" />
+                                                        <TextBox Text="{Binding Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,1" />
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
@@ -2163,7 +2163,7 @@
                                                           VerticalAlignment="Center" />
                                                 <local:InfoButton Topic="{x:Static local:InfoTexts.RouterWatchdog}" Margin="8,0,0,0" />
                                             </StackPanel>
-                                            <TextBlock Text="{Binding WatchdogLine}" Style="{StaticResource Hint}" Margin="26,4,0,0"
+                                            <TextBox Text="{Binding WatchdogLine, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="26,4,0,0"
                                                        Visibility="{Binding HasWatchdogLine, Converter={StaticResource Vis}}" />
                                         </StackPanel>
                                     </StackPanel>
@@ -2182,10 +2182,10 @@
                                         <!-- Установка по SSH: пакета нет — «Установить на роутер», есть — «Установить заново» (починить сломанную установку). -->
                                         <Button Content="{Binding InstallText}" Command="{Binding InstallCmd}" Visibility="{Binding Found, Converter={StaticResource Vis}}" />
                                     </WrapPanel>
-                                    <TextBlock Text="{Binding ConnectionText}" FontWeight="SemiBold" Margin="0,4,0,0" TextWrapping="Wrap"
+                                    <TextBox Text="{Binding ConnectionText, Mode=OneWay}" FontWeight="SemiBold" Margin="0,4,0,0" TextWrapping="Wrap"
                                                Visibility="{Binding ShowConnectionText, Converter={StaticResource Vis}}">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
+                                        <TextBox.Style>
+                                            <Style TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
                                                 <Setter Property="Foreground" Value="{DynamicResource Text}" />
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding ConnectionOk}" Value="True">
@@ -2193,8 +2193,8 @@
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
+                                        </TextBox.Style>
+                                    </TextBox>
                                     <!-- Пароль переиспользуется везде (вход, установка, удаление, обновление по SSH); видно, что он сохранён, и его можно забыть. -->
                                     <WrapPanel Margin="0,4,0,0" Visibility="{Binding HasSavedPassword, Converter={StaticResource Vis}}">
                                         <TextBlock Text="{Binding SavedPasswordText}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
@@ -2441,8 +2441,8 @@
                                         </StackPanel>
                                         <TextBlock Grid.Row="4" Text="{l:T about.row.router}" Style="{StaticResource Hint}" Margin="0,2,16,2" />
                                         <StackPanel Grid.Row="4" Grid.Column="1" DataContext="{Binding Router}">
-                                            <TextBlock Text="{Binding PackageVersionText}" TextWrapping="Wrap" Margin="0,2,0,2" />
-                                            <TextBlock Text="{Binding PackageUpdateText}" FontWeight="SemiBold" Margin="0,2,0,2"
+                                            <TextBox Text="{Binding PackageVersionText, Mode=OneWay}" Style="{StaticResource SelectableText}" TextWrapping="Wrap" Margin="0,2,0,2" />
+                                            <TextBox Text="{Binding PackageUpdateText, Mode=OneWay}" Style="{StaticResource SelectableText}" FontWeight="SemiBold" Margin="0,2,0,2"
                                                        Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
                                             <WrapPanel>
                                                 <Button Content="{Binding UpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}"
@@ -2453,7 +2453,7 @@
                                         </StackPanel>
                                         <!-- Ядро, установленное на роутере (status.core.installed_version, роутер 0.2.0-r8); нет входа или старый роутер — строки нет. -->
                                         <TextBlock Grid.Row="5" Text="{l:T about.row.router_core}" Style="{StaticResource Hint}" Margin="0,2,16,2" Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
-                                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Router.RouterCoreText}" TextWrapping="Wrap" Margin="0,2,0,2"
+                                        <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Router.RouterCoreText, Mode=OneWay}" Style="{StaticResource SelectableText}" TextWrapping="Wrap" Margin="0,2,0,2"
                                                    Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
                                     </Grid>
                                     <Button Content="{Binding FixHelperText}" Command="{Binding FixHelperCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
