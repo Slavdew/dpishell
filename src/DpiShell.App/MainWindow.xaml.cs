@@ -127,11 +127,11 @@ public partial class MainWindow : Window
         if (router.Strategies.FirstOrDefault(s => s.Id == router.CurrentStrategyId) is { HasParams: true } current)
         {
             menu.Items.Add(new System.Windows.Controls.Separator());
-            var copy = new System.Windows.Controls.MenuItem { Header = "Скопировать параметры: " + current.Title };
+            var copy = new System.Windows.Controls.MenuItem { Header = L.T("router.strategy.copy_params", new { name = current.Title }) };
             copy.Click += (_, _) => router.CopyParams(current);
             menu.Items.Add(copy);
         }
-        if (menu.Items.Count == 0) menu.Items.Add(new System.Windows.Controls.MenuItem { Header = "Список стратегий роутера пуст", IsEnabled = false });
+        if (menu.Items.Count == 0) menu.Items.Add(new System.Windows.Controls.MenuItem { Header = L.T("router.strategy.menu_empty"), IsEnabled = false });
         menu.IsOpen = true;
     }
 

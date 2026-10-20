@@ -142,15 +142,15 @@
                             <DockPanel>
                                 <!-- Ссылки переносятся на новую строку, а не отнимают ширину у заголовка (UX-аудит 5, п. 2). -->
                                 <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" MaxWidth="360" Margin="12,0,0,0">
-                                    <Button Content="Войти" Style="{StaticResource LinkButton}" Command="{Binding LoginCmd}" Margin="8,0,0,0"
+                                    <Button Content="{l:T router.login}" Style="{StaticResource LinkButton}" Command="{Binding LoginCmd}" Margin="8,0,0,0"
                                             Visibility="{Binding NeedLogin, Converter={StaticResource Vis}}" />
                                     <!-- Выключил сторож, кнопка или откат (last_off) — включить снова тут же, на пробу. -->
-                                    <Button Content="Подобрать на роутере" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="8,0,0,0"
+                                    <Button Content="{l:T router.select}" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="8,0,0,0"
                                             Visibility="{Binding CanReEnable, Converter={StaticResource Vis}}" />
                                     <Button Content="{Binding ReEnableText}" Style="{StaticResource LinkButton}" Command="{Binding ReEnableCmd}" Margin="8,0,0,0"
                                             Visibility="{Binding CanReEnable, Converter={StaticResource Vis}}" />
-                                    <Button Content="Подробнее →" Style="{StaticResource LinkButton}" Command="{Binding DataContext.GoRouterCmd, RelativeSource={RelativeSource AncestorType=TabControl}}"
-                                            Margin="8,0,0,0" AutomationProperties.Name="Открыть вкладку «Роутер»" />
+                                    <Button Content="{l:T router.details_arrow}" Style="{StaticResource LinkButton}" Command="{Binding DataContext.GoRouterCmd, RelativeSource={RelativeSource AncestorType=TabControl}}"
+                                            Margin="8,0,0,0" AutomationProperties.Name="{l:T router.open_tab_name}" />
                                 </WrapPanel>
                                 <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0">
                                     <Ellipse.Style>
@@ -1802,7 +1802,7 @@
                 <TabItem Header="{l:T common.nav.router}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Router}">
                         <StackPanel>
-                            <TextBlock Text="Роутер" Style="{StaticResource H1}" />
+                            <TextBlock Text="{l:T common.nav.router}" Style="{StaticResource H1}" />
 
                             <!-- Совместимость (router-api §5.4): другая версия на роутере — что не так и что сделать. Обновление программы — отдельно (ссылка на выпуски). -->
                             <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,12"
@@ -1810,10 +1810,10 @@
                                 <StackPanel>
                                     <TextBlock Text="{Binding CompatText}" TextWrapping="Wrap" />
                                     <WrapPanel Margin="-4,8,0,0">
-                                        <Button Content="Обновить роутер" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}" Margin="4,0,8,0"
+                                        <Button Content="{l:T router.compat.update_router}" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}" Margin="4,0,8,0"
                                                 Visibility="{Binding CompatNeedsRouter, Converter={StaticResource Vis}}" />
-                                        <Button Content="Обновить программу →" Style="{StaticResource LinkButton}" Command="{Binding GoUpdatesCmd}" VerticalAlignment="Center" Margin="4,0,8,0"
-                                                ToolTip="Вкладка «Информация и обновления»" Visibility="{Binding CompatNeedsApp, Converter={StaticResource Vis}}" />
+                                        <Button Content="{l:T router.compat.update_app}" Style="{StaticResource LinkButton}" Command="{Binding GoUpdatesCmd}" VerticalAlignment="Center" Margin="4,0,8,0"
+                                                ToolTip="{l:T router.compat.update_app_tip}" Visibility="{Binding CompatNeedsApp, Converter={StaticResource Vis}}" />
                                     </WrapPanel>
                                 </StackPanel>
                             </Border>
@@ -1847,9 +1847,9 @@
                                     </ItemsControl>
                                     <Expander Header="{l:T common.more}" Margin="0,6,0,0" Visibility="{Binding HasUpdateLog, Converter={StaticResource Vis}}">
                                         <TextBox Text="{Binding UpdateLog, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Padding="6,4" Margin="0,4,0,0"
-                                                 MaxHeight="220" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Журнал обновления" />
+                                                 MaxHeight="220" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{l:T router.update.log_name}" />
                                     </Expander>
-                                    <Expander Header="Что нового" Margin="0,6,0,0" Visibility="{Binding HasUpdateNotes, Converter={StaticResource Vis}}">
+                                    <Expander Header="{l:T router.update.notes}" Margin="0,6,0,0" Visibility="{Binding HasUpdateNotes, Converter={StaticResource Vis}}">
                                         <TextBlock Text="{Binding UpdateNotes}" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     </Expander>
                                 </StackPanel>
@@ -1861,24 +1861,24 @@
                                 <StackPanel>
                                     <TextBlock Text="{Binding EmptyTitle}" Style="{StaticResource H2}" />
                                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
-                                               Text="С роутером оптимизация работает для всех устройств дома: телефонов, телевизора, приставки. Без роутера всё работает и на одном этом компьютере." />
+                                               Text="{l:T router.empty.intro}" />
                                     <!-- Человек не знает слов «OpenWrt» и «LuCI»: одна кнопка, программа сама находит роутер и отвечает «да / нет / не знаю» (UX-аудит 7, п. 10). -->
                                     <WrapPanel Margin="-4,10,0,0">
-                                        <Button Content="Проверить, подходит ли мой роутер" Style="{StaticResource Primary}" Command="{Binding FitCmd}" Margin="4,0,8,0" />
+                                        <Button Content="{l:T router.empty.fit}" Style="{StaticResource Primary}" Command="{Binding FitCmd}" Margin="4,0,8,0" />
                                         <!-- Установка из окна по SSH (router-api §5.4, RouterInstallDialog). -->
-                                        <Button Content="Установить на роутер" Command="{Binding InstallCmd}" Margin="4,0,8,0"
+                                        <Button Content="{l:T router.empty.install}" Command="{Binding InstallCmd}" Margin="4,0,8,0"
                                                 Visibility="{Binding CanInstall, Converter={StaticResource Vis}}" />
-                                        <Button Content="Как поставить на роутер ↗" Style="{StaticResource LinkButton}" Command="{Binding GuideCmd}" VerticalAlignment="Center"
-                                                ToolTip="Инструкция на GitHub: docs/router/README.md" />
+                                        <Button Content="{l:T router.empty.guide}" Style="{StaticResource LinkButton}" Command="{Binding GuideCmd}" VerticalAlignment="Center"
+                                                ToolTip="{l:T router.empty.guide_tip}" />
                                     </WrapPanel>
                                     <TextBlock Text="{Binding FitText}" TextWrapping="Wrap" Margin="0,6,0,0" Visibility="{Binding HasFit, Converter={StaticResource Vis}}" />
                                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                        <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center" Text="DpiShell на роутере уже стоит?" />
-                                        <Button Content="Найти" Style="{StaticResource LinkButton}" Command="{Binding FindCmd}" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                        <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center" Text="{l:T router.empty.installed_q}" />
+                                        <Button Content="{l:T router.find}" Style="{StaticResource LinkButton}" Command="{Binding FindCmd}" Margin="6,0,0,0" VerticalAlignment="Center" />
                                     </StackPanel>
                                     <Expander Header="{l:T common.more}" Margin="0,6,0,0">
                                         <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0"
-                                                   Text="DpiShell ставится на роутеры с прошивкой OpenWrt (на многие модели с OpenWrt 25.x). Проверить самому: откройте в браузере адрес роутера (обычно 192.168.1.1) — у OpenWrt страница входа называется LuCI." />
+                                                   Text="{l:T router.empty.openwrt_hint}" />
                                     </Expander>
                                 </StackPanel>
                             </Border>
@@ -1914,7 +1914,7 @@
                                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0"
                                                                 Visibility="{Binding CanReEnable, Converter={StaticResource Vis}}">
                                                         <Button Content="{Binding ReEnableText}" Style="{StaticResource LinkButton}" Command="{Binding ReEnableCmd}" />
-                                                        <Button Content="Подобрать на роутере" Command="{Binding GoSelectCmd}" Margin="8,0,0,0"
+                                                        <Button Content="{l:T router.select}" Command="{Binding GoSelectCmd}" Margin="8,0,0,0"
                                                                 Visibility="{Binding OfferSelectButton, Converter={StaticResource Vis}}" />
                                                     </StackPanel>
                                                     <TextBlock Text="{Binding OffText}" TextWrapping="Wrap" VerticalAlignment="Center" />
@@ -1924,10 +1924,10 @@
                                                              Visibility="{Binding WdRunning, Converter={StaticResource Vis}}" />
                                                 <!-- Сторож выключил обход: не решаем за человека, а предлагаем подобрать другую стратегию; «Не сейчас» прячет до следующего срабатывания. -->
                                                 <StackPanel Margin="0,8,0,0" Visibility="{Binding OfferSelect, Converter={StaticResource Vis}}">
-                                                    <TextBlock Text="Подобрать на роутере другую стратегию сейчас?" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{l:T router.off.offer_title}" FontWeight="SemiBold" />
                                                     <WrapPanel Margin="0,6,0,0">
-                                                        <Button Content="Подобрать" Style="{StaticResource Primary}" Command="{Binding GoSelectCmd}" />
-                                                        <Button Content="Не сейчас" Command="{Binding DismissOfferCmd}" />
+                                                        <Button Content="{l:T router.select}" Style="{StaticResource Primary}" Command="{Binding GoSelectCmd}" />
+                                                        <Button Content="{l:T router.not_now}" Command="{Binding DismissOfferCmd}" />
                                                     </WrapPanel>
                                                 </StackPanel>
                                                 <Expander Header="{l:T common.more}" Margin="0,4,0,0" Visibility="{Binding HasOffDetails, Converter={StaticResource Vis}}">
@@ -1970,7 +1970,7 @@
                                                 Visibility="{Binding TimestampsNeedAction, Converter={StaticResource Vis}}">
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="{Binding TimestampsNote}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="520" />
-                                                <Button Content="Включить" ContentTemplate="{StaticResource Shield}" Style="{StaticResource LinkButton}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                <Button Content="{l:T router.enable}" ContentTemplate="{StaticResource Shield}" Style="{StaticResource LinkButton}" Margin="8,0,0,0" VerticalAlignment="Center"
                                                         Command="{Binding EnableTimestampsCmd}" ToolTip="{x:Static local:RouterViewModel.TimestampsTerm}" />
                                             </StackPanel>
                                         </Border>
@@ -1979,18 +1979,18 @@
                                         <WrapPanel Margin="0,12,0,0" Visibility="{Binding Connected, Converter={StaticResource Vis}}">
                                             <Button Content="{Binding ToggleText}" Command="{Binding ToggleCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True"
                                                     Visibility="{Binding ShowRouterActions, Converter={StaticResource Vis}}" />
-                                            <Button Content="Проверить" Command="{Binding CheckCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True" />
-                                            <Button Content="Подобрать на роутере" Command="{Binding GoSelectCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True"
+                                            <Button Content="{l:T router.check}" Command="{Binding CheckCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True" />
+                                            <Button Content="{l:T router.select}" Command="{Binding GoSelectCmd}" ToolTip="{Binding MethodsTip}" ToolTipService.ShowOnDisabled="True"
                                                     Visibility="{Binding ShowRouterActions, Converter={StaticResource Vis}}" />
-                                            <Button Content="Остановить подбор" Command="{Binding StopSelectCmd}" Visibility="{Binding WdRunning, Converter={StaticResource Vis}}" />
-                                            <Button Click="RouterStrategy_Click" IsEnabled="{Binding CanAct}" ToolTip="Стратегия на роутере" AutomationProperties.Name="Стратегия на роутере"
+                                            <Button Content="{l:T router.stop_select}" Command="{Binding StopSelectCmd}" Visibility="{Binding WdRunning, Converter={StaticResource Vis}}" />
+                                            <Button Click="RouterStrategy_Click" IsEnabled="{Binding CanAct}" ToolTip="{l:T router.strategy_tip}" AutomationProperties.Name="{l:T router.strategy_tip}"
                                                     Visibility="{Binding ShowRouterActions, Converter={StaticResource Vis}}">
-                                                <TextBlock><Run Text="Стратегия" /><Run Text=" ▾" Foreground="{DynamicResource Muted}" /></TextBlock>
+                                                <TextBlock><Run Text="{l:T router.strategy}" /><Run Text=" ▾" Foreground="{DynamicResource Muted}" /></TextBlock>
                                             </Button>
                                         </WrapPanel>
                                         <StackPanel Visibility="{Binding NeedLogin, Converter={StaticResource Vis}}" Margin="0,10,0,0">
-                                            <TextBlock Text="Войдите на роутер, чтобы управлять оптимизацией на нём." Style="{StaticResource Hint}" />
-                                            <Button Content="Войти" Command="{Binding LoginCmd}" Style="{StaticResource Primary}" HorizontalAlignment="Left" Margin="0,8,0,0" />
+                                            <TextBlock Text="{l:T router.login_hint}" Style="{StaticResource Hint}" />
+                                            <Button Content="{l:T router.login}" Command="{Binding LoginCmd}" Style="{StaticResource Primary}" HorizontalAlignment="Left" Margin="0,8,0,0" />
                                         </StackPanel>
                                     </StackPanel>
                                 </Grid>
@@ -2001,12 +2001,12 @@
                             <Border Style="{StaticResource Card}" Visibility="{Binding JointCardVisible, Converter={StaticResource Vis}}">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="Совместная работа с роутером" Style="{StaticResource H2}" />
+                                        <TextBlock Text="{l:T router.joint.title}" Style="{StaticResource H2}" />
                                         <local:InfoButton Topic="{x:Static local:InfoTexts.Joint}" Margin="8,0,0,8" />
                                     </StackPanel>
                                     <!-- Переключатель показывает настоящее состояние: роутера нет — выключен, а не «включён и ждёт» (UX-аудит 6, п. 6, 14). -->
                                     <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding JointShown}" IsEnabled="{Binding JointAvailable}" HorizontalAlignment="Left"
-                                              AutomationProperties.Name="Совместная работа с роутером">
+                                              AutomationProperties.Name="{l:T router.joint.title}">
                                         <TextBlock Text="{Binding JointToggleText}" FontSize="15" FontWeight="SemiBold" />
                                     </CheckBox>
                                     <TextBlock Text="{Binding JointStatus}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="50,4,0,0"
@@ -2015,8 +2015,8 @@
                                                Visibility="{Binding HasJointNotes, Converter={StaticResource Vis}}" />
                                     <TextBlock Text="{Binding JointHint}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="50,4,0,0"
                                                Visibility="{Binding HasJointHint, Converter={StaticResource Vis}}" />
-                                    <Button Content="Не ждать роутер" Style="{StaticResource LinkButton}" Command="{Binding JointStopWaitCmd}" HorizontalAlignment="Left" Margin="46,0,0,0"
-                                            Visibility="{Binding JointWaiting, Converter={StaticResource Vis}}" ToolTip="Выключить совместную работу: этот ПК останется сам по себе" />
+                                    <Button Content="{l:T router.joint.stop_wait}" Style="{StaticResource LinkButton}" Command="{Binding JointStopWaitCmd}" HorizontalAlignment="Left" Margin="46,0,0,0"
+                                            Visibility="{Binding JointWaiting, Converter={StaticResource Vis}}" ToolTip="{l:T router.joint.stop_wait_tip}" />
                                 </StackPanel>
                             </Border>
 
@@ -2026,10 +2026,10 @@
                                     <DockPanel>
                                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
                                             <TextBlock Text="{Binding DiagUpdated}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                            <Button Content="Сохранить отчёт роутера" Style="{StaticResource LinkButton}" Command="{Binding SaveReportCmd}" Margin="0,0,8,0" />
-                                            <Button Content="Проверить снова" Style="{StaticResource LinkButton}" Command="{Binding RefreshDiagCmd}" />
+                                            <Button Content="{l:T router.diag.save_report}" Style="{StaticResource LinkButton}" Command="{Binding SaveReportCmd}" Margin="0,0,8,0" />
+                                            <Button Content="{l:T router.diag.recheck}" Style="{StaticResource LinkButton}" Command="{Binding RefreshDiagCmd}" />
                                         </StackPanel>
-                                        <TextBlock Text="Роутер: что мешает" Style="{StaticResource H2}" />
+                                        <TextBlock Text="{l:T router.diag.title}" Style="{StaticResource H2}" />
                                     </DockPanel>
                                     <TextBlock Text="{Binding DiagHint}" Style="{StaticResource Hint}" Visibility="{Binding ShowDiagHint, Converter={StaticResource Vis}}" />
                                     <StackPanel Visibility="{Binding DiagLoaded, Converter={StaticResource Vis}}">
@@ -2044,27 +2044,27 @@
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
-                                            <TextBlock Text="Ускорение сети" Style="{StaticResource Hint}" Margin="0,0,0,6" />
+                                            <TextBlock Text="{l:T router.diag.flow}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                             <!-- «Исправить» — один раз, в плашке выше: одна проблема показывается один раз (UX-аудит 6, п. 13). -->
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,6">
                                                 <TextBlock Text="{Binding FlowOffloadText}" />
                                             </StackPanel>
-                                            <TextBlock Grid.Row="1" Text="IPv6 у провайдера" Style="{StaticResource Hint}" Margin="0,0,0,6" />
+                                            <TextBlock Grid.Row="1" Text="{l:T router.diag.ipv6}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                             <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,6">
                                                 <TextBlock Text="{Binding Ipv6Text}" />
                                             </StackPanel>
-                                            <TextBlock Grid.Row="2" Text="DNS" Style="{StaticResource Hint}" Margin="0,0,0,6" />
+                                            <TextBlock Grid.Row="2" Text="{l:T common.nav.dns}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                             <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DnsText}" local:Demo.Sensitive="True" Margin="0,0,0,6" />
-                                            <TextBlock Grid.Row="3" Text="Свободно места" Style="{StaticResource Hint}" />
+                                            <TextBlock Grid.Row="3" Text="{l:T router.diag.space}" Style="{StaticResource Hint}" />
                                             <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SpaceText}" />
                                         </Grid>
-                                        <TextBlock Text="Похожие программы на роутере" Style="{StaticResource Hint}" Margin="0,12,0,4" />
-                                        <TextBlock Text="Не найдены." Visibility="{Binding Conflicts.Count, Converter={StaticResource Zero}}" />
+                                        <TextBlock Text="{l:T router.diag.conflicts}" Style="{StaticResource Hint}" Margin="0,12,0,4" />
+                                        <TextBlock Text="{l:T router.diag.none}" Visibility="{Binding Conflicts.Count, Converter={StaticResource Zero}}" />
                                         <ItemsControl ItemsSource="{Binding Conflicts}" local:Demo.Sensitive="True">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <DockPanel Margin="0,2">
-                                                        <Button DockPanel.Dock="Right" Content="Остановить" Style="{StaticResource LinkButton}" VerticalAlignment="Center"
+                                                        <Button DockPanel.Dock="Right" Content="{l:T router.diag.stop}" Style="{StaticResource LinkButton}" VerticalAlignment="Center"
                                                                 Visibility="{Binding CanStop, Converter={StaticResource Vis}}"
                                                                 Command="{Binding DataContext.StopConflictCmd, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding Name}" />
                                                         <TextBlock VerticalAlignment="Center" TextWrapping="Wrap">
@@ -2083,7 +2083,7 @@
                                 <Border Style="{StaticResource Card}">
                                     <StackPanel>
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="DNS для всей сети" Style="{StaticResource H2}" />
+                                            <TextBlock Text="{l:T router.dns.title}" Style="{StaticResource H2}" />
                                             <local:InfoButton Topic="{x:Static local:InfoTexts.RouterDns}" Margin="8,0,0,8" />
                                         </StackPanel>
                                         <TextBlock Text="{Binding DnsState}" FontWeight="SemiBold" TextWrapping="Wrap" Visibility="{Binding DnsLoaded, Converter={StaticResource Vis}}" />
@@ -2094,12 +2094,12 @@
                                             <TextBlock Text="{Binding DnsJobText}" Style="{StaticResource Hint}" TextWrapping="Wrap" />
                                         </StackPanel>
                                         <WrapPanel Margin="0,10,0,0">
-                                            <Button Content="Проверить" Command="{Binding DnsCheckCmd}" />
+                                            <Button Content="{l:T router.check}" Command="{Binding DnsCheckCmd}" />
                                             <!-- Старый пакет на роутере (без dns_presets) — одна кнопка, как раньше. -->
                                             <StackPanel Orientation="Horizontal" Visibility="{Binding DnsSingleButton, Converter={StaticResource Vis}}">
-                                                <Button Content="Включить защищённый DNS" Style="{StaticResource Primary}" Command="{Binding DnsEnableCmd}"
+                                                <Button Content="{l:T router.dns.enable}" Style="{StaticResource Primary}" Command="{Binding DnsEnableCmd}"
                                                         Visibility="{Binding DnsCanEnable, Converter={StaticResource Vis}}" />
-                                                <Button Content="Вернуть как было" Command="{Binding DnsRestoreCmd}"
+                                                <Button Content="{l:T router.dns.restore}" Command="{Binding DnsRestoreCmd}"
                                                         Visibility="{Binding DnsProtected, Converter={StaticResource Vis}}" />
                                             </StackPanel>
                                         </WrapPanel>
@@ -2121,22 +2121,22 @@
                                 <!-- «Проверять сам» и автоподбор (schedule_set) — на роутере, на ПК фоновой проверки нет. -->
                                 <Border Style="{StaticResource Card}">
                                     <StackPanel>
-                                        <TextBlock Text="Проверять сам" Style="{StaticResource H2}" />
+                                        <TextBlock Text="{l:T router.schedule.title}" Style="{StaticResource H2}" />
                                         <StackPanel Orientation="Horizontal">
-                                            <CheckBox Content="Проверять сайты" IsChecked="{Binding ScheduleEnabled}" IsEnabled="{Binding CanAct}" VerticalAlignment="Center" />
+                                            <CheckBox Content="{l:T router.schedule.enabled}" IsChecked="{Binding ScheduleEnabled}" IsEnabled="{Binding CanAct}" VerticalAlignment="Center" />
                                             <ComboBox ItemsSource="{Binding Source={x:Static local:RouterViewModel.ScheduleOptions}}" DisplayMemberPath="Title" SelectedValuePath="Hours"
                                                       SelectedValue="{Binding ScheduleHours}" IsEnabled="{Binding ScheduleEditable}" Width="180" Margin="14,0,0,0" VerticalAlignment="Center"
-                                                      AutomationProperties.Name="Как часто проверять" />
+                                                      AutomationProperties.Name="{l:T router.schedule.interval_name}" />
                                         </StackPanel>
-                                        <TextBlock Text="При неудаче роутер переключится на запасную стратегию." Style="{StaticResource Hint}" Margin="26,4,0,0" />
-                                        <CheckBox Content="Если не помогло — подобрать заново" IsChecked="{Binding AutoSelect}" IsEnabled="{Binding ScheduleEditable}"
+                                        <TextBlock Text="{l:T router.schedule.fallback_hint}" Style="{StaticResource Hint}" Margin="26,4,0,0" />
+                                        <CheckBox Content="{l:T router.schedule.reselect}" IsChecked="{Binding AutoSelect}" IsEnabled="{Binding ScheduleEditable}"
                                                   Margin="0,10,0,0" HorizontalAlignment="Left" />
-                                        <TextBlock Text="Подбор 2–3 мин, не чаще раза в 6 ч; на это время сайты на всех устройствах будут прерываться." Style="{StaticResource Hint}"
+                                        <TextBlock Text="{l:T router.schedule.reselect_hint}" Style="{StaticResource Hint}"
                                                    Margin="26,4,0,0" TextWrapping="Wrap" />
                                         <!-- Сторож (schedule.watchdog, status.watchdog): аварийный выключатель на самом роутере. -->
                                         <StackPanel Visibility="{Binding WatchdogAvailable, Converter={StaticResource Vis}}">
                                             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                                <CheckBox Content="Сторож: выключать оптимизацию, если с ней пропал интернет" IsChecked="{Binding WatchdogEnabled}" IsEnabled="{Binding CanAct}"
+                                                <CheckBox Content="{l:T router.watchdog.check}" IsChecked="{Binding WatchdogEnabled}" IsEnabled="{Binding CanAct}"
                                                           VerticalAlignment="Center" />
                                                 <local:InfoButton Topic="{x:Static local:InfoTexts.RouterWatchdog}" Margin="8,0,0,0" />
                                             </StackPanel>
@@ -2150,12 +2150,12 @@
                             <!-- Подключение: адрес и вход (раньше — карточка в конце «Диагностики»). Пароль — в диалоге «Войти». -->
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="Подключение" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T router.connection.title}" Style="{StaticResource H2}" />
                                     <WrapPanel Margin="0,4,0,0">
                                         <!-- Роутера нет — «Найти» одна, в карточке выше (UX-аудит 6, п. 14). -->
-                                        <Button Content="Найти" Command="{Binding FindCmd}" Visibility="{Binding Found, Converter={StaticResource Vis}}" />
-                                        <Button Content="Войти…" Style="{StaticResource Primary}" Command="{Binding LoginCmd}" Visibility="{Binding NeedLogin, Converter={StaticResource Vis}}" />
-                                        <Button Content="Сменить пароль…" Command="{Binding LoginCmd}" Visibility="{Binding Connected, Converter={StaticResource Vis}}" />
+                                        <Button Content="{l:T router.find}" Command="{Binding FindCmd}" Visibility="{Binding Found, Converter={StaticResource Vis}}" />
+                                        <Button Content="{l:T router.login_dots}" Style="{StaticResource Primary}" Command="{Binding LoginCmd}" Visibility="{Binding NeedLogin, Converter={StaticResource Vis}}" />
+                                        <Button Content="{l:T router.change_password}" Command="{Binding LoginCmd}" Visibility="{Binding Connected, Converter={StaticResource Vis}}" />
                                         <!-- Установка по SSH: пакета нет — «Установить на роутер», есть — «Установить заново» (починить сломанную установку). -->
                                         <Button Content="{Binding InstallText}" Command="{Binding InstallCmd}" Visibility="{Binding Found, Converter={StaticResource Vis}}" />
                                     </WrapPanel>
@@ -2176,17 +2176,17 @@
                                     <WrapPanel Margin="0,4,0,0" Visibility="{Binding HasSavedPassword, Converter={StaticResource Vis}}">
                                         <TextBlock Text="{Binding SavedPasswordText}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                         <TextBlock Text=" · " Style="{StaticResource Hint}" VerticalAlignment="Center" />
-                                        <Button Content="Забыть" Style="{StaticResource LinkButton}" Command="{Binding ForgetPasswordCmd}" VerticalAlignment="Center"
-                                                ToolTip="Стереть сохранённый пароль роутера с этого компьютера" />
+                                        <Button Content="{l:T router.forget}" Style="{StaticResource LinkButton}" Command="{Binding ForgetPasswordCmd}" VerticalAlignment="Center"
+                                                ToolTip="{l:T router.forget_tip}" />
                                     </WrapPanel>
                                     <!-- Адрес — в «Дополнительно», как в окне входа: обычно его определяют сами (UX-аудит 2, п. 10). -->
-                                    <Expander Header="Дополнительно: адрес роутера" Margin="0,8,0,0" IsExpanded="{Binding AddressCustom, Mode=OneTime}">
+                                    <Expander Header="{l:T router.address.header}" Margin="0,8,0,0" IsExpanded="{Binding AddressCustom, Mode=OneTime}">
                                         <StackPanel Margin="0,4,0,0">
                                             <RadioButton Content="{Binding AutoAddressText}" IsChecked="{Binding AddressAuto}" Margin="0,3" HorizontalAlignment="Left" local:Demo.Sensitive="True" />
                                             <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                                <RadioButton Content="Свой:" IsChecked="{Binding AddressCustom}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                                <RadioButton Content="{l:T router.address.custom}" IsChecked="{Binding AddressCustom}" VerticalAlignment="Center" Margin="0,0,10,0" />
                                                 <TextBox Text="{Binding CustomAddress, UpdateSourceTrigger=PropertyChanged}" Width="200" Padding="6,4" IsEnabled="{Binding AddressCustom}" local:Demo.Sensitive="True"
-                                                         ToolTip="IP или имя роутера, например 192.168.1.1" AutomationProperties.Name="Адрес роутера">
+                                                         ToolTip="{l:T router.address.tip}" AutomationProperties.Name="{l:T router.address.name}">
                                                     <TextBox.InputBindings>
                                                         <KeyBinding Key="Enter" Command="{Binding FindCmd}" />
                                                     </TextBox.InputBindings>
@@ -2194,10 +2194,10 @@
                                             </StackPanel>
                                         </StackPanel>
                                     </Expander>
-                                    <Button Content="Проверить обновления" Style="{StaticResource LinkButton}" Command="{Binding UpdateCheckCmd}" HorizontalAlignment="Left"
+                                    <Button Content="{l:T router.update.check}" Style="{StaticResource LinkButton}" Command="{Binding UpdateCheckCmd}" HorizontalAlignment="Left"
                                             Margin="0,10,0,0" Visibility="{Binding Connected, Converter={StaticResource Vis}}" />
                                     <!-- Удаление — спокойно и не на виду: ссылкой внизу карточки, подтверждение — в диалоге (RouterUninstallDialog). -->
-                                    <Button Content="Удалить DpiShell с роутера…" Style="{StaticResource LinkButton}" Command="{Binding UninstallCmd}" HorizontalAlignment="Left"
+                                    <Button Content="{l:T router.uninstall}" Style="{StaticResource LinkButton}" Command="{Binding UninstallCmd}" HorizontalAlignment="Left"
                                             Margin="0,10,0,0" Visibility="{Binding Found, Converter={StaticResource Vis}}" />
                                 </StackPanel>
                             </Border>
@@ -2416,7 +2416,7 @@
                                             <Button ContentTemplate="{StaticResource Shield}" Content="Восстановить" Command="{Binding RepairCoreCmd}" HorizontalAlignment="Left"
                                                     Visibility="{Binding CoreBroken, Converter={StaticResource Vis}}" />
                                         </StackPanel>
-                                        <TextBlock Grid.Row="4" Text="DpiShell на роутере" Style="{StaticResource Hint}" Margin="0,2,16,2" />
+                                        <TextBlock Grid.Row="4" Text="{l:T router.about.label}" Style="{StaticResource Hint}" Margin="0,2,16,2" />
                                         <StackPanel Grid.Row="4" Grid.Column="1" DataContext="{Binding Router}">
                                             <TextBlock Text="{Binding PackageVersionText}" TextWrapping="Wrap" Margin="0,2,0,2" />
                                             <TextBlock Text="{Binding PackageUpdateText}" FontWeight="SemiBold" Margin="0,2,0,2"
@@ -2424,12 +2424,12 @@
                                             <WrapPanel>
                                                 <Button Content="{Binding UpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}"
                                                         Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
-                                                <Button Content="Установить на роутер" Style="{StaticResource LinkButton}" Command="{Binding InstallCmd}"
+                                                <Button Content="{l:T router.empty.install}" Style="{StaticResource LinkButton}" Command="{Binding InstallCmd}"
                                                         Visibility="{Binding ShowPackageInstall, Converter={StaticResource Vis}}" />
                                             </WrapPanel>
                                         </StackPanel>
                                         <!-- Ядро, установленное на роутере (status.core.installed_version, роутер 0.2.0-r8); нет входа или старый роутер — строки нет. -->
-                                        <TextBlock Grid.Row="5" Text="Ядро на роутере" Style="{StaticResource Hint}" Margin="0,2,16,2" Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
+                                        <TextBlock Grid.Row="5" Text="{l:T router.about.core_label}" Style="{StaticResource Hint}" Margin="0,2,16,2" Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
                                         <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Router.RouterCoreText}" TextWrapping="Wrap" Margin="0,2,0,2"
                                                    Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
                                     </Grid>
@@ -2530,8 +2530,8 @@
             <StackPanel>
                 <TextBlock Text="{Binding TrialText}" FontWeight="SemiBold" TextWrapping="Wrap" />
                 <WrapPanel Margin="-4,8,0,0" Visibility="{Binding TrialAsk, Converter={StaticResource Vis}}">
-                    <Button Content="Да, оставить" Style="{StaticResource Primary}" Command="{Binding TrialKeepCmd}" Margin="4,0,8,0" />
-                    <Button Content="Вернуть как было" Command="{Binding TrialRevertCmd}" Margin="0,0,12,0" />
+                    <Button Content="{l:T router.trial.keep}" Style="{StaticResource Primary}" Command="{Binding TrialKeepCmd}" Margin="4,0,8,0" />
+                    <Button Content="{l:T router.trial.revert}" Command="{Binding TrialRevertCmd}" Margin="0,0,12,0" />
                     <TextBlock Text="{Binding TrialCountdown}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                 </WrapPanel>
             </StackPanel>
