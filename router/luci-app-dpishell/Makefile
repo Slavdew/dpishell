@@ -7,7 +7,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-dpishell
 PKG_VERSION:=0.2.0
-PKG_RELEASE:=6
+PKG_RELEASE:=7
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=DpiShell
 
@@ -42,6 +42,8 @@ endef
 define Package/luci-app-dpishell/install
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/dpishell
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/dpishell/*.js $(1)/www/luci-static/resources/dpishell/
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/dpishell/lang
+	$(INSTALL_DATA) ./htdocs/luci-static/resources/dpishell/lang/*.json $(1)/www/luci-static/resources/dpishell/lang/
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/dpishell
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/dpishell/*.js $(1)/www/luci-static/resources/view/dpishell/
 	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d

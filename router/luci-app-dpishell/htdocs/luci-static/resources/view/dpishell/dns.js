@@ -6,27 +6,11 @@
 'require dpishell.api as api';
 
 // Вкладка «DNS» (architecture.md «DNS для всей сети»): анализ подмены, выбор DNS для всей сети, возврат.
+// Названия — как в окне ПК (вкладка «DNS» и DNS роутера на вкладке «Роутер»), матрица ПК×роутер п. 41–45.
 
 // Кто держит сервер — подпись к варианту (перед заметкой из dns-presets.json).
-var OWNERS = {
-	provider: 'Адреса выдаёт провайдер, ответы он может подменять',
-	'default': 'Google и Cloudflare, США',
-	google: 'Google, США',
-	cloudflare: 'Cloudflare, США',
-	quad9: 'Quad9, некоммерческий фонд, Швейцария',
-	yandex: 'Яндекс'
-};
-
-// Копирование и по http: navigator.clipboard есть только в защищённом контексте, а LuCI обычно открыт по http.
-function copyText(text) {
-	if (navigator.clipboard && window.isSecureContext)
-		return navigator.clipboard.writeText(text);
-	var ta = E('textarea', { style: 'position:fixed;left:-1000px;top:0' }, text);
-	document.body.appendChild(ta);
-	ta.select();
-	try { document.execCommand('copy'); } catch (e) {}
-	document.body.removeChild(ta);
-}
+var OWNERS = { provider: 'web.dns.owner.provider', 'default': 'router.dns.owner_default', google: 'web.dns.owner.google',
+	cloudflare: 'web.dns.owner.cloudflare', quad9: 'web.dns.owner.quad9', yandex: 'web.dns.owner.yandex' };
 
 return view.extend({
 	handleSaveApply: null,
@@ -34,16 +18,18 @@ return view.extend({
 	handleReset: null,
 
 	load: function() {
-		return Promise.all([api.safe('dns_status'), api.safe('status'), api.safe('dns_presets')]);
+		return api.lang().then(function() {
+			return Promise.all([api.safe('dns_status'), api.safe('status'), api.safe('dns_presets')]);
+		});
 	},
 
 	render: function(data) {
-		var self = this;
 		this.dns = data[0];
 		this.status = data[1].__error ? { jobs: {} } : data[1];
 		this.presets = data[2];
 		this.choice = null;
 		this.waitTicks = 0;
+		this.speed = {};
 
 		this.el = {
 			state: E('div', { 'class': 'dps-state' }),
@@ -55,17 +41,16 @@ return view.extend({
 		};
 
 		var view = E('div', {}, [
-			E('h2', {}, 'DNS'),
+			E('h2', {}, api.t('dns.title')),
 			api.card(null, [
-				api.line(['Некоторые провайдеры подменяют ответы DNS — тогда оптимизация может не помогать приложениям на телефонах и ТВ. DNS здесь меняется для всей сети.',
-					api.info('«Проверить» сравнивает ответы DNS провайдера с эталонными (Google и Cloudflare по шифрованному каналу). Если ответы подменяются — включите защищённый DNS. Браузеры с собственным защищённым DNS это не затрагивает. Если после включения что-то пропало — «Вернуть как было».')], 'dps-muted'),
+				api.line([api.t('web.dns.intro'), api.info(api.t('web.dns.intro_info'))], 'dps-muted'),
 				this.el.state,
 				this.el.body,
 				this.el.actions,
 				this.el.err
 			]),
-			api.card('Какой DNS раздавать сети', [
-				E('details', { 'class': 'dps-details' }, [E('summary', {}, 'Что изменится при защищённом DNS'), api.dnsConsequences()]),
+			api.card(api.t('router.dns.title'), [
+				E('details', { 'class': 'dps-details' }, [E('summary', {}, api.t('web.dns.what_changes')), api.dnsConsequences()]),
 				this.el.presets, this.el.presetErr])
 		]);
 
@@ -106,12 +91,15 @@ return view.extend({
 	},
 
 	jobLine: function(job) {
-		var names = { dns_analyze: 'Проверка', dns_enable: 'Включение защищённого DNS', dns_restore: 'Возврат DNS', dns_set: 'Смена DNS' };
-		var name = names[job.action] || job.action;
+		var known = ['dns_analyze', 'dns_enable', 'dns_restore', 'dns_set'];
+		var name = known.indexOf(job.action) >= 0 ? api.t('router.dns.job.' + job.action) : job.action;
 		if (job.running)
-			return E('div', { 'class': 'spinning' }, name + '…');
-		return api.line(name + (job.at ? ' ' + api.time(job.at) : '') + ': ' + (job.message || (job.ok ? 'готово' : 'не удалось')),
-			job.ok === false ? 'dps-error' : 'dps-muted');
+			return E('div', { 'class': 'spinning' }, api.t('router.dns.job.running', { action: name }));
+		var m = api.msg(job.message_msg || job.message);
+		var text = job.ok === false
+			? (m ? api.t('router.dns.job.failed_msg', { action: name, message: m }) : api.t('router.dns.job.failed', { action: name }))
+			: name + ': ' + (m || api.t('web.done'));
+		return api.line(text + (job.at ? ' · ' + api.time(job.at) : ''), job.ok === false ? 'dps-error' : 'dps-muted');
 	},
 
 	update: function() {
@@ -120,46 +108,36 @@ return view.extend({
 		var kids = [], actions = [];
 
 		if (d.__error) {
-			this.el.state.textContent = 'Состояние DNS неизвестно';
+			this.el.state.textContent = api.t('web.dns.state_unknown');
 			kids.push(api.errorLine(d.__error));
 		} else {
 			var cur = this.presetTitle(d.preset);
-			this.el.state.textContent = d.mode == 'doh' ? 'Защищённый DNS' + (cur ? ': ' + cur : '')
-				: d.mode == 'plain' ? 'Обычный DNS' + (cur ? ': ' + cur : '') : 'DNS провайдера';
+			this.el.state.textContent = d.mode == 'doh' ? api.t('router.dns.now_doh', { title: cur || '—' })
+				: d.mode == 'plain' ? api.t('router.dns.now_plain', { title: cur || '—' }) : api.t('router.dns.now', { title: api.t('web.dns.provider') });
 			if (d.fallback_active)
-				kids.push(E('div', { 'class': 'alert-message warning' }, 'Защищённые серверы недоступны — временно работает DNS провайдера. Роутер вернёт защищённый DNS, когда они ответят.'));
+				kids.push(E('div', { 'class': 'alert-message warning' }, api.t('router.dns.unavailable') + '. ' + api.t('router.dns.fallback_hint')));
 			if (d.spoofed === true)
-				kids.push(E('div', { 'class': 'alert-message warning' }, 'Провайдер подменяет ответы DNS' + (d.checked_at ? ' (проверено ' + api.time(d.checked_at) + ')' : '')));
+				kids.push(E('div', { 'class': 'alert-message warning' }, d.checked_at ? api.t('router.dns.spoofed_at', { time: api.time(d.checked_at) }) : api.t('router.dns.spoofed')));
 			else if (d.spoofed === false)
-				kids.push(api.line('Подмены DNS не замечено' + (d.checked_at ? ' (проверено ' + api.time(d.checked_at) + ')' : ''), 'dps-ok'));
+				kids.push(api.line(d.checked_at ? api.t('router.dns.clean_at', { time: api.time(d.checked_at) }) : api.t('router.dns.clean'), 'dps-ok'));
 			else
-				kids.push(api.line('Проверка ещё не выполнялась', 'dps-muted'));
-			if (d.servers && d.servers.length) {
-				var t = E('table', { 'class': 'table dps-table' }, [
-					E('tr', { 'class': 'tr table-titles' }, [
-						E('th', { 'class': 'th' }, 'Сервер'), E('th', { 'class': 'th' }, 'Доступен'), E('th', { 'class': 'th' }, 'Ответ')
-					])
-				]);
-				d.servers.forEach(function(s) {
-					t.appendChild(E('tr', { 'class': 'tr' }, [
-						E('td', { 'class': 'td', 'data-title': 'Сервер' }, s.name),
-						E('td', { 'class': 'td', 'data-title': 'Доступен' }, s.doh_ok ? 'да' : 'нет'),
-						E('td', { 'class': 'td', 'data-title': 'Ответ' }, s.ms != null ? s.ms + ' мс' : '—')
-					]));
-				});
-				kids.push(t);
-			}
+				kids.push(api.line(api.t('web.dns.not_checked'), 'dps-muted'));
+			(d.servers || []).forEach(function(s) {
+				kids.push(api.line(!s.doh_ok ? api.t('router.dns.server_fail', { name: s.name })
+					: s.ms != null ? api.t('router.dns.server_ok_ms', { name: s.name, ms: s.ms }) : api.t('router.dns.server_ok', { name: s.name }),
+					s.doh_ok ? 'dps-muted' : 'dps-error'));
+			});
 			if (d.job)
 				kids.push(this.jobLine(d.job));
 		}
 		if (analyzing && !(d.job && d.job.running))
-			kids.push(E('div', { 'class': 'spinning' }, 'Выполняется…'));
+			kids.push(E('div', { 'class': 'spinning' }, api.t('web.dns.running')));
 
-		actions.push(api.btn('Проверить', function() { return self.analyze(); }, 'cbi-button-action'));
+		actions.push(api.btn(api.t('dns.check'), function() { return self.analyze(); }, 'cbi-button-action'));
 		if (!d.__error && d.mode != 'provider')
-			actions.push(api.btn('Вернуть как было', function() { return self.restore(); }, 'cbi-button-remove'));
+			actions.push(api.btn(api.t('router.dns.restore'), function() { return self.restore(); }, 'cbi-button-remove'));
 		else if (!d.__error && d.spoofed === true)
-			actions.push(api.btn('Включить защищённый DNS', function() { api.dnsEnableDialog(function() { self.wait(); }); }, 'cbi-button-apply'));
+			actions.push(api.btn(api.t('router.dns.enable'), function() { api.dnsEnableDialog(function() { self.wait(); }); }, 'cbi-button-apply'));
 		actions.forEach(function(b) { b.disabled = analyzing; });
 
 		dom.content(this.el.body, kids);
@@ -172,12 +150,15 @@ return view.extend({
 		if (!id || !p || p.__error)
 			return null;
 		if (id == 'custom')
-			return p.custom ? p.custom.title : 'свой';
+			return p.custom ? p.custom.title : api.t('router.dns.custom');
+		if (api.has('web.dns.preset.' + id))
+			return api.t('web.dns.preset.' + id);
 		var f = (p.presets || []).filter(function(x) { return x.id == id; })[0];
 		return f ? f.title : id;
 	},
 
-	// Выбор варианта DNS (router-api §5.1 dns_presets, §5.2 dns_set): адреса, DoH, кто держит; «Копировать» — для своих устройств.
+	// Выбор варианта DNS (router-api §5.1 dns_presets, §5.2 dns_set): адреса, защищённый (DoH), кто держит; «Скопировать
+	// адреса» — для своих устройств; «Сравнить скорость» — время ответа защищённого DNS каждого варианта (dns_compare).
 	renderPresets: function(busy) {
 		var self = this, p = this.presets;
 		if (!p || p.__error) {
@@ -190,36 +171,47 @@ return view.extend({
 		var list = (p.presets || []).slice();
 		var c = p.custom || {};
 		var cres = (c.resolvers || [])[0] || {};
-		list.push({ id: 'custom', title: 'Свой', note: null, plain: c.plain || [], resolvers: c.resolvers || [] });
+		list.push({ id: 'custom', title: api.t('dns.picker.custom'), note: null, plain: c.plain || [], resolvers: c.resolvers || [] });
+
+		// Названия и заметки вариантов приходят из dns-presets.json по-русски — на странице берутся из словаря, если там есть.
+		list = list.map(function(x) {
+			return Object.assign({}, x, {
+				title: x.id != 'custom' && api.has('web.dns.preset.' + x.id) ? api.t('web.dns.preset.' + x.id) : x.title,
+				note: api.has('web.dns.note.' + x.id) ? api.t('web.dns.note.' + x.id) : x.note
+			});
+		});
 
 		var rows = list.map(function(x) {
 			var doh = (x.resolvers || []).map(function(v) { return v.doh; }).join(', ');
 			var plain = x.plain || [];
 			var info = [];
-			var who = [OWNERS[x.id], x.note].filter(function(t) { return t; }).join(' · ');
+			var who = [OWNERS[x.id] ? api.t(OWNERS[x.id]) : null, x.note].filter(function(t) { return t; }).join(' · ');
+			var sp = self.speed[x.id];
+			if (sp !== undefined)
+				who = (who ? who + ' · ' : '') + (sp == null ? api.t('dns.no_answer') : api.t('dns.picker.ping', { ms: sp }));
 			if (who)
 				info.push(E('div', { 'class': 'dps-muted' }, who));
-			// Адреса и DoH — свёрнуто (ux-audit-web п.23): видно название, кто держит и заметку; раскрытое не сворачивается при опросе.
+			// Адреса и защищённый — свёрнуто (ux-audit-web п.23): видно название, кто держит и заметку; раскрытое не сворачивается при опросе.
 			var addr = [];
 			if (plain.length)
-				addr.push(E('div', {}, 'Адреса: ' + plain.join(', ')));
+				addr.push(E('div', {}, api.t('web.dns.addresses', { ips: plain.join(', ') })));
 			if (doh)
-				addr.push(E('div', {}, 'DoH: ' + doh));
+				addr.push(E('div', {}, api.t('web.dns.doh', { url: doh })));
 			self.openAddr = self.openAddr || {};
-			var head = [api.radio('dps-dns-preset', x.id, x.title + (x.id == current ? ' — сейчас' : ''), x.id == self.choice, function() {
+			var head = [api.radio('dps-dns-preset', x.id, x.id == current ? api.t('web.dns.current_mark', { title: x.title }) : x.title, x.id == self.choice, function() {
 				self.choice = x.id;
 				self.renderPresets(busy);
 			})];
-			if (plain.length || doh)
-				addr.push(api.btn('Копировать', function(ev) {
-					var text = [plain.length ? 'DNS: ' + plain.join(', ') : null, doh ? 'DoH: ' + doh : null].filter(function(t) { return t; }).join('\n');
-					copyText(text);
-					ev.target.textContent = 'Скопировано';
-					window.setTimeout(function() { ev.target.textContent = 'Копировать'; }, 1500);
-				}));
+			if (plain.length || doh) {
+				var b = api.copyBtn(api.t('dns.picker.copy_ips'), function() {
+					return [plain.length ? 'DNS: ' + plain.join(', ') : null, doh ? 'DoH: ' + doh : null].filter(function(t) { return t; }).join('\n');
+				});
+				b.title = api.t('dns.picker.copy_ips.tip');
+				addr.push(b);
+			}
 			if (addr.length) {
 				var det = E('details', { 'class': 'dps-details', open: self.openAddr[x.id] ? '' : null,
-					toggle: function() { self.openAddr[x.id] = det.open; } }, [E('summary', {}, 'Адреса')].concat(addr));
+					toggle: function() { self.openAddr[x.id] = det.open; } }, [E('summary', {}, api.t('web.dns.addresses_title'))].concat(addr));
 				info.push(det);
 			}
 			return E('div', { 'class': 'dps-preset' }, [E('div', {}, head), E('div', { 'class': 'dps-preset-info' }, info)]);
@@ -234,16 +226,35 @@ return view.extend({
 				boot: E('input', { type: 'text', 'class': 'cbi-input-text', placeholder: '9.9.9.9', value: (cres.bootstrap || []).join(', ') })
 			};
 			form = E('div', {}, [
-				api.row('Название', this.cf.title),
-				api.row('Адреса DNS', this.cf.plain, 'До 4, через запятую'),
-				api.row('DoH-адрес', this.cf.doh, 'Необязательно'),
-				api.row('IP сервера DoH', this.cf.boot, 'Нужны, если в DoH-адресе имя, а не IP')
+				api.row(api.t('dns.picker.name'), this.cf.title),
+				api.row(api.t('dns.picker.ips_field'), this.cf.plain, api.t('web.dns.ips_hint')),
+				api.row(api.t('dns.picker.doh'), this.cf.doh, api.t('web.dns.optional')),
+				api.row(api.t('web.dns.boot'), this.cf.boot, api.t('web.dns.boot_hint'))
 			]);
 		}
-		var apply = api.btn('Применить', function() { return self.applyPreset(); }, 'cbi-button-apply');
+		var apply = api.btn(api.t('dns.picker.apply'), function() { return self.applyPreset(); }, 'cbi-button-apply');
 		apply.disabled = busy || (this.choice == current && this.choice != 'custom');
-		var hint = apply.disabled && !busy ? E('span', { 'class': 'dps-muted' }, 'Выберите другой DNS, чтобы применить') : '';
-		dom.content(this.el.presets, rows.concat(form ? [form] : [], [E('div', { 'class': 'dps-actions' }, [apply, hint])]));
+		var compare = api.btn(this.comparing ? api.t('dns.picker.comparing') : api.t('dns.picker.compare'), function() { return self.compare(); }, 'cbi-button-neutral');
+		compare.title = api.t('dns.picker.compare.tip');
+		compare.disabled = busy || !!this.comparing;
+		var hint = apply.disabled && !busy ? E('span', { 'class': 'dps-muted' }, api.t('web.dns.choose_other')) : '';
+		dom.content(this.el.presets, rows.concat(form ? [form] : [], [E('div', { 'class': 'dps-actions' }, [apply, compare, hint])]));
+	},
+
+	compare: function() {
+		var self = this;
+		this.comparing = true;
+		this.el.presetErr.textContent = '';
+		this.renderPresets(false);
+		return api.call('dns_compare').then(function(r) {
+			self.speed = {};
+			(r.items || []).forEach(function(it) { self.speed[it.id] = it.ms; });
+		}, function(e) {
+			self.el.presetErr.textContent = api.text(e);
+		}).then(function() {
+			self.comparing = false;
+			self.renderPresets(false);
+		});
 	},
 
 	applyPreset: function() {

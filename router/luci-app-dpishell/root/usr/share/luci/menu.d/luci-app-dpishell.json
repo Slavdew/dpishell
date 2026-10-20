@@ -11,7 +11,7 @@
 	},
 
 	"admin/services/dpishell/main": {
-		"title": "Оптимизация",
+		"title": "Home",
 		"order": 1,
 		"action": {
 			"type": "view",
@@ -20,7 +20,7 @@
 	},
 
 	"admin/services/dpishell/select": {
-		"title": "Подбор",
+		"title": "Search",
 		"order": 2,
 		"action": {
 			"type": "view",
@@ -29,7 +29,7 @@
 	},
 
 	"admin/services/dpishell/lists": {
-		"title": "Сайты",
+		"title": "Sites",
 		"order": 3,
 		"action": {
 			"type": "view",
@@ -47,7 +47,7 @@
 	},
 
 	"admin/services/dpishell/diag": {
-		"title": "Диагностика",
+		"title": "Diagnostics",
 		"order": 5,
 		"action": {
 			"type": "view",
@@ -56,7 +56,7 @@
 	},
 
 	"admin/services/dpishell/about": {
-		"title": "Информация и обновления",
+		"title": "About & updates",
 		"order": 6,
 		"action": {
 			"type": "view",

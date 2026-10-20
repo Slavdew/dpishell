@@ -6,6 +6,7 @@
 'require dpishell.api as api';
 
 // Вкладка «Диагностика» (architecture.md «Диагностика роутера»): чужие обходы, flow offloading, IPv6, DNS, ядро, отчёт.
+// Названия — как в окне ПК («Что мешает» на вкладке «Роутер»), матрица ПК×роутер п. 46–51.
 
 return view.extend({
 	handleSaveApply: null,
@@ -13,7 +14,9 @@ return view.extend({
 	handleReset: null,
 
 	load: function() {
-		return Promise.all([api.safe('diag'), api.safe('status')]);
+		return api.lang().then(function() {
+			return Promise.all([api.safe('diag'), api.safe('status')]);
+		});
 	},
 
 	render: function(data) {
@@ -29,17 +32,16 @@ return view.extend({
 		};
 
 		var view = E('div', {}, [
-			E('h2', {}, 'Диагностика'),
-			api.card('Что мешает оптимизации', [
-				api.line(['Здесь роутер проверяет, что мешает оптимизации: похожие программы, ускорение сети, подмена DNS. Ничего не меняется без вашей кнопки.',
-					api.info('Зайдите сюда, если оптимизация «Работает», а сайты не открываются, или перед тем, как писать о проблеме. «Сохранить отчёт» собирает сведения о роутере и оптимизации в файл — без паролей — его можно прикрепить к вопросу.')], 'dps-muted'),
+			E('h2', {}, api.t('diag.title')),
+			api.card(api.t('router.diag.title'), [
+				api.line([api.t('web.diag.intro'), api.info(api.t('web.diag.intro_info'))], 'dps-muted'),
 				this.el.findings,
 				this.el.err
 			]),
-			api.card('Ядро zapret', [this.el.core]),
-			api.card('Отчёт', [
-				api.line('Версии, настройки оптимизации и DNS, хвост журнала роутера — текстовым файлом.', 'dps-muted'),
-				E('div', { 'class': 'dps-actions' }, [api.btn('Сохранить отчёт', function() { return self.report(); }, 'cbi-button-action')])
+			api.card(api.t('web.core.title'), [this.el.core]),
+			api.card(api.t('web.diag.report'), [
+				api.line(api.t('web.diag.report_descr'), 'dps-muted'),
+				E('div', { 'class': 'dps-actions' }, [api.btn(api.t('router.diag.save_report'), function() { return self.report(); }, 'cbi-button-action')])
 			]),
 			this.uninstallSection()
 		]);
@@ -89,44 +91,45 @@ return view.extend({
 			if (!c.running)
 				return;
 			if (c.kind == 'package')
-				return kids.push(finding('warning', 'Установлен другой zapret (пакет ' + c.name + ') — он занимает те же файлы. Удалите его: Система → Программное обеспечение (название может отличаться) или apk del ' + c.name + '. До этого включение и подбор заблокированы.'));
-			kids.push(finding('warning', 'Работает похожая программа: ' + c.name + '. Пока он работает, включение и подбор заблокированы.',
-				api.btn('Остановить', function() { return self.conflictStop(c.name); }, 'cbi-button-remove')));
+				return kids.push(finding('warning', api.t('web.diag.package', { name: c.name })));
+			kids.push(finding('warning', api.t('web.diag.conflict', { name: c.name }),
+				api.btn(api.t('router.diag.stop'), function() { return self.conflictStop(c.name); }, 'cbi-button-remove')));
 		});
 		if (d.flow_offload)
-			kids.push(finding('warning', 'Включено ускорение сети (flow offloading) — с ним оптимизация не работает. «Исправить» передаст ускорение zapret: скорость обычно почти не меняется, на быстрых тарифах с аппаратным ускорением может снизиться.',
-				api.btn('Исправить', function() { return self.act('flow_offload_fix'); }, 'cbi-button-apply')));
+			kids.push(finding('warning', api.t('web.diag.flow'),
+				api.btn(api.t('router.warn.fix'), function() { return self.act('flow_offload_fix'); }, 'cbi-button-apply')));
 		if (d.ipv6_wan)
-			kids.push(finding('notice', 'У роутера есть IPv6 от провайдера, а оптимизация работает только для IPv4 — часть сайтов может открываться мимо неё. «Исправить» включит её и для IPv6.',
-				api.btn('Исправить', function() { return self.act('ipv6_set', { enabled: true }); }, 'cbi-button-apply')));
+			kids.push(finding('notice', api.t('web.diag.ipv6'),
+				api.btn(api.t('router.warn.fix'), function() { return self.act('ipv6_set', { enabled: true }); }, 'cbi-button-apply')));
 		if (d.dns && d.dns.spoofed)
-			kids.push(finding('warning', 'Провайдер подменяет ответы DNS' + (d.dns.checked_at ? ' (проверено ' + api.time(d.dns.checked_at) + ')' : ''),
-				api.btn('Включить защищённый DNS', function() { api.dnsEnableDialog(function() { self.reload(); }); }, 'cbi-button-apply')));
+			kids.push(finding('warning', d.dns.checked_at ? api.t('router.dns.spoofed_at', { time: api.time(d.dns.checked_at) }) : api.t('router.dns.spoofed'),
+				api.btn(api.t('router.dns.enable'), function() { api.dnsEnableDialog(function() { self.reload(); }); }, 'cbi-button-apply')));
 		if (!kids.length)
-			kids.push(api.line('Помех не найдено', 'dps-ok'));
+			kids.push(api.line(api.t('web.diag.none'), 'dps-ok'));
 		if (d.overlay_free_kb != null)
-			kids.push(api.line('Свободно на роутере: ' + (d.overlay_free_kb >= 1024 ? Math.round(d.overlay_free_kb / 1024) + ' МБ' : d.overlay_free_kb + ' КБ'), 'dps-muted'));
+			kids.push(api.line(api.t('router.diag.space') + ': ' + (d.overlay_free_kb >= 1024 ? api.t('router.diag.space_value', { value: Math.round(d.overlay_free_kb / 1024) })
+				: api.t('web.diag.space_kb', { value: d.overlay_free_kb })), 'dps-muted'));
 		dom.content(this.el.findings, kids);
 	},
 
 	renderCore: function() {
 		var self = this, s = this.status, kids = [];
 		if (!s) {
-			dom.content(this.el.core, api.line('Состояние неизвестно', 'dps-muted'));
+			dom.content(this.el.core, api.line(api.t('web.diag.unknown'), 'dps-muted'));
 			return;
 		}
 		var c = s.core || {};
 		if (s.jobs && s.jobs.core_install)
-			kids.push(E('div', { 'class': 'spinning' }, 'Загружаем ядро zapret…'));
+			kids.push(E('div', { 'class': 'spinning' }, api.t('web.core.loading')));
 		else if (!c.installed)
-			kids.push(api.line('Ядро zapret не установлено — без него оптимизация не работает.', 'dps-error'));
+			kids.push(api.line(api.t('web.core.missing_long'), 'dps-error'));
 		else if (c.hash_ok === false)
-			kids.push(api.line('Файлы zapret повреждены — нажмите «Восстановить».', 'dps-error'));
+			kids.push(api.line(api.t('web.core.broken_long'), 'dps-error'));
 		else
-			kids.push(api.line('Ядро ' + (c.version || '') + ' установлено, файлы целы', 'dps-ok'));
+			kids.push(api.line(api.t('web.core.ok', { version: c.version || '' }), 'dps-ok'));
 		if (!(s.jobs && s.jobs.core_install) && (!c.installed || c.hash_ok === false))
 			kids.push(E('div', { 'class': 'dps-actions' }, [
-				api.btn(c.installed ? 'Восстановить' : 'Загрузить ядро', function() { return self.coreInstall(); }, 'cbi-button-apply')
+				api.btn(api.t(c.installed ? 'web.core.restore' : 'web.core.download'), function() { return self.coreInstall(); }, 'cbi-button-apply')
 			]));
 		dom.content(this.el.core, kids);
 	},
@@ -168,19 +171,19 @@ return view.extend({
 		var self = this;
 		var keep = E('input', { type: 'radio', name: 'dps-uninst', value: 'keep', checked: '' });
 		var full = E('input', { type: 'radio', name: 'dps-uninst', value: 'full' });
-		var word = E('input', { type: 'text', 'class': 'cbi-input-text', placeholder: 'удалить', autocomplete: 'off', style: 'max-width:12em' });
-		var btn = api.btn('Удалить DpiShell', function() { return self.uninstall(!full.checked); }, 'cbi-button-negative');
+		var word = E('input', { type: 'text', 'class': 'cbi-input-text', placeholder: api.t('web.uninst.word'), autocomplete: 'off', style: 'max-width:12em' });
+		var btn = api.btn(api.t('web.uninst.button'), function() { return self.uninstall(!full.checked); }, 'cbi-button-negative');
 		btn.disabled = true;
-		word.addEventListener('input', function() { btn.disabled = word.value.trim().toLowerCase() != 'удалить'; });
+		word.addEventListener('input', function() { btn.disabled = word.value.trim().toLowerCase() != api.t('web.uninst.word').toLowerCase(); });
 		this.el.uninstall = E('div', {}, [
-			api.line('Оптимизация выключится, то, что DpiShell менял в настройках роутера (ускорение сети, DNS, расписание), вернётся к значениям до DpiShell — ваши более поздние правки этих настроек могут быть перезаписаны; пакеты DpiShell и ядро zapret удалятся. Модули ядра и другие пакеты роутера останутся.', 'dps-muted'),
-			E('label', { 'class': 'dps-radio' }, [keep, 'Сохранить настройки — свои адреса, исключения, найденные стратегии; при повторной установке они вернутся']),
-			E('label', { 'class': 'dps-radio' }, [full, 'Удалить полностью, вместе с настройками']),
-			E('div', { 'class': 'dps-actions' }, [E('span', {}, 'Чтобы подтвердить, введите слово «удалить»: '), word, btn])
+			api.line(api.t('web.uninst.intro'), 'dps-muted'),
+			E('label', { 'class': 'dps-radio' }, [keep, api.t('router.uninstall.keep')]),
+			E('label', { 'class': 'dps-radio' }, [full, api.t('router.uninstall.full')]),
+			E('div', { 'class': 'dps-actions' }, [E('span', {}, api.t('web.uninst.confirm', { word: api.t('web.uninst.word') }) + ' '), word, btn])
 		]);
 		// Опасное — отдельной красной карточкой, не рядом с «Сохранить отчёт» (ux-audit-web п.29).
 		return E('div', { 'class': 'dps-danger', 'style': 'margin-top:2em' }, E('details', {}, [
-			E('summary', { 'style': 'font-weight:600' }, 'Удалить DpiShell с роутера'),
+			E('summary', { 'style': 'font-weight:600' }, api.t('router.uninstall.title')),
 			this.el.uninstall
 		]));
 	},
@@ -188,7 +191,7 @@ return view.extend({
 	uninstall: function(keepSettings) {
 		var self = this;
 		return api.call('uninstall', { keep_settings: keepSettings }).then(function() {
-			dom.content(self.el.uninstall, E('div', { 'class': 'spinning' }, 'Удаляю DpiShell… страницу пока не закрывайте'));
+			dom.content(self.el.uninstall, E('div', { 'class': 'spinning' }, api.t('web.uninst.busy')));
 			poll.stop();
 			// Пакет и объект ubus исчезают по ходу удаления: пропали (или сброшена сессия) — значит, удалён.
 			var tries = 0;
@@ -198,8 +201,8 @@ return view.extend({
 					if (s.__error || tries > 90) {
 						window.clearInterval(timer);
 						dom.content(self.el.uninstall, api.line(s.__error
-							? 'DpiShell удалён' + (keepSettings ? ', настройки сохранены' : '') + '. Страницу можно закрыть.'
-							: 'Удаление идёт дольше обычного — обновите страницу через минуту.', s.__error ? 'dps-ok' : 'dps-muted'));
+							? api.t(keepSettings ? 'web.uninst.done_kept' : 'web.uninst.done')
+							: api.t('web.uninst.too_long'), s.__error ? 'dps-ok' : 'dps-muted'));
 					}
 				});
 			}, 2000);

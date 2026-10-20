@@ -13,7 +13,7 @@ on:
     branches: [ master ]
     tags: [ 'router-v*' ]
     # Для тегов фильтр путей GitHub не применяет — релиз собирается всегда.
-    paths: [ 'router/**', 'data/**', 'packaging/keys/**', '.github/workflows/router.yml' ]
+    paths: [ 'router/**', 'data/**', 'packaging/keys/**', 'src/DpiShell.Core/Lang/**', '.github/workflows/router.yml' ]
   workflow_dispatch:
 
 permissions:
@@ -44,6 +44,9 @@ jobs:
 
       - name: Методы в ACL и PARAMS страницы
         run: python3 router/tools/acl-check.py
+
+      - name: Язык страниц — ключи, подстановки, общие тексты с окном ПК
+        run: python3 router/tools/lang-build.py --check
 
       - name: Пакеты в дерево SDK, данные из data/
         run: |
