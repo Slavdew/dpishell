@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -83,7 +84,7 @@ public sealed partial class RouterSsh(ISshSession ssh)
     {
         var run = await RunScriptAsync(UninstallScript, keepSettings ? "--keep" : "--full", null, null, ct);
         return await ReadUninstallResultAsync(ct)
-               ?? throw new RouterSshException(RouterSshFailure.Failed, "Удаление не оставило итога" + (run.Stderr.Length > 0 ? ": " + run.Stderr.Trim() : ""));
+               ?? throw new RouterSshException(RouterSshFailure.Failed, L.T("core.rt.ssh.no_result", new { stderr = run.Stderr.Length > 0 ? ": " + run.Stderr.Trim() : "" }));
     }
 
     /// <summary>Ход/итог удаления (и после <c>uninstall</c> через API — объект dpishell к концу исчезает). null — файла нет.</summary>
@@ -149,7 +150,7 @@ public sealed partial class RouterSsh(ISshSession ssh)
         if (!string.Equals(got, sha256, StringComparison.OrdinalIgnoreCase))
         {
             await ssh.RunAsync($"rm -f {Sh.Quote(remotePath)}", null, null, ct);
-            throw new RouterSshException(RouterSshFailure.Failed, $"Файл {Path.GetFileName(remotePath)} на роутере не совпал по sha256 — загрузка отменена");
+            throw new RouterSshException(RouterSshFailure.Failed, L.T("core.rt.ssh.hash_mismatch", new { name = Path.GetFileName(remotePath) }));
         }
     }
 
@@ -159,7 +160,7 @@ public sealed partial class RouterSsh(ISshSession ssh)
     /// </summary>
     public async Task UploadCoreAsync(Stream zip, string sha256, CancellationToken ct = default)
     {
-        await RunOkAsync($"mkdir -p {CoreDir} && chmod 700 /tmp/dpishell {CoreDir}", "Не удалось создать папку ядра на роутере", ct);
+        await RunOkAsync($"mkdir -p {CoreDir} && chmod 700 /tmp/dpishell {CoreDir}", L.T("core.rt.ssh.mkdir_core"), ct);
         if (await RemoteSha256Async(CoreZip, ct) is { } have && have.Equals(sha256, StringComparison.OrdinalIgnoreCase)) return;
         await UploadVerifiedAsync(zip, CoreZip, sha256, ct);
     }
@@ -179,9 +180,9 @@ public sealed partial class RouterSsh(ISshSession ssh)
         {
             if (!UpdatePackageName().IsMatch(f.Name)) throw new ArgumentException($"Не пакет DpiShell: {f.Name}");
             if (Sha256File(f.LocalPath) is var h && !h.Equals(f.Sha256, StringComparison.OrdinalIgnoreCase))
-                throw new SecurityException($"Пакет {f.Name} не совпал по sha256 — не загружаю");
+                throw new SecurityException(L.T("core.rt.ssh.pkg_hash", new { name = f.Name }));
         }
-        await RunOkAsync($"rm -rf {UpdateDir} && mkdir -p {UpdateDir} && chmod 700 {UpdateDir}", "Не удалось подготовить папку обновления на роутере", ct);
+        await RunOkAsync($"rm -rf {UpdateDir} && mkdir -p {UpdateDir} && chmod 700 {UpdateDir}", L.T("core.rt.ssh.mkdir_update"), ct);
         var sums = new StringBuilder();
         foreach (var f in files)
         {

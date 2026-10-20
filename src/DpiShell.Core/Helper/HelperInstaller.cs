@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Security.Principal;
 
 namespace DpiShell.Core.Helper;
@@ -62,11 +63,11 @@ public sealed class HelperInstaller(AppPaths paths)
 
     public void Install(SecurityIdentifier user, IProgress<string>? log = null)
     {
-        if (!Shell.IsAdmin()) throw new UnauthorizedAccessException("Установка помощника — только с правами администратора.");
-        var exe = Environment.ProcessPath ?? throw new InvalidOperationException("Не найден исполняемый файл программы.");
+        if (!Shell.IsAdmin()) throw new UnauthorizedAccessException(L.T("core.helper.need_admin_install"));
+        var exe = Environment.ProcessPath ?? throw new InvalidOperationException(L.T("core.helper.no_exe"));
         var source = Path.GetDirectoryName(exe)!;
         var dir = HelperDir(paths);
-        if (IsInHelperDir(paths, source)) throw new InvalidOperationException("Установка запущена из папки помощника — запустите её из папки программы.");
+        if (IsInHelperDir(paths, source)) throw new InvalidOperationException(L.T("core.helper.install_from_helper_dir"));
 
         // Сначала закрыть папку, потом класть в неё исполняемый файл.
         log?.Report("Закрываю папку программы от изменений…");
@@ -92,29 +93,29 @@ public sealed class HelperInstaller(AppPaths paths)
         File.WriteAllText(OwnerPath(paths), user.Value);
         // Права наследуются от закрытого корня; явные права у скопированного сбрасываем.
         paths.Harden();
-        if (!paths.IsHardened()) throw new InvalidOperationException("Не удалось закрыть папку помощника от пользователей.");
+        if (!paths.IsHardened()) throw new InvalidOperationException(L.T("core.helper.lock_failed"));
 
         var helperExe = Path.Combine(dir, Path.GetFileName(exe));
-        Check(ServiceManager.Sc(exists ? ScConfigArgs(helperExe) : ScCreateArgs(helperExe)), exists ? "перенастроить службу помощника" : "создать службу помощника");
+        Check(ServiceManager.Sc(exists ? ScConfigArgs(helperExe) : ScCreateArgs(helperExe)), L.T(exists ? "core.helper.sc_reconfigure" : "core.helper.sc_create"));
         ServiceManager.Sc(ScDescriptionArgs());
         ServiceManager.Sc(ScFailureArgs());
         log?.Report("Запускаю помощника…");
-        Check(ServiceManager.Sc(ScStartArgs()), "запустить помощника");
+        Check(ServiceManager.Sc(ScStartArgs()), L.T("core.helper.sc_start"));
         if (!ServiceManager.WaitFor(HelperProtocol.ServiceName, SvcState.Running, TimeSpan.FromSeconds(20)))
-            throw new InvalidOperationException("Помощник не запустился за 20 секунд — см. logs\\helper.log.");
+            throw new InvalidOperationException(L.T("core.helper.start_timeout"));
         log?.Report("Помощник установлен.");
     }
 
     /// <summary>Удаление: остановить и удалить службу, стереть папку помощника. Данные программы (state, результаты) остаются.</summary>
     public void Uninstall(IProgress<string>? log = null)
     {
-        if (!Shell.IsAdmin()) throw new UnauthorizedAccessException("Удаление помощника — только с правами администратора.");
+        if (!Shell.IsAdmin()) throw new UnauthorizedAccessException(L.T("core.helper.need_admin_uninstall"));
         if (ServiceManager.Query(HelperProtocol.ServiceName) != SvcState.NotInstalled)
         {
             log?.Report("Останавливаю помощника…");
             ServiceManager.Sc(ScStopArgs());
             ServiceManager.WaitFor(HelperProtocol.ServiceName, SvcState.Stopped, TimeSpan.FromSeconds(30));
-            Check(ServiceManager.Sc(ScDeleteArgs()), "удалить службу помощника");
+            Check(ServiceManager.Sc(ScDeleteArgs()), L.T("core.helper.sc_delete"));
         }
         DeleteWhenReleased(HelperDir(paths));
         log?.Report("Помощник удалён.");
@@ -144,6 +145,6 @@ public sealed class HelperInstaller(AppPaths paths)
 
     static void Check((int Code, string Output) r, string what)
     {
-        if (r.Code != 0) throw new InvalidOperationException($"Не удалось {what}: код {r.Code}. {r.Output.Trim()}");
+        if (r.Code != 0) throw new InvalidOperationException(L.T("core.helper.sc_failed", new { what, code = r.Code, output = r.Output.Trim() }));
     }
 }

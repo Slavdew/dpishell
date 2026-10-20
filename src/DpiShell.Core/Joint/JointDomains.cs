@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Text.Json.Nodes;
 
 namespace DpiShell.Core;
@@ -133,29 +134,24 @@ public sealed record JointSelection(IReadOnlyList<string> Send, IReadOnlyList<st
 /// <summary>Тексты совместной работы для окна и журнала. Без «обход» и без обещаний «у всех».</summary>
 public static class JointTexts
 {
-    public const string NothingToDo = "В режиме совместной работы этот ПК берёт только свои сайты, а их нет. Добавьте сайт на вкладке «Сайты» или выключите совместную работу.";
-    public const string JournalTitle = "Совместная работа с роутером: этот ПК ведёт только свои сайты";
-    public const string RouterJournalTitle = "Совместная работа с роутером: роутер не трогает сайты этого ПК";
+    public static string NothingToDo => L.T("core.joint.nothing_to_do");
+    public static string JournalTitle => L.T("core.joint.journal");
+    public static string RouterJournalTitle => L.T("core.joint.router_journal");
 
-    public static string Plural(int n) => (n % 10, n % 100) switch
-    {
-        (1, not 11) => $"{n} сайт",
-        (>= 2 and <= 4, not (>= 12 and <= 14)) => $"{n} сайта",
-        _ => $"{n} сайтов",
-    };
+    public static string Plural(int n) => L.Plural("core.joint.sites", n);
 
     /// <summary>«Роутер ведёт YouTube и Discord, этот ПК — свои сайты (3)».</summary>
-    public static string Active(int mine) => $"Роутер ведёт YouTube и Discord, этот ПК — свои сайты ({mine})";
+    public static string Active(int mine) => L.T("core.joint.active", new { mine });
 
-    public const string Fallback = "Роутер не найден — этот ПК работает сам";
-    public const string FallbackDisabled = "Оптимизация на роутере выключена — этот ПК работает сам";
-    public const string FallbackLogin = "Нет входа на роутер — этот ПК работает сам";
-    public const string FallbackOld = "Роутер не умеет совместной работы — этот ПК работает сам";
-    public const string FallbackNotInstalled = "Нужен помощник — этот ПК работает сам";
-    public const string FallbackRenew = "Роутер не принял связку — этот ПК работает сам";
-    public const string FallbackNoMac = "Не удалось узнать сетевой адаптер — этот ПК работает сам";
-    public const string WaitingPc = "Включится вместе с оптимизацией на этом ПК";
-    public const string NoOwnSites = "У этого ПК нет своих сайтов — добавьте их на вкладке «Сайты»";
-    public const string Starting = "Проверяю роутер…";
-    public const string StartFailed = "Не удалось включить оптимизацию на этом ПК.";
+    public static string Fallback => L.T("core.joint.fallback");
+    public static string FallbackDisabled => L.T("core.joint.fallback_disabled");
+    public static string FallbackLogin => L.T("core.joint.fallback_login");
+    public static string FallbackOld => L.T("core.joint.fallback_old");
+    public static string FallbackNotInstalled => L.T("core.joint.fallback_helper");
+    public static string FallbackRenew => L.T("core.joint.fallback_renew");
+    public static string FallbackNoMac => L.T("core.joint.fallback_no_mac");
+    public static string WaitingPc => L.T("core.joint.waiting_pc");
+    public static string NoOwnSites => L.T("core.joint.no_own_sites");
+    public static string Starting => L.T("core.joint.starting");
+    public static string StartFailed => L.T("core.joint.start_failed");
 }

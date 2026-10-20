@@ -98,7 +98,7 @@ public sealed class ConnectionRecorder : IDisposable
     {
         lock (_lock)
         {
-            if (_running || _disposed) throw new InvalidOperationException("Запись уже идёт.");
+            if (_running || _disposed) throw new InvalidOperationException(L.T("core.rec.started_already"));
             _started = _now();
             RefreshSnapshot(force: true);
             if (Mode == RecordingMode.NewProcesses) foreach (var p in _snap.Keys) _baseline.Add(p);
@@ -114,7 +114,7 @@ public sealed class ConnectionRecorder : IDisposable
         lock (_lock)
         {
             _notes.AddRange(errors);
-            if (opened == 0) { Dispose(); throw new InvalidOperationException("Запись не началась. " + string.Join(" ", errors)); }
+            if (opened == 0) { Dispose(); throw new InvalidOperationException(L.T("core.rec.not_started", new { errors = string.Join(" ", errors) })); }
             if (!_udp) _notes.Add(L.T("apps.core.note.udp_no_driver"));
             _running = true;
         }

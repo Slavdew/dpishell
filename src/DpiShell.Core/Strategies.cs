@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -130,8 +131,8 @@ public static class WinwsArgs
     /// </summary>
     public static string? Problem(string role, string args, Func<string, bool>? fakeExists = null)
     {
-        if (!RoleOrder.Contains(role)) return $"Неизвестная роль «{Shorten(role)}»";
-        if (args.Length > MaxRoleLength) return $"Строка роли «{role}» слишком длинная";
+        if (!RoleOrder.Contains(role)) return L.T("core.args.unknown_role", new { role = Shorten(role) });
+        if (args.Length > MaxRoleLength) return L.T("core.args.role_too_long", new { role });
         foreach (var tok in args.Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
             var name = tok.Split('=', 2)[0];
@@ -140,24 +141,24 @@ public static class WinwsArgs
                 // Имя из белого списка, а значение с лишними символами — «недопустимые символы»; чужое имя — «не разрешён».
                 var bare = System.Text.RegularExpressions.Regex.Match(tok, @"^--[a-z0-9-]+").Value;
                 return AllowedOptions.Contains(bare) || GameOnlyOptions.Contains(bare)
-                    ? $"В «{Shorten(tok)}» недопустимые символы"
-                    : bare.Length > 0 ? $"Параметр {bare} не разрешён" : $"«{Shorten(tok)}» — не параметр winws";
+                    ? L.T("core.args.bad_chars", new { tok = Shorten(tok) })
+                    : bare.Length > 0 ? L.T("core.args.not_allowed", new { name = bare }) : L.T("core.args.not_winws", new { tok = Shorten(tok) });
             }
             if (!AllowedOptions.Contains(name))
             {
                 if (GameOnlyOptions.Contains(name))
                 {
-                    if (!role.StartsWith("game_")) return $"Параметр {name} разрешён только в игровых ролях";
+                    if (!role.StartsWith("game_")) return L.T("core.args.game_only", new { name });
                 }
-                else return $"Параметр {name} не разрешён";
+                else return L.T("core.args.not_allowed", new { name });
             }
             var val = tok.Contains('=') ? tok.Split('=', 2)[1] : "";
             if (FileOptions.Contains(name) ? !FileValueRx.IsMatch(val) : val.Contains('/'))
-                return $"Путь вне папки программы: {Shorten(tok)}";
+                return L.T("core.args.path_outside", new { tok = Shorten(tok) });
             if (val.Contains(".."))
-                return $"Недопустимое значение: {Shorten(tok)}";
+                return L.T("core.args.bad_value", new { tok = Shorten(tok) });
             if (fakeExists is not null && val.StartsWith("{fake}/", StringComparison.Ordinal) && !fakeExists(val["{fake}/".Length..]))
-                return $"Файла {val["{fake}/".Length..]} нет в папке программы";
+                return L.T("core.args.no_file", new { file = val["{fake}/".Length..] });
         }
         return null;
     }

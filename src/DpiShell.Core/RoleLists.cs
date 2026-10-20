@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 namespace DpiShell.Core;
 
 /// <summary>
@@ -29,7 +30,7 @@ public static class RoleLists
         var lists = Path.Combine(dataDir, "lists");
         var overlap = Overlap(Path.Combine(lists, Google), Path.Combine(lists, Discord));
         if (overlap.Count == 0) return null;
-        var shown = string.Join(", ", overlap.Take(3)) + (overlap.Count > 3 ? $" и ещё {overlap.Count - 3}" : "");
-        return $"{Google} пересекается с {Discord}: {shown} — домен должен быть только в одном списке";
+        var shown = string.Join(", ", overlap.Take(3)) + (overlap.Count > 3 ? L.T("core.roles.more", new { n = overlap.Count - 3 }) : "");
+        return L.T("core.roles.overlap", new { google = Google, discord = Discord, shown });
     }
 }

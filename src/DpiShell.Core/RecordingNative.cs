@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.ComponentModel;
 using System.Net;
 using System.Runtime.InteropServices;
@@ -10,7 +11,7 @@ namespace DpiShell.Core;
 /// <summary>Таблица TCP Windows раз в секунду: IPv4 и IPv6 с PID. Без драйвера. Состояние «подключается» (SYN_SENT) и «установлено».</summary>
 public sealed class TcpTableSource : IFlowSource
 {
-    public string Name => "таблица TCP";
+    public string Name => L.T("core.rec.src.tcp");
     public bool CoversUdp => false;
 
     CancellationTokenSource? _cts;
@@ -112,7 +113,7 @@ public sealed class TcpTableSource : IFlowSource
 /// </summary>
 public sealed class WinDivertFlowSource : IFlowSource
 {
-    public string Name => "драйвер WinDivert (потоки)";
+    public string Name => L.T("core.rec.src.windivert");
     public bool CoversUdp => true;
 
     readonly string _dll;
@@ -135,7 +136,7 @@ public sealed class WinDivertFlowSource : IFlowSource
 
     public string? Start(Action<FlowObservation> onFlow)
     {
-        if (!File.Exists(_dll)) return "нет WinDivert.dll в папке ядра";
+        if (!File.Exists(_dll)) return L.T("core.rec.no_dll");
         try
         {
             _lib = NativeLibrary.Load(_dll);
@@ -144,7 +145,7 @@ public sealed class WinDivertFlowSource : IFlowSource
         }
         catch (Exception e) when (e is DllNotFoundException or BadImageFormatException or EntryPointNotFoundException)
         {
-            return "драйвер WinDivert не загрузился";
+            return L.T("core.rec.driver_not_loaded");
         }
         // Фильтр «true»: события отбираем здесь. Так нечему не скомпилироваться в фильтре на другой версии драйвера.
         _handle = _f.Open("true", LayerFlow, 0, FlagSniff | FlagRecvOnly);
@@ -152,7 +153,7 @@ public sealed class WinDivertFlowSource : IFlowSource
         {
             int err = Marshal.GetLastWin32Error();
             _handle = IntPtr.Zero;
-            return err == 5 ? "нет прав на драйвер WinDivert" : err == 577 ? "драйвер WinDivert заблокирован системой" : $"драйвер WinDivert не открылся (код {err})";
+            return err == 5 ? L.T("core.rec.driver_denied") : err == 577 ? L.T("core.rec.driver_blocked") : L.T("core.rec.driver_failed", new { code = err });
         }
         _thread = new Thread(() => Loop(onFlow)) { IsBackground = true, Name = "flow-record" };
         _thread.Start();

@@ -46,5 +46,9 @@
   "shell.err.conflict": "Similar programs interfere: {names}. Close them and retry.",
   "shell.err.access": "No access to the app files. An antivirus may be holding them. {error}",
   "shell.err.start_core": "Could not start the zapret core (antivirus?): {error}",
-  "shell.err.helper_old": "The helper is older than the app and cannot do this — update it on the “About & updates” tab (one administrator rights prompt)."
+  "shell.err.helper_old": "The helper is older than the app and cannot do this — update it on the “About & updates” tab (one administrator rights prompt).",
+  "shell.helper.install_exit": "code {code}; details are in the helper log (logs\\helper.log)",
+  "shell.undo.no_record": "There is no change record — nothing to revert.",
+  "shell.about_text": "DpiShell {version} · helper: {helper}",
+  "shell.open_failed": "Could not open: {error}"
 }

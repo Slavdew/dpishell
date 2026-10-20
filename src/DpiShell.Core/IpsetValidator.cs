@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
@@ -39,18 +40,18 @@ public readonly record struct Cidr(bool V6, UInt128 Addr, int Len)
     {
         c = default; fixedHost = false; error = null;
         var parts = s.Split('/');
-        if (parts.Length > 2) { error = "не подсеть"; return false; }
+        if (parts.Length > 2) { error = L.T("core.ipset.not_subnet"); return false; }
         var ip = parts[0];
         bool v6 = ip.Contains(':');
-        if (v6 ? ip.Contains('%') : !V4Rx.IsMatch(ip)) { error = "не адрес"; return false; }
+        if (v6 ? ip.Contains('%') : !V4Rx.IsMatch(ip)) { error = L.T("core.ipset.not_address"); return false; }
         if (!IPAddress.TryParse(ip, out var addr) || addr.AddressFamily != (v6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork))
-        { error = "не адрес"; return false; }
+        { error = L.T("core.ipset.not_address"); return false; }
         int bits = v6 ? 128 : 32, len = bits;
         if (parts.Length == 2)
         {
-            if (!LenRx.IsMatch(parts[1]) || (len = int.Parse(parts[1])) > bits) { error = "неверная длина префикса"; return false; }
+            if (!LenRx.IsMatch(parts[1]) || (len = int.Parse(parts[1])) > bits) { error = L.T("core.ipset.bad_prefix"); return false; }
         }
-        else if (requireLen) { error = "нет длины префикса"; return false; }
+        else if (requireLen) { error = L.T("core.ipset.no_prefix"); return false; }
 
         UInt128 n = 0;
         foreach (var b in addr.GetAddressBytes()) n = (n << 8) | b;
@@ -100,25 +101,33 @@ public static class IpsetValidator
     public const double MaxIpv4Share = 0.15, MaxChange = 0.40, MaxDroppedShare = 0.01;
     public const int MinLenV4 = 8, MinLenV6 = 19, UserConfirmLenV4 = 16;
 
-    /// <summary>Служебные сети: приманки туда — это локальная сеть, мультикаст, loopback. Совпадает с ipset-exclude.txt + резерв.</summary>
+    /// <summary>Служебные сети (Name — код: подпись по ключу core.ipset.net.*, <see cref="NetName"/>): приманки туда — это локальная сеть, мультикаст, loopback. Совпадает с ipset-exclude.txt + резерв.</summary>
     public static readonly IReadOnlyList<(Cidr Net, string Name)> Forbidden =
     [
         .. new[]
         {
-            ("0.0.0.0/8", "«этот» сегмент"), ("10.0.0.0/8", "частная сеть"), ("100.64.0.0/10", "CGNAT провайдера"),
-            ("127.0.0.0/8", "loopback"), ("169.254.0.0/16", "link-local"), ("172.16.0.0/12", "частная сеть"),
-            ("192.168.0.0/16", "частная сеть"), ("224.0.0.0/4", "мультикаст"), ("240.0.0.0/4", "резерв"),
-            ("::/128", "пустой адрес"), ("::1/128", "loopback"), ("::ffff:0:0/96", "IPv4 внутри IPv6"),
-            ("fc00::/7", "частная сеть"), ("fe80::/10", "link-local"), ("ff00::/8", "мультикаст"),
+            ("0.0.0.0/8", "this"), ("10.0.0.0/8", "private"), ("100.64.0.0/10", "cgnat"),
+            ("127.0.0.0/8", "loopback"), ("169.254.0.0/16", "linklocal"), ("172.16.0.0/12", "private"),
+            ("192.168.0.0/16", "private"), ("224.0.0.0/4", "multicast"), ("240.0.0.0/4", "reserved"),
+            ("::/128", "empty"), ("::1/128", "loopback"), ("::ffff:0:0/96", "v4in6"),
+            ("fc00::/7", "private"), ("fe80::/10", "linklocal"), ("ff00::/8", "multicast"),
         }.Select(x => (Cidr.Parse(x.Item1), x.Item2)),
     ];
+
+    /// <summary>Подпись служебной сети по коду из <see cref="Forbidden"/>.</summary>
+    public static string NetName(string code) => code switch
+    {
+        "this" => L.T("core.ipset.net.this"), "private" => L.T("core.ipset.net.private"), "cgnat" => L.T("core.ipset.net.cgnat"),
+        "loopback" => L.T("core.ipset.net.loopback"), "linklocal" => L.T("core.ipset.net.linklocal"), "multicast" => L.T("core.ipset.net.multicast"),
+        "reserved" => L.T("core.ipset.net.reserved"), "empty" => L.T("core.ipset.net.empty"), _ => L.T("core.ipset.net.v4in6"),
+    };
 
     public static IpsetVerdict ValidateFile(string path, IpsetKind kind, IReadOnlyCollection<string>? previous = null)
     {
         var size = new FileInfo(path).Length;
         // Огромный файл даже не читаем: это точно не наш список.
         if (size > MaxBytes)
-            return Reject($"Файл {size / 1024 / 1024} МБ — больше {MaxBytes / 1024 / 1024} МБ.");
+            return Reject(L.T("core.ipset.too_big_mb", new { size = size / 1024 / 1024, max = MaxBytes / 1024 / 1024 }));
         return Validate(File.ReadAllText(path), kind, previous, size);
     }
 
@@ -135,7 +144,7 @@ public static class IpsetValidator
         void Drop(string raw, string why)
         {
             dropped++;
-            if (problems.Count < 20) problems.Add($"строка {lineNo}: «{(raw.Length > 60 ? raw[..60] + "…" : raw)}» — {why}");
+            if (problems.Count < 20) problems.Add(L.T("core.ipset.line_problem", new { n = lineNo, raw = raw.Length > 60 ? raw[..60] + "…" : raw, why }));
         }
 
         foreach (var line in text.Split('\n'))
@@ -145,9 +154,9 @@ public static class IpsetValidator
             if (raw.Length == 0 || raw.StartsWith('#')) continue;
             // Общий список — строго «адрес/длина», как у Flowseal; свои подсети можно писать и одиночным адресом.
             if (!Cidr.TryParse(raw, requireLen: kind == IpsetKind.Main, out var c, out var fixedHost, out var err)) { Drop(raw, err!); continue; }
-            if (c.Len < (c.V6 ? MinLenV6 : MinLenV4)) { Drop(raw, $"слишком широкая подсеть (/{c.Len})"); continue; }
+            if (c.Len < (c.V6 ? MinLenV6 : MinLenV4)) { Drop(raw, L.T("core.ipset.too_wide", new { len = c.Len })); continue; }
             var bad = Forbidden.FirstOrDefault(f => f.Net.Overlaps(c));
-            if (bad.Name is not null) { Drop(raw, $"служебная сеть: {bad.Name} ({bad.Net})"); continue; }
+            if (bad.Name is not null) { Drop(raw, L.T("core.ipset.service_net", new { name = NetName(bad.Name), net = bad.Net })); continue; }
             if (fixedHost) fixedN++;
             var canon = c.ToString();
             if (!seen.Add(canon)) { dups++; continue; }
@@ -162,18 +171,18 @@ public static class IpsetValidator
 
         if (kind == IpsetKind.Main)
         {
-            if (entries.Count < MinLines) errors.Add($"В списке {entries.Count} подсетей — меньше {MinLines}: похоже, файл обрезан.");
-            if (entries.Count > MaxLines) errors.Add($"В списке {entries.Count} подсетей — больше {MaxLines}.");
-            if (size < MinBytes) errors.Add($"Файл {size / 1024} КБ — меньше {MinBytes / 1024} КБ: похоже, файл обрезан.");
-            if (size > MaxBytes) errors.Add($"Файл {size / 1024 / 1024} МБ — больше {MaxBytes / 1024 / 1024} МБ.");
-            if (share > MaxIpv4Share) errors.Add($"Список покрывает {share:P1} адресов IPv4 — больше {MaxIpv4Share:P0}.");
+            if (entries.Count < MinLines) errors.Add(L.T("core.ipset.too_few", new { n = entries.Count, min = MinLines }));
+            if (entries.Count > MaxLines) errors.Add(L.T("core.ipset.too_many", new { n = entries.Count, max = MaxLines }));
+            if (size < MinBytes) errors.Add(L.T("core.ipset.too_small_kb", new { size = size / 1024, min = MinBytes / 1024 }));
+            if (size > MaxBytes) errors.Add(L.T("core.ipset.too_big_mb", new { size = size / 1024 / 1024, max = MaxBytes / 1024 / 1024 }));
+            if (share > MaxIpv4Share) errors.Add(L.T("core.ipset.too_much_ipv4", new { share = share.ToString("P1"), max = MaxIpv4Share.ToString("P0") }));
             if (dropped > (entries.Count + dropped) * MaxDroppedShare)
-                errors.Add($"Ошибочных строк {dropped} из {entries.Count + dropped} — список повреждён.");
+                errors.Add(L.T("core.ipset.many_bad", new { dropped, total = entries.Count + dropped }));
         }
         else
         {
-            if (entries.Count > MaxUserLines) errors.Add($"Своих подсетей {entries.Count} — больше {MaxUserLines}.");
-            if (wideUser > 0) confirm.Add($"Есть очень широкие подсети ({wideUser} шт., от 65 536 адресов) — точно?");
+            if (entries.Count > MaxUserLines) errors.Add(L.T("core.ipset.too_many_own", new { n = entries.Count, max = MaxUserLines }));
+            if (wideUser > 0) confirm.Add(L.T("core.ipset.wide_confirm", new { n = wideUser }));
         }
 
         int added = 0, removed = 0;
@@ -183,7 +192,7 @@ public static class IpsetValidator
             added = entries.Count(e => !prev.Contains(e));
             removed = prev.Count - (entries.Count - added);
             if ((double)(added + removed) / prev.Count > MaxChange)
-                confirm.Add($"Список сильно изменился (+{added}/−{removed}). Применить?");
+                confirm.Add(L.T("core.ipset.changed_confirm", new { added, removed }));
         }
         return new(entries, fixedN, dropped, dups, problems, errors, confirm, v4, v6, share, added, removed);
     }

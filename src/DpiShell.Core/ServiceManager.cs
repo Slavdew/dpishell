@@ -78,21 +78,21 @@ public sealed partial class ServiceManager(AppPaths paths) : IServiceOps
         if (State == SvcState.NotInstalled)
         {
             // Службы не было — запись ДО создания: прежнее «нет службы», поставим службу с нашим winws.
-            var rec = Recorder.Begin(ChangeKinds.Service, "Установлена служба оптимизации DpiShell (запускается вместе с Windows)",
+            var rec = Recorder.Begin(ChangeKinds.Service, L.T("core.svc.journal"),
                 new System.Text.Json.Nodes.JsonObject { ["exists"] = false },
                 new System.Text.Json.Nodes.JsonObject { ["exe"] = paths.Winws });
-            try { Check(Sc("create", Name, "binPath=", bin, "DisplayName=", "DpiShell DPI bypass", "start=", "auto"), "создать службу"); }
+            try { Check(Sc("create", Name, "binPath=", bin, "DisplayName=", "DpiShell DPI bypass", "start=", "auto"), L.T("core.svc.sc_create")); }
             catch { Recorder.Abort(rec); throw; }
             Recorder.Done(rec);
         }
         else
         {
             Stop();
-            Check(Sc("config", Name, "binPath=", bin, "start=", "auto"), "перенастроить службу");
+            Check(Sc("config", Name, "binPath=", bin, "start=", "auto"), L.T("core.svc.sc_config"));
         }
         Sc("description", Name, "Оптимизация соединения (zapret winws), управляется приложением DpiShell");
         Sc("failure", Name, "reset=", "60", "actions=", "restart/5000/restart/5000/none/0");
-        Check(Sc("start", Name), "запустить службу");
+        Check(Sc("start", Name), L.T("core.svc.sc_start"));
     }
 
     public void Stop()
@@ -115,7 +115,7 @@ public sealed partial class ServiceManager(AppPaths paths) : IServiceOps
         Sc("delete", Name);
         Sc("stop", "WinDivert");
         Sc("delete", "WinDivert");
-        Recorder.Close(ChangeKinds.Service, "служба удалена кнопкой «Удалить службу оптимизации»");
+        Recorder.Close(ChangeKinds.Service, L.T("core.svc.closed"));
     }
 
     public static bool WaitFor(string name, SvcState want, TimeSpan timeout)
@@ -132,7 +132,7 @@ public sealed partial class ServiceManager(AppPaths paths) : IServiceOps
 
     static void Check((int Code, string Output) r, string what)
     {
-        if (r.Code != 0) throw new InvalidOperationException($"Не удалось {what}: код {r.Code}. {r.Output.Trim()}");
+        if (r.Code != 0) throw new InvalidOperationException(L.T("core.svc.sc_failed", new { what, code = r.Code, output = r.Output.Trim() }));
     }
 
     [GeneratedRegex(@":\s*\d+\s+(STOPPED|START_PENDING|STOP_PENDING|RUNNING|CONTINUE_PENDING|PAUSE_PENDING|PAUSED)\b")]

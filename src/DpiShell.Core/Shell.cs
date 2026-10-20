@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Security.Principal;
 
 namespace DpiShell.Core;
@@ -81,7 +82,7 @@ public sealed class Shell
     {
         string rec = "";
         if (Installer.Check().State == CoreState.Missing && Journal.Active(ChangeKinds.Core).Count == 0)
-            rec = Journal.Begin(ChangeKinds.Core, $"Установлено ядро оптимизации, версия {Installer.Manifest.Version}",
+            rec = Journal.Begin(ChangeKinds.Core, L.T("core.shell.journal_core", new { version = Installer.Manifest.Version }),
                 new System.Text.Json.Nodes.JsonObject { ["installed"] = false }, new System.Text.Json.Nodes.JsonObject { ["version"] = Installer.Manifest.Version });
         try { await Installer.InstallAsync(http, log, ct); }
         catch { Journal.Abort(rec); throw; }
@@ -153,12 +154,12 @@ public sealed class Shell
         var c = Installer.Check();
         if (c.State != CoreState.Ok)
             throw new SecurityException(c.State == CoreState.Missing
-                ? "Файлы ядра не найдены. Возможно, их удалил антивирус."
-                : $"Файлы ядра изменены: {string.Join(", ", c.BadFiles)}. Возможно, их тронул антивирус — восстановите ядро.");
+                ? L.T("core.shell.core_missing")
+                : L.T("core.shell.core_changed", new { files = string.Join(", ", c.BadFiles) }));
         // Чужая dll или exe рядом с winws может быть подхвачена при запуске.
         var foreign = c.ExtraFiles.Where(f => f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)).ToList();
         if (foreign.Count > 0)
-            throw new SecurityException($"В папке ядра посторонние файлы: {string.Join(", ", foreign)}. Восстановите ядро.");
+            throw new SecurityException(L.T("core.shell.core_foreign", new { files = string.Join(", ", foreign) }));
     }
 
     void ThrowIfConflicts()
@@ -200,7 +201,7 @@ public sealed class Shell
         {
             ServiceManager.Sc("stop", z.Name);
             ServiceManager.WaitFor(z.Name, SvcState.Stopped, TimeSpan.FromSeconds(10));
-            stopped.Add(z.OwnerTitle + $" (служба {z.Name})");
+            stopped.Add(L.T("core.shell.stopped_service", new { owner = z.OwnerTitle, name = z.Name }));
             comeBack.Add(z.Name);
         }
         foreach (var z in found.Where(z => z.Kind == "process"))
@@ -233,7 +234,7 @@ public sealed class Shell
     {
         if (Tcp.IsEnabled() != false) return;
         // Были выключены — запись ДО netsh: прежнее «выключены», поставим «включены».
-        var rec = Journal.Begin(ChangeKinds.TcpTimestamps, "Включены временные метки TCP (настройка Windows)",
+        var rec = Journal.Begin(ChangeKinds.TcpTimestamps, L.T("core.shell.journal_timestamps"),
             new System.Text.Json.Nodes.JsonObject { ["enabled"] = false }, new System.Text.Json.Nodes.JsonObject { ["enabled"] = true });
         if (Tcp.Set(true))
         {
@@ -252,7 +253,7 @@ public sealed class Shell
         {
             State.TimestampsEnabledByUs = false;
             State.Save(Paths);
-            Journal.Close(ChangeKinds.TcpTimestamps, "метки TCP возвращены кнопкой «Удалить службу оптимизации»");
+            Journal.Close(ChangeKinds.TcpTimestamps, L.T("core.shell.closed_timestamps"));
         }
     }
 
@@ -322,7 +323,7 @@ public sealed class Shell
         {
             var output = p.Output;
             p.Dispose();
-            throw new InvalidOperationException("winws не запустился: " + (output.Length > 300 ? output[^300..] : output).Trim());
+            throw new InvalidOperationException(L.T("core.shell.winws_failed", new { output = (output.Length > 300 ? output[^300..] : output).Trim() }));
         }
         _proc = p;
     }
@@ -382,7 +383,7 @@ public sealed class Shell
         IProgress<SelectorProgress>? progress = null, CancellationToken ct = default) =>
         WithServicePausedAsync(async () =>
         {
-            var strategy = FindStrategy(strategyId) ?? throw new InvalidOperationException("Такой стратегии нет.");
+            var strategy = FindStrategy(strategyId) ?? throw new InvalidOperationException(L.T("core.shell.no_such_strategy"));
             using var doh = new DohResolver();
             var report = await new Selector(Paths, NewProbe(doh)).RunAsync([strategy], WithControl(groups ?? SelectedGroups(), DefaultTargets), quick: false, progress, ct);
             ResultStore.Save(Paths, report);
@@ -483,7 +484,7 @@ public sealed class Shell
     {
         if (mode == IpsetMode.Any) { StartAllAddresses(); return; }
         if (mode == IpsetMode.List && !IpLists.HasList && !IpLists.SeedFromPackage())
-            throw new InvalidOperationException("IP-список не загружен — обновите его.");
+            throw new InvalidOperationException(L.T("core.shell.iplist_missing"));
         if (CurrentOptions.Ipset == mode && State.IpsetMode != "any") return;
         State.IpsetMode = BuildOptions.Format(mode);
         State.IpsetAnyUntil = null;
@@ -532,7 +533,7 @@ public sealed class Shell
         {
             var ipset = CurrentOptions.Ipset;
             if (ipset == IpsetMode.Any)
-                throw new InvalidOperationException("Игровой режим недоступен, пока включены «Все адреса».");
+                throw new InvalidOperationException(L.T("core.shell.game_needs_lists"));
             if (ipset == IpsetMode.Off || !IpLists.HasList)
             {
                 if (!IpLists.HasList && !IpLists.SeedFromPackage())
@@ -545,7 +546,7 @@ public sealed class Shell
                 {
                     State.IpsetMode = BuildOptions.Format(IpsetMode.List);
                     State.IpsetAnyUntil = null;
-                    note = "Включён IP-список: игровой режим работает по нему.";
+                    note = L.T("core.shell.game_uses_list");
                 }
             }
         }
@@ -661,13 +662,13 @@ public sealed class Shell
     public AppProfile SetAppProfile(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant)
     {
         var variants = ProfileVariants();
-        if (variant < 0 || variant >= variants.Count) throw new InvalidOperationException("Такого варианта параметров нет.");
+        if (variant < 0 || variant >= variants.Count) throw new InvalidOperationException(L.T("core.shell.no_variant"));
         var v = variants[variant];
-        string tcp = tcpPorts is null or "" ? "" : AppProfiles.NormalizePorts(tcpPorts) ?? throw new InvalidOperationException("Порты TCP записаны неверно.");
-        string udp = udpPorts is null or "" ? "" : AppProfiles.NormalizePorts(udpPorts) ?? throw new InvalidOperationException("Порты UDP записаны неверно.");
+        string tcp = tcpPorts is null or "" ? "" : AppProfiles.NormalizePorts(tcpPorts) ?? throw new InvalidOperationException(L.T("core.profile.bad_tcp"));
+        string udp = udpPorts is null or "" ? "" : AppProfiles.NormalizePorts(udpPorts) ?? throw new InvalidOperationException(L.T("core.profile.bad_udp"));
         var verdict = IpsetValidator.Validate(string.Join('\n', addresses), IpsetKind.User);
         var existing = id is null ? null : State.AppProfiles.FirstOrDefault(p => p.Id == id);
-        if (id is not null && existing is null) throw new InvalidOperationException("Такого профиля нет.");
+        if (id is not null && existing is null) throw new InvalidOperationException(L.T("core.shell.no_profile"));
         var profile = new AppProfile
         {
             Id = id ?? AppProfiles.NewId(), Title = title.Trim(), TcpPorts = tcp, UdpPorts = udp, Addresses = [.. verdict.Entries],
@@ -676,12 +677,12 @@ public sealed class Shell
         };
         if (AppProfiles.Problem(profile) is { } problem) throw new InvalidOperationException(problem);
         if (existing is null && State.AppProfiles.Count >= AppProfiles.MaxProfiles)
-            throw new InvalidOperationException($"Профилей уже {AppProfiles.MaxProfiles} — удалите ненужный.");
+            throw new InvalidOperationException(L.T("core.shell.too_many_profiles", new { max = AppProfiles.MaxProfiles }));
         // Журнал отката: новый профиль — запись «было: нет профиля» до сохранения; правка своего же профиля обновляет «что поставили».
         var snapshot = AppProfileUndoer.Snapshot(profile);
         if (existing is null)
         {
-            var rec = Journal.Begin(ChangeKinds.AppProfile, $"Профиль программы «{profile.Title}» (порты {(profile.TcpPorts + " " + profile.UdpPorts).Trim()})",
+            var rec = Journal.Begin(ChangeKinds.AppProfile, L.T("core.shell.journal_profile", new { title = profile.Title, ports = (profile.TcpPorts + " " + profile.UdpPorts).Trim() }),
                 new System.Text.Json.Nodes.JsonObject { ["exists"] = false }, snapshot);
             State.AppProfiles.Add(profile);
             State.Save(Paths);
@@ -707,7 +708,7 @@ public sealed class Shell
         State.AppProfiles.Remove(p);
         State.Save(Paths);
         SyncAppProfileFiles();
-        Journal.Close(ChangeKinds.AppProfile, "профиль удалён пользователем", en => en.After?["id"]?.GetValue<string>() == id);
+        Journal.Close(ChangeKinds.AppProfile, L.T("core.shell.closed_profile"), en => en.After?["id"]?.GetValue<string>() == id);
         ReapplyIfActive();
         return true;
     }
@@ -718,7 +719,7 @@ public sealed class Shell
         State.AppProfiles.Clear();
         State.Save(Paths);
         SyncAppProfileFiles();
-        Journal.Close(ChangeKinds.AppProfile, "профили удалены кнопкой «Удалить службу оптимизации»");
+        Journal.Close(ChangeKinds.AppProfile, L.T("core.shell.closed_profiles"));
     }
 
     /// <summary>Файлы адресов профилей — ровно по state.json: недостающие пишутся, лишние (app-*.txt) удаляются.</summary>
@@ -760,8 +761,8 @@ public sealed class Shell
     /// </summary>
     public AdvancedConfig SetAdvanced(bool enabled, string others, IReadOnlyList<AdvancedRowInput> rows)
     {
-        if (!AdvancedSites.IsOthers(others)) throw new InvalidOperationException("Остальные адреса: напрямую, по спискам или для всех.");
-        if (rows.Count > AdvancedSites.MaxRows) throw new InvalidOperationException($"Строк больше {AdvancedSites.MaxRows}.");
+        if (!AdvancedSites.IsOthers(others)) throw new InvalidOperationException(L.T("core.adv.others"));
+        if (rows.Count > AdvancedSites.MaxRows) throw new InvalidOperationException(L.T("core.adv.too_many_rows", new { max = AdvancedSites.MaxRows }));
         var next = new AdvancedConfig { Enabled = enabled, Others = others };
         for (int i = 0; i < rows.Count; i++)
         {
@@ -769,7 +770,7 @@ public sealed class Shell
             if (problem is not null) throw new InvalidOperationException(problem);
             var strategy = rows[i].Strategy;
             if (!AdvancedSites.IsStrategyChoice(strategy) || strategy is not (AdvancedSites.Auto or AdvancedSites.Direct) && FindStrategy(strategy) is null)
-                throw new InvalidOperationException($"Строка {i + 1}: такой стратегии нет.");
+                throw new InvalidOperationException(L.T("core.adv.row_no_strategy", new { n = i + 1 }));
             var old = strategy != AdvancedSites.Auto ? null
                 : State.Advanced.Rows.FirstOrDefault(r => r.Strategy == AdvancedSites.Auto && r.Domains.SequenceEqual(domains!));
             next.Rows.Add(new() { Domains = domains!, Strategy = strategy, Resolved = old?.Resolved });
@@ -806,11 +807,11 @@ public sealed class Shell
             throw;
         }
         Journal.Done(rec);
-        if (closed) Journal.Close(ChangeKinds.Advanced, "возвращён прежний вид");
+        if (closed) Journal.Close(ChangeKinds.Advanced, L.T("core.shell.adv_restored"));
     }
 
     static string AdvancedTitle(AdvancedConfig c) =>
-        "Продвинутый режим «сайты → стратегия» " + (c.Enabled ? $"включён, строк: {c.Rows.Count}" : $"выключен, строк: {c.Rows.Count}");
+        L.T("core.shell.adv_state", new { state = L.T(c.Enabled ? "core.shell.adv_on" : "core.shell.adv_off", new { n = c.Rows.Count }) });
 
     /// <summary>Откат записи журнала: вернуть прежние настройки (итоги подбора совпадающих строк сохраняются). Журнал не трогается — его ведёт движок отката.</summary>
     public void RestoreAdvanced(AdvancedConfig was)
@@ -828,7 +829,7 @@ public sealed class Shell
     {
         State.Advanced = new();
         State.Save(Paths);
-        Journal.Close(ChangeKinds.Advanced, "настройки удалены кнопкой «Удалить службу оптимизации»");
+        Journal.Close(ChangeKinds.Advanced, L.T("core.shell.closed_adv"));
     }
 
     // ---------- совместная работа с роутером (docs/research/mixed-strategies.md §7) ----------
@@ -891,8 +892,8 @@ public sealed class Shell
     public JointConfig SetJoint(bool active, IReadOnlyList<string> owned)
     {
         var clean = JointRules.Clean(owned);
-        if (clean.Count != owned.Count && owned.Any(o => !AdvancedSites.IsDomain(o))) throw new InvalidOperationException("Сайт вида example.com.");
-        if (clean.Count > JointRules.MaxDomains) throw new InvalidOperationException($"Сайтов больше {JointRules.MaxDomains}.");
+        if (clean.Count != owned.Count && owned.Any(o => !AdvancedSites.IsDomain(o))) throw new InvalidOperationException(L.T("core.shell.site_form"));
+        if (clean.Count > JointRules.MaxDomains) throw new InvalidOperationException(L.T("core.shell.too_many_sites", new { max = JointRules.MaxDomains }));
         var before = State.Joint.Clone();
         var next = new JointConfig { Active = active, Owned = active ? clean : [], Until = active ? DateTime.UtcNow + JointRules.Lease : null, PcId = before.PcId };
         if (!active && !before.Active) { return before; }
@@ -919,7 +920,7 @@ public sealed class Shell
             }
         }
         Journal.Done(rec);
-        if (!active) Journal.Close(ChangeKinds.Joint, "совместная работа выключена");
+        if (!active) Journal.Close(ChangeKinds.Joint, L.T("core.shell.closed_joint"));
         return next;
     }
 
@@ -945,7 +946,7 @@ public sealed class Shell
     {
         State.Joint = new JointConfig { PcId = State.Joint.PcId };
         State.Save(Paths);
-        Journal.Close(ChangeKinds.Joint, "настройки удалены кнопкой «Удалить службу оптимизации»");
+        Journal.Close(ChangeKinds.Joint, L.T("core.shell.closed_adv"));
     }
 
     public void SaveState() => State.Save(Paths);
@@ -974,7 +975,7 @@ public sealed record GameModeChange(bool IpsetSwitched, string? Note);
 
 /// <summary>Работают другие программы обхода (Flowseal, GoodbyeDPI…): подбор с ними бессмысленен.</summary>
 public sealed class ConflictException(IReadOnlyList<Conflict> conflicts)
-    : InvalidOperationException("Мешают похожие программы: " + string.Join("; ", conflicts.Select(c => $"{c.Name} ({c.Detail})")))
+    : InvalidOperationException(L.T("core.shell.conflict", new { list = string.Join("; ", conflicts.Select(c => $"{c.Name} ({c.Detail})")) }))
 {
     public IReadOnlyList<Conflict> Conflicts { get; } = conflicts;
 }

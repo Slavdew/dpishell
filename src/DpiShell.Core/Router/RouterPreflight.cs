@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -169,25 +170,25 @@ public static class RouterSuitability
         var release = p.Openwrt?.Release;
 
         if (p.Openwrt is null || string.IsNullOrEmpty(release))
-            stop.Add(new("not_openwrt", "Это не OpenWrt: DpiShell ставится только на роутер с прошивкой OpenWrt"));
+            stop.Add(new("not_openwrt", L.T("core.rt.pre.not_openwrt")));
 
         bool pkgOk = false;
         switch (p.Pkg)
         {
             case "apk": pkgOk = true; break;
             case "opkg":
-                stop.Add(new("opkg", $"OpenWrt {release} с opkg пока не поддерживается — пакет для opkg (OpenWrt 24.10) готовится, ждите обновления. Или обновите роутер до OpenWrt 25.12"));
+                stop.Add(new("opkg", L.T("core.rt.pre.opkg", new { release })));
                 break;
             default:
-                if (p.Openwrt is not null) stop.Add(new("no_pkg", "На роутере не найден пакетный менеджер (apk) — прошивка урезана, установить пакеты нельзя"));
+                if (p.Openwrt is not null) stop.Add(new("no_pkg", L.T("core.rt.pre.no_pkg")));
                 break;
         }
 
         if (!p.Fw4 || !p.Nft)
-            stop.Add(new("no_fw4", "Нужен межсетевой экран fw4 (nftables), а на роутере его нет — старая прошивка с iptables или сборка без fw4"));
+            stop.Add(new("no_fw4", L.T("core.rt.pre.no_fw4")));
 
         if (p.Openwrt?.Arch is { } arch && (CoreArch(arch) is not { } ca || coreArches is not null && !coreArches.Contains(ca)))
-            stop.Add(new("arch", $"Процессор роутера ({arch}) не поддерживается ядром zapret"));
+            stop.Add(new("arch", L.T("core.rt.pre.arch", new { arch })));
 
         // Сеть: без витрины, GitHub или фида прошивки — ставим через ПК (туннель).
         var net = p.Net ?? new PreflightNet(false, false, false);
@@ -202,26 +203,25 @@ public static class RouterSuitability
             if (unknown && !net.FwFeed)
                 kmodPending = true;   // индекс фида не получить — проверим через туннель (--update)
             else if (unknown)
-                stop.Add(new("kmod_missing", "В фиде прошивки нет модуля kmod-nft-queue — без него оптимизация не работает. Обычно его нет в урезанных сборках: поставьте официальную OpenWrt"));
+                stop.Add(new("kmod_missing", L.T("core.rt.pre.kmod_missing")));
             else
-                stop.Add(new("kmod_mismatch",
-                    $"Модуль kmod-nft-queue ({k!.Version}) собран не под ядро роутера ({p.Kernel}) — так бывает со snapshot, который обновился после прошивки. Обновите прошивку до свежей сборки и повторите"));
+                stop.Add(new("kmod_mismatch", L.T("core.rt.pre.kmod_mismatch", new { version = k!.Version, kernel = p.Kernel })));
         }
 
         if (p.Space?.OverlayFreeKb is { } ov)
         {
-            if (ov < MinOverlayKb) stop.Add(new("space_overlay", $"Мало места на роутере: свободно {ov / 1024.0:0.#} МБ, нужно около {MinOverlayKb / 1024} МБ"));
+            if (ov < MinOverlayKb) stop.Add(new("space_overlay", L.T("core.rt.pre.space_overlay", new { free = (ov / 1024.0).ToString("0.#"), need = MinOverlayKb / 1024 })));
         }
-        else warn.Add(new("space_unknown", "Не удалось узнать свободное место на роутере"));
+        else warn.Add(new("space_unknown", L.T("core.rt.pre.space_unknown")));
         if (p.Space?.TmpFreeKb is { } tmp && tmp < MinTmpKb)
-            stop.Add(new("space_tmp", $"Мало временной памяти на роутере: свободно {tmp / 1024.0:0.#} МБ, нужно около {MinTmpKb / 1024} МБ."));
+            stop.Add(new("space_tmp", L.T("core.rt.pre.space_tmp", new { free = (tmp / 1024.0).ToString("0.#"), need = MinTmpKb / 1024 })));
 
         foreach (var f in p.Foreign ?? [])
         {
             if (f.Kind == "package")
-                stop.Add(new("foreign_package", $"Удалите пакет «{f.Name}» (похожая программа): в меню роутера «Система» → «Программное обеспечение» (название может отличаться), затем повторите."));
+                stop.Add(new("foreign_package", L.T("core.rt.pre.foreign_package", new { name = f.Name })));
             else
-                warn.Add(new("foreign_service", $"На роутере работает похожая программа ({f.Name}) — после установки DpiShell предложит её остановить"));
+                warn.Add(new("foreign_service", L.T("core.rt.pre.foreign_service", new { name = f.Name })));
         }
 
         RouterRelease? chosen = null;
@@ -229,13 +229,13 @@ public static class RouterSuitability
         {
             chosen = releases.Choose(p.Pkg, release);
             if (chosen is null)
-                stop.Add(new("no_release", $"Для OpenWrt {release} выпуска DpiShell пока нет — нужна OpenWrt {MinSupported(releases, p.Pkg)} или новее"));
+                stop.Add(new("no_release", L.T("core.rt.pre.no_release", new { release, min = MinSupported(releases, p.Pkg) })));
         }
 
         if (p.Dpishell is { Version: { } v })
-            warn.Add(new("installed", $"DpiShell {v} уже установлен — установка обновит пакеты"));
+            warn.Add(new("installed", L.T("core.rt.pre.installed", new { version = v })));
         if (needsTunnel)
-            warn.Add(new("tunnel", "Роутер не достаёт до GitHub или фида пакетов — установка пойдёт через этот компьютер"));
+            warn.Add(new("tunnel", L.T("core.rt.pre.tunnel")));
 
         return new RouterVerdict(stop.Count == 0, stop, warn, needsTunnel, kmodPending, chosen, p.Dpishell?.Version);
     }

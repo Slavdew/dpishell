@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 namespace DpiShell.Core.Router;
 
 /// <summary>Итог установки: решение предпроверки и (если до неё дошло) итог install.sh.</summary>
@@ -29,11 +30,11 @@ public sealed class RouterInstallFlow(ISshConnector connector, RouterReleases re
     public async Task<RouterInstallOutcome> InstallAsync(RouterSshTarget target, Func<string> password, IProgress<string>? progress = null, CancellationToken ct = default,
         IProgress<RouterInstallStepCode>? steps = null)
     {
-        progress?.Report("Подключение к роутеру"); steps?.Report(RouterInstallStepCode.Prepare);
+        progress?.Report(L.T("core.rt.flow.connect")); steps?.Report(RouterInstallStepCode.Prepare);
         await using var ssh = await connector.ConnectAsync(target, password, ct);
         var r = new RouterSsh(ssh);
 
-        progress?.Report("Проверка роутера"); steps?.Report(RouterInstallStepCode.Prepare);
+        progress?.Report(L.T("core.rt.flow.check")); steps?.Report(RouterInstallStepCode.Prepare);
         var arches = core.Manifest.Nfqws.Keys.ToArray();
         var verdict = RouterSuitability.Evaluate(await r.PreflightAsync(updateIndexes: true, ct: ct), releases, arches);
         if (!verdict.CanInstall) return new(verdict, null);
@@ -43,7 +44,7 @@ public sealed class RouterInstallFlow(ISshConnector connector, RouterReleases re
         {
             if (verdict.NeedsTunnel)
             {
-                progress?.Report("Интернет роутеру — через этот компьютер"); steps?.Report(RouterInstallStepCode.Prepare);
+                progress?.Report(L.T("core.rt.flow.tunnel")); steps?.Report(RouterInstallStepCode.Prepare);
                 tunnel = await RouterTunnel.OpenAsync(ssh, await r.FeedHostsAsync(ct), m => progress?.Report(m), ct);
                 if (verdict.KmodPending)
                 {
@@ -53,7 +54,7 @@ public sealed class RouterInstallFlow(ISshConnector connector, RouterReleases re
                 }
             }
 
-            progress?.Report("Ядро zapret: загрузка на роутер"); steps?.Report(RouterInstallStepCode.Prepare);
+            progress?.Report(L.T("core.rt.flow.core")); steps?.Report(RouterInstallStepCode.Prepare);
             var zip = await core.EnsureAsync(http, LocalCoreCandidates, progress, ct);
             await using (var s = File.OpenRead(zip)) await r.UploadCoreAsync(s, core.Manifest.ZipSha256, ct);
 

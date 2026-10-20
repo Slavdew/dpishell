@@ -497,5 +497,14 @@
  "router.login.intro": "The router administrator password — usually the same as for its settings (LuCI).",
  "router.login.stored": "The password is stored encrypted and only on this PC.",
  "router.login.stored_saved": "The password is stored encrypted and only on this PC. Leave the field empty to sign in with the saved one.",
-  "router.row.start_failed": "start failed: {error}"
+  "router.row.start_failed": "start failed: {error}",
+  "router.log.checking": "Checking the router {host}",
+  "router.log.error": "Error: {error}",
+  "router.log.uninstall_api": "Removal over the API ({mode})",
+  "router.log.keep_settings": "keeping settings",
+  "router.log.full": "completely",
+  "router.log.api_failed": "API: {error} — falling back to SSH",
+  "router.log.uninstall_ssh": "Removal over SSH ({host})",
+  "router.log.uninstall_failed": "Removal failed",
+  "router.log.removed": "Removed"
 }

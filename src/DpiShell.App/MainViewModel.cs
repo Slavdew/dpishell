@@ -162,7 +162,7 @@ public sealed partial class MainViewModel : Observable
         Router.Advanced.Revert = async () =>
         {
             var entry = windowJournal.Active(ChangeKinds.RouterAdvanced).FirstOrDefault();
-            return entry is null ? "Записи об изменении нет — вернуть нечего." : AdvancedViewModel.UndoText((await windowChanges.UndoAsync(entry.Id)).Items.FirstOrDefault());
+            return entry is null ? L.T("shell.undo.no_record") : AdvancedViewModel.UndoText((await windowChanges.UndoAsync(entry.Id)).Items.FirstOrDefault());
         };
         Autostart.Recorder = windowJournal;
         Router.Recorder = windowJournal;
@@ -1507,7 +1507,7 @@ public sealed partial class MainViewModel : Observable
     void ShowSearch(SearchReport r)
     {
         // Причина остановки приходит из ядра («остановлено» — отмена окном; прочее — текст ядра как есть).
-        bool cancelled = r.Stopped == "остановлено";
+        bool cancelled = r.Cancelled;
         string? stopped = r.Stopped is null || cancelled ? null : char.ToUpper(r.Stopped[0]) + r.Stopped[1..];
         if (r.Final is not { } f)
         {
@@ -1787,7 +1787,7 @@ public sealed partial class MainViewModel : Observable
     ICommand? _openDefenderCmd;
 
     /// <summary>«Информация и обновления» → «Версия»: версия окна и состояние помощника.</summary>
-    public string AboutText => $"DpiShell {typeof(MainViewModel).Assembly.GetName().Version?.ToString(3)} · помощник: {HelperText}";
+    public string AboutText => L.T("shell.about_text", new { version = typeof(MainViewModel).Assembly.GetName().Version?.ToString(3), helper = HelperText });
 
     public string AppVersionText => typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "";
 
@@ -1808,7 +1808,7 @@ public sealed partial class MainViewModel : Observable
     void OpenLink(string target)
     {
         try { Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Fail("Не удалось открыть: " + e.Message); }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Fail(L.T("shell.open_failed", new { error = e.Message })); }
     }
 
     public ICommand RefreshDiagCmd { get; }

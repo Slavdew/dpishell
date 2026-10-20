@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -59,8 +60,7 @@ public static class HostKeyCheck
     public static HostKeyVerdict Decide(string? stored, string received) =>
         stored is null ? HostKeyVerdict.New : string.Equals(stored, received, StringComparison.Ordinal) ? HostKeyVerdict.Same : HostKeyVerdict.Changed;
 
-    public const string ChangedText =
-        "Ключ роутера изменился (переустановили прошивку?). Если вы сами переустанавливали OpenWrt — подтвердите новый ключ; если нет — кто-то может подменять роутер, не продолжайте.";
+    public static string ChangedText => L.T("core.rt.ssh.key_changed");
 }
 
 /// <summary>Хранилище отпечатков в JSON-файле (папка настроек пользователя).</summary>
@@ -142,10 +142,10 @@ public sealed class SshNetConnector(IRouterHostKeyStore hostKeys) : ISshConnecto
                 throw new RouterSshException(RouterSshFailure.HostKeyChanged, HostKeyCheck.ChangedText, e);
             throw e switch
             {
-                SshAuthenticationException => new RouterSshException(RouterSshFailure.AuthFailed, "Неверный пароль роутера (SSH)", e),
+                SshAuthenticationException => new RouterSshException(RouterSshFailure.AuthFailed, L.T("core.rt.ssh.bad_password"), e),
                 SocketException or SshOperationTimeoutException or SshConnectionException or TimeoutException =>
-                    new RouterSshException(RouterSshFailure.Unreachable, $"Роутер {target.Host} не отвечает по SSH (порт {target.Port})", e),
-                _ => new RouterSshException(RouterSshFailure.Failed, "Не удалось подключиться к роутеру по SSH: " + e.Message, e),
+                    new RouterSshException(RouterSshFailure.Unreachable, L.T("core.rt.ssh.silent", new { host = target.Host, port = target.Port }), e),
+                _ => new RouterSshException(RouterSshFailure.Failed, L.T("core.rt.ssh.connect_failed", new { error = e.Message }), e),
             };
         }
         // Первое подключение — запомнить ключ (вход прошёл: это тот роутер, к которому пользователь знает пароль).
@@ -163,7 +163,7 @@ sealed class SshNetSession(RouterSshTarget target, SshClient ssh, ConnectionInfo
         using var cmd = ssh.CreateCommand(command);
         Task exec;
         try { exec = cmd.ExecuteAsync(ct); }
-        catch (SshException e) { throw new RouterSshException(RouterSshFailure.Failed, "Связь с роутером по SSH прервалась", e); }
+        catch (SshException e) { throw new RouterSshException(RouterSshFailure.Failed, L.T("core.rt.ssh.lost"), e); }
         var stdout = ReadLinesAsync(cmd.OutputStream, onLine, ct);
         var stderr = new StreamReader(cmd.ExtendedOutputStream).ReadToEndAsync(ct);
         if (stdin is not null)
@@ -172,7 +172,7 @@ sealed class SshNetSession(RouterSshTarget target, SshClient ssh, ConnectionInfo
             await stdin.CopyToAsync(input, ct);
         }
         try { await exec; }
-        catch (SshException e) { throw new RouterSshException(RouterSshFailure.Failed, "Связь с роутером по SSH прервалась", e); }
+        catch (SshException e) { throw new RouterSshException(RouterSshFailure.Failed, L.T("core.rt.ssh.lost"), e); }
         return new SshRunResult(cmd.ExitStatus, await stdout, await stderr);
     }
 
@@ -208,7 +208,7 @@ sealed class SshNetSession(RouterSshTarget target, SshClient ssh, ConnectionInfo
         if (start >= 0) content.Position = start;
         var tmp = remotePath + ".part";
         var r = await RunAsync($"cat > {Sh.Quote(tmp)} && mv -f {Sh.Quote(tmp)} {Sh.Quote(remotePath)}", content, null, ct);
-        if (r.ExitCode != 0) throw new RouterSshException(RouterSshFailure.Failed, $"Не удалось записать {remotePath} на роутер: {r.Stderr.Trim()}");
+        if (r.ExitCode != 0) throw new RouterSshException(RouterSshFailure.Failed, L.T("core.rt.ssh.write_failed", new { path = remotePath, error = r.Stderr.Trim() }));
     }
 
     public Task<IAsyncDisposable> ForwardRemoteAsync(int remotePort, int localPort, CancellationToken ct = default)
@@ -220,7 +220,7 @@ sealed class SshNetSession(RouterSshTarget target, SshClient ssh, ConnectionInfo
         {
             ssh.RemoveForwardedPort(fp);
             fp.Dispose();
-            throw new RouterSshException(RouterSshFailure.Failed, $"Роутер не открыл порт {remotePort} для туннеля", e);
+            throw new RouterSshException(RouterSshFailure.Failed, L.T("core.rt.ssh.port_closed", new { port = remotePort }), e);
         }
         return Task.FromResult<IAsyncDisposable>(new Forward(ssh, fp));
     }

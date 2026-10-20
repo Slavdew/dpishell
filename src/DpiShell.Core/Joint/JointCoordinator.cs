@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Text.Json.Nodes;
 using DpiShell.Core.Helper;
 using DpiShell.Core.Router;
@@ -72,9 +73,12 @@ public sealed class JointCoordinator(IJointRouter router, IJointPc pc)
 
     public JointState State { get; private set; } = JointState.Off;
     /// <summary>Короткий статус: «Роутер ведёт YouTube и Discord, этот ПК — свои сайты (3)».</summary>
-    public string Status { get; private set; } = "";
+    public string Status => _status();
+    Func<string> _status = static () => "";
+    void SetStatus(Func<string> build) => _status = build;
     /// <summary>Пояснения под статусом: что ведёт роутер, что отброшено.</summary>
-    public IReadOnlyList<string> Notes { get; private set; } = [];
+    public IReadOnlyList<string> Notes => _notes();
+    Func<IReadOnlyList<string>> _notes = static () => [];
     /// <summary>Сайты, которые ведёт этот ПК (свои сайты и строки продвинутого режима, без отданных роутеру).</summary>
     public IReadOnlyList<string> Mine { get; private set; } = [];
     /// <summary>Сайты ПК, совпавшие с адресами роутера: «ведёт роутер», на ПК не применяются.</summary>
@@ -171,7 +175,7 @@ public sealed class JointCoordinator(IJointRouter router, IJointPc pc)
     public void Restore(bool wanted)
     {
         Wanted = wanted;
-        if (wanted && State == JointState.Off) { State = JointState.Waiting; Status = JointTexts.Starting; Changed?.Invoke(); }
+        if (wanted && State == JointState.Off) { State = JointState.Waiting; SetStatus(() => JointTexts.Starting); Changed?.Invoke(); }
     }
 
     // ---------- проверка ----------
@@ -205,7 +209,7 @@ public sealed class JointCoordinator(IJointRouter router, IJointPc pc)
     /// <param name="enabling">Включение (переключатель или подготовка запуска ПК): оптимизация на ПК ещё не обязана работать, и «нечего вести» ничего не выключает.</param>
     async Task TickCoreAsync(JointInfo? info, bool enabling, CancellationToken ct)
     {
-        if (info is null) { await DropAsync(JointTexts.FallbackNotInstalled, fallback: true, ct); return; }
+        if (info is null) { await DropAsync(() => JointTexts.FallbackNotInstalled, fallback: true, ct); return; }
         _pcId = info.PcId;
         Decoys = info.Decoys; DecoysReliable = info.DecoysReliable;
 
@@ -213,12 +217,12 @@ public sealed class JointCoordinator(IJointRouter router, IJointPc pc)
         if (!enabling && !pc.Running)
         {
             await DropAsync(null, fallback: false, ct, info);
-            State = JointState.Waiting; Status = JointTexts.WaitingPc; Notes = []; Changed?.Invoke();
+            State = JointState.Waiting; SetStatus(() => JointTexts.WaitingPc); _notes = static () => []; Changed?.Invoke();
             return;
         }
-        if (router.NotReady is { } why) { await DropAsync(why, fallback: true, ct, info); return; }
+        if (router.NotReady is { } why) { await DropAsync(() => why, fallback: true, ct, info); return; }
         var mac = OwnMac(router.Address);
-        if (mac is null) { await DropAsync(JointTexts.FallbackNoMac, fallback: true, ct, info); return; }
+        if (mac is null) { await DropAsync(() => JointTexts.FallbackNoMac, fallback: true, ct, info); return; }
 
         try
         {
@@ -229,7 +233,7 @@ public sealed class JointCoordinator(IJointRouter router, IJointPc pc)
             {
                 await DropAsync(null, fallback: false, ct, info);
                 if (!enabling && pc.Running) await pc.StopAsync(ct);
-                State = JointState.Waiting; Status = JointTexts.NoOwnSites; Notes = []; Changed?.Invoke();
+                State = JointState.Waiting; SetStatus(() => JointTexts.NoOwnSites); _notes = static () => []; Changed?.Invoke();
                 return;
             }
             string key = mac + "|" + string.Join(',', sel.Send);
@@ -260,14 +264,14 @@ public sealed class JointCoordinator(IJointRouter router, IJointPc pc)
                 var after = await router.GetAsync(ct);
                 if (after.Items.FirstOrDefault(l => l.Id == info.PcId) is not { Active: true })
                 {
-                    await DropAsync(JointTexts.FallbackRenew, fallback: true, ct, info);
+                    await DropAsync(() => JointTexts.FallbackRenew, fallback: true, ct, info);
                     return;
                 }
                 if (!HasWork(info, sel))
                 {
                     await DropAsync(null, fallback: false, ct, info);
                     if (!enabling && pc.Running) await pc.StopAsync(ct);
-                    State = JointState.Waiting; Status = JointTexts.NoOwnSites; Notes = []; Changed?.Invoke();
+                    State = JointState.Waiting; SetStatus(() => JointTexts.NoOwnSites); _notes = static () => []; Changed?.Invoke();
                     return;
                 }
             }
@@ -280,23 +284,24 @@ public sealed class JointCoordinator(IJointRouter router, IJointPc pc)
                 catch (HelperException he) when (he.Code == HelperErrors.Busy) { return; }   // помощник занят подбором или другой командой — следующая проверка повторит
                 catch (Exception e) when (e is not OperationCanceledException)
                 {
-                    await DropAsync(e.Message.Length > 0 ? e.Message : JointTexts.FallbackRenew, fallback: true, ct, info);
+                    await DropAsync(() => e.Message.Length > 0 ? e.Message : JointTexts.FallbackRenew, fallback: true, ct, info);
                     return;
                 }
             }
             Mine = sel.Mine; RouterOwned = sel.RouterOwned;
-            Notes = NotesOf(sel, info);
-            State = JointState.Active; Status = JointTexts.Active(sel.Mine.Count);
+            var notesSel = sel; var notesInfo = info; var mineCount = sel.Mine.Count;
+            _notes = () => NotesOf(notesSel, notesInfo);
+            State = JointState.Active; SetStatus(() => JointTexts.Active(mineCount));
             Changed?.Invoke();
         }
         catch (RouterException e)
         {
-            await DropAsync(e.Failure == RouterFailure.NotSupported ? JointTexts.FallbackOld
+            await DropAsync(() => e.Failure == RouterFailure.NotSupported ? JointTexts.FallbackOld
                 : e.Failure is RouterFailure.Unreachable or RouterFailure.NoResponse ? JointTexts.Fallback : JointTexts.FallbackRenew, fallback: true, ct, info);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or TimeoutException or IOException && !ct.IsCancellationRequested)
         {
-            await DropAsync(JointTexts.Fallback, fallback: true, ct, info);
+            await DropAsync(() => JointTexts.Fallback, fallback: true, ct, info);
         }
     }
 
@@ -322,10 +327,14 @@ public sealed class JointCoordinator(IJointRouter router, IJointPc pc)
     {
         var notes = new List<string>();
         if (sel.RouterOwned.Count > 0)
-            notes.Add("Ведёт роутер: " + string.Join(", ", sel.RouterOwned.Take(5)) + (sel.RouterOwned.Count > 5 ? $" и ещё {sel.RouterOwned.Count - 5}" : "") + " — на этом ПК не применяется.");
-        if (sel.Trimmed > 0) notes.Add($"Роутер принимает до {JointRules.MaxDomains} имён: {JointTexts.Plural(sel.Trimmed)} этого ПК в связку не вошли.");
-        if (sel.DecoyGaps.Count > 0) notes.Add("Имена, которые подставляет стратегия этого ПК, совпали с адресами роутера: " + string.Join(", ", sel.DecoyGaps.Take(3)) + ".");
-        if (!info.DecoysReliable) notes.Add("Имена приманок стратегии определены приблизительно — роутеру отданы все имена фейков из поставки.");
+            notes.Add(L.T("core.joint.note.router_owned", new
+            {
+                names = string.Join(", ", sel.RouterOwned.Take(5)),
+                more = sel.RouterOwned.Count > 5 ? L.T("core.joint.note.more", new { n = sel.RouterOwned.Count - 5 }) : "",
+            }));
+        if (sel.Trimmed > 0) notes.Add(L.T("core.joint.note.trimmed", new { max = JointRules.MaxDomains, sites = JointTexts.Plural(sel.Trimmed) }));
+        if (sel.DecoyGaps.Count > 0) notes.Add(L.T("core.joint.note.decoy_gaps", new { names = string.Join(", ", sel.DecoyGaps.Take(3)) }));
+        if (!info.DecoysReliable) notes.Add(L.T("core.joint.note.decoys_rough"));
         return notes;
     }
 
@@ -335,7 +344,7 @@ public sealed class JointCoordinator(IJointRouter router, IJointPc pc)
     /// ПК — по полной настройке сразу (помощник), потом связка снимается на роутере (если он отвечает). <paramref name="reason"/> — статус для окна;
     /// <paramref name="fallback"/> — это откат при включённой совместной работе (состояние «Fallback»), а не её выключение.
     /// </summary>
-    async Task DropAsync(string? reason, bool fallback, CancellationToken ct, JointInfo? info = null)
+    async Task DropAsync(Func<string>? reason, bool fallback, CancellationToken ct, JointInfo? info = null)
     {
         if (_pcActive || info is null || info.Active)
         {
@@ -345,21 +354,21 @@ public sealed class JointCoordinator(IJointRouter router, IJointPc pc)
         var id = _pcId ?? info?.PcId;
         if (id is not null && (_lastSetAt is not null || _linkRecord is not null) && router.Reachable)
         {
-            try { await router.DelAsync(id, ct); _linkRecord = null; Recorder.Close(ChangeKinds.RouterJoint, "связка снята"); }
+            try { await router.DelAsync(id, ct); _linkRecord = null; Recorder.Close(ChangeKinds.RouterJoint, L.T("core.joint.closed")); }
             catch (Exception e) when (e is RouterException or HttpRequestException or TaskCanceledException) { }
         }
         _lastSetAt = null; _sentKey = null; _mac = null; _ignored = []; _sent = []; _namesLoaded = false;
         Mine = []; RouterOwned = [];
         if (fallback && reason is not null)
         {
-            State = JointState.Fallback; Status = reason; Notes = [];
+            State = JointState.Fallback; SetStatus(reason); _notes = static () => [];
             Changed?.Invoke();
         }
     }
 
     void SetOff()
     {
-        State = JointState.Off; Status = ""; Notes = [];
+        State = JointState.Off; SetStatus(static () => ""); _notes = static () => [];
         Changed?.Invoke();
     }
 }

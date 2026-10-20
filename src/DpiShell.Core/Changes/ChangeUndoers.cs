@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Text.Json.Nodes;
 
 namespace DpiShell.Core;
@@ -57,14 +58,14 @@ public sealed class ServiceUndoer(IServiceOps ops) : IChangeUndoer
 
     public Task<UndoOutcome> UndoAsync(ChangeEntry e, CancellationToken ct)
     {
-        if (ops.State == SvcState.NotInstalled) return Task.FromResult(UndoOutcome.Already("службы уже нет"));
+        if (ops.State == SvcState.NotInstalled) return Task.FromResult(UndoOutcome.Already(L.T("core.undo.svc_gone")));
         var (exe, _) = ZapretDetector.SplitCommandLine(ops.ImagePath);
         var ours = e.After?["exe"]?.GetValue<string>();
         if (exe is null || ours is null || !exe.Equals(ours, StringComparison.OrdinalIgnoreCase))
-            return Task.FromResult(UndoOutcome.Changed("служба с этим именем теперь запускает другую программу"));
+            return Task.FromResult(UndoOutcome.Changed(L.T("core.undo.svc_other")));
         ops.Remove();
-        return Task.FromResult(ops.State == SvcState.NotInstalled ? UndoOutcome.Restored("служба удалена")
-            : UndoOutcome.Restored("служба удалена, пропадёт из списка после перезагрузки Windows"));
+        return Task.FromResult(ops.State == SvcState.NotInstalled ? UndoOutcome.Restored(L.T("core.undo.svc_removed"))
+            : UndoOutcome.Restored(L.T("core.undo.svc_removed_reboot")));
     }
 }
 
@@ -77,12 +78,12 @@ public sealed class TcpTimestampsUndoer(ITcpTimestampsSystem sys, Action? restor
     {
         switch (sys.IsEnabled())
         {
-            case null: return Task.FromResult(UndoOutcome.Fail("не удалось узнать состояние настройки Windows"));
-            case false: restored?.Invoke(); return Task.FromResult(UndoOutcome.Already("настройка уже выключена"));
+            case null: return Task.FromResult(UndoOutcome.Fail(L.T("core.undo.setting_unknown")));
+            case false: restored?.Invoke(); return Task.FromResult(UndoOutcome.Already(L.T("core.undo.setting_already_off")));
         }
-        if (!sys.Set(false)) return Task.FromResult(UndoOutcome.Fail("Windows не приняла выключение настройки"));
+        if (!sys.Set(false)) return Task.FromResult(UndoOutcome.Fail(L.T("core.undo.setting_refused")));
         restored?.Invoke();
-        return Task.FromResult(UndoOutcome.Restored("настройка выключена, как до DpiShell"));
+        return Task.FromResult(UndoOutcome.Restored(L.T("core.undo.setting_off")));
     }
 }
 
@@ -111,10 +112,10 @@ public sealed class DnsUndoer(IDnsSystem sys) : IChangeUndoer
             if (changed.Count == 0) foreach (var ip in DnsSnapshot.AddedDoh(e.After)) sys.UnregisterDoh(ip);
             sys.FlushCache();
         }
-        var skipped = changed.Count > 0 ? $"; не тронуто (DNS менялся после DpiShell): {string.Join(", ", changed)}" : "";
-        if (restored.Count > 0) return Task.FromResult(UndoOutcome.Restored($"DNS как было: {string.Join(", ", restored)}{skipped}"));
-        if (changed.Count > 0) return Task.FromResult(UndoOutcome.Changed($"DNS изменён после DpiShell: {string.Join(", ", changed)}"));
-        return Task.FromResult(UndoOutcome.Already("DNS уже как раньше"));
+        var skipped = changed.Count > 0 ? L.T("core.undo.dns_skipped", new { list = string.Join(", ", changed) }) : "";
+        if (restored.Count > 0) return Task.FromResult(UndoOutcome.Restored(L.T("core.undo.dns_restored", new { list = string.Join(", ", restored), skipped })));
+        if (changed.Count > 0) return Task.FromResult(UndoOutcome.Changed(L.T("core.undo.dns_changed", new { list = string.Join(", ", changed) })));
+        return Task.FromResult(UndoOutcome.Already(L.T("core.undo.dns_already")));
     }
 }
 
@@ -131,17 +132,17 @@ public sealed class HostsUndoer(Func<HostsManager> hosts) : IChangeUndoer
             case ChangeKinds.HostsBlock:
             {
                 var w = m.Revert();
-                return w.Changed ? UndoOutcome.Restored("блок DpiShell убран из hosts") : UndoOutcome.Already("блока DpiShell в hosts уже нет");
+                return w.Changed ? UndoOutcome.Restored(L.T("core.undo.hosts_block_removed")) : UndoOutcome.Already(L.T("core.undo.hosts_block_gone"));
             }
             case ChangeKinds.HostsUser:
             {
                 var r = await m.SetUserAsync([], ct);
-                return r.Changed ? UndoOutcome.Restored("свои строки убраны из hosts") : UndoOutcome.Already("своих строк в hosts уже нет");
+                return r.Changed ? UndoOutcome.Restored(L.T("core.undo.hosts_user_removed")) : UndoOutcome.Already(L.T("core.undo.hosts_user_gone"));
             }
             default:
             {
                 var r = m.Uncomment();
-                return r.Changed ? UndoOutcome.Restored($"возвращено строк: {r.Commented.Count}") : UndoOutcome.Already("закомментированных нами строк уже нет");
+                return r.Changed ? UndoOutcome.Restored(L.T("core.undo.hosts_comment_restored", new { n = r.Commented.Count })) : UndoOutcome.Already(L.T("core.undo.hosts_comment_gone"));
             }
         }
     }
@@ -156,19 +157,19 @@ public sealed class CoreUndoer(Func<CoreInstaller> installer, AppPaths paths) : 
     {
         var inst = installer();
         var check = inst.Check();
-        if (check.State == CoreState.Missing) return Task.FromResult(UndoOutcome.Already("ядра уже нет"));
+        if (check.State == CoreState.Missing) return Task.FromResult(UndoOutcome.Already(L.T("core.undo.core_gone")));
         if (check.State == CoreState.Modified)
-            return Task.FromResult(UndoOutcome.Changed("файлы ядра изменены после установки: " + string.Join(", ", check.BadFiles)));
+            return Task.FromResult(UndoOutcome.Changed(L.T("core.undo.core_changed", new { files = string.Join(", ", check.BadFiles) })));
         try
         {
             foreach (var name in inst.Manifest.Files.Keys) File.Delete(Path.Combine(paths.Core, name));
             var left = Directory.GetFileSystemEntries(paths.Core);
             if (left.Length == 0) Directory.Delete(paths.Core);
-            return Task.FromResult(UndoOutcome.Restored(left.Length == 0 ? "ядро удалено" : "ядро удалено, чужие файлы в папке остались"));
+            return Task.FromResult(UndoOutcome.Restored(L.T(left.Length == 0 ? "core.undo.core_removed" : "core.undo.core_removed_foreign")));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return Task.FromResult(UndoOutcome.Fail("файлы ядра заняты (оптимизация ещё работает?): " + ex.Message));
+            return Task.FromResult(UndoOutcome.Fail(L.T("core.undo.core_busy", new { error = ex.Message })));
         }
     }
 }
@@ -181,17 +182,17 @@ public sealed class AdvancedUndoer(Func<AdvancedConfig> current, Action<Advanced
 {
     public IReadOnlyCollection<string> Kinds { get; } = [ChangeKinds.Advanced];
 
-    static string Describe(AdvancedConfig c) => c.Enabled ? $"включён, строк: {c.Rows.Count}" : $"выключен, строк: {c.Rows.Count}";
+    static string Describe(AdvancedConfig c) => L.T(c.Enabled ? "core.undo.adv_state_on" : "core.undo.adv_state_off", new { n = c.Rows.Count });
 
     public Task<UndoOutcome> UndoAsync(ChangeEntry e, CancellationToken ct)
     {
         var was = AdvancedConfig.FromJson(e.Before);
         var ours = AdvancedConfig.FromJson(e.After);
         var now = current();
-        if (now.SameChoice(was)) return Task.FromResult(UndoOutcome.Already("продвинутый режим уже такой, как был"));
-        if (!now.SameChoice(ours)) return Task.FromResult(UndoOutcome.Changed("продвинутый режим изменён после DpiShell"));
+        if (now.SameChoice(was)) return Task.FromResult(UndoOutcome.Already(L.T("core.undo.adv_already")));
+        if (!now.SameChoice(ours)) return Task.FromResult(UndoOutcome.Changed(L.T("core.undo.adv_changed")));
         restore(was);
-        return Task.FromResult(UndoOutcome.Restored("продвинутый режим как был: " + Describe(was)));
+        return Task.FromResult(UndoOutcome.Restored(L.T("core.undo.adv_restored", new { state = Describe(was) })));
     }
 }
 
@@ -205,9 +206,9 @@ public sealed class JointUndoer(Func<JointConfig> current, Action restoreOff) : 
 
     public Task<UndoOutcome> UndoAsync(ChangeEntry e, CancellationToken ct)
     {
-        if (!current().Active) return Task.FromResult(UndoOutcome.Already("совместная работа уже выключена"));
+        if (!current().Active) return Task.FromResult(UndoOutcome.Already(L.T("core.undo.joint_already")));
         restoreOff();
-        return Task.FromResult(UndoOutcome.Restored("совместная работа выключена: этот ПК работает по полной настройке"));
+        return Task.FromResult(UndoOutcome.Restored(L.T("core.undo.joint_off")));
     }
 }
 
@@ -229,8 +230,8 @@ public sealed class AppProfileUndoer(Func<string, AppProfile?> find, Func<string
     public Task<UndoOutcome> UndoAsync(ChangeEntry e, CancellationToken ct)
     {
         var id = e.After?["id"]?.GetValue<string>() ?? "";
-        if (find(id) is not { } p) return Task.FromResult(UndoOutcome.Already("профиля уже нет"));
-        if (!Same(p, e.After)) return Task.FromResult(UndoOutcome.Changed("профиль изменён после записи"));
-        return Task.FromResult(remove(id) ? UndoOutcome.Restored("профиль удалён") : UndoOutcome.Already("профиля уже нет"));
+        if (find(id) is not { } p) return Task.FromResult(UndoOutcome.Already(L.T("core.undo.profile_gone")));
+        if (!Same(p, e.After)) return Task.FromResult(UndoOutcome.Changed(L.T("core.undo.profile_changed")));
+        return Task.FromResult(remove(id) ? UndoOutcome.Restored(L.T("core.undo.profile_removed")) : UndoOutcome.Already(L.T("core.undo.profile_gone")));
     }
 }

@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Collections.Concurrent;
 using System.IO.Pipes;
 using System.Security.AccessControl;
@@ -264,7 +265,7 @@ public sealed class HelperServer : IAsyncDisposable
                 {
                     var now = _current;
                     conn.Send(HelperProtocol.Error(call.Id, HelperErrors.Busy,
-                        HelperErrors.Text(HelperErrors.Busy) + (now is null ? "" : $" Сейчас выполняется: {now}.")));
+                        HelperErrors.Text(HelperErrors.Busy) + (now is null ? "" : L.T("core.helper.busy_now", new { cmd = now }))));
                     return;
                 }
                 held = true;

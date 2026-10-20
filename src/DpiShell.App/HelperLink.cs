@@ -59,7 +59,7 @@ public sealed class ElevatedSelf : IHelperSetup
         {
             await p.WaitForExitAsync();
             return p.ExitCode == 0 ? new(SetupResult.Done)
-                : new(SetupResult.Failed, $"код {p.ExitCode}; подробности — в журнале помощника (logs\\helper.log)");
+                : new(SetupResult.Failed, L.T("shell.helper.install_exit", new { code = p.ExitCode }));
         }
     }
 }

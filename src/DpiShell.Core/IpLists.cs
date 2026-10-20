@@ -1,3 +1,4 @@
+using Loc = DpiShell.Core.Localization.L;
 using System.Text.Json;
 
 namespace DpiShell.Core;
@@ -31,17 +32,17 @@ public sealed record DataManifest(string Version, Dictionary<string, DataFile> F
     public IReadOnlyList<string> UpdateProblems()
     {
         var p = new List<string>();
-        if (ParseVersion(Version) is null) p.Add("версия не в формате ГГГГ-ММ-ДД");
-        if (Files is null || Files.Count == 0) { p.Add("нет файлов"); return p; }
-        if (Files.Count > MaxFiles) p.Add("слишком много файлов");
+        if (ParseVersion(Version) is null) p.Add(Loc.T("core.data.v.bad_version"));
+        if (Files is null || Files.Count == 0) { p.Add(Loc.T("core.data.v.no_files")); return p; }
+        if (Files.Count > MaxFiles) p.Add(Loc.T("core.data.v.too_many"));
         foreach (var (key, f) in Files)
         {
-            if (!DataKeys.IsAllowed(key)) p.Add($"недопустимый файл «{(key.Length > 40 ? key[..40] : key)}»");
-            else if (f?.Sha256 is not { Length: 64 } h || !h.All(Uri.IsHexDigit)) p.Add($"нет sha256 у {key}");
-            else if (f.Url is not null && !UpdateSources.IsSafeHttps(f.Url)) p.Add($"адрес {key} не https");
+            if (!DataKeys.IsAllowed(key)) p.Add(Loc.T("core.data.v.bad_file", new { name = key.Length > 40 ? key[..40] : key }));
+            else if (f?.Sha256 is not { Length: 64 } h || !h.All(Uri.IsHexDigit)) p.Add(Loc.T("core.data.v.no_sha", new { key }));
+            else if (f.Url is not null && !UpdateSources.IsSafeHttps(f.Url)) p.Add(Loc.T("core.data.v.not_https", new { key }));
         }
         foreach (var v in new[] { AppVersion, MinAppVersion })
-            if (v is not null && !System.Version.TryParse(v, out _)) p.Add("версия программы не читается");
+            if (v is not null && !System.Version.TryParse(v, out _)) p.Add(Loc.T("core.data.v.bad_app_version"));
         return p;
     }
 
@@ -195,10 +196,10 @@ public sealed class IpLists(AppPaths paths)
     /// <summary>Обновить общий список из файла (ручная загрузка). Отказ валидатора или неподтверждённое сильное изменение — остаётся прежний.</summary>
     public IpsetUpdateResult UpdateFromFile(string file, bool confirmed = false, string source = "file", string? version = null, DateTime? updated = null)
     {
-        if (!File.Exists(file)) return new(false, null, $"Файл не найден: {file}");
+        if (!File.Exists(file)) return new(false, null, Loc.T("core.ip.file_missing", new { file }));
         var previous = HasList ? Read(AllFile).ToHashSet() : null;
         var v = IpsetValidator.ValidateFile(file, IpsetKind.Main, previous);
-        if (!v.Accepted) return new(false, v, "Список не принят, оставлен прежний: " + string.Join(" ", v.Errors));
+        if (!v.Accepted) return new(false, v, Loc.T("core.ip.rejected", new { errors = string.Join(" ", v.Errors) }));
         if (v.NeedsConfirm && !confirmed) return new(false, v, string.Join(" ", v.Confirm));
         return Install(file, v, source, version, updated ?? File.GetLastWriteTimeUtc(file));
     }
@@ -209,19 +210,19 @@ public sealed class IpLists(AppPaths paths)
     {
         manifest ??= PackageManifest;
         var entry = manifest?.Files.GetValueOrDefault(DataManifest.IpsetKey);
-        if (entry?.Url is not { } url) return new(false, null, "В манифесте данных нет адреса IP-списка.");
+        if (entry?.Url is not { } url) return new(false, null, Loc.T("core.ip.no_url"));
         if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps)
-            return new(false, null, "IP-список качается только по HTTPS.");
+            return new(false, null, Loc.T("core.ip.https_only"));
         paths.EnsureDirectories();
         var tmp = Path.Combine(paths.Root, "ipset.download.txt");
         try
         {
-            log?.Report("Скачиваю IP-список…");
+            log?.Report(Loc.T("core.ip.downloading"));
             try { await CoreInstaller.DownloadWithRetriesAsync(http, url, tmp, ct); }
-            catch (HttpRequestException e) { return new(false, null, "Не удалось скачать IP-список: " + e.Message); }
+            catch (HttpRequestException e) { return new(false, null, Loc.T("core.ip.download_failed", new { error = e.Message })); }
             var hash = DataManifest.Sha256(tmp);
             if (!string.Equals(hash, entry.Sha256, StringComparison.OrdinalIgnoreCase))
-                return new(false, null, "Скачанный IP-список не совпал с манифестом (sha256) — не применён.");
+                return new(false, null, Loc.T("core.ip.hash_mismatch"));
             var r = UpdateFromFile(tmp, confirmed, "download", manifest!.Version, entry.Updated);
             log?.Report(r.Message);
             return r;
@@ -231,7 +232,7 @@ public sealed class IpLists(AppPaths paths)
 
     IpsetUpdateResult Install(string from, IpsetVerdict v, string source, string? version, DateTime? updated)
     {
-        if (!v.Accepted) return new(false, v, "Список не принят, оставлен прежний: " + string.Join(" ", v.Errors));
+        if (!v.Accepted) return new(false, v, Loc.T("core.ip.rejected", new { errors = string.Join(" ", v.Errors) }));
         paths.EnsureDirectories();
         // В рабочий файл — только то, что прошло проверку, в каноническом виде. winws перечитает его сам.
         var tmp = L(AllFile + ".tmp");
@@ -241,9 +242,9 @@ public sealed class IpLists(AppPaths paths)
         var meta = new IpsetMeta(CoreInstaller.Sha256(L(AllFile)), v.Entries.Count, v.Ipv4, v.Ipv6, v.Ipv4Share, version, updated, DateTime.UtcNow, source);
         File.WriteAllText(L(MetaFile + ".tmp"), JsonSerializer.Serialize(meta, Json));
         File.Move(L(MetaFile + ".tmp"), L(MetaFile), overwrite: true);
-        var fixedNote = v.Fixed > 0 ? $", исправлено {v.Fixed}" : "";
-        var dropNote = v.Dropped > 0 ? $", отброшено {v.Dropped}" : "";
-        return new(true, v, $"IP-список обновлён: {v.Entries.Count} подсетей{fixedNote}{dropNote}.");
+        var fixedNote = v.Fixed > 0 ? Loc.T("core.ip.fixed", new { n = v.Fixed }) : "";
+        var dropNote = v.Dropped > 0 ? Loc.T("core.ip.dropped", new { n = v.Dropped }) : "";
+        return new(true, v, Loc.T("core.ip.updated", new { n = v.Entries.Count, fixes = fixedNote, drops = dropNote }));
     }
 
     /// <summary>Записать свои подсети (или исключения). Ошибочные строки отбрасываются и возвращаются в Problems; широкие — только с подтверждением.</summary>

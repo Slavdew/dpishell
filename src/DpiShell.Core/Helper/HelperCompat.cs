@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 namespace DpiShell.Core.Helper;
 
 public enum HelperCompatLevel
@@ -46,13 +47,13 @@ public sealed record HelperCompat(HelperCompatLevel Level, string HelperApi, IRe
         bool outdated = !string.IsNullOrEmpty(helperVersion) && AppRelease.IsOlder(helperVersion, windowVersion);
         if (Parse(api) is not { } h || Parse(windowApi) is not { } w || h.Major != w.Major)
             return new(HelperCompatLevel.Incompatible, api, set, outdated,
-                "Помощник несовместим с этой версией программы — переустановите его (один запрос прав администратора).");
+                L.T("core.helper.compat.incompatible"));
         if (h.Minor != w.Minor)
             return new(HelperCompatLevel.MinorDiffers, api, set, outdated,
                 outdated || h.Minor < w.Minor
-                    ? "Помощник старее программы — часть функций недоступна. Обновите помощника."
-                    : "Помощник новее программы — обновите программу.");
-        return new(HelperCompatLevel.Ok, api, set, outdated, outdated ? "Вышла новая версия помощника — обновите его (один запрос прав администратора)." : null);
+                    ? L.T("core.helper.compat.older")
+                    : L.T("core.helper.compat.newer"));
+        return new(HelperCompatLevel.Ok, api, set, outdated, outdated ? L.T("core.helper.compat.new_version") : null);
     }
 
     static (int Major, int Minor)? Parse(string s)

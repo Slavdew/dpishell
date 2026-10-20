@@ -97,10 +97,10 @@ public sealed class ProxyManager(IProxyRegistry reg, IWinHttpProxy winHttp)
 
     static string Title(string kind, ProxySettings next) => (kind, next.IsOn) switch
     {
-        (ChangeKinds.ProxyMachine, true) => "Включён системный прокси для всей машины",
-        (ChangeKinds.ProxyMachine, false) => "Выключен системный прокси для всей машины",
-        (_, true) => "Включён системный прокси для пользователя",
-        _ => "Выключен системный прокси для пользователя",
+        (ChangeKinds.ProxyMachine, true) => L.T("core.proxy.title.machine_on"),
+        (ChangeKinds.ProxyMachine, false) => L.T("core.proxy.title.machine_off"),
+        (_, true) => L.T("core.proxy.title.user_on"),
+        _ => L.T("core.proxy.title.user_off"),
     };
 
     // ---------- вся машина ----------
@@ -155,13 +155,13 @@ public sealed class ProxyManager(IProxyRegistry reg, IWinHttpProxy winHttp)
         string id = open?.Id ?? Recorder.Begin(kind, title, before, planned);
         string? error = null;
         try { act(); }
-        catch (Exception e) when (IsIo(e)) { error = string.IsNullOrWhiteSpace(e.Message) ? "ошибка записи" : e.Message; }
+        catch (Exception e) when (IsIo(e)) { error = string.IsNullOrWhiteSpace(e.Message) ? L.T("core.proxy.write_error") : e.Message; }
         var actual = snapshot();
         if (open is null)
         {
             if (ProxySnapshot.Same(actual, before)) Recorder.Abort(id); else Recorder.Done(id, actual);
         }
-        else if (ProxySnapshot.Same(actual, open.Before)) Recorder.Close(kind, "прежнее значение вернулось", e => e.Id == open.Id);
+        else if (ProxySnapshot.Same(actual, open.Before)) Recorder.Close(kind, L.T("core.proxy.value_back"), e => e.Id == open.Id);
         else if (!ProxySnapshot.Same(actual, open.After)) Recorder.Update(open.Id, actual);
         return error;
     }
@@ -183,16 +183,16 @@ public sealed class ProxyUndoer(IProxyRegistry reg, IWinHttpProxy winHttp, IProx
             bool machine = e.Kind == ChangeKinds.ProxyMachine;
             var key = machine ? ProxyKey.MachineSettings : ProxyKey.UserSettings;
             var sid = machine ? null : ProxySnapshot.Sid(e.After);
-            if (sid is not null && !reg.UserHiveLoaded(sid)) return Task.FromResult(UndoOutcome.Fail("настройки этого пользователя сейчас не загружены"));
+            if (sid is not null && !reg.UserHiveLoaded(sid)) return Task.FromResult(UndoOutcome.Fail(L.T("core.proxy.undo.hive")));
 
-            Part("настройки прокси", ProxyRegistryIo.Read(reg, key, sid), ProxySnapshot.Settings(e.After), ProxySnapshot.Settings(e.Before),
+            Part(L.T("core.proxy.undo.part_settings"), ProxyRegistryIo.Read(reg, key, sid), ProxySnapshot.Settings(e.After), ProxySnapshot.Settings(e.Before),
                 v => ProxyRegistryIo.Write(reg, key, sid, v));
             if (machine && ProxySnapshot.HasPerUser(e.After))
-                Part("общие настройки для всех", ProxyRegistryIo.PerUserPolicy(reg), ProxySnapshot.PerUser(e.After), ProxySnapshot.PerUser(e.Before),
+                Part(L.T("core.proxy.undo.part_policy"), ProxyRegistryIo.PerUserPolicy(reg), ProxySnapshot.PerUser(e.After), ProxySnapshot.PerUser(e.Before),
                     v => ProxyRegistryIo.SetPerUserPolicy(reg, v));
             if (machine && ProxySnapshot.WinHttp(e.After) is { } wAfter)
-                Part("прокси для служб (WinHTTP)", winHttp.Get(), wAfter, ProxySnapshot.WinHttp(e.Before) ?? WinHttpInfo.Direct,
-                    v => { if (!winHttp.Set(v)) throw new IOException("Windows не приняла прокси WinHTTP"); });
+                Part(L.T("core.proxy.undo.part_winhttp"), winHttp.Get(), wAfter, ProxySnapshot.WinHttp(e.Before) ?? WinHttpInfo.Direct,
+                    v => { if (!winHttp.Set(v)) throw new IOException(L.T("core.proxy.undo.winhttp_refused")); });
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException or ArgumentException)
         {
@@ -200,10 +200,10 @@ public sealed class ProxyUndoer(IProxyRegistry reg, IWinHttpProxy winHttp, IProx
         }
 
         if (restored.Count > 0) notifier?.Changed();
-        var skipped = changed.Count > 0 ? $"; не тронуто (менялось после DpiShell): {string.Join(", ", changed)}" : "";
-        if (restored.Count > 0) return Task.FromResult(UndoOutcome.Restored($"возвращено: {string.Join(", ", restored)}{skipped}"));
-        if (changed.Count > 0) return Task.FromResult(UndoOutcome.Changed($"изменено после DpiShell: {string.Join(", ", changed)}"));
-        return Task.FromResult(UndoOutcome.Already("уже как раньше"));
+        var skipped = changed.Count > 0 ? L.T("core.proxy.undo.skipped", new { list = string.Join(", ", changed) }) : "";
+        if (restored.Count > 0) return Task.FromResult(UndoOutcome.Restored(L.T("core.proxy.undo.restored", new { list = string.Join(", ", restored), skipped })));
+        if (changed.Count > 0) return Task.FromResult(UndoOutcome.Changed(L.T("core.proxy.undo.changed", new { list = string.Join(", ", changed) })));
+        return Task.FromResult(UndoOutcome.Already(L.T("core.proxy.undo.already")));
 
         void Part<T>(string name, T cur, T? ours, T? was, Action<T> write)
         {

@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -52,15 +53,15 @@ public static class RouterUpdatePackages
         var json = await GetBytesAsync(http, url, RouterReleaseInfo.MaxBytes, ct);
         var sig = System.Text.Encoding.ASCII.GetString(await GetBytesAsync(http, url + ReleaseSignature.Extension, ReleaseSignature.MaxSignatureFileBytes, ct));
         if (!ReleaseSignature.Verify(json, sig, publicKey))
-            throw new SecurityException("Подпись выпуска для роутера не сошлась — пакеты не загружаю");
+            throw new SecurityException(L.T("core.rt.upd.bad_signature"));
         RouterReleaseInfo info;
         try { info = RouterReleaseInfo.Parse(json); }
-        catch (InvalidDataException e) { throw new SecurityException("Описание выпуска для роутера не по формату: " + e.Message); }
-        if (info.Version != BaseVersion(version)) throw new SecurityException($"Выпуск {info.Version} вместо {BaseVersion(version)} — пакеты не загружаю");
+        catch (InvalidDataException e) { throw new SecurityException(L.T("core.rt.upd.bad_format", new { error = e.Message })); }
+        if (info.Version != BaseVersion(version)) throw new SecurityException(L.T("core.rt.upd.wrong_release", new { got = info.Version, want = BaseVersion(version) }));
 
         var ext = "." + (info.Pkg ?? "apk");
         var assets = info.Assets.Where(a => RouterSsh.UpdatePackageName().IsMatch(a.Name) && a.Name.EndsWith(ext, StringComparison.Ordinal)).ToList();
-        if (assets.Count == 0) throw new SecurityException($"В выпуске {info.Version} нет пакетов DpiShell");
+        if (assets.Count == 0) throw new SecurityException(L.T("core.rt.upd.no_packages", new { version = info.Version }));
 
         Directory.CreateDirectory(dir);
         var baseUrl = url[..(url.LastIndexOf('/') + 1)];
@@ -70,7 +71,7 @@ public static class RouterUpdatePackages
             var path = Path.Combine(dir, a.Name);
             var bytes = await GetBytesAsync(http, baseUrl + a.Name, 64 * 1024 * 1024, ct);
             if (!Convert.ToHexStringLower(SHA256.HashData(bytes)).Equals(a.Sha256, StringComparison.OrdinalIgnoreCase))
-                throw new SecurityException($"Пакет {a.Name} не совпал по sha256 — не загружаю");
+                throw new SecurityException(L.T("core.rt.upd.pkg_hash", new { name = a.Name }));
             await File.WriteAllBytesAsync(path, bytes, ct);
             files.Add(new(a.Name, path, a.Sha256.ToLowerInvariant()));
         }
@@ -87,7 +88,7 @@ public static class RouterUpdatePackages
         int n;
         while ((n = await s.ReadAsync(buf, ct)) > 0)
         {
-            if (ms.Length + n > max) throw new HttpRequestException($"{url}: файл больше ожидаемого");
+            if (ms.Length + n > max) throw new HttpRequestException(L.T("core.rt.upd.too_big", new { url }));
             ms.Write(buf, 0, n);
         }
         return ms.ToArray();

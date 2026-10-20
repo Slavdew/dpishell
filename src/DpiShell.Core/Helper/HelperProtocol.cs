@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -90,14 +91,14 @@ public static class HelperErrors
 
     public static string Text(string code) => code switch
     {
-        Invalid => "Помощник отклонил запрос: такой команды или аргументов нет.",
-        Busy => "Помощник занят другой операцией — дождитесь её окончания.",
-        Conflict => "Мешают похожие программы.",
-        Failed => "Помощник не смог выполнить действие.",
-        Denied => "Помощник установлен для другого пользователя этого компьютера.",
-        Cancelled => "Операция отменена.",
-        Incompatible => "Помощник несовместим с этой версией программы — переустановите его.",
-        _ => "Ошибка помощника.",
+        Invalid => L.T("core.helper.err.invalid"),
+        Busy => L.T("core.helper.err.busy"),
+        Conflict => L.T("core.helper.err.conflict"),
+        Failed => L.T("core.helper.err.failed"),
+        Denied => L.T("core.helper.err.denied"),
+        Cancelled => L.T("core.helper.err.cancelled"),
+        Incompatible => L.T("core.helper.err.incompatible"),
+        _ => L.T("core.helper.err.other"),
     };
 }
 
@@ -129,10 +130,10 @@ public sealed class HelperUnavailableException(HelperUnavailableReason reason, E
 
     static string TextFor(HelperUnavailableReason r) => r switch
     {
-        HelperUnavailableReason.NotInstalled => "Нужен помощник DpiShell: один запрос прав администратора, дальше без вопросов.",
-        HelperUnavailableReason.NotRunning => "Помощник DpiShell не запущен. Переустановите его или перезагрузите компьютер.",
-        HelperUnavailableReason.NotResponding => "Помощник DpiShell не отвечает.",
-        _ => "Связь с помощником DpiShell прервалась.",
+        HelperUnavailableReason.NotInstalled => L.T("core.helper.unavailable.not_installed"),
+        HelperUnavailableReason.NotRunning => L.T("core.helper.unavailable.not_running"),
+        HelperUnavailableReason.NotResponding => L.T("core.helper.unavailable.not_responding"),
+        _ => L.T("core.helper.unavailable.lost"),
     };
 }
 

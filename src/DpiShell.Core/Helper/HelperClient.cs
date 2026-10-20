@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Collections.Concurrent;
 using System.IO.Pipes;
 using System.Security.Principal;
@@ -68,7 +69,7 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
             catch (IOException e) { throw new HelperUnavailableException(HelperUnavailableReason.NotResponding, e); }
 
             if (o.RequireTrustedServer && !IsTrustedOwner(pipe))
-                throw new HelperException(HelperErrors.Denied, "Канал помощника создан не системой — подключение отменено.");
+                throw new HelperException(HelperErrors.Denied, L.T("core.helper.not_by_system"));
 
             var client = new HelperClient(pipe);
             await client.HandshakeAsync(o.ConnectTimeout, ct);

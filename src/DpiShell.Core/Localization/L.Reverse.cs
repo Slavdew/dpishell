@@ -41,6 +41,13 @@ public static partial class L
         foreach (var (rx, key, names) in templates)
             if (rx.Match(text) is { Success: true } m)
                 return T(key, names.ToDictionary(n => n, n => (object?)FromRu(m.Groups[n].Value)));
+        // Список из нескольких фраз через запятую («настройки прокси, прокси для служб (WinHTTP)») — по частям.
+        if (text.Contains(", "))
+        {
+            var parts = text.Split(", ");
+            var translated = parts.Select(p => FromRu(p)).ToArray();
+            if (!translated.SequenceEqual(parts)) return string.Join(", ", translated);
+        }
         return text;
     }
 }

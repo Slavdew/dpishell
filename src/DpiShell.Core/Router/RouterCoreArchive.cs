@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -58,13 +59,13 @@ public sealed class RouterCoreArchive(RouterCoreManifest manifest, string cacheD
         var errors = new List<string>();
         foreach (var url in new[] { manifest.ZipUrl }.Concat(manifest.MirrorUrls ?? []))
         {
-            progress?.Report($"Загрузка ядра: {url}");
+            progress?.Report(L.T("core.rt.core.downloading", new { url }));
             try { await CoreInstaller.DownloadWithRetriesAsync(http, url, tmp, ct); }
             catch (HttpRequestException e) { errors.Add(e.Message); continue; }
             if (IsValid(tmp)) { File.Move(tmp, CachePath, true); return CachePath; }
             File.Delete(tmp);
-            errors.Add($"{url}: хеш не совпал");
+            errors.Add(L.T("core.rt.core.hash", new { url }));
         }
-        throw new HttpRequestException($"Не удалось скачать ядро для роутера ({manifest.ZipName}): {string.Join("; ", errors)}");
+        throw new HttpRequestException(L.T("core.rt.core.failed", new { name = manifest.ZipName, errors = string.Join("; ", errors) }));
     }
 }

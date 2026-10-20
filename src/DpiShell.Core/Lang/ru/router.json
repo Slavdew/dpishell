@@ -499,5 +499,14 @@
  "router.login.intro": "Пароль администратора роутера — обычно тот же, что для входа в его настройки (LuCI).",
  "router.login.stored": "Пароль хранится зашифрованным и только на этом ПК.",
  "router.login.stored_saved": "Пароль хранится зашифрованным и только на этом ПК. Пустое поле — вход с сохранённым.",
-  "router.row.start_failed": "ошибка запуска: {error}"
+  "router.row.start_failed": "ошибка запуска: {error}",
+  "router.log.checking": "Проверка роутера {host}",
+  "router.log.error": "Ошибка: {error}",
+  "router.log.uninstall_api": "Удаление через API ({mode})",
+  "router.log.keep_settings": "с сохранением настроек",
+  "router.log.full": "полностью",
+  "router.log.api_failed": "API: {error} — переход на SSH",
+  "router.log.uninstall_ssh": "Удаление по SSH ({host})",
+  "router.log.uninstall_failed": "Удаление не удалось",
+  "router.log.removed": "Удалено"
 }

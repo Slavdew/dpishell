@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Security.Authentication;
 using System.Text.Json;
 
@@ -108,7 +109,8 @@ public sealed record SearchReport(
     IReadOnlyDictionary<string, IReadOnlyList<CandidateResult>> ByRole,
     IReadOnlyList<Strategy> Generated,
     SelectionReport? Final,
-    string? Stopped);
+    string? Stopped,
+    bool Cancelled = false);
 
 /// <summary>Глубокий поиск: роли подбираются раздельно, лучшие собираются в стратегии и проходят полную проверку вместе с базовой.</summary>
 public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
@@ -129,6 +131,7 @@ public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
     {
         var byRole = new Dictionary<string, IReadOnlyList<CandidateResult>>();
         string? stopped = null;
+        bool cancelled = false;
         // Быстрая оценка: обязательные цели, одна попытка, короткие таймауты. Обе версии TLS: живой прогон 2026-10-16 показал,
         // что «тихий» multidisorder проходит по TLS 1.3 и не проходит по 1.2 — проверка только 1.3 пропускала такие находки.
         var quick = new Selector(paths, QuickProbe()) { Tls = HttpProbe.DefaultTls };
@@ -178,13 +181,13 @@ public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
                 foreach (var c in CandidateGenerator.Coarse())
                 {
                     await Try(c);
-                    if (!await ControlStillOk()) { stopped = "провайдер, похоже, временно ограничил соединения — продолжите поиск позже"; break; }
+                    if (!await ControlStillOk()) { stopped = L.T("core.search.throttled"); break; }
                 }
 
                 if (!await RefineAsync(Best(results, 3).Where(r => r.Ok > 0).ToList(), Try, ControlStillOk, RefineBudget))
-                    stopped = "провайдер, похоже, временно ограничил соединения — продолжите поиск позже";
+                    stopped = L.T("core.search.throttled");
             }
-            catch (OperationCanceledException) { stopped = "остановлено"; }
+            catch (OperationCanceledException) { stopped = L.T("core.search.cancelled"); cancelled = true; }
             byRole[role] = results;
             if (stopped is not null) break;
         }
@@ -198,9 +201,9 @@ public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
         {
             var full = new Selector(paths, newProbe());
             try { final = await full.RunAsync([baseStrategy, .. generated], groups, quick: false, progress, ct); }
-            catch (OperationCanceledException) { stopped ??= "остановлено"; }
+            catch (OperationCanceledException) { if (stopped is null) { stopped = L.T("core.search.cancelled"); cancelled = true; } }
         }
-        return new(byRole, generated, final, stopped);
+        return new(byRole, generated, final, stopped, cancelled);
     }
 
     /// <summary>

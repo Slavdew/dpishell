@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 namespace DpiShell.Core;
 
 public enum UndoStatus
@@ -82,12 +83,12 @@ public sealed class ChangeUndoEngine(ChangeJournal journal)
     {
         UndoOutcome o;
         if (!_byKind.TryGetValue(e.Kind, out var u))
-            o = UndoOutcome.Fail("эту запись откатывает другая версия программы — обновите помощника");
+            o = UndoOutcome.Fail(L.T("core.undo.other_version"));
         else
         {
             try { o = await u.UndoAsync(e, ct); }
             catch (OperationCanceledException) { throw; }
-            catch (Exception ex) when (ex is not OutOfMemoryException) { o = UndoOutcome.Fail(string.IsNullOrWhiteSpace(ex.Message) ? "ошибка при откате" : ex.Message); }
+            catch (Exception ex) when (ex is not OutOfMemoryException) { o = UndoOutcome.Fail(string.IsNullOrWhiteSpace(ex.Message) ? L.T("core.undo.error") : ex.Message); }
         }
         switch (o.Status)
         {

@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 namespace DpiShell.Core.Router;
 
 public enum RouterCompatLevel
@@ -34,17 +35,17 @@ public sealed record RouterCompatibility(RouterCompatLevel Level, string? Text, 
         var set = methods is null ? null : new HashSet<string>(methods, StringComparer.Ordinal);
 
         if (api is not { } a)
-            return new(RouterCompatLevel.Blocked, "DpiShell на роутере слишком старый — обновите его на роутере", set);
+            return new(RouterCompatLevel.Blocked, L.T("core.rt.compat.too_old"), set);
         if (a.Major > sup.Major)
-            return new(RouterCompatLevel.Blocked, "DpiShell на роутере новее программы — обновите программу. Пока работают только состояние, обновление и удаление", set);
+            return new(RouterCompatLevel.Blocked, L.T("core.rt.compat.router_newer_blocked"), set);
         if (a.Major < sup.Major)
-            return new(RouterCompatLevel.Blocked, "DpiShell на роутере устарел — обновите его. Пока доступны состояние, обновление и удаление", set);
+            return new(RouterCompatLevel.Blocked, L.T("core.rt.compat.outdated"), set);
         if (ParseVersion(minApp) is { } need && Normalize(app) < need)
-            return new(RouterCompatLevel.Blocked, $"DpiShell на роутере нужна программа {minApp} или новее. Пока работают только состояние, обновление и удаление.", set);
+            return new(RouterCompatLevel.Blocked, L.T("core.rt.compat.needs_app", new { min = minApp }), set);
         if (a.Minor > sup.Minor)
-            return new(RouterCompatLevel.Warning, "DpiShell на роутере новее программы — обновите программу, чтобы получить новые возможности.", set);
+            return new(RouterCompatLevel.Warning, L.T("core.rt.compat.router_newer"), set);
         if (a.Minor < sup.Minor)
-            return new(RouterCompatLevel.Warning, "DpiShell на роутере старше программы —часть кнопок неактивна, обновите DpiShell на роутере", set);
+            return new(RouterCompatLevel.Warning, L.T("core.rt.compat.router_older"), set);
         return new(RouterCompatLevel.Ok, null, set);
     }
 

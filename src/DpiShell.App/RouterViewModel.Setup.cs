@@ -753,7 +753,7 @@ public sealed class RouterInstallViewModel : Observable
         Stage = RouterInstallStage.Checking;
         VerdictTitle = ""; VerdictText = ""; TunnelNote = "";
         ProgressText = L.T("router.install.checking");
-        Log($"Проверка роутера {p.Target.Host}");
+        Log(L.T("router.log.checking", new { host = p.Target.Host }));
         _cts = new();
         try
         {
@@ -864,7 +864,7 @@ public sealed class RouterInstallViewModel : Observable
     {
         Stage = RouterInstallStage.Failed;
         ErrorText = e is OperationCanceledException ? L.T("router.install.cancelled") : RouterViewModel.SshText(e, host);
-        Log("Ошибка: " + e.Message);
+        Log(L.T("router.log.error", new { error = e.Message }));
         Raise(nameof(HasDetails));
     }
 
@@ -965,19 +965,19 @@ public sealed class RouterUninstallViewModel(RouterViewModel router) : Observabl
             bool viaApi = false;
             if (router.UninstallViaApi)
             {
-                Log($"Удаление через API ({(KeepSettings ? "с сохранением настроек" : "полностью")})");
+                Log(L.T("router.log.uninstall_api", new { mode = L.T(KeepSettings ? "router.log.keep_settings" : "router.log.full") }));
                 try { (o, sshError) = await router.UninstallViaApiAsync(target, pw, KeepSettings, _cts.Token); viaApi = true; }
-                catch (RouterException e) { Log("API: " + e.Message + " — удаляю по SSH"); }
+                catch (RouterException e) { Log(L.T("router.log.api_failed", new { error = e.Message })); }
             }
             if (!viaApi)
             {
-                Log($"Удаление по SSH ({target.Host})");
+                Log(L.T("router.log.uninstall_ssh", new { host = target.Host }));
                 o = await router.Flow().UninstallAsync(target, () => pw, KeepSettings, _cts.Token);
             }
         }
         catch (Exception e) when (e is RouterSshException or IOException or OperationCanceledException)
         {
-            Log("Ошибка: " + e.Message);
+            Log(L.T("router.log.error", new { error = e.Message }));
             router.SetBusy(false);
             ProgressText = "";
             Stage = RouterUninstallStage.Failed;
@@ -998,7 +998,7 @@ public sealed class RouterUninstallViewModel(RouterViewModel router) : Observabl
         }
         else if (o.Result.Ok != true)
         {
-            Log(o.Result.Message ?? "Удаление не удалось");
+            Log(o.Result.Message ?? L.T("router.log.uninstall_failed"));
             Stage = RouterUninstallStage.Failed;
             ErrorText = L.T("router.uninstall.failed", new { reason = o.Result.Message ?? L.T("router.uninstall.no_reason") });
             Raise(nameof(HasDetails));
@@ -1007,7 +1007,7 @@ public sealed class RouterUninstallViewModel(RouterViewModel router) : Observabl
         }
         else
         {
-            Log(o.Result.Message ?? "Удалено");
+            Log(o.Result.Message ?? L.T("router.log.removed"));
             var left = o.Left?.Left ?? [];
             Clean = o.Left?.Clean == true;
             ResultTitle = Clean ? L.T("router.uninstall.clean") : L.T("router.uninstall.done");

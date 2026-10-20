@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Text.Json.Nodes;
 
 namespace DpiShell.Core.Helper;
@@ -222,7 +223,7 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
             info.State, info.OurCore, info.Strategy?.Id,
             shell.Installer.Check().State, shell.Features,
             shell.AllStrategies.Select(s => new StrategyInfo(s.Id, s.Title, s.Source)).ToList(),
-            [.. shell.DefaultTargets.Groups.Select(g => new GroupInfo(g.Id, g.Title, g.Targets.Count)), new GroupInfo("user", "Свои сайты", st.UserTargets.Count)],
+            [.. shell.DefaultTargets.Groups.Select(g => new GroupInfo(g.Id, g.Title, g.Targets.Count)), new GroupInfo("user", L.T("select.group.user"), st.UserTargets.Count)],
             st.Groups, st.UserTargets, st.Fallbacks,
             st.TimestampsEnabledByUs, st.HostsFix, foreign,
             HelperProtocol.AppVersion, shell.DataVersion, UserExclude: st.UserExclude);
@@ -299,9 +300,9 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
 
     public void DeleteStrategy(string strategyId)
     {
-        if (shell.Catalog.Find(strategyId) is not null) throw new InvalidOperationException("Готовые стратегии не удаляются — только свои.");
-        if (shell.State.StrategyId == strategyId) throw new InvalidOperationException("Эта стратегия сейчас выбрана — сначала выберите другую.");
-        if (!UserStrategies.Remove(shell.Paths, strategyId)) throw new InvalidOperationException("Такой своей стратегии нет.");
+        if (shell.Catalog.Find(strategyId) is not null) throw new InvalidOperationException(L.T("core.helper.builtin_strategy"));
+        if (shell.State.StrategyId == strategyId) throw new InvalidOperationException(L.T("core.helper.strategy_selected"));
+        if (!UserStrategies.Remove(shell.Paths, strategyId)) throw new InvalidOperationException(L.T("core.helper.no_such_strategy"));
         if (shell.State.Fallbacks.Remove(strategyId)) shell.SaveState();
     }
 
@@ -406,7 +407,7 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
     public HostsWriteResult HostsApply()
     {
         HostsCheckReport r;
-        lock (_hostsLock) r = _lastHostsCheck ?? throw new InvalidOperationException("Сначала проверьте адреса.");
+        lock (_hostsLock) r = _lastHostsCheck ?? throw new InvalidOperationException(L.T("core.helper.check_addresses_first"));
         var w = shell.Hosts.Apply(r);
         shell.State.HostsFix = r.ToInstall.Count > 0;
         shell.State.HostsCheckedAt = DateTime.Now;
@@ -453,7 +454,7 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
     public HostsCommentResult HostsComment(IReadOnlyList<string> ids)
     {
         HostsTryReport a;
-        lock (_hostsLock) a = _lastAudit ?? throw new InvalidOperationException("Сначала проверьте hosts.");
+        lock (_hostsLock) a = _lastAudit ?? throw new InvalidOperationException(L.T("core.helper.check_hosts_first"));
         return shell.Hosts.Comment(ids, a.ProblemIds.ToHashSet());
     }
 
@@ -546,9 +547,9 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
     {
         lock (_recLock)
         {
-            if (_rec is not null) throw new InvalidOperationException("Запись уже идёт.");
+            if (_rec is not null) throw new InvalidOperationException(L.T("core.helper.rec_running"));
             if (mode == RecordingMode.Process && !Processes.Snapshot().Any(p => p.Pid == pid))
-                throw new InvalidOperationException("Такого процесса сейчас нет.");
+                throw new InvalidOperationException(L.T("core.helper.no_process"));
             // Драйвер перехвата — только при целых файлах ядра (WinDivert.dll берётся по полному пути из папки ядра).
             if (useDriver && RecorderSources is null && shell.Installer.Check().State != CoreState.Ok) useDriver = false;
             var rec = new ConnectionRecorder(mode, pid, Sources(useDriver), Processes);
@@ -572,7 +573,7 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
     {
         lock (_recLock)
         {
-            var rec = _rec ?? throw new InvalidOperationException("Запись не идёт.");
+            var rec = _rec ?? throw new InvalidOperationException(L.T("core.helper.rec_idle"));
             rec.Stop();
             var r = rec.Result();
             DropRecording();
@@ -591,7 +592,7 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
 
     static AppProfileInfo Info(AppProfile p, IReadOnlyList<ProfileVariant> variants) =>
         new(p.Id, p.Title, p.TcpPorts, p.UdpPorts, p.Addresses, p.Variant,
-            variants.FirstOrDefault(v => v.Index == p.Variant)?.Title ?? $"вариант {p.Variant + 1}", p.CreatedAt);
+            variants.FirstOrDefault(v => v.Index == p.Variant)?.Title ?? L.T("core.helper.variant_n", new { n = p.Variant + 1 }), p.CreatedAt);
 
     public AppProfilesInfo AppProfilesInfo()
     {
@@ -729,7 +730,7 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
     public ProxyChangeResult ProxyUserSet(string? clientSid, bool enabled, string? server, string? bypass, string? pac)
     {
         if (!ProxySid.IsUserSid(clientSid))
-            return new(false, "Не удалось определить пользователя окна — для этого пользователя прокси с правами администратора не меняется.", ProxyStatus(null));
+            return new(false, L.T("core.helper.proxy_no_user"), ProxyStatus(null));
         shell.Paths.EnsureDirectories();
         var mgr = ProxyMgr();
         var cur = ProxyRegistryIo.Read(ProxyRegistry, ProxyKey.UserSettings, clientSid);
