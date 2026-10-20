@@ -64,11 +64,14 @@ public sealed partial class RouterSsh(ISshSession ssh)
     /// dpishell-install.sh: строки «# …» — в progress, последняя строка — итог. Архив ядра — заранее <see cref="UploadCoreAsync"/>:
     /// через туннель 8 МБ с GitHub не успевают.
     /// </summary>
-    public async Task<RouterInstallResult> InstallAsync(int? proxyPort = null, IProgress<string>? progress = null, CancellationToken ct = default)
+    public async Task<RouterInstallResult> InstallAsync(int? proxyPort = null, IProgress<string>? progress = null, CancellationToken ct = default,
+        IProgress<RouterInstallStepCode>? steps = null)
     {
         var r = await RunScriptAsync(InstallScript, "", proxyPort, line =>
         {
-            if (RouterScriptJson.ProgressLine(line) is { } p) progress?.Report(p);
+            if (RouterScriptJson.ProgressLine(line) is not { } p) return;
+            progress?.Report(p);
+            if (RouterInstallSteps.FromScriptLine(p) is { } step) steps?.Report(step);
         }, ct);
         return RouterScriptJson.ParseInstall(r.Stdout);
     }
