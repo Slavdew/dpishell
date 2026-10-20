@@ -116,9 +116,9 @@ public sealed class LangWindowTests : IDisposable
             var w = Open(vm);
             SetProp(vm, "IsLoading", false);
             // Все вкладки построены (страницы создаются при первом показе), как у человека, обошедшего программу.
-            foreach (var page in new[] { Pages.Select, Pages.Sites, Pages.Apps, Pages.Hosts, Pages.Dns, Pages.Proxy, Pages.Diag, Pages.Router, Pages.Settings, Pages.About, Pages.Home })
+            foreach (var page in new[] { Pages.Select, Pages.Sites, Pages.Apps, NetPages.Hosts, NetPages.Dns, NetPages.Proxy, Pages.Diag, Pages.Router, Pages.Settings, Pages.About, Pages.Home })
             {
-                vm.Page = page;
+                vm.GoTo(page);
                 WindowSmokeTests.Pump();
             }
             var sw = System.Diagnostics.Stopwatch.StartNew();
