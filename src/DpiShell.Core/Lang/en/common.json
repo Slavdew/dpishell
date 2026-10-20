@@ -8,7 +8,6 @@
   "common.close_message": "Close message",
   "common.copy": "Copy",
   "common.more": "Details",
-  "common.copy": "Copy",
   "common.info": "Explanation",
   "common.info.name": "Explanation: {topic}",
   "common.shield.tip": "Needs the DpiShell helper: one administrator rights prompt",
