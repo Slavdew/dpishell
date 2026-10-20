@@ -39,17 +39,19 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames
     public string Title { get; } = title;
     /// <summary>Вариант глубокого поиска (candidate): в списке стратегий роутера его нет — только посмотреть, применить нельзя.</summary>
     public bool IsCandidate => Row.Candidate;
-    public string Kind => IsCandidate ? "проверяется в поиске" : "";
+    public string Kind => IsCandidate ? L.T("router.row.candidate") : "";
     /// <summary>Как на ПК: «N из M» (M — отмеченных групп); число групп роутер не присылает — берём по адресам в разбивке, нет её — доля.</summary>
-    public string Groups => Row is { GroupsOk: { } gok, GroupsTotal: > 0 and var gt } ? $"{gok} из {gt}"   // роутер 0.2.0-r8 присылает сам
+    public string Groups => Row is { GroupsOk: { } gok, GroupsTotal: > 0 and var gt } ? L.T("router.row.groups_of", new { ok = gok, total = gt })   // роутер 0.2.0-r8 присылает сам
         : IsCandidate ? "—"
-        : groupsTotal > 0 ? $"{(int)Math.Round(Row.GroupShare * groupsTotal)} из {groupsTotal}" : $"{Row.GroupShare * 100:0} %";
+        : groupsTotal > 0 ? L.T("router.row.groups_of", new { ok = (int)Math.Round(Row.GroupShare * groupsTotal), total = groupsTotal }) : Percent(Row.GroupShare * 100);
+    static string Percent(double v) => L.T("router.row.percent", new { value = v.ToString("0", L.Culture) });
+    static string Seconds(double v, string format) => L.T("router.row.seconds", new { value = v.ToString(format, L.Culture) });
     /// <summary>У варианта поиска доля обязательных адресов его части (ok из total) — тоже процентом, как у остальных строк.</summary>
-    public string Share => IsCandidate && Row.Total is > 0 ? $"{(double)(Row.Ok ?? 0) / Row.Total.Value * 100:0} %" : $"{Row.TargetShare * 100:0} %";
-    public string Avg => Row.Error is null && Row.AvgS > 0 ? $"{Row.AvgS:0.00} с" : "—";
+    public string Share => IsCandidate && Row.Total is > 0 ? Percent((double)(Row.Ok ?? 0) / Row.Total.Value * 100) : Percent(Row.TargetShare * 100);
+    public string Avg => Row.Error is null && Row.AvgS > 0 ? Seconds(Row.AvgS, "0.00") : "—";
     public string Error => Row.Error ?? "";
     /// <summary>Пустая колонка выглядит как сбой отрисовки: когда ошибок нет — «нет» серым.</summary>
-    public string ErrorShown => Error.Length > 0 ? Error : "нет";
+    public string ErrorShown => Error.Length > 0 ? Error : L.T("router.row.none");
     public bool ErrorIsProblem => Error.Length > 0;
     public bool Usable => !IsCandidate && Row.Error is null && Row.GroupShare > 0;
     public bool IsBest { get => _best; set { if (Set(ref _best, value)) Raise(nameof(Mark)); } }
@@ -60,15 +62,15 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames
     {
         var n = names ?? GroupNames.Empty;
         bool control = n.Control(v.Group);
-        return new CheckRow(v.Ok, n.Title(v.Group), v.Url, v.Detail ?? "", v.Seconds is { } sec ? $"{sec:0.0} с" : "",
-            !v.Ok && control ? "ломает обычный сайт" : "", !v.Ok && control);
+        return new CheckRow(v.Ok, n.Title(v.Group), v.Url, v.Detail ?? "", v.Seconds is { } sec ? Seconds(sec, "0.0") : "",
+            !v.Ok && control ? L.T("router.row.breaks_site") : "", !v.Ok && control);
     }).OrderByDescending(r => r.Alert).ToList();
     public bool HasDetails => Row.Verdicts is { Count: > 0 };
     /// <summary>Подсказка про обновление — только у полных проверок: у кандидатов поиска роутер разбивку не присылает.</summary>
     public bool NoDetails => !HasDetails && !IsCandidate;
     /// <summary>Стрелка: есть что раскрыть — разбивка или подсказка.</summary>
     public bool CanExpand => HasDetails || NoDetails;
-    public string NoDetailsHint => "Подробности по адресам появятся после обновления роутера.";
+    public string NoDetailsHint => L.T("router.row.no_details");
     public bool Expanded { get => _expanded; set => Set(ref _expanded, value); }
 
     /// <summary>То же содержимое строки (без сравнения списков по ссылке): ход опрашивается часто, раскрытую строку не пересоздаём.</summary>
@@ -89,13 +91,13 @@ public static class RouterTexts
     /// <summary>Ошибка роутера → строка состояния. Тексты уже в исключении; пароля в них нет (RouterClient не кладёт запрос в текст).</summary>
     public static string Friendly(RouterException e) => e.AppError?.Code switch
     {
-        "busy" => "Роутер занят: " + (e.AppError.Text is { Length: > 0 } t ? char.ToLower(t[0]) + t[1..] : "идёт подбор или проверка"),
+        "busy" => L.T("router.busy", new { reason = e.AppError.Text is { Length: > 0 } t ? char.ToLower(t[0]) + t[1..] : L.T("router.busy.default") }),
         // §9: enable/select_start при чужом обходе — conflict.
         "conflict" => Conflict,
         _ => e.Message,
     };
 
-    public const string Conflict = "На роутере работает похожая программа — остановите или удалите её: «Роутер» → «Роутер: что мешает».";
+    public static string Conflict => L.T("router.conflict");
 
     /// <summary>Выключение без человека (§5.1): сторож, кнопка на корпусе, откат неподтверждённого включения.</summary>
     public static bool IsOffCode(string code) => code is "watchdog_off" or "button_off" or "confirm_reverted" or "watchdog_select_failed";
@@ -106,15 +108,15 @@ public static class RouterTexts
     /// </summary>
     public static string Off(string by, DateTime? at, bool enabled = false)
     {
-        var when = at is null ? "" : " в " + Time(at);
+        string Pick(string key, string keyAt) => at is null ? L.T(key) : L.T(keyAt, new { time = Time(at) });
         return by switch
         {
             // Слово «сторож» — один раз и с пояснением (UX-аудит 7, п. 9); дальше — «выключили автоматически».
-            "watchdog" or "watchdog_off" => $"Оптимизация на роутере выключена автоматически{when}: с ней пропал интернет (это сделал сторож — он проверяет, что интернет работает).",
+            "watchdog" or "watchdog_off" => Pick("router.off.watchdog", "router.off.watchdog_at"),
             "watchdog_select_failed" => RouterViewModel.WatchdogSelectText(RouterViewModel.WatchdogSelectState.Failed, null),
-            "button" or "button_off" => $"Оптимизация на роутере выключена кнопкой на корпусе{when}",
-            _ when enabled => $"Роутер вернул прежнюю стратегию{when}: новую не подтвердили вовремя",
-            _ => $"Роутер вернул как было{when}: включение не подтвердили вовремя",
+            "button" or "button_off" => Pick("router.off.button", "router.off.button_at"),
+            _ when enabled => Pick("router.off.revert_strategy", "router.off.revert_strategy_at"),
+            _ => Pick("router.off.revert_enable", "router.off.revert_enable_at"),
         };
     }
 
@@ -128,9 +130,9 @@ public static class RouterTexts
     /// <summary>Предупреждение status.warnings → строка главной. flow_offload и ipv6 роутер исправляет сам (§9).</summary>
     public static RouterWarningRow Warning(RouterWarning w) => w.Code switch
     {
-        "flow_offload" => new(w.Code, "Ускорение сети на роутере мешает оптимизации", "Исправить"),
-        "ipv6" => new(w.Code, "Сайты по IPv6 идут мимо оптимизации", "Исправить"),
-        "conflict" => new(w.Code, "На роутере работает похожая программа", "Подробнее"),
+        "flow_offload" => new(w.Code, L.T("router.warn.flow_offload"), L.T("router.warn.fix")),
+        "ipv6" => new(w.Code, L.T("router.warn.ipv6"), L.T("router.warn.fix")),
+        "conflict" => new(w.Code, L.T("router.warn.conflict"), L.T("common.more")),
         _ => new(w.Code, w.Text ?? w.Code),
     };
 
@@ -148,14 +150,14 @@ public static class RouterTexts
         ? L.Time((t.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(t, DateTimeKind.Utc) : t).ToLocalTime())
         : "";
 
-    public const string NotFoundText = "DpiShell на роутере не найден";
+    public static string NotFoundText => L.T("router.not_found");
 
     public static string Found(RouterFound f, string? version) => f switch
     {
         RouterFound.NotFound => NotFoundText,
-        RouterFound.AppTooOld => "Обновите программу: роутер новее",
-        RouterFound.RouterTooOld => "Обновите пакет на роутере",
-        _ => $"DpiShell {version} найден — введите пароль роутера",
+        RouterFound.AppTooOld => L.T("router.found.app_too_old"),
+        RouterFound.RouterTooOld => L.T("router.found.router_too_old"),
+        _ => L.T("router.found.password", new { version }),
     };
 
     /// <summary>Номер элемента из error.field (§4: «items[3].url» → 3).</summary>
@@ -220,7 +222,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         DnsPick = new DnsPicker(settings) { Apply = DnsApplyAsync, Restore = DnsRestoreAsync, Enabled = () => Can("dns_set") };
         FixWarningCmd = new RelayCommand(p => { if (p is string code) _ = FixWarningAsync(code); }, p => Can(p as string == "ipv6" ? "ipv6_set" : "flow_offload_fix"));
         StopPcCmd = RelayCommand.Async(StopPcForRouterAsync, () => !Busy);
-        StopRouterCmd = RelayCommand.Async(async () => { if (await DisableAsync()) Say("Оптимизация на роутере выключена — работает этот ПК."); }, () => Can("disable"));
+        StopRouterCmd = RelayCommand.Async(async () => { if (await DisableAsync()) Say(L.T("router.stop.done")); }, () => Can("disable"));
         EnableTimestampsCmd = RelayCommand.Async(() => CheckTimestampsAsync(ask: true), () => !Busy);
         InitAdvanced();   // продвинутый режим на роутере — RouterViewModel.Advanced.cs
         WatchSites();
@@ -244,7 +246,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     };
     public Func<string?> AskReportPath { get; set; } = () =>
     {
-        var d = new Microsoft.Win32.SaveFileDialog { FileName = $"dpishell-router-{DateTime.Now:yyyy-MM-dd_HH-mm}.txt", Filter = "Текст (*.txt)|*.txt" };
+        var d = new Microsoft.Win32.SaveFileDialog { FileName = $"dpishell-router-{DateTime.Now:yyyy-MM-dd_HH-mm}.txt", Filter = L.T("router.save.filter") };
         return d.ShowDialog() == true ? d.FileName : null;
     };
     public Action<int> Navigate { get; set; } = _ => { };
@@ -285,7 +287,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public string CustomAddress { get => _custom; set => Set(ref _custom, value); }
 
     string? _gateway;
-    public string AutoAddressText => "Автоматически" + (_gateway is { } g ? $" ({g})" : "");
+    public string AutoAddressText => _gateway is { } g ? L.T("router.address.auto_gw", new { gateway = g }) : L.T("router.address.auto");
 
     string? EffectiveAddress()
     {
@@ -324,24 +326,24 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task CheckFitAsync()
     {
         FitChecking = true;
-        FitText = "Ищу роутер…";
+        FitText = L.T("router.fit.searching");
         try
         {
             string? gw;
             try { gw = Gateway(); }
             catch (Exception e) when (e is InvalidOperationException or System.Net.NetworkInformation.NetworkInformationException) { gw = null; }
-            if (gw is null) { FitText = "Не нашёл роутер: похоже, компьютер не подключён к сети. Подключитесь и проверьте ещё раз."; return; }
+            if (gw is null) { FitText = L.T("router.fit.no_network"); return; }
             FitText = await FitProbe(gw) switch
             {
-                RouterFitResult.Yes => $"Похоже, у вас роутер с OpenWrt ({gw}): DpiShell на него поставить можно. Нажмите «Установить на роутер» — программа проверит всё ещё раз перед установкой.",
-                RouterFitResult.No => $"Роутер ({gw}) отвечает, но на OpenWrt не похож. DpiShell ставится только на роутер с прошивкой OpenWrt; на этом компьютере всё работает и без него. Если OpenWrt ставили сами — нажмите «Установить на роутер», программа проверит точно.",
-                _ => $"Не получилось определить: роутер ({gw}) не ответил. Проверьте, что вы дома в своей сети, или нажмите «Установить на роутер» и укажите адрес в «Дополнительно».",
+                RouterFitResult.Yes => L.T("router.fit.yes", new { address = gw }),
+                RouterFitResult.No => L.T("router.fit.no", new { address = gw }),
+                _ => L.T("router.fit.unknown", new { address = gw }),
             };
         }
         finally { FitChecking = false; }
     }
 
-    public string EmptyTitle => Removed ? "DpiShell с роутера удалён" : Searched ? "Роутер с DpiShell не найден" : _autoFindTried ? "Ищу роутер…" : "Роутер не проверялся";
+    public string EmptyTitle => Removed ? L.T("router.empty.removed") : Searched ? L.T("router.empty.not_found") : _autoFindTried ? L.T("router.fit.searching") : L.T("router.empty.not_checked");
 
     /// <summary>Инструкция «Как поставить DpiShell на роутер» (п. 9).</summary>
     public const string GuideUrl = "https://github.com/Slavdew/dpishell/blob/master/docs/router/README.md";
@@ -349,7 +351,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public ICommand GuideCmd => _guideCmd ??= new RelayCommand(() =>
     {
         try { OpenUrl(GuideUrl); }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Failed("Не удалось открыть браузер: " + e.Message); }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Failed(L.T("router.err.browser", new { error = e.Message })); }
     });
     ICommand? _guideCmd;
 
@@ -381,16 +383,27 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public bool CanAct => Connected && !Busy && !Blocked;
     public bool CanConnect => !Busy;
 
-    string _connectionText = "Не проверялось";
+    string _connectionText = L.T("router.conn.not_checked");
     public string ConnectionText { get => _connectionText; private set { if (Set(ref _connectionText, value)) Raise(nameof(ShowConnectionText)); } }
 
     /// <summary>«DpiShell на роутере не найден» в «Подключении» не повторяем: то же уже сказано в карточке выше (UX-аудит 6, п. 14).</summary>
-    public bool ShowConnectionText => Searched && (Found || ConnectionText != RouterTexts.NotFoundText);
+    public bool ShowConnectionText => Searched && (Found || !_connNotFound);
+
+    // Вид состояния подключения — флагами, а не сравнением текста (текст зависит от языка).
+    bool _connNotFound, _connNeedsPassword;
+    /// <summary>Подключение не прошло из-за пароля: у роутера он есть, а нужный не введён или неверен.</summary>
+    internal bool ConnectionNeedsPassword => _connNeedsPassword;
 
     bool _connectionOk;
     public bool ConnectionOk { get => _connectionOk; private set => Set(ref _connectionOk, value); }
 
-    void SetConnection(string text, bool ok = false) { ConnectionText = text; ConnectionOk = ok; Raise(nameof(DiagHint)); UpdateHome(); }
+    void SetConnection(string text, bool ok = false, bool notFound = false, bool needsPassword = false)
+    {
+        _connNotFound = notFound; _connNeedsPassword = needsPassword;
+        ConnectionText = text; ConnectionOk = ok; Raise(nameof(DiagHint)); UpdateHome();
+    }
+
+    void SetFound(RouterFound f, string? version) => SetConnection(RouterTexts.Found(f, version), notFound: f == RouterFound.NotFound, needsPassword: f == RouterFound.Ok);
 
     RouterClient? ClientFor(string address)
     {
@@ -406,7 +419,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     async Task<T> Call<T>(Func<RouterClient, Task<T>> f)
     {
         await _gate.WaitAsync();
-        try { return await f(_client ?? throw new RouterException(RouterFailure.Unreachable, "Роутер не выбран")); }
+        try { return await f(_client ?? throw new RouterException(RouterFailure.Unreachable, L.T("router.err.no_router"))); }
         finally { _gate.Release(); }
     }
 
@@ -420,7 +433,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     {
         if (Busy) return false;
         Busy = true;
-        Say("Ищу роутер…");
+        Say(L.T("router.fit.searching"));
         try
         {
             _settings.RouterAddress = AddressAuto ? null : CustomAddress.Trim();
@@ -429,7 +442,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             var typed = noPassword ? "" : string.IsNullOrEmpty(password) ? null : password;
             if (typed is null && !HasSavedPassword)
             {
-                SetConnection(RouterTexts.Found(_detection!.Found, _detection.Status?.Version));
+                SetFound(_detection!.Found, _detection.Status?.Version);
                 return false;
             }
             return await LoginAsync(typed);
@@ -452,7 +465,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (address is null)
         {
             SetDetection(null);
-            SetConnection(AddressAuto ? "Не удалось узнать адрес роутера — укажите его в «Дополнительно»" : "Укажите адрес роутера");
+            SetConnection(AddressAuto ? L.T("router.addr.unknown") : L.T("router.addr.enter"));
             return false;
         }
         if (ClientFor(address) is null) { SetDetection(null); return false; }
@@ -461,11 +474,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (d.Found == RouterFound.NotFound)
         {
             Connected = false;
-            SetConnection(RouterTexts.Found(d.Found, d.Status?.Version));
+            SetFound(d.Found, d.Status?.Version);
             return false;
         }
         // Другая версия договора: войти всё равно можно — доступны состояние, обновление и удаление (§5.4).
-        if (d.Found != RouterFound.Ok && !Connected) SetConnection(RouterTexts.Found(d.Found, d.Status?.Version));
+        if (d.Found != RouterFound.Ok && !Connected) SetFound(d.Found, d.Status?.Version);
         return true;
     }
 
@@ -499,7 +512,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 TrySave();
                 RaisePassword();
             }
-            SetConnection(typed == "" ? "У роутера есть пароль — введите его" : "Неверный пароль");
+            SetConnection(typed == "" ? L.T("router.conn.has_password") : L.T("router.conn.bad_password"), needsPassword: true);
             return false;
         }
         catch (RouterException e)
@@ -512,7 +525,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (typed is not null) RememberPassword(typed);
         plain = null;
         Connected = true;
-        SetConnection($"Подключено, DpiShell {_detection?.Status?.Version}", ok: true);
+        SetConnection(L.T("router.conn.connected", new { version = _detection?.Status?.Version }), ok: true);
         if (SelectOnRouterChosen is null) SelectOnRouter = true;   // роутер подключён — подбирать по умолчанию на нём
         try
         {
@@ -543,7 +556,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             if (!await DetectAsync()) return;
             if (_client!.LoggedIn && Connected) await RefreshStatusCoreAsync();
             else if (HasSavedPassword) await LoginAsync(null);
-            else if (_detection!.Found == RouterFound.Ok) SetConnection(RouterTexts.Found(RouterFound.Ok, _detection.Status?.Version));
+            else if (_detection!.Found == RouterFound.Ok) SetFound(RouterFound.Ok, _detection.Status?.Version);
         }
         catch (RouterException e)
         {
@@ -593,13 +606,18 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     // ---------- проверка по расписанию на роутере (schedule_set) ----------
 
-    public sealed record ScheduleOption(double Hours, string Title);
+    /// <summary>Пункт списка периодов: подпись берётся из языка при каждом чтении, при смене языка список обновляется.</summary>
+    public sealed class ScheduleOption(double hours, string key) : Observable
+    {
+        public double Hours { get; } = hours;
+        public string Title => L.T(key);
+    }
 
     /// <summary>Часы — по договору (§5.2, редакция §9): 0.5, 1, 3, 6, 12, 24.</summary>
     public static IReadOnlyList<ScheduleOption> ScheduleOptions { get; } =
     [
-        new(0.5, "каждые 30 минут"), new(1, "каждый час"), new(3, "каждые 3 часа"),
-        new(6, "каждые 6 часов"), new(12, "каждые 12 часов"), new(24, "раз в сутки"),
+        new(0.5, "router.schedule.opt.30m"), new(1, "router.schedule.opt.1h"), new(3, "router.schedule.opt.3h"),
+        new(6, "router.schedule.opt.6h"), new(12, "router.schedule.opt.12h"), new(24, "router.schedule.opt.24h"),
     ];
 
     bool _scheduleEnabled;
@@ -634,24 +652,24 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (watchdog is { } w)
         {
             // Сторож меняется своим сообщением: расписание то же.
-            if (await Guard(w ? "Включаю сторож на роутере…" : "Выключаю сторож на роутере…", async () =>
+            if (await Guard(w ? L.T("router.watchdog.on_busy") : L.T("router.watchdog.off_busy"), async () =>
                 {
                     await Call(c => c.ScheduleSetAsync(enabled, hours, autoSelect, w));
                     await RefreshStatusCoreAsync();
                 }))
-                Say(w ? WatchdogOnText : "Сторож на роутере выключен.");
+                Say(w ? WatchdogOnText : L.T("router.watchdog.off_done"));
             else RaiseWatchdog();
             return;
         }
         bool? wd = WatchdogAvailable ? _watchdog : null;
-        if (await Guard("Меняю расписание проверки на роутере…", async () =>
+        if (await Guard(L.T("router.schedule.busy"), async () =>
             {
                 await Call(c => c.ScheduleSetAsync(enabled, hours, autoSelect, wd));
                 await RefreshStatusCoreAsync();
             }))
-            Say(!enabled ? "Роутер больше не проверяет сайты сам."
-                : "Роутер будет проверять сайты " + (ScheduleOptions.FirstOrDefault(o => o.Hours == hours)?.Title ?? $"раз в {hours} ч")
-                  + (autoSelect ? ", а если запасные не помогут — подберёт заново." : "."));
+            Say(!enabled ? L.T("router.schedule.off_done")
+                : L.T(autoSelect ? "router.schedule.on_reselect_done" : "router.schedule.on_done",
+                    new { interval = ScheduleOptions.FirstOrDefault(o => o.Hours == hours)?.Title ?? L.T("router.schedule.opt.other", new { hours }) }));
         else
         {
             // Не получилось — переключатели показывают то, что на роутере.
@@ -670,8 +688,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     }
     public bool ModeLists { get => !ModeAll; set => ModeAll = !value; }
     public string ModeHint => ModeAll
-        ? "Оптимизация для всех сайтов. Проверить сломавшийся сайт — выше, в «Сайт не открывается»."
-        : "Оптимизация только для YouTube, Discord и сайтов из списков.";
+        ? L.T("router.mode.hint_all")
+        : L.T("router.mode.hint_lists");
 
     public async Task SetModeAsync(bool all)
     {
@@ -679,12 +697,12 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         RaiseMode();
         try
         {
-            if (await Guard("Меняю режим на роутере…", async () =>
+            if (await Guard(L.T("router.mode.busy"), async () =>
                 {
                     await Call(c => c.ModeSetAsync(all));
                     await RefreshStatusCoreAsync();
                 }))
-                Say((all ? "Роутер оптимизирует соединение со всеми сайтами, кроме исключений." : "Роутер оптимизирует соединение только с сайтами из списков.") + " Он сам перепроверит, что всё открывается.");
+                Say(L.T(all ? "router.mode.all_done" : "router.mode.lists_done"));
         }
         finally
         {
@@ -698,7 +716,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     /// <summary>Обход на роутере включён (по status, без входа — по status.json).</summary>
     public bool RouterEnabled => _status?.Enabled ?? _detection?.Status?.Enabled ?? false;
 
-    string _homeTitle = "", _homeDetail = "", _warnings = "", _toggleText = "Включить на роутере";
+    string _homeTitle = "", _homeDetail = "", _warnings = "", _toggleText = L.T("router.toggle.on");
     public string HomeTitle { get => _homeTitle; private set => Set(ref _homeTitle, value); }
     public string HomeDetail { get => _homeDetail; private set => Set(ref _homeDetail, value); }
     string _homeLine = "";
@@ -710,7 +728,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     string StrategyTitle(string? id)
     {
-        if (id is null) return "не выбрана";
+        if (id is null) return L.T("router.strategy.none");
         if (_titles.TryGetValue(id, out var t)) return t;
         // Найденная глубоким поиском на роутере («r-…») — в строках подбора она уже с названием.
         return _shell.Catalog.Find(id)?.Title ?? Scores.FirstOrDefault(s => s.Id == id && s.Title != id)?.Title ?? id;
@@ -724,19 +742,19 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         var at = _status?.LastCheck?.At ?? pub?.CheckedAt;
         var ok = _status?.LastCheck?.Ok ?? pub?.LastCheckOk;
 
-        HomeTitle = Selecting ? "На роутере идёт подбор"
-            : enabled ? "Оптимизация работает на роутере" : "На роутере оптимизация выключена";
+        HomeTitle = Selecting ? L.T("router.home.selecting")
+            : enabled ? L.T("router.home.on") : L.T("router.home.off");
         var parts = new List<string>();
         if (Selecting) parts.Add(SelectProgressText);
         else
         {
-            parts.Add("Стратегия " + StrategyTitle(strategy));
-            if (Checking) parts.Add("проверяю…");
-            else if (enabled && at is not null) parts.Add($"проверено в {RouterTexts.Time(at)}" + (ok == false ? " — не всё открывается" : ""));
+            parts.Add(L.T("router.home.strategy", new { name = StrategyTitle(strategy) }));
+            if (Checking) parts.Add(L.T("router.home.checking"));
+            else if (enabled && at is not null) parts.Add(L.T(ok == false ? "router.home.checked_bad" : "router.home.checked", new { time = RouterTexts.Time(at) }));
         }
-        if (Updating) parts.Add("обновляется");
-        else if (_status?.Update is { Available: true, Version: { } uv }) parts.Add("доступно обновление " + uv);
-        if (Compat is { Level: not RouterCompatLevel.Ok }) parts.Add(CompatNeedsApp ? Compat.Level == RouterCompatLevel.Blocked ? "нужна новая версия программы" : "есть новая версия программы" :"обновите DpiShell на роутере");
+        if (Updating) parts.Add(L.T("router.home.updating"));
+        else if (_status?.Update is { Available: true, Version: { } uv }) parts.Add(L.T("router.home.update_available", new { version = uv }));
+        if (Compat is { Level: not RouterCompatLevel.Ok }) parts.Add(CompatNeedsApp ? Compat.Level == RouterCompatLevel.Blocked ? L.T("router.home.app_needed") : L.T("router.home.app_available") :L.T("router.home.router_update"));
         else if (!Connected && _detection?.Found is RouterFound.AppTooOld or RouterFound.RouterTooOld)
             parts.Add(RouterTexts.Found(_detection.Found, null) is var t ? char.ToLowerInvariant(t[0]) + t[1..] : "");
         // Выключение сторожем, кнопкой или откатом — отдельной фразой с «Подробнее» (UpdateOff), не строкой предупреждений.
@@ -752,9 +770,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         HomeLine = !Selecting && HasOff ? OffText : !Selecting && !enabled && FirstFix() is { } fix ? fix : HomeDetail;   // работает — текст предупреждений не на главной, а по «Подробнее»
         // Обновление для роутера — коротко и первым, даже когда строка занята предупреждением.
         if (!Selecting && !Updating && _status?.Update is { Available: true, Version: { } upd } && !HomeLine.Contains(upd))
-            HomeLine = $"доступно обновление {upd} · {HomeLine}";
+            HomeLine = L.T("router.home.update_available", new { version = upd }) + " · " + HomeLine;
         Warnings = string.Join(" · ", rows.Select(r => r.Text));
-        ToggleText = enabled ? "Выключить на роутере" : "Включить на роутере";
+        ToggleText = enabled ? L.T("router.toggle.off") : L.T("router.toggle.on");
         Raise(nameof(RouterEnabled));
         Raise(nameof(FlowOffloadFixable)); Raise(nameof(Ipv6Fixable));
         RaisePc();
@@ -775,20 +793,20 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         switch (code)
         {
             case "flow_offload":
-                if (await Guard("Исправляю ускорение сети на роутере…", async () =>
+                if (await Guard(L.T("router.fix.flow_busy"), async () =>
                     {
                         await Call(c => c.FlowOffloadFixAsync());
                         await RefreshStatusCoreAsync();
                     }))
-                    Say("Готово: ускорение сети работает вместе с оптимизацией; скорость обычно почти не меняется.");
+                    Say(L.T("router.fix.flow_done"));
                 break;
             case "ipv6":
-                if (await Guard("Включаю оптимизацию по IPv6 на роутере…", async () =>
+                if (await Guard(L.T("router.fix.ipv6_busy"), async () =>
                     {
                         await Call(c => c.Ipv6SetAsync(true));
                         await RefreshStatusCoreAsync();
                     }))
-                    Say("Готово: оптимизация работает и для сайтов по IPv6.");
+                    Say(L.T("router.fix.ipv6_done"));
                 break;
             case "conflict":
                 Navigate(Pages.Router);   // сам обновит «Роутер: что мешает»; на вкладке уже — обновим здесь
@@ -824,16 +842,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     string? FirstFix() => WarningRows.FirstOrDefault()?.Text ?? (TimestampsNeedAction ? TimestampsNeed : null);
 
     /// <summary>«1 предупреждение», «2 предупреждения», «5 предупреждений».</summary>
-    public static string WarningsCount(int n)
-    {
-        int d = n % 10, h = n % 100;
-        var word = d == 1 && h != 11 ? "предупреждение" : d is >= 2 and <= 4 && h is < 12 or > 14 ? "предупреждения" : "предупреждений";
-        return $"{n} {word}";
-    }
+    public static string WarningsCount(int n) => L.Plural("router.warnings_count", n);
 
     async Task StopPcForRouterAsync()
     {
-        if (await StopPc()) Say("Оптимизация на этом ПК выключена — работает роутер.");
+        if (await StopPc()) Say(L.T("router.pc.stopped"));
         RaisePc();
     }
 
@@ -841,7 +854,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task<bool> DisableAsync()
     {
         if (!RouterEnabled) return true;
-        return await Guard("Выключаю оптимизацию на роутере…", async () =>
+        return await Guard(L.T("router.disable.busy"), async () =>
         {
             await Call(c => c.DisableAsync());
             await RefreshStatusCoreAsync();
@@ -852,7 +865,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task<bool> EnableAsync()
     {
         if (RouterEnabled) return true;
-        return await TrialAsync("Включаю оптимизацию на роутере…", (c, confirmS) => c.EnableAsync(confirmS), done: null);
+        return await TrialAsync(L.T("router.enable.busy"), (c, confirmS) => c.EnableAsync(confirmS), done: null);
     }
 
     // ---------- временные метки TCP (needs_tcp_timestamps, §6) ----------
@@ -868,9 +881,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         : _pcTimestamps == false ? TimestampsNeed
         : _timestampsByRouter ? TimestampsOn
         : "";
-    public const string TimestampsNeed = "Для стратегии роутера этому ПК нужна одна настройка Windows";
-    public const string TimestampsOn = "На этом ПК включена настройка Windows, нужная стратегии роутера.";
-    public const string TimestampsTerm = "Настройка — временные метки TCP (TCP timestamps). Без неё часть сайтов с этого ПК может не открываться. Включается одной командой, вернуть — «Диагностика».";
+    public static string TimestampsNeed => L.T("router.timestamps.need");
+    public static string TimestampsOn => L.T("router.timestamps.on");
+    public static string TimestampsTerm => L.T("router.timestamps.term");
     public bool HasTimestampsNote => TimestampsNote.Length > 0;
     /// <summary>Включили сами — серой строкой (плашка — только когда нужно действие).</summary>
     public bool TimestampsDone => HasTimestampsNote && !TimestampsNeedAction;
@@ -895,7 +908,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 _timestampsByRouter = true;
                 Say(TimestampsOn);
             }
-            else if (ask) Failed("Не удалось включить настройку Windows для роутера. Попробуйте ещё раз или перезагрузите компьютер.");
+            else if (ask) Failed(L.T("router.timestamps.failed"));
         }
         UpdateHome();   // число предупреждений и первое из них на главной
     }
@@ -924,7 +937,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         foreach (var s in list.Items)
         {
             _titles[s.Id] = StrategyNaming.DisplayTitle(s.Title, s.Roles); if (s.Roles is not null) _roles[s.Id] = s.Roles;
-            Strategies.Add(new(s.Id, _titles[s.Id], StrategyNote(s), s.Roles is { Count: > 0 } roles ? "Параметры по ролям:\n" + StrategyParams.Roles(roles) : ""));
+            Strategies.Add(new(s.Id, _titles[s.Id], StrategyNote(s), s.Roles is { Count: > 0 } roles ? L.T("router.strategy.roles") + "\n" + StrategyParams.Roles(roles) : ""));
         }
     }
 
@@ -935,13 +948,16 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public static string StrategyNote(RouterStrategyItem s)
     {
         var parts = new List<string>();
-        if (s.FoundOnRouter) parts.Add("найдена на роутере");
-        else if (s.FromPc) parts.Add("с ПК");
+        if (s.FoundOnRouter) parts.Add(L.T("router.strategy.found"));
+        else if (s.FromPc) parts.Add(L.T("router.strategy.from_pc"));
         if (s.Last is { } last)
         {
-            var at = last.At is { } t ? $" {L.DayMonth(t.ToLocalTime())} в {L.Time(t.ToLocalTime())}" : "";
-            parts.Add(last.Ok ? $"✓ проверено{at}"
-                : $"✗ проверено{at}" + (last.Failed is { Count: > 0 } f ? ", не открылось: " + string.Join(", ", f) : ""));
+            var when = last.At?.ToLocalTime();
+            var failed = !last.Ok && last.Failed is { Count: > 0 } f ? string.Join(", ", f) : null;
+            parts.Add(L.T(last.Ok ? (when is null ? "router.strategy.ok" : "router.strategy.ok_at")
+                : failed is null ? (when is null ? "router.strategy.fail" : "router.strategy.fail_at")
+                : when is null ? "router.strategy.fail_sites" : "router.strategy.fail_at_sites",
+                new { date = when is { } d ? L.DayMonth(d) : "", time = when is { } d2 ? L.Time(d2) : "", sites = failed ?? "" }));
         }
         return string.Join(" · ", parts);
     }
@@ -955,8 +971,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public void CopyParams(RouterStrategyRow s)
     {
         if (!s.HasParams) return;
-        try { CopyText($"{s.Title}\n{s.Params}"); Say($"Параметры стратегии «{s.Title}» скопированы в буфер обмена."); }
-        catch (System.Runtime.InteropServices.ExternalException) { Failed("Не удалось скопировать — буфер обмена занят другой программой."); }
+        try { CopyText($"{s.Title}\n{s.Params}"); Say(L.T("router.strategy.copied", new { name = s.Title })); }
+        catch (System.Runtime.InteropServices.ExternalException) { Failed(L.T("router.strategy.copy_failed")); }
     }
 
     public ICommand LoginCmd { get; }
@@ -976,9 +992,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     /// <summary>Одно действие за раз; ошибки роутера — коротким текстом в строку состояния.</summary>
     async Task<bool> Guard(string text, Func<Task> work, bool changes = true)
     {
-        if (Busy) { Say("Подождите: роутер ещё выполняет прошлую команду"); return false; }
-        if (!Connected) { Say("Сначала подключитесь к роутеру"); return false; }
-        if (Blocked) { Failed(Compat!.Text ?? "Версия DpiShell на роутере не подходит к программе"); return false; }
+        if (Busy) { Say(L.T("router.guard.busy")); return false; }
+        if (!Connected) { Say(L.T("router.guard.not_connected")); return false; }
+        if (Blocked) { Failed(Compat!.Text ?? L.T("router.guard.incompatible")); return false; }
         if (changes && !RiskAccepted()) return false;
         Busy = true;
         Say(text);
@@ -993,9 +1009,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             if (e.Failure == RouterFailure.AccessDenied)
             {
                 Connected = false;
-                SetConnection("Неверный пароль или сессия — войдите заново");
+                SetConnection(L.T("router.conn.relogin"));
             }
-            else if (e.Failure == RouterFailure.Unreachable) SetConnection("Роутер недоступен");
+            else if (e.Failure == RouterFailure.Unreachable) SetConnection(L.T("router.conn.unreachable"));
             // Занят подбором (запущен с другого устройства или страницы роутера) — показать его ход.
             if (e.AppError?.Code == "busy" && !_polling) _ = RefreshStatusSafeAsync();
             return false;
@@ -1020,27 +1036,26 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         // §6: вместе с обходом ПК роутер не работает — включение второго только осознанно и с выключением первого.
         if (enable && PcRunning())
         {
-            if (!Confirm("На этом ПК оптимизация включена. Вместе с роутером она не работает: трафик обрабатывается дважды, и сайты перестают открываться.\n\n"
-                         + "Выключить оптимизацию на этом ПК и включить на роутере?")) return;
-            if (!await StopPc()) { Failed("Не удалось выключить оптимизацию на этом ПК — на роутере не включаю."); return; }
+            if (!Confirm(L.T("router.enable.confirm"))) return;
+            if (!await StopPc()) { Failed(L.T("router.enable.pc_off_failed")); return; }
         }
         if (enable)
         {
             // На пробу (§5.2 confirm_s): проверка с этого ПК решит, оставить ли; без ответа роутер вернёт как было сам.
             // Журнал окна: оптимизация на роутере была выключена — запись ДО включения.
-            var rec = Connected ? BeginRouter(ChangeKinds.RouterEnable, "Включена оптимизация на роутере", new JsonObject { ["enabled"] = true }) : "";
-            await TrialAsync("Включаю оптимизацию на роутере…", (c, confirmS) => c.EnableAsync(confirmS), "Оптимизация на роутере включена.");
+            var rec = Connected ? BeginRouter(ChangeKinds.RouterEnable, L.T("router.change.enabled"), new JsonObject { ["enabled"] = true }) : "";
+            await TrialAsync(L.T("router.enable.busy"), (c, confirmS) => c.EnableAsync(confirmS), L.T("router.enable.done"));
             if (rec.Length > 0) { if (RouterEnabled) Recorder.Done(rec); else Recorder.Abort(rec); }
             return;
         }
-        if (await Guard("Выключаю оптимизацию на роутере…", async () =>
+        if (await Guard(L.T("router.disable.busy"), async () =>
             {
                 await Call(c => c.DisableAsync());
                 await RefreshStatusCoreAsync();
             }))
         {
-            Recorder.Close(ChangeKinds.RouterEnable, "оптимизация на роутере выключена кнопкой");
-            Say("Оптимизация на роутере выключена.");
+            Recorder.Close(ChangeKinds.RouterEnable, L.T("router.change.disabled_button"));
+            Say(L.T("router.disable.done"));
         }
     }
 
@@ -1049,7 +1064,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (id == CurrentStrategyId) return;
         // При включённом обходе смена стратегии — на пробу, как включение (§5.2).
         bool trial = RouterEnabled;
-        await TrialAsync("Меняю стратегию на роутере…", (c, confirmS) => c.StrategySetAsync(id, trial ? confirmS : null), "На роутере стратегия: " + StrategyTitle(id) + ".");
+        await TrialAsync(L.T("router.strategy.busy"), (c, confirmS) => c.StrategySetAsync(id, trial ? confirmS : null), L.T("router.strategy.done", new { name = StrategyTitle(id) }));
     }
 
     bool _checking;
@@ -1058,7 +1073,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task CheckAsync()
     {
         string? result = null;
-        if (await Guard("Роутер проверяет сайты…", async () => result = await CheckCoreAsync(), changes: false))
+        if (await Guard(L.T("router.check.busy"), async () => result = await CheckCoreAsync(), changes: false))
             Say(result ?? "");
     }
 
@@ -1080,11 +1095,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                     Checking = false;
                     Status = st;
                     var bad = (st.LastCheck!.Groups ?? []).Where(g => !g.Ok).Select(g => GroupTitle(g.Id)).ToList();
-                    return st.LastCheck.Ok ? "Роутер проверил: всё открывается."
-                        : "Роутер проверил: не открывается " + (bad.Count > 0 ? string.Join(", ", bad) : "часть сайтов") + ".";
+                    return st.LastCheck.Ok ? L.T("router.check.ok")
+                        : bad.Count > 0 ? L.T("router.check.fail", new { sites = string.Join(", ", bad) }) : L.T("router.check.fail_some");
                 }
             }
-            return "Роутер ещё проверяет — результат появится на главной позже.";
+            return L.T("router.check.pending");
         }
         finally { Checking = false; }
     }
@@ -1094,7 +1109,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     string GroupTitle(string id) => id switch
     {
-        "user" => "свои сайты",
+        "user" => L.T("router.group.user"),
         _ => _shell.DefaultTargets.Groups.FirstOrDefault(g => g.Id == id)?.Title ?? id,
     };
 
@@ -1111,7 +1126,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         var found = FoundStrategies().ToList();
         if (found.FirstOrDefault(s => s.Id == id) is not { } strategy)
         {
-            Say("Эта стратегия не найдена среди своих и найденных поиском");
+            Say(L.T("router.send.not_found"));
             return;
         }
         // Набор из приложения роутер заменяет целиком (§5.2) — шлём все найденные; название — до 80 символов.
@@ -1121,17 +1136,18 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         var routerId = RouterClient.ToRouter(strategy, newRouter).Id;
         bool trimmed = !newRouter && strategy.Roles.ContainsKey("discord_tcp");
         string? result = null;
-        if (await Guard("Отправляю стратегию на роутер…", async () =>
+        if (await Guard(L.T("router.send.busy"), async () =>
             {
                 try { await Call(c => c.StrategiesUserSetAsync(items)); }
                 catch (RouterException e) when (e.Failure == RouterFailure.NotSupported)
                 {
-                    throw new RouterException(e.Failure, "Роутер не умеет принимать стратегии с ПК — обновите пакет DpiShell на роутере");
+                    throw new RouterException(e.Failure, L.T("router.send.unsupported"));
                 }
                 catch (RouterException e) when (e.Failure == RouterFailure.InvalidArgs || e.AppError?.Code == "invalid")
                 {
-                    throw new RouterException(e.Failure, $"Роутер не принял стратегию «{strategy.Title}»: на нём нет нужных параметров или файлов"
-                        + (e.AppError?.Field is { } f ? $" ({f})" : ""), e.AppError);
+                    throw new RouterException(e.Failure, e.AppError?.Field is { } f
+                        ? L.T("router.send.rejected_field", new { name = strategy.Title, field = f })
+                        : L.T("router.send.rejected", new { name = strategy.Title }), e.AppError);
                 }
                 _titles[routerId] = strategy.Title;
                 var confirmS = RouterEnabled ? TrialArg : null;
@@ -1140,8 +1156,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 await LoadStrategiesAsync();
             }))
         {
-            Say($"Стратегия «{strategy.Title}» включена на роутере. {result}"
-                + (trimmed ? " Часть для Discord роутер этой версии не знает — Discord идёт по общей части. Обновите DpiShell на роутере." : ""));
+            Say(L.T("router.send.done", new { name = strategy.Title, result = result ?? "" })
+                + (trimmed ? " " + L.T("router.send.discord_trimmed") : ""));
             if (_status?.PendingConfirm is not null) await VerifyTrialAsync();
         }
     }
@@ -1201,7 +1217,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         get
         {
             var row = Scores.FirstOrDefault(s => s.Id == _best);
-            return "✓ Включена на роутере " + (row?.Title ?? StrategyTitle(_best ?? "")) + (row is null ? "" : $" · {row.Groups} · {row.Share}");
+            var name = row?.Title ?? StrategyTitle(_best ?? "");
+            return row is null ? L.T("router.result.applied", new { name }) : L.T("router.result.applied_row", new { name, groups = row.Groups, share = row.Share });
         }
     }
     public ICommand ShowResultDetailsCmd => _showResultDetailsCmd ??= new RelayCommand(() => ResultExpanded = true);
@@ -1222,7 +1239,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     RouterScoreRow? _selectedScore;
     public RouterScoreRow? SelectedScore { get => _selectedScore; set { if (Set(ref _selectedScore, value)) { Raise(nameof(ApplySelectedText)); Requery(); } } }
     /// <summary>Выбрана лучшая — «Применить лучшую»; другая строка — «Применить выбранную».</summary>
-    public string ApplySelectedText => _selectedScore is { IsBest: true } ? "Применить лучшую" : "Применить выбранную";
+    public string ApplySelectedText => _selectedScore is { IsBest: true } ? L.T("router.apply.best") : L.T("router.apply.selected");
 
     public ICommand StartSelectCmd { get; }
     public ICommand StartDeepCmd { get; }
@@ -1262,11 +1279,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         for (int attempt = 0; ; attempt++)
         {
             if (dropUser) { o = WithoutUser(o, out hint); dropUser = false; }
-            if (!await Guard("Запускаю подбор на роутере…", async () =>
+            if (!await Guard(L.T("router.select.busy"), async () =>
                 {
                     Scores.Clear(); SelectedScore = null; ResultText = ""; ResultHint = ""; SetBest(null, false); ResultExpanded = false; AddressNote = "";
                     if (!deep) _addressBlock.Clear();   // глубокий поиск продолжает счёт проверок прежнего подбора
-                    SelectProgress = 0; SelectProgressText = "Подготовка…";
+                    SelectProgress = 0; SelectProgressText = L.T("router.select.preparing");
                     try { await Call(c => c.SelectStartAsync(o.Groups, o.Full, deep)); }
                     catch (RouterException e) when (e.AppError?.Code == "busy" && !Selecting)
                     {
@@ -1301,13 +1318,13 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 Failed(RouterTexts.Friendly(busyError));
                 return;
             }
-            Say("Подбор уже идёт — показываю ход.");
+            Say(L.T("router.select.already"));
         }
         else Say(hint ?? "");
         await PollSelectAsync(justStarted: true);
     }
 
-    public const string StartingText = "Запускаю подбор…";
+    public static string StartingText => L.T("router.select.starting");
 
     /// <summary>Сколько после запуска ошибка или пустой ответ select_progress — ещё «Запускаю подбор…» (роутер поднимает подбор не сразу).</summary>
     public TimeSpan SelectStartGrace { get; set; } = TimeSpan.FromSeconds(10);
@@ -1318,7 +1335,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         var rest = o.Groups.Where(g => g != "user").ToList();
         IReadOnlyList<string> groups = rest.Count > 0 ? rest : DefaultSelectGroups;
         SetSelectGroups(groups);
-        hint = "На роутере нет своих сайтов — подбираю без них. Отправить их с ПК: «Сайты» → «На роутере» → «Скопировать с ПК».";
+        hint = L.T("router.select.no_user_sites");
         return (groups, o.Full);
     }
 
@@ -1344,20 +1361,19 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     async Task<bool> OfferPcTargetsAsync()
     {
         var pc = PcUserTargets();
-        if (!Confirm($"Список своих сайтов на роутере пуст, а на этом компьютере их {pc.Count}.\n\n"
-                     + "Отправить свои сайты с компьютера на роутер и подобрать по ним?"))
+        if (!Confirm(L.T("router.targets.offer", new { count = pc.Count })))
         {
-            Say("Подбор не запущен: на роутере нет своих сайтов. Добавьте их на вкладке «Сайты» → «На роутере».");
+            Say(L.T("router.targets.not_started"));
             return false;
         }
         var items = pc.Select(d => new RouterTarget(RouterTexts.ToUrl(d), false))
             .DistinctBy(t => t.Url, StringComparer.OrdinalIgnoreCase).Take(MaxTargets).ToList();
-        if (!await Guard("Отправляю свои сайты на роутер…", () => Call(c => c.TargetsSetAsync(items)))) return false;
+        if (!await Guard(L.T("router.targets.sending"), () => Call(c => c.TargetsSetAsync(items)))) return false;
         Targets.Clear();
         foreach (var t in items) Targets.Add(new(t.Url, t.Important));
         _targetsLoaded = true;
         MarkSitesSaved();
-        TargetsMessage = $"Сохранено на роутере: адресов — {items.Count}" + (pc.Count > items.Count ? $" (не поместилось: {pc.Count - items.Count})." : ".");
+        TargetsMessage = L.T(pc.Count > items.Count ? "router.targets.saved_skipped" : "router.targets.saved", new { count = items.Count, skipped = pc.Count - items.Count });
         return true;
     }
 
@@ -1393,7 +1409,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 await Task.Delay(PollInterval);
             }
         }
-        catch (RouterException e) { Failed(RouterTexts.Friendly(e)); ResultText = "Не удалось узнать ход подбора на роутере."; }
+        catch (RouterException e) { Failed(RouterTexts.Friendly(e)); ResultText = L.T("router.select.status_failed"); }
         finally
         {
             _polling = false;
@@ -1411,8 +1427,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public static string Eta(int? seconds) => seconds switch
     {
         null => "",
-        < 60 => "осталось меньше минуты",
-        var s => $"осталось ~{(int)Math.Ceiling(s.Value / 60.0)} мин",
+        < 60 => L.T("router.eta.under_minute"),
+        var s => L.T("router.eta.minutes", new { n = (int)Math.Ceiling(s.Value / 60.0) }),
     };
 
     int _groupsTotal;
@@ -1424,8 +1440,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (p.Running && p.Total == 0 && p.Index == 0 && p.Message is not { Length: > 0 }) SelectProgressText = StartingText;
         else if (p.Running)
         {
-            var who = p.StartedBy switch { "page" => "Запущен со страницы роутера. ", "auto" or "timer" or "watchdog" => "Роутер подбирает сам. ", _ => "" };
-            var parts = new[] { $"Проверено {p.Index} из {p.Total}" + (p.Message is { Length: > 0 } m ? $": {m}" : ""), Eta(p.EtaS) };
+            var who = p.StartedBy switch { "page" => L.T("router.select.started_page") + " ", "auto" or "timer" or "watchdog" => L.T("router.select.started_auto") + " ", _ => "" };
+            var parts = new[] { p.Message is { Length: > 0 } m ? L.T("router.select.progress_msg", new { index = p.Index, total = p.Total, message = m }) : L.T("router.select.progress", new { index = p.Index, total = p.Total }), Eta(p.EtaS) };
             SelectProgressText = who + string.Join(" · ", parts.Where(x => x.Length > 0));
         }
         else SelectProgressText = "";
@@ -1471,22 +1487,23 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (p.Cancelled)
         {
             SetBest(null, false);
-            ResultText = "Подбор на роутере остановлен.";
-            ResultHint = "Роутер вернул всё как было.";
+            ResultText = L.T("router.select.stopped");
+            ResultHint = L.T("router.select.stopped_hint");
         }
         else if (p.Best is { } best)
         {
             SetBest(best, p.Applied);
             var backups = (p.Backups ?? []).Select(StrategyTitle).ToList();
-            ResultText = (p.Applied ? "Включена на роутере: " : HasAddressNote ? "Лучшая из проверенных: " : "Подходит: ") + StrategyTitle(best);
-            ResultHint = (backups.Count > 0 ? "Запасные: " + string.Join(", ", backups) + ". " : "")
-                + (p.Applied ? "Можно выбрать другую в таблице." : "Нажмите «Применить на роутере».");
+            ResultText = L.T(p.Applied ? "router.select.result_applied" : HasAddressNote ? "router.select.result_best" : "router.select.result_ok", new { name = StrategyTitle(best) });
+            ResultHint = backups.Count > 0
+                ? L.T(p.Applied ? "router.select.hint_backups_applied" : "router.select.hint_backups_apply", new { list = string.Join(", ", backups) })
+                : p.Applied ? L.T("router.select.hint_applied") : L.T("router.select.hint_apply");
         }
         else
         {
             SetBest(null, false);
-            ResultText = "Ни одна стратегия не помогла.";
-            ResultHint = "Проверьте свои сайты роутера или поищите глубже — роутер придумает новые стратегии.";
+            ResultText = L.T("router.select.none_helped");
+            ResultHint = L.T("router.select.none_hint");
         }
         // «Искать глубже» — только когда готовые не помогли (UX-аудит, п. 30), а не равной кнопкой рядом с «Начать подбор».
         OfferDeep = !p.Cancelled && p.Best is null;
@@ -1494,20 +1511,20 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     public async Task CancelSelectAsync()
     {
-        if (await Guard("Останавливаю подбор на роутере…", () => Call(c => c.SelectCancelAsync())))
-            Say("Подбор на роутере остановлен.");
+        if (await Guard(L.T("router.select.stop_busy"), () => Call(c => c.SelectCancelAsync())))
+            Say(L.T("router.select.stopped"));
     }
 
     /// <summary>«Применить на роутере» (лучшая не включилась сама) или «Применить выбранную» (другая из итога, `apply`). Запасные — 2 следующие рабочие.</summary>
     public async Task ApplyAsync(string id)
     {
         var backups = Scores.Where(s => s.Usable && s.Id != id).Select(s => s.Id).Take(2).ToList();
-        if (await TrialAsync("Применяю на роутере…", (c, confirmS) => c.ApplyAsync(id, backups, confirmS), "Включена на роутере: " + StrategyTitle(id) + "."))
+        if (await TrialAsync(L.T("router.apply.busy"), (c, confirmS) => c.ApplyAsync(id, backups, confirmS), L.T("router.apply.done", new { name = StrategyTitle(id) })))
         {
             SetBest(_best, true);
             foreach (var s in Scores) s.IsBest = s.Id == id;
-            ResultText = "Включена на роутере: " + StrategyTitle(id);
-            ResultHint = backups.Count > 0 ? "Запасные: " + string.Join(", ", backups.Select(StrategyTitle)) + "." : "";
+            ResultText = L.T("router.apply.result_applied", new { name = StrategyTitle(id) });
+            ResultHint = backups.Count > 0 ? L.T("router.apply.backups", new { list = string.Join(", ", backups.Select(StrategyTitle)) }) : "";
         }
     }
 
@@ -1564,7 +1581,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     public async Task LoadTargetsAsync()
     {
-        await Guard("Читаю свои сайты роутера…", async () =>
+        await Guard(L.T("router.targets.reading"), async () =>
         {
             var t = await Call(c => c.TargetsGetAsync());
             Targets.Clear();
@@ -1573,7 +1590,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             ListGeneralText = string.Join(Environment.NewLine, (await Call(c => c.ListsGetAsync("user-general"))).Lines);
             ListExcludeText = string.Join(Environment.NewLine, (await Call(c => c.ListsGetAsync("user-exclude"))).Lines);
             _listsLoaded = true;
-            TargetsMessage = $"На роутере адресов: {Targets.Count} из {MaxTargets}.";
+            TargetsMessage = L.T("router.targets.count", new { count = Targets.Count, max = MaxTargets });
             MarkSitesSaved();
         }, changes: false);
         Say("");
@@ -1581,7 +1598,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     void AddTarget()
     {
-        if (Targets.Count >= MaxTargets) { TargetsMessage = $"На роутере — не больше {MaxTargets} адресов."; return; }
+        if (Targets.Count >= MaxTargets) { TargetsMessage = L.T("router.targets.max", new { max = MaxTargets }); return; }
         Targets.Add(new("", false));
     }
 
@@ -1598,8 +1615,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             Targets.Add(new(url, false));
             added++;
         }
-        TargetsMessage = PcUserTargets().Count == 0 ? "На этом ПК своих сайтов нет."
-            : $"Добавлено с ПК: {added}" + (skipped > 0 ? $", не поместилось: {skipped}" : "") + ". Нажмите «Сохранить на роутере».";
+        TargetsMessage = PcUserTargets().Count == 0 ? L.T("router.targets.pc_empty")
+            : L.T(skipped > 0 ? "router.targets.added_skipped" : "router.targets.added", new { added, skipped });
     }
 
     public async Task SaveTargetsAsync()
@@ -1607,9 +1624,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         var items = Targets.Where(t => t.Url.Trim().Length > 0)
             .Select(t => new RouterTarget(RouterTexts.ToUrl(t.Url), t.Important))
             .DistinctBy(t => t.Url, StringComparer.OrdinalIgnoreCase).ToList();
-        if (items.Count > MaxTargets) { TargetsMessage = $"На роутере — не больше {MaxTargets} адресов, сейчас {items.Count}."; return; }
+        if (items.Count > MaxTargets) { TargetsMessage = L.T("router.targets.over_max", new { max = MaxTargets, count = items.Count }); return; }
         static List<string> Lines(string text) => text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
-        if (await Guard("Сохраняю на роутере…", async () =>
+        if (await Guard(L.T("router.targets.saving"), async () =>
             {
                 try
                 {
@@ -1624,21 +1641,22 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 catch (RouterException e) when (e.AppError?.Code == "invalid" || e.Failure == RouterFailure.InvalidArgs)
                 {
                     // field — путь к значению (§4): items[3].url → какой именно адрес.
-                    var what = RouterTexts.Index(e.AppError?.Field) is { } i && i < items.Count && e.AppError!.Field!.StartsWith("items")
-                        ? $"адрес «{items[i].Url}»" : "адрес или строку списка";
-                    throw new RouterException(e.Failure, $"Роутер не принял {what} — проверьте, что это домен или https-адрес", e.AppError);
+                    throw new RouterException(e.Failure,
+                        RouterTexts.Index(e.AppError?.Field) is { } i && i < items.Count && e.AppError!.Field!.StartsWith("items")
+                            ? L.T("router.targets.rejected_url", new { url = items[i].Url })
+                            : L.T("router.targets.rejected_line"), e.AppError);
                 }
             }))
         {
             Targets.Clear();
             foreach (var t in items) Targets.Add(new(t.Url, t.Important));
-            TargetsMessage = $"Сохранено на роутере: адресов — {items.Count}.";
+            TargetsMessage = L.T("router.targets.saved", new { count = items.Count });
             MarkSitesSaved();
             Say(TargetsMessage);
             // Строки «Свои настройки для сайтов» — той же кнопкой: у вкладки одно «Сохранить» (применение пробное, как у переключателя).
             if (Advanced.Dirty && Advanced.Available) await Advanced.ApplyAsync();
         }
-        else TargetsMessage = "Не сохранено — причина в строке состояния.";
+        else TargetsMessage = L.T("router.targets.not_saved");
     }
 
     // ---------- вкладка «Роутер» ----------
@@ -1654,7 +1672,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             catch (RouterException) { /* поиск не удался — «Найти» остаётся вручную */ }
         }
         if (!Connected || Busy) return;
-        await Guard("Читаю DNS роутера…", async () =>
+        await Guard(L.T("router.dns.reading"), async () =>
         {
             await LoadDnsPresetsAsync();
             ShowDns(await Call(c => c.DnsStatusAsync()));
@@ -1685,13 +1703,14 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task SiteCheckAsync()
     {
         var url = SiteUrl.Trim();
-        if (RouterTexts.Host(url) is not { } host) { SiteResult = "Впишите адрес сайта, например example.com"; SiteHint = ""; SiteDetail = ""; SiteSuggestExclude = false; return; }
+        if (RouterTexts.Host(url) is not { } host) { SiteResult = L.T("router.site.enter"); SiteHint = ""; SiteDetail = ""; SiteSuggestExclude = false; return; }
         RouterSiteCheckResult? res = null;
+        bool progressShown = false;
         SiteSuggestExclude = false;
-        if (!await Guard("Роутер проверяет сайт…", async () =>
+        if (!await Guard(L.T("router.site.busy"), async () =>
             {
                 SiteChecking = true;
-                SiteResult = "Проверяю " + host + "…"; SiteHint = ""; SiteDetail = "";
+                SiteResult = L.T("router.site.checking", new { host }); progressShown = true; SiteHint = ""; SiteDetail = "";
                 try
                 {
                     await Call(c => c.SiteCheckAsync(url));
@@ -1706,7 +1725,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 finally { SiteChecking = false; }
             }, changes: false))
         {
-            if (SiteResult.StartsWith("Проверяю")) SiteResult = "";
+            if (progressShown) SiteResult = "";
             return;
         }
         Say("");
@@ -1716,17 +1735,17 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     void ShowSiteResult(string host, RouterSiteCheckResult? r)
     {
         _siteHost = host;
-        if (r is null) { SiteResult = "Роутер ещё проверяет — попробуйте через минуту."; SiteHint = ""; SiteDetail = ""; return; }
+        if (r is null) { SiteResult = L.T("router.site.pending"); SiteHint = ""; SiteDetail = ""; return; }
         bool with = r.WithBypass?.Ok == true, without = r.WithoutBypass?.Ok == true;
         (SiteResult, SiteHint) = (with, without) switch
         {
-            (true, _) => ("С оптимизацией сайт открывается", "Значит, дело не в оптимизации: попробуйте обновить страницу или другой браузер."),
-            (false, true) => ("Сайт открывается только без оптимизации", "Добавьте его в исключения — роутер перестанет его трогать."),
-            _ => ("Сайт не открывается и без оптимизации", "Похоже, он не работает сам или недоступен по адресу."),
+            (true, _) => (L.T("router.site.opens"), L.T("router.site.opens_hint")),
+            (false, true) => (L.T("router.site.only_without"), L.T("router.site.only_without_hint")),
+            _ => (L.T("router.site.closed"), L.T("router.site.closed_hint")),
         };
         SiteSuggestExclude = r.SuggestExclude || (!with && without);
-        static string Side(RouterSiteCheckSide? s) => s is null ? "не проверялось" : s.Ok ? "открылся" : "не открылся" + (s.Detail is { Length: > 0 } d ? $" ({d})" : "");
-        SiteDetail = $"С оптимизацией: {Side(r.WithBypass)}. Без оптимизации: {Side(r.WithoutBypass)}.";
+        static string Side(RouterSiteCheckSide? s) => s is null ? L.T("router.site.side_none") : s.Ok ? L.T("router.site.side_ok") : s.Detail is { Length: > 0 } d ? L.T("router.site.side_fail_detail", new { detail = d }) : L.T("router.site.side_fail");
+        SiteDetail = L.T("router.site.detail", new { @with = Side(r.WithBypass), without = Side(r.WithoutBypass) });
     }
 
     /// <summary>«Добавить в исключения»: хост — в user-exclude роутера (lists_set), не трогая остальные строки.</summary>
@@ -1736,9 +1755,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (await AddHostToExcludeAsync(host))
         {
             SiteSuggestExclude = false;
-            SiteResult = $"{host} — добавлен в «Исключения»";
-            SiteHint = "Список ниже, на этой же вкладке. Роутер больше не применяет к сайту оптимизацию.";
-            Say(SiteResult + ".");
+            SiteResult = L.T("router.site.excluded", new { host });
+            SiteHint = L.T("router.site.excluded_hint");
+            Say(SiteResult);
         }
     }
 
@@ -1749,7 +1768,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     {
         // Тот же список, что поле «Исключения» ниже: если оно загружено — берём его строки (с несохранёнными правками), иначе читаем с роутера.
         var wasDirty = SitesDirty;
-        if (await Guard("Добавляю в исключения роутера…", async () =>
+        if (await Guard(L.T("router.exclude.busy"), async () =>
             {
                 var lines = _listsLoaded
                     ? ListExcludeText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList()
@@ -1793,22 +1812,24 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     void ShowDns(RouterDnsStatus d)
     {
         _dnsStatus = d;
-        var at = d.CheckedAt is { } t ? $" · проверено в {RouterTexts.Time(t)}" : "";
         if (d.Mode == "doh")
         {
-            DnsState = d.FallbackActive ? "Защищённый DNS сейчас недоступен" : "Защищённый DNS включён для всей сети";
-            DnsHint = d.FallbackActive ? "Временно работает DNS провайдера — роутер вернёт защищённый сам." : "";
+            DnsState = d.FallbackActive ? L.T("router.dns.unavailable") : L.T("router.dns.on");
+            DnsHint = d.FallbackActive ? L.T("router.dns.fallback_hint") : "";
         }
-        else if (d.CheckedAt is null) { DnsState = "DNS провайдера, не проверялся"; DnsHint = "Нажмите «Проверить»."; }
-        else if (d.Spoofed) { DnsState = "Провайдер подменяет адреса сайтов" + at; DnsHint = "Включите защищённый DNS — он поможет всем устройствам дома."; }
-        else { DnsState = "Подмены нет" + at; DnsHint = ""; }
+        else if (d.CheckedAt is null) { DnsState = L.T("router.dns.not_checked"); DnsHint = L.T("router.dns.press_check"); }
+        else if (d.Spoofed) { DnsState = L.T("router.dns.spoofed_at", new { time = RouterTexts.Time(d.CheckedAt) }); DnsHint = L.T("router.dns.spoofed_hint"); }
+        else { DnsState = L.T("router.dns.clean_at", new { time = RouterTexts.Time(d.CheckedAt) }); DnsHint = ""; }
         DnsServers.Clear();
-        foreach (var s in d.Servers ?? []) DnsServers.Add($"{s.Name}: " + (s.DohOk ? "отвечает" + (s.Ms is { } ms ? $", {ms} мс" : "") : "не отвечает"));
+        foreach (var s in d.Servers ?? []) DnsServers.Add(!s.DohOk ? L.T("router.dns.server_fail", new { name = s.Name })
+            : s.Ms is { } ms ? L.T("router.dns.server_ok_ms", new { name = s.Name, ms }) : L.T("router.dns.server_ok", new { name = s.Name }));
         DnsJobText = d.Job switch
         {
             null => "",
-            { Running: true } j => JobTitle(j.Action) + "…",
-            { Ok: false } j => JobTitle(j.Action) + ": не получилось" + (j.Message is { Length: > 0 } m ? $" — {m}" : ""),
+            { Running: true } j => L.T("router.dns.job.running", new { action = JobTitle(j.Action) }),
+            { Ok: false } j => j.Message is { Length: > 0 } m
+                ? L.T("router.dns.job.failed_msg", new { action = JobTitle(j.Action), message = m })
+                : L.T("router.dns.job.failed", new { action = JobTitle(j.Action) }),
             _ => "",
         };
         // Выбор вариантов (dns_presets): включённый, «Вернуть как было» — когда DNS не как у провайдера.
@@ -1817,8 +1838,13 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         else if (d.Preset is { } p) DnsPick.CurrentId = p;
         if (untouched && d.Spoofed && d.CheckedAt is not null && d.Mode != "doh" && d.Preset == "provider") DnsPick.PreselectRecommended(MainViewModel.RecommendedDns);
         DnsPick.CanRestore = d.Mode is "doh" or "plain" || d.Preset is { } q && q != "provider";
-        var title = d.Preset == "custom" ? d.Custom?.Title ?? "свой" : DnsPick.Options.FirstOrDefault(o => o.Id == d.Preset)?.Title;
-        DnsPick.CurrentText = title is null ? "" : "Сейчас: " + title + (d.Mode switch { "doh" => ", защищённый", "plain" => ", без шифрования", _ => "" });
+        var title = d.Preset == "custom" ? d.Custom?.Title ?? L.T("router.dns.custom") : DnsPick.Options.FirstOrDefault(o => o.Id == d.Preset)?.Title;
+        DnsPick.CurrentText = title is null ? "" : d.Mode switch
+        {
+            "doh" => L.T("router.dns.now_doh", new { title }),
+            "plain" => L.T("router.dns.now_plain", new { title }),
+            _ => L.T("router.dns.now", new { title }),
+        };
         Raise(nameof(DnsLoaded)); Raise(nameof(DnsProtected)); Raise(nameof(DnsCanEnable));
         Requery();
     }
@@ -1847,75 +1873,71 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     static DnsOption ToOption(RouterDnsPreset p)
     {
         var ips = p.Resolvers is { Count: > 0 } r ? r.SelectMany(x => x.Bootstrap ?? []).Distinct().ToList() : p.Plain ?? [];
-        var detail = p.Id == "provider" ? "адреса DNS — от провайдера"
-            : p.Resolvers is { Count: > 0 } ? "защищённый" + (p.Resolvers.Count > 1 ? $" · серверов: {p.Resolvers.Count}" : "")
-            : string.Join(", ", ips) + " · без шифрования";
+        var detail = p.Id == "provider" ? L.T("router.dns.opt.provider")
+            : p.Resolvers is { Count: > 0 } ? (p.Resolvers.Count > 1 ? L.T("router.dns.opt.secure_n", new { count = p.Resolvers.Count }) : L.T("router.dns.opt.secure"))
+            : L.T("router.dns.opt.plain", new { ips = string.Join(", ", ips) });
         if (p.Note is { Length: > 0 } n) detail += " · " + n;
         // Описание: адреса и шаблоны — с роутера; кто держит — из пресетов ПК по тому же id (у «Google + Cloudflare» — оба).
         var dohs = (p.Resolvers ?? []).Select(x => x.Doh).OfType<string>().ToList();
-        var owner = DnsPresets.Find(p.Id)?.Owner ?? (p.Id == "default" ? "Google и Cloudflare (США)" : null);
+        var owner = DnsPresets.Find(p.Id)?.Owner ?? (p.Id == "default" ? L.T("router.dns.owner_default") : null);
         return new DnsOption(p.Id, p.Title, detail, false, ips, dohs.FirstOrDefault(), dohs, owner, MainViewModel.PresetNote(p.Id, p.Note));
     }
 
     /// <summary>«Применить» в выборе DNS роутера: готовый — dns_set preset, свой — dns_set custom (адреса — bootstrap при DoH, иначе plain).</summary>
     public async Task DnsApplyAsync(DnsOption o)
     {
-        if (o.Id != "provider" && !Confirm($"Включить DNS «{o.Title}» для всей сети?\n\n"
-                + "Все устройства дома будут брать адреса сайтов у него. Фильтры провайдера перестанут действовать. "
-                + "Не заработает — роутер вернёт прежний вариант; «Вернуть как было» — DNS провайдера."))
+        if (o.Id != "provider" && !Confirm(L.T("router.dns.apply_confirm", new { title = o.Title })))
             return;
-        var done = $"DNS для всей сети: {o.Title}.";
+        var done = L.T("router.dns.set_done", new { title = o.Title });
+        var change = L.T("router.change.dns", new { name = o.Title });
         if (o.Custom)
         {
             var custom = new RouterDnsCustom(o.Title, o.Doh, o.Doh is null ? null : [.. o.Ips], o.Doh is null ? [.. o.Ips] : null);
-            await DnsJobAsync("dns_set", c => c.DnsSetCustomAsync(custom), done, "custom");
+            await DnsJobAsync("dns_set", c => c.DnsSetCustomAsync(custom), done, "custom", change);
         }
-        else await DnsJobAsync("dns_set", c => c.DnsSetAsync(o.Id), done, o.Id);
+        else await DnsJobAsync("dns_set", c => c.DnsSetAsync(o.Id), done, o.Id, change);
     }
 
     static string JobTitle(string? action) => action switch
     {
-        "dns_set" => "Включаю выбранный DNS",
-        "dns_enable" => "Включаю защищённый DNS",
-        "dns_restore" => "Возвращаю DNS как было",
-        _ => "Проверяю DNS",
+        "dns_set" => L.T("router.dns.job.dns_set"),
+        "dns_enable" => L.T("router.dns.job.dns_enable"),
+        "dns_restore" => L.T("router.dns.job.dns_restore"),
+        _ => L.T("router.dns.job.dns_analyze"),
     };
 
-    public Task DnsAnalyzeAsync() => DnsJobAsync("dns_analyze", c => c.DnsAnalyzeAsync(), "Роутер проверил DNS.");
+    public Task DnsAnalyzeAsync() => DnsJobAsync("dns_analyze", c => c.DnsAnalyzeAsync(), L.T("router.dns.analyze_done"));
 
     public Task DnsEnableAsync()
     {
-        if (!Confirm("Включить защищённый DNS для всей сети?\n\n"
-                     + "Все устройства дома будут получать настоящие адреса сайтов — провайдер обычно не подменит их, но может перекрыть сам защищённый DNS. "
-                     + "Фильтры провайдера (родительский контроль) перестанут действовать, сайты могут открываться чуть медленнее. "
-                     + "Прежние настройки сохранятся: «Вернуть как было» вернёт их."))
+        if (!Confirm(L.T("router.dns.enable_confirm")))
             return Task.CompletedTask;
-        return DnsJobAsync("dns_enable", c => c.DnsEnableAsync(), "Защищённый DNS включён для всей сети.");
+        return DnsJobAsync("dns_enable", c => c.DnsEnableAsync(), L.T("router.dns.enable_done"), changeText: L.T("router.change.dns_enable"));
     }
 
-    public Task DnsRestoreAsync() => DnsJobAsync("dns_restore", c => c.DnsRestoreAsync(), "DNS на роутере — как было.");
+    public Task DnsRestoreAsync() => DnsJobAsync("dns_restore", c => c.DnsRestoreAsync(), L.T("router.dns.restore_done"));
 
     /// <summary>Фоновое DNS-задание: запустить и опрашивать dns_status, пока job этого действия не закончится.</summary>
-    async Task DnsJobAsync(string action, Func<RouterClient, Task<RouterStarted>> start, string done, string? preset = null)
+    async Task DnsJobAsync(string action, Func<RouterClient, Task<RouterStarted>> start, string done, string? preset = null, string? changeText = null)
     {
         RouterDnsJob? job = null;
         // Журнал окна: DNS сети меняем — запись ДО команды роутеру; «как было» закрывает записи.
         string rec = "";
         var after = new JsonObject { ["preset"] = preset };
         bool changes = action is "dns_set" or "dns_enable";
-        if (changes && Connected) rec = BeginRouter(ChangeKinds.RouterDns, $"DNS для всей сети на роутере: {done.Replace("DNS для всей сети: ", "").TrimEnd('.')}", after);
+        if (changes && Connected) rec = BeginRouter(ChangeKinds.RouterDns, changeText ?? done, after);
         try { await DnsJobCoreAsync(action, start, done, r => job = r); }
         finally
         {
             if (changes && rec.Length > 0) { if (job?.Ok == true) Recorder.Done(rec); else Recorder.Abort(rec); }
-            else if (action == "dns_restore" && job?.Ok == true) Recorder.Close(ChangeKinds.RouterDns, "DNS сети возвращён кнопкой «Вернуть как было»");
+            else if (action == "dns_restore" && job?.Ok == true) Recorder.Close(ChangeKinds.RouterDns, L.T("router.change.dns_restored"));
         }
     }
 
     async Task DnsJobCoreAsync(string action, Func<RouterClient, Task<RouterStarted>> start, string done, Action<RouterDnsJob?> found)
     {
         RouterDnsJob? job = null;
-        if (!await Guard(JobTitle(action) + " на роутере…", async () =>
+        if (!await Guard(L.T("router.dns.job.busy", new { action = JobTitle(action) }), async () =>
             {
                 DnsRunning = true;
                 DnsPick.Working = true;
@@ -1923,7 +1945,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 {
                     var before = _dnsStatus?.Job;
                     await Call(start);
-                    DnsJobText = JobTitle(action) + "…";
+                    DnsJobText = L.T("router.dns.job.running", new { action = JobTitle(action) });
                     bool sawRunning = false;
                     var deadline = DateTime.UtcNow + DnsTimeout;
                     while (DateTime.UtcNow < deadline)
@@ -1931,7 +1953,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                         await Task.Delay(PollInterval);
                         var d = await Call(c => c.DnsStatusAsync());
                         var j = d.Job;
-                        if (j?.Running == true) { sawRunning = true; DnsJobText = JobTitle(action) + "…"; continue; }
+                        if (j?.Running == true) { sawRunning = true; DnsJobText = L.T("router.dns.job.running", new { action = JobTitle(action) }); continue; }
                         // Закончилось наше: видели, как шло, или у задания новое время (at) — не прошлое такое же.
                         if (j is not null && j.Action == action && (sawRunning || (j.At is not null && j.At != before?.At)))
                         {
@@ -1942,7 +1964,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                             return;
                         }
                     }
-                    DnsJobText = JobTitle(action) + " — роутер ещё не закончил, итог появится здесь позже.";
+                    DnsJobText = L.T("router.dns.job.pending", new { action = JobTitle(action) });
                 }
                 finally { DnsRunning = false; DnsPick.Working = false; }
             }))
@@ -1965,7 +1987,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     bool _diagLoaded;
     public bool DiagLoaded { get => _diagLoaded; private set { if (Set(ref _diagLoaded, value)) { Raise(nameof(ShowDiagHint)); Raise(nameof(DiagHint)); } } }
     public bool ShowDiagHint => !DiagLoaded;
-    public string DiagHint => Connected ? "Нажмите «Проверить снова»." : NeedLogin ? "Войдите на роутер («Войти» выше), чтобы увидеть, что ему мешает." : ConnectionText + ".";
+    public string DiagHint => Connected ? L.T("router.diag.hint_check") : NeedLogin ? L.T("router.diag.hint_login") : L.T("router.diag.hint_other", new { text = ConnectionText });
 
     public ICommand RefreshDiagCmd { get; }
     public ICommand StopConflictCmd { get; }
@@ -1974,48 +1996,50 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task RefreshDiagAsync()
     {
         if (!Connected || Busy) return;
-        if (await Guard("Читаю диагностику роутера…", async () =>
+        if (await Guard(L.T("router.diag.busy"), async () =>
             {
                 var d = await Call(c => c.DiagAsync());
                 Conflicts.Clear();
                 foreach (var c in d.Conflicts ?? [])
                     Conflicts.Add(c.Kind == "package"
                         // §9: пакет conflict_stop не останавливает — только удаление.
-                        ? new(c.Name, "установлен пакет, он мешает — удалите его в меню роутера: «Система» → «Программное обеспечение» (название может отличаться)", CanStop: false)
-                        : new(c.Name, (c.Kind == "service" ? "служба" : c.Kind) + (c.Running ? ", работает" : ", остановлена")));
+                        ? new(c.Name, L.T("router.diag.package"), CanStop: false)
+                        : new(c.Name, c.Kind == "service"
+                            ? L.T(c.Running ? "router.diag.service_running" : "router.diag.service_stopped")
+                            : L.T(c.Running ? "router.diag.kind_running" : "router.diag.kind_stopped", new { kind = c.Kind })));
                 FlowOffloadText = !d.FlowOffload
-                    ? (d.Flowoffload is "software" or "hardware" ? "передано оптимизации — не мешает" : "выключено")
-                    : FlowOffloadFixable ? "включено — мешает оптимизации (исправить — в плашке выше)" : "включено";
-                Ipv6Text = !d.Ipv6Wan ? "нет" : Ipv6Fixable ? "есть — сайты по IPv6 идут мимо оптимизации (исправить — в плашке выше)" : "есть";
+                    ? (d.Flowoffload is "software" or "hardware" ? L.T("router.diag.flow_handed") : L.T("router.diag.flow_off"))
+                    : FlowOffloadFixable ? L.T("router.diag.flow_on_bad") : L.T("router.diag.flow_on");
+                Ipv6Text = !d.Ipv6Wan ? L.T("router.diag.ipv6_none") : Ipv6Fixable ? L.T("router.diag.ipv6_bad") : L.T("router.diag.ipv6_yes");
                 // Время проверки DNS — одно, в карточке «DNS для всей сети»; здесь только итог.
-                DnsText = d.Dns is null ? "не проверялся" : d.Dns.Spoofed ? "провайдер подменяет адреса сайтов" : "подмены нет";
-                SpaceText = $"{d.OverlayFreeKb / 1024.0:0.#} МБ" + (d.OverlayFreeKb < 2048 ? " — мало, обновления могут не поместиться" : "");
+                DnsText = d.Dns is null ? L.T("router.diag.dns_not_checked") : d.Dns.Spoofed ? L.T("router.diag.dns_spoofed") : L.T("router.diag.dns_clean");
+                SpaceText = L.T(d.OverlayFreeKb < 2048 ? "router.diag.space_low" : "router.diag.space_value", new { value = (d.OverlayFreeKb / 1024.0).ToString("0.#", L.Culture) });
                 DiagLoaded = true;
-                DiagUpdated = $"обновлено в {L.Time(DateTime.Now)}";
+                DiagUpdated = L.T("router.diag.updated", new { time = L.Time(DateTime.Now) });
             }, changes: false))
             Say("");
     }
 
     public async Task StopConflictAsync(string name)
     {
-        if (!Confirm($"Остановить и отключить «{name}» на роутере? Он перехватывает тот же трафик, что и DpiShell.")) return;
-        if (await Guard($"Останавливаю {name} на роутере…", () => Call(c => c.ConflictStopAsync(name))))
+        if (!Confirm(L.T("router.diag.stop_confirm", new { name }))) return;
+        if (await Guard(L.T("router.diag.stop_busy", new { name }), () => Call(c => c.ConflictStopAsync(name))))
         {
             await RefreshDiagAsync();
-            Say($"На роутере остановлен: {name}.");
+            Say(L.T("router.diag.stopped", new { name }));
         }
     }
 
     public async Task SaveReportAsync()
     {
         string? path = null;
-        if (await Guard("Получаю отчёт роутера…", async () =>
+        if (await Guard(L.T("router.diag.report_busy"), async () =>
             {
                 var text = (await Call(c => c.ReportAsync())).Text;
                 path = AskReportPath();
                 if (path is not null) await File.WriteAllTextAsync(path, text);
             }, changes: false))
-            Say(path is null ? "" : "Отчёт роутера сохранён: " + path);
+            Say(path is null ? "" : L.T("router.diag.report_saved", new { path }));
     }
 
     static void Requery()
