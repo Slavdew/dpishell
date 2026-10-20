@@ -40,18 +40,19 @@ public sealed partial class RouterViewModel
 
     public string TrialText => _trialState switch
     {
-        RouterTrialState.Checking => "Проверяю, что сайты открываются. Если не подтвердить — роутер сам вернёт прежнее "
-            + (_trialDeadline is { } d ? "через " + RouterTexts.Countdown(d - UtcNow()) : "скоро") + ".",
-        RouterTrialState.Failed => "Часть сайтов с этого ПК не открылась. Оставить оптимизацию?",
-        RouterTrialState.Unknown => "Проверить сайты с этого ПК не удалось. Всё работает?",
-        _ => "Оптимизация на роутере включена на пробу. Всё работает?",
+        RouterTrialState.Checking => _trialDeadline is { } d
+            ? L.T("router.trial.checking", new { time = RouterTexts.Countdown(d - UtcNow()) })
+            : L.T("router.trial.checking_soon"),
+        RouterTrialState.Failed => L.T("router.trial.failed"),
+        RouterTrialState.Unknown => L.T("router.trial.unknown"),
+        _ => L.T("router.trial.ask"),
     };
 
     /// <summary>Кнопки и отсчёт рядом с ними — только когда решает человек (проверка не прошла или её нет).</summary>
     public bool TrialAsk => !TrialChecking;
 
     /// <summary>«вернётся само через 2:45».</summary>
-    public string TrialCountdown => _trialDeadline is { } d ? "вернётся само через " + RouterTexts.Countdown(d - UtcNow()) : "";
+    public string TrialCountdown => _trialDeadline is { } d ? L.T("router.trial.countdown", new { time = RouterTexts.Countdown(d - UtcNow()) }) : "";
 
     public ICommand TrialKeepCmd => _trialKeepCmd ??= RelayCommand.Async(KeepTrialAsync, () => CanAct && TrialVisible);
     public ICommand TrialRevertCmd => _trialRevertCmd ??= RelayCommand.Async(RevertTrialAsync, () => CanAct && TrialVisible);
@@ -137,14 +138,14 @@ public sealed partial class RouterViewModel
         if (opened == true)
         {
             _trialState = RouterTrialState.Ask;
-            if (await ConfirmCoreAsync()) { Say("Проверено — оставил. " + (done ?? "Оптимизация на роутере включена.")); return; }
+            if (await ConfirmCoreAsync()) { Say(L.T("router.trial.kept", new { result = done ?? L.T("router.enable.done") })); return; }
         }
         else _trialState = opened == false ? RouterTrialState.Failed : RouterTrialState.Unknown;
         RaiseTrial();
         if (TrialVisible) Say(TrialText);
     }
 
-    Task<bool> ConfirmCoreAsync() => Guard("Подтверждаю на роутере…", async () =>
+    Task<bool> ConfirmCoreAsync() => Guard(L.T("router.trial.confirm_busy"), async () =>
     {
         await Call(c => c.ConfirmAsync());
         await RefreshStatusCoreAsync();
@@ -153,14 +154,14 @@ public sealed partial class RouterViewModel
     /// <summary>«Да, оставить» — confirm.</summary>
     public async Task KeepTrialAsync()
     {
-        if (await ConfirmCoreAsync()) Say("Оставлено: оптимизация на роутере работает.");
+        if (await ConfirmCoreAsync()) Say(L.T("router.trial.kept_short"));
     }
 
     /// <summary>«Вернуть как было» — не ждать срока: выключить или вернуть прежнюю стратегию (revert_to), затем снять ожидание.</summary>
     public async Task RevertTrialAsync()
     {
         if (_status?.PendingConfirm is not { } p) return;
-        if (await Guard("Возвращаю как было на роутере…", async () =>
+        if (await Guard(L.T("router.trial.revert_busy"), async () =>
             {
                 await RevertAdvancedTrialAsync();   // проба была от продвинутого режима — вернуть и прежние строки
                 if (p.RevertsToOff) await Call(c => c.DisableAsync());
@@ -169,7 +170,7 @@ public sealed partial class RouterViewModel
                 await Call(c => c.ConfirmAsync());
                 await RefreshStatusCoreAsync();
             }, changes: false))
-            Say(p.RevertsToOff ? "Вернул как было: оптимизация на роутере выключена." : "Вернул как было: на роутере стратегия " + StrategyTitle(p.RevertTo) + ".");
+            Say(p.RevertsToOff ? L.T("router.trial.reverted_off") : L.T("router.trial.reverted_strategy", new { name = StrategyTitle(p.RevertTo) }));
     }
 
     // ---------- выключение без человека: сторож, кнопка, откат (last_off, warnings) ----------
@@ -198,7 +199,7 @@ public sealed partial class RouterViewModel
     /// <summary>Фраза красная, кроме случая «роутер сам подобрал и включил».</summary>
     public bool OffAlert => _wdState != WatchdogSelectState.Found;
     /// <summary>Подпись возврата: после неудачного подбора роутера «прежняя» — она уже не подошла сторожу.</summary>
-    public string ReEnableText => "Попробовать прежнюю (на пробу)";   // одно название везде (UX-аудит 5, п. 13)
+    public string ReEnableText => L.T("router.trial.reenable");   // одно название везде (UX-аудит 5, п. 13)
 
     WatchdogSelectState ClassifyWatchdogSelect()
     {
@@ -212,9 +213,9 @@ public sealed partial class RouterViewModel
     /// <summary>Фраза о подборе после сторожа; пусто — подбора нет.</summary>
     public static string WatchdogSelectText(WatchdogSelectState state, string? strategy) => state switch
     {
-        WatchdogSelectState.Running => "Оптимизацию выключили автоматически — пропал интернет. Роутер подбирает другую стратегию…",
-        WatchdogSelectState.Found => $"Оптимизацию выключили автоматически — пропал интернет. Роутер подобрал и включил {strategy}.",
-        WatchdogSelectState.Failed => "Оптимизацию выключили автоматически — пропал интернет, а подходящей стратегии не нашлось. Она выключена, пока вы её не включите.",
+        WatchdogSelectState.Running => L.T("router.wd.select_running"),
+        WatchdogSelectState.Found => L.T("router.wd.select_found", new { name = strategy }),
+        WatchdogSelectState.Failed => L.T("router.wd.select_failed"),
         _ => "",
     };
 
@@ -272,7 +273,7 @@ public sealed partial class RouterViewModel
         set { if (value != _watchdog) _ = SetScheduleAsync(_scheduleEnabled, _scheduleHours, _autoSelect, value); }
     }
 
-    public const string WatchdogOnText = "Сторож включён: если с оптимизацией перестанут открываться проверочные сайты, роутер обычно сам выключит её. Поломки на других сайтах он может не заметить.";
+    public static string WatchdogOnText => L.T("router.wd.on_text");
 
     /// <summary>«проверено в 14:30 · всё в порядке»; сторож выключен — пусто.</summary>
     public string WatchdogLine
@@ -280,9 +281,9 @@ public sealed partial class RouterViewModel
         get
         {
             if (!_watchdog || _status?.Watchdog is not { Enabled: true } w) return "";
-            if (w.CheckedAt is null) return "ещё не проверял";
-            var verdict = w.Ok switch { true => " · всё в порядке", false => " · с оптимизацией пропадал интернет", null => "" };
-            return "проверено в " + RouterTexts.Time(w.CheckedAt) + verdict;
+            if (w.CheckedAt is null) return L.T("router.wd.not_checked");
+            return L.T(w.Ok switch { true => "router.wd.checked_ok", false => "router.wd.checked_bad", null => "router.wd.checked" },
+                new { time = RouterTexts.Time(w.CheckedAt) });
         }
     }
     public bool HasWatchdogLine => WatchdogLine.Length > 0;
