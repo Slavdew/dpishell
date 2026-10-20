@@ -30,17 +30,28 @@
 
         <!-- Выделяемый текст-значение (стратегия, адреса, версии, тексты ошибок): TextBox только для чтения без рамки и фона; «Копировать» — в меню.
              Перенос и цвет — у места использования (TextWrapping, Foreground); привязку писать с Mode=OneWay. -->
-        <Style x:Key="SelectableText" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+        <Style x:Key="SelectableText" TargetType="TextBox">
             <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="IsTabStop" Value="False" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource Text}" />
+            <Setter Property="SelectionBrush" Value="{DynamicResource Accent}" />
             <Setter Property="ContextMenu">
                 <Setter.Value>
                     <ContextMenu>
                         <MenuItem Header="{l:T common.copy}" Command="ApplicationCommands.Copy" />
                     </ContextMenu>
+                </Setter.Value>
+            </Setter>
+            <!-- Без системной рамки и отступа: текст стоит ровно там, где стоял бы TextBlock. -->
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <ScrollViewer x:Name="PART_ContentHost" Focusable="False" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled" Margin="-2,0,0,0" />
+                    </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
@@ -516,32 +527,6 @@
                                 <Setter TargetName="B" Property="Opacity" Value="0.5" />
                             </Trigger>
                         </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Выделяемый текст (значения, ошибки): TextBox только для чтения, выглядит как TextBlock; в меню — «Копировать». -->
-        <Style x:Key="SelectableText" TargetType="TextBox">
-            <Setter Property="IsReadOnly" Value="True" />
-            <Setter Property="IsTabStop" Value="False" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="Foreground" Value="{DynamicResource Text}" />
-            <Setter Property="SelectionBrush" Value="{DynamicResource Accent}" />
-            <Setter Property="ContextMenu">
-                <Setter.Value>
-                    <ContextMenu>
-                        <MenuItem Command="ApplicationCommands.Copy" Header="{l:T common.copy}" />
-                    </ContextMenu>
-                </Setter.Value>
-            </Setter>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="TextBox">
-                        <ScrollViewer x:Name="PART_ContentHost" Focusable="False" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled" Margin="-2,0,0,0" />
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
