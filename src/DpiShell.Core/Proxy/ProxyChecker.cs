@@ -34,8 +34,8 @@ public static class ProxyChecker
         int okCount = probes.Count(p => p.Ok);
         int avg = okCount == 0 ? 0 : (int)probes.Where(p => p.Ok).Average(p => p.Ms);
         var kindText = use.Kind == "socks5" ? "SOCKS5" : "HTTP";
-        var summary = okCount == probes.Count ? $"работает ({kindText}): {okCount} из {probes.Count}, ≈{avg} мс"
-            : okCount > 0 ? $"отвечает не на всё ({kindText}): {okCount} из {probes.Count}, ≈{avg} мс"
+        var summary = okCount == probes.Count ? $"работает ({kindText}): {okCount} из {probes.Count} проверочных адресов, ≈{avg} мс"
+            : okCount > 0 ? $"отвечает не на всё ({kindText}): {okCount} из {probes.Count} проверочных адресов, ≈{avg} мс"
             : "не отвечает: " + (probes.FirstOrDefault()?.Error ?? "нет ответа");
         return new(okCount == probes.Count && probes.Count > 0, use.Kind, probes, summary);
     }

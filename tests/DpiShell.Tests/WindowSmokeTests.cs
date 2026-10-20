@@ -469,10 +469,16 @@ public sealed partial class WindowSmokeTests
                 }
                 var mix = new Strategy("mix-alt-alt10", MixBuilder.MakeTitle(singles[0], singles[1]), "mix", new(singles[1].Roles), new() { ["youtube"] = singles[0].Id, ["discord"] = singles[1].Id });
                 var mixScore = DpiShell.Core.Selector.Score(mix, groups, groups.SelectMany(g => g.Targets.Select(t => V(g, t, true))).ToList());
-                vm.Scores.Insert(0, new ScoreRow(mixScore, vm.Names) { IsBest = true });
+                string Full(string id) => shell.Catalog.Find(id)?.Title ?? id;
+                var composition = MixBuilder.Composition(mix.Parts, Full);
+                vm.Scores.Insert(0, new ScoreRow(mixScore, vm.Names, Full) { IsBest = true });
+                vm.SelectedScore = vm.Scores[0];
                 SetProp(vm, "ResultText", "Подходит: " + mix.Title);
                 SetProp(vm, "ResultHint", "одной стратегии на всё не нашлось — собрана смешанная; без оптимизации не открывалось: YouTube, Discord.");
-                vm.StrategyChoices.Add(new(mix.Id, mix.Title, "YouTube ✓ · Discord ✓ · проверено 20.10 в 14:30", false) { Source = "mix" });
+                // Как после подбора, когда лучшая ещё не применена: в карточке главная кнопка «Применить», «Применить выбранную» активна (UX-аудит 6, п. 8).
+                typeof(MainViewModel).GetMethod("SetBest", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(vm, [mix.Id]);
+                vm.StrategyChoices.Add(new(mix.Id, mix.Title, "YouTube ✓ · Discord ✓ · проверено 20.10 в 14:30", false,
+                    parameters: $"Состав: {composition}\n\nПараметры по ролям:\n{StrategyParams.Roles(mix.Roles)}") { Source = "mix", Tip = mix.Title + "\n" + composition });
                 vm.StrategyChoices.Add(new(singles[0].Id, singles[0].Title, "YouTube ✓ · Discord ✗ · проверено 20.10 в 14:30", false));
                 var w = Open(vm);
                 w.Height = 700;
@@ -485,6 +491,12 @@ public sealed partial class WindowSmokeTests
                 if (!Visible(t => t.Text.Contains("собрана смешанная"))) throw new Exception("Нет пояснения, откуда смешанная");
                 if (!Visible(t => t.Text.StartsWith("Смешанная · YouTube — "))) throw new Exception("Нет строки смешанной в таблице");
                 if (Visible(t => t.Text is "найдена" or "вставлена" or "своя")) throw new Exception("У смешанной лишняя метка источника");
+                if (Find<Button>(tabs, b => b.Content as string == "Применить" && b.IsVisible) is null) throw new Exception("В карточке итога нет «Применить»");
+                if (Find<Button>(tabs, b => b.Content as string == "Применить лучшую" && b.IsVisible && b.IsEnabled) is null) throw new Exception("«Применить лучшую» неактивна");
+                if (Visible(t => t.Text.StartsWith("Не нашлось стратегии для всего"))) throw new Exception("Фраза «Не нашлось стратегии для всего» при лучшей «2 из 2»");
+                if (Find<TextBlock>(tabs, t => t.IsVisible && t.Text.StartsWith("Подходит: Смешанная") && t.ToolTip is string tip && tip.Contains("general (ALT")) is null) throw new Exception("У названия смешанной нет подсказки с составом");
+                if (Find<TextBlock>(tabs, t => t.IsVisible && t.Text.StartsWith("Смешанная · YouTube — ") && t.TextWrapping == TextWrapping.Wrap) is null) throw new Exception("Название смешанной в таблице обрезается, а не переносится");
+                if (Visible(t => t.Text is "Группы" or "Открылось") || Find<DataGridColumnHeader>(tabs, h => h.IsVisible && h.Content as string == "Сервисы") is null) throw new Exception("Колонка «Группы» не переименована в «Сервисы»");
                 if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-select-mix.png")); }
 
                 SetProp(vm, "ShowStrategies", true);
@@ -606,13 +618,13 @@ public sealed partial class WindowSmokeTests
                     if (page == Pages.Router && (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Роутер не проверялся" && t.IsVisible) is null
                                                  || Find<Button>(Find<TabControl>(w)!, b => b.Content as string == "Как поставить на роутер ↗" && b.IsVisible) is null))
                         throw new Exception("На вкладке «Роутер» без роутера нет пустого состояния или ссылки «Как поставить»");
-                    // Пока роутер не найден: одна «Установить на роутер», в «Подключении» — только «Найти»; «Найти» ещё и ссылкой в пустом состоянии.
+                    // Пока роутер не найден: одна «Установить на роутер» и одна «Найти» (ссылкой в пустом состоянии; в «Подключении» её нет — UX-аудит 6, п. 14).
                     if (page == Pages.Router)
                     {
                         var tabsNone = Find<TabControl>(w)!;
                         int installs = FindAll<Button>(tabsNone, b => (b.Content as string ?? "").StartsWith("Установить") && b.IsVisible).Count();
                         int finds = FindAll<Button>(tabsNone, b => b.Content as string == "Найти" && b.IsVisible).Count();
-                        if (installs != 1 || finds != 2) throw new Exception($"Без роутера кнопок установки {installs} (ждали 1), «Найти» {finds} (ждали 2)");
+                        if (installs != 1 || finds != 1) throw new Exception($"Без роутера кнопок установки {installs} (ждали 1), «Найти» {finds} (ждали 1)");
                         if (Find<TextBlock>(tabsNone, t => t.Text.Contains("«Найти» ниже")) is not null) throw new Exception("Осталась фраза «Нажмите «Найти» ниже»");
                     }
                     // Вход на роутер — небольшое окно на месте (п. 14): Enter — «Войти», Esc — «Отмена».
@@ -1583,6 +1595,7 @@ public sealed partial class WindowSmokeTests
         SetProp(vm, "ResultText", "Подходит: " + strategies[0].Title);
         SetProp(vm, "ResultHint", "без оптимизации не открывалось: YouTube, Discord.");
         SetProp(vm, "OfferDeep", true);   // «Искать глубже» — в итоге, не рядом с «Начать подбор» (п. 30)
+        SetProp(vm, "DeepText", "У лучшей открылось 1 из 2 сервисов — можно поискать новые.");   // цифрой, а не «не нашлось…» (UX-аудит 6, п. 9)
         typeof(MainViewModel).GetMethod("SetBest", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .Invoke(vm, [strategies[0].Id]);
 

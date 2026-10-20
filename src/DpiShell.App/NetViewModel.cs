@@ -80,7 +80,10 @@ public sealed class NetViewModel : Observable
         CommandManager.InvalidateRequerySuggested();
     }
 
-    static string Title(IpsetMode m) => m switch { IpsetMode.List => "Только из списков", IpsetMode.Any => "Все адреса", _ => "Выкл" };
+    /// <summary>Единое имя десятиминутной проверки по всем адресам (не режим наравне с «Только из списков»).</summary>
+    public const string AnyName = "Все адреса на 10 минут (проверка)";
+
+    static string Title(IpsetMode m) => m switch { IpsetMode.List => "Только из списков", IpsetMode.Any => AnyName, _ => "Выкл" };
 
     // ---------- режим IP-списка ----------
 
@@ -98,7 +101,7 @@ public sealed class NetViewModel : Observable
             if (!AnyActive) return "";
             var left = (_f.AnyUntilUtc ?? DateTime.UtcNow) - DateTime.UtcNow;
             if (left < TimeSpan.Zero) left = TimeSpan.Zero;
-            return $"Все адреса: осталось {(int)left.TotalMinutes}:{left.Seconds:00}. Потом сам вернётся режим «{Title(_f.ReturnTo)}».";
+            return $"{AnyName}: осталось {(int)left.TotalMinutes}:{left.Seconds:00}. Потом сам вернётся режим «{Title(_f.ReturnTo)}».";
         }
     }
 
@@ -126,7 +129,7 @@ public sealed class NetViewModel : Observable
             mode == IpsetMode.Off && gameWasOn ? "Готово. Игровой режим выключен: без IP-списка он не работает." : "Готово.");
     }
 
-    Task StartAnyAsync() => Run("Применяю…", c => c.StartAllAddressesAsync(), "Все адреса — на 10 минут, потом режим вернётся сам.");
+    Task StartAnyAsync() => Run("Применяю…", c => c.StartAllAddressesAsync(), "Проверка по всем адресам включена на 10 минут, потом режим вернётся сам.");
 
     Task StopAnyAsync() => Run("Возвращаю обычный режим…", c => c.StopAllAddressesAsync(), "Готово.");
 
@@ -164,7 +167,7 @@ public sealed class NetViewModel : Observable
         await AfterChange();
         Refresh();
         if (!reverted) return;
-        var msg = $"10 минут «Все адреса» прошли — вернулся режим «{Title(_f.Ipset)}».";
+        var msg = $"Проверка по всем адресам закончилась (10 минут) — вернулся режим «{Title(_f.Ipset)}».";
         Say(msg);
         Notify?.Invoke(msg);
     }
@@ -295,8 +298,8 @@ public sealed class NetViewModel : Observable
     {
         get
         {
-            if (_f.Game == GameMode.Off) return AnyActive ? "Выключен. Включить нельзя, пока идёт проверка «Все адреса»." : "Выключен";
-            if (_f.GameBlocked) return "Сейчас не работает: идёт проверка «Все адреса» (ниже, в «Дополнительно»). Вернётся сам, когда она закончится.";
+            if (_f.Game == GameMode.Off) return AnyActive ? "Выключен. Включить нельзя, пока идёт проверка по всем адресам." : "Выключен";
+            if (_f.GameBlocked) return "Сейчас не работает: идёт проверка по всем адресам (ниже, в «Дополнительно»). Вернётся сам, когда она закончится.";
             var list = _f.List is { } m ? $"Работает по списку адресов ниже ↓ ({m.Lines:N0} подсетей)" : "Работает по списку адресов ниже ↓";
             return _helper.Status?.Enabled == true ? list : list.Replace("Работает", "Включится вместе с оптимизацией,");
         }

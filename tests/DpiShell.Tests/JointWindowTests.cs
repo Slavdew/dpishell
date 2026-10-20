@@ -234,7 +234,7 @@ public sealed class JointWindowTests : IDisposable
 
         router.Remove();                                                  // роутер выключен / ноутбук вне дома
         await vm.Router.RefreshAsync();
-        await WaitAsync(() => vm.Router.JointStatus == "Роутер недоступен — этот ПК работает сам");
+        await WaitAsync(() => vm.Router.JointStatus == "Роутер не найден — этот ПК работает сам");
         await vm.Router.JointWhenIdleAsync();
         Assert.False(f.Backend.JointValue.Active);
         Assert.True(vm.IsRunning);                                        // и сам ПК не выключается из-за пропавшего роутера

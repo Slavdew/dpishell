@@ -44,7 +44,8 @@ public sealed class AdvancedWindowTests : IDisposable
         var a = vm.AdvancedPc;
         Assert.False(a.Enabled);
         Assert.False(a.ShowEditor);
-        Assert.Equal("Выключен", a.Summary);
+        Assert.Equal("Выключено", a.ToggleText);
+        Assert.StartsWith("Сайту из строки можно задать свою стратегию", a.Summary);
 
         a.Enabled = true;
         await WaitAsync(() => !a.Busy && a.Enabled && f.Backend.Calls.Any(c => c.StartsWith("advanced_set")));
@@ -63,7 +64,8 @@ public sealed class AdvancedWindowTests : IDisposable
         Assert.Equal(["auto", "direct", "alt9"], f.Backend.LastAdvancedRows.Select(r => r.Strategy));
         Assert.Equal(3, f.Backend.LastAdvancedRows.Count);
         Assert.Contains("3", a.Summary);
-        Assert.StartsWith("Включён", a.Summary);
+        Assert.Equal("Включено", a.ToggleText);
+        Assert.StartsWith("Строки: 3", a.Summary);
         Assert.Equal(3, a.Rows.Count);
         Assert.StartsWith("Авто — сейчас", a.Rows[0].Hint);
         Assert.Contains("не трогает", a.Rows[1].Hint);
@@ -93,7 +95,7 @@ public sealed class AdvancedWindowTests : IDisposable
         f.Backend.AdvancedFails = "Строка 1: такой стратегии нет.";
         var a = vm.AdvancedPc;
         a.Enabled = true;
-        await WaitAsync(() => a.HasMessage && !a.Busy);
+        await WaitAsync(() => a.MessageIsError && !a.Busy);   // «Включаю…» — не итог: ждём отказ
         Assert.False(a.Enabled);
         Assert.Contains("такой стратегии нет", a.Message);
     }
@@ -293,6 +295,70 @@ public sealed class AdvancedWindowTests : IDisposable
         Assert.False(vm.Advanced.Available);
         Assert.Contains("обновите DpiShell на роутере", vm.Advanced.UnavailableText);
         Assert.False(vm.Advanced.ShowEditor);
+    }
+
+    // ---------- одно «Сохранить» и один статус на вкладку «Сайты» (UX-аудит 6, п. 2–3) ----------
+
+    [Fact]
+    public async Task Pc_SaveSites_SavesTargetsAndRows_UnderOneStatus()
+    {
+        var (vm, f) = await PcAsync();
+        await using var _ = f;
+        var a = vm.AdvancedPc;
+        a.Enabled = true;
+        await WaitAsync(() => !a.Busy && a.Enabled && f.Backend.Calls.Any(c => c.StartsWith("advanced_set")));
+        Assert.False(vm.SitesDirty);
+        Assert.True(vm.SitesSaved);
+
+        AddRow(a, "example.com", "auto");   // несохранённая строка — это и есть «Не сохранено» вкладки
+        Assert.True(vm.SitesDirty);
+        Assert.False(vm.SitesSaved);
+        vm.TargetsText = "mysite.example";
+        vm.SaveSitesCmd.Execute(null);
+        await WaitAsync(() => !a.Dirty && !a.Busy && f.Backend.Calls.Contains("advanced_set True lists 1"));
+
+        Assert.Contains("user_targets_set mysite.example", f.Backend.Calls);
+        Assert.False(a.Dirty);   // строки продвинутого режима сохранились той же кнопкой
+        Assert.Equal(vm.TargetsDirty, vm.SitesDirty);   // а статус вкладки — один: свои сайты + строки
+    }
+
+    [Fact]
+    public async Task Router_SitesDirty_FollowsAddressesListsAndRows_SaveClearsIt()
+    {
+        using var r = Router();
+        var (vm, _) = await RouterAsync(r);
+        await vm.LoadTargetsAsync();
+        await vm.Advanced.RefreshAsync(force: true);
+        Assert.False(vm.SitesDirty);
+
+        vm.ListExcludeText = vm.ListExcludeText + "\nx.example";
+        Assert.True(vm.SitesDirty);
+        vm.AddTargetCmd.Execute(null);
+        vm.Targets[^1].Url = "https://y.example/";
+        AddRow(vm.Advanced, "a.example", "direct");
+        await vm.SaveTargetsAsync();   // одна кнопка: адреса, списки и строки «Свои настройки для сайтов»
+        await WaitAsync(() => !vm.SitesDirty && !vm.Advanced.Busy);
+
+        Assert.False(vm.Advanced.Dirty);
+        Assert.Contains("x.example", r.Lists["user-exclude"]);
+        Assert.True(vm.SitesSaved);
+    }
+
+    [Fact]
+    public async Task Router_AddSiteToExclude_GoesIntoTheSameExcludeField_KeepingUnsavedLines()
+    {
+        using var r = Router();
+        var (vm, _) = await RouterAsync(r);
+        await vm.LoadTargetsAsync();
+        vm.ListExcludeText = "mine.example";   // правка в поле «Исключения» ещё не сохранена
+        r.SiteWithBypassOk = false;
+        vm.SiteUrl = "www.broken.example";
+        await vm.SiteCheckAsync();
+        await vm.AddSiteToExcludeAsync();
+
+        Assert.Equal(["mine.example", "www.broken.example"], vm.ListExcludeText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0));
+        Assert.Contains("www.broken.example", r.Lists["user-exclude"]);
+        Assert.Contains("«Исключения»", vm.SiteResult);
     }
 
     [Fact]

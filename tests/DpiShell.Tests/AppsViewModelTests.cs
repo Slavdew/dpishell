@@ -55,7 +55,7 @@ public sealed class AppsViewModelTests
         Assert.True(vm.IsDone);
         Assert.Contains("Профиль «game» сохранён.", vm.Status);
         Assert.Single(vm.Profiles);
-        Assert.Contains(said, s => s.Contains("включён"));
+        Assert.Contains(said, s => s == "Профиль «game» сохранён.");   // строка состояния и карточка говорят одно
     }
 
     [Fact]

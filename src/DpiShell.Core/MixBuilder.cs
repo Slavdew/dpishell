@@ -149,6 +149,22 @@ public static class MixBuilder
         return StrategyExchange.CleanTitle(full.Length <= StrategyExchange.MaxTitle ? full : Make(true));
     }
 
+    /// <summary>
+    /// Состав смешанной для подсказки и «Параметров»: «YouTube — general (ALT); остальное — general (ALT10)». Имена — полные, как в каталоге
+    /// (<paramref name="titleOf"/> по id); одинаковые части сливаются, как в названии. Не смешанная — пусто.
+    /// </summary>
+    public static string Composition(IReadOnlyDictionary<string, string>? parts, Func<string, string> titleOf)
+    {
+        if (parts is null || parts.Count == 0) return "";
+        var groups = PartOrder.Where(parts.ContainsKey).GroupBy(p => parts[p]).ToList();
+        return string.Join("; ", groups.Select(g =>
+        {
+            var ps = g.ToList();
+            var name = ps.Count == 2 && ps.Contains(DiscordGroup) && ps.Contains(UserGroup) ? "остальное" : string.Join(" и ", ps.Select(Label));
+            return $"{name} — {titleOf(g.Key)}";
+        }));
+    }
+
     /// <summary>Подпись для двух частей: YouTube и «остальное».</summary>
     public static string MakeTitle(Strategy youtube, Strategy rest) =>
         MakeTitle([(YoutubeGroup, youtube), (DiscordGroup, rest), (UserGroup, rest)]);

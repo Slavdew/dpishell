@@ -23,7 +23,9 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
     /// <summary>Точные параметры по ролям и командная строка winws для этого ПК (<see cref="StrategyParams"/>); пусто — стратегии нет у окна.</summary>
     public string Params { get; } = parameters;
     public bool HasParams => Params.Length > 0;
-    public bool ShowParams { get => _showParams; set { if (Set(ref _showParams, value)) Raise(nameof(ParamsLinkText)); } }
+    public bool ShowParams { get => _showParams; set { if (Set(ref _showParams, value)) { Raise(nameof(ParamsLinkText)); Raise(nameof(ParamsVisible)); } } }
+    /// <summary>Блок параметров показывается, только когда есть что показать: пустая рамка выглядит как сбой.</summary>
+    public bool ParamsVisible => _showParams && HasParams;
     public string ParamsLinkText => ShowParams ? "Скрыть параметры" : "Параметры";
     public string Id { get; } = id;
     public string Title { get; } = title;
@@ -217,15 +219,19 @@ public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, 
 }
 
 /// <summary>Строка таблицы подбора. Раскрывается — результаты по всем проверенным адресам.</summary>
-public sealed class ScoreRow(StrategyScore s, GroupNames? names = null) : Observable
+public sealed class ScoreRow(StrategyScore s, GroupNames? names = null, Func<string, string>? titleOf = null) : Observable
 {
     bool _best, _expanded;
     IReadOnlyList<CheckRow>? _details;
     public StrategyScore Score { get; } = s;
     public string Id => Score.Strategy.Id;
     public string Title => StrategyNaming.DisplayTitle(Score.Strategy.Title, Score.Strategy.Roles);
-    /// <summary>Прежняя запись названия (с датой поиска), если показано имя по параметрам.</summary>
-    public string Tip => StrategyNaming.Tip(Score.Strategy.Title, Score.Strategy.Roles) is { Length: > 0 } t ? t : Title;
+    /// <summary>
+    /// Подсказка к названию: у смешанной — состав полными именами («YouTube — general (ALT); остальное — general (ALT10)»), иначе
+    /// прежняя запись названия (с датой поиска), если показано имя по параметрам.
+    /// </summary>
+    public string Tip => titleOf is not null && MixBuilder.Composition(Score.Strategy.Parts, titleOf) is { Length: > 0 } c ? Title + "\n" + c
+        : StrategyNaming.Tip(Score.Strategy.Title, Score.Strategy.Roles) is { Length: > 0 } t ? t : Title;
     public string Groups => Unchecked ? "—" : $"{Score.GroupsPassed} из {Score.GroupsTotal}";
     public string Share => Unchecked ? "—" : $"{Score.TargetShare * 100:0} %";
     public string Avg => Score.Verdicts.Any(v => v.Ok) ? $"{Score.AvgSeconds:0.00} с" : "—";

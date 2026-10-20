@@ -86,11 +86,11 @@ public sealed partial class WindowSmokeTests
                 Pump();
                 SetProp(vm2, "IsLoading", false);
                 Pump();
-                var link = Find<Button>(Find<TabControl>(w2)!, b => b.Content as string == "Настроить →" && b.IsVisible)
-                           ?? throw new Exception("У находки «Системный прокси» нет ссылки «Настроить →»");
+                var link = Find<Button>(Find<TabControl>(w2)!, b => b.Content as string == "Открыть Прокси →" && b.IsVisible)
+                           ?? throw new Exception("У находки «Системный прокси» нет ссылки «Открыть Прокси →»");
                 link.Command.Execute(null);
                 Pump();
-                if (vm2.Page != Pages.Proxy) throw new Exception("«Настроить →» не привела на вкладку «Прокси»");
+                if (vm2.Page != Pages.Proxy) throw new Exception("«Открыть Прокси →» не привела на вкладку «Прокси»");
                 Close(w2);
             }
         });

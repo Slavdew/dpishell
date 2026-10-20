@@ -451,8 +451,9 @@ public sealed class RouterViewModelTests : IDisposable
         await vm.ConnectAsync("secret");
         await vm.RefreshDiagAsync();
         Assert.Equal("zapret2", Assert.Single(vm.Conflicts).Name);
-        Assert.Equal("включено — мешает оптимизации", vm.FlowOffloadText);
+        Assert.StartsWith("включено — мешает оптимизации", vm.FlowOffloadText);
         Assert.StartsWith("провайдер подменяет", vm.DnsText);
+        Assert.DoesNotContain("проверено", vm.DnsText);   // время проверки DNS — одно, в карточке «DNS для всей сети»
         await vm.StopConflictAsync("zapret2");
         Assert.Equal("zapret2", r.Calls.Single(c => Method(c) == "conflict_stop")["params"]![3]!["name"]!.GetValue<string>());
         await vm.SaveReportAsync();

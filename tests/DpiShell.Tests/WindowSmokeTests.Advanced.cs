@@ -26,6 +26,9 @@ public sealed partial class WindowSmokeTests
                 var vm = TestWindow.Model(shell);
                 var a = vm.AdvancedPc;
                 var ids = shell.Catalog.Strategies.Take(3).ToList();
+                // Список «Стратегия» строки — полными именами каталога («general (ALT10)»), как в остальных местах окна.
+                a.Strategies = () => [.. shell.Catalog.Strategies.Select(s => new AdvancedChoice(s.Id, s.Title))];
+                vm.Router.Advanced.Strategies = a.Strategies;
                 // Роутер подключается до открытия окна: его события трогают окно, а ConnectAsync здесь идёт с другого потока.
                 vm.Router.AddressAuto = false;
                 vm.Router.CustomAddress = fake.Address;
@@ -62,11 +65,15 @@ public sealed partial class WindowSmokeTests
                 if (!Visible(t => t.Text.StartsWith("Авто — сейчас "))) throw new Exception("Нет подсказки «Авто — сейчас …»");
                 if (!Visible(t => t.Text.Contains("youtube.com есть в списке YouTube: ваша строка важнее"))) throw new Exception("Нет подсказки о списке YouTube");
                 if (!Visible(t => t.Text.Contains("не трогает"))) throw new Exception("Нет подсказки у «Напрямую»");
-                if (Find<RadioButton>(tabs, r => r.IsVisible && Text(r) == "Как сейчас" && r.IsChecked == true) is null) throw new Exception("«Как сейчас» должен быть выбран");
+                if (Find<RadioButton>(tabs, r => r.IsVisible && Text(r) == "Только из списков" && r.IsChecked == true) is null) throw new Exception("«Только из списков» должен быть выбран");
                 if (Find<RadioButton>(tabs, r => r.IsVisible && Text(r) == "Для всех сайтов") is null || Find<RadioButton>(tabs, r => r.IsVisible && Text(r) == "Напрямую — без оптимизации") is null)
                     throw new Exception("Нет вариантов «Остальных сайтов»");
-                var apply = Find<Button>(tabs, b => b.IsVisible && b.Content as string == "Применить") ?? throw new Exception("Нет «Применить»");
-                if (apply.IsEnabled) throw new Exception("«Применить» активна без правок");
+                // Одна кнопка сохранения и один статус на вкладку (UX-аудит 6, п. 2): второй «Применить» и «Не применено» нет.
+                if (Find<Button>(tabs, b => b.IsVisible && b.Content as string == "Применить") is not null) throw new Exception("Осталась вторая кнопка сохранения «Применить»");
+                if (Find<Button>(tabs, b => b.IsVisible && b.Content as string == "Сохранить") is null) throw new Exception("Нет единой кнопки «Сохранить»");
+                if (!Visible(t => t.Text == "Сохранено")) throw new Exception("Нет статуса «Сохранено» без правок");
+                if (Visible(t => t.Text == "Не сохранено")) throw new Exception("«Не сохранено» без правок");
+                if (a.ToggleText != "Включено" || !Visible(t => t.Text == "Включено")) throw new Exception("Подпись переключателя — не состояние «Включено»");
                 if (FindAll<ComboBox>(tabs, c => c.IsVisible && c.Items.Count >= 3).Count() < 3) throw new Exception("У строк нет списка стратегий");
                 if (Find<ComboBox>(tabs, c => c.IsVisible && c.SelectedValue as string == ids[0].Id) is null) throw new Exception("В строке не выбрана её стратегия");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-sites-advanced-on.png"));
@@ -74,8 +81,8 @@ public sealed partial class WindowSmokeTests
                 // Правка и ошибка в строке — красным.
                 a.Rows[1].DomainsText = "bank example";
                 Pump();
-                if (!apply.IsEnabled) throw new Exception("После правки «Применить» неактивна");
-                if (Find<TextBlock>(tabs, t => t.IsVisible && t.Text == "Не применено") is null) throw new Exception("Нет пометки «Не применено»");
+                if (!Visible(t => t.Text == "Не сохранено") || Visible(t => t.Text == "Сохранено")) throw new Exception("После правки строки нет единого статуса «Не сохранено»");
+                if (Find<Button>(tabs, b => b.IsVisible && b.Content as string == "Отменить правки") is null) throw new Exception("При правках нет «Отменить правки»");
                 WaitUi(a.ApplyAsync());
                 Pump();
                 if (!Visible(t => t.Text == "Строка 2: Домен вида example.com")) throw new Exception("Нет сообщения об ошибке в строке");

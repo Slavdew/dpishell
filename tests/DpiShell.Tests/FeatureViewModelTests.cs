@@ -68,6 +68,9 @@ public sealed class FeatureViewModelTests
         answer = true;
         await net.TryAnyAsync();
         Assert.True(net.AnyActive);
+        // UX-аудит 6, п. 4: десятиминутная проверка названа так, чтобы её не спутать с режимом «Только из списков».
+        Assert.StartsWith(NetViewModel.AnyName + ": осталось", net.AnyText);
+        Assert.Equal("Все адреса на 10 минут (проверка)", NetViewModel.AnyName);
         Assert.False(net.TryAnyCmd.CanExecute(null));   // уже идёт — второй раз не предлагаем
     }
 

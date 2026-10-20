@@ -147,7 +147,7 @@ public static class JointTexts
     /// <summary>«Роутер ведёт YouTube и Discord, этот ПК — свои сайты (3)».</summary>
     public static string Active(int mine) => $"Роутер ведёт YouTube и Discord, этот ПК — свои сайты ({mine})";
 
-    public const string Fallback = "Роутер недоступен — этот ПК работает сам";
+    public const string Fallback = "Роутер не найден — этот ПК работает сам";
     public const string FallbackDisabled = "Оптимизация на роутере выключена — этот ПК работает сам";
     public const string FallbackLogin = "Нет входа на роутер — этот ПК работает сам";
     public const string FallbackOld = "Роутер не умеет совместной работы — этот ПК работает сам";

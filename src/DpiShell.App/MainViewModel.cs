@@ -408,7 +408,7 @@ public sealed partial class MainViewModel : Observable
     }
 
     bool _busy;
-    public bool Busy { get => _busy; private set { if (Set(ref _busy, value)) CommandManager.InvalidateRequerySuggested(); } }
+    public bool Busy { get => _busy; private set { if (Set(ref _busy, value)) { Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); CommandManager.InvalidateRequerySuggested(); } } }
 
     string _busyText = "";
     public string BusyText { get => _busyText; private set => Set(ref _busyText, value); }
@@ -485,7 +485,7 @@ public sealed partial class MainViewModel : Observable
     // ---------- загрузка ----------
 
     bool _isLoading = true;
-    public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); CommandManager.InvalidateRequerySuggested(); } } }
+    public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); CommandManager.InvalidateRequerySuggested(); } } }
 
     bool _loadFailed;
     public bool LoadFailed { get => _loadFailed; private set { if (Set(ref _loadFailed, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); CommandManager.InvalidateRequerySuggested(); } } }
@@ -621,10 +621,19 @@ public sealed partial class MainViewModel : Observable
         return _titles.TryGetValue(id, out var t) ? t : id;
     }
 
+    /// <summary>«YouTube, Discord» — группы, не открывшиеся в последней проверке «Проверить сейчас»; null — проверки нет или открылось всё.</summary>
+    string? FailingCheckGroups()
+    {
+        if (Checking || CheckGroups.Count == 0) return null;
+        var bad = CheckGroups.Where(g => !g.Ok || g.Browser).Select(g => g.Title).ToList();
+        return bad.Count == 0 ? null : string.Join(", ", bad);
+    }
+
     void UpdateStatus()
     {
         var err = _error ?? _coreProblem;
         var id = CurrentStrategyId;
+        bool partial = false;
         if (Selecting) { Kind = StatusKind.Busy; StatusTitle = _searching ? "Глубокий поиск…" : "Подбор…"; StatusDetail = SelectProgressText; }
         else if (Busy) { Kind = StatusKind.Busy; StatusTitle = BusyText; StatusDetail = ""; }
         else if (err is not null) { Kind = StatusKind.Error; StatusTitle = "Ошибка"; StatusDetail = err; }
@@ -633,6 +642,8 @@ public sealed partial class MainViewModel : Observable
             Kind = StatusKind.On; StatusTitle = "Работает";
             // Совместная работа: тем же местом, одной короткой фразой, кто что ведёт.
             StatusDetail = (id is null ? "" : "Стратегия: " + StrategyTitle(id)) + (Router.JointOn && Router.HasJointStatus ? (id is null ? "" : " · ") + Router.JointStatus : "");
+            // Проверка нашла, что что-то не открывается: заголовок не зелёный «Работает» (UX-аудит 6, п. 7).
+            if (FailingCheckGroups() is { } bad) { partial = true; StatusTitle = "Открывается не всё"; StatusDetail = "Оптимизация работает. Не открывается: " + bad + (id is null ? "" : " · стратегия " + StrategyTitle(id)); }
         }
         else if (ServiceMode && _svc == SvcState.StartPending) { Kind = StatusKind.Busy; StatusTitle = "Запускается…"; StatusDetail = ""; }
         else if (Router.Found && Router.RouterEnabled)
@@ -640,6 +651,8 @@ public sealed partial class MainViewModel : Observable
             // Обход делает роутер — для этого ПК тоже: не «Выключено» (читается как «не работает», UX-аудит 2, п. 3).
             Kind = StatusKind.Off; StatusTitle = "Работает через роутер";
             StatusDetail = "На этом ПК включать не нужно";
+            // «Включать не нужно» — только когда открылось всё; иначе заголовок про то, что не открылось.
+            if (FailingCheckGroups() is { } bad) { partial = true; StatusTitle = "Открывается не всё"; StatusDetail = "Оптимизация работает через роутер. Не открывается: " + bad; }
         }
         else
         {
@@ -647,11 +660,11 @@ public sealed partial class MainViewModel : Observable
             StatusDetail = id is not null ? "Выбрана стратегия: " + StrategyTitle(id) : "Нажмите «Включить» — подходящую стратегию подберу сам (2–3 мин)";
         }
         // Через роутер — зелёный кружок: обход работает, хоть и не на этом ПК (значок в трее — про этот ПК).
-        StatusBrush = BrushOf(Kind == StatusKind.Off && Router.Found && Router.RouterEnabled ? StatusKind.On : Kind);
+        StatusBrush = partial ? BrushOf(StatusKind.Busy) : BrushOf(Kind == StatusKind.Off && Router.Found && Router.RouterEnabled ? StatusKind.On : Kind);
         DropStaleCheck();
-        Raise(nameof(IsRunning));
+        Raise(nameof(IsRunning)); Raise(nameof(ResultApplied));
         Raise(nameof(ToggleText)); Raise(nameof(PcSecondary)); Raise(nameof(PcPrimary));
-        Raise(nameof(CanChoose)); Raise(nameof(TargetsDirty));
+        Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); RaiseSitesDirty();
         Router.PcChanged();
         Raise(nameof(StrategyHeader));
         Raise(nameof(ServiceMode)); Raise(nameof(RunModeHint)); Raise(nameof(CloseHint)); Raise(nameof(HasCloseHint));
@@ -745,15 +758,19 @@ public sealed partial class MainViewModel : Observable
         Raise(nameof(ChosenStrategyId));
     }
 
-    string TipFor(string id, string title) => ShownTitle(id, title) != title ? title : "";
+    /// <summary>Подсказка к названию в списке: у смешанной — из чего собрана (полными именами), у найденной — прежняя запись с датой.</summary>
+    string TipFor(string id, string title) =>
+        StrategyOf(id) is { Parts: { } parts } && MixBuilder.Composition(parts, StrategyTitle) is { Length: > 0 } c ? ShownTitle(id, title) + "\n" + c
+        : ShownTitle(id, title) != title ? title : "";
 
-    /// <summary>Роли стратегии и командная строка winws с режимами, что сейчас у помощника; найденные поиском — от помощника.</summary>
+    /// <summary>Роли стратегии и командная строка winws с режимами, что сейчас у помощника; найденные поиском — от помощника. У смешанной — ещё состав.</summary>
     string ParamsOf(string id)
     {
         var s = Helper.Details?.Found.FirstOrDefault(x => x.Id == id) ?? _shell.Catalog.Find(id);
         if (s is null) return "";
         var f = Helper.Status?.Features;
-        return StrategyParams.Full(s, _shell.Paths, f is null ? BuildOptions.Default : new(f.Ipset, f.Game));
+        var full = StrategyParams.Full(s, _shell.Paths, f is null ? BuildOptions.Default : new(f.Ipset, f.Game));
+        return MixBuilder.Composition(s.Parts, StrategyTitle) is { Length: > 0 } c ? $"Состав: {c}\n\n{full}" : full;
     }
 
     /// <summary>Положить текст в буфер обмена (в тестах — подмена).</summary>
@@ -765,7 +782,7 @@ public sealed partial class MainViewModel : Observable
     public ICommand CopyParamsCmd => _copyParamsCmd ??= new RelayCommand(p =>
     {
         if (p is not StrategyChoice { HasParams: true } c) return;
-        try { CopyText($"{c.Title}\n{c.Params}"); Message = "Параметры скопированы: " + c.Title; }
+        try { CopyText($"{c.Title}\n{c.Params}"); Message = $"Параметры стратегии «{c.Title}» скопированы в буфер обмена."; }
         catch (System.Runtime.InteropServices.ExternalException) { Fail("Не удалось скопировать — буфер обмена занят другой программой."); }
     });
     ICommand? _copyParamsCmd;
@@ -837,6 +854,11 @@ public sealed partial class MainViewModel : Observable
 
     public string ToggleText => IsRunning ? "Выключить" : PcSecondary ? "Включить и на этом ПК" : "Включить";
     public bool CanChoose => !Busy && !IsLoading && !Selecting;
+
+    /// <summary>Почему выбор стратегии сейчас недоступен (список серый).</summary>
+    public string ChooseBlockedText => Selecting ? "Идёт подбор — выбрать можно после него."
+        : IsLoading ? "Читаю состояние — выбрать можно через секунду."
+        : "Идёт другая операция — выбрать можно после неё.";
     public ICommand ToggleCmd => _toggleCmd ??= RelayCommand.Async(() => IsRunning ? DisableAsync() : EnableAsync(), () => !Busy && !IsLoading);
     ICommand? _toggleCmd;
 
@@ -1124,7 +1146,7 @@ public sealed partial class MainViewModel : Observable
     public bool Full { get => !_quick; set => Quick = !value; }
 
     bool _selecting;
-    public bool Selecting { get => _selecting; private set { if (Set(ref _selecting, value)) CommandManager.InvalidateRequerySuggested(); } }
+    public bool Selecting { get => _selecting; private set { if (Set(ref _selecting, value)) { Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); CommandManager.InvalidateRequerySuggested(); } } }
 
     int _progress, _progressMax = 1;
     public int SelectProgress { get => _progress; private set => Set(ref _progress, value); }
@@ -1151,8 +1173,19 @@ public sealed partial class MainViewModel : Observable
     string _resultHint = "";
     public string ResultHint { get => _resultHint; private set => Set(ref _resultHint, value); }
 
-    string? _bestId;
+    string? _bestId, _resultId;
     public bool HasBest => _bestId is not null;
+
+    /// <summary>Стратегия из итога уже в работе: в карточке вместо «Применить» — «Уже работает».</summary>
+    public bool ResultApplied => _bestId is null && _resultId is not null && IsRunning && CurrentStrategyId == _resultId;
+
+    /// <summary>Подсказка к названию итога: у смешанной — из каких стратегий она собрана (полными именами каталога).</summary>
+    public string ResultTip => _resultId is not null && (Scores.FirstOrDefault(s => s.Id == _resultId)?.Score.Strategy ?? StrategyOf(_resultId)) is { Parts: { } parts }
+        ? MixBuilder.Composition(parts, StrategyTitle) : "";
+
+    string _deepText = "";
+    /// <summary>Почему предлагается «Искать глубже»: сколько сервисов открылось у лучшей (без «не нашлось…», когда открылось всё).</summary>
+    public string DeepText { get => _deepText; private set => Set(ref _deepText, value); }
 
     ScoreRow? _selected;
     public ScoreRow? SelectedScore { get => _selected; set { if (Set(ref _selected, value)) { Raise(nameof(HasSelectedScore)); Raise(nameof(ApplySelectedText)); CommandManager.InvalidateRequerySuggested(); } } }
@@ -1210,7 +1243,7 @@ public sealed partial class MainViewModel : Observable
     {
         AddressNote = "";
         Scores.Clear(); SelectedScore = null;
-        ResultText = ""; ResultHint = ""; SetBest(null); OfferDeep = false;
+        ResultText = ""; ResultHint = ""; SetBest(null); _resultId = null; OfferDeep = false;
         ResultSummary = ""; ResultExpanded = false;
         SelectProgress = 0; SelectIndeterminate = false;
         SelectProgressText = "Подготовка…";
@@ -1241,7 +1274,7 @@ public sealed partial class MainViewModel : Observable
             SelectProgressMax = Math.Max(1, p.Total);
             SelectProgress = p.Index;
             SelectProgressText = p.Message;
-            if (p.Last is { } s) Scores.Add(new ScoreRow(s, Names));
+            if (p.Last is { } s) Scores.Add(new ScoreRow(s, Names, StrategyTitle));
             UpdateStatus();
         });
         var quick = Quick;
@@ -1309,7 +1342,7 @@ public sealed partial class MainViewModel : Observable
                 SelectProgressMax = Math.Max(1, p.Total);
                 SelectProgress = p.Index;
                 SelectProgressText = "Проверяю найденное: " + p.Message;
-                if (p.Last is { } s) Scores.Add(new ScoreRow(s, Names));
+                if (p.Last is { } s) Scores.Add(new ScoreRow(s, Names, StrategyTitle));
             }
             UpdateStatus();
         });
@@ -1406,7 +1439,8 @@ public sealed partial class MainViewModel : Observable
     void SetBest(string? id)
     {
         _bestId = id;
-        Raise(nameof(HasBest));
+        if (id is not null) _resultId = id;
+        Raise(nameof(HasBest)); Raise(nameof(ResultApplied)); Raise(nameof(ResultTip));
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -1417,7 +1451,7 @@ public sealed partial class MainViewModel : Observable
         var ordered = r.Scores.OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds).ToList();
         var best = r.Best;
         Scores.Clear();
-        foreach (var s in ordered) Scores.Add(new ScoreRow(s, Names) { IsBest = best is not null && s.Strategy.Id == best.Strategy.Id });
+        foreach (var s in ordered) Scores.Add(new ScoreRow(s, Names, StrategyTitle) { IsBest = best is not null && s.Strategy.Id == best.Strategy.Id });
         ResortScores();
         SelectedScore = Scores.FirstOrDefault(r => r.IsBest);   // лучшая выбрана сразу — «Применить лучшую» активна
         SelectProgress = SelectProgressMax;
@@ -1433,6 +1467,9 @@ public sealed partial class MainViewModel : Observable
         // Лучшая не открыла только то, что молчит у всех стратегий, — искать новые ради этого нечего.
         if (OfferDeep && best is not null && _addressBlock.ExplainsAllFailures(best.Verdicts.Where(v => !v.Ok).Select(v => v.Target.Url)))
             OfferDeep = false;
+        // «Не нашлось…» — только пока у лучшей открылось не всё: «2 из 2» такой фразы не заслуживает.
+        DeepText = best is null ? "Подходящей стратегии не нашлось — можно поискать новые."
+            : best.Perfect ? "" : $"У лучшей открылось {best.GroupsPassed} из {best.GroupsTotal} сервисов — можно поискать новые.";
         if (r.NothingBlocked)
         {
             ResultText = "Без оптимизации всё открывается: оптимизация не нужна или включён VPN.";
@@ -1468,7 +1505,7 @@ public sealed partial class MainViewModel : Observable
     {
         get => _targetsText;
         // Правка после «Сохранено адресов: N» — прежний итог уже не про то, что в поле.
-        set { if (Set(ref _targetsText, value)) { TargetsMessage = ""; Raise(nameof(TargetsDirty)); Raise(nameof(TargetsMessage)); } }
+        set { if (Set(ref _targetsText, value)) { TargetsMessage = ""; RaiseSitesDirty(); } }
     }
 
     /// <summary>
@@ -1527,7 +1564,7 @@ public sealed partial class MainViewModel : Observable
         TargetsMessage = r.Rejected.Count == 0
             ? $"Сохранено сайтов: {r.Saved.Count}."
             : $"Сохранено сайтов: {r.Saved.Count}. Не распознаны и убраны: {string.Join(", ", r.Rejected)}.";
-        Raise(nameof(TargetsDirty));
+        RaiseSitesDirty();
         Router.JointRecheck();   // свои сайты — часть связки: роутеру они уходят сразу, а не через минуту
         return true;
     }
@@ -1687,7 +1724,7 @@ public sealed partial class MainViewModel : Observable
             Findings.Clear();
             foreach (var f in findings) Findings.Add(new FindingRow(f.Ok, f.Title, f.Text, f.Go));
             OnHelperChanged();
-            DiagUpdated = $"обновлено в {DateTime.Now:HH:mm:ss}";
+            DiagUpdated = $"обновлено в {DateTime.Now:HH:mm}";
         }
         catch (Exception e) { Fail(Texts.Friendly(e)); }
         finally { DiagRefreshing = false; }

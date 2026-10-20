@@ -268,7 +268,7 @@ public sealed class JointCoordinatorTests
         r.Router.Reachable = false;
 
         await r.J.TickAsync();
-        AssertFallback(r, "Роутер недоступен — этот ПК работает сам");
+        AssertFallback(r, "Роутер не найден — этот ПК работает сам");
         Assert.Equal(["pc off"], r.Order);                                    // помощник — сразу, без ожидания роутера
         Assert.DoesNotContain("router del", r.Order);                         // недоступному роутеру снятие не шлём (оно истечёт само)
 

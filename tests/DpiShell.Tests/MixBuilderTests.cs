@@ -226,6 +226,18 @@ public sealed class MixBuilderTests : IDisposable
         Assert.Equal(new Dictionary<string, string> { ["youtube"] = "alt", ["discord"] = "found-1" }, mix.Parts);   // «свои» не проверялись — частью не записаны
     }
 
+    /// <summary>UX-аудит 6, п. 5: в подсказке и «Параметрах» смешанная называет части полными именами каталога, а не «ALT» / «ALT10».</summary>
+    [Fact]
+    public void Composition_UsesFullCatalogNames_AndMergesEqualParts()
+    {
+        string Full(string id) => id switch { "alt" => "general (ALT)", "alt10" => "general (ALT10)", _ => id };
+        Assert.Equal("YouTube — general (ALT); остальное — general (ALT10)",
+            MixBuilder.Composition(new Dictionary<string, string> { ["youtube"] = "alt", ["discord"] = "alt10", ["user"] = "alt10" }, Full));
+        Assert.Equal("YouTube и Discord — general (ALT); свои сайты — general (ALT10)",
+            MixBuilder.Composition(new Dictionary<string, string> { ["youtube"] = "alt", ["discord"] = "alt", ["user"] = "alt10" }, Full));
+        Assert.Equal("", MixBuilder.Composition(null, Full));
+    }
+
     [Fact]
     public void Title_EqualParts_AreMerged()
     {

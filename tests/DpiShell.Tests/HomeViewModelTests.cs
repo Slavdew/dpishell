@@ -84,6 +84,28 @@ public sealed class HomeViewModelTests : IDisposable
         Assert.Empty(vm.CheckGroups);
     }
 
+    /// <summary>UX-аудит 6, п. 7: оптимизация работает, а проверка нашла ✗ — заголовок не зелёный «Работает», а жёлтый «Открывается не всё» (в подзаголовке — что именно).</summary>
+    [Fact]
+    public async Task Status_RunningButSomethingNotOpening_SaysSo_AndTurnsBackWhenAllOpen()
+    {
+        await using var f = new HelperFixture();
+        f.Backend.StatusValue = Status(active: false);
+        var vm = Model(await f.LinkAsync());
+        bool on = false;
+        vm.ProbeGroups = Probe(() => on);   // YouTube открывается всегда, Discord — только когда «on»
+        await vm.RefreshStatusAsync();
+        foreach (var g in vm.Groups) g.IsChecked = g.Id is "youtube" or "discord";
+
+        f.Backend.StatusValue = Status(active: true);
+        await vm.EnableAsync();   // проверка идёт сама
+        Assert.Equal("Открывается не всё", vm.StatusTitle);   // жёлтый, а не зелёный «Работает»
+        Assert.StartsWith("Оптимизация работает. Не открывается: Discord", vm.StatusDetail);
+
+        on = true;
+        await vm.CheckNowAsync();
+        Assert.Equal("Работает", vm.StatusTitle);
+    }
+
     /// <summary>UX-аудит 2, п. 15 (п. 33 первого круга): дописали сайт и не нажали «Сохранить» — проверка берёт поле, уход с вкладки и подбор сохраняют сами.</summary>
     [Fact]
     public async Task UnsavedTargets_CheckedAsTyped_SavedOnLeave_AndBeforeSelect()

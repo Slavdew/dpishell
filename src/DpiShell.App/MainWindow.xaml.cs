@@ -215,7 +215,7 @@ public partial class MainWindow : Window
     async Task PrepareExitAsync()
     {
         // «Все адреса» без программы не вернутся сами до следующего запуска — спросить (architecture.md «IP-списки и игровой режим»).
-        if (_vm.Net.AnyActive && !_vm.Busy && _vm.Confirm("Сейчас включены «Все адреса». Вернуть обычный режим перед выходом?"))
+        if (_vm.Net.AnyActive && !_vm.Busy && _vm.Confirm("Сейчас идёт проверка по всем адресам (10 минут). Вернуть обычный режим перед выходом?"))
         {
             // Через помощника: режимы меняет только он (без него «Все адреса» и не включить).
             if (_vm.Helper.Client is { } c)

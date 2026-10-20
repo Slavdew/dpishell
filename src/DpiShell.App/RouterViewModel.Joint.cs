@@ -55,10 +55,36 @@ public sealed partial class RouterViewModel
     public string JointNotes => string.Join("\n", _joint?.Notes ?? []);
     public bool HasJointNotes => JointNotes.Length > 0;
 
-    /// <summary>Подсказка под выключенным переключателем.</summary>
-    public string JointHint => JointWanted
-        ? "Выключите, чтобы оптимизацию вёл только роутер: на этом ПК она выключится."
+    /// <summary>
+    /// Что показывает переключатель — настоящее состояние: связка действует. Включена «на ожидание», а роутера нет (<see cref="JointIsFallback"/>) —
+    /// выключен: этот ПК работает сам (UX-аудит 6, п. 14). Включить вручную при этом нельзя: нужен роутер.
+    /// </summary>
+    public bool JointShown
+    {
+        get => JointWanted && !JointIsFallback;
+        set
+        {
+            if (value == JointShown) return;
+            if (value && JointWanted) { Say("Совместная работа включится, когда роутер найдётся."); RaiseJoint(); return; }   // ждёт роутер — включать нечего
+            JointWanted = value;
+        }
+    }
+
+    /// <summary>Подпись переключателя — состояние, как у остальных: «Включено» / «Выключено».</summary>
+    public string JointToggleText => JointShown ? "Включено" : "Выключено";
+
+    /// <summary>Включена, но ждёт роутер: можно перестать ждать.</summary>
+    public bool JointWaiting => JointWanted && JointIsFallback;
+
+    /// <summary>Пояснение под переключателем — без «выключите, чтобы…»: статус выше уже говорит, кто что ведёт.</summary>
+    public string JointHint => JointWaiting ? "Включится само, когда роутер найдётся."
+        : JointWanted ? ""
         : "Роутер ведёт YouTube и Discord сам, а этот ПК — свои сайты и строки «Свои настройки для сайтов». Нужен DpiShell на роутере с включённой оптимизацией.";
+    public bool HasJointHint => JointHint.Length > 0;
+
+    /// <summary>«Не ждать роутер»: выключить связку, которая ждёт роутера.</summary>
+    public System.Windows.Input.ICommand JointStopWaitCmd => _jointStopWaitCmd ??= new RelayCommand(() => JointWanted = false);
+    System.Windows.Input.ICommand? _jointStopWaitCmd;
 
     /// <summary>Сайты ПК, которые ведёт роутер: на ПК не применяются («ведёт роутер»).</summary>
     public IReadOnlyList<string> JointRouterOwned => _joint?.RouterOwned ?? [];
@@ -72,7 +98,8 @@ public sealed partial class RouterViewModel
     void RaiseJoint()
     {
         foreach (var n in new[] { nameof(JointWanted), nameof(JointAvailable), nameof(JointCardVisible), nameof(JointStatus), nameof(HasJointStatus), nameof(JointIsFallback), nameof(JointNotes),
-                     nameof(HasJointNotes), nameof(JointHint), nameof(JointRouterOwned), nameof(JointOn), nameof(BothOn) })
+                     nameof(HasJointNotes), nameof(JointHint), nameof(HasJointHint), nameof(JointRouterOwned), nameof(JointOn), nameof(BothOn),
+                     nameof(JointShown), nameof(JointToggleText), nameof(JointWaiting) })
             Raise(n);
         JointChanged?.Invoke();
     }

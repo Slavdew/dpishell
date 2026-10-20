@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows.Input;
 using DpiShell.Core;
 using DpiShell.Core.Helper;
 
@@ -15,7 +16,7 @@ public sealed partial class MainViewModel
     public AdvancedViewModel AdvancedPc { get; private set; } = null!;
 
     public const string AllQuestion =
-        "«Для всех»: оптимизация включится для любого сайта, кроме исключений. Часть обычных сайтов может перестать открываться — "
+        "«Для всех сайтов»: оптимизация включится для любого сайта, кроме исключений. Часть обычных сайтов может перестать открываться — "
         + "я проверю их до и после, и если что-то сломается, верну «Как сейчас».\n\nВключить?";
 
     void InitAdvanced()
@@ -31,6 +32,24 @@ public sealed partial class MainViewModel
             Builtin = new BuiltinLists(Path.Combine(_shell.Paths.Seed, "lists")),
             Say = s => Message = s,
         };
+        AdvancedPc.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(AdvancedViewModel.Dirty)) RaiseSitesDirty(); };
+        SaveSitesCmd = RelayCommand.Async(SaveSitesAsync, () => !Busy);
+    }
+
+    /// <summary>Одна кнопка «Сохранить» на вкладку «Сайты» (на ПК): свои сайты и строки «Свои настройки для сайтов».</summary>
+    public ICommand SaveSitesCmd { get; private set; } = null!;
+
+    /// <summary>Есть несохранённое: свои сайты или строки продвинутого режима.</summary>
+    public bool SitesDirty => TargetsDirty || AdvancedPc.Dirty;
+    public bool SitesSaved => !SitesDirty;
+
+    void RaiseSitesDirty() { Raise(nameof(TargetsDirty)); Raise(nameof(SitesDirty)); Raise(nameof(SitesSaved)); Raise(nameof(TargetsMessage)); }
+
+    async Task SaveSitesAsync()
+    {
+        if (!await SaveTargetsAsync()) return;
+        if (AdvancedPc.Dirty && AdvancedPc.Available) await AdvancedPc.ApplyAsync();
+        RaiseSitesDirty();
     }
 
     static AdvancedState ToState(AdvancedInfo i) => new(i.Enabled, i.Others, [.. i.Rows.Select(r => new AdvancedRowState(r.Domains, r.Strategy, r.Resolved))]);
@@ -51,10 +70,10 @@ public sealed partial class MainViewModel
         if (toAll)
         {
             // «Для всех» проверяется на обычных сайтах — значит, оптимизация должна работать, а сайты — открываться сейчас.
-            if (!IsRunning) return new(null, "«Для всех» проверяется на обычных сайтах, пока оптимизация работает: сначала включите её.");
+            if (!IsRunning) return new(null, "«Для всех сайтов» проверяется на обычных сайтах, пока оптимизация работает: сначала включите её.");
             if (newAll && !Confirm(AllQuestion)) return new(null, "Не применено.");
             before = await OpenControlSitesAsync();
-            if (before.Count == 0) return new(null, "Обычные сайты сейчас не открываются — проверить «Для всех» нельзя. Попробуйте позже.");
+            if (before.Count == 0) return new(null, "Обычные сайты сейчас не открываются — проверить «Для всех сайтов» нельзя. Попробуйте позже.");
         }
         if (await NeedHelperAsync() is not { } c) return new(null, "Без помощника режим не применить.");
         if (!c.Compat.Supports("advanced_set")) return new(null, AdvancedPc.UnavailableText ?? "Помощник не знает этого режима.");
@@ -74,7 +93,7 @@ public sealed partial class MainViewModel
                 var back = next with { Others = prev.Enabled && prev.Others != AdvancedSites.OthersAll ? prev.Others : AdvancedSites.OthersLists };
                 await Guard("Возвращаю как было…", async () => info = await c.AdvancedSetAsync(back.Enabled, back.Others, Rows(back)));
                 warn = "Обычные сайты перестали открываться (" + string.Join(", ", broken.Take(3)) + (broken.Count > 3 ? " и ещё " + (broken.Count - 3) : "")
-                    + ") — вернул «" + (info?.Others == AdvancedSites.OthersDirect ? "Напрямую" : "Как сейчас") + "».";
+                    + ") — вернул «" + (info?.Others == AdvancedSites.OthersDirect ? "Напрямую" : "Только из списков") + "».";
             }
         }
         await RefreshStatusAsync();

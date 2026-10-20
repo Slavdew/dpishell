@@ -194,6 +194,9 @@
                                         <RadioButton Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" ToolTip="Сначала те, что открыли больше сайтов в последнем прогоне" />
                                         <RadioButton Content="по имени" IsChecked="{Binding SortByName}" ToolTip="ALT2, ALT3 … ALT10, ALT11" />
                                     </WrapPanel>
+                                    <!-- Список недоступен — сказать почему, а не просто посерить (UX-аудит 6, п. 11). -->
+                                    <TextBlock Text="{Binding ChooseBlockedText}" Style="{StaticResource Hint}" Margin="0,0,0,6" TextWrapping="Wrap"
+                                               Visibility="{Binding CanChoose, Converter={StaticResource InvVis}}" />
                                     <ListBox ItemsSource="{Binding StrategyChoices}" SelectedValue="{Binding ChosenStrategyId}" SelectedValuePath="Id"
                                              IsEnabled="{Binding CanChoose}" Margin="0,0,0,10" PreviewMouseWheel="PassWheelToPage" AutomationProperties.Name="Стратегии">
                                         <ListBox.ItemTemplate>
@@ -205,7 +208,7 @@
                                                                 Visibility="{Binding HasLabel, Converter={StaticResource Vis}}">
                                                             <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource AccentText}" TextWrapping="NoWrap" />
                                                         </Border>
-                                                        <TextBlock Text="{Binding Title}" FontSize="15" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Tip}" />
+                                                        <TextBlock Text="{Binding Title}" FontSize="15" TextWrapping="Wrap" ToolTip="{Binding Tip}" />
                                                     </DockPanel>
                                                     <DockPanel Margin="0,1,0,0">
                                                         <!-- Найденную на ПК — на роутер (router-api §6); видно, только если роутер подключён. -->
@@ -234,7 +237,7 @@
                                                             Visibility="{Binding Expanded, Converter={StaticResource Vis}}">
                                                         <ItemsControl ItemsSource="{Binding Details}" ItemTemplate="{StaticResource VerdictRow}" />
                                                     </Border>
-                                                    <StackPanel Margin="0,4,0,4" Background="Transparent" MouseLeftButtonDown="KeepSelection" Visibility="{Binding ShowParams, Converter={StaticResource Vis}}">
+                                                    <StackPanel Margin="0,4,0,4" Background="Transparent" MouseLeftButtonDown="KeepSelection" Visibility="{Binding ParamsVisible, Converter={StaticResource Vis}}">
                                                         <!-- Невысокий блок с прокруткой: параметры длинные и иначе растягивают список стратегий. -->
                                                         <TextBox Text="{Binding Params, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Padding="6,4" AutomationProperties.Name="Параметры стратегии"
                                                                  MaxHeight="130" VerticalScrollBarVisibility="Auto" />
@@ -394,23 +397,26 @@
                             </DockPanel>
                         </Border>
 
-                        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14" Visibility="{Binding ResultFull, Converter={StaticResource Vis}}">
+                        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14,10" Margin="0,0,0,8" Visibility="{Binding ResultFull, Converter={StaticResource Vis}}">
                             <DockPanel>
+                                <!-- «Применить» — всегда главная кнопка карточки; уже работает — словами вместо кнопки (UX-аудит 6, п. 8). -->
                                 <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="Применить" Style="{StaticResource Primary}" Command="{Binding ApplyBestCmd}"
                                         VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding HasBest, Converter={StaticResource Vis}}" />
+                                <TextBlock DockPanel.Dock="Right" Text="Уже работает" FontWeight="SemiBold" Foreground="{DynamicResource Ok}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                           Visibility="{Binding ResultApplied, Converter={StaticResource Vis}}" />
+                                <!-- Глубокий поиск — одной кнопкой справа, а не отдельной строкой: таблице остаётся высота. -->
+                                <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="Искать глубже (до 15 мин)" Command="{Binding StartSearchCmd}"
+                                        VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding OfferDeep, Converter={StaticResource Vis}}"
+                                        ToolTip="Программа придумывает и проверяет новые стратегии; сайты и игры всё это время будут прерываться" />
                                 <!-- Вставленная или собранная руками стратегия: проверка сайтов только для неё. -->
                                 <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="Проверить" Style="{StaticResource Primary}" Command="{Binding CheckStrategyCmd}"
                                         VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding HasPendingCheck, Converter={StaticResource Vis}}"
                                         ToolTip="Открыть ваши сайты через эту стратегию — только через неё" />
                                 <StackPanel>
-                                    <TextBlock Text="{Binding ResultText}" FontSize="16" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding ResultHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" /><TextBlock Text="{Binding AddressNote}" Style="{StaticResource Hint}" Margin="0,4,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
-                                    <!-- Глубокий поиск — только когда готовые не помогли со всем (UX-аудит, п. 30). -->
-                                    <WrapPanel Margin="0,10,0,0" Visibility="{Binding OfferDeep, Converter={StaticResource Vis}}">
-                                        <TextBlock Text="Не нашлось стратегии для всего — можно поискать новые." VerticalAlignment="Center" Margin="0,0,10,8" />
-                                        <Button ContentTemplate="{StaticResource Shield}" Content="Искать глубже (до 15 мин)" Command="{Binding StartSearchCmd}"
-                                                ToolTip="Программа придумывает и проверяет новые стратегии; сайты и игры всё это время будут прерываться" />
-                                    </WrapPanel>
+                                    <TextBlock Text="{Binding ResultText}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" ToolTip="{Binding ResultTip}" />
+                                    <TextBlock Text="{Binding ResultHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" /><TextBlock Text="{Binding AddressNote}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
+                                    <!-- Глубокий поиск — только когда готовые не помогли со всем (UX-аудит, п. 30); фраза — цифрой, что не открылось (UX-аудит 6, п. 9). -->
+                                    <TextBlock Text="{Binding DeepText}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="{Binding OfferDeep, Converter={StaticResource Vis}}" />
                                 </StackPanel>
                             </DockPanel>
                         </Border>
@@ -453,13 +459,14 @@
                                                         Visibility="{Binding IsBest, Converter={StaticResource Vis}}">
                                                     <TextBlock Text="лучшая" FontSize="12" Foreground="{DynamicResource AccentText}" />
                                                 </Border>
-                                                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" VerticalAlignment="Center" ToolTip="{Binding Title}" />
+                                                <!-- Не обрезается: длинная смешанная переносится, состав — в подсказке. -->
+                                                <TextBlock Text="{Binding Title}" TextWrapping="Wrap" VerticalAlignment="Center" ToolTip="{Binding Tip}" />
                                             </DockPanel>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="Группы" Binding="{Binding Groups}" Width="70" />
-                                <DataGridTextColumn Header="Открылось" Binding="{Binding Share}" Width="90" />
+                                <DataGridTextColumn Header="Сервисы" Binding="{Binding Groups}" Width="70" />
+                                <DataGridTextColumn Header="Адреса" Binding="{Binding Share}" Width="90" />
                                 <DataGridTextColumn Header="Время" Binding="{Binding Avg}" Width="80" />
                                 <DataGridTemplateColumn Header="Что не так" Width="2*">
                                     <DataGridTemplateColumn.CellTemplate>
@@ -583,8 +590,8 @@
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTextColumn Header="Группы" Binding="{Binding Groups}" Width="70" />
-                                    <DataGridTextColumn Header="Открылось" Binding="{Binding Share}" Width="90" />
+                                    <DataGridTextColumn Header="Сервисы" Binding="{Binding Groups}" Width="70" />
+                                    <DataGridTextColumn Header="Адреса" Binding="{Binding Share}" Width="90" />
                                     <DataGridTextColumn Header="Время" Binding="{Binding Avg}" Width="80" />
                                     <DataGridTemplateColumn Header="Что не так" Width="2*">
                                         <DataGridTemplateColumn.CellTemplate>
@@ -641,7 +648,7 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel>
+                            <StackPanel Margin="0,0,0,10">
                             <!-- Продвинутый режим «сайты → стратегия»: переключатель сверху, выключен по умолчанию (docs/research/mixed-strategies.md §6). -->
                             <local:AdvancedView DataContext="{Binding AdvancedPc}" />
                             <DockPanel Margin="0,14,0,10">
@@ -660,13 +667,18 @@
                                      FontFamily="Consolas" FontSize="14" Padding="8" />
                             </StackPanel>
                             </ScrollViewer>
-                            <DockPanel Grid.Row="1" Margin="0,10,0,0">
-                                <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="Сохранить" Style="{StaticResource Primary}" Command="{Binding SaveTargetsCmd}" VerticalAlignment="Top" />
-                                <!-- Несохранённое видно (UX-аудит 2, п. 15): подбор берёт сохранённое; при уходе с вкладки и перед подбором сохраняется само. -->
-                                <TextBlock DockPanel.Dock="Left" Text="Не сохранено" Foreground="{DynamicResource Danger}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,8,8"
-                                           Visibility="{Binding TargetsDirty, Converter={StaticResource Vis}}" ToolTip="Подбор учитывает сохранённый список. Сохраню сам перед подбором и при уходе с вкладки." />
-                                <TextBlock Text="{Binding TargetsMessage}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8" />
-                            </DockPanel>
+                            <!-- Одна кнопка и один статус на вкладку (UX-аудит 6, п. 2): сохраняет и свои сайты, и строки «Свои настройки для сайтов». -->
+                            <Border Grid.Row="1" Margin="0,4,0,0" Padding="0,8,0,0" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
+                                <DockPanel>
+                                    <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="Сохранить" Style="{StaticResource Primary}" Command="{Binding SaveSitesCmd}" VerticalAlignment="Top" />
+                                    <!-- Несохранённое видно (UX-аудит 2, п. 15): подбор берёт сохранённое; при уходе с вкладки и перед подбором свои сайты сохраняются сами. -->
+                                    <TextBlock DockPanel.Dock="Left" Text="Не сохранено" Foreground="{DynamicResource Danger}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,8,8"
+                                               Visibility="{Binding SitesDirty, Converter={StaticResource Vis}}" ToolTip="Подбор учитывает сохранённое. Свои сайты сохраню сам перед подбором и при уходе с вкладки." />
+                                    <TextBlock DockPanel.Dock="Left" Text="Сохранено" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,8,8"
+                                               Visibility="{Binding SitesSaved, Converter={StaticResource Vis}}" />
+                                    <TextBlock Text="{Binding TargetsMessage}" Style="{StaticResource Hint}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="4,0,0,8" />
+                                </DockPanel>
+                            </Border>
                         </Grid>
 
                         <!-- Свои сайты и списки роутера (targets_get/set, lists_get/set): с ПК не синхронизируются сами. -->
@@ -717,8 +729,8 @@
                                         <TextBlock Text="Для каких сайтов оптимизация" Style="{StaticResource H2}" />
                                         <local:InfoButton Topic="{x:Static local:InfoTexts.RouterMode}" Margin="8,0,0,8" />
                                     </StackPanel>
-                                    <RadioButton Content="Все сайты" IsChecked="{Binding ModeAll}" IsEnabled="{Binding CanAct}" Margin="0,3" HorizontalAlignment="Left" />
                                     <RadioButton Content="Только из списков" IsChecked="{Binding ModeLists}" IsEnabled="{Binding CanAct}" Margin="0,3" HorizontalAlignment="Left" />
+                                    <RadioButton Content="Для всех сайтов" IsChecked="{Binding ModeAll}" IsEnabled="{Binding CanAct}" Margin="0,3" HorizontalAlignment="Left" />
                                     <TextBlock Text="{Binding ModeHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" />
                                 </StackPanel>
                             </Border>
@@ -785,6 +797,10 @@
                             <Border Grid.Row="1" Margin="0,4,0,0" Padding="0,8,0,0" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
                                 <WrapPanel>
                                     <Button Content="Сохранить на роутере" Style="{StaticResource Primary}" Command="{Binding SaveTargetsCmd}" />
+                                    <TextBlock Text="Не сохранено" Foreground="{DynamicResource Danger}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,8,8"
+                                               Visibility="{Binding SitesDirty, Converter={StaticResource Vis}}" />
+                                    <TextBlock Text="Сохранено" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,8,8"
+                                               Visibility="{Binding SitesSaved, Converter={StaticResource Vis}}" />
                                     <TextBlock Text="{Binding TargetsMessage}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8" />
                                 </WrapPanel>
                             </Border>
@@ -1447,7 +1463,7 @@
                                         <TextBlock Grid.Column="1" Text="{Binding UserLine}" local:Demo.Sensitive="True" TextWrapping="Wrap" Margin="0,2" />
                                         <TextBlock Grid.Row="1" Text="Для всей машины" Style="{StaticResource Hint}" Margin="0,2" />
                                         <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MachineLine}" local:Demo.Sensitive="True" TextWrapping="Wrap" Margin="0,2" />
-                                        <TextBlock Grid.Row="2" Text="Для служб (WinHTTP)" Style="{StaticResource Hint}" Margin="0,2" />
+                                        <TextBlock Grid.Row="2" Text="Для служб Windows" Style="{StaticResource Hint}" Margin="0,2" ToolTip="Прокси WinHTTP: его берут службы и часть программ" />
                                         <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding WinHttpLine}" local:Demo.Sensitive="True" TextWrapping="Wrap" Margin="0,2" />
                                     </Grid>
                                     <ItemsControl ItemsSource="{Binding Notes}" Margin="0,6,0,0">
@@ -1498,13 +1514,13 @@
                                             </Grid.RowDefinitions>
                                             <TextBlock Text="Название" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                             <TextBox Grid.Column="1" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" local:Demo.Sensitive="True" AutomationProperties.Name="Название прокси" />
-                                            <TextBlock Grid.Row="1" Text="Адрес (хост:порт)" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="1" Text="Адрес и порт" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                             <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding EditServer, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" local:Demo.Sensitive="True"
                                                      ToolTip="Например: 127.0.0.1:7897 или http=127.0.0.1:7897;https=127.0.0.1:7897" AutomationProperties.Name="Адрес прокси" />
                                             <TextBlock Grid.Row="2" Text="Исключения" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                             <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding EditBypass, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" local:Demo.Sensitive="True"
                                                      ToolTip="Необязательно. Через «;»: &lt;local&gt;;*.example.com" AutomationProperties.Name="Исключения прокси" />
-                                            <TextBlock Grid.Row="3" Text="Автонастройка (PAC)" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Row="3" Text="Адрес автонастройки (PAC)" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                             <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding EditPac, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" local:Demo.Sensitive="True"
                                                      ToolTip="Необязательно. Ссылка http:// или https://" AutomationProperties.Name="Адрес автонастройки" />
                                             <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding FormError}" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,0,0,6"
@@ -1526,15 +1542,15 @@
                                     <TextBlock Text="Куда применить" Style="{StaticResource H2}" />
                                     <StackPanel Margin="0,0,0,6">
                                         <RadioButton Content="Для этого пользователя" IsChecked="{Binding TargetUser}" Margin="0,0,0,4" ToolTip="Окно меняет само, права администратора не нужны" />
-                                        <RadioButton Content="Для этого пользователя, с правами администратора" IsChecked="{Binding TargetUserAdmin}" Margin="0,0,0,4" ToolTip="Меняет помощник; нужен, если окно само изменить не может" />
+                                        <RadioButton Content="Для этого пользователя, через помощника" IsChecked="{Binding TargetUserAdmin}" Margin="0,0,0,4" ToolTip="Меняет помощник (запрос прав администратора); нужен, если окно само изменить не может" />
                                         <RadioButton Content="Для всей машины (права администратора)" IsChecked="{Binding TargetMachine}" ToolTip="Настройки станут общими для всех пользователей этого компьютера" />
                                     </StackPanel>
-                                    <CheckBox Content="Ещё и для служб Windows (WinHTTP)" IsChecked="{Binding AlsoWinHttp}" Margin="0,0,0,8"
+                                    <CheckBox Content="Ещё и для служб Windows" IsChecked="{Binding AlsoWinHttp}" Margin="0,0,0,8"
                                               Visibility="{Binding TargetMachine, Converter={StaticResource Vis}}"
                                               ToolTip="Прокси WinHTTP берут службы и часть программ, которые не читают системный прокси" />
                                     <WrapPanel>
                                         <Button Content="Включить выбранный" Style="{StaticResource Primary}" Command="{Binding EnableCmd}" />
-                                        <Button Content="Очистить" Command="{Binding ClearCmd}" ToolTip="Выключить системный прокси; прежний запоминается" />
+                                        <Button Content="Выключить прокси" Command="{Binding ClearCmd}" ToolTip="Выключить системный прокси в Windows; прежний запоминается" />
                                         <Button Content="Вернуть прежний" Command="{Binding RestoreCmd}" Visibility="{Binding HasPrevious, Converter={StaticResource Vis}}" />
                                         <Button Content="Проверить прокси" Command="{Binding CheckCmd}" ToolTip="Открыть через выбранный прокси соединение к двум сайтам" />
                                     </WrapPanel>
@@ -1676,7 +1692,7 @@
                                                     <TextBlock Grid.Column="1" Text="{Binding Title}" Style="{StaticResource Hint}" />
                                                     <TextBlock Grid.Column="2" Text="{Binding Text}" local:Demo.Sensitive="True" TextWrapping="Wrap" />
                                                     <!-- «Системный прокси включён» → вкладка «Прокси». -->
-                                                    <Button Grid.Column="3" Content="Настроить →" Style="{StaticResource LinkButton}" Margin="10,0,0,0" VerticalAlignment="Top"
+                                                    <Button Grid.Column="3" Content="Открыть Прокси →" Style="{StaticResource LinkButton}" Margin="10,0,0,0" VerticalAlignment="Top"
                                                             Command="{Binding DataContext.GoProxyCmd, RelativeSource={RelativeSource AncestorType=TabControl}}"
                                                             Visibility="{Binding HasGo, Converter={StaticResource Vis}}" />
                                                 </Grid>
@@ -1914,15 +1930,19 @@
                                         <TextBlock Text="Совместная работа с роутером" Style="{StaticResource H2}" />
                                         <local:InfoButton Topic="{x:Static local:InfoTexts.Joint}" Margin="8,0,0,8" />
                                     </StackPanel>
-                                    <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding JointWanted}" IsEnabled="{Binding JointAvailable}" HorizontalAlignment="Left"
+                                    <!-- Переключатель показывает настоящее состояние: роутера нет — выключен, а не «включён и ждёт» (UX-аудит 6, п. 6, 14). -->
+                                    <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding JointShown}" IsEnabled="{Binding JointAvailable}" HorizontalAlignment="Left"
                                               AutomationProperties.Name="Совместная работа с роутером">
-                                        <TextBlock Text="Включить" FontSize="15" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding JointToggleText}" FontSize="15" FontWeight="SemiBold" />
                                     </CheckBox>
                                     <TextBlock Text="{Binding JointStatus}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="50,4,0,0"
                                                Visibility="{Binding HasJointStatus, Converter={StaticResource Vis}}" />
                                     <TextBlock Text="{Binding JointNotes}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="50,2,0,0" local:Demo.Sensitive="True"
                                                Visibility="{Binding HasJointNotes, Converter={StaticResource Vis}}" />
-                                    <TextBlock Text="{Binding JointHint}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="50,4,0,0" />
+                                    <TextBlock Text="{Binding JointHint}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="50,4,0,0"
+                                               Visibility="{Binding HasJointHint, Converter={StaticResource Vis}}" />
+                                    <Button Content="Не ждать роутер" Style="{StaticResource LinkButton}" Command="{Binding JointStopWaitCmd}" HorizontalAlignment="Left" Margin="46,0,0,0"
+                                            Visibility="{Binding JointWaiting, Converter={StaticResource Vis}}" ToolTip="Выключить совместную работу: этот ПК останется сам по себе" />
                                 </StackPanel>
                             </Border>
 
@@ -1951,16 +1971,13 @@
                                                 <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
                                             <TextBlock Text="Ускорение сети" Style="{StaticResource Hint}" Margin="0,0,0,6" />
+                                            <!-- «Исправить» — один раз, в плашке выше: одна проблема показывается один раз (UX-аудит 6, п. 13). -->
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,6">
                                                 <TextBlock Text="{Binding FlowOffloadText}" />
-                                                <Button Content="Исправить" Style="{StaticResource LinkButton}" Margin="8,0,0,0" Command="{Binding FixWarningCmd}" CommandParameter="flow_offload"
-                                                        Visibility="{Binding FlowOffloadFixable, Converter={StaticResource Vis}}" />
                                             </StackPanel>
                                             <TextBlock Grid.Row="1" Text="IPv6 у провайдера" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                             <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,6">
                                                 <TextBlock Text="{Binding Ipv6Text}" />
-                                                <Button Content="Исправить" Style="{StaticResource LinkButton}" Margin="8,0,0,0" Command="{Binding FixWarningCmd}" CommandParameter="ipv6"
-                                                        Visibility="{Binding Ipv6Fixable, Converter={StaticResource Vis}}" />
                                             </StackPanel>
                                             <TextBlock Grid.Row="2" Text="DNS" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                             <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DnsText}" local:Demo.Sensitive="True" Margin="0,0,0,6" />
@@ -2061,14 +2078,15 @@
                                 <StackPanel>
                                     <TextBlock Text="Подключение" Style="{StaticResource H2}" />
                                     <WrapPanel Margin="0,4,0,0">
-                                        <Button Content="Найти" Command="{Binding FindCmd}" />
+                                        <!-- Роутера нет — «Найти» одна, в карточке выше (UX-аудит 6, п. 14). -->
+                                        <Button Content="Найти" Command="{Binding FindCmd}" Visibility="{Binding Found, Converter={StaticResource Vis}}" />
                                         <Button Content="Войти…" Style="{StaticResource Primary}" Command="{Binding LoginCmd}" Visibility="{Binding NeedLogin, Converter={StaticResource Vis}}" />
                                         <Button Content="Сменить пароль…" Command="{Binding LoginCmd}" Visibility="{Binding Connected, Converter={StaticResource Vis}}" />
                                         <!-- Установка по SSH: пакета нет — «Установить на роутер», есть — «Установить заново» (починить сломанную установку). -->
                                         <Button Content="{Binding InstallText}" Command="{Binding InstallCmd}" Visibility="{Binding Found, Converter={StaticResource Vis}}" />
                                     </WrapPanel>
                                     <TextBlock Text="{Binding ConnectionText}" FontWeight="SemiBold" Margin="0,4,0,0" TextWrapping="Wrap"
-                                               Visibility="{Binding Searched, Converter={StaticResource Vis}}">
+                                               Visibility="{Binding ShowConnectionText, Converter={StaticResource Vis}}">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="{DynamicResource Text}" />

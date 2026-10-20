@@ -137,10 +137,13 @@ public sealed class AdvancedViewModel : Observable
         {
             if (_enabled == value) return;
             _enabled = value;
-            Raise(); Raise(nameof(ShowEditor)); Raise(nameof(ShowStored)); Raise(nameof(StoredText));
+            Raise(); Raise(nameof(ToggleText)); Raise(nameof(ShowEditor)); Raise(nameof(ShowStored)); Raise(nameof(StoredText));
             if (!_loading) _ = ApplyAsync(fromToggle: true);
         }
     }
+
+    /// <summary>Подпись переключателя — состояние («Включено» / «Выключено»), как у остальных переключателей окна.</summary>
+    public string ToggleText => _enabled ? "Включено" : "Выключено";
 
     /// <summary>Редактор виден, пока режим включён; выключенный — одна строка «строк сохранено».</summary>
     public bool ShowEditor => _enabled && Available;
@@ -167,7 +170,7 @@ public sealed class AdvancedViewModel : Observable
         AdvancedSites.OthersDirect => "Работают только ваши строки, остальные сайты идут напрямую.",
         AdvancedSites.OthersAll => IsRouter
             ? "Может мешать обычным сайтам — после сохранения проверьте их."
-            : "Может мешать обычным сайтам. Включается, только когда оптимизация работает, и после проверки обычных сайтов: если они перестанут открываться, вернётся «Как сейчас».",
+            : "Может мешать обычным сайтам. Включается, только когда оптимизация работает, и после проверки обычных сайтов: если они перестанут открываться, вернётся «Только из списков».",
         _ => "Остальные сайты — как обычно: YouTube, Discord и ваши сайты из списков.",
     };
 
@@ -182,11 +185,11 @@ public sealed class AdvancedViewModel : Observable
     /// <summary>Сообщение — отказ (красным), а не сводка.</summary>
     public bool MessageIsError { get => _error; private set => Set(ref _error, value); }
 
-    /// <summary>Сводка сохранённого: «Включён · строк: 3 · остальные: по спискам».</summary>
-    public string Summary => !_saved.Enabled ? "Выключен"
-        : $"Включён · {Plural(_saved.Rows.Count, "строка", "строки", "строк")}: {_saved.Rows.Count} · остальные сайты: " + _saved.Others switch
+    /// <summary>Сводка сохранённого: «Строк: 3 · остальные сайты: только из списков».</summary>
+    public string Summary => !_saved.Enabled ? "Сайту из строки можно задать свою стратегию; остальные работают как обычно."
+        : $"{Plural(_saved.Rows.Count, "Строка", "Строки", "Строк")}: {_saved.Rows.Count} · остальные сайты: " + _saved.Others switch
         {
-            AdvancedSites.OthersDirect => "напрямую", AdvancedSites.OthersAll => "для всех", _ => "по спискам",
+            AdvancedSites.OthersDirect => "напрямую", AdvancedSites.OthersAll => "для всех сайтов", _ => "только из списков",
         };
 
     public ICommand AddRowCmd { get; }
@@ -232,7 +235,7 @@ public sealed class AdvancedViewModel : Observable
             Dirty = false;
         }
         finally { _loading = false; }
-        Raise(nameof(Enabled)); Raise(nameof(ShowEditor)); Raise(nameof(ShowStored)); Raise(nameof(StoredText)); Raise(nameof(Summary)); Raise(nameof(AddText));
+        Raise(nameof(Enabled)); Raise(nameof(ToggleText)); Raise(nameof(ShowEditor)); Raise(nameof(ShowStored)); Raise(nameof(StoredText)); Raise(nameof(Summary)); Raise(nameof(AddText));
         Raise(nameof(OthersDirect)); Raise(nameof(OthersLists)); Raise(nameof(OthersAll)); Raise(nameof(OthersHint)); Raise(nameof(CanRevert));
         CommandManager.InvalidateRequerySuggested();
     }
@@ -346,8 +349,8 @@ public sealed class AdvancedViewModel : Observable
         }
         Take(res.State);
         var done = res.State.Enabled
-            ? $"Продвинутый режим включён: {Plural(res.State.Rows.Count, "строка", "строки", "строк")} {res.State.Rows.Count}."
-            : "Продвинутый режим выключен: всё работает как обычно, строки сохранены.";
+            ? $"Свои настройки для сайтов включены: {Plural(res.State.Rows.Count, "строка", "строки", "строк")} {res.State.Rows.Count}."
+            : "Свои настройки для сайтов выключены: всё работает как обычно, строки сохранены.";
         Message = res.Error is { Length: > 0 } warn ? warn : done; MessageIsError = false;
         Say(done);
     }
@@ -357,7 +360,7 @@ public sealed class AdvancedViewModel : Observable
         _loading = true;
         _enabled = _saved.Enabled;
         _loading = false;
-        Raise(nameof(Enabled)); Raise(nameof(ShowEditor)); Raise(nameof(ShowStored));
+        Raise(nameof(Enabled)); Raise(nameof(ToggleText)); Raise(nameof(ShowEditor)); Raise(nameof(ShowStored));
     }
 
     /// <summary>Итог отката одной записи журнала — фраза для карточки.</summary>

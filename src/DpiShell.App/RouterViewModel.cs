@@ -147,9 +147,11 @@ public static class RouterTexts
         ? (t.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(t, DateTimeKind.Utc) : t).ToLocalTime().ToString("HH:mm")
         : "";
 
+    public const string NotFoundText = "DpiShell на роутере не найден";
+
     public static string Found(RouterFound f, string? version) => f switch
     {
-        RouterFound.NotFound => "DpiShell на роутере не найден",
+        RouterFound.NotFound => NotFoundText,
         RouterFound.AppTooOld => "Обновите программу: роутер новее",
         RouterFound.RouterTooOld => "Обновите пакет на роутере",
         _ => $"DpiShell {version} найден — введите пароль роутера",
@@ -220,6 +222,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         StopRouterCmd = RelayCommand.Async(async () => { if (await DisableAsync()) Say("Оптимизация на роутере выключена — работает этот ПК."); }, () => Can("disable"));
         EnableTimestampsCmd = RelayCommand.Async(() => CheckTimestampsAsync(ask: true), () => !Busy);
         InitAdvanced();   // продвинутый режим на роутере — RouterViewModel.Advanced.cs
+        WatchSites();
     }
 
     // ---------- связь с окном (в тестах подменяются) ----------
@@ -299,7 +302,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     bool _searched, _autoFindTried;
     /// <summary>Роутер уже искали (хоть раз): до того пустое состояние — «не проверялся», а не «не найден» (UX-аудит 2, п. 10).</summary>
-    public bool Searched { get => _searched; private set { if (Set(ref _searched, value)) Raise(nameof(EmptyTitle)); } }
+    public bool Searched { get => _searched; private set { if (Set(ref _searched, value)) { Raise(nameof(EmptyTitle)); Raise(nameof(ShowConnectionText)); } } }
     public string EmptyTitle => Removed ? "DpiShell с роутера удалён" : Searched ? "Роутер с DpiShell не найден" : _autoFindTried ? "Ищу роутер…" : "Роутер не проверялся";
 
     /// <summary>Инструкция «Как поставить DpiShell на роутер» (п. 9).</summary>
@@ -341,7 +344,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public bool CanConnect => !Busy;
 
     string _connectionText = "Не проверялось";
-    public string ConnectionText { get => _connectionText; private set => Set(ref _connectionText, value); }
+    public string ConnectionText { get => _connectionText; private set { if (Set(ref _connectionText, value)) Raise(nameof(ShowConnectionText)); } }
+
+    /// <summary>«DpiShell на роутере не найден» в «Подключении» не повторяем: то же уже сказано в карточке выше (UX-аудит 6, п. 14).</summary>
+    public bool ShowConnectionText => Searched && (Found || ConnectionText != RouterTexts.NotFoundText);
 
     bool _connectionOk;
     public bool ConnectionOk { get => _connectionOk; private set => Set(ref _connectionOk, value); }
@@ -911,7 +917,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public void CopyParams(RouterStrategyRow s)
     {
         if (!s.HasParams) return;
-        try { CopyText($"{s.Title}\n{s.Params}"); Say("Параметры скопированы: " + s.Title); }
+        try { CopyText($"{s.Title}\n{s.Params}"); Say($"Параметры стратегии «{s.Title}» скопированы в буфер обмена."); }
         catch (System.Runtime.InteropServices.ExternalException) { Failed("Не удалось скопировать — буфер обмена занят другой программой."); }
     }
 
@@ -1312,6 +1318,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         Targets.Clear();
         foreach (var t in items) Targets.Add(new(t.Url, t.Important));
         _targetsLoaded = true;
+        MarkSitesSaved();
         TargetsMessage = $"Сохранено на роутере: адресов — {items.Count}" + (pc.Count > items.Count ? $" (не поместилось: {pc.Count - items.Count})." : ".");
         return true;
     }
@@ -1488,11 +1495,29 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public const int MaxTargets = 50;
 
     string _listGeneral = "", _listExclude = "", _targetsMessage = "";
-    public string ListGeneralText { get => _listGeneral; set => Set(ref _listGeneral, value); }
-    public string ListExcludeText { get => _listExclude; set => Set(ref _listExclude, value); }
+    public string ListGeneralText { get => _listGeneral; set { if (Set(ref _listGeneral, value)) RaiseSites(); } }
+    public string ListExcludeText { get => _listExclude; set { if (Set(ref _listExclude, value)) RaiseSites(); } }
     public string TargetsMessage { get => _targetsMessage; private set => Set(ref _targetsMessage, value); }
 
     bool _targetsLoaded, _listsLoaded;
+
+    // Один статус «Не сохранено / Сохранено» на вкладку «Сайты» (UX-аудит 6, п. 2–3): адреса, списки и строки «Свои настройки для сайтов».
+    string _sitesSaved = "";
+    string SitesSignature() => string.Join("\n", Targets.Select(t => t.Url.Trim() + "|" + (t.Important ? 1 : 0))) + "\u0001" + ListGeneralText + "\u0001" + ListExcludeText;
+    public bool SitesDirty => (_targetsLoaded && SitesSignature() != _sitesSaved) || Advanced.Dirty;
+    public bool SitesSaved => !SitesDirty;
+    void RaiseSites() { Raise(nameof(SitesDirty)); Raise(nameof(SitesSaved)); }
+    void MarkSitesSaved() { _sitesSaved = SitesSignature(); RaiseSites(); }
+
+    void WatchSites()
+    {
+        Targets.CollectionChanged += (_, e) =>
+        {
+            foreach (var r in e.NewItems?.OfType<RouterTargetRow>() ?? []) r.PropertyChanged += (_, _) => RaiseSites();
+            RaiseSites();
+        };
+        Advanced.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(AdvancedViewModel.Dirty)) RaiseSites(); };
+    }
 
     public ICommand AddTargetCmd { get; }
     public ICommand RemoveTargetCmd { get; }
@@ -1511,6 +1536,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             ListExcludeText = string.Join(Environment.NewLine, (await Call(c => c.ListsGetAsync("user-exclude"))).Lines);
             _listsLoaded = true;
             TargetsMessage = $"На роутере адресов: {Targets.Count} из {MaxTargets}.";
+            MarkSitesSaved();
         }, changes: false);
         Say("");
     }
@@ -1569,7 +1595,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             Targets.Clear();
             foreach (var t in items) Targets.Add(new(t.Url, t.Important));
             TargetsMessage = $"Сохранено на роутере: адресов — {items.Count}.";
+            MarkSitesSaved();
             Say(TargetsMessage);
+            // Строки «Свои настройки для сайтов» — той же кнопкой: у вкладки одно «Сохранить» (применение пробное, как у переключателя).
+            if (Advanced.Dirty && Advanced.Available) await Advanced.ApplyAsync();
         }
         else TargetsMessage = "Не сохранено — причина в строке состояния.";
     }
@@ -1666,17 +1695,22 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task AddSiteToExcludeAsync()
     {
         if (_siteHost is not { } host) return;
+        // Тот же список, что поле «Исключения» ниже: если оно загружено — берём его строки (с несохранёнными правками), иначе читаем с роутера.
+        var wasDirty = SitesDirty;
         if (await Guard("Добавляю в исключения роутера…", async () =>
             {
-                var lines = (await Call(c => c.ListsGetAsync("user-exclude"))).Lines.ToList();
+                var lines = _listsLoaded
+                    ? ListExcludeText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList()
+                    : (await Call(c => c.ListsGetAsync("user-exclude"))).Lines.ToList();
                 if (!lines.Contains(host, StringComparer.OrdinalIgnoreCase)) lines.Add(host);
                 await Call(c => c.ListsSetAsync("user-exclude", lines));
                 if (_listsLoaded) ListExcludeText = string.Join(Environment.NewLine, lines);
             }))
         {
+            if (!wasDirty) MarkSitesSaved();
             SiteSuggestExclude = false;
-            SiteResult = $"{host} — в исключениях роутера";
-            SiteHint = "Роутер больше не применяет к нему оптимизацию.";
+            SiteResult = $"{host} — добавлен в «Исключения»";
+            SiteHint = "Список ниже, на этой же вкладке. Роутер больше не применяет к сайту оптимизацию.";
             Say(SiteResult + ".");
         }
     }
@@ -1901,13 +1935,13 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                         : new(c.Name, (c.Kind == "service" ? "служба" : c.Kind) + (c.Running ? ", работает" : ", остановлена")));
                 FlowOffloadText = !d.FlowOffload
                     ? (d.Flowoffload is "software" or "hardware" ? "передано оптимизации — не мешает" : "выключено")
-                    : FlowOffloadFixable ? "включено — мешает оптимизации" : "включено";
-                Ipv6Text = !d.Ipv6Wan ? "нет" : Ipv6Fixable ? "есть — сайты по IPv6 идут мимо оптимизации" : "есть";
-                DnsText = d.Dns is null ? "не проверялся"
-                    : (d.Dns.Spoofed ? "провайдер подменяет адреса сайтов" : "подмены нет") + (d.Dns.CheckedAt is { } at ? $" (проверено в {RouterTexts.Time(at)})" : "");
+                    : FlowOffloadFixable ? "включено — мешает оптимизации (исправить — в плашке выше)" : "включено";
+                Ipv6Text = !d.Ipv6Wan ? "нет" : Ipv6Fixable ? "есть — сайты по IPv6 идут мимо оптимизации (исправить — в плашке выше)" : "есть";
+                // Время проверки DNS — одно, в карточке «DNS для всей сети»; здесь только итог.
+                DnsText = d.Dns is null ? "не проверялся" : d.Dns.Spoofed ? "провайдер подменяет адреса сайтов" : "подмены нет";
                 SpaceText = $"{d.OverlayFreeKb / 1024.0:0.#} МБ" + (d.OverlayFreeKb < 2048 ? " — мало, обновления могут не поместиться" : "");
                 DiagLoaded = true;
-                DiagUpdated = $"обновлено в {DateTime.Now:HH:mm:ss}";
+                DiagUpdated = $"обновлено в {DateTime.Now:HH:mm}";
             }, changes: false))
             Say("");
     }

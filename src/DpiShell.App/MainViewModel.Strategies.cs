@@ -96,7 +96,7 @@ public sealed partial class MainViewModel
     {
         var title = DisplayTitleOf(s);
         _titles[s.Id] = title;
-        var row = new ScoreRow(new StrategyScore(s, [], 0, 0), Names);
+        var row = new ScoreRow(new StrategyScore(s, [], 0, 0), Names, StrategyTitle);
         var old = Scores.FirstOrDefault(r => r.Id == s.Id);
         if (old is not null) Scores.Remove(old);
         Scores.Insert(0, row);
@@ -160,7 +160,7 @@ public sealed partial class MainViewModel
             PendingCheckId = id;
             return;
         }
-        var row = new ScoreRow(score, Names);
+        var row = new ScoreRow(score, Names, StrategyTitle);
         var at = Scores.ToList().FindIndex(x => x.Id == id);
         if (at >= 0) Scores[at] = row; else Scores.Insert(0, row);
         SelectedScore = row;

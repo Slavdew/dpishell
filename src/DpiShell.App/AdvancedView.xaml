@@ -13,7 +13,7 @@
             <StackPanel>
                 <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding Enabled}" IsEnabled="{Binding CanEdit}" HorizontalAlignment="Left"
                           AutomationProperties.Name="Свои настройки для сайтов">
-                    <TextBlock Text="Включить" FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding ToggleText}" FontSize="15" FontWeight="SemiBold" />
                 </CheckBox>
                 <TextBlock Text="{Binding Summary}" Margin="50,4,0,0" Visibility="{Binding Available, Converter={StaticResource Vis}}" />
                 <TextBlock Text="{Binding UnavailableText}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="50,4,0,0"
@@ -61,17 +61,15 @@
                     <Button Content="{Binding AddText}" Command="{Binding AddRowCmd}" HorizontalAlignment="Left" Margin="0,8,0,0" />
 
                     <TextBlock Text="Остальные сайты" FontWeight="SemiBold" Margin="0,14,0,2" />
-                    <RadioButton Content="Напрямую — без оптимизации" IsChecked="{Binding OthersDirect}" IsEnabled="{Binding CanEdit}" Margin="0,3" HorizontalAlignment="Left" />
-                    <RadioButton Content="Как сейчас" IsChecked="{Binding OthersLists}" IsEnabled="{Binding CanEdit}" Margin="0,3" HorizontalAlignment="Left" />
+                    <RadioButton Content="Только из списков" IsChecked="{Binding OthersLists}" IsEnabled="{Binding CanEdit}" Margin="0,3" HorizontalAlignment="Left" />
                     <RadioButton Content="Для всех сайтов" IsChecked="{Binding OthersAll}" IsEnabled="{Binding CanEdit}" Margin="0,3" HorizontalAlignment="Left" />
+                    <RadioButton Content="Напрямую — без оптимизации" IsChecked="{Binding OthersDirect}" IsEnabled="{Binding CanEdit}" Margin="0,3" HorizontalAlignment="Left" />
                     <TextBlock Text="{Binding OthersHint}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0" />
 
+                    <!-- Сохраняет кнопка вкладки «Сайты» (одна на вкладку, с одним статусом «Не сохранено / Сохранено»); здесь только откат. -->
                     <WrapPanel Margin="0,12,0,0">
-                        <Button x:Name="ApplyButton" Content="Применить" Style="{StaticResource Primary}" Command="{Binding ApplyCmd}" />
-                        <Button Content="Отменить правки" Command="{Binding DiscardCmd}" />
+                        <Button Content="Отменить правки" Command="{Binding DiscardCmd}" Visibility="{Binding Dirty, Converter={StaticResource Vis}}" />
                         <Button x:Name="RevertButton" Content="Вернуть как было" Command="{Binding RevertCmd}" />
-                        <TextBlock Text="Не применено" Foreground="{DynamicResource Danger}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,8,8"
-                                   Visibility="{Binding Dirty, Converter={StaticResource Vis}}" />
                     </WrapPanel>
                 </StackPanel>
 

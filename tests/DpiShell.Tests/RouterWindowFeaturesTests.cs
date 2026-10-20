@@ -91,7 +91,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         await vm.AddSiteToExcludeAsync();
         Assert.Equal(new[] { "example.com", "www.example.org" }, r.Lists["user-exclude"]);
         Assert.False(vm.SiteSuggestExclude);
-        Assert.Equal("www.example.org — в исключениях роутера", vm.SiteResult);
+        Assert.Equal("www.example.org — добавлен в «Исключения»", vm.SiteResult);
     }
 
     [Fact]
