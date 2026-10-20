@@ -25,7 +25,7 @@ public static class HelperProtocol
     /// Версия протокола «мажор.минор» (helper-protocol §6): минор — добавления без поломок (команды, поля), мажор — несовместимые
     /// изменения. В hello и status; помощник без поля — «1.0». Сравнение — <see cref="HelperCompat"/>.
     /// </summary>
-    public const string Api = "1.9";
+    public const string Api = "1.10";
 
     /// <summary>Предел строки: IP-список (до 4 МБ) с запасом на экранирование JSON. Длиннее — соединение рвётся.</summary>
     public const int MaxLineBytes = 12 * 1024 * 1024;

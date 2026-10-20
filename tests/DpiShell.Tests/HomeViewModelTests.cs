@@ -73,6 +73,7 @@ public sealed class HomeViewModelTests : IDisposable
         Assert.False(vm.Checking);
         Assert.Equal("Открывается 2 из 2", vm.CheckSummary);
         Assert.All(vm.CheckGroups, g => Assert.True(g.Ok));
+        Assert.EndsWith(" · было 1 из 2", vm.CheckedAt);   // UX-аудит 7, п. 1: «стало лучше или нет» — рядом с прежним итогом
 
         // «Выключить»: итог про включённый обход больше не верен — скрыт.
         on = false;
@@ -225,7 +226,7 @@ public sealed class HomeViewModelTests : IDisposable
         Assert.Equal("⚠", vm.CheckGroups.Single(g => g.Title == "YouTube").Mark);
         Assert.Equal("✓", vm.CheckGroups.Single(g => g.Title == "Discord").Mark);
         Assert.True(vm.HasBrowserWarning);
-        Assert.Equal("⚠ В браузере не откроется: YouTube — DNS провайдера подменяет адрес.", vm.BrowserWarning);
+        Assert.Equal("⚠ В браузере не откроется: YouTube — провайдер подсовывает не тот адрес.", vm.BrowserWarning);
         Assert.True(vm.ShowBrowserDnsFix);
 
         hostsIp = "10.1.1.1";

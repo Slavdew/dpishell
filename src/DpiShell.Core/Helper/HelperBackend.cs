@@ -23,6 +23,8 @@ public interface IHelperBackend : IHelperCatalog
     IpsetUpdateSummary UpdateIpsetFromContent(string content, bool confirmed);
     IpsetVerdictSummary WriteUserIpset(IReadOnlyList<string> lines, bool exclude, bool confirmed);
     UserTargetsResult SetUserTargets(IReadOnlyList<string> lines);
+    /// <summary>Сайты, которые на этом ПК открываются без оптимизации (API 1.10): список целиком, домены проходят тот же разбор, что «Свои сайты».</summary>
+    UserTargetsResult SetUserExclude(IReadOnlyList<string> lines);
     Task<HostsCheckReport> HostsCheckAsync(IProgress<HostsCheckProgress> progress, CancellationToken ct);
     /// <summary>Предпросмотр по последней проверке (что будет записано); проверки не было — предпросмотр снятия блока.</summary>
     HostsPreview HostsPreview();
@@ -126,7 +128,7 @@ public sealed record HelperStatus(
     IReadOnlyList<string> SelectedGroups, IReadOnlyList<string> UserTargets, IReadOnlyList<string> Fallbacks,
     bool TimestampsEnabledByUs, bool HostsFix, IReadOnlyList<Conflict> Foreign,
     string HelperVersion, string? DataVersion = null,
-    string? Api = null, IReadOnlyList<string>? Commands = null)
+    string? Api = null, IReadOnlyList<string>? Commands = null, IReadOnlyList<string>? UserExclude = null)
 {
     // Api — версия протокола «мажор.минор», Commands — белый список этого помощника (helper-protocol §6). Заполняет сервер;
     // помощник до 1.1 их не присылает (null = «1.0», список неизвестен).
@@ -217,7 +219,7 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
             [.. shell.DefaultTargets.Groups.Select(g => new GroupInfo(g.Id, g.Title, g.Targets.Count)), new GroupInfo("user", "Свои сайты", st.UserTargets.Count)],
             st.Groups, st.UserTargets, st.Fallbacks,
             st.TimestampsEnabledByUs, st.HostsFix, foreign,
-            HelperProtocol.AppVersion, shell.DataVersion);
+            HelperProtocol.AppVersion, shell.DataVersion, UserExclude: st.UserExclude);
     }
 
     /// <summary>Клиент HTTP для обновления данных; в тестах — подмена без сети.</summary>
@@ -375,6 +377,16 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
         if (good.Count > 0 && !shell.State.Groups.Contains("user")) shell.State.Groups.Add("user");
         shell.SaveState();
         return new(good, rejected);
+    }
+
+    /// <summary>
+    /// «Открывать без оптимизации» (API 1.10): <see cref="Shell.SetUserExclude"/> — список в user-exclude.txt и в состояние, работающая оптимизация перезапускается.
+    /// Только домены: остальное отбрасывается и возвращается в Rejected.
+    /// </summary>
+    public UserTargetsResult SetUserExclude(IReadOnlyList<string> lines)
+    {
+        var (saved, rejected) = shell.SetUserExclude(lines);
+        return new(saved, rejected);
     }
 
     public async Task<HostsCheckReport> HostsCheckAsync(IProgress<HostsCheckProgress> progress, CancellationToken ct)

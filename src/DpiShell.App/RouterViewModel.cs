@@ -109,7 +109,8 @@ public static class RouterTexts
         var when = at is null ? "" : " в " + Time(at);
         return by switch
         {
-            "watchdog" or "watchdog_off" => $"Оптимизация на роутере выключена сторожем{when} — с оптимизацией пропал интернет.",
+            // Слово «сторож» — один раз и с пояснением (UX-аудит 7, п. 9); дальше — «выключили автоматически».
+            "watchdog" or "watchdog_off" => $"Оптимизация на роутере выключена автоматически{when}: с ней пропал интернет (это сделал сторож — он проверяет, что интернет работает).",
             "watchdog_select_failed" => RouterViewModel.WatchdogSelectText(RouterViewModel.WatchdogSelectState.Failed, null),
             "button" or "button_off" => $"Оптимизация на роутере выключена кнопкой на корпусе{when}",
             _ when enabled => $"Роутер вернул прежнюю стратегию{when}: новую не подтвердили вовремя",
@@ -303,6 +304,43 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     bool _searched, _autoFindTried;
     /// <summary>Роутер уже искали (хоть раз): до того пустое состояние — «не проверялся», а не «не найден» (UX-аудит 2, п. 10).</summary>
     public bool Searched { get => _searched; private set { if (Set(ref _searched, value)) { Raise(nameof(EmptyTitle)); Raise(nameof(ShowConnectionText)); } } }
+    // ---------- «Проверить, подходит ли мой роутер» (UX-аудит 7, п. 10) ----------
+
+    /// <summary>Открыть страницу роутера по адресу; в тестах — подмена без сети.</summary>
+    public Func<string, Task<RouterFitResult>> FitProbe { get; set; } = address => RouterFit.ProbeAsync(address);
+
+    string _fitText = "";
+    /// <summary>Ответ на «Проверить, подходит ли мой роутер»: да / нет / не знаю — простыми словами.</summary>
+    public string FitText { get => _fitText; private set { if (Set(ref _fitText, value)) Raise(nameof(HasFit)); } }
+    public bool HasFit => _fitText.Length > 0;
+
+    bool _fitChecking;
+    public bool FitChecking { get => _fitChecking; private set { if (Set(ref _fitChecking, value)) Requery(); } }
+
+    public ICommand FitCmd => _fitCmd ??= RelayCommand.Async(CheckFitAsync, () => !FitChecking && !Busy);
+    ICommand? _fitCmd;
+
+    /// <summary>Программа сама находит роутер (основной шлюз) и говорит «похоже на OpenWrt — можно ставить» / «не OpenWrt» / «не ответил».</summary>
+    public async Task CheckFitAsync()
+    {
+        FitChecking = true;
+        FitText = "Ищу роутер…";
+        try
+        {
+            string? gw;
+            try { gw = Gateway(); }
+            catch (Exception e) when (e is InvalidOperationException or System.Net.NetworkInformation.NetworkInformationException) { gw = null; }
+            if (gw is null) { FitText = "Не нашёл роутер: похоже, компьютер не подключён к сети. Подключитесь и проверьте ещё раз."; return; }
+            FitText = await FitProbe(gw) switch
+            {
+                RouterFitResult.Yes => $"Похоже, у вас роутер с OpenWrt ({gw}): DpiShell на него поставить можно. Нажмите «Установить на роутер» — программа проверит всё ещё раз перед установкой.",
+                RouterFitResult.No => $"Роутер ({gw}) отвечает, но на OpenWrt не похож. DpiShell ставится только на роутер с прошивкой OpenWrt; на этом компьютере всё работает и без него. Если OpenWrt ставили сами — нажмите «Установить на роутер», программа проверит точно.",
+                _ => $"Не получилось определить: роутер ({gw}) не ответил. Проверьте, что вы дома в своей сети, или нажмите «Установить на роутер» и укажите адрес в «Дополнительно».",
+            };
+        }
+        finally { FitChecking = false; }
+    }
+
     public string EmptyTitle => Removed ? "DpiShell с роутера удалён" : Searched ? "Роутер с DpiShell не найден" : _autoFindTried ? "Ищу роутер…" : "Роутер не проверялся";
 
     /// <summary>Инструкция «Как поставить DpiShell на роутер» (п. 9).</summary>
@@ -632,7 +670,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     }
     public bool ModeLists { get => !ModeAll; set => ModeAll = !value; }
     public string ModeHint => ModeAll
-        ? "Оптимизация для всех сайтов. Если какой-то сайт сломался — добавьте его в исключения (выше — «Сайт не открывается»)."
+        ? "Оптимизация для всех сайтов. Проверить сломавшийся сайт — выше, в «Сайт не открывается»."
         : "Оптимизация только для YouTube, Discord и сайтов из списков.";
 
     public async Task SetModeAsync(bool all)
@@ -1440,7 +1478,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         {
             SetBest(best, p.Applied);
             var backups = (p.Backups ?? []).Select(StrategyTitle).ToList();
-            ResultText = (p.Applied ? "Включена на роутере: " : "Подходит: ") + StrategyTitle(best);
+            ResultText = (p.Applied ? "Включена на роутере: " : HasAddressNote ? "Лучшая из проверенных: " : "Подходит: ") + StrategyTitle(best);
             ResultHint = (backups.Count > 0 ? "Запасные: " + string.Join(", ", backups) + ". " : "")
                 + (p.Applied ? "Можно выбрать другую в таблице." : "Нажмите «Применить на роутере».");
         }
@@ -1695,6 +1733,20 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task AddSiteToExcludeAsync()
     {
         if (_siteHost is not { } host) return;
+        if (await AddHostToExcludeAsync(host))
+        {
+            SiteSuggestExclude = false;
+            SiteResult = $"{host} — добавлен в «Исключения»";
+            SiteHint = "Список ниже, на этой же вкладке. Роутер больше не применяет к сайту оптимизацию.";
+            Say(SiteResult + ".");
+        }
+    }
+
+    /// <summary>«Открыть без оптимизации» с Главной (UX-аудит 7, п. 5): сайт — в «Исключения» роутера. false — не вышло (нет входа, роутер без lists_set).</summary>
+    public async Task<bool> ExcludeHostAsync(string host) => Can("lists_set") && await AddHostToExcludeAsync(host);
+
+    async Task<bool> AddHostToExcludeAsync(string host)
+    {
         // Тот же список, что поле «Исключения» ниже: если оно загружено — берём его строки (с несохранёнными правками), иначе читаем с роутера.
         var wasDirty = SitesDirty;
         if (await Guard("Добавляю в исключения роутера…", async () =>
@@ -1708,11 +1760,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             }))
         {
             if (!wasDirty) MarkSitesSaved();
-            SiteSuggestExclude = false;
-            SiteResult = $"{host} — добавлен в «Исключения»";
-            SiteHint = "Список ниже, на этой же вкладке. Роутер больше не применяет к сайту оптимизацию.";
-            Say(SiteResult + ".");
+            return true;
         }
+        return false;
     }
 
     // ---------- DNS для всей сети (dns_status, dns_analyze / dns_enable / dns_restore) ----------

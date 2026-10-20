@@ -212,9 +212,9 @@ public sealed partial class RouterViewModel
     /// <summary>Фраза о подборе после сторожа; пусто — подбора нет.</summary>
     public static string WatchdogSelectText(WatchdogSelectState state, string? strategy) => state switch
     {
-        WatchdogSelectState.Running => "Сторож выключил оптимизацию — роутер подбирает другую стратегию…",
-        WatchdogSelectState.Found => $"Сторож выключил прежнюю стратегию, роутер подобрал и включил {strategy}.",
-        WatchdogSelectState.Failed => "Сторож выключил оптимизацию, подходящей стратегии не нашлось. Оптимизация выключена, пока вы её не включите.",
+        WatchdogSelectState.Running => "Оптимизацию выключили автоматически — пропал интернет. Роутер подбирает другую стратегию…",
+        WatchdogSelectState.Found => $"Оптимизацию выключили автоматически — пропал интернет. Роутер подобрал и включил {strategy}.",
+        WatchdogSelectState.Failed => "Оптимизацию выключили автоматически — пропал интернет, а подходящей стратегии не нашлось. Она выключена, пока вы её не включите.",
         _ => "",
     };
 

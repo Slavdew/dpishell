@@ -69,11 +69,19 @@ public sealed partial class WindowSmokeTests
                     if (t.Text.Contains("обход", StringComparison.OrdinalIgnoreCase) || t.Text.Contains("у всех", StringComparison.OrdinalIgnoreCase)) throw new Exception("В тексте запретное слово: " + t.Text);
                 if (!vm.IsRunning) throw new Exception("Оптимизация на ПК не включилась вместе со связкой");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-joint-on.png"));
+                // Оптимизацию на ПК включила связка, не «Включить»: проверка сайтов идёт сама (UX-аудит 7, п. 1; сеть — подмена). Включаем после запуска связки,
+                // чтобы лишние чтения состояния не мешали самому запуску.
+                vm.ProbeGroups = groups => Task.FromResult<IReadOnlyList<TargetVerdict>>(groups.SelectMany(g => g.Targets.Select(t => new TargetVerdict(g.Id, t, true, 0.3, []))).ToList());
+                vm.AutoCheck = true;
+                WaitUi(vm.RefreshStatusAsync());
 
                 // Главная: та же фраза в карточке состояния.
                 vm.Page = Pages.Home;
                 Pump();
                 if (!Visible(t => t.Text.Contains("свои сайты (1)"))) throw new Exception("На главной нет фразы о совместной работе");
+                PumpUntil(() => vm.HasCheck && !vm.Checking && vm.CheckSummary.StartsWith("Открывается"), "после включения связкой проверка сайтов не пошла сама");
+                Pump();
+                if (!Visible(t => t.Text.StartsWith("Открывается ") && t.Text.Contains(" из "))) throw new Exception("В состоянии «Работает» нет строки «Открывается N из M»");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-home-joint.png"));
 
                 // «Сайты» → «Свои настройки для сайтов»: строка с youtube.com — «ведёт роутер».

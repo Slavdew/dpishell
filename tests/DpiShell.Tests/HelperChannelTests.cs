@@ -69,6 +69,7 @@ public class HelperChannelTests
             ["ipset_update"] = new { from = "manifest" },
             ["user_ipset_set"] = new { lines = new[] { "10.0.0.0/8" } },
             ["user_targets_set"] = new { lines = new[] { "example.com" } },
+            ["user_exclude_set"] = new { lines = new[] { "bank.example" } },
             ["dns_set"] = new { preset = "google" },
             ["strategy_add"] = new { title = "Моя", roles = new { general = "--dpi-desync=fake --dpi-desync-repeats=6" }, source = "user" },
             ["strategy_delete"] = new { strategy = "found-1" },

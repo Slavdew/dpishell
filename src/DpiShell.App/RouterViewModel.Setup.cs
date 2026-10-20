@@ -639,7 +639,7 @@ public sealed class RouterInstallViewModel : Observable
         private set
         {
             if (!Set(ref _stage, value)) return;
-            foreach (var n in new[] { nameof(Working), nameof(CanEdit), nameof(CanCheck), nameof(CanInstall), nameof(CanTryInstall), nameof(InstallText), nameof(ShowSteps), nameof(IsDone), nameof(CanGoSelect), nameof(ShowCheck) })
+            foreach (var n in new[] { nameof(Working), nameof(CanEdit), nameof(CanCheck), nameof(CanInstall), nameof(CanTryInstall), nameof(InstallText), nameof(ShowSteps), nameof(IsDone), nameof(CanGoSelect), nameof(ShowCheck), nameof(Unsuitable), nameof(ShowCheckPlain), nameof(ShowCheckPrimary) })
                 Raise(n);
         }
     }
@@ -649,8 +649,16 @@ public sealed class RouterInstallViewModel : Observable
     public bool CanCheck => CanEdit;
     public bool ShowCheck => Stage != RouterInstallStage.Done;
     public bool CanInstall => Stage == RouterInstallStage.Checked && _verdict?.CanInstall == true;
-    /// <summary>«Установить» активна всегда, пока можно править: непроверенный роутер она проверит сама.</summary>
-    public bool CanTryInstall => CanEdit;
+    /// <summary>
+    /// «Установить» активна, пока можно править: непроверенный роутер она проверит сама. Роутер проверен и не подходит — недоступна (причина — в итоге выше),
+    /// главной становится «Проверить роутер» после исправления (UX-аудит 7, п. 11).
+    /// </summary>
+    public bool CanTryInstall => CanEdit && !Unsuitable;
+    /// <summary>Проверка показала «Роутер не подходит»: ставить нельзя, пока причины не устранены.</summary>
+    public bool Unsuitable => _verdict is { CanInstall: false } && Stage is RouterInstallStage.Checked or RouterInstallStage.Failed;
+    /// <summary>«Проверить роутер» — обычная кнопка; при «не подходит» вместо неё главная (<see cref="ShowCheckPrimary"/>).</summary>
+    public bool ShowCheckPlain => ShowCheck && !Unsuitable;
+    public bool ShowCheckPrimary => ShowCheck && Unsuitable;
     /// <summary>После сбоя установки главная кнопка — «Повторить».</summary>
     public string InstallText => Stage == RouterInstallStage.Failed ? "Повторить" : "Установить";
     public bool IsDone => Stage == RouterInstallStage.Done;
@@ -786,6 +794,7 @@ public sealed class RouterInstallViewModel : Observable
         TunnelNote = v.CanInstall && v.NeedsTunnel ? TunnelText : "";
         Log(VerdictTitle + (VerdictText.Length > 0 ? "\n" + VerdictText : ""));
         Raise(nameof(CanInstall));
+        foreach (var n in new[] { nameof(Unsuitable), nameof(CanTryInstall), nameof(ShowCheckPlain), nameof(ShowCheckPrimary) }) Raise(n);
     }
 
     /// <summary>«Установить»: установка целиком; при успехе — вход тем же паролем.</summary>

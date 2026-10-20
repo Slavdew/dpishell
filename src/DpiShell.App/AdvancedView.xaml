@@ -61,8 +61,11 @@
                     <Button Content="{Binding AddText}" Command="{Binding AddRowCmd}" HorizontalAlignment="Left" Margin="0,8,0,0" />
 
                     <TextBlock Text="Остальные сайты" FontWeight="SemiBold" Margin="0,14,0,2" />
-                    <RadioButton Content="Только из списков" IsChecked="{Binding OthersLists}" IsEnabled="{Binding CanEdit}" Margin="0,3" HorizontalAlignment="Left" />
-                    <RadioButton Content="Для всех сайтов" IsChecked="{Binding OthersAll}" IsEnabled="{Binding CanEdit}" Margin="0,3" HorizontalAlignment="Left" />
+                    <RadioButton Content="Только из списков" IsChecked="{Binding OthersLists}" IsEnabled="{Binding CanEdit}" Margin="0,3,0,0" HorizontalAlignment="Left" />
+                    <TextBlock Text="Рекомендуем" Style="{StaticResource Hint}" FontSize="12" Margin="22,0,0,3" />
+                    <RadioButton Content="Для всех сайтов" IsChecked="{Binding OthersAll}" IsEnabled="{Binding CanEdit}" Margin="0,3,0,0" HorizontalAlignment="Left" />
+                    <!-- «Для всех сайтов» может сломать банк или госсайт — предупреждение рядом с выбором, а не только после (UX-аудит 7, п. 6). -->
+                    <TextBlock Text="Может мешать отдельным сайтам (например, банкам) — тогда добавьте их в исключения." Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap" Margin="22,0,0,3" />
                     <RadioButton Content="Напрямую — без оптимизации" IsChecked="{Binding OthersDirect}" IsEnabled="{Binding CanEdit}" Margin="0,3" HorizontalAlignment="Left" />
                     <TextBlock Text="{Binding OthersHint}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0" />
 

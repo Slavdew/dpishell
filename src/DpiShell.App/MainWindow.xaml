@@ -74,9 +74,10 @@
                                             </ItemsControl>
                                             <TextBlock Text="{Binding CheckedAt}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                         </WrapPanel>
-                                        <!-- Программа открывает по DoH, браузер по DNS системы — нет: что не так и кнопка защищённого DNS. -->
+                                        <!-- Программа открывает по DoH, браузер по DNS системы — нет: что не так и обычная кнопка защищённого DNS
+                                             (главная на карточке одна — «Включить»; красным не пугаем, UX-аудит 7, п. 2). -->
                                         <StackPanel Margin="0,6,0,0" Visibility="{Binding HasBrowserWarning, Converter={StaticResource Vis}}">
-                                            <TextBlock Text="{Binding BrowserWarning}" TextWrapping="Wrap" Foreground="{DynamicResource Danger}" />
+                                            <TextBlock Text="{Binding BrowserWarning}" TextWrapping="Wrap" />
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{Binding RecommendedDnsText}" Command="{Binding FixDnsCmd}" ToolTip="{Binding RecommendedDnsHint}"
                                                     HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="{Binding ShowBrowserDnsFix, Converter={StaticResource Vis}}" />
                                         </StackPanel>
@@ -87,10 +88,31 @@
                                     <!-- Второстепенные действия — ссылками. -->
                                     <WrapPanel Margin="-4,12,0,0">
                                         <Button Content="Проверить сейчас" Style="{StaticResource LinkButton}" Command="{Binding CheckNowCmd}" Margin="0,0,10,0" />
+                                        <!-- Не открылось — путь на экран «Подбор» прямо здесь (UX-аудит 7, п. 3). -->
+                                        <Button Content="Не помогло? → Подобрать" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="0,0,10,0"
+                                                ToolTip="Откроет вкладку «Подбор»: программа проверит способы по очереди и выберет подходящий" />
                                         <Button Content="{Binding StrategiesLinkText}" Style="{StaticResource LinkButton}" Command="{Binding ToggleStrategiesCmd}" Margin="0,0,10,0" />
-                                        <Button Content="Подобрать на роутере" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="0,0,4,0" />
+                                        <Button Content="Подобрать на роутере" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="0,0,10,0"
+                                                Visibility="{Binding ShowRouterSelectLink, Converter={StaticResource Vis}}" />
+                                        <!-- Банк или другой сайт перестал открываться — два шага: адрес и «Открыть без оптимизации» (UX-аудит 7, п. 5). -->
+                                        <Button Content="Сайт не открывается?" Style="{StaticResource LinkButton}" Command="{Binding ToggleDirectCmd}" Margin="0,0,4,0"
+                                                Visibility="{Binding ShowSiteFix, Converter={StaticResource Vis}}" />
                                         <local:InfoButton Topic="{x:Static local:InfoTexts.Home}" Margin="4,0,0,0" />
                                     </WrapPanel>
+                                    <StackPanel Margin="0,6,0,0" Visibility="{Binding DirectOpen, Converter={StaticResource Vis}}">
+                                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Text="Какой сайт перестал открываться? Он будет открываться без оптимизации, остальные — как раньше." />
+                                        <WrapPanel Margin="0,6,0,0">
+                                            <TextBox Text="{Binding DirectSite, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" Width="220" Padding="6,4" VerticalAlignment="Center" Margin="0,0,8,4"
+                                                     ToolTip="Адрес сайта, например bank.example" AutomationProperties.Name="Адрес сайта без оптимизации">
+                                                <TextBox.InputBindings>
+                                                    <KeyBinding Key="Enter" Command="{Binding OpenDirectCmd}" />
+                                                </TextBox.InputBindings>
+                                            </TextBox>
+                                            <Button Content="Открыть без оптимизации" Command="{Binding OpenDirectCmd}" Margin="0,0,0,4" VerticalAlignment="Center" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding DirectMessage}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                               Visibility="{Binding HasDirectMessage, Converter={StaticResource Vis}}" />
                                 </StackPanel>
                                 <!-- Выключатель. Обход делает роутер — кнопка ПК второстепенная: «Включить и на этом ПК». -->
                                 <StackPanel Grid.Column="2" VerticalAlignment="Top" Margin="16,6,0,0">
@@ -663,8 +685,16 @@
                                 </StackPanel>
                             </DockPanel>
                             <TextBox Text="{Binding TargetsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AutomationProperties.Name="Свои сайты"
-                                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" Height="200"
+                                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" Height="150"
                                      FontFamily="Consolas" FontSize="14" Padding="8" />
+                            <!-- Простой список исключений ПК (UX-аудит 7, п. 5): сюда же сайт попадает с Главной по «Сайт не открывается?». Строки «Напрямую» продвинутого режима — отдельно. -->
+                            <TextBlock Text="Открывать без оптимизации" Style="{StaticResource H2}" Margin="0,14,0,0" />
+                            <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,6"
+                                       Text="Сайт или адрес на строку. Если банк или другой сайт перестал открываться, впишите его сюда: оптимизация его не тронет." />
+                            <TextBox Text="{Binding ExcludeText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AutomationProperties.Name="Открывать без оптимизации" local:Demo.Sensitive="True"
+                                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" Height="100"
+                                     FontFamily="Consolas" FontSize="14" Padding="8" />
+                            <TextBlock Text="{Binding ExcludeMessage}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0" />
                             </StackPanel>
                             </ScrollViewer>
                             <!-- Одна кнопка и один статус на вкладку (UX-аудит 6, п. 2): сохраняет и свои сайты, и строки «Свои настройки для сайтов». -->
@@ -730,7 +760,8 @@
                                         <local:InfoButton Topic="{x:Static local:InfoTexts.RouterMode}" Margin="8,0,0,8" />
                                     </StackPanel>
                                     <RadioButton Content="Только из списков" IsChecked="{Binding ModeLists}" IsEnabled="{Binding CanAct}" Margin="0,3" HorizontalAlignment="Left" />
-                                    <RadioButton Content="Для всех сайтов" IsChecked="{Binding ModeAll}" IsEnabled="{Binding CanAct}" Margin="0,3" HorizontalAlignment="Left" />
+                                    <RadioButton Content="Для всех сайтов" IsChecked="{Binding ModeAll}" IsEnabled="{Binding CanAct}" Margin="0,3,0,0" HorizontalAlignment="Left" />
+                                    <TextBlock Text="Может мешать отдельным сайтам (например, банкам) — тогда добавьте их в исключения." Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap" Margin="22,0,0,3" />
                                     <TextBlock Text="{Binding ModeHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" />
                                 </StackPanel>
                             </Border>
@@ -818,12 +849,6 @@
                                     <TextBlock Text="Игры и программы" Style="{StaticResource H1}" />
                                     <local:InfoButton Topic="{x:Static local:InfoTexts.Apps}" Margin="10,0,0,12" />
                                 </StackPanel>
-                                <!-- Предупреждение про античиты — одно на вкладку (UX-аудит 5, п. 10). -->
-                                <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="6"
-                                        Padding="10,6" Margin="0,-4,0,12" HorizontalAlignment="Left">
-                                    <TextBlock Text="{Binding Anti}" FontSize="13" TextWrapping="Wrap" />
-                                </Border>
-
                                 <Border Style="{StaticResource Card}">
                                     <StackPanel>
                                         <TextBlock Text="Настроить под игру" Style="{StaticResource H2}" />
@@ -835,12 +860,22 @@
                                         <!-- Драйвер для записи — только по выбору: игры с защитой от читов могут его заметить (AppsViewModel.AdvNoDriver). -->
                                         <StackPanel Margin="0,8,0,0" Visibility="{Binding ShowStart, Converter={StaticResource Vis}}">
                                             <CheckBox Content="Записывать и голосовой чат, и игровые серверы (UDP)" IsChecked="{Binding WithDriver}" HorizontalAlignment="Left" />
+                                            <!-- Коротко: решение «нужна мне UDP или нет» не должно тонуть в четырёх строках про драйвер (UX-аудит 7, п. 15). -->
                                             <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="26,2,0,0"
-                                                       Text="Для этого на время записи нужен драйвер WinDivert. Игры с защитой от читов могут его заметить — не включайте, если не уверены. Без галочки записываются только соединения TCP. Если оптимизация уже включена, драйвер и так работает." />
+                                                       Text="Нужен драйвер WinDivert. Игры с защитой от читов могут его заметить — не включайте, если не уверены." />
+                                            <Expander Header="Подробнее" Margin="22,2,0,0" FontSize="13">
+                                                <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="4,2,0,0"
+                                                           Text="Драйвер нужен только на время записи. Без галочки записываются только соединения TCP. Если оптимизация уже включена, драйвер и так работает." />
+                                            </Expander>
                                         </StackPanel>
                                         <WrapPanel Margin="0,10,0,0">
+                                            <!-- Профиль сохранён, а оптимизация выключена — включить тут же, не уходя на Главную (UX-аудит 7, п. 16); тогда она главная, «Настроить ещё одну игру» — обычная. -->
+                                            <Button ContentTemplate="{StaticResource Shield}" Content="Включить оптимизацию" Style="{StaticResource Primary}" Command="{Binding EnableCmd}"
+                                                    Visibility="{Binding ShowEnablePrimary, Converter={StaticResource Vis}}" />
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{Binding StartText}" Style="{StaticResource Primary}" Command="{Binding StartCmd}"
-                                                    Visibility="{Binding ShowStart, Converter={StaticResource Vis}}" />
+                                                    Visibility="{Binding ShowStartPrimary, Converter={StaticResource Vis}}" />
+                                            <Button ContentTemplate="{StaticResource Shield}" Content="{Binding StartText}" Command="{Binding StartCmd}"
+                                                    Visibility="{Binding ShowStartPlain, Converter={StaticResource Vis}}" />
                                             <Button ContentTemplate="{StaticResource Shield}" Content="Готово" Style="{StaticResource Primary}" Command="{Binding FinishCmd}"
                                                     Visibility="{Binding IsRecording, Converter={StaticResource Vis}}" />
                                             <Button Content="Отмена" Command="{Binding CancelCmd}" Visibility="{Binding IsRecording, Converter={StaticResource Vis}}" />
@@ -853,7 +888,16 @@
                                         <Border Style="{StaticResource Warn}" Margin="0,10,0,0" Visibility="{Binding ShowOffHint, Converter={StaticResource Vis}}">
                                             <TextBlock Text="{Binding OffHint}" FontSize="13" TextWrapping="Wrap" />
                                         </Border>
+                                        <!-- Пока ждём «Заработало?» — обычная кнопка под подсказкой «оптимизация выключена». -->
+                                        <Button ContentTemplate="{StaticResource Shield}" Content="Включить оптимизацию" Command="{Binding EnableCmd}"
+                                                HorizontalAlignment="Left" Margin="0,10,0,0" Visibility="{Binding ShowEnablePlain, Converter={StaticResource Vis}}" />
                                     </StackPanel>
+                                </Border>
+
+                                <!-- Предупреждение про античиты — под карточкой «Настроить под игру», а не над ней: человек пришёл не из-за античита (UX-аудит 7, п. 15). -->
+                                <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="6"
+                                        Padding="10,6" Margin="0,0,0,12" HorizontalAlignment="Left">
+                                    <TextBlock Text="{Binding Anti}" FontSize="13" TextWrapping="Wrap" />
                                 </Border>
 
                                 <Border Style="{StaticResource Card}" Visibility="{Binding HasProfiles, Converter={StaticResource Vis}}">
@@ -1792,20 +1836,25 @@
                                 <StackPanel>
                                     <TextBlock Text="{Binding EmptyTitle}" Style="{StaticResource H2}" />
                                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
-                                               Text="Если у вас роутер с OpenWrt (на многие модели с OpenWrt 25.x можно поставить DpiShell) — тогда оптимизация будет работать для всех устройств дома: телефонов, телевизора, приставки. Без роутера всё работает и на одном этом компьютере." />
-                                    <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,8,0,0"
-                                               Text="OpenWrt ли у вас: откройте в браузере адрес роутера (обычно 192.168.1.1) — у OpenWrt страница входа называется LuCI." />
+                                               Text="С роутером оптимизация работает для всех устройств дома: телефонов, телевизора, приставки. Без роутера всё работает и на одном этом компьютере." />
+                                    <!-- Человек не знает слов «OpenWrt» и «LuCI»: одна кнопка, программа сама находит роутер и отвечает «да / нет / не знаю» (UX-аудит 7, п. 10). -->
                                     <WrapPanel Margin="-4,10,0,0">
+                                        <Button Content="Проверить, подходит ли мой роутер" Style="{StaticResource Primary}" Command="{Binding FitCmd}" Margin="4,0,8,0" />
                                         <!-- Установка из окна по SSH (router-api §5.4, RouterInstallDialog). -->
-                                        <Button Content="Установить на роутер" Style="{StaticResource Primary}" Command="{Binding InstallCmd}" Margin="4,0,8,0"
+                                        <Button Content="Установить на роутер" Command="{Binding InstallCmd}" Margin="4,0,8,0"
                                                 Visibility="{Binding CanInstall, Converter={StaticResource Vis}}" />
                                         <Button Content="Как поставить на роутер ↗" Style="{StaticResource LinkButton}" Command="{Binding GuideCmd}" VerticalAlignment="Center"
                                                 ToolTip="Инструкция на GitHub: docs/router/README.md" />
                                     </WrapPanel>
+                                    <TextBlock Text="{Binding FitText}" TextWrapping="Wrap" Margin="0,6,0,0" Visibility="{Binding HasFit, Converter={StaticResource Vis}}" />
                                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                         <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center" Text="DpiShell на роутере уже стоит?" />
                                         <Button Content="Найти" Style="{StaticResource LinkButton}" Command="{Binding FindCmd}" Margin="6,0,0,0" VerticalAlignment="Center" />
                                     </StackPanel>
+                                    <Expander Header="Подробнее" Margin="0,6,0,0">
+                                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                                   Text="DpiShell ставится на роутеры с прошивкой OpenWrt (на многие модели с OpenWrt 25.x). Проверить самому: откройте в браузере адрес роутера (обычно 192.168.1.1) — у OpenWrt страница входа называется LuCI." />
+                                    </Expander>
                                 </StackPanel>
                             </Border>
 

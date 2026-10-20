@@ -569,6 +569,33 @@ public sealed class Shell
     public IpsetVerdict WriteUserIpset(IEnumerable<string> lines, bool exclude = false, bool confirmed = false) =>
         IpLists.WriteUser(lines, exclude, confirmed);
 
+    /// <summary>
+    /// «Открывать без оптимизации» (API 1.10): список целиком. Домены — в user-exclude.txt (его читают общие роли и IP-списки) и в состояние (сборка добавляет их
+    /// как <c>--hostlist-exclude-domains</c> во все роли каталога, в том числе google и discord_media). Работающий обход перезапускается; не поднялся — список возвращается.
+    /// </summary>
+    public (IReadOnlyList<string> Saved, IReadOnlyList<string> Rejected) SetUserExclude(IEnumerable<string> lines)
+    {
+        Paths.EnsureDirectories();
+        var trimmed = lines.Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+        var good = trimmed.Select(DataStore.NormalizeDomain).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Take(AdvancedSites.MaxExclude).ToList();
+        var before = State.UserExclude.ToList();
+        Data.WriteUserDomains(good, DataStore.UserExclude);
+        IReadOnlyList<string> rejected = [.. trimmed.Where(l => DataStore.NormalizeDomain(l) is null)];
+        if (before.SequenceEqual(good, StringComparer.OrdinalIgnoreCase)) return (good, rejected);
+        State.UserExclude = good;
+        State.Save(Paths);
+        try { ReapplyIfActive(); }
+        catch (Exception e) when (e is InvalidOperationException or SecurityException or IOException or ConflictException)
+        {
+            State.UserExclude = before;
+            State.Save(Paths);
+            Data.WriteUserDomains(before, DataStore.UserExclude);
+            try { ReapplyIfActive(); } catch (Exception again) when (again is InvalidOperationException or SecurityException or IOException) { }
+            throw;
+        }
+        return (good, rejected);
+    }
+
     /// <summary>Изменились режимы — работающий обход перезапускается на той же стратегии (как Enable).</summary>
     void ReapplyIfActive()
     {

@@ -40,14 +40,15 @@ public sealed partial class MainViewModel
     public ICommand SaveSitesCmd { get; private set; } = null!;
 
     /// <summary>Есть несохранённое: свои сайты или строки продвинутого режима.</summary>
-    public bool SitesDirty => TargetsDirty || AdvancedPc.Dirty;
+    public bool SitesDirty => TargetsDirty || ExcludeDirty || AdvancedPc.Dirty;
     public bool SitesSaved => !SitesDirty;
 
-    void RaiseSitesDirty() { Raise(nameof(TargetsDirty)); Raise(nameof(SitesDirty)); Raise(nameof(SitesSaved)); Raise(nameof(TargetsMessage)); }
+    void RaiseSitesDirty() { Raise(nameof(TargetsDirty)); Raise(nameof(ExcludeDirty)); Raise(nameof(SitesDirty)); Raise(nameof(SitesSaved)); Raise(nameof(TargetsMessage)); Raise(nameof(ExcludeMessage)); }
 
     async Task SaveSitesAsync()
     {
         if (!await SaveTargetsAsync()) return;
+        if (ExcludeDirty && !await SaveExcludeAsync()) return;
         if (AdvancedPc.Dirty && AdvancedPc.Available) await AdvancedPc.ApplyAsync();
         RaiseSitesDirty();
     }

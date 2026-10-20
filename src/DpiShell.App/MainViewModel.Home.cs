@@ -56,6 +56,9 @@ public sealed partial class MainViewModel
     public ICommand ToggleStrategiesCmd => _toggleStrategiesCmd ??= new RelayCommand(() => ShowStrategies = !ShowStrategies);
     ICommand? _toggleStrategiesCmd;
 
+    /// <summary>«Подобрать на роутере» на карточке — только когда роутер с DpiShell найден (без роутера слово ничего не говорит, UX-аудит 7, п. 4).</summary>
+    public bool ShowRouterSelectLink => Router.Found;
+
     public ICommand GoRouterCmd => _goRouterCmd ??= new RelayCommand(() => Page = Pages.Router);
     ICommand? _goRouterCmd;
 

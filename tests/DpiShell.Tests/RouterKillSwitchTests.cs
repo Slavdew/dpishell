@@ -175,7 +175,8 @@ public sealed class RouterKillSwitchTests : IDisposable
 
         r.WatchdogTrip();
         await vm.RefreshAsync();
-        Assert.Equal($"Оптимизация на роутере выключена сторожем в {RouterTexts.Time(new DateTime(2026, 10, 19, 11, 32, 0, DateTimeKind.Utc))} — с оптимизацией пропал интернет.", vm.OffText);
+        // «Сторож» — один раз и с пояснением (UX-аудит 7, п. 9).
+        Assert.Equal($"Оптимизация на роутере выключена автоматически в {RouterTexts.Time(new DateTime(2026, 10, 19, 11, 32, 0, DateTimeKind.Utc))}: с ней пропал интернет (это сделал сторож — он проверяет, что интернет работает).", vm.OffText);
         Assert.Equal(vm.OffText, vm.HomeLine);
         // Предложение подобрать другую стратегию; «Не сейчас» прячет его до следующего срабатывания сторожа.
         Assert.True(vm.OfferSelect);
@@ -253,7 +254,8 @@ public sealed class RouterKillSwitchTests : IDisposable
         r.WatchdogSelectRunning();
         await vm.RefreshAsync();
         Assert.Equal(RouterViewModel.WatchdogSelectState.Running, vm.WdState);
-        Assert.Equal("Сторож выключил оптимизацию — роутер подбирает другую стратегию…", vm.OffText);
+        Assert.Equal("Оптимизацию выключили автоматически — пропал интернет. Роутер подбирает другую стратегию…", vm.OffText);
+        Assert.DoesNotContain("Сторож", vm.OffText);   // слово объяснено в одной фразе, дальше — «автоматически»
         Assert.True(vm.WdRunning);
         Assert.False(vm.ShowRouterActions);   // «Включить», «Подобрать» и «Стратегия» спрятаны на время подбора
         Assert.False(vm.OfferSelect);
@@ -265,7 +267,7 @@ public sealed class RouterKillSwitchTests : IDisposable
         r.WatchdogSelectFound("alt10");
         await vm.RefreshAsync();
         Assert.Equal(RouterViewModel.WatchdogSelectState.Found, vm.WdState);
-        Assert.StartsWith("Сторож выключил прежнюю стратегию, роутер подобрал и включил ", vm.OffText);
+        Assert.StartsWith("Оптимизацию выключили автоматически — пропал интернет. Роутер подобрал и включил ", vm.OffText);
         Assert.EndsWith(".", vm.OffText);
         Assert.False(vm.OffAlert);
         Assert.False(vm.OfferSelect);
@@ -277,7 +279,7 @@ public sealed class RouterKillSwitchTests : IDisposable
         r.WatchdogSelectFailed();
         await vm.RefreshAsync();
         Assert.Equal(RouterViewModel.WatchdogSelectState.Failed, vm.WdState);
-        Assert.Equal("Сторож выключил оптимизацию, подходящей стратегии не нашлось. Оптимизация выключена, пока вы её не включите.", vm.OffText);
+        Assert.Equal("Оптимизацию выключили автоматически — пропал интернет, а подходящей стратегии не нашлось. Она выключена, пока вы её не включите.", vm.OffText);
         Assert.True(vm.OffAlert);
         Assert.False(vm.OfferSelect);
         Assert.True(vm.OfferSelectButton);

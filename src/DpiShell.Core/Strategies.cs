@@ -34,7 +34,7 @@ public sealed record StrategyCatalog(string Engine, int Version, string Source, 
 /// <param name="Advanced">Продвинутый режим «сайты → стратегия» (включён и строки разрешены); null — как обычно.</param>
 /// <param name="Joint">Совместная работа с роутером (§7): роутер ведёт YouTube, Discord и остальное, этот ПК — только свои сайты и строки продвинутого режима; null — как обычно.</param>
 public sealed record BuildOptions(IpsetMode Ipset = IpsetMode.Off, GameMode Game = GameMode.Off, IReadOnlyList<AppProfile>? Profiles = null, AdvancedPlan? Advanced = null,
-    JointBuild? Joint = null)
+    JointBuild? Joint = null, IReadOnlyList<string>? Exclude = null)
 {
     public static readonly BuildOptions Default = new();
 
@@ -57,7 +57,8 @@ public sealed record BuildOptions(IpsetMode Ipset = IpsetMode.Off, GameMode Game
         var joint = s.Joint is { Active: true, Until: { } leaseEnd } && leaseEnd > utcNow
             ? new JointBuild([.. s.Joint.Owned.Where(AdvancedSites.IsDomain).Take(JointRules.MaxDomains)])
             : null;
-        return new(mode, ParseGame(s.GameMode), profiles.Count > 0 ? profiles : null, advanced, joint);
+        var exclude = s.UserExclude.Where(AdvancedSites.IsDomain).Take(AdvancedSites.MaxExclude).ToList();
+        return new(mode, ParseGame(s.GameMode), profiles.Count > 0 ? profiles : null, advanced, joint, exclude.Count > 0 ? exclude : null);
     }
 
     public static IpsetMode ParseIpset(string? s) => s switch { "list" => IpsetMode.List, "any" => IpsetMode.Any, _ => IpsetMode.Off };
@@ -201,8 +202,7 @@ public static class WinwsArgs
             IpsetMode.Any => [$"--ipset={L(IpLists.AnyFile)}"],   // единственный и пустой: все include пусты = любой адрес
             _ => [$"--ipset={L(IpLists.NoneFile)}"],
         };
-        string[] ipsetExclude = [$"--ipset-exclude={L(IpLists.ExcludeFile)}", $"--ipset-exclude={L(IpLists.UserExcludeFile)}"];
-        // Списки собираются поэлементно: путь с пробелом остаётся одним аргументом.
+        string[] ipsetExclude = [$"--ipset-exclude={L(IpLists.ExcludeFile)}", $"--ipset-exclude={L(IpLists.UserExcludeFile)}"];        // Списки собираются поэлементно: путь с пробелом остаётся одним аргументом.
         string[] excludes =
         [
             $"--hostlist-exclude={L("exclude.txt")}", $"--hostlist-exclude={L(DataStore.UserExclude)}",
@@ -273,7 +273,9 @@ public static class WinwsArgs
         }
         // Сайты «напрямую» — исключения во всех ролях каталога (в режиме IP-списка нулевая фаза ipset-профиля их всё равно может задеть: имя ещё не известно).
         // При связке к ним добавляются сайты, которые ведёт роутер, но записаны у ПК в «Свои сайты» (список winws не правим): их на ПК не трогаем.
-        var direct = (adv?.Direct ?? []).Concat(routerOwned).Where(AdvancedSites.IsDomain).Distinct().ToList();
+        // К ним же — «Открывать без оптимизации» (API 1.10, простой список исключений ПК): те же --hostlist-exclude-domains во всех ролях каталога, в том числе
+        // google и discord_media, где файла user-exclude.txt нет (его читают общие роли). Пустой список — командная строка каталога не меняется (эталон роутера).
+        var direct = (adv?.Direct ?? []).Concat(routerOwned).Concat(o.Exclude ?? []).Where(AdvancedSites.IsDomain).Distinct().ToList();
         string[] directArgs = direct.Count > 0 ? ["--hostlist-exclude-domains=" + string.Join(',', direct)] : [];
         // Профили программ идут сразу после строк продвинутого режима и до общих ролей: winws берёт первый подходящий профиль, а general и quic ловили бы те же порты.
         foreach (var pr in profiles)

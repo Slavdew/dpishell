@@ -80,6 +80,8 @@ public static partial class AdvancedSites
     public const string Auto = "auto", Direct = "direct";
     public const string OthersDirect = "direct", OthersLists = "lists", OthersAll = "all";
     public const int MaxRows = 20, MaxDomains = 50;
+    /// <summary>Сайтов в «Открывать без оптимизации» (API 1.10): они идут в командную строку winws и службы — длина ограничена.</summary>
+    public const int MaxExclude = 200;
 
     public static bool IsOthers(string? s) => s is OthersDirect or OthersLists or OthersAll;
 

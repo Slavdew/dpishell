@@ -122,6 +122,9 @@ public static partial class HelperCommands
             new ArgSpec("lines", ArgKind.Lines, Required: true, MaxItems: IpsetValidator.MaxUserLines),
             new ArgSpec("exclude", ArgKind.Bool), new ArgSpec("confirmed", ArgKind.Bool)),
         new("user_targets_set", true, false, new ArgSpec("lines", ArgKind.Lines, Required: true, MaxItems: MaxUserTargets)),
+        // Сайты, которые открываются без оптимизации (API 1.10): список целиком, только домены (тот же разбор, что у «Своих сайтов»);
+        // в командную строку они попадают как --hostlist-exclude файла user-exclude.txt, который собирает сам помощник.
+        new("user_exclude_set", true, false, new ArgSpec("lines", ArgKind.Lines, Required: true, MaxItems: AdvancedSites.MaxExclude)),
         new("hosts_check", true, true),
         new("hosts_preview", false, false),
         new("hosts_apply", true, false),

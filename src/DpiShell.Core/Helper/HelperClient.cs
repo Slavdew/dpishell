@@ -324,6 +324,10 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public Task<UserTargetsResult> SetUserTargetsAsync(IReadOnlyList<string> lines, CancellationToken ct = default) =>
         CallAsync<UserTargetsResult>("user_targets_set", new { lines }, null, ct);
 
+    /// <summary>Сайты, которые на этом ПК открываются без оптимизации (API 1.10): весь список целиком.</summary>
+    public Task<UserTargetsResult> SetUserExcludeAsync(IReadOnlyList<string> lines, CancellationToken ct = default) =>
+        CallAsync<UserTargetsResult>("user_exclude_set", new { lines }, null, ct);
+
     public Task<HostsCheckReport> HostsCheckAsync(IProgress<HostsCheckProgress>? progress = null, CancellationToken ct = default) =>
         CallAsync<HostsCheckReport>("hosts_check", null, Map(progress), ct);
 

@@ -168,6 +168,13 @@ public sealed class FakeHelperBackend : IHelperBackend
         return new(lines, []);
     }
 
+    public UserTargetsResult SetUserExclude(IReadOnlyList<string> lines)
+    {
+        Call("user_exclude_set " + string.Join(",", lines));
+        StatusValue = StatusValue with { UserExclude = [.. lines] };
+        return new(lines, []);
+    }
+
     public Task<HostsCheckReport> HostsCheckAsync(IProgress<HostsCheckProgress> progress, CancellationToken ct)
     {
         Call("hosts_check");

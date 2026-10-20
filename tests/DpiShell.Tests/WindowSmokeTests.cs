@@ -299,8 +299,13 @@ public sealed partial class WindowSmokeTests
                 // Адрес молчит у всех стратегий — строка под итогом (и в свёрнутом виде, и в «Подробнее»).
                 const string blockedNote = "Не открылось ни с одной стратегией: redirector.googlevideo.com, yt3.ggpht.com — похоже на блокировку по адресу, подбор стратегии тут, скорее всего, не поможет. Сайт YouTube откроется, а видео может не воспроизводиться.";
                 SetProp(vm, "AddressNote", blockedNote);
+                // С такой оговоркой заголовок не обещает успех (UX-аудит 7, п. 7), а в карточке есть главная «Применить» (как после настоящего подбора).
+                SetProp(vm, "ResultText", MainViewModel.BestTitle(perfect: true, addressNote: true, strategies[0].Title));
+                typeof(MainViewModel).GetMethod("SetBest", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, [strategies[0].Id]);
                 Pump();
                 if (!Visible(t => t.Text == blockedNote)) throw new Exception("В карточке итога нет строки про блокировку по адресу");
+                if (Visible(t => t.Text.StartsWith("Подходит:")) || !Visible(t => t.Text.StartsWith("Лучшая из проверенных:"))) throw new Exception("Заголовок итога с оговоркой про блокировку обещает успех");
+                if (Find<Button>(tabs, b => b.Content as string == "Применить" && b.IsVisible && b.IsEnabled) is null) throw new Exception("В карточке итога нет главной кнопки «Применить»");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-select-result-blocked-full.png"));
 
                 // Лучшая включена — одна строка.
@@ -626,6 +631,10 @@ public sealed partial class WindowSmokeTests
                         int finds = FindAll<Button>(tabsNone, b => b.Content as string == "Найти" && b.IsVisible).Count();
                         if (installs != 1 || finds != 1) throw new Exception($"Без роутера кнопок установки {installs} (ждали 1), «Найти» {finds} (ждали 1)");
                         if (Find<TextBlock>(tabsNone, t => t.Text.Contains("«Найти» ниже")) is not null) throw new Exception("Осталась фраза «Нажмите «Найти» ниже»");
+                        // UX-аудит 7, п. 10: вместо абзаца про OpenWrt и LuCI — кнопка «Проверить, подходит ли мой роутер»; абзац — под «Подробнее».
+                        if (Find<Button>(tabsNone, b => b.Content as string == "Проверить, подходит ли мой роутер" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет кнопки «Проверить, подходит ли мой роутер»");
+                        if (Find<TextBlock>(tabsNone, t => t.IsVisible && (t.Text.Contains("LuCI") || t.Text.Contains("OpenWrt ли у вас"))) is not null) throw new Exception("Слова про OpenWrt и LuCI видны без «Подробнее»");
+                        if (Find<Expander>(tabsNone, e => e.Header as string == "Подробнее" && e.Content is TextBlock tb && tb.Text.Contains("LuCI")) is null) throw new Exception("Абзац про OpenWrt и LuCI не под «Подробнее»");
                     }
                     // Вход на роутер — небольшое окно на месте (п. 14): Enter — «Войти», Esc — «Отмена».
                     if (page == Pages.Router)
@@ -651,6 +660,16 @@ public sealed partial class WindowSmokeTests
                     typeof(MainViewModel).GetMethod("UpdateStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
                     Pump();
                     Snap(w, Path.Combine(snapDir, $"{theme}-{name}.png"));
+                    // «Проверить, подходит ли мой роутер»: ответ простыми словами под кнопкой (сеть — подмена).
+                    if (page == Pages.Router)
+                    {
+                        vm.Router.Gateway = () => "192.168.1.1";
+                        vm.Router.FitProbe = _ => Task.FromResult(DpiShell.Core.Router.RouterFitResult.Yes);
+                        WaitUi(vm.Router.CheckFitAsync());
+                        Pump();
+                        if (Find<TextBlock>(Find<TabControl>(w)!, t => t.IsVisible && t.Text.StartsWith("Похоже, у вас роутер с OpenWrt (192.168.1.1)")) is null) throw new Exception("Нет ответа «Похоже, у вас роутер с OpenWrt»");
+                        Snap(w, Path.Combine(snapDir, $"{theme}-router-none-fit.png"));
+                    }
                     // Подбор: строка раскрыта — результаты по всем адресам (обязательные провалы — первыми, отмечены).
                     if (page == Pages.Select)
                     {
@@ -757,6 +776,7 @@ public sealed partial class WindowSmokeTests
                         // Роутера нет: только свои сайты ПК — без карточек роутера и заглушек про исключения.
                         foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", "Исключения (оптимизация их не трогает)", "Роутер: что мешает" })
                             if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» на «Сайтах» без роутера");
+                        if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Открывать без оптимизации" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет списка «Открывать без оптимизации»");
                         if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Свои сайты" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет поля своих сайтов ПК");
                     }
                     if (page == Pages.Dns)
@@ -1135,7 +1155,7 @@ public sealed partial class WindowSmokeTests
                 Pump();
                 {
                     var tabs = Find<TabControl>(w)!;
-                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Оптимизация на роутере выключена сторожем") && t.IsVisible) is null) throw new Exception("На главной нет фразы о стороже");
+                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Оптимизация на роутере выключена автоматически") && t.Text.Contains("сторож — он проверяет, что интернет работает") && t.IsVisible) is null) throw new Exception("На главной нет фразы о стороже");
                     if (Find<Button>(tabs, b => b.Content as string == "Попробовать прежнюю (на пробу)" && b.IsVisible && b.IsEnabled) is null) throw new Exception("На главной нет «Попробовать снова»");
                     if (Find<Button>(tabs, b => b.Content as string == "Подобрать на роутере" && b.IsVisible && b.IsEnabled) is null) throw new Exception("В плашке главной нет «Подобрать заново»");
                     if (Find<Button>(tabs, b => b.Content as string == "Включить снова") is not null) throw new Exception("Осталась «Включить снова»");
@@ -1177,21 +1197,21 @@ public sealed partial class WindowSmokeTests
                     fake.WatchdogSelectRunning();
                     WaitUi(router.RefreshAsync());
                     Pump();
-                    if (Find<TextBlock>(tabs, t => t.Text == "Сторож выключил оптимизацию — роутер подбирает другую стратегию…" && t.IsVisible) is null) throw new Exception("Нет фразы о подборе после сторожа");
+                    if (Find<TextBlock>(tabs, t => t.Text == "Оптимизацию выключили автоматически — пропал интернет. Роутер подбирает другую стратегию…" && t.IsVisible) is null) throw new Exception("Нет фразы о подборе после сторожа");
                     if (Find<Button>(tabs, b => (b.Content as string is "Подобрать" or "Не сейчас" or "Попробовать прежнюю (на пробу)") && b.IsVisible) is not null) throw new Exception("Во время подбора после сторожа остались кнопки предложения");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-running.png"));
                     WaitUi(router.CancelSelectAsync());
                     fake.WatchdogSelectFound();
                     WaitUi(router.RefreshAsync());
                     Pump();
-                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Сторож выключил прежнюю стратегию, роутер подобрал и включил ") && t.IsVisible) is null) throw new Exception("Нет фразы «роутер подобрал и включил»");
+                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Оптимизацию выключили автоматически — пропал интернет. Роутер подобрал и включил ") && t.IsVisible) is null) throw new Exception("Нет фразы «роутер подобрал и включил»");
                     if (Find<Button>(tabs, b => (b.Content as string is "Подобрать" or "Не сейчас" or "Попробовать прежнюю (на пробу)" or "Попробовать прежнюю (на пробу)") && b.IsVisible) is { } extra) throw new Exception("После удачного подбора сторожа остались кнопки: " + extra.Content);
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-found.png"));
                     fake.WatchdogTrip();
                     fake.WatchdogSelectFailed();
                     WaitUi(router.RefreshAsync());
                     Pump();
-                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Сторож выключил оптимизацию, подходящей стратегии не нашлось.") && t.IsVisible) is null) throw new Exception("Нет фразы «не нашлось»");
+                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Оптимизацию выключили автоматически — пропал интернет, а подходящей стратегии не нашлось.") && t.IsVisible) is null) throw new Exception("Нет фразы «не нашлось»");
                     if (Find<Button>(tabs, b => b.Content as string == "Подобрать на роутере" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Подобрать на роутере» после неудачи");
                     if (Find<Button>(tabs, b => b.Content as string == "Попробовать прежнюю (на пробу)" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Попробовать прежнюю»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-failed.png"));
@@ -1311,11 +1331,19 @@ public sealed partial class WindowSmokeTests
                 Shot(d, "install-start");
                 router.SshConnector = new FakeSshConnector(RouterSetupViewModelTests.Ssh(fake, bad));
                 Task.Run(() => i.CheckAsync("secret")).GetAwaiter().GetResult();
+                Pump();
+                // UX-аудит 7, п. 11: не подходит — «Установить» серая (с причиной выше), главная — «Проверить роутер».
+                if (Find<Button>(d, b => b.Content as string == "Установить" && b.IsVisible && !b.IsEnabled) is null) throw new Exception("Роутер не подходит, а «Установить» активна");
+                if (Find<Button>(d, b => b.Content as string == "Проверить роутер" && b.IsVisible && b.IsEnabled && b.IsDefault && b.Style == (Style)d.FindResource("Primary")) is null)
+                    throw new Exception("Роутер не подходит, а «Проверить роутер» не главная");
+                if (FindAll<Button>(d, b => b.Content as string == "Проверить роутер" && b.IsVisible).Count() != 1) throw new Exception("«Проверить роутер» показана дважды");
+                if (Find<TextBlock>(d, t => t.IsVisible && t.Text.StartsWith("Установка недоступна, пока роутер не подходит")) is null) throw new Exception("Нет пояснения, почему «Установить» недоступна");
                 Shot(d, "install-unsuitable");
                 router.SshConnector = new FakeSshConnector(RouterSetupViewModelTests.Ssh(fake, offline, failed));
                 Task.Run(() => i.CheckAsync("secret")).GetAwaiter().GetResult();
                 Pump();
                 if (Find<Button>(d, b => b.Content as string == "Установить" && b.IsEnabled) is null) throw new Exception("Роутер подходит, а «Установить» неактивна");
+                if (Find<TextBlock>(d, t => t.IsVisible && t.Text.StartsWith("Установка недоступна")) is not null) throw new Exception("Роутер подходит, а пояснение «Установка недоступна» осталось");
                 Shot(d, "install-checked");
                 Task.Run(() => i.InstallAsync("secret")).GetAwaiter().GetResult();
                 Pump();
@@ -1704,6 +1732,17 @@ public sealed partial class WindowSmokeTests
                 if (Visible(t => t.Text == "Свои подсети")) throw new Exception("Свои подсети видны в свёрнутом блоке");
                 if (!Visible(t => t.Text.Contains("Vanguard"))) throw new Exception("Предупреждение про античиты не видно");
                 if (Btn("Начать") is null) throw new Exception("Нет кнопки «Начать»");
+                // UX-аудит 7, п. 15: плашка про античиты — под карточкой «Настроить под игру», а не над ней; пояснение у галки UDP — две строки, детали — под «Подробнее».
+                {
+                    double Y(FrameworkElement e) => e.TranslatePoint(new Point(0, 0), tabs).Y;
+                    var anti = Find<TextBlock>(tabs, t => t.IsVisible && t.Text.Contains("Vanguard"))!;
+                    if (Y(anti) <= Y(Btn("Начать")!)) throw new Exception("Плашка про античиты выше кнопки «Начать» — она должна быть под карточкой");
+                    if (!Visible(t => t.Text.StartsWith("Нужен драйвер WinDivert.") && t.Text.Length < 130)) throw new Exception("Нет короткого пояснения у галки UDP");
+                    if (Visible(t => t.Text.Contains("Без галочки записываются"))) throw new Exception("Детали про драйвер видны без «Подробнее»");
+                    if (Find<Expander>(tabs, e => e.IsVisible && e.Header as string == "Подробнее" && e.Content is TextBlock tb && tb.Text.Contains("Без галочки записываются")) is null)
+                        throw new Exception("Детали про UDP не под «Подробнее»");
+                    if (Btn("Включить оптимизацию") is not null) throw new Exception("«Включить оптимизацию» видна до настройки профиля");
+                }
                 // «Отладка подключений» — только для опытных.
                 bool advVisible = Visible(t => t.Text == "Отладка подключений");
                 if (advVisible != dark) throw new Exception($"«Отладка подключений» видна = {advVisible}, ждали {dark}");
@@ -1734,10 +1773,13 @@ public sealed partial class WindowSmokeTests
                     if (!Visible(t => t.Text == "Профили программ")) throw new Exception("Профиль не в списке");
                     if (Btn("Вернуть как было") is null) throw new Exception("Нет «Вернуть как было»");
                     if (!Visible(t => t.Text.StartsWith("Оптимизация сейчас выключена"))) throw new Exception("Нет подсказки, что оптимизация выключена");
+                    if (Btn("Включить оптимизацию") is null) throw new Exception("Нет «Включить оптимизацию» рядом с подсказкой");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-simple-check.png"));
                     Btn("Да, заработало")!.Command.Execute(null);
                     Pump();
                     if (!Visible(t => t.Text.StartsWith("Профиль «") && t.Text.Contains("» сохранён."))) throw new Exception("Нет итога");
+                    // UX-аудит 7, п. 16: оптимизация выключена — включить прямо в карточке, не уходя на Главную.
+                    if (Btn("Включить оптимизацию") is not { IsEnabled: true }) throw new Exception("После «профиль сохранён» нет кнопки «Включить оптимизацию»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-simple-done.png"));
                 }
                 else

@@ -39,7 +39,7 @@ public sealed record BrowserPath(IPAddress[] System, IPAddress[] Doh, bool Ok, s
     /// </summary>
     public string Reason => FromHosts ? HostsReason : Spoofed ? DnsReason : WindowsOnlyReason;
 
-    public const string DnsReason = "DNS провайдера подменяет адрес";
+    public const string DnsReason = "провайдер подсовывает не тот адрес";
     public const string HostsReason = "запись в hosts ведёт на неработающий адрес";
     public const string WindowsOnlyReason = "Программы, которые берут адрес у Windows (Discord, игры, часть браузеров), сюда не достучатся";
 }

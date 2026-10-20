@@ -182,6 +182,13 @@ public sealed partial class MainViewModel : Observable
         Apps = new AppsViewModel(helper)
         {
             OptimizationRunning = () => IsRunning,
+            // «Включить» ведёт на Главную; с «Игр» человек остаётся на месте — он пришёл настроить игру, а не смотреть итог.
+            EnableOptimization = async () =>
+            {
+                int from = Page;
+                await EnableAsync();
+                if (Page == Pages.Home && IsRunning) Page = from;
+            },
             Guard = Guard,
             Need = NeedHelperAsync,
             Say = s => Message = s,
@@ -368,6 +375,7 @@ public sealed partial class MainViewModel : Observable
                 _targetsFromHelper = true;
                 if (s.UserTargets.Count > 0) TargetsText = string.Join(Environment.NewLine, s.UserTargets);
             }
+            TakeExcludeFromHelper();
         }
         ReloadChoices();
         Net.Refresh();
@@ -662,6 +670,8 @@ public sealed partial class MainViewModel : Observable
         // Через роутер — зелёный кружок: обход работает, хоть и не на этом ПК (значок в трее — про этот ПК).
         StatusBrush = partial ? BrushOf(StatusKind.Busy) : BrushOf(Kind == StatusKind.Off && Router.Found && Router.RouterEnabled ? StatusKind.On : Kind);
         DropStaleCheck();
+        MaybeAutoCheck();
+        Raise(nameof(ShowSiteFix)); Raise(nameof(ShowRouterSelectLink));
         Raise(nameof(IsRunning)); Raise(nameof(ResultApplied));
         Raise(nameof(ToggleText)); Raise(nameof(PcSecondary)); Raise(nameof(PcPrimary));
         Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); RaiseSitesDirty();
@@ -1008,10 +1018,39 @@ public sealed partial class MainViewModel : Observable
     void DropStaleCheck()
     {
         if (_checkFor is not { } f || f == CheckState()) return;
+        DropCheck();
+    }
+
+    /// <summary>Итог до включения — «было 1 из 2» в строке после включения (UX-аудит 7, п. 1). Null — прежней проверки нет.</summary>
+    (int Ok, int Total)? _checkWas;
+
+    void DropCheck()
+    {
+        if (!Checking && CheckGroups.Count > 0) _checkWas = (CheckGroups.Count(g => g.Ok), CheckGroups.Count);
         _checkGen++;
         _checkFor = null;
         CheckRows.Clear(); CheckSummary = ""; CheckedAt = "";
         Checking = false;
+    }
+
+    /// <summary>Проверять сайты сами, как только оптимизация заработала (на ПК или через роутер) и итога для этого состояния ещё нет. В тестах — выключено.</summary>
+    public bool AutoCheck { get; set; }
+
+    bool _covered;
+
+    /// <summary>
+    /// Оптимизация заработала — сразу «Проверить сейчас», чтобы было видно, стало ли лучше (в том числе при совместной работе и через роутер,
+    /// где «Включить» нажимали не здесь). Включение из «Включить» проверяет само (ApplyAsync) — здесь остальные пути и запуск программы.
+    /// </summary>
+    void MaybeAutoCheck()
+    {
+        bool covered = Covered, was = _covered;
+        _covered = covered;
+        if (!covered) { if (was && _checkFor is not null) DropCheck(); return; }
+        // Роутер включился, а состояние ПК то же: прежний итог (без оптимизации) уже не про это.
+        if (!was && _checkFor is not null) DropCheck();
+        if (!AutoCheck || IsLoading || Busy || Selecting || Checking || _checkFor is not null || CheckedGroups().Count == 0) return;
+        _ = CheckNowAsync();
     }
 
     /// <summary>«Проверить сейчас» — без прав: HTTPS-проверка целей с DoH, winws не нужен. Не занимает окно: идёт рядом с другими действиями.</summary>
@@ -1025,6 +1064,8 @@ public sealed partial class MainViewModel : Observable
         if (Checking) return null;
         IReadOnlyList<TargetVerdict>? result = null;
         int gen = ++_checkGen;
+        // Повторная проверка в том же состоянии — «было» уже не про включение.
+        if (_checkFor is not null && CheckGroups.Count > 0) _checkWas = null;
         _checkFor = CheckState();
         CheckRows.Clear(); CheckedAt = "";
         CheckSummary = "Проверяю…";
@@ -1040,7 +1081,8 @@ public sealed partial class MainViewModel : Observable
             result = verdicts;
             // В тех же единицах, что и отметки рядом (п. 5): группы, а не адреса; адреса — в «Подробнее».
             CheckSummary = $"Открывается {CheckGroups.Count(g => g.Ok)} из {CheckGroups.Count}";
-            CheckedAt = $"в {DateTime.Now:HH:mm}";
+            // «Было» — итог до включения: виден, чтобы не гадать, помогло ли.
+            CheckedAt = $"в {DateTime.Now:HH:mm}" + (Covered && _checkWas is { } w ? $" · было {w.Ok} из {w.Total}" : "");
         }
         catch (Exception e)
         {
@@ -1444,6 +1486,10 @@ public sealed partial class MainViewModel : Observable
         CommandManager.InvalidateRequerySuggested();
     }
 
+    /// <summary>Заголовок итога подбора: «Подходит» — только когда открылось всё и нет «подбор тут, скорее всего, не поможет»; иначе — «Лучшая из проверенных».</summary>
+    public static string BestTitle(bool perfect, bool addressNote, string strategy) =>
+        (perfect && !addressNote ? "Подходит: " : "Лучшая из проверенных: ") + strategy;
+
     void ShowReport(SelectionReport r)
     {
         foreach (var s in r.Scores) _titles[s.Strategy.Id] = StrategyNaming.DisplayTitle(s.Strategy.Title, s.Strategy.Roles);
@@ -1485,7 +1531,8 @@ public sealed partial class MainViewModel : Observable
             return;
         }
         SetBest(best.Strategy.Id);
-        ResultText = "Подходит: " + best.Strategy.Title;
+        // «Подходит» — только когда открылось всё и рядом нет «подбор, скорее всего, не поможет»; иначе заголовок не обещает успех (UX-аудит 7, п. 7).
+        ResultText = BestTitle(best.Perfect, HasAddressNote, best.Strategy.Title);
         // Подбор дошёл до конца — лучшая сразу ставится в работу (после выхода из Guard, см. AutoApplyAsync).
         if (!r.Cancelled) _autoApplyId = best.Strategy.Id;
         var notes = new List<string>();
@@ -1524,10 +1571,12 @@ public sealed partial class MainViewModel : Observable
     /// <summary>Ушли с «Своих сайтов», не сохранив: с помощником — сохранить сами (прав не спросит), без него — тост «Сохранить».</summary>
     async Task SaveDraftOnLeaveAsync()
     {
-        if (!TargetsDirty || Busy) return;
+        if (!(TargetsDirty || ExcludeDirty) || Busy) return;
         if (Helper.Ready)
         {
-            if (await SaveTargetsAsync()) ShowToast("Свои сайты сохранены.");
+            bool ok = !TargetsDirty || await SaveTargetsAsync();
+            if (ok && ExcludeDirty) ok = await SaveExcludeAsync();
+            if (ok) ShowToast("Свои сайты сохранены.");
             return;
         }
         ShowToast("Свои сайты не сохранены — подбор и оптимизация их не учтут.", "Сохранить", async () => await SaveTargetsAsync());

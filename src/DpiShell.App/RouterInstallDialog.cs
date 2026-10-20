@@ -133,6 +133,8 @@ public static class RouterInstallDialog
         title.Style = titleStyle;
         verdict.Children.Add(title);
         verdict.Children.Add(DialogKit.Text(nameof(RouterInstallViewModel.VerdictText), new Thickness(0, 2, 0, 2)).Show(nameof(RouterInstallViewModel.HasVerdictText)));
+        verdict.Children.Add(DialogKit.Hint("Установка недоступна, пока роутер не подходит. Исправьте причины выше и нажмите «Проверить роутер».", new Thickness(0, 4, 0, 0))
+            .Show(nameof(RouterInstallViewModel.Unsuitable)));
         verdict.Children.Add(DialogKit.Plate(DialogKit.Text(nameof(RouterInstallViewModel.TunnelNote), new Thickness(0)), new Thickness(0, 6, 0, 0))
             .Show(nameof(RouterInstallViewModel.HasTunnelNote)));
         verdict.Margin = new Thickness(0, 0, 0, 10);
@@ -162,13 +164,25 @@ public static class RouterInstallDialog
         panel.Children.Add(DialogKit.Details(nameof(RouterInstallViewModel.Details), nameof(RouterInstallViewModel.HasDetails)));
 
         var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
-        var check = DialogKit.Button("Проверить роутер").Enable(nameof(RouterInstallViewModel.CanCheck)).Show(nameof(RouterInstallViewModel.ShowCheck));
+        var check = DialogKit.Button("Проверить роутер").Enable(nameof(RouterInstallViewModel.CanCheck)).Show(nameof(RouterInstallViewModel.ShowCheckPlain));
+        // Роутер проверен и не подходит: «Установить» недоступна, главная — «Проверить роутер» после исправления причин (UX-аудит 7, п. 11).
+        var checkAgain = DialogKit.Button("Проверить роутер", primary: true).Enable(nameof(RouterInstallViewModel.CanCheck)).Show(nameof(RouterInstallViewModel.ShowCheckPrimary));
         var install = DialogKit.Button("Установить", primary: true).Enable(nameof(RouterInstallViewModel.CanTryInstall)).Show(nameof(RouterInstallViewModel.ShowCheck));
         install.SetBinding(System.Windows.Controls.ContentControl.ContentProperty, nameof(RouterInstallViewModel.InstallText));
         var select = DialogKit.Button("Подобрать на роутере", primary: true).Show(nameof(RouterInstallViewModel.CanGoSelect));
         var close = DialogKit.Button("Закрыть", cancel: true);
         install.IsDefault = true;   // «Установить» сама проверит роутер; «Проверить роутер» — второстепенная
-        foreach (var b in new[] { check, install, select, close }) buttons.Children.Add(b);
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(RouterInstallViewModel.Unsuitable)) return;
+            // Проверка идёт не в потоке окна — кнопки трогаем его же потоком.
+            w.Dispatcher.BeginInvoke(() =>
+            {
+                install.IsDefault = !vm.Unsuitable;
+                checkAgain.IsDefault = vm.Unsuitable;
+            });
+        };
+        foreach (var b in new[] { check, checkAgain, install, select, close }) buttons.Children.Add(b);
         panel.Children.Add(buttons);
         w.Content = panel;
 
@@ -178,6 +192,7 @@ public static class RouterInstallDialog
             catch (Exception ex) { vm.Router.Failed(Texts.Friendly(ex)); }
         }
         check.Click += async (_, _) => await Run(vm.CheckAsync);
+        checkAgain.Click += async (_, _) => await Run(vm.CheckAsync);
         install.Click += async (_, _) => { await Run(vm.InstallAsync); if (vm.IsDone) password.Clear(); };
         select.Click += (_, _) =>
         {

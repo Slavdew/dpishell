@@ -116,7 +116,7 @@ public sealed class AppsViewModel : Observable
         private set
         {
             if (!Set(ref _step, value)) return;
-            foreach (var p in new[] { nameof(IsIdle), nameof(IsRecording), nameof(IsWorking), nameof(IsCheck), nameof(IsDone), nameof(IsFailed), nameof(ShowStart), nameof(ShowMore), nameof(ShowOffHint), nameof(ShowIntro), nameof(StartText) }) Raise(p);
+            foreach (var p in new[] { nameof(IsIdle), nameof(IsRecording), nameof(IsWorking), nameof(IsCheck), nameof(IsDone), nameof(IsFailed), nameof(ShowStart), nameof(ShowMore), nameof(ShowOffHint), nameof(ShowIntro), nameof(StartText), nameof(ShowEnable), nameof(ShowEnablePrimary), nameof(ShowEnablePlain), nameof(ShowStartPrimary), nameof(ShowStartPlain) }) Raise(p);
             CommandManager.InvalidateRequerySuggested();
         }
     }
@@ -156,10 +156,22 @@ public sealed class AppsViewModel : Observable
     public bool HasDetail => Detail.Length > 0;
 
     /// <summary>Изменилось состояние оптимизации (status помощника).</summary>
-    public void StatusChanged() { Raise(nameof(OptimizationOff)); Raise(nameof(ShowOffHint)); }
+    public void StatusChanged() { Raise(nameof(OptimizationOff)); Raise(nameof(ShowOffHint)); foreach (var p in new[] { nameof(ShowEnable), nameof(ShowEnablePrimary), nameof(ShowEnablePlain), nameof(ShowStartPrimary), nameof(ShowStartPlain) }) Raise(p); CommandManager.InvalidateRequerySuggested(); }
 
     public bool OptimizationOff => _helper.Status is { Enabled: false };
-    public string OffHint => "Оптимизация сейчас выключена: профиль начнёт работать после «Включить» на главной.";
+    public string OffHint => "Оптимизация сейчас выключена: профиль начнёт работать, когда вы её включите.";
+
+    /// <summary>Включить оптимизацию (как «Включить» на Главной); задаёт окно. Не задана — кнопки нет.</summary>
+    public Func<Task>? EnableOptimization { get; set; }
+    /// <summary>Профиль применён или сохранён, а оптимизация выключена — «Включить оптимизацию» прямо в карточке (UX-аудит 7, п. 16).</summary>
+    public bool ShowEnable => EnableOptimization is not null && OptimizationOff && Step is AppsStep.Check or AppsStep.Done;
+    /// <summary>Готово: «Включить оптимизацию» — главная кнопка, «Настроить ещё одну игру» — обычная. Ждём «Заработало?»: «Включить» — обычная, главные — «Да, заработало» и остальные.</summary>
+    public bool ShowEnablePrimary => ShowEnable && IsDone;
+    public bool ShowEnablePlain => ShowEnable && !IsDone;
+    public bool ShowStartPrimary => ShowStart && !ShowEnablePrimary;
+    public bool ShowStartPlain => ShowStart && ShowEnablePrimary;
+    public ICommand EnableCmd => _enableCmd ??= RelayCommand.Async(async () => { if (EnableOptimization is { } e) await e(); }, () => ShowEnable);
+    ICommand? _enableCmd;
 
     public static string Summarize(AppProfileInfo p)
     {
@@ -324,11 +336,11 @@ public sealed class AppsViewModel : Observable
     void Yes()
     {
         // Одна фраза вместо итога и жёлтой плашки; «Вернуть как было» — в списке профилей ниже.
-        Status = $"Профиль «{_draft?.Title ?? "игра"}» сохранён." + (OptimizationOff ? " Заработает после включения на Главной." : "");
+        Status = $"Профиль «{_draft?.Title ?? "игра"}» сохранён." + (OptimizationOff ? " Заработает, когда включите оптимизацию." : "");
         Detail = "";
         Step = AppsStep.Done;
         // Строка состояния и карточка говорят одно: сохранён; заработает ли сейчас — зависит от оптимизации на Главной.
-        Say($"Профиль «{_draft?.Title ?? "игра"}» сохранён" + (OptimizationOff ? " — заработает после включения на Главной." : "."));
+        Say($"Профиль «{_draft?.Title ?? "игра"}» сохранён" + (OptimizationOff ? " — заработает, когда включите оптимизацию." : "."));
     }
 
     /// <summary>«Нет» и «Стало хуже»: следующий вариант; попытки или варианты кончились — профиль убирается, как было.</summary>

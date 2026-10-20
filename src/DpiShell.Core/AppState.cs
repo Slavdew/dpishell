@@ -8,6 +8,8 @@ public sealed class AppState
     public string? StrategyId { get; set; }
     public bool Enabled { get; set; }
     public List<string> UserTargets { get; set; } = [];
+    /// <summary>Сайты, которые на этом ПК открываются без оптимизации (user-exclude.txt, API 1.10): «Открыть без оптимизации» и список на «Сайтах».</summary>
+    public List<string> UserExclude { get; set; } = [];
     public List<string> Groups { get; set; } = ["youtube", "discord"];
     public Dictionary<string, NetworkMemory> Networks { get; set; } = [];
 

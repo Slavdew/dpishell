@@ -164,7 +164,7 @@ public class HelperProtocolTests
         string[] spec =
         [
             "status", "enable", "disable", "set_run_mode", "select", "search", "cancel", "ipset_mode", "all_addresses_start",
-            "all_addresses_stop", "game_mode", "ipset_update", "user_ipset_set", "user_targets_set", "hosts_check", "hosts_preview",
+            "all_addresses_stop", "game_mode", "ipset_update", "user_ipset_set", "user_targets_set", "user_exclude_set", "hosts_check", "hosts_preview",
             "hosts_apply", "hosts_revert", "hosts_recheck", "stop_foreign", "core_repair", "remove_all", "clear_history", "read_results",
             "details", "choose", "tcp_timestamps_on", "data_update", "dns_status", "dns_set", "dns_restore",
             "strategy_add", "strategy_delete", "strategy_check",
@@ -187,6 +187,8 @@ public class HelperProtocolTests
         Assert.All(["proxy_status", "proxy_user_set {enabled, server?, bypass?, pac?}", "proxy_machine_set {enabled, server?, bypass?, pac?, winhttp?}", "proxy_machine_restore"],
             cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.All(["joint_get", "joint_set {active, owned?}"], cmd => Assert.Contains("`" + cmd + "`", doc));
+        Assert.Contains("`user_exclude_set {lines}`", doc);
+        Assert.Contains("1.10 — сайты без оптимизации на ПК", doc);
         Assert.Contains($"Текущая версия — `{HelperProtocol.Api}`", doc);
         // Только чтение — не занимает «одну операцию за раз».
         Assert.Equal(["advanced_get", "app_profiles", "cancel", "changes_list", "details", "dns_status", "hosts_preview", "joint_get", "proxy_status", "read_results", "rec_status", "status"],
