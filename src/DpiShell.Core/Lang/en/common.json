@@ -24,6 +24,9 @@
   "common.nav.settings": "Settings",
   "common.nav.about": "About & updates",
   "common.nav.about.menu": "About & updates",
+  "common.nav.net": "Network",
+  "common.nav.collapse": "Collapse menu",
+  "common.nav.expand": "Expand menu",
 
   "common.lang.name": "Interface language",
   "common.lang.tip": "Interface language: {language}",

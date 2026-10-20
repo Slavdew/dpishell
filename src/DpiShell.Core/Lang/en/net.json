@@ -1,0 +1,14 @@
+{
+  "net.intro": "DNS, proxy and addresses in the hosts file.",
+  "net.expand_all": "Expand all",
+  "net.collapse_all": "Collapse all",
+  "net.status.unknown": "not read yet",
+  "net.dns.secure": "{title}, secure",
+  "net.dns.secure_fallback": "{title}, secure (plain allowed)",
+  "net.dns.plain": "{title}, unencrypted",
+  "net.dns.spoofed": "ISP DNS spoofs addresses",
+  "net.dns.clean": "no spoofing",
+  "net.proxy.status": "{state} · My proxies: {n}",
+  "net.hosts.none": "hosts: no DpiShell lines",
+  "net.hosts.some": "hosts: {parts}"
+}

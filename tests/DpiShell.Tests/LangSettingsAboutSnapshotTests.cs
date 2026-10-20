@@ -32,7 +32,7 @@ public sealed class LangSettingsAboutSnapshotTests : IDisposable
                 var tabs = Find<TabControl>(w)!;
                 void Page(int page, string name)
                 {
-                    vm.Page = page;
+                    vm.GoTo(page);
                     Pump();
                     CyrillicScan.CheckIfEn(tabs, name);
                     if (snapDir is null) return;

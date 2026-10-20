@@ -40,9 +40,9 @@ public sealed class HomeViewModelTests : IDisposable
         f.Backend.StatusValue = Status(active: false);
         var vm = Model(await f.LinkAsync());
         vm.Message = "Параметры скопированы: general (ALT10)";
-        vm.Page = Pages.Diag;
+        vm.GoTo(Pages.Diag);
         Assert.Equal(MainViewModel.ReadyText, vm.Message);
-        vm.Page = Pages.Home;
+        vm.GoTo(Pages.Home);
         Assert.Equal(MainViewModel.ReadyText, vm.Message);
     }
 
@@ -118,7 +118,7 @@ public sealed class HomeViewModelTests : IDisposable
         await vm.RefreshStatusAsync();
         foreach (var g in vm.Groups) g.IsChecked = g.Id == "user";
 
-        vm.Page = Pages.Sites;
+        vm.GoTo(Pages.Sites);
         vm.TargetsText = "example.com";
         Assert.True(vm.TargetsDirty);
         var urls = new List<string>();
@@ -127,7 +127,7 @@ public sealed class HomeViewModelTests : IDisposable
         Assert.Contains(urls, u => u.Contains("example.com"));
 
         // Ушли с вкладки — помощник на связи, сохраняем сами и говорим об этом.
-        vm.Page = Pages.Home;
+        vm.GoTo(Pages.Home);
         for (int i = 0; i < 300 && !vm.HasToast; i++) await Task.Delay(10);
         Assert.Contains("user_targets_set example.com", f.Backend.Calls);
         Assert.Equal("Свои сайты сохранены.", vm.Toast);

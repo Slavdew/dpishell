@@ -66,7 +66,7 @@ public sealed class LangHomeSelectTests : IDisposable
         w.Height = 700;
         SetProp(vm, "IsLoading", false);
         foreach (var g in vm.Groups) g.IsChecked = g.Id is "youtube" or "discord";
-        vm.Page = Pages.Home;
+        vm.GoTo(Pages.Home);
         WaitUi(vm.RefreshStatusAsync());
         WaitUi(vm.CheckNowAsync());
         Pump();
@@ -113,7 +113,7 @@ public sealed class LangHomeSelectTests : IDisposable
             }
             var w = Open(vm);
             w.Height = 700;
-            vm.Page = Pages.Select;
+            vm.GoTo(Pages.Select);
             Pump();
             shot(w, $"select-start-{lang}");
 
@@ -134,14 +134,14 @@ public sealed class LangHomeSelectTests : IDisposable
 
             // Главная: список стратегий, у вставленной раскрыты параметры.
             SetProp(vm, "ShowStrategies", true);
-            vm.Page = Pages.Home;
+            vm.GoTo(Pages.Home);
             Pump();
             var own = vm.StrategyChoices.First(c => c.Personal);
             vm.StrategyChoices.Move(vm.StrategyChoices.IndexOf(own), 0);
             own.ShowParams = true;
             Pump();
             shot(w, $"home-strategies-{lang}");
-            vm.Page = Pages.Select;
+            vm.GoTo(Pages.Select);
             Pump();
 
             // Окно правки: с ошибкой.

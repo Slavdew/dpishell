@@ -360,7 +360,24 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public RouterDetection? Detection => _detection;
 
     /// <summary>DpiShell на роутере найден (любой версии) — на главной есть блок роутера.</summary>
-    public bool Found => _detection is { Found: not RouterFound.NotFound };
+    public bool Found => Enabled && _detection is { Found: not RouterFound.NotFound };
+
+    /// <summary>«Показывать роутер» (Настройки): снята — окно ведёт себя как при ненайденном роутере, поиск и обращения к нему не идут. Единственная точка.</summary>
+    public bool Enabled => _settings.ShowRouter;
+
+    /// <summary>Галочку переключили: снята — забыть найденное и закрыть связь; поставлена — искать заново.</summary>
+    public void ShowRouterChanged()
+    {
+        if (!Enabled)
+        {
+            _client?.Dispose();
+            _client = null;
+            SetDetection(null);
+            SetConnection(() => RouterTexts.NotFoundText, notFound: true);
+        }
+        else _ = RefreshAsync();
+        Raise(nameof(Enabled)); Raise(nameof(Found));
+    }
 
     bool _searched, _autoFindTried;
     /// <summary>Роутер уже искали (хоть раз): до того пустое состояние — «не проверялся», а не «не найден» (UX-аудит 2, п. 10).</summary>
@@ -524,6 +541,13 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     async Task<bool> DetectAsync()
     {
         Searched = true;
+        if (!Enabled)
+        {
+            // «Показывать роутер» снята: как при ненайденном роутере, но сеть не трогаем.
+            SetDetection(null);
+            SetConnection(() => RouterTexts.NotFoundText, notFound: true);
+            return false;
+        }
         var address = EffectiveAddress();
         if (address is null)
         {

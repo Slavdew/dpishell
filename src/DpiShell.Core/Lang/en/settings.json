@@ -28,6 +28,8 @@
   "settings.close.title": "When the window is closed",
   "settings.close.tray": "Minimize to tray",
   "settings.close.exit": "Exit the app",
+  "settings.router.show": "Show router",
+  "settings.router.show_hint": "Off: the router is not searched for or shown, and the window works as if there were none.",
   "settings.advanced.title": "Advanced tools",
   "settings.advanced.check": "Show advanced tools",
   "settings.advanced.hint": "This is “Connection debugging” in “Games & apps”: recording an app’s connections and saving a profile.",

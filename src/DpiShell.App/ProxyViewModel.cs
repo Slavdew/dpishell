@@ -69,6 +69,9 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
     // Строки состояния собираются из прочитанного (данные) при показе — на языке окна.
     string? _readError;
     public string UserLine => _readError ?? (_now is { } n ? Line(n.User, n.UserAutoDetect) : "");
+    /// <summary>Строка состояния в заголовке блока «Прокси» на вкладке «Сеть»: «выключен · Мои прокси: 2».</summary>
+    public string NetStatus => UserLine.Length == 0 ? L.T("net.status.unknown")
+        : Items.Count > 0 ? L.T("net.proxy.status", new { state = UserLine, n = Items.Count }) : UserLine;
     public string MachineLine => _now is { } n ? Line(n.Machine, n.MachineAutoDetect) : "";
     public string WinHttpLine => _now is not { } n ? "" : n.WinHttp.IsDirect ? L.T("proxy.winhttp.direct") : n.WinHttp.Bypass is { } b ? L.T("proxy.winhttp.bypass", new { proxy = n.WinHttp.Proxy, bypass = b }) : n.WinHttp.Proxy ?? "";
 

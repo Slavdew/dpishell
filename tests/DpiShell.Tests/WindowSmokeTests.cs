@@ -158,7 +158,7 @@ public sealed partial class WindowSmokeTests
     }).GetAwaiter().GetResult();
 
     static readonly (int Page, string Name)[] AllPages =
-        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Sites, "sites"), (Pages.Apps, "apps"), (Pages.Hosts, "hosts"), (Pages.Dns, "dns"), (Pages.Proxy, "proxy"), (Pages.Diag, "diag"), (Pages.Settings, "settings"), (Pages.About, "about")];
+        [(Pages.Home, "home"), (Pages.Select, "select"), (Pages.Sites, "sites"), (Pages.Apps, "apps"), (NetPages.Hosts, "hosts"), (NetPages.Dns, "dns"), (NetPages.Proxy, "proxy"), (Pages.Diag, "diag"), (Pages.Settings, "settings"), (Pages.About, "about")];
 
     [Fact]
     public void MainWindow_OpensAndAllPagesBind_WithoutErrors()
@@ -170,16 +170,16 @@ public sealed partial class WindowSmokeTests
             var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
             var w = Open(vm);
             var tabs = Find<TabControl>(w)!;
-            foreach (var page in new[] { Pages.Select, Pages.Sites, Pages.Apps, Pages.Hosts, Pages.Dns, Pages.Proxy, Pages.Diag, Pages.Router, Pages.Settings, Pages.About, Pages.Home })
+            foreach (var page in new[] { Pages.Select, Pages.Sites, Pages.Apps, NetPages.Hosts, NetPages.Dns, NetPages.Proxy, Pages.Diag, Pages.Router, Pages.Settings, Pages.About, Pages.Home })
             {
-                vm.Page = page;
+                vm.GoTo(page);
                 Pump();
                 // Пункты меню стоят на экране в порядке вкладок, какая бы ни была выбрана (TabPanel переставлял выбранную в конец).
                 var ys = tabs.Items.Cast<TabItem>().Select(t => t.TranslatePoint(new Point(0, 0), w).Y).ToList();
                 if (!ys.SequenceEqual(ys.Order())) throw new Exception($"Меню перемешано при вкладке {page}: {string.Join(", ", ys)}");
             }
             // Режимы подбора: «Полный» (по умолчанию) — первым.
-            vm.Page = Pages.Select;
+            vm.GoTo(Pages.Select);
             Pump();
             var modes = new List<RadioButton>();
             Collect(w, modes);
@@ -210,7 +210,7 @@ public sealed partial class WindowSmokeTests
             ThemeManager.Apply(ThemeManager.Light);
             var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
             var w = Open(vm);
-            vm.Page = Pages.Hosts;
+            vm.GoTo(NetPages.Hosts);
             Pump();
             var tabs = Find<TabControl>(w)!;
             string[] names = ["HostsListSection", "HostsTrySection", "HostsUserSection", "HostsAuditSection"];
@@ -289,7 +289,7 @@ public sealed partial class WindowSmokeTests
                 var w = Open(vm);
                 w.Height = 600;
                 SetProp(vm, "IsLoading", false);
-                vm.Page = Pages.Select;
+                vm.GoTo(Pages.Select);
                 Pump();
                 var tabs = Find<TabControl>(w)!;
                 bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
@@ -389,7 +389,7 @@ public sealed partial class WindowSmokeTests
                     var id = vm.PendingCheckId ?? throw new Exception("Вставка не дошла до проверки: " + vm.Message);
 
                     var w = Open(vm);
-                    vm.Page = Pages.Select;
+                    vm.GoTo(Pages.Select);
                     Pump();
                     var tabs = Find<TabControl>(w)!;
                     bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
@@ -410,7 +410,7 @@ public sealed partial class WindowSmokeTests
 
                     // Главная: список стратегий, у вставленной — метка и в «Параметрах» «Изменить» / «Удалить».
                     SetProp(vm, "ShowStrategies", true);
-                    vm.Page = Pages.Home;
+                    vm.GoTo(Pages.Home);
                     Pump();
                     var own = vm.StrategyChoices.First(c => c.Id == id);
                     vm.StrategyChoices.Move(vm.StrategyChoices.IndexOf(own), 0);
@@ -496,7 +496,7 @@ public sealed partial class WindowSmokeTests
                 var w = Open(vm);
                 w.Height = 700;
                 SetProp(vm, "IsLoading", false);
-                vm.Page = Pages.Select;
+                vm.GoTo(Pages.Select);
                 Pump();
                 var tabs = Find<TabControl>(w)!;
                 bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
@@ -513,7 +513,7 @@ public sealed partial class WindowSmokeTests
                 if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-select-mix.png")); }
 
                 SetProp(vm, "ShowStrategies", true);
-                vm.Page = Pages.Home;
+                vm.GoTo(Pages.Home);
                 Pump();
                 var home = Find<TabControl>(w)!;
                 var row = vm.StrategyChoices.First(c => c.Id == mix.Id);
@@ -585,7 +585,7 @@ public sealed partial class WindowSmokeTests
                 {
                     // Пока «загрузка» — смена вкладки не запускает проверку службы (sc.exe); потом снять заставку для снимка.
                     SetProp(vm, "IsLoading", true);
-                    vm.Page = page;
+                    vm.GoTo(page);
                     Pump();
                     if (page == Pages.Home)
                     {
@@ -788,14 +788,14 @@ public sealed partial class WindowSmokeTests
                         if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Открывать без оптимизации" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет списка «Открывать без оптимизации»");
                         if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Свои сайты" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет поля своих сайтов ПК");
                     }
-                    if (page == Pages.Dns)
+                    if (page == NetPages.Dns)
                     {
                         // Карточка DNS этого компьютера лежит на вкладке «DNS», а не на «Диагностике».
                         var dcard = (FrameworkElement)w.FindName("PcDnsCard")!;
                         if (!dcard.IsVisible) throw new Exception("Нет карточки DNS на вкладке «DNS»");
                         DependencyObject? parent = dcard;
                         while (parent is not null and not TabItem) parent = LogicalTreeHelper.GetParent(parent);
-                        if ((parent as TabItem)?.Header as string != "DNS") throw new Exception("Карточка DNS лежит не на вкладке «DNS»");
+                        if ((parent as TabItem)?.Header as string != "Сеть") throw new Exception("Карточка DNS лежит не на вкладке «Сеть»");
                         Snap(w, Path.Combine(snapDir, $"{theme}-dns.png"));
                         // «Подробнее → DNS» с главной (UX-аудит 2, п. 4): к выбору DNS этого компьютера, список вариантов раскрыт.
                         w.ShowSpot(Spot.PcDns);
@@ -842,7 +842,7 @@ public sealed partial class WindowSmokeTests
                         Snap(w, Path.Combine(snapDir, $"{theme}-apps-end.png"));
                         nv.ScrollToHome();
                     }
-                    if (page == Pages.Hosts && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } hostsScroll)
+                    if (page == NetPages.Hosts && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } hostsScroll)
                     {
                         // Вкладка длинная: конец (проверка своего hosts, закомментированные) — отдельным снимком.
                         if (w.FindName("HostsTrySection") is Expander { IsExpanded: true } trySection && hostsScroll.Content is UIElement hostsContent)
@@ -856,7 +856,7 @@ public sealed partial class WindowSmokeTests
                         Snap(w, Path.Combine(snapDir, $"{theme}-hosts-end.png"));
                         hostsScroll.ScrollToHome();
                     }
-                    if (page == Pages.Hosts)
+                    if (page == NetPages.Hosts)
                     {
                         // Карточка «(i)»: открыть как по нажатию и снять её содержимое.
                         var info = Find<InfoButton>(Find<TabControl>(w)!, b => b.Topic == InfoTexts.Hosts)!;
@@ -954,7 +954,7 @@ public sealed partial class WindowSmokeTests
                 foreach (var (page, name) in AllPages.Append((Pages.Router, "tab")))
                 {
                     SetProp(vm, "IsLoading", true);
-                    vm.Page = page;
+                    vm.GoTo(page);
                     Pump();
                     SetProp(vm, "IsLoading", false);
                     typeof(MainViewModel).GetMethod("UpdateStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
@@ -996,7 +996,7 @@ public sealed partial class WindowSmokeTests
                         SetProp(router, "AddressNote", "");
                         Pump();
                     }
-                    if (page == Pages.Dns && (Find<TextBlock>(tabs, t => t.Text.StartsWith("DNS для всей сети — на вкладке") && t.IsVisible) is null
+                    if (page == NetPages.Dns && (Find<TextBlock>(tabs, t => t.Text.StartsWith("DNS для всей сети — на вкладке") && t.IsVisible) is null
                                               || Find<Button>(tabs, b => b.Content as string == "Открыть →" && b.IsVisible) is null))
                         throw new Exception("На вкладке «DNS» нет подсказки про роутер");
                     if (page == Pages.Diag)
@@ -1037,7 +1037,7 @@ public sealed partial class WindowSmokeTests
                     }
                     if (snapDir is null) continue;
                     Directory.CreateDirectory(snapDir);
-                    Snap(w, Path.Combine(snapDir, $"{theme}-router-{(page == Pages.Dns ? "pcdns" : name)}.png"));
+                    Snap(w, Path.Combine(snapDir, $"{theme}-router-{(page == NetPages.Dns ? "pcdns" : name)}.png"));
                     // Подбор на роутере: строка с разбивкой по адресам раскрывается; без неё — подсказка про обновление роутера.
                     if (page == Pages.Select)
                     {
@@ -1097,14 +1097,14 @@ public sealed partial class WindowSmokeTests
                     fake.StatusApi = api;
                     fake.MinApp = minApp;
                     WaitUi(router.RefreshAsync());   // на потоке окна: меняет списки, привязанные к окну
-                    vm.Page = Pages.Router;
+                    vm.GoTo(Pages.Router);
                     Pump();
                     var tabs = Find<TabControl>(w)!;
                     if (Find<Button>(tabs, b => b.Content as string == "Обновить программу ↗") is not null) throw new Exception($"Осталась «Обновить программу ↗» ({name})");
                     if (Find<Button>(tabs, b => (b.Content as string ?? "").StartsWith("Обновить программу →") && b.IsVisible) is not { } toSettings) throw new Exception($"Нет плашки совместимости ({name})");
                     toSettings.Command.Execute(null);
                     if (vm.Page != Pages.About) throw new Exception($"Ссылка «Обновить программу» не привела в «Информация и обновления» ({name})");
-                    vm.Page = Pages.Router;
+                    vm.GoTo(Pages.Router);
                     Pump();
                     if (name == "blocked" && Find<Button>(tabs, b => b.Content as string == "Проверить" && b.IsVisible && b.IsEnabled) is not null)
                         throw new Exception("При несовместимости «Проверить» активна");
@@ -1147,7 +1147,7 @@ public sealed partial class WindowSmokeTests
                     Field("_updateFailed", false);
                     Field("_updateStep", null);
                     router.GetType().GetProperty("UpdateLog")!.SetValue(router, "");
-                    vm.Page = Pages.Home;
+                    vm.GoTo(Pages.Home);
                     Pump();
                     if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text.Contains("доступно обновление 0.2.1-r1") && t.IsVisible) is null && !router.HomeLine.Contains("предупрежд"))
                         throw new Exception("На главной нет «доступно обновление»");
@@ -1160,7 +1160,7 @@ public sealed partial class WindowSmokeTests
                 fake.MethodsJson = FakeRouter.Methods020;
                 fake.WatchdogTrip();
                 WaitUi(router.RefreshAsync());
-                vm.Page = Pages.Home;
+                vm.GoTo(Pages.Home);
                 Pump();
                 {
                     var tabs = Find<TabControl>(w)!;
@@ -1169,7 +1169,7 @@ public sealed partial class WindowSmokeTests
                     if (Find<Button>(tabs, b => b.Content as string == L.T("home.find_on_router") && b.IsVisible && b.IsEnabled) is null) throw new Exception("В плашке главной нет «Подобрать заново»");
                     if (Find<Button>(tabs, b => b.Content as string == "Включить снова") is not null) throw new Exception("Осталась «Включить снова»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-home.png"));
-                    vm.Page = Pages.Router;
+                    vm.GoTo(Pages.Router);
                     Pump();
                     tabs = Find<TabControl>(w)!;
                     if (Find<Expander>(tabs, e => e.Header as string == "Подробнее" && e.IsVisible) is not { } more) throw new Exception("На вкладке нет «Подробнее» у выключения");
@@ -1224,10 +1224,10 @@ public sealed partial class WindowSmokeTests
                     if (Find<Button>(tabs, b => b.Content as string == L.T("router.select") && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Подобрать на роутере» после неудачи");
                     if (Find<Button>(tabs, b => b.Content as string == L.T("router.trial.reenable") && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Попробовать прежнюю»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-failed.png"));
-                    vm.Page = Pages.Home;
+                    vm.GoTo(Pages.Home);
                     Pump();
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-failed-home.png"));
-                    vm.Page = Pages.Router;
+                    vm.GoTo(Pages.Router);
                     fake.WatchdogSelectJson = null;
                     fake.SelectSteps = 3;
                     fake.StartedBy = "app";
@@ -1436,7 +1436,7 @@ public sealed partial class WindowSmokeTests
             var w = Open(vm);
             foreach (var (page, _) in AllPages.Append((Pages.Router, "router")))
             {
-                vm.Page = page;
+                vm.GoTo(page);
                 Pump();
                 var buttons = new List<InfoButton>();
                 Collect(Find<TabControl>(w)!, buttons);
@@ -1444,7 +1444,7 @@ public sealed partial class WindowSmokeTests
             }
             // «Сайты» роутера: «Сайт не открывается» и «Для каких сайтов обход» — с переключателем «На роутере».
             vm.Router.TargetsOnRouter = true;
-            vm.Page = Pages.Sites;
+            vm.GoTo(Pages.Sites);
             Pump();
             var routerSites = new List<InfoButton>();
             Collect(Find<TabControl>(w)!, routerSites);
@@ -1729,7 +1729,7 @@ public sealed partial class WindowSmokeTests
                 vm.ApplyHelperData();
                 var w = Open(vm);
                 SetProp(vm, "IsLoading", false);
-                vm.Page = Pages.Apps;
+                vm.GoTo(Pages.Apps);
                 PumpUntil(() => vm.Apps.Variants.Count > 0, "варианты параметров от помощника");
                 var tabs = Find<TabControl>(w)!;
                 bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
@@ -1955,7 +1955,7 @@ public sealed partial class WindowSmokeTests
                     // Окно подключает свой перезапуск (запуск другой копии и выход) — в тесте он подменён: настоящую копию не запускаем.
                     vm.Updates.Restart = restart;
                     SetProp(vm, "IsLoading", false);
-                    vm.Page = Pages.About;
+                    vm.GoTo(Pages.About);
                     Pump();
                     return (vm, w, store);
                 }
@@ -2063,7 +2063,7 @@ public sealed partial class WindowSmokeTests
                 var vm = TestWindow.Model(shell, link, settings);
                 var w = Open(vm);
                 SetProp(vm, "IsLoading", false);
-                vm.Page = Pages.Settings;
+                vm.GoTo(Pages.Settings);
                 Pump();
                 WaitUi(vm.Changes.RefreshAsync());
                 Pump();

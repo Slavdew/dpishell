@@ -82,6 +82,9 @@ public sealed class UpdatesViewModel : Observable
     /// <summary>Версия данных в работе: у помощника — его, без помощника — поставки окна.</summary>
     public string? CurrentVersion => _helper.Reader is not null && _helper.Status?.DataVersion is { } v ? v : _packageVersion;
 
+    /// <summary>Есть что обновить (списки или программа): точка на значке «Информация и обновления» в меню.</summary>
+    public bool AnyAvailable => DataAvailable || AppAvailable;
+
     public bool DataAvailable => _s.UpdatesData is { } v && DataManifest.CompareVersions(v, CurrentVersion) > 0;
     public string AvailableText => DataAvailable ? L.T("about.lists.available", new { date = Day(_s.UpdatesData) }) : "";
 
@@ -190,7 +193,7 @@ public sealed class UpdatesViewModel : Observable
     /// <summary>Пересчитать строки (помощник ответил, версия данных у него поменялась).</summary>
     public void Refresh()
     {
-        foreach (var p in new[] { nameof(CurrentVersion), nameof(DataAvailable), nameof(AvailableText), nameof(AppAvailable), nameof(AppHintOnly), nameof(AppText), nameof(AppButtonText), nameof(StatusText),
+        foreach (var p in new[] { nameof(CurrentVersion), nameof(DataAvailable), nameof(AnyAvailable), nameof(AvailableText), nameof(AppAvailable), nameof(AppHintOnly), nameof(AppText), nameof(AppButtonText), nameof(StatusText),
                                   nameof(AppReleaseReady), nameof(AppReleaseTitle), nameof(AppUpdateButtonText), nameof(AppNotes), nameof(HasAppNotes), nameof(AppProgressText),
                                   nameof(AppError), nameof(HasAppError), nameof(AppErrorDetails), nameof(HasAppErrorDetails), nameof(AppErrorShort), nameof(AppErrorMore), nameof(HasAppErrorMore), nameof(ShowCheckButton), nameof(AppNotice), nameof(HasAppNotice),
                                   nameof(AppOsNote), nameof(HasAppOsNote), nameof(CanRollback), nameof(RollbackText) })

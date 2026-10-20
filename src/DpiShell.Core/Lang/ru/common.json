@@ -24,6 +24,9 @@
   "common.nav.settings": "Настройки",
   "common.nav.about": "Информация и обновления",
   "common.nav.about.menu": "Информация\nи обновления",
+  "common.nav.net": "Сеть",
+  "common.nav.collapse": "Свернуть меню",
+  "common.nav.expand": "Развернуть меню",
 
   "common.lang.name": "Язык интерфейса",
   "common.lang.tip": "Язык интерфейса: {language}",

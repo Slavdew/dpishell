@@ -376,7 +376,10 @@ public sealed partial class HostsViewModel
     /// <summary>Что-то из сделанного нами есть в файле: блок проверенных адресов, свои строки или закомментированные.</summary>
     public bool HasOurs => BlockPresent || UserRows.Count > 0 || OffRows.Count > 0;
 
-    public string OursText
+    public string OursText => OursParts is { Length: > 0 } p ? L.T("hosts.ours", new { parts = p }) : "";
+
+    /// <summary>«проверенные адреса: 2, свои строки: 1» — что от DpiShell лежит в hosts; пусто — ничего.</summary>
+    string OursParts
     {
         get
         {
@@ -384,9 +387,12 @@ public sealed partial class HostsViewModel
             if (BlockPresent) parts.Add(L.T("hosts.ours.verified", new { n = _status!.Block.Entries.Count }));
             if (UserRows.Count > 0) parts.Add(L.T("hosts.ours.user", new { n = UserRows.Count }));
             if (OffRows.Count > 0) parts.Add(L.T("hosts.ours.off", new { n = OffRows.Count }));
-            return parts.Count == 0 ? "" : L.T("hosts.ours", new { parts = string.Join(", ", parts) });
+            return string.Join(", ", parts);
         }
     }
+
+    /// <summary>Строка состояния в заголовке блока «Починить адреса» на вкладке «Сеть».</summary>
+    public string NetStatus => OursParts is { Length: > 0 } p ? L.T("net.hosts.some", new { parts = p }) : L.T("net.hosts.none");
 
     ICommand? _restoreAllCmd;
     public ICommand RestoreAllCmd => _restoreAllCmd ??= RelayCommand.Async(RestoreAllAsync, () => !Busy && HasOurs && Can("hosts_restore"));
@@ -419,7 +425,7 @@ public sealed partial class HostsViewModel
             UserRows.Add(new UserRowVm(l.Host, l.Ip, l.Date, stale.Contains(new HostsEntry(l.Host, l.Ip))));
         OffRows.Clear();
         foreach (var o in _status?.OffLines ?? []) OffRows.Add(new OffRowVm(o.Line, o.Date, o.Original));
-        foreach (var p in new[] { nameof(HasUserRows), nameof(UserHeader), nameof(HasOff), nameof(UncommentText), nameof(HasOurs), nameof(OursText),
+        foreach (var p in new[] { nameof(HasUserRows), nameof(UserHeader), nameof(HasOff), nameof(UncommentText), nameof(HasOurs), nameof(OursText), nameof(NetStatus),
                      nameof(ToolsUnavailable), nameof(ToolsUnavailableText) })
             Raise(p);
     }

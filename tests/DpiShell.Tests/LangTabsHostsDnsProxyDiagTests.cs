@@ -52,9 +52,9 @@ public sealed class LangTabsHostsDnsProxyDiagTests : IDisposable
             SetProp(vm, "IsLoading", false);
             Pump();
             var tabs = Find<TabControl>(w)!;
-            foreach (var (page, name) in new[] { (Pages.Hosts, "hosts"), (Pages.Dns, "dns"), (Pages.Proxy, "proxy"), (Pages.Diag, "diag") })
+            foreach (var (page, name) in new[] { (NetPages.Hosts, "hosts"), (NetPages.Dns, "dns"), (NetPages.Proxy, "proxy"), (Pages.Diag, "diag") })
             {
-                vm.Page = page;
+                vm.GoTo(page);
                 Pump();
                 vm.DnsDetailsOpen = true;
                 foreach (var e in FindAll<Expander>(tabs, x => x.IsVisible)) e.IsExpanded = true;

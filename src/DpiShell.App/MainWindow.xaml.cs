@@ -88,6 +88,7 @@ public partial class MainWindow : Window
     void HostsAnchor_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { Tag: string name } || FindName(name) is not System.Windows.Controls.Expander section) return;
+        _vm.HostsBlockOpen = true;   // раздел лежит в блоке «Починить адреса» вкладки «Сеть»
         section.IsExpanded = true;
         UpdateLayout();
         DependencyObject? up = section;

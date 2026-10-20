@@ -13,9 +13,13 @@ public enum StatusKind { Off, On, Busy, Error }
 
 public static class Pages
 {
-    // «Сайты» (свои сайты и исключения), «Игры и программы» (запись подключений, профили, игровой режим, IP-списки), «Починить адреса» (hosts), «DNS», «Прокси»; порядок вкладок — по номерам.
-    public const int Home = 0, Select = 1, Sites = 2, Apps = 3, Hosts = 4, Dns = 5, Proxy = 6, Diag = 7, Router = 8, Settings = 9, About = 10;
+    // «Сайты» (свои сайты и исключения), «Игры и программы» (запись подключений, профили, игровой режим, IP-списки), «Сеть» (блоки DNS, «Прокси», «Починить адреса»); порядок вкладок — по номерам.
+    // К блоку «Сети» ведёт MainViewModel.OpenNet(NetBlock).
+    public const int Home = 0, Select = 1, Sites = 2, Apps = 3, Net = 4, Diag = 5, Router = 6, Settings = 7, About = 8;
 }
+
+/// <summary>Блок вкладки «Сеть»: порядок на экране — DNS, «Прокси», «Починить адреса».</summary>
+public enum NetBlock { Dns, Proxy, Hosts }
 
 /// <summary>
 /// Всё состояние окна. Окно работает без прав администратора (helper-protocol): читает само (проверка сайтов, DNS, службы,
@@ -116,7 +120,7 @@ public sealed partial class MainViewModel : Observable
         GoSelectCmd = new RelayCommand(() => Page = Pages.Select);
         GoAboutCmd = new RelayCommand(() => Page = Pages.About);
         GoDiagCmd = new RelayCommand(() => Page = Pages.Diag);
-        GoProxyCmd = new RelayCommand(() => Page = Pages.Proxy);
+        GoProxyCmd = new RelayCommand(() => OpenNet(NetBlock.Proxy));
         CheckNowCmd = RelayCommand.Async(CheckNowAsync, () => !Busy && !IsLoading && !Checking);
 
         StartSelectCmd = RelayCommand.Async(StartSelectAsync, () => !Busy && !IsLoading);
@@ -223,6 +227,7 @@ public sealed partial class MainViewModel : Observable
         };
         Hosts.Notify += s => { Message = s; Notify?.Invoke(s); };
         ClearDiscordCmd = RelayCommand.Async(ClearDiscordAsync, () => !Busy && !IsLoading);
+        InitNet();        // вкладка «Сеть», меню, «Показывать роутер» — MainViewModel.Net.cs
 
         // Группы — по умолчанию; у помощника свой выбор — подставится, когда он ответит.
         var chosen = new AppState().Groups.ToHashSet();
@@ -414,11 +419,9 @@ public sealed partial class MainViewModel : Observable
             if (IsLoading) return;
             if (was == Pages.Sites) _ = SaveDraftOnLeaveAsync();
             if (value == Pages.Apps) _ = RefreshNetAsync();
-            if (value == Pages.Hosts) _ = Hosts.RefreshAsync();
+            if (value == Pages.Net) _ = RefreshNetTabAsync();
             if (value == Pages.Settings) _ = Changes.RefreshAsync();
-            if (value == Pages.Proxy) _ = Proxy.RefreshAsync();
             if (value == Pages.Router) _ = Router.RefreshRouterPageAsync();   // и «Роутер: что мешает» — внутри
-            if (value == Pages.Dns && DnsRows.Count == 0) _ = CheckDnsAsync();
             if (value == Pages.Diag || value == Pages.About) _ = RefreshDiagAsync();   // «Информация и обновления» показывает версию ядра
         }
     }

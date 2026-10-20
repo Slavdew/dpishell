@@ -36,7 +36,7 @@ public sealed partial class WindowSmokeTests
                 w.Height = 700;
                 SetProp(vm, "IsLoading", false);
                 foreach (var g in vm.Groups) g.IsChecked = g.Id is "youtube" or "discord";
-                vm.Page = Pages.Home;
+                vm.GoTo(Pages.Home);
                 WaitUi(vm.RefreshStatusAsync());
                 WaitUi(vm.CheckNowAsync());
                 Pump();
@@ -56,7 +56,7 @@ public sealed partial class WindowSmokeTests
                 Link("Не помогло? → Подобрать")!.Command.Execute(null);
                 Pump();
                 if (vm.Page != Pages.Select) throw new Exception("«Не помогло? → Подобрать» не открыла «Подбор»");
-                vm.Page = Pages.Home;
+                vm.GoTo(Pages.Home);
 
                 // Включили: проверка сама, строка «было 1 из 2».
                 on = true;
@@ -86,7 +86,7 @@ public sealed partial class WindowSmokeTests
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-home-site-fix.png"));
 
                 // Тот же сайт — в списке на «Сайтах».
-                vm.Page = Pages.Sites;
+                vm.GoTo(Pages.Sites);
                 Pump();
                 var list = Find<TextBox>(Find<TabControl>(w)!, t => t.IsVisible && System.Windows.Automation.AutomationProperties.GetName(t) == "Открывать без оптимизации") ?? throw new Exception("На «Сайтах» нет списка «Открывать без оптимизации»");
                 if (list.Text.Trim() != "bank.example") throw new Exception("В списке исключений не тот сайт: " + list.Text);

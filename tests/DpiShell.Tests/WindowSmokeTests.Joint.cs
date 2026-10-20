@@ -40,7 +40,7 @@ public sealed partial class WindowSmokeTests
                 var w = Open(vm);
                 w.Height = 900;
                 SetProp(vm, "IsLoading", false);
-                vm.Page = Pages.Router;
+                vm.GoTo(Pages.Router);
                 Pump();
                 var tabs = Find<TabControl>(w)!;
                 bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
@@ -76,7 +76,7 @@ public sealed partial class WindowSmokeTests
                 WaitUi(vm.RefreshStatusAsync());
 
                 // Главная: та же фраза в карточке состояния.
-                vm.Page = Pages.Home;
+                vm.GoTo(Pages.Home);
                 Pump();
                 if (!Visible(t => t.Text.Contains("свои сайты (1)"))) throw new Exception("На главной нет фразы о совместной работе");
                 PumpUntil(() => vm.HasCheck && !vm.Checking && vm.CheckSummary.StartsWith("Открывается"), "после включения связкой проверка сайтов не пошла сама");
@@ -88,14 +88,14 @@ public sealed partial class WindowSmokeTests
                 vm.AdvancedPc.Load = () => Task.FromResult<AdvancedState?>(new(true, "lists", [new(["youtube.com", "bank.example"], "auto", "alt9")]));
                 WaitUi(vm.AdvancedPc.RefreshAsync(force: true));
                 vm.AdvancedPc.RefreshHints();
-                vm.Page = Pages.Sites;
+                vm.GoTo(Pages.Sites);
                 Pump();
                 tabs = Find<TabControl>(w)!;
                 if (!Visible(t => t.Text.Contains(L.T("sites.adv.hint.router_owned", new { sites = "youtube.com" })))) throw new Exception("У строки с youtube.com нет пометки «ведёт роутер»");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-sites-joint.png"));
 
                 // Роутер пропал: ПК сразу работает сам, переключатель показывает «Выключено» (связки нет), ждать роутер можно перестать.
-                vm.Page = Pages.Router;
+                vm.GoTo(Pages.Router);
                 Pump();
                 tabs = Find<TabControl>(w)!;
                 fake.Remove();
@@ -113,7 +113,7 @@ public sealed partial class WindowSmokeTests
                 if (Find<Button>(tabs, b => b.IsVisible && b.Content as string == "Не ждать роутер") is null) throw new Exception("Нет «Не ждать роутер»");
                 if (Visible(t => t.Text.StartsWith("Выключите, чтобы"))) throw new Exception("В карточке осталась фраза «Выключите, чтобы…»");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-joint-fallback.png"));
-                vm.Page = Pages.Home;
+                vm.GoTo(Pages.Home);
                 Pump();
                 if (!Visible(t => t.Text.Contains("Роутер не найден — этот ПК работает сам"))) throw new Exception("На главной нет фразы отката");
                 Close(w);

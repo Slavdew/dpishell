@@ -84,7 +84,7 @@ public sealed class LangSitesAppsTests : IDisposable
             void Shot(string name) { CyrillicScan.CheckIfEn(w, name); if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{name}-{lang}.png")); }
 
             // Сайты, этот ПК: свои строки, «Остальные сайты», исключения, «Не сохранено», сообщение об ошибке.
-            vm.Page = Pages.Sites;
+            vm.GoTo(Pages.Sites);
             Pump();
             a.Load = () => Task.FromResult<AdvancedState?>(new(true, "lists",
             [
@@ -116,7 +116,7 @@ public sealed class LangSitesAppsTests : IDisposable
             Top();
 
             // Игры и программы: простой режим — запись, вопрос «Заработало?», итог.
-            vm.Page = Pages.Apps;
+            vm.GoTo(Pages.Apps);
             PumpUntil(() => vm.Apps.Variants.Count > 0, "варианты параметров от помощника");
             Button? Btn(string key) => Find<Button>(tabs, b => b.IsVisible && b.Content as string == L.T(key));
             NoRawKeys(tabs, "Игры (покой)");

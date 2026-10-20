@@ -1027,9 +1027,9 @@ public sealed class ProxyViewModelTests : IDisposable
 
         var vm = TestWindow.Model(NewShell());
         vm.GoProxyCmd.Execute(null);
-        Assert.Equal(Pages.Proxy, vm.Page);
-        Assert.Equal(Pages.Dns + 1, Pages.Proxy);   // вкладка стоит сразу после «DNS»
-        Assert.Equal(Pages.Proxy + 1, Pages.Diag);
+        Assert.Equal(Pages.Net, vm.Page);
+        Assert.True(vm.ProxyBlockOpen);   // ссылка ведёт на «Сеть» с раскрытым блоком «Прокси»
+        Assert.Equal(Pages.Net + 1, Pages.Diag);   // «Сеть» стоит перед «Диагностикой»
     }
 
     [Fact]

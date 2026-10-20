@@ -31,6 +31,10 @@ public sealed class WindowSettings
     public RouterBypassMark? RouterBypass { get; set; }
     /// <summary>Совместная работа с роутером включена (вкладка «Роутер»); по умолчанию выключена. После перезапуска окна связка поднимается сама.</summary>
     public bool JointWanted { get; set; }
+    /// <summary>«Показывать роутер»: по умолчанию да. Снята — роутер не ищется и не показывается, окно как при ненайденном роутере.</summary>
+    public bool ShowRouter { get; set; } = true;
+    /// <summary>Меню слева свёрнуто до значков (по умолчанию раскрыто).</summary>
+    public bool NavCollapsed { get; set; }
     /// <summary>Показывать инструменты для опытных (пока — «Отладка подключений» на вкладке «Игры и программы»).</summary>
     public bool ShowAdvanced { get; set; }
     /// <summary>Подсказку «свернулась в трей» уже показывали.</summary>

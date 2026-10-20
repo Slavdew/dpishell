@@ -57,7 +57,7 @@ public sealed partial class WindowSmokeTests
                     foreach (var (page, name) in DemoPages)
                     {
                         SetProp(vm, "IsLoading", true);
-                        vm.Page = page;
+                        vm.GoTo(page);
                         Pump();
                         SetProp(vm, "IsLoading", false);
                         typeof(MainViewModel).GetMethod("UpdateStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
@@ -69,7 +69,7 @@ public sealed partial class WindowSmokeTests
                     }
 
                     // Главная: «Подробнее» проверки (адреса DNS этого компьютера — размыты), затем список стратегий.
-                    vm.Page = Pages.Home;
+                    vm.GoTo(Pages.Home);
                     Pump();
                     var more = Find<System.Windows.Controls.Expander>(Find<System.Windows.Controls.TabControl>(w)!, e => e.Header as string == "Подробнее" && e.IsVisible)
                         ?? throw new Exception("На главной нет «Подробнее» проверки");
@@ -87,12 +87,12 @@ public sealed partial class WindowSmokeTests
                     vm.Router.CustomAddress = fake.Address;
                     vm.Router.PollInterval = TimeSpan.FromMilliseconds(10);
                     WaitUi(vm.Router.ConnectAsync("secret"));
-                    vm.Page = Pages.Router;
+                    vm.GoTo(Pages.Router);
                     Pump();
                     Snap(w, Path.Combine(dir, $"{theme}-router.png"));
 
                     // «Игры и программы»: простой режим «Начать» → «Готово» → «Заработало?» (профиль в списке), затем для опытных — запись со списком.
-                    vm.Page = Pages.Apps;
+                    vm.GoTo(Pages.Apps);
                     Pump();
                     var tabs = Find<System.Windows.Controls.TabControl>(w)!;
                     System.Windows.Controls.Button? Btn(string content) => Find<System.Windows.Controls.Button>(tabs, b => b.IsVisible && b.Content as string == content);

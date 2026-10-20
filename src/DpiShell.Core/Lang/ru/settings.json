@@ -30,6 +30,8 @@
   "settings.close.title": "При закрытии окна",
   "settings.close.tray": "Сворачивать в трей",
   "settings.close.exit": "Закрывать программу",
+  "settings.router.show": "Показывать роутер",
+  "settings.router.show_hint": "Снято — роутер не ищется и не показывается, окно работает как без него.",
   "settings.advanced.title": "Для опытных",
   "settings.advanced.check": "Показывать инструменты",
   "settings.advanced.hint": "Это «Отладка подключений» в «Играх и программах»: запись подключений программы и сохранение профиля.",

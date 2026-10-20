@@ -41,7 +41,7 @@ public sealed partial class MainViewModel
         SetPcPresets();
         FixDnsCmd = RelayCommand.Async(() => ApplyPcDnsAsync(PcDns.Options.First(o => o.Id == RecommendedDns)), () => !Busy && !IsLoading);
         // «Другой DNS» — сразу к выбору, а не в начало вкладки «DNS» (UX-аудит 2, п. 4): окно прокручивает к карточке и раскрывает список.
-        ChooseDnsCmd = new RelayCommand(() => { Page = Pages.Dns; ShowRequested?.Invoke(Spot.PcDns); });
+        ChooseDnsCmd = new RelayCommand(() => { OpenNet(NetBlock.Dns); ShowRequested?.Invoke(Spot.PcDns); });
         // Свои варианты одни на ПК и роутер.
         PcDns.CustomChanged += Router.DnsPick.Reload;
         Router.DnsPick.CustomChanged += PcDns.Reload;
@@ -91,6 +91,32 @@ public sealed partial class MainViewModel
         }
     }
 
+    /// <summary>Название DNS на адаптерах: свой вариант, пресет, «как у провайдера» или адреса.</summary>
+    string PcDnsTitle(DnsStatusInfo s, DnsOption? own)
+    {
+        var first = s.Adapters.FirstOrDefault();
+        var v4 = first?.Servers.Where(ip => !DnsValues.IsIpv6(ip)).ToHashSet() ?? [];
+        return own?.Title ?? s.Current switch
+        {
+            DnsPresets.Auto => L.T("dns.status.provider"),
+            "other" or DnsPresets.Custom => v4.Count > 0 ? L.T("dns.status.custom_ips", new { ips = string.Join(", ", v4) }) : L.T("dns.status.custom"),
+            var id => DnsPresets.Find(id)?.Title ?? id,
+        };
+    }
+
+    /// <summary>Что сейчас на адаптерах одной строкой для заголовка блока «DNS» («Google, защищённый · Ethernet»); пусто — ещё не читали.</summary>
+    string PcDnsNow()
+    {
+        if (_pcDnsStatus is not { } s) return "";
+        if (s.Adapters.Count == 0) return L.T("dns.status.no_connection");
+        var first = s.Adapters.First();
+        var v4 = first.Servers.Where(ip => !DnsValues.IsIpv6(ip)).ToHashSet();
+        var own = s.Current is DnsPresets.Custom or "other" ? PcDns.FindCustom(o => o.Ips.ToHashSet().SetEquals(v4)) : null;
+        var title = PcDnsTitle(s, own);
+        var head = s.Current == DnsPresets.Auto ? title : L.T(s.Encrypted ? (s.Fallback ? "net.dns.secure_fallback" : "net.dns.secure") : "net.dns.plain", new { title });
+        return head + " · " + string.Join(", ", s.Adapters.Select(a => a.Name));
+    }
+
     DnsStatusInfo? _pcDnsStatus;   // последнее, что прочитали у адаптеров (данные): подписи собираются заново при смене языка
 
     public void ShowPcDns(DnsStatusInfo s)
@@ -100,12 +126,7 @@ public sealed partial class MainViewModel
         var first = s.Adapters.FirstOrDefault();
         var v4 = first?.Servers.Where(ip => !DnsValues.IsIpv6(ip)).ToHashSet() ?? [];
         var own = s.Current is DnsPresets.Custom or "other" ? PcDns.FindCustom(o => o.Ips.ToHashSet().SetEquals(v4)) : null;
-        var title = own?.Title ?? s.Current switch
-        {
-            DnsPresets.Auto => L.T("dns.status.provider"),
-            "other" or DnsPresets.Custom => v4.Count > 0 ? L.T("dns.status.custom_ips", new { ips = string.Join(", ", v4) }) : L.T("dns.status.custom"),
-            var id => DnsPresets.Find(id)?.Title ?? id,
-        };
+        var title = PcDnsTitle(s, own);
         var currentKey = s.Current == DnsPresets.Auto ? "dns.current" : s.Encrypted ? (s.Fallback ? "dns.current.secure_fallback" : "dns.current.secure") : "dns.current.plain";
         PcDns.CurrentText = s.Adapters.Count == 0 ? L.T("dns.status.no_connection")
             : L.T(currentKey, new { title, adapters = string.Join(", ", s.Adapters.Select(a => a.Name)) });

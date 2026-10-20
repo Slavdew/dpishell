@@ -74,7 +74,7 @@ public sealed class LangRouterWindowTests : IDisposable
                 vm.Router.CustomAddress = "127.0.0.1:1";
                 var w = Open(vm);
                 SetProp(vm, "IsLoading", false);
-                vm.Page = Pages.Router;
+                vm.GoTo(Pages.Router);
                 Pump();
                 var tabs = Find<TabControl>(w)!;
                 if (Find<Button>(tabs, b => b.Content as string == L.T("router.empty.fit") && b.IsVisible) is null) throw new Exception("Нет «Проверить, подходит ли мой роутер»");
@@ -108,7 +108,7 @@ public sealed class LangRouterWindowTests : IDisposable
                 SetProp(vm, "IsLoading", false);
                 foreach (var (page, name) in new[] { (Pages.Home, "home"), (Pages.Router, "tab") })
                 {
-                    vm.Page = page;
+                    vm.GoTo(page);
                     Pump();
                     var tabs = Find<TabControl>(w)!;
                     if (page == Pages.Home && Find<TextBlock>(tabs, t => t.Text == L.T("router.home.on") && t.IsVisible) is null) throw new Exception("На главной нет строки роутера");
@@ -120,7 +120,7 @@ public sealed class LangRouterWindowTests : IDisposable
                     }
                     Shot(w, name);
                 }
-                vm.Page = Pages.Select;
+                vm.GoTo(Pages.Select);
                 Pump();
                 Shot(w, "select");
                 Close(w);

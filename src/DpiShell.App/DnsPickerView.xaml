@@ -63,7 +63,7 @@
                   Visibility="{Binding ShowFallback, Converter={StaticResource Vis}}" />
 
         <!-- Технические подробности (адреса, IPv4/IPv6, шаблон защищённого DNS, оператор), копирование и сравнение скорости — под «Подробнее» (UX-аудит 5, п. 6). -->
-        <Expander Header="{l:T dns.picker.details}" Margin="0,8,0,0">
+        <Expander Header="{l:T dns.picker.details}" Style="{StaticResource SubBlock}">
             <StackPanel Margin="0,6,0,0">
                 <!-- Описание варианта: чтобы вписать вручную в Windows, телефон, роутер. -->
                 <ItemsControl ItemsSource="{Binding SelectedInfo}" AutomationProperties.Name="{l:T dns.picker.info_name}">
@@ -94,7 +94,7 @@
             </StackPanel>
         </Expander>
 
-        <Expander Header="{l:T dns.picker.custom}" IsExpanded="{Binding Adding}" Margin="0,8,0,0">
+        <Expander Header="{l:T dns.picker.custom}" Style="{StaticResource SubBlock}" IsExpanded="{Binding Adding}">
             <!-- Enter в любом поле — «Добавить». -->
             <Grid Margin="0,6,0,0">
                 <Grid.InputBindings>

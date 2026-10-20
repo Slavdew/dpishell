@@ -61,7 +61,7 @@ public sealed class LangPopulatedTests : IDisposable
             vm.ReloadChoices();
             WaitUi(vm.RefreshStatusAsync());
             SetProp(vm, "ShowStrategies", true);
-            vm.Page = Pages.Home;
+            vm.GoTo(Pages.Home);
             Pump();
             foreach (var c in vm.StrategyChoices) c.Expanded = true;
             Pump();
@@ -75,7 +75,7 @@ public sealed class LangPopulatedTests : IDisposable
                 [new DnsAdapterInfo("Ethernet", "ethernet", false, ["8.8.8.8", "8.8.4.4"], true)], ["Radmin VPN"]));
             Pump();
             CyrillicScan.CheckIfEn(w, "populated-home-banners");
-            vm.Page = Pages.Dns;
+            vm.GoTo(NetPages.Dns);
             Pump();
             foreach (var e in FindAll<Expander>(w, x => x.IsVisible)) e.IsExpanded = true;
             vm.DnsDetailsOpen = true;

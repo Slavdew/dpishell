@@ -60,7 +60,7 @@ public sealed partial class RouterViewModel
     /// </summary>
     public async Task<bool> BypassExpectedButAbsentAsync()
     {
-        if (Found || _settings.RouterBypass is not { Mac: { } mac } mark) return false;
+        if (!Enabled || Found || _settings.RouterBypass is not { Mac: { } mac } mark) return false;
         string? address;
         try { address = AddressAuto ? Gateway() : CustomAddress.Trim(); }
         catch (Exception e) when (e is InvalidOperationException or System.Net.NetworkInformation.NetworkInformationException) { return false; }

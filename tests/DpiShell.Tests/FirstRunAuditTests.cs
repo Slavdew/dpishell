@@ -410,7 +410,7 @@ public sealed class FirstRunAuditTests : IDisposable
         var vm = Model(await f.LinkAsync());
         vm.ProbeGroups = Probe(() => true);
         await vm.RefreshStatusAsync();
-        vm.Page = Pages.Apps;
+        vm.GoTo(Pages.Apps);
         typeof(AppsViewModel).GetProperty(nameof(AppsViewModel.Step))!.SetValue(vm.Apps, AppsStep.Done);
         Assert.True(vm.Apps.EnableCmd.CanExecute(null));
 

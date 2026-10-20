@@ -27,7 +27,7 @@ public sealed partial class WindowSmokeTests
                 vm.Proxy.Show(ProxyOverview.Read(vm.Proxy.Registry, vm.Proxy.WinHttp));
                 var w = Open(vm);
                 SetProp(vm, "IsLoading", true);   // как в остальных снимках: страница выбирается под заставкой, потом заставка снимается
-                vm.Page = Pages.Proxy;
+                vm.GoTo(NetPages.Proxy);
                 Pump();
                 SetProp(vm, "IsLoading", false);
                 Pump();
@@ -51,7 +51,7 @@ public sealed partial class WindowSmokeTests
                 vm2.Findings.Add(new(false, "Системный прокси", SystemChecks.ProxyFinding((true, "127.0.0.1:7897")).Text, SystemFinding.GoProxy));
                 var w2 = Open(vm2);
                 SetProp(vm2, "IsLoading", true);
-                vm2.Page = Pages.Proxy;
+                vm2.GoTo(NetPages.Proxy);
                 Pump();
                 SetProp(vm2, "IsLoading", false);
                 Pump();
@@ -82,7 +82,7 @@ public sealed partial class WindowSmokeTests
 
                 // «Диагностика» → «Настроить →» ведёт на вкладку «Прокси».
                 SetProp(vm2, "IsLoading", true);   // под заставкой смена вкладки не запускает проверку служб (sc.exe)
-                vm2.Page = Pages.Diag;
+                vm2.GoTo(Pages.Diag);
                 Pump();
                 SetProp(vm2, "IsLoading", false);
                 Pump();
@@ -90,7 +90,7 @@ public sealed partial class WindowSmokeTests
                            ?? throw new Exception("У находки «Системный прокси» нет ссылки «Открыть Прокси →»");
                 link.Command.Execute(null);
                 Pump();
-                if (vm2.Page != Pages.Proxy) throw new Exception("«Открыть Прокси →» не привела на вкладку «Прокси»");
+                if (vm2.Page != Pages.Net || !vm2.ProxyBlockOpen) throw new Exception("«Открыть Прокси →» не привела на блок «Прокси» вкладки «Сеть»");
                 Close(w2);
             }
         });

@@ -37,7 +37,7 @@ public sealed partial class WindowSmokeTests
                 var w = Open(vm);
                 w.Height = 900;
                 SetProp(vm, "IsLoading", false);
-                vm.Page = Pages.Sites;
+                vm.GoTo(Pages.Sites);
                 Pump();
                 var tabs = Find<TabControl>(w)!;
                 bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);

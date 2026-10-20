@@ -1,0 +1,14 @@
+{
+  "net.intro": "DNS, прокси и адреса в файле hosts.",
+  "net.expand_all": "Раскрыть все",
+  "net.collapse_all": "Свернуть все",
+  "net.status.unknown": "ещё не прочитано",
+  "net.dns.secure": "{title}, защищённый",
+  "net.dns.secure_fallback": "{title}, защищённый (можно обычный)",
+  "net.dns.plain": "{title}, без шифрования",
+  "net.dns.spoofed": "DNS провайдера подменяет адреса",
+  "net.dns.clean": "подмены нет",
+  "net.proxy.status": "{state} · Мои прокси: {n}",
+  "net.hosts.none": "hosts: строк DpiShell нет",
+  "net.hosts.some": "hosts: {parts}"
+}

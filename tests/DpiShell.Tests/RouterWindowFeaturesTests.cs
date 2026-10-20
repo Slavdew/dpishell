@@ -690,12 +690,12 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.False(vm.Router.DiagLoaded);
         int before = Count(r, "diag");
 
-        vm.Page = Pages.Diag;
+        vm.GoTo(Pages.Diag);
         await Task.Delay(300);
         Assert.Equal(before, Count(r, "diag"));
         Assert.False(vm.Router.DiagLoaded);
 
-        vm.Page = Pages.Router;
+        vm.GoTo(Pages.Router);
         await Until(() => vm.Router.DiagLoaded);
         Assert.Equal("zapret2", vm.Router.Conflicts.Single().Name);
         Assert.True(Count(r, "diag") > before);
