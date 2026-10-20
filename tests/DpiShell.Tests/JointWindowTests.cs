@@ -72,7 +72,7 @@ public sealed class JointWindowTests : IDisposable
         Assert.False(vm.Router.JointWanted);
         Assert.False(vm.Router.HasJointStatus);
         Assert.True(vm.Router.JointAvailable);
-        Assert.Contains("Нужен DpiShell на роутере", vm.Router.JointHint);
+        Assert.Equal(L.T("router.joint.hint"), vm.Router.JointHint);
         Assert.False(new WindowSettings().JointWanted);
         await vm.Router.JointTickAsync();
         Assert.Empty(router.Links);

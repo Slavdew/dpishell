@@ -62,7 +62,7 @@ public sealed class RouterViewModelTests : IDisposable
         // Оптимизация работает — текст предупреждения не на главной, а на вкладке «Роутер» (UX-аудит 5, п. 22): в строке стратегия и время.
         Assert.StartsWith("Стратегия general (ALT10), проверено в ", vm.HomeLine);
         Assert.StartsWith("Стратегия general (ALT10), проверено в ", vm.HomeDetail);
-        Assert.Equal("Ускорение сети на роутере мешает оптимизации", vm.Warnings);
+        Assert.Equal(L.T("router.warn.flow_offload"), vm.Warnings);
         Assert.Equal("Исправить", Assert.Single(vm.WarningRows).Fix);
         Assert.Single(vm.Strategies);
         AssertNoSecretSaid("secret");
@@ -155,7 +155,7 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.False(await vm.ConnectAsync(""));
         Assert.True(vm.Found);
         Assert.True(vm.NeedLogin);
-        Assert.Equal("DpiShell 0.1.0 найден — введите пароль роутера", vm.ConnectionText);
+        Assert.Equal(L.T("router.found.password", new { version = "0.1.0" }), vm.ConnectionText);
         Assert.Equal(0, r.Logins);
         Assert.Empty(r.Calls);
     }
@@ -242,7 +242,7 @@ public sealed class RouterViewModelTests : IDisposable
         var texts = new List<string>();
         vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.SelectProgressText) && vm.SelectProgressText.Length > 0) lock (texts) texts.Add(vm.SelectProgressText); };
         await vm.StartSelectAsync(deep: false);
-        Assert.Contains("Запускаю подбор…", texts);
+        Assert.Contains(L.T("router.select.starting"), texts);
         Assert.DoesNotContain(texts, t => t.StartsWith("Проверено 0 из"));
         Assert.StartsWith("Включена на роутере: ", vm.ResultText);   // дошёл до результата, а не «не удалось узнать ход»
         lock (_said) Assert.DoesNotContain(_said, s => s.Contains("Подбор ещё не поднялся") || s.Contains("Ошибка на роутере"));
@@ -393,7 +393,7 @@ public sealed class RouterViewModelTests : IDisposable
         UserStrategies.Add(shell.Paths, [shell.Catalog.Strategies[0] with { Id = "found-1", Title = "Найденная", Source = "search" }]);
         await vm.ConnectAsync("secret");
         await vm.SendStrategyAsync("found-1");
-        Assert.Contains("Роутер не умеет принимать стратегии с ПК — обновите пакет DpiShell на роутере", _said);
+        Assert.Contains(L.T("router.send.unsupported"), _said);
         Assert.DoesNotContain(r.Calls, c => Method(c) == "strategy_set");
     }
 
@@ -451,7 +451,7 @@ public sealed class RouterViewModelTests : IDisposable
         await vm.ConnectAsync("secret");
         await vm.RefreshDiagAsync();
         Assert.Equal("zapret2", Assert.Single(vm.Conflicts).Name);
-        Assert.StartsWith("включено — мешает оптимизации", vm.FlowOffloadText);
+        Assert.Equal(L.T("router.diag.flow_on_bad"), vm.FlowOffloadText);
         Assert.StartsWith("провайдер подменяет", vm.DnsText);
         Assert.DoesNotContain("проверено", vm.DnsText);   // время проверки DNS — одно, в карточке «DNS для всей сети»
         await vm.StopConflictAsync("zapret2");

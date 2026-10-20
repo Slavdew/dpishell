@@ -44,17 +44,17 @@ public sealed partial class WindowSmokeTests
                 Pump();
                 var tabs = Find<TabControl>(w)!;
                 bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
-                CheckBox Switch() => Find<CheckBox>(tabs, c => c.IsVisible && System.Windows.Automation.AutomationProperties.GetName(c) == "Совместная работа с роутером")
+                CheckBox Switch() => Find<CheckBox>(tabs, c => c.IsVisible && System.Windows.Automation.AutomationProperties.GetName(c) == L.T("router.joint.title"))
                                      ?? throw new Exception("Нет переключателя «Совместная работа с роутером»");
 
                 // Выключена по умолчанию: карточка с заголовком, «(i)», переключатель и подсказка; статуса нет.
-                if (!Visible(t => t.Text == "Совместная работа с роутером")) throw new Exception("Нет заголовка карточки");
+                if (!Visible(t => t.Text == L.T("router.joint.title"))) throw new Exception("Нет заголовка карточки");
                 if (Find<InfoButton>(tabs, b => b.Topic == InfoTexts.Joint && b.IsVisible) is null) throw new Exception("Нет «(i)» у совместной работы");
                 var sw = Switch();
                 if (sw.IsChecked == true) throw new Exception("Совместная работа включена по умолчанию");
                 if (!sw.IsEnabled) throw new Exception("Переключатель недоступен при подключённом роутере");
-                if (!Visible(t => t.Text.StartsWith("Роутер ведёт YouTube и Discord сам, а этот ПК"))) throw new Exception("Нет подсказки под выключенным переключателем");
-                if (Visible(t => t.Text.StartsWith("Роутер ведёт YouTube и Discord, этот ПК"))) throw new Exception("Статус виден у выключенной совместной работы");
+                if (!Visible(t => t.Text == L.T("router.joint.hint"))) throw new Exception("Нет подсказки под выключенным переключателем");
+                if (Visible(t => t.Text.StartsWith("Роутер ведёт YouTube и Discord, этот ПК — свои сайты ("))) throw new Exception("Статус виден у выключенной совместной работы");
                 if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-router-joint-off.png")); }
 
                 // Включена: связка на роутере, ПК включается и ведёт свои сайты; youtube.com ведёт роутер.
@@ -109,7 +109,7 @@ public sealed partial class WindowSmokeTests
                 // Переключатель показывает настоящее состояние: связки нет — он выключен («Выключено»), а ждать роутер можно перестать.
                 if (Switch().IsChecked == true) throw new Exception("Переключатель при пропавшем роутере не должен выглядеть включённым");
                 if (!Visible(t => t.Text == "Выключено")) throw new Exception("Подпись переключателя при пропавшем роутере — не «Выключено»");
-                if (!Visible(t => t.Text == "Включится само, когда роутер найдётся.")) throw new Exception("Нет строки «Включится само, когда роутер найдётся»");
+                if (!Visible(t => t.Text == L.T("router.joint.hint_waiting"))) throw new Exception("Нет строки «Включится само, когда роутер найдётся»");
                 if (Find<Button>(tabs, b => b.IsVisible && b.Content as string == "Не ждать роутер") is null) throw new Exception("Нет «Не ждать роутер»");
                 if (Visible(t => t.Text.StartsWith("Выключите, чтобы"))) throw new Exception("В карточке осталась фраза «Выключите, чтобы…»");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-joint-fallback.png"));

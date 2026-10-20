@@ -385,7 +385,7 @@ public sealed class JointTests : IDisposable
         var hp = File.ReadAllText(Path.Combine(root, "docs", "dev", "helper-protocol.md"));
         Assert.Contains("1.9 — совместная работа с роутером", hp);
         var arch = File.ReadAllText(Path.Combine(root, "docs", "dev", "architecture.md"));
-        Assert.Contains("Совместная работа с роутером", arch);
+        Assert.Contains(L.T("router.joint.title"), arch);
         Assert.Contains("joint_get", arch);
     }
 

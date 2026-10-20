@@ -288,9 +288,9 @@ public sealed class FirstRunAuditTests : IDisposable
     }
 
     [Theory]
-    [InlineData(RouterFitResult.Yes, "Похоже, у вас роутер с OpenWrt (192.168.1.1)")]
-    [InlineData(RouterFitResult.No, "Роутер (192.168.1.1) отвечает, но на OpenWrt не похож")]
-    [InlineData(RouterFitResult.Unknown, "Не получилось определить: роутер (192.168.1.1) не ответил")]
+    [InlineData(RouterFitResult.Yes, "router.fit.yes")]
+    [InlineData(RouterFitResult.No, "router.fit.no")]
+    [InlineData(RouterFitResult.Unknown, "router.fit.unknown")]
     public async Task RouterFit_AnswersYesNoDontKnow_InPlainWords(RouterFitResult probe, string expected)
     {
         using var t = new TempDir();
@@ -299,7 +299,7 @@ public sealed class FirstRunAuditTests : IDisposable
         vm.FitProbe = _ => Task.FromResult(probe);
         Assert.False(vm.HasFit);
         await vm.CheckFitAsync();
-        Assert.StartsWith(expected, vm.FitText);
+        Assert.Equal(L.T(expected, new { address = "192.168.1.1" }), vm.FitText);
         Assert.True(vm.HasFit);
         Assert.False(vm.FitChecking);
         Assert.DoesNotContain("LuCI", vm.FitText);   // слов для знатоков в ответе нет
@@ -313,7 +313,7 @@ public sealed class FirstRunAuditTests : IDisposable
         vm.Gateway = () => null;
         vm.FitProbe = _ => throw new InvalidOperationException("шлюза нет — страницу не открываем");
         await vm.CheckFitAsync();
-        Assert.StartsWith("Не нашёл роутер", vm.FitText);
+        Assert.Equal(L.T("router.fit.no_network"), vm.FitText);
     }
 
     [Fact]

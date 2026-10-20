@@ -95,7 +95,7 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.Equal("secret", RouterSecrets.Unprotect(Settings.RouterPassword));
         Assert.True(vm.HasSavedPassword);
         Assert.True(i.VerdictOk);
-        Assert.Equal("Роутер подходит — можно ставить DpiShell 0.2.0.", i.VerdictTitle);
+        Assert.Equal(L.T("router.install.verdict_ok", new { version = "0.2.0" }), i.VerdictTitle);
         Assert.False(i.HasTunnelNote);
         Assert.True(i.CanInstall);
         Assert.Empty(ssh.Uploads);    // проверка ничего не кладёт
@@ -145,13 +145,13 @@ public sealed class RouterSetupViewModelTests : IDisposable
     [Fact]
     public async Task Install_StepsFollowScriptLines()
     {
-        Assert.Equal(0, RouterInstallViewModel.StepOf("Подключение к роутеру"));
-        Assert.Equal(0, RouterInstallViewModel.StepOf("Ядро zapret: загрузка на роутер"));
-        Assert.Equal(1, RouterInstallViewModel.StepOf("Ключ витрины DpiShell"));
-        Assert.Equal(2, RouterInstallViewModel.StepOf("Пакеты DpiShell и зависимости"));
-        Assert.Equal(3, RouterInstallViewModel.StepOf("Ядро zapret (zapret) — загрузка и проверка хеша"));
-        Assert.Equal(4, RouterInstallViewModel.StepOf("Проверка"));
-        Assert.Null(RouterInstallViewModel.StepOf("CONNECT github.com:443"));
+        // Шаги — коды установщика (DpiShell.Core), а не сравнение русского текста окна.
+        Assert.Equal(RouterInstallStepCode.Feed, RouterInstallSteps.FromScriptLine("Ключ витрины DpiShell"));
+        Assert.Equal(RouterInstallStepCode.Feed, RouterInstallSteps.FromScriptLine("Витрина пакетов"));
+        Assert.Equal(RouterInstallStepCode.Packages, RouterInstallSteps.FromScriptLine("Пакеты DpiShell и зависимости"));
+        Assert.Equal(RouterInstallStepCode.Core, RouterInstallSteps.FromScriptLine("Ядро zapret (zapret) — загрузка и проверка хеша"));
+        Assert.Equal(RouterInstallStepCode.Start, RouterInstallSteps.FromScriptLine("Проверка"));
+        Assert.Null(RouterInstallSteps.FromScriptLine("CONNECT github.com:443"));
         await Task.CompletedTask;
     }
 
@@ -486,12 +486,12 @@ public sealed class RouterSetupViewModelTests : IDisposable
         var conn = new FakeSshConnector(ssh);
         var vm = Make(r, conn);
         Assert.True(await vm.ConnectAsync("secret"));
-        Assert.Equal("Пароль сохранён на этом компьютере (зашифрован)", vm.SavedPasswordText);
+        Assert.Equal(L.T("router.password.saved"), vm.SavedPasswordText);
         Assert.True(vm.ForgetPasswordCmd.CanExecute(null));
         vm.ForgetPasswordCmd.Execute(null);
         Assert.Null(Settings.RouterPassword);
         Assert.False(vm.HasSavedPassword);
-        Assert.Contains("Пароль роутера забыт — на этом компьютере его больше нет", _said);
+        Assert.Contains(L.T("router.password.forgotten"), _said);
 
         // Сохранённый перестал подходить (пароль сменили) — стирается при входе им, а не держится.
         Assert.True(await vm.ConnectAsync("secret"));
@@ -531,8 +531,8 @@ public sealed class RouterSetupViewModelTests : IDisposable
         };
         Assert.True(await vm.UpdateRouterAsync());
         // Шаги по step: текущий выделен, пройденные — с ✓.
-        Assert.Equal(["Скачиваю", "Устанавливаю", "Перезапуск службы", "✓ Готово"], current);
-        Assert.Contains(titles, t => t.StartsWith("Обновляю DpiShell на роутере… прошло 0:0"));   // прошедшее время в заголовке
+        Assert.Equal([L.T("router.update.step.download"), L.T("router.update.step.install"), L.T("router.update.step.restart"), "✓ " + L.T("router.update.step.done")], current);
+        Assert.Contains(titles, t => t.StartsWith(L.T("router.update.title_running", new { time = "0:0" })));   // прошедшее время в заголовке
         Assert.Equal("# download\n# install\n# restart", vm.UpdateLog);   // «Подробнее» — хвост журнала
         Assert.Empty(vm.UpdateSteps);   // закончилось — шагов не видно
         Assert.Contains("Обновлено до 0.2.1-r1", _said);
@@ -569,15 +569,15 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.DoesNotContain(r.Calls, c => Method(c) == "update_install" && c["params"]![3]!["from"]!.GetValue<string>() == "local");
         if (newVersion)
         {
-            Assert.Contains(_said, s => s.Contains("обновлён до 0.2.1-r1 (роутер не дописал итог)"));
+            Assert.Contains(_said, s => s == L.T("router.update.done_no_summary", new { version = "0.2.1-r1" }));
             Assert.Equal("Подключено, DpiShell 0.2.1-r1", vm.ConnectionText);
             Assert.False(vm.UpdateAvailable);
         }
         else
         {
-            Assert.Contains(_said, s => s.StartsWith("Обновление не завершилось: роутер отвечает, но версия DpiShell прежняя (0.2.0-r3)"));
-            Assert.Equal("Обновление до 0.2.1-r1 не завершилось — работает прежняя 0.2.0-r3", vm.UpdateTitle);
-            Assert.Equal("Повторить", vm.UpdateButtonText);
+            Assert.Contains(_said, s => s == L.T("router.update.same_version_v", new { version = "0.2.0-r3" }));
+            Assert.Equal(L.T("router.update.title_failed_cur", new { version = "0.2.1-r1", current = "0.2.0-r3" }), vm.UpdateTitle);
+            Assert.Equal(L.T("common.retry"), vm.UpdateButtonText);
             Assert.True(vm.UpdateAvailable && vm.UpdateCmd.CanExecute(null));
         }
     }
@@ -636,7 +636,7 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.True(vm.UpdateCheckCmd.CanExecute(null));
         await vm.CheckUpdatesAsync();
         Assert.Equal(1, r.UpdateCheckCalls);
-        Assert.Contains("Обновлений нет — на роутере последняя версия DpiShell", _said);
+        Assert.Contains(L.T("router.update.none"), _said);
     }
 
     // ---------- 5. ключ роутера изменился ----------

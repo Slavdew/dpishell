@@ -69,7 +69,7 @@ public sealed class RouterKillSwitchTests : IDisposable
         Assert.Null(r.Pending);
         Assert.True(r.Enabled);
         Assert.False(vm.TrialVisible);
-        Assert.Equal("Проверено — оставил. Оптимизация на роутере включена.", LastSaid());
+        Assert.Equal(L.T("router.trial.kept", new { result = L.T("router.enable.done") }), LastSaid());
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public sealed class RouterKillSwitchTests : IDisposable
         string? text = null; bool? ask = null, visible = null;
         vm.VerifyFromPc = () => { text = vm.TrialText; ask = vm.TrialAsk; visible = vm.TrialVisible; return Task.FromResult<bool?>(true); };
         await vm.ToggleAsync();
-        Assert.Equal("Проверяю, что сайты открываются. Если не подтвердить — роутер сам вернёт прежнее через 3:00.", text);
+        Assert.Equal(L.T("router.trial.checking", new { time = "3:00" }), text);
         Assert.False(ask);
         Assert.True(visible);
         Assert.False(vm.TrialVisible);
@@ -97,9 +97,9 @@ public sealed class RouterKillSwitchTests : IDisposable
         Assert.Equal("Часть сайтов с этого ПК не открылась. Оставить оптимизацию?", vm.TrialText);
         Assert.True(vm.TrialAsk);
         // Отсчёт — от left_s по часам ПК, не от until роутера.
-        Assert.Equal("вернётся само через 3:00", vm.TrialCountdown);
+        Assert.Equal(L.T("router.trial.countdown", new { time = "3:00" }), vm.TrialCountdown);
         _now = _now.AddSeconds(15);
-        Assert.Equal("вернётся само через 2:45", vm.TrialCountdown);
+        Assert.Equal(L.T("router.trial.countdown", new { time = "2:45" }), vm.TrialCountdown);
         Assert.True(vm.TrialKeepCmd.CanExecute(null));
 
         await vm.KeepTrialAsync();
@@ -120,7 +120,7 @@ public sealed class RouterKillSwitchTests : IDisposable
         Assert.False(r.Enabled);
         Assert.False(vm.TrialVisible);
         Assert.False(vm.HasOff);   // выключил человек — не «выключено без вас»
-        Assert.Equal("Вернул как было: оптимизация на роутере выключена.", LastSaid());
+        Assert.Equal(L.T("router.trial.reverted_off"), LastSaid());
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public sealed class RouterKillSwitchTests : IDisposable
         Assert.Equal("alt10", r.Strategy);
         Assert.True(r.Enabled);
         Assert.Null(r.Pending);
-        Assert.Equal("Вернул как было: на роутере стратегия general (ALT10).", LastSaid());
+        Assert.Equal(L.T("router.trial.reverted_strategy", new { name = "general (ALT10)" }), LastSaid());
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class RouterKillSwitchTests : IDisposable
         await Until(() => vm.HasOff);
         Assert.False(vm.TrialVisible);
         Assert.False(vm.RouterEnabled);
-        Assert.Equal($"Роутер вернул как было в {RouterTexts.Time(new DateTime(2026, 10, 19, 12, 3, 0, DateTimeKind.Utc))}: включение не подтвердили вовремя", vm.OffText);
+        Assert.Equal(L.T("router.off.revert_enable_at", new { time = RouterTexts.Time(new DateTime(2026, 10, 19, 12, 3, 0, DateTimeKind.Utc)) }), vm.OffText);
         Assert.Equal(vm.OffText, vm.HomeLine);
         Assert.DoesNotContain(vm.WarningRows, w => w.Code == "confirm_reverted");
         Assert.True(vm.CanReEnable);
@@ -171,12 +171,12 @@ public sealed class RouterKillSwitchTests : IDisposable
         using var vm = await Connected(r, sitesOpen: true);
         Assert.True(vm.WatchdogAvailable);
         Assert.True(vm.WatchdogEnabled);
-        Assert.Equal($"проверено в {RouterTexts.Time(new DateTime(2026, 10, 19, 12, 0, 1, DateTimeKind.Utc))} · всё в порядке", vm.WatchdogLine);
+        Assert.Equal(L.T("router.wd.checked_ok", new { time = RouterTexts.Time(new DateTime(2026, 10, 19, 12, 0, 1, DateTimeKind.Utc)) }), vm.WatchdogLine);
 
         r.WatchdogTrip();
         await vm.RefreshAsync();
         // «Сторож» — один раз и с пояснением (UX-аудит 7, п. 9).
-        Assert.Equal($"Оптимизация на роутере выключена автоматически в {RouterTexts.Time(new DateTime(2026, 10, 19, 11, 32, 0, DateTimeKind.Utc))}: с ней пропал интернет (это сделал сторож — он проверяет, что интернет работает).", vm.OffText);
+        Assert.Equal(L.T("router.off.watchdog_at", new { time = RouterTexts.Time(new DateTime(2026, 10, 19, 11, 32, 0, DateTimeKind.Utc)) }), vm.OffText);
         Assert.Equal(vm.OffText, vm.HomeLine);
         // Предложение подобрать другую стратегию; «Не сейчас» прячет его до следующего срабатывания сторожа.
         Assert.True(vm.OfferSelect);
@@ -215,7 +215,7 @@ public sealed class RouterKillSwitchTests : IDisposable
         using var vm = await Connected(r, sitesOpen: true);
         r.ButtonOff();
         await vm.RefreshAsync();
-        Assert.StartsWith("Оптимизация на роутере выключена кнопкой на корпусе в ", vm.OffText);
+        Assert.StartsWith(L.T("router.off.button_at", new { time = "" }), vm.OffText);
         Assert.Empty(vm.OffTargets);
         Assert.True(vm.CanReEnable);
     }
@@ -254,20 +254,20 @@ public sealed class RouterKillSwitchTests : IDisposable
         r.WatchdogSelectRunning();
         await vm.RefreshAsync();
         Assert.Equal(RouterViewModel.WatchdogSelectState.Running, vm.WdState);
-        Assert.Equal("Оптимизацию выключили автоматически — пропал интернет. Роутер подбирает другую стратегию…", vm.OffText);
-        Assert.DoesNotContain("Сторож", vm.OffText);   // слово объяснено в одной фразе, дальше — «автоматически»
+        Assert.Equal(L.T("router.wd.select_running"), vm.OffText);
         Assert.True(vm.WdRunning);
         Assert.False(vm.ShowRouterActions);   // «Включить», «Подобрать» и «Стратегия» спрятаны на время подбора
         Assert.False(vm.OfferSelect);
         Assert.False(vm.CanReEnable);
-        await Until(() => vm.Selecting && vm.SelectProgressText.StartsWith("Роутер подбирает сам."));
+        await Until(() => vm.Selecting && vm.SelectProgressText.StartsWith(L.T("router.select.started_auto")));
         await vm.CancelSelectAsync();
 
         // Нашёл и включил: фраза с названием, без кнопок; «Подробнее» — если роутер отдал last_off.
         r.WatchdogSelectFound("alt10");
         await vm.RefreshAsync();
         Assert.Equal(RouterViewModel.WatchdogSelectState.Found, vm.WdState);
-        Assert.StartsWith("Оптимизацию выключили автоматически — пропал интернет. Роутер подобрал и включил ", vm.OffText);
+        var foundText = L.T("router.wd.select_found", new { name = "\u0001" });
+        Assert.StartsWith(foundText[..foundText.IndexOf('\u0001')], vm.OffText);
         Assert.EndsWith(".", vm.OffText);
         Assert.False(vm.OffAlert);
         Assert.False(vm.OfferSelect);
@@ -279,12 +279,12 @@ public sealed class RouterKillSwitchTests : IDisposable
         r.WatchdogSelectFailed();
         await vm.RefreshAsync();
         Assert.Equal(RouterViewModel.WatchdogSelectState.Failed, vm.WdState);
-        Assert.Equal("Оптимизацию выключили автоматически — пропал интернет, а подходящей стратегии не нашлось. Она выключена, пока вы её не включите.", vm.OffText);
+        Assert.Equal(L.T("router.wd.select_failed"), vm.OffText);
         Assert.True(vm.OffAlert);
         Assert.False(vm.OfferSelect);
         Assert.True(vm.OfferSelectButton);
         Assert.True(vm.CanReEnable);
-        Assert.Equal("Попробовать прежнюю (на пробу)", vm.ReEnableText);
+        Assert.Equal(L.T("router.trial.reenable"), vm.ReEnableText);
         Assert.Empty(vm.WarningRows);
     }
 

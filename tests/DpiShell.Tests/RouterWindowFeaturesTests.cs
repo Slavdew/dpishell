@@ -67,7 +67,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.Equal("lists", r.Mode);
         Assert.False(vm.ModeAll);
         Assert.True(vm.ModeLists);
-        Assert.Contains("перепроверит", _said[^1]);
+        Assert.Equal(L.T("router.mode.lists_done"), _said[^1]);
         await vm.SetModeAsync(true);
         Assert.True(vm.ModeAll);
         Assert.Equal("all", r.Mode);
@@ -134,18 +134,18 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.Contains("родительский контроль", asked);
         Assert.Equal("doh", r.DnsMode);
         Assert.True(vm.DnsProtected);
-        Assert.Equal("Защищённый DNS включён для всей сети", vm.DnsState);
-        Assert.Equal("Защищённый DNS включён для всей сети.", _said[^1]);
+        Assert.Equal(L.T("router.dns.on"), vm.DnsState);
+        Assert.Equal(L.T("router.dns.enable_done"), _said[^1]);
         Assert.False(vm.DnsRunning);
 
         await vm.DnsRestoreAsync();
         Assert.Equal("provider", r.DnsMode);
         Assert.False(vm.DnsProtected);
-        Assert.Equal("DNS на роутере — как было.", _said[^1]);
+        Assert.Equal(L.T("router.dns.restore_done"), _said[^1]);
 
         await vm.DnsAnalyzeAsync();
         Assert.Equal(1, Count(r, "dns_analyze"));
-        Assert.Equal("Роутер проверил DNS.", _said[^1]);
+        Assert.Equal(L.T("router.dns.analyze_done"), _said[^1]);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         await vm.RefreshRouterPageAsync();
         await vm.DnsEnableAsync();
         Assert.Equal("provider", r.DnsMode);
-        Assert.Equal("Включаю защищённый DNS: не получилось — Не удалось установить пакет", vm.DnsJobText);
+        Assert.Equal(L.T("router.dns.job.failed_msg", new { action = L.T("router.dns.job.dns_enable"), message = "Не удалось установить пакет" }), vm.DnsJobText);
         Assert.Equal(vm.DnsJobText, _said[^1]);
     }
 
@@ -357,7 +357,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         string? asked = null;
         vm.Confirm = q => { asked = q; return true; };
         await vm.ToggleAsync();
-        Assert.Contains("Выключить оптимизацию на этом ПК и включить на роутере?", asked);
+        Assert.Equal(L.T("router.enable.confirm"), asked);
         Assert.False(pc);
         Assert.True(r.Enabled);
         Assert.False(vm.BothOn);
@@ -396,7 +396,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         IReadOnlyList<string>? options = null;
         vm.Choose = (_, o) => { options = o; return 0; };
         await vm.EnableAsync();
-        Assert.Equal(new[] { "Подобрать на роутере", "Выключить на роутере и включить на этом ПК" }, options);
+        Assert.Equal(new[] { L.T("router.choice.select_router"), L.T("router.choice.swap") }, options);
         Assert.Equal(Pages.Select, vm.Page);
         Assert.True(vm.Router.SelectOnRouter);
         Assert.True(r.Enabled);
@@ -519,7 +519,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         var (vm, f, _) = await MainWithHelper(address, Pc(active: true), new RouterBypassMark(address, "AABBCCDDEEFF"), macNow);
         await using var _f = f;
         await vm.InitializeAsync();
-        if (off) await Until(() => vm.Message == "Оптимизация на этом ПК выключена: она работает на роутере, а роутер сейчас не отвечает.");
+        if (off) await Until(() => vm.Message == L.T("router.pc_off_router_silent"));
         else await Task.Delay(300);
         Assert.Equal(off, f.Backend.Calls.Contains("disable"));
     }
@@ -727,8 +727,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
 
         await vm.StartSelectAsync(deep: false);
 
-        Assert.Contains("пуст", asked);
-        Assert.Contains("Отправить свои сайты с компьютера на роутер", asked);
+        Assert.Equal(L.T("router.targets.offer", new { count = 2 }), asked);
         Assert.Equal(2, Count(r, "select_start"));          // отказ, отправка, повтор
         Assert.Equal(1, Count(r, "targets_set"));
         Assert.Equal(["https://example.org/", "https://news.example.net/"], r.UserTargets.Select(t => t.Url));

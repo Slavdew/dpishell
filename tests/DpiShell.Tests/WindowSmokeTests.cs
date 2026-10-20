@@ -621,7 +621,7 @@ public sealed partial class WindowSmokeTests
                     // Роутера нет — вкладка всё равно есть: пустое состояние и адрес (UX-аудит п. 47). Ещё не искали — «не проверялся» (UX-аудит 2, п. 10),
                     // и как поставить — ссылка на инструкцию (п. 9).
                     if (page == Pages.Router && (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Роутер не проверялся" && t.IsVisible) is null
-                                                 || Find<Button>(Find<TabControl>(w)!, b => b.Content as string == "Как поставить на роутер ↗" && b.IsVisible) is null))
+                                                 || Find<Button>(Find<TabControl>(w)!, b => b.Content as string == L.T("router.empty.guide") && b.IsVisible) is null))
                         throw new Exception("На вкладке «Роутер» без роутера нет пустого состояния или ссылки «Как поставить»");
                     // Пока роутер не найден: одна «Установить на роутер» и одна «Найти» (ссылкой в пустом состоянии; в «Подключении» её нет — UX-аудит 6, п. 14).
                     if (page == Pages.Router)
@@ -632,7 +632,7 @@ public sealed partial class WindowSmokeTests
                         if (installs != 1 || finds != 1) throw new Exception($"Без роутера кнопок установки {installs} (ждали 1), «Найти» {finds} (ждали 1)");
                         if (Find<TextBlock>(tabsNone, t => t.Text.Contains("«Найти» ниже")) is not null) throw new Exception("Осталась фраза «Нажмите «Найти» ниже»");
                         // UX-аудит 7, п. 10: вместо абзаца про OpenWrt и LuCI — кнопка «Проверить, подходит ли мой роутер»; абзац — под «Подробнее».
-                        if (Find<Button>(tabsNone, b => b.Content as string == "Проверить, подходит ли мой роутер" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет кнопки «Проверить, подходит ли мой роутер»");
+                        if (Find<Button>(tabsNone, b => b.Content as string == L.T("router.empty.fit") && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет кнопки «Проверить, подходит ли мой роутер»");
                         if (Find<TextBlock>(tabsNone, t => t.IsVisible && (t.Text.Contains("LuCI") || t.Text.Contains("OpenWrt ли у вас"))) is not null) throw new Exception("Слова про OpenWrt и LuCI видны без «Подробнее»");
                         if (Find<Expander>(tabsNone, e => e.Header as string == "Подробнее" && e.Content is TextBlock tb && tb.Text.Contains("LuCI")) is null) throw new Exception("Абзац про OpenWrt и LuCI не под «Подробнее»");
                     }
@@ -667,7 +667,7 @@ public sealed partial class WindowSmokeTests
                         vm.Router.FitProbe = _ => Task.FromResult(DpiShell.Core.Router.RouterFitResult.Yes);
                         WaitUi(vm.Router.CheckFitAsync());
                         Pump();
-                        if (Find<TextBlock>(Find<TabControl>(w)!, t => t.IsVisible && t.Text.StartsWith("Похоже, у вас роутер с OpenWrt (192.168.1.1)")) is null) throw new Exception("Нет ответа «Похоже, у вас роутер с OpenWrt»");
+                        if (Find<TextBlock>(Find<TabControl>(w)!, t => t.IsVisible && t.Text == L.T("router.fit.yes", new { address = "192.168.1.1" })) is null) throw new Exception("Нет ответа «Похоже, у вас роутер с OpenWrt»");
                         Snap(w, Path.Combine(snapDir, $"{theme}-router-none-fit.png"));
                     }
                     // Подбор: строка раскрыта — результаты по всем адресам (обязательные провалы — первыми, отмечены).
@@ -769,12 +769,12 @@ public sealed partial class WindowSmokeTests
                         throw new Exception("В диагностике ПК у «Похожих программ» нет «Остановить»");
                     if (page == Pages.Diag && w.FindName("PcDnsCard") is FrameworkElement { IsVisible: true }) throw new Exception("Карточка DNS осталась на «Диагностике»");
                     if (page == Pages.Diag)
-                        foreach (var text in new[] { "Роутер: что мешает", "Сайт не открывается" })
+                        foreach (var text in new[] { L.T("router.diag.title"), "Сайт не открывается" })
                             if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» на «Диагностике» без роутера");
                     if (page == Pages.Sites)
                     {
                         // Роутера нет: только свои сайты ПК — без карточек роутера и заглушек про исключения.
-                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", "Исключения (оптимизация их не трогает)", "Роутер: что мешает" })
+                        foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", "Исключения (оптимизация их не трогает)", L.T("router.diag.title") })
                             if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» на «Сайтах» без роутера");
                         if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Открывать без оптимизации" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет списка «Открывать без оптимизации»");
                         if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Свои сайты" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет поля своих сайтов ПК");
@@ -993,9 +993,9 @@ public sealed partial class WindowSmokeTests
                     if (page == Pages.Diag)
                     {
                         // «Диагностика» — только этот ПК: карточки роутера (и его отчёт) переехали на вкладку «Роутер».
-                        foreach (var text in new[] { "Роутер: что мешает", "Похожие программы на роутере" })
+                        foreach (var text in new[] { L.T("router.diag.title") })   // «Похожие программы» совпадает с блоком проверок ПК — не сверяем
                             if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» осталось на «Диагностике»");
-                        if (Find<Button>(tabs, b => b.Content as string == "Сохранить отчёт роутера" && b.IsVisible) is not null) throw new Exception("«Сохранить отчёт роутера» осталось на «Диагностике»");
+                        if (Find<Button>(tabs, b => b.Content as string == L.T("router.diag.save_report") && b.IsVisible) is not null) throw new Exception("«Сохранить отчёт роутера» осталось на «Диагностике»");
                         if (Find<TextBlock>(tabs, t => t.Text == "Похожие программы" && t.IsVisible) is null) throw new Exception("На «Диагностике» нет проверок этого ПК");
                     }
                     if (page == Pages.Sites)
@@ -1015,12 +1015,12 @@ public sealed partial class WindowSmokeTests
                     if (page == Pages.Router)
                     {
                         // «Роутер: что мешает» (diag, чужие обходы, отчёт) — на «Роутере», рядом с плашками; «Сайты» и режим обхода переехали на «Сайты».
-                        foreach (var text in new[] { "Роутер: что мешает", "Похожие программы на роутере", "DNS для всей сети", "Проверять сам" })
+                        foreach (var text in new[] { L.T("router.diag.title"), L.T("router.diag.conflicts"), "DNS для всей сети", L.T("router.schedule.title") })
                             if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is null) throw new Exception($"На вкладке «Роутер» нет «{text}»");
                         foreach (var text in new[] { "Для каких сайтов оптимизация", "Сайт не открывается" })
                             if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» осталось на «Роутере»");
                         if (Find<Button>(tabs, b => b.Content as string == "Остановить" && b.IsVisible) is null) throw new Exception("В «Роутер: что мешает» нет «Остановить» у конфликта");
-                        if (Find<Button>(tabs, b => b.Content as string == "Сохранить отчёт роутера" && b.IsVisible) is null) throw new Exception("На «Роутере» нет «Сохранить отчёт роутера»");
+                        if (Find<Button>(tabs, b => b.Content as string == L.T("router.diag.save_report") && b.IsVisible) is null) throw new Exception("На «Роутере» нет «Сохранить отчёт роутера»");
                         // dns_presets есть — вместо одной кнопки выбор вариантов, как на ПК.
                         if (Find<Button>(tabs, b => b.Content as string == "Включить защищённый DNS" && b.IsVisible) is not null) throw new Exception("Осталась одна кнопка «Включить защищённый DNS»");
                         if (Find<DnsPickerView>(tabs, p => p.IsVisible) is not { } rp || Find<ComboBox>(rp, c => c.Items.Count >= 4) is null)
@@ -1068,7 +1068,7 @@ public sealed partial class WindowSmokeTests
                         Collect(tabs, expanders);
                         foreach (var e in expanders) e.IsExpanded = true;
                         Pump();
-                        var diagCard = Find<TextBlock>(tabs, t => t.Text == "Роутер: что мешает")!;
+                        var diagCard = Find<TextBlock>(tabs, t => t.Text == L.T("router.diag.title"))!;
                         rsv.ScrollToVerticalOffset(diagCard.TranslatePoint(new Point(0, 0), (UIElement)rsv.Content).Y - 30);
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-router-diag-card.png"));
@@ -1124,7 +1124,7 @@ public sealed partial class WindowSmokeTests
                     router.GetType().GetProperty("UpdateLog")!.SetValue(router, "# download: dpishell-0.2.1-r1.apk\n# install: apk add --upgrade dpishell luci-app-dpishell");
                     SetProp(router, "Updating", true);
                     Pump();
-                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Обновляю DpiShell на роутере… прошло 1:2") && t.IsVisible) is null) throw new Exception("Нет «Обновляю…» с прошедшим временем");
+                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith(L.T("router.update.title_running", new { time = "1:2" })) && t.IsVisible) is null) throw new Exception("Нет «Обновляю…» с прошедшим временем");
                     if (Find<Expander>(tabs, e => e.Header as string == "Подробнее" && e.IsVisible && e.DataContext == router) is not { } log) throw new Exception("Нет «Подробнее» с журналом обновления");
                     log.IsExpanded = true;
                     Pump();
@@ -1155,9 +1155,9 @@ public sealed partial class WindowSmokeTests
                 Pump();
                 {
                     var tabs = Find<TabControl>(w)!;
-                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Оптимизация на роутере выключена автоматически") && t.Text.Contains("сторож — он проверяет, что интернет работает") && t.IsVisible) is null) throw new Exception("На главной нет фразы о стороже");
-                    if (Find<Button>(tabs, b => b.Content as string == "Попробовать прежнюю (на пробу)" && b.IsVisible && b.IsEnabled) is null) throw new Exception("На главной нет «Попробовать снова»");
-                    if (Find<Button>(tabs, b => b.Content as string == "Подобрать на роутере" && b.IsVisible && b.IsEnabled) is null) throw new Exception("В плашке главной нет «Подобрать заново»");
+                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Сторож выключил оптимизацию") && t.Text.Contains("с ней пропал интернет") && t.IsVisible) is null) throw new Exception("На главной нет фразы о стороже");
+                    if (Find<Button>(tabs, b => b.Content as string == L.T("router.trial.reenable") && b.IsVisible && b.IsEnabled) is null) throw new Exception("На главной нет «Попробовать снова»");
+                    if (Find<Button>(tabs, b => b.Content as string == L.T("router.select") && b.IsVisible && b.IsEnabled) is null) throw new Exception("В плашке главной нет «Подобрать заново»");
                     if (Find<Button>(tabs, b => b.Content as string == "Включить снова") is not null) throw new Exception("Осталась «Включить снова»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-home.png"));
                     vm.Page = Pages.Router;
@@ -1171,7 +1171,7 @@ public sealed partial class WindowSmokeTests
                         throw new Exception("В «Подробнее» нет целей сторожа");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-tab.png"));
                     // Предложение после срабатывания сторожа: вопрос, «Подобрать» и «Не сейчас»; «Не сейчас» прячет его, «Попробовать снова» остаётся.
-                    if (Find<TextBlock>(tabs, t => t.Text == "Подобрать на роутере другую стратегию сейчас?" && t.IsVisible) is null) throw new Exception("Нет вопроса «Подобрать на роутере другую стратегию сейчас?»");
+                    if (Find<TextBlock>(tabs, t => t.Text == L.T("router.off.offer_title") && t.IsVisible) is null) throw new Exception("Нет вопроса «Подобрать на роутере другую стратегию сейчас?»");
                     if (Find<Button>(tabs, b => b.Content as string == "Подобрать" && b.IsVisible && b.IsEnabled) is null) throw new Exception("В предложении нет «Подобрать»");
                     if (Find<Button>(tabs, b => b.Content as string == "Не сейчас" && b.IsVisible) is not { } later) throw new Exception("В предложении нет «Не сейчас»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-offer.png"));
@@ -1179,7 +1179,7 @@ public sealed partial class WindowSmokeTests
                     Pump();
                     if (Find<Button>(tabs, b => b.Content as string == "Не сейчас" && b.IsVisible) is not null || Find<TextBlock>(tabs, t => t.Text.StartsWith("Подобрать на роутере другую") && t.IsVisible) is not null)
                         throw new Exception("«Не сейчас» не спрятало предложение");
-                    if (Find<Button>(tabs, b => b.Content as string == "Попробовать прежнюю (на пробу)" && b.IsVisible && b.IsEnabled) is null) throw new Exception("После «Не сейчас» пропало «Попробовать снова»");
+                    if (Find<Button>(tabs, b => b.Content as string == L.T("router.trial.reenable") && b.IsVisible && b.IsEnabled) is null) throw new Exception("После «Не сейчас» пропало «Попробовать снова»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-dismissed.png"));
                     if (Find<CheckBox>(tabs, c => (c.Content as string ?? "").StartsWith("Сторож:") && c.IsVisible) is not { } wdBox) throw new Exception("В «Проверять сам» нет сторожа");
                     if (Find<ScrollViewer>(tabs, s => s.ScrollableHeight > 0) is { } wsv2)
@@ -1197,23 +1197,23 @@ public sealed partial class WindowSmokeTests
                     fake.WatchdogSelectRunning();
                     WaitUi(router.RefreshAsync());
                     Pump();
-                    if (Find<TextBlock>(tabs, t => t.Text == "Оптимизацию выключили автоматически — пропал интернет. Роутер подбирает другую стратегию…" && t.IsVisible) is null) throw new Exception("Нет фразы о подборе после сторожа");
-                    if (Find<Button>(tabs, b => (b.Content as string is "Подобрать" or "Не сейчас" or "Попробовать прежнюю (на пробу)") && b.IsVisible) is not null) throw new Exception("Во время подбора после сторожа остались кнопки предложения");
+                    if (Find<TextBlock>(tabs, t => t.Text == L.T("router.wd.select_running") && t.IsVisible) is null) throw new Exception("Нет фразы о подборе после сторожа");
+                    if (Find<Button>(tabs, b => (b.Content as string is "Подобрать" or "Не сейчас" || b.Content as string == L.T("router.trial.reenable")) && b.IsVisible) is not null) throw new Exception("Во время подбора после сторожа остались кнопки предложения");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-running.png"));
                     WaitUi(router.CancelSelectAsync());
                     fake.WatchdogSelectFound();
                     WaitUi(router.RefreshAsync());
                     Pump();
-                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Оптимизацию выключили автоматически — пропал интернет. Роутер подобрал и включил ") && t.IsVisible) is null) throw new Exception("Нет фразы «роутер подобрал и включил»");
-                    if (Find<Button>(tabs, b => (b.Content as string is "Подобрать" or "Не сейчас" or "Попробовать прежнюю (на пробу)" or "Попробовать прежнюю (на пробу)") && b.IsVisible) is { } extra) throw new Exception("После удачного подбора сторожа остались кнопки: " + extra.Content);
+                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Сторож выключил оптимизацию: пропал интернет. Роутер подобрал и включил ") && t.IsVisible) is null) throw new Exception("Нет фразы «роутер подобрал и включил»");
+                    if (Find<Button>(tabs, b => (b.Content as string == L.T("router.not_now") || b.Content as string == L.T("router.trial.reenable"))   /* «Подобрать» в ряду действий теперь называется так же, как в предложении */ && b.IsVisible) is { } extra) throw new Exception("После удачного подбора сторожа остались кнопки: " + extra.Content);
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-found.png"));
                     fake.WatchdogTrip();
                     fake.WatchdogSelectFailed();
                     WaitUi(router.RefreshAsync());
                     Pump();
-                    if (Find<TextBlock>(tabs, t => t.Text.StartsWith("Оптимизацию выключили автоматически — пропал интернет, а подходящей стратегии не нашлось.") && t.IsVisible) is null) throw new Exception("Нет фразы «не нашлось»");
-                    if (Find<Button>(tabs, b => b.Content as string == "Подобрать на роутере" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Подобрать на роутере» после неудачи");
-                    if (Find<Button>(tabs, b => b.Content as string == "Попробовать прежнюю (на пробу)" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Попробовать прежнюю»");
+                    if (Find<TextBlock>(tabs, t => t.Text == L.T("router.wd.select_failed") && t.IsVisible) is null) throw new Exception("Нет фразы «не нашлось»");
+                    if (Find<Button>(tabs, b => b.Content as string == L.T("router.select") && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Подобрать на роутере» после неудачи");
+                    if (Find<Button>(tabs, b => b.Content as string == L.T("router.trial.reenable") && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Попробовать прежнюю»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-failed.png"));
                     vm.Page = Pages.Home;
                     Pump();
@@ -1337,7 +1337,7 @@ public sealed partial class WindowSmokeTests
                 if (Find<Button>(d, b => b.Content as string == "Проверить роутер" && b.IsVisible && b.IsEnabled && b.IsDefault && b.Style == (Style)d.FindResource("Primary")) is null)
                     throw new Exception("Роутер не подходит, а «Проверить роутер» не главная");
                 if (FindAll<Button>(d, b => b.Content as string == "Проверить роутер" && b.IsVisible).Count() != 1) throw new Exception("«Проверить роутер» показана дважды");
-                if (Find<TextBlock>(d, t => t.IsVisible && t.Text.StartsWith("Установка недоступна, пока роутер не подходит")) is null) throw new Exception("Нет пояснения, почему «Установить» недоступна");
+                if (Find<TextBlock>(d, t => t.IsVisible && t.Text == L.T("router.install.unavailable")) is null) throw new Exception("Нет пояснения, почему «Установить» недоступна");
                 Shot(d, "install-unsuitable");
                 router.SshConnector = new FakeSshConnector(RouterSetupViewModelTests.Ssh(fake, offline, failed));
                 Task.Run(() => i.CheckAsync("secret")).GetAwaiter().GetResult();
@@ -1354,7 +1354,7 @@ public sealed partial class WindowSmokeTests
                 router.SshConnector = new FakeSshConnector(RouterSetupViewModelTests.Ssh(fake));
                 Task.Run(async () => { await i.CheckAsync("secret"); await i.InstallAsync("secret"); }).GetAwaiter().GetResult();
                 Pump();
-                if (Find<Button>(d, b => b.Content as string == "Подобрать на роутере" && b.IsVisible) is null) throw new Exception("После установки нет «Подобрать на роутере»");
+                if (Find<Button>(d, b => b.Content as string == L.T("router.select_router_btn") && b.IsVisible) is null) throw new Exception("После установки нет «Подобрать на роутере»");
                 Shot(d, "install-done");
                 d.Close();
 

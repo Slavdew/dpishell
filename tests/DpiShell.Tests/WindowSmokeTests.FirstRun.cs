@@ -48,7 +48,7 @@ public sealed partial class WindowSmokeTests
                 if (!Visible(t => t.Text == "Открывается 1 из 2")) throw new Exception("До включения нет итога проверки");
                 if (Link("Не помогло? → Подобрать") is null) throw new Exception("Нет ссылки «Не помогло? → Подобрать»");
                 if (Link("Сайт не открывается?") is not null) throw new Exception("«Сайт не открывается?» видна, пока оптимизация выключена");
-                if (Link("Подобрать на роутере") is not null) throw new Exception("«Подобрать на роутере» видна без роутера");
+                if (Link(L.T("router.select")) is not null) throw new Exception("«Подобрать на роутере» видна без роутера");
                 int primary = FindAll<Button>(tabs, b => b.IsVisible && b.Style == (Style)w.FindResource("Primary")).Count();
                 if (primary != 1) throw new Exception($"На Главной главных (синих) кнопок {primary}, ждали 1");
 
