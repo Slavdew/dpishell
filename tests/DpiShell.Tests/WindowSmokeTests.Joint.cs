@@ -43,7 +43,7 @@ public sealed partial class WindowSmokeTests
                 vm.Page = Pages.Router;
                 Pump();
                 var tabs = Find<TabControl>(w)!;
-                bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
+                bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
                 CheckBox Switch() => Find<CheckBox>(tabs, c => c.IsVisible && System.Windows.Automation.AutomationProperties.GetName(c) == "Совместная работа с роутером")
                                      ?? throw new Exception("Нет переключателя «Совместная работа с роутером»");
 

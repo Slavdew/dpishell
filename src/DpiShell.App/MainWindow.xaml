@@ -48,7 +48,7 @@
                                 <Ellipse Width="22" Height="22" Fill="{Binding StatusBrush}" VerticalAlignment="Top" Margin="0,10,16,0" />
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="{Binding StatusTitle}" FontSize="30" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding StatusDetail}" Style="{StaticResource Hint}" FontSize="15" Margin="0,2,0,0" />
+                                    <TextBox Text="{Binding StatusDetail, Mode=OneWay}" Style="{StaticResource SelectableHint}" FontSize="15" Margin="0,2,0,0" />
                                     <!-- Итог «Проверить сейчас»: по группе ✓ или ✗; адреса — в «Подробнее». -->
                                     <StackPanel Margin="0,12,0,0" Visibility="{Binding HasCheck, Converter={StaticResource Vis}}">
                                         <WrapPanel>
@@ -78,7 +78,7 @@
                                         <!-- Программа открывает по DoH, браузер по DNS системы — нет: что не так и обычная кнопка защищённого DNS
                                              (главная на карточке одна — «Включить»; красным не пугаем, UX-аудит 7, п. 2). -->
                                         <StackPanel Margin="0,6,0,0" Visibility="{Binding HasBrowserWarning, Converter={StaticResource Vis}}">
-                                            <TextBlock Text="{Binding BrowserWarning}" TextWrapping="Wrap" />
+                                            <TextBox Text="{Binding BrowserWarning, Mode=OneWay}" Style="{StaticResource SelectableText}" />
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{Binding RecommendedDnsText}" Command="{Binding FixDnsCmd}" ToolTip="{Binding RecommendedDnsHint}"
                                                     HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="{Binding ShowBrowserDnsFix, Converter={StaticResource Vis}}" />
                                         </StackPanel>
@@ -88,31 +88,33 @@
                                     </StackPanel>
                                     <!-- Второстепенные действия — ссылками. -->
                                     <WrapPanel Margin="-4,12,0,0">
-                                        <Button Content="Проверить сейчас" Style="{StaticResource LinkButton}" Command="{Binding CheckNowCmd}" Margin="0,0,10,0" />
+                                        <Button Content="{l:T home.check_now}" Style="{StaticResource LinkButton}" Command="{Binding CheckNowCmd}" Margin="0,0,10,0" />
                                         <!-- Не открылось — путь на экран «Подбор» прямо здесь (UX-аудит 7, п. 3). -->
-                                        <Button Content="Не помогло? → Подобрать" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="0,0,10,0"
-                                                ToolTip="Откроет вкладку «Подбор»: программа проверит способы по очереди и выберет подходящий" />
+                                        <Button Content="{l:T home.retry_select}" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="0,0,10,0"
+                                                ToolTip="{l:T home.retry_select.tip}" />
                                         <Button Content="{Binding StrategiesLinkText}" Style="{StaticResource LinkButton}" Command="{Binding ToggleStrategiesCmd}" Margin="0,0,10,0" />
-                                        <Button Content="Подобрать на роутере" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="0,0,10,0"
+                                        <Button Content="{l:T home.find_on_router}" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="0,0,10,0"
                                                 Visibility="{Binding ShowRouterSelectLink, Converter={StaticResource Vis}}" />
                                         <!-- Банк или другой сайт перестал открываться — два шага: адрес и «Открыть без оптимизации» (UX-аудит 7, п. 5). -->
-                                        <Button Content="Сайт не открывается?" Style="{StaticResource LinkButton}" Command="{Binding ToggleDirectCmd}" Margin="0,0,4,0"
-                                                Visibility="{Binding ShowSiteFix, Converter={StaticResource Vis}}" />
-                                        <local:InfoButton Topic="{x:Static local:InfoTexts.Home}" Margin="4,0,0,0" />
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Content="{l:T home.site_fix}" Style="{StaticResource LinkButton}" Command="{Binding ToggleDirectCmd}" Margin="0,0,4,0"
+                                                    Visibility="{Binding ShowSiteFix, Converter={StaticResource Vis}}" />
+                                            <local:InfoButton Topic="{x:Static local:InfoTexts.Home}" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
                                     </WrapPanel>
                                     <StackPanel Margin="0,6,0,0" Visibility="{Binding DirectOpen, Converter={StaticResource Vis}}">
-                                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Text="Какой сайт перестал открываться? Он будет открываться без оптимизации, остальные — как раньше." />
+                                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Text="{l:T home.direct.ask}" />
                                         <WrapPanel Margin="0,6,0,0">
                                             <TextBox Text="{Binding DirectSite, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" Width="220" Padding="6,4" VerticalAlignment="Center" Margin="0,0,8,4"
-                                                     ToolTip="Адрес сайта, например bank.example" AutomationProperties.Name="Адрес сайта без оптимизации">
+                                                     ToolTip="{l:T home.direct.site.tip}" AutomationProperties.Name="{l:T home.direct.site.aria}">
                                                 <TextBox.InputBindings>
                                                     <KeyBinding Key="Enter" Command="{Binding OpenDirectCmd}" />
                                                 </TextBox.InputBindings>
                                             </TextBox>
-                                            <Button Content="Открыть без оптимизации" Command="{Binding OpenDirectCmd}" Margin="0,0,0,4" VerticalAlignment="Center" />
+                                            <Button Content="{l:T home.direct.open}" Command="{Binding OpenDirectCmd}" Margin="0,0,0,4" VerticalAlignment="Center" />
                                         </WrapPanel>
                                     </StackPanel>
-                                    <TextBlock Text="{Binding DirectMessage}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                    <TextBox Text="{Binding DirectMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,6,0,0"
                                                Visibility="{Binding HasDirectMessage, Converter={StaticResource Vis}}" />
                                 </StackPanel>
                                 <!-- Служба (решение владельца): без неё — «Установить службу», с ней — надпись и «(i)». Под выключателем, прижато к низу справа. -->
@@ -130,7 +132,7 @@
                                     <Button ContentTemplate="{StaticResource Shield}" Content="{Binding ToggleText}" Style="{StaticResource Primary}" Command="{Binding ToggleCmd}"
                                             MinWidth="150" Padding="24,11" FontSize="15" Margin="0" Visibility="{Binding PcPrimary, Converter={StaticResource Vis}}" />
                                     <Button ContentTemplate="{StaticResource Shield}" Content="{Binding ToggleText}" Command="{Binding ToggleCmd}" Margin="0"
-                                            Visibility="{Binding PcSecondary, Converter={StaticResource Vis}}" ToolTip="Оптимизация уже делает роутер — и для этого ПК тоже" />
+                                            Visibility="{Binding PcSecondary, Converter={StaticResource Vis}}" ToolTip="{l:T home.toggle.pc_secondary.tip}" />
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -142,15 +144,15 @@
                             <DockPanel>
                                 <!-- Ссылки переносятся на новую строку, а не отнимают ширину у заголовка (UX-аудит 5, п. 2). -->
                                 <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" MaxWidth="360" Margin="12,0,0,0">
-                                    <Button Content="Войти" Style="{StaticResource LinkButton}" Command="{Binding LoginCmd}" Margin="8,0,0,0"
+                                    <Button Content="{l:T home.router.login}" Style="{StaticResource LinkButton}" Command="{Binding LoginCmd}" Margin="8,0,0,0"
                                             Visibility="{Binding NeedLogin, Converter={StaticResource Vis}}" />
                                     <!-- Выключил сторож, кнопка или откат (last_off) — включить снова тут же, на пробу. -->
-                                    <Button Content="Подобрать на роутере" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="8,0,0,0"
+                                    <Button Content="{l:T home.find_on_router}" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="8,0,0,0"
                                             Visibility="{Binding CanReEnable, Converter={StaticResource Vis}}" />
                                     <Button Content="{Binding ReEnableText}" Style="{StaticResource LinkButton}" Command="{Binding ReEnableCmd}" Margin="8,0,0,0"
                                             Visibility="{Binding CanReEnable, Converter={StaticResource Vis}}" />
-                                    <Button Content="Подробнее →" Style="{StaticResource LinkButton}" Command="{Binding DataContext.GoRouterCmd, RelativeSource={RelativeSource AncestorType=TabControl}}"
-                                            Margin="8,0,0,0" AutomationProperties.Name="Открыть вкладку «Роутер»" />
+                                    <Button Content="{l:T home.router.details}" Style="{StaticResource LinkButton}" Command="{Binding DataContext.GoRouterCmd, RelativeSource={RelativeSource AncestorType=TabControl}}"
+                                            Margin="8,0,0,0" AutomationProperties.Name="{l:T home.router.details.aria}" />
                                 </WrapPanel>
                                 <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,10,0">
                                     <Ellipse.Style>
@@ -222,16 +224,16 @@
                                      Прокручивается вместе со страницей (колесо мыши — странице). -->
                                 <StackPanel x:Name="StrategiesBlock" Visibility="{Binding ShowStrategies, Converter={StaticResource Vis}}">
                                     <TextBlock Text="{Binding StrategyHeader}" Style="{StaticResource H2}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding StrategyHeader}" />
-                                    <WrapPanel Margin="0,0,0,6" AutomationProperties.Name="Порядок стратегий">
-                                        <TextBlock Text="Порядок:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                        <RadioButton Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" ToolTip="Сначала те, что открыли больше сайтов в последнем прогоне" />
-                                        <RadioButton Content="по имени" IsChecked="{Binding SortByName}" ToolTip="ALT2, ALT3 … ALT10, ALT11" />
+                                    <WrapPanel Margin="0,0,0,6" AutomationProperties.Name="{l:T home.order.aria}">
+                                        <TextBlock Text="{l:T home.order.label}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                        <RadioButton Content="{l:T home.order.by_result}" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" ToolTip="{l:T home.order.by_result.tip}" />
+                                        <RadioButton Content="{l:T home.order.by_name}" IsChecked="{Binding SortByName}" ToolTip="{l:T home.order.by_name.tip}" />
                                     </WrapPanel>
                                     <!-- Список недоступен — сказать почему, а не просто посерить (UX-аудит 6, п. 11). -->
                                     <TextBlock Text="{Binding ChooseBlockedText}" Style="{StaticResource Hint}" Margin="0,0,0,6" TextWrapping="Wrap"
                                                Visibility="{Binding CanChoose, Converter={StaticResource InvVis}}" />
                                     <ListBox ItemsSource="{Binding StrategyChoices}" SelectedValue="{Binding ChosenStrategyId}" SelectedValuePath="Id"
-                                             IsEnabled="{Binding CanChoose}" Margin="0,0,0,10" PreviewMouseWheel="PassWheelToPage" AutomationProperties.Name="Стратегии">
+                                             IsEnabled="{Binding CanChoose}" Margin="0,0,0,10" PreviewMouseWheel="PassWheelToPage" AutomationProperties.Name="{l:T home.list.aria}">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
                                                 <!-- Метка — в строке названия, чтобы статистика под ним шла во всю ширину. -->
@@ -247,21 +249,21 @@
                                                         <!-- Найденную на ПК — на роутер (router-api §6); видно, только если роутер подключён. -->
                                                         <Border DockPanel.Dock="Right" Margin="8,0,0,0" VerticalAlignment="Center"
                                                                 Visibility="{Binding DataContext.Router.Connected, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource Vis}}">
-                                                            <Button Content="Отправить на роутер" Style="{StaticResource LinkButton}" FontSize="12"
+                                                            <Button Content="{l:T home.send_to_router}" Style="{StaticResource LinkButton}" FontSize="12"
                                                                     Command="{Binding DataContext.Router.SendStrategyCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding Id}"
-                                                                    Visibility="{Binding Removable, Converter={StaticResource Vis}}" ToolTip="Отправить на роутер, включить там и проверить" />
+                                                                    Visibility="{Binding Removable, Converter={StaticResource Vis}}" ToolTip="{l:T home.send_to_router.tip}" />
                                                         </Border>
                                                         <!-- Стрелка — адреса последнего подбора (как в таблице подбора); щелчок по ней и по адресам стратегию не выбирает. -->
                                                         <ToggleButton DockPanel.Dock="Left" Style="{StaticResource RowToggle}" IsChecked="{Binding Expanded}" Margin="-4,0,2,0"
-                                                                      Visibility="{Binding HasDetails, Converter={StaticResource Vis}}" ToolTip="Подробнее: адреса последнего подбора" />
+                                                                      Visibility="{Binding HasDetails, Converter={StaticResource Vis}}" ToolTip="{l:T home.expand.tip}" />
                                                         <!-- «Скопировать стратегию»: строка dpishell:1:… в буфер — вставить в DpiShell у другого человека. -->
-                                                        <Button DockPanel.Dock="Right" Content="Скопировать стратегию" Style="{StaticResource LinkButton}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                        <Button DockPanel.Dock="Right" Content="{l:T home.copy}" Style="{StaticResource LinkButton}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
                                                                 Command="{Binding DataContext.CopyStrategyCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"
-                                                                Visibility="{Binding HasParams, Converter={StaticResource Vis}}" ToolTip="Положить стратегию в буфер одной строкой — её можно вставить в DpiShell" />
+                                                                Visibility="{Binding HasParams, Converter={StaticResource Vis}}" ToolTip="{l:T home.copy.tip}" />
                                                         <!-- «Параметры»: роли и командная строка winws — щелчок стратегию не выбирает. -->
                                                         <Button DockPanel.Dock="Right" Content="{Binding ParamsLinkText}" Style="{StaticResource LinkButton}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
                                                                 Command="{Binding DataContext.ToggleParamsCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"
-                                                                Visibility="{Binding HasParams, Converter={StaticResource Vis}}" ToolTip="Точные параметры оптимизации и командная строка winws" />
+                                                                Visibility="{Binding HasParams, Converter={StaticResource Vis}}" ToolTip="{l:T home.params.tip}" />
                                                         <TextBlock Text="{Binding Stats}" Style="{StaticResource Hint}" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap" />
                                                     </DockPanel>
                                                     <TextBlock Text="{Binding Warning}" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,1,0,0"
@@ -272,15 +274,15 @@
                                                     </Border>
                                                     <StackPanel Margin="0,4,0,4" Background="Transparent" MouseLeftButtonDown="KeepSelection" Visibility="{Binding ParamsVisible, Converter={StaticResource Vis}}">
                                                         <!-- Невысокий блок с прокруткой: параметры длинные и иначе растягивают список стратегий. -->
-                                                        <TextBox Text="{Binding Params, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Padding="6,4" AutomationProperties.Name="Параметры стратегии"
+                                                        <TextBox Text="{Binding Params, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Padding="6,4" AutomationProperties.Name="{l:T home.params.aria}"
                                                                  MaxHeight="130" VerticalScrollBarVisibility="Auto" />
                                                         <WrapPanel Margin="0,4,0,0">
-                                                            <Button Content="Скопировать параметры" Style="{StaticResource LinkButton}" FontSize="12" Margin="0,0,12,0"
+                                                            <Button Content="{l:T home.params.copy}" Style="{StaticResource LinkButton}" FontSize="12" Margin="0,0,12,0"
                                                                     Command="{Binding DataContext.CopyParamsCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" />
                                                             <Button Content="{Binding EditText}" Style="{StaticResource LinkButton}" FontSize="12" Margin="0,0,12,0"
                                                                     Command="{Binding DataContext.EditStrategyCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"
-                                                                    ToolTip="Готовые стратегии не меняются — сохранится ваша копия" />
-                                                            <Button Content="Удалить" Style="{StaticResource LinkButton}" FontSize="12"
+                                                                    ToolTip="{Binding EditTip}" />
+                                                            <Button Content="{l:T home.delete}" Style="{StaticResource LinkButton}" FontSize="12"
                                                                     Command="{Binding DataContext.DeleteStrategyCmd, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"
                                                                     Visibility="{Binding Removable, Converter={StaticResource Vis}}" />
                                                         </WrapPanel>
@@ -300,35 +302,35 @@
                                 <!-- router-api §6: обход и на ПК, и на роутере — вместе не работают; выключить один. -->
                                 <Border Style="{StaticResource Warn}" Visibility="{Binding ShowBothOn, Converter={StaticResource Vis}}">
                                     <StackPanel DataContext="{Binding Router}">
-                                        <TextBlock Text="Оптимизация включена и здесь, и на роутере — вместе они ломают сайты." />
+                                        <TextBlock Text="{l:T home.warn.both_on}" />
                                         <WrapPanel Margin="0,8,0,0">
-                                            <Button Content="Выключить на ПК" Command="{Binding StopPcCmd}" />
-                                            <Button Content="Выключить на роутере" Command="{Binding StopRouterCmd}" />
+                                            <Button Content="{l:T home.stop_pc}" Command="{Binding StopPcCmd}" />
+                                            <Button Content="{l:T home.stop_router}" Command="{Binding StopRouterCmd}" />
                                         </WrapPanel>
                                     </StackPanel>
                                 </Border>
 
                                 <Border Style="{StaticResource Warn}" Visibility="{Binding ShowConflicts, Converter={StaticResource Vis}}">
                                     <StackPanel>
-                                        <TextBlock Text="{Binding ConflictWarning}" />
-                                        <Button ContentTemplate="{StaticResource Shield}" Content="Остановить" Command="{Binding StopConflictsCmd}" HorizontalAlignment="Left" Margin="0,8,0,0" />
+                                        <TextBox Text="{Binding ConflictWarning, Mode=OneWay}" Style="{StaticResource SelectableText}" />
+                                        <Button ContentTemplate="{StaticResource Shield}" Content="{l:T home.stop}" Command="{Binding StopConflictsCmd}" HorizontalAlignment="Left" Margin="0,8,0,0" />
                                     </StackPanel>
                                 </Border>
 
                                 <Border Style="{StaticResource Warn}" Visibility="{Binding ShowDns, Converter={StaticResource Vis}}">
                                     <StackPanel>
-                                        <TextBlock Text="DNS провайдера может подменять ответы — часть сайтов не откроется даже с оптимизацией." />
+                                        <TextBlock Text="{l:T home.dns.warn}" />
                                         <WrapPanel Margin="0,8,0,0">
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{Binding RecommendedDnsText}" Command="{Binding FixDnsCmd}" ToolTip="{Binding RecommendedDnsHint}" />
-                                            <Button Content="Подробнее → DNS" Style="{StaticResource LinkButton}" Command="{Binding ChooseDnsCmd}" VerticalAlignment="Center" Margin="0,0,0,8" />
+                                            <Button Content="{l:T home.dns.details}" Style="{StaticResource LinkButton}" Command="{Binding ChooseDnsCmd}" VerticalAlignment="Center" Margin="0,0,0,8" />
                                         </WrapPanel>
                                     </StackPanel>
                                 </Border>
 
                                 <Border Style="{StaticResource Warn}" Visibility="{Binding ShowVpn, Converter={StaticResource Vis}}">
                                     <StackPanel>
-                                        <TextBlock Text="{Binding VpnWarning}" />
-                                        <Button Content="Понятно, не показывать" Style="{StaticResource LinkButton}" Command="{Binding DismissVpnCmd}" HorizontalAlignment="Left" Margin="-4,8,0,0" />
+                                        <TextBox Text="{Binding VpnWarning, Mode=OneWay}" Style="{StaticResource SelectableText}" />
+                                        <Button Content="{l:T home.vpn.dismiss}" Style="{StaticResource LinkButton}" Command="{Binding DismissVpnCmd}" HorizontalAlignment="Left" Margin="-4,8,0,0" />
                                     </StackPanel>
                                 </Border>
 
@@ -336,8 +338,8 @@
                                 <Border Style="{StaticResource Card}" Padding="14" Visibility="{Binding ShowUpdate, Converter={StaticResource Vis}}">
                                     <DockPanel DataContext="{Binding Updates}">
                                         <!-- Кнопка обновления — только на «Информация и обновления» (UX-аудит 5, п. 19). -->
-                                        <Button DockPanel.Dock="Right" Content="К обновлениям →" Style="{StaticResource LinkButton}" Command="{Binding DataContext.GoAboutCmd, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="Версии и обновления" />
+                                        <Button DockPanel.Dock="Right" Content="{l:T home.updates.go}" Style="{StaticResource LinkButton}" Command="{Binding DataContext.GoAboutCmd, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                VerticalAlignment="Center" Margin="12,0,0,0" ToolTip="{l:T home.updates.tip}" />
                                         <TextBlock Text="{Binding AvailableText}" VerticalAlignment="Center" TextWrapping="Wrap" />
                                     </DockPanel>
                                 </Border>
@@ -359,12 +361,12 @@
                             <!-- Где подбирать — только когда роутер подключён (router-api §6). -->
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,4,0,0" DataContext="{Binding Router}"
                                         Visibility="{Binding Connected, Converter={StaticResource Vis}}">
-                                <TextBlock Text="Где подбирать:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,12,0" />
-                                <RadioButton Content="На этом ПК" IsChecked="{Binding SelectOnPc}" Margin="0,0,16,0" IsEnabled="{Binding CanConnect}" />
-                                <RadioButton Content="На роутере" IsChecked="{Binding SelectOnRouter}" IsEnabled="{Binding CanConnect}" />
+                                <TextBlock Text="{l:T select.where.label}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                <RadioButton Content="{l:T select.where.pc}" IsChecked="{Binding SelectOnPc}" Margin="0,0,16,0" IsEnabled="{Binding CanConnect}" />
+                                <RadioButton Content="{l:T select.where.router}" IsChecked="{Binding SelectOnRouter}" IsEnabled="{Binding CanConnect}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
-                                <TextBlock Text="Подбор стратегии" Style="{StaticResource H1}" />
+                                <TextBlock Text="{l:T select.title}" Style="{StaticResource H1}" />
                                 <local:InfoButton Topic="{x:Static local:InfoTexts.Select}" Margin="10,0,0,12" />
                             </StackPanel>
                         </DockPanel>
@@ -375,7 +377,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <StackPanel>
-                                <TextBlock Text="Что должно открываться" Style="{StaticResource H2}" />
+                                <TextBlock Text="{l:T select.groups.title}" Style="{StaticResource H2}" />
                                 <ItemsControl ItemsSource="{Binding Groups}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
@@ -385,12 +387,12 @@
                                 </ItemsControl>
                             </StackPanel>
                             <StackPanel Grid.Column="1">
-                                <TextBlock Text="Режим" Style="{StaticResource H2}" />
+                                <TextBlock Text="{l:T select.mode.title}" Style="{StaticResource H2}" />
                                 <RadioButton IsChecked="{Binding Full}" Margin="0,3">
-                                    <TextBlock><Run Text="Полный" /><Run Text=" — все стратегии, выбор лучшей" Foreground="{DynamicResource Muted}" /></TextBlock>
+                                    <TextBlock><Run Text="{l:T select.mode.full}" /><Run Text="{l:T select.mode.full_hint}" Foreground="{DynamicResource Muted}" /></TextBlock>
                                 </RadioButton>
                                 <RadioButton IsChecked="{Binding Quick}" Margin="0,3">
-                                    <TextBlock><Run Text="Быстрый" /><Run Text=" — до первой рабочей, начиная с прежних" Foreground="{DynamicResource Muted}" /></TextBlock>
+                                    <TextBlock><Run Text="{l:T select.mode.quick}" /><Run Text="{l:T select.mode.quick_hint}" Foreground="{DynamicResource Muted}" /></TextBlock>
                                 </RadioButton>
                             </StackPanel>
                         </Grid>
@@ -405,14 +407,14 @@
                         <StackPanel>
                             <!-- Порядок таблицы — в той же строке, что и кнопки подбора: отдельная строка съедала место у таблицы. -->
                             <DockPanel>
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,8" AutomationProperties.Name="Порядок стратегий">
-                                    <TextBlock Text="Порядок:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                    <RadioButton Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
-                                    <RadioButton Content="по имени" IsChecked="{Binding SortByName}" />
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,8" AutomationProperties.Name="{l:T select.order.aria}">
+                                    <TextBlock Text="{l:T select.order.label}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <RadioButton Content="{l:T select.order.by_result}" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
+                                    <RadioButton Content="{l:T select.order.by_name}" IsChecked="{Binding SortByName}" />
                                 </StackPanel>
                                 <WrapPanel>
-                                    <Button ContentTemplate="{StaticResource Shield}" Content="Начать подбор" Style="{StaticResource Primary}" Command="{Binding StartSelectCmd}" />
-                                    <Button Content="Стоп" Command="{Binding StopSelectCmd}" />
+                                    <Button ContentTemplate="{StaticResource Shield}" Content="{l:T select.start}" Style="{StaticResource Primary}" Command="{Binding StartSelectCmd}" />
+                                    <Button Content="{l:T select.stop}" Command="{Binding StopSelectCmd}" />
                                 </WrapPanel>
                             </DockPanel>
                             <!-- Ход — только во время подбора: пустая полоса без подбора выглядела незавершённой операцией. -->
@@ -425,7 +427,7 @@
                         <!-- Лучшая включена — итог одной строкой, «Подробнее» возвращает карточку. -->
                         <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14,8" Margin="0,0,0,8" Visibility="{Binding ResultCompact, Converter={StaticResource Vis}}">
                             <DockPanel>
-                                <Button DockPanel.Dock="Right" Content="Подробнее" Style="{StaticResource LinkButton}" Command="{Binding ShowResultDetailsCmd}" Margin="12,0,0,0" VerticalAlignment="Center" />
+                                <Button DockPanel.Dock="Right" Content="{l:T common.more}" Style="{StaticResource LinkButton}" Command="{Binding ShowResultDetailsCmd}" Margin="12,0,0,0" VerticalAlignment="Center" />
                                 <StackPanel VerticalAlignment="Center"><TextBlock Text="{Binding ResultSummary}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding AddressNote}" ToolTip="{Binding AddressNote}" Style="{StaticResource Hint}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" /></StackPanel>
                             </DockPanel>
                         </Border>
@@ -433,21 +435,21 @@
                         <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14,10" Margin="0,0,0,8" Visibility="{Binding ResultFull, Converter={StaticResource Vis}}">
                             <DockPanel>
                                 <!-- «Применить» — всегда главная кнопка карточки; уже работает — словами вместо кнопки (UX-аудит 6, п. 8). -->
-                                <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="Применить" Style="{StaticResource Primary}" Command="{Binding ApplyBestCmd}"
+                                <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="{l:T select.apply}" Style="{StaticResource Primary}" Command="{Binding ApplyBestCmd}"
                                         VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding HasBest, Converter={StaticResource Vis}}" />
-                                <TextBlock DockPanel.Dock="Right" Text="Уже работает" FontWeight="SemiBold" Foreground="{DynamicResource Ok}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                <TextBlock DockPanel.Dock="Right" Text="{l:T select.already}" FontWeight="SemiBold" Foreground="{DynamicResource Ok}" VerticalAlignment="Center" Margin="12,0,0,0"
                                            Visibility="{Binding ResultApplied, Converter={StaticResource Vis}}" />
                                 <!-- Глубокий поиск — одной кнопкой справа, а не отдельной строкой: таблице остаётся высота. -->
-                                <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="Искать глубже (до 15 мин)" Command="{Binding StartSearchCmd}"
+                                <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="{l:T select.deep}" Command="{Binding StartSearchCmd}"
                                         VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding OfferDeep, Converter={StaticResource Vis}}"
-                                        ToolTip="Программа придумывает и проверяет новые стратегии; сайты и игры всё это время будут прерываться" />
+                                        ToolTip="{l:T select.deep.tip}" />
                                 <!-- Вставленная или собранная руками стратегия: проверка сайтов только для неё. -->
-                                <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="Проверить" Style="{StaticResource Primary}" Command="{Binding CheckStrategyCmd}"
+                                <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="{l:T select.check}" Style="{StaticResource Primary}" Command="{Binding CheckStrategyCmd}"
                                         VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding HasPendingCheck, Converter={StaticResource Vis}}"
-                                        ToolTip="Открыть ваши сайты через эту стратегию — только через неё" />
+                                        ToolTip="{l:T select.check.tip}" />
                                 <StackPanel>
-                                    <TextBlock Text="{Binding ResultText}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" ToolTip="{Binding ResultTip}" />
-                                    <TextBlock Text="{Binding ResultHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" /><TextBlock Text="{Binding AddressNote}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
+                                    <TextBox Text="{Binding ResultText, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="16" FontWeight="SemiBold" ToolTip="{Binding ResultTip}" />
+                                    <TextBox Text="{Binding ResultHint, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" /><TextBox Text="{Binding AddressNote, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
                                     <!-- Глубокий поиск — только когда готовые не помогли со всем (UX-аудит, п. 30); фраза — цифрой, что не открылось (UX-аудит 6, п. 9). -->
                                     <TextBlock Text="{Binding DeepText}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="{Binding OfferDeep, Converter={StaticResource Vis}}" />
                                 </StackPanel>
@@ -478,7 +480,7 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTemplateColumn Header="Стратегия" Width="2*">
+                                <DataGridTemplateColumn Header="{l:T select.col.strategy}" Width="2*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <!-- Метки справа и целиком, обрезается название (в StackPanel метка уезжала за край).
@@ -490,7 +492,7 @@
                                                 </Border>
                                                 <Border DockPanel.Dock="Right" Background="{DynamicResource AccentSoft}" CornerRadius="4" Padding="5,0" Margin="6,0,0,0" VerticalAlignment="Center"
                                                         Visibility="{Binding IsBest, Converter={StaticResource Vis}}">
-                                                    <TextBlock Text="лучшая" FontSize="12" Foreground="{DynamicResource AccentText}" />
+                                                    <TextBlock Text="{l:T select.best_mark}" FontSize="12" Foreground="{DynamicResource AccentText}" />
                                                 </Border>
                                                 <!-- Не обрезается: длинная смешанная переносится, состав — в подсказке. -->
                                                 <TextBlock Text="{Binding Title}" TextWrapping="Wrap" VerticalAlignment="Center" ToolTip="{Binding Tip}" />
@@ -498,10 +500,10 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="Сервисы" Binding="{Binding Groups}" Width="70" />
-                                <DataGridTextColumn Header="Адреса" Binding="{Binding Share}" Width="90" />
-                                <DataGridTextColumn Header="Время" Binding="{Binding Avg}" Width="80" />
-                                <DataGridTemplateColumn Header="Что не так" Width="2*">
+                                <DataGridTextColumn Header="{l:T select.col.services}" Binding="{Binding Groups}" Width="70" />
+                                <DataGridTextColumn Header="{l:T select.col.addresses}" Binding="{Binding Share}" Width="90" />
+                                <DataGridTextColumn Header="{l:T select.col.time}" Binding="{Binding Avg}" Width="80" />
+                                <DataGridTemplateColumn Header="{l:T select.col.problem}" Width="2*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding ErrorShown}" ToolTip="{Binding ErrorFull}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap">
@@ -523,14 +525,14 @@
                         <!-- Выбранная строка: применить или своё (скопировать, изменить, проверить только её). «Вставить» — второстепенная ссылка:
                              строка DpiShell или запуск winws из .bat Flowseal, сначала проверка, потом «Применить». -->
                         <DockPanel Grid.Row="3" Margin="0,10,0,0">
-                            <Button DockPanel.Dock="Right" Content="Вставить стратегию" Style="{StaticResource LinkButton}" FontSize="13" Margin="8,0,0,8" VerticalAlignment="Top"
-                                    Command="{Binding PasteStrategyCmd}" ToolTip="Строка dpishell:1:… или запуск winws из .bat Flowseal; сначала проверка, потом «Применить»" />
+                            <Button DockPanel.Dock="Right" Content="{l:T select.paste}" Style="{StaticResource LinkButton}" FontSize="13" Margin="8,0,0,8" VerticalAlignment="Top"
+                                    Command="{Binding PasteStrategyCmd}" ToolTip="{l:T select.paste.tip}" />
                             <WrapPanel>
-                                <Button ContentTemplate="{StaticResource Shield}" Content="{Binding ApplySelectedText}" Command="{Binding ApplySelectedCmd}" ToolTip="Можно выбрать стратегию в таблице вручную" />
+                                <Button ContentTemplate="{StaticResource Shield}" Content="{Binding ApplySelectedText}" Command="{Binding ApplySelectedCmd}" ToolTip="{l:T select.apply_selected.tip}" />
                                 <StackPanel Orientation="Horizontal" Margin="4,0,0,8" VerticalAlignment="Center" Visibility="{Binding HasSelectedScore, Converter={StaticResource Vis}}">
-                                    <Button Content="Скопировать стратегию" Style="{StaticResource LinkButton}" FontSize="13" Margin="0,0,10,0" Command="{Binding CopyStrategyCmd}" CommandParameter="{Binding SelectedScore}" />
+                                    <Button Content="{l:T select.copy}" Style="{StaticResource LinkButton}" FontSize="13" Margin="0,0,10,0" Command="{Binding CopyStrategyCmd}" CommandParameter="{Binding SelectedScore}" />
                                     <Button Content="{Binding SelectedScore.EditText}" Style="{StaticResource LinkButton}" FontSize="13" Margin="0,0,10,0" Command="{Binding EditStrategyCmd}" CommandParameter="{Binding SelectedScore}" />
-                                    <Button Content="Проверить только её" Style="{StaticResource LinkButton}" FontSize="13" Command="{Binding CheckStrategyCmd}" CommandParameter="{Binding SelectedScore}" />
+                                    <Button Content="{l:T select.check_one}" Style="{StaticResource LinkButton}" FontSize="13" Command="{Binding CheckStrategyCmd}" CommandParameter="{Binding SelectedScore}" />
                                 </StackPanel>
                             </WrapPanel>
                         </DockPanel>
@@ -546,17 +548,17 @@
                             </Grid.RowDefinitions>
                             <StackPanel>
                                 <DockPanel>
-                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,8" AutomationProperties.Name="Порядок стратегий">
-                                        <TextBlock Text="Порядок:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                        <RadioButton Content="по результату" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
-                                        <RadioButton Content="по имени" IsChecked="{Binding SortByName}" />
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,8" AutomationProperties.Name="{l:T select.order.aria}">
+                                        <TextBlock Text="{l:T select.order.label}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                        <RadioButton Content="{l:T select.order.by_result}" IsChecked="{Binding SortByResult}" Margin="0,0,14,0" />
+                                        <RadioButton Content="{l:T select.order.by_name}" IsChecked="{Binding SortByName}" />
                                     </StackPanel>
                                     <WrapPanel>
-                                        <Button Content="Начать подбор на роутере" Style="{StaticResource Primary}" Command="{Binding StartSelectCmd}" />
-                                        <Button Content="Стоп" Command="{Binding StopSelectCmd}" />
+                                        <Button Content="{l:T select.router.start}" Style="{StaticResource Primary}" Command="{Binding StartSelectCmd}" />
+                                        <Button Content="{l:T select.stop}" Command="{Binding StopSelectCmd}" />
                                     </WrapPanel>
                                 </DockPanel>
-                                <TextBlock Text="Подбор идёт на самом роутере — программу можно закрыть. Лучшую стратегию роутер включит сам." Style="{StaticResource Hint}" Margin="0,0,0,6" />
+                                <TextBlock Text="{l:T select.router.note}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                 <StackPanel Visibility="{Binding Selecting, Converter={StaticResource Vis}}">
                                     <ProgressBar Height="8" Maximum="{Binding SelectProgressMax}" Value="{Binding SelectProgress, Mode=OneWay}" Margin="0,2,0,4" />
                                     <TextBlock Text="{Binding SelectProgressText}" Style="{StaticResource Hint}" Margin="0,0,0,8" />
@@ -565,20 +567,20 @@
 
                             <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14,8" Margin="0,0,0,8" Visibility="{Binding ResultCompact, Converter={StaticResource Vis}}">
                                 <DockPanel>
-                                    <Button DockPanel.Dock="Right" Content="Подробнее" Style="{StaticResource LinkButton}" Command="{Binding ShowResultDetailsCmd}" Margin="12,0,0,0" VerticalAlignment="Center" />
+                                    <Button DockPanel.Dock="Right" Content="{l:T common.more}" Style="{StaticResource LinkButton}" Command="{Binding ShowResultDetailsCmd}" Margin="12,0,0,0" VerticalAlignment="Center" />
                                     <StackPanel VerticalAlignment="Center"><TextBlock Text="{Binding ResultSummary}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding AddressNote}" ToolTip="{Binding AddressNote}" Style="{StaticResource Hint}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" /></StackPanel>
                                 </DockPanel>
                             </Border>
 
                             <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14" Visibility="{Binding ResultFull, Converter={StaticResource Vis}}">
                                 <DockPanel>
-                                    <Button DockPanel.Dock="Right" Content="Применить на роутере" Style="{StaticResource Primary}" Command="{Binding ApplyCmd}"
+                                    <Button DockPanel.Dock="Right" Content="{l:T select.router.apply}" Style="{StaticResource Primary}" Command="{Binding ApplyCmd}"
                                             VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding HasBest, Converter={StaticResource Vis}}" />
                                     <StackPanel>
-                                        <TextBlock Text="{Binding ResultText}" FontSize="16" FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding ResultHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" /><TextBlock Text="{Binding AddressNote}" Style="{StaticResource Hint}" Margin="0,4,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
-                                        <Button Content="Искать глубже (до 15 мин)" Command="{Binding StartDeepCmd}" HorizontalAlignment="Left" Margin="0,10,0,0"
-                                                Visibility="{Binding OfferDeep, Converter={StaticResource Vis}}" ToolTip="Роутер придумывает и проверяет новые стратегии" />
+                                        <TextBox Text="{Binding ResultText, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="16" FontWeight="SemiBold" />
+                                        <TextBox Text="{Binding ResultHint, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" /><TextBox Text="{Binding AddressNote, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
+                                        <Button Content="{l:T select.deep}" Command="{Binding StartDeepCmd}" HorizontalAlignment="Left" Margin="0,10,0,0"
+                                                Visibility="{Binding OfferDeep, Converter={StaticResource Vis}}" ToolTip="{l:T select.router.deep.tip}" />
                                     </StackPanel>
                                 </DockPanel>
                             </Border>
@@ -608,7 +610,7 @@
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTemplateColumn Header="Стратегия" Width="2*">
+                                    <DataGridTemplateColumn Header="{l:T select.col.strategy}" Width="2*">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <!-- Вариант глубокого поиска — с пометкой справа: применить его нельзя, найденное в конце попадёт в стратегии роутера. -->
@@ -616,17 +618,17 @@
                                                     <TextBlock DockPanel.Dock="Right" Text="{Binding Kind}" Style="{StaticResource Hint}" FontSize="13" Margin="6,0,0,0" VerticalAlignment="Center" />
                                                     <Border DockPanel.Dock="Right" Background="{DynamicResource AccentSoft}" CornerRadius="4" Padding="5,0" Margin="6,0,0,0" VerticalAlignment="Center"
                                                             Visibility="{Binding IsBest, Converter={StaticResource Vis}}">
-                                                        <TextBlock Text="лучшая" FontSize="12" Foreground="{DynamicResource AccentText}" />
+                                                        <TextBlock Text="{l:T select.best_mark}" FontSize="12" Foreground="{DynamicResource AccentText}" />
                                                     </Border>
                                                     <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" VerticalAlignment="Center" ToolTip="{Binding Title}" />
                                                 </DockPanel>
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTextColumn Header="Сервисы" Binding="{Binding Groups}" Width="70" />
-                                    <DataGridTextColumn Header="Адреса" Binding="{Binding Share}" Width="90" />
-                                    <DataGridTextColumn Header="Время" Binding="{Binding Avg}" Width="80" />
-                                    <DataGridTemplateColumn Header="Что не так" Width="2*">
+                                    <DataGridTextColumn Header="{l:T select.col.services}" Binding="{Binding Groups}" Width="70" />
+                                    <DataGridTextColumn Header="{l:T select.col.addresses}" Binding="{Binding Share}" Width="90" />
+                                    <DataGridTextColumn Header="{l:T select.col.time}" Binding="{Binding Avg}" Width="80" />
+                                    <DataGridTemplateColumn Header="{l:T select.col.problem}" Width="2*">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding ErrorShown}" ToolTip="{Binding Error}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap">
@@ -647,7 +649,7 @@
 
                             <WrapPanel Grid.Row="3" Margin="0,10,0,0">
                                 <Button Content="{Binding ApplySelectedText}" Command="{Binding ApplySelectedCmd}" />
-                                <TextBlock Text="Лучшую роутер включает сам; другую можно выбрать в таблице." Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8" />
+                                <TextBlock Text="{l:T select.router.best_note}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8" />
                             </WrapPanel>
                         </Grid>
                     </Grid>

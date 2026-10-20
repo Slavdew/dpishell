@@ -26,7 +26,7 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
     public bool ShowParams { get => _showParams; set { if (Set(ref _showParams, value)) { Raise(nameof(ParamsLinkText)); Raise(nameof(ParamsVisible)); } } }
     /// <summary>Блок параметров показывается, только когда есть что показать: пустая рамка выглядит как сбой.</summary>
     public bool ParamsVisible => _showParams && HasParams;
-    public string ParamsLinkText => ShowParams ? "Скрыть параметры" : "Параметры";
+    public string ParamsLinkText => L.T(ShowParams ? "home.params.hide" : "home.params.show");
     public string Id { get; } = id;
     public string Title { get; } = title;
     public string Stats { get; } = stats;
@@ -38,9 +38,11 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
     /// <summary>Лежит в файле своих стратегий (найденная, своя, вставленная): удаляется, уходит на роутер.</summary>
     public bool Removable => Source is "search" or "mix" || Personal;
     /// <summary>Метка у названия; пусто — готовая.</summary>
-    public string Label => Source switch { "search" => "найдена поиском", "pasted" => "вставлена", "user" => "своя", _ => "" };
+    public string Label => Source switch { "search" => L.T("home.label.found"), "pasted" => L.T("home.label.pasted"), "user" => L.T("home.label.own"), _ => "" };
     public bool HasLabel => Label.Length > 0;
-    public string EditText => Personal ? "Изменить" : "Сделать копию и изменить";
+    public string EditText => L.T(Personal ? "home.edit" : "home.edit_copy");
+    /// <summary>Подсказка к «Изменить»: «сохранится копия» верна только для готовых стратегий; у своей — без подсказки.</summary>
+    public string? EditTip => Personal ? null : L.T("home.edit_copy.tip");
     public string Warning { get; } = warning;
     /// <summary>Сколько сайтов открылось в последнем прогоне; null — прогона не было.</summary>
     public int? Opened { get; init; }
@@ -68,17 +70,17 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
             foreach (var g in last.Targets.Where(t => t.GroupId != "user" && !AdvancedSites.IsGroupId(t.GroupId) && !t.Control).GroupBy(t => t.GroupId))
                 parts.Add($"{names.Title(g.Key)} {(g.Where(t => t.Required).All(t => t.Ok) && g.Any(t => t.Ok) ? "✓" : "✗")}");
             var mine = last.Targets.Where(t => t.GroupId == "user").ToList();
-            if (mine.Count > 0) parts.Add($"свои {mine.Count(t => t.Ok)} из {mine.Count}");
+            if (mine.Count > 0) parts.Add(L.T("home.stats.mine", new { ok = mine.Count(t => t.Ok), total = mine.Count }));
             broken = newest?.ControlBroken ?? last.Targets.Any(t => t.Control && !t.Ok);
         }
         else if (newest is not null)
         {
-            parts.Add(newest.ControlBroken || newest.Passed == newest.Total ? "открыла всё" : $"открыла {newest.Passed} из {newest.Total} групп");
+            parts.Add(newest.ControlBroken || newest.Passed == newest.Total ? L.T("home.stats.all") : L.T("home.stats.some", new { ok = newest.Passed, total = newest.Total }));
             broken = newest.ControlBroken;
         }
-        else return ("ещё не проверялась", "");
-        if (Checked(newest?.File ?? st.Last!.File) is { } at) parts.Add($"проверено {L.DayMonth(at)} в {L.Time(at)}");
-        return (string.Join(" · ", parts), broken ? "ломает обычные сайты" : "");
+        else return (L.T("home.strategy.not_checked_yet"), "");
+        if (Checked(newest?.File ?? st.Last!.File) is { } at) parts.Add(L.T("home.stats.checked", new { date = L.DayMonth(at), time = L.Time(at) }));
+        return (string.Join(" · ", parts), broken ? L.T("home.stats.breaks") : "");
     }
 
     /// <summary>Время подбора из имени файла результатов (yyyy-MM-dd_HH-mm-ss.json).</summary>
@@ -104,20 +106,17 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
             .OrderByDescending(x => x.s.Strategy.Id == currentId).ThenByDescending(x => x.streak)
             .FirstOrDefault();
         if (hit.s is null) return "";
-        return $"Стратегия «{hit.s.Strategy.Title}», работавшая последние {hit.streak} {Times(hit.streak)}, сейчас {Failed(hit.s, names)} — "
-            + "похоже, провайдер изменил правила или сеть сбоит. Можно поискать новые.";
+        return L.Plural("select.regression", hit.streak, new { name = hit.s.Strategy.Title, failed = Failed(hit.s, names) });
     }
-
-    static string Times(int n) => n % 10 is >= 2 and <= 4 && n % 100 is < 12 or > 14 ? "раза" : "раз";
 
     /// <summary>«не открывает Discord» / «ломает обычные сайты» / «не открывает свои сайты»; пусто — прошла.</summary>
     static string Failed(StrategyScore s, GroupNames names)
     {
-        if (s.Verdicts.Any(v => names.Control(v.GroupId) && !v.Ok)) return "ломает обычные сайты";
+        if (s.Verdicts.Any(v => names.Control(v.GroupId) && !v.Ok)) return L.T("select.failed.breaks");
         var bad = s.Verdicts.Where(v => !names.Control(v.GroupId) && !AdvancedSites.IsGroupId(v.GroupId)).GroupBy(v => v.GroupId)
             .Where(g => !(g.Where(v => v.Target.Required).All(v => v.Ok) && g.Any(v => v.Ok)))
-            .Select(g => g.Key == "user" ? "свои сайты" : names.Title(g.Key)).ToList();
-        return bad.Count == 0 ? "" : "не открывает " + string.Join(", ", bad);
+            .Select(g => g.Key == "user" ? L.T("select.group.user_lc") : names.Title(g.Key)).ToList();
+        return bad.Count == 0 ? "" : L.T("select.failed.not_opening", new { groups = string.Join(", ", bad) });
     }
 
     /// <summary>Адреса последнего прогона — те же строки, что в таблице подбора.</summary>
@@ -147,12 +146,14 @@ public static class StrategyParams
     {
         string line;
         try { line = "winws.exe " + Short(WinwsArgs.Join(WinwsArgs.Build(s, p, o)), p.Root); }
-        catch (ArgumentException e) { line = "не собрать: " + e.Message; }
-        return $"Параметры по ролям:\n{Roles(s.Roles)}\n\n"
-            + $"Командная строка на этом ПК (IP-список: {Mode(o.Ipset)}, игровой режим: {(o.GameTcp || o.GameUdp ? "вкл" : "выкл")}; пути — от {p.Root}):\n{line}";
+        catch (ArgumentException e) { line = L.T("home.params.build_failed", new { reason = e.Message }); }
+        return L.T("home.params.full", new
+        {
+            roles = Roles(s.Roles), ipset = Mode(o.Ipset), game = L.T(o.GameTcp || o.GameUdp ? "home.params.game.on" : "home.params.game.off"), root = p.Root, line,
+        });
     }
 
-    static string Mode(IpsetMode m) => m switch { IpsetMode.List => "только из списков", IpsetMode.Any => "все адреса", _ => "выкл" };
+    static string Mode(IpsetMode m) => L.T(m switch { IpsetMode.List => "home.params.ipset.list", IpsetMode.Any => "home.params.ipset.any", _ => "home.params.ipset.off" });
 
     /// <summary>Пути внутри папки программы — относительными: строка короче, а что где лежит, сказано в заголовке.</summary>
     static string Short(string line, string root) =>
@@ -162,7 +163,7 @@ public static class StrategyParams
 /// <summary>Названия групп целей для подробностей: из каталога целей и «Свои сайты»; контрольные («Обычные сайты») отмечены.</summary>
 public sealed class GroupNames
 {
-    readonly Dictionary<string, (string Title, bool Control)> _map = new() { ["user"] = ("Свои сайты", false) };
+    readonly Dictionary<string, (string Title, bool Control)> _map = new() { ["user"] = (L.T("select.group.user"), false) };
 
     public GroupNames(IEnumerable<TargetGroup> groups)
     {
@@ -172,7 +173,7 @@ public sealed class GroupNames
     public static readonly GroupNames Empty = new([]);
 
     public string Title(string id) => _map.TryGetValue(id, out var g) ? g.Title
-        : AdvancedSites.IsGroupId(id) && int.TryParse(id[4..], out var n) ? $"Сайты строки {n + 1}" : id;
+        : AdvancedSites.IsGroupId(id) && int.TryParse(id[4..], out var n) ? L.T("select.group.line", new { n = n + 1 }) : id;
     public bool Control(string id) => _map.TryGetValue(id, out var g) && g.Control;
 }
 
@@ -190,15 +191,24 @@ public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, 
 
     public static CheckRow From(TargetVerdict v, Func<string, string> groupTitle, bool control = false)
     {
-        var note = v.BrowserFails ? (v.Browser!.Reason == BrowserPath.WindowsOnlyReason ? "✓ по защищённому DNS, ✗ по DNS Windows" : "✓ для программы, ✗ для браузера")
-            : v.Ok ? "" : control ? "ломает обычный сайт" : v.Target.Required ? "важный" : "";
+        var note = v.BrowserFails ? L.T(v.Browser!.Reason == BrowserPath.WindowsOnlyReason ? "select.check.note.windows" : "select.check.note.browser")
+            : v.Ok ? "" : control ? L.T("select.check.note.breaks") : v.Target.Required ? L.T("select.check.note.required") : "";
         var seconds = v.Ok ? v.BestSeconds : v.Probes.Select(p => p.Seconds).DefaultIfEmpty(0).Max();
         var detail = Texts.ProbeDetail(v.Probes);
         // Адреса разошлись — оба пути с адресами: программа (DoH) и браузер (DNS системы, с hosts).
         if (v.Browser is { } b)
-            detail = $"Программа (защищённый DNS: {Ips(b.Doh)}): {detail}\nЧерез Windows ({(b.FromHosts ? "hosts" : "DNS Windows")}: {(b.System.Length > 0 ? Ips(b.System) : "имени нет")}): "
-                + (b.Probes.Count > 0 ? Texts.ProbeDetail(b.Probes) : "не открыть") + (b.Ok ? "" : " — " + b.Reason);
-        return new(v.Ok, groupTitle(v.GroupId), v.Target.Url, detail, $"{seconds:0.0} с", note, !v.Ok && (control || v.Target.Required),
+        {
+            var args = new
+            {
+                doh = Ips(b.Doh), detail, source = L.T(b.FromHosts ? "select.check.src_hosts" : "select.check.src_dns"),
+                system = b.System.Length > 0 ? Ips(b.System) : L.T("select.check.no_name"),
+                result = b.Probes.Count > 0 ? Texts.ProbeDetail(b.Probes) : L.T("select.check.cant_open"),
+                reason = b.Ok ? "" : Texts.BrowserReason(b.Reason),
+            };
+            detail = L.T(b.Ok ? "select.check.browser_detail" : "select.check.browser_detail_reason", args);
+        }
+        return new(v.Ok, groupTitle(v.GroupId), v.Target.Url, detail, L.T("select.check.time", new { sec = seconds.ToString("0.0", L.Culture) }),
+            note, !v.Ok && (control || v.Target.Required),
             v.BrowserFails ? v.Browser!.Reason : "", Required: !v.Ok && !control && v.Target.Required);
     }
 
@@ -214,7 +224,7 @@ public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, 
     public static string Missed(IEnumerable<CheckRow> rows)
     {
         var bad = rows.Where(r => r.Alert && r.Required).Select(r => r.Group).Distinct().ToList();
-        return bad.Count == 0 ? "" : "не открылось: " + string.Join(", ", bad);
+        return bad.Count == 0 ? "" : L.T("select.check.missed", new { groups = string.Join(", ", bad) });
     }
 }
 
@@ -232,25 +242,25 @@ public sealed class ScoreRow(StrategyScore s, GroupNames? names = null, Func<str
     /// </summary>
     public string Tip => titleOf is not null && MixBuilder.Composition(Score.Strategy.Parts, titleOf) is { Length: > 0 } c ? Title + "\n" + c
         : StrategyNaming.Tip(Score.Strategy.Title, Score.Strategy.Roles) is { Length: > 0 } t ? t : Title;
-    public string Groups => Unchecked ? "—" : $"{Score.GroupsPassed} из {Score.GroupsTotal}";
-    public string Share => Unchecked ? "—" : $"{Score.TargetShare * 100:0} %";
-    public string Avg => Score.Verdicts.Any(v => v.Ok) ? $"{Score.AvgSeconds:0.00} с" : "—";
+    public string Groups => Unchecked ? "—" : L.T("select.row.groups", new { ok = Score.GroupsPassed, total = Score.GroupsTotal });
+    public string Share => Unchecked ? "—" : L.T("select.row.share", new { pct = (Score.TargetShare * 100).ToString("0", L.Culture) });
+    public string Avg => Score.Verdicts.Any(v => v.Ok) ? L.T("select.row.avg", new { sec = Score.AvgSeconds.ToString("0.00", L.Culture) }) : "—";
     /// <summary>Ошибка запуска или «ломает обычные сайты»; без неё — где не открылись обязательные адреса.</summary>
-    public string Error => Unchecked ? "не проверена" : Score.Error is null ? CheckRow.Missed(Details) : Score.Error.Length > 80 ? Score.Error[..80] + "…" : Score.Error;
+    public string Error => Unchecked ? L.T("select.row.not_checked") : Score.Error is null ? CheckRow.Missed(Details) : Score.Error.Length > 80 ? Score.Error[..80] + "…" : Score.Error;
     /// <summary>Пустая колонка выглядит как сбой отрисовки: когда ошибок нет — «нет» серым (UX-аудит 5, п. 17).</summary>
-    public string ErrorShown => Error.Length > 0 ? Error : "нет";
+    public string ErrorShown => Error.Length > 0 ? Error : L.T("select.row.none");
     public bool ErrorIsProblem => !Unchecked && Error.Length > 0;
-    public string ErrorFull => Unchecked ? "Стратегия ещё не проверена на ваших сайтах — нажмите «Проверить»." : Score.Error ?? CheckRow.Missed(Details);
+    public string ErrorFull => Unchecked ? L.T("select.row.not_checked.tip") : Score.Error ?? CheckRow.Missed(Details);
     public bool Usable => Score.Error is null && Score.GroupsPassed > 0;
     public bool IsBest { get => _best; set { if (Set(ref _best, value)) Raise(nameof(Mark)); } }
     public string Mark => IsBest ? "★" : "";
     /// <summary>Найдена глубоким поиском, а не из готового набора.</summary>
     public bool Found => Score.Strategy.Source == "search";
     /// <summary>Метка у названия: найдена, вставлена или своя; пусто — готовая.</summary>
-    public string Label => Score.Strategy.Source switch { "search" => "найдена", "pasted" => "вставлена", "user" => "своя", _ => "" };
+    public string Label => Score.Strategy.Source switch { "search" => L.T("select.label.found"), "pasted" => L.T("select.label.pasted"), "user" => L.T("select.label.own"), _ => "" };
     public bool HasLabel => Label.Length > 0;
     public bool Personal => UserStrategies.IsPersonal(Score.Strategy.Source);
-    public string EditText => Personal ? "Изменить" : "Сделать копию и изменить";
+    public string EditText => L.T(Personal ? "select.edit" : "select.edit_copy");
     /// <summary>Вставлена или собрана руками и ещё не прошла проверку сайтов: «Применить» — только с подтверждением.</summary>
     public bool Unchecked => Score.Error is null && Score.Verdicts.Count == 0;
 
@@ -295,17 +305,24 @@ public static class Texts
 
     public static string Outcome(ProbeOutcome o) => o switch
     {
-        ProbeOutcome.Timeout => "нет ответа",
-        ProbeOutcome.ConnectFailed => "нет соединения",
-        ProbeOutcome.TlsFailed => "защищённое соединение не устанавливается",
-        ProbeOutcome.Reset => "соединение сброшено",
-        ProbeOutcome.Truncated => "загрузка обрывается",
-        ProbeOutcome.BadStatus => "ошибка на сайте",
-        ProbeOutcome.ForeignRedirect => "заглушка провайдера",
-        ProbeOutcome.Blocked => "блокировка (451)",
-        ProbeOutcome.Ok => "открывается",
-        _ => "ошибка",
+        ProbeOutcome.Timeout => L.T("select.outcome.timeout"),
+        ProbeOutcome.ConnectFailed => L.T("select.outcome.connect_failed"),
+        ProbeOutcome.TlsFailed => L.T("select.outcome.tls_failed"),
+        ProbeOutcome.Reset => L.T("select.outcome.reset"),
+        ProbeOutcome.Truncated => L.T("select.outcome.truncated"),
+        ProbeOutcome.BadStatus => L.T("select.outcome.bad_status"),
+        ProbeOutcome.ForeignRedirect => L.T("select.outcome.foreign_redirect"),
+        ProbeOutcome.Blocked => L.T("select.outcome.blocked"),
+        ProbeOutcome.Ok => L.T("select.outcome.ok"),
+        _ => L.T("select.outcome.error"),
     };
+
+    /// <summary>Причина «браузер не откроет» (константы <see cref="BrowserPath"/> в ядре) → текст на языке окна; незнакомая — как есть.</summary>
+    public static string BrowserReason(string reason) =>
+        reason == BrowserPath.DnsReason ? L.T("home.browser.reason.dns")
+        : reason == BrowserPath.HostsReason ? L.T("home.browser.reason.hosts")
+        : reason == BrowserPath.WindowsOnlyReason ? L.T("home.browser.reason.windows_only")
+        : reason;
 
     public static string Tls(SslProtocols v) => v switch
     {
@@ -321,10 +338,13 @@ public static class Texts
     public static string ProbeDetail(IEnumerable<ProbeResult> probes) => string.Join(" · ", probes
         .Select(p => (p.Tls, Text: p.Ok ? p.Detail : p.Detail.Length > 0 ? $"{Outcome(p.Outcome)}, {p.Detail}" : Outcome(p.Outcome)))
         .GroupBy(x => x.Text)
-        .Select(g => $"{string.Join(" и ", g.Select(x => Tls(x.Tls)))}: {g.Key}"));
+        .Select(g => $"{TlsList(g.Select(x => Tls(x.Tls)).ToList())}: {g.Key}"));
+
+    /// <summary>«TLS 1.3 и TLS 1.2» — версий не больше двух.</summary>
+    static string TlsList(List<string> tls) => tls.Count == 2 ? L.T("select.probe.and", new { a = tls[0], b = tls[1] }) : string.Join(", ", tls);
 
     public static string Problem(TargetVerdict v) =>
-        v.Probes.FirstOrDefault(p => !p.Ok) is { } p ? Outcome(p.Outcome) : "не открывается";
+        v.Probes.FirstOrDefault(p => !p.Ok) is { } p ? Outcome(p.Outcome) : L.T("select.outcome.not_opening");
 
     /// <summary>Исключение → текст для человека.</summary>
     public static string Friendly(Exception e) => e switch

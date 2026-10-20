@@ -41,7 +41,7 @@ public sealed partial class WindowSmokeTests
                 WaitUi(vm.CheckNowAsync());
                 Pump();
                 var tabs = Find<TabControl>(w)!;
-                bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
+                bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
                 Button? Link(string content) => Find<Button>(tabs, b => b.IsVisible && b.Content as string == content);
 
                 // Выключено: «Открывается 1 из 2», главная кнопка одна, ссылка про сломавшийся сайт спрятана (чинить пока нечего).
@@ -78,8 +78,10 @@ public sealed partial class WindowSmokeTests
                 WaitUi(vm.OpenDirectAsync());
                 Pump();
                 if (!f.Backend.Calls.Contains("user_exclude_set bank.example")) throw new Exception("Сайт не ушёл в список исключений ПК: " + string.Join(" | ", f.Backend.Calls));
-                if (!Visible(t => t.Text.StartsWith("bank.example теперь открывается без оптимизации (на этом ПК)"))) throw new Exception("Нет ответа под ссылками");
+                if (!Visible(t => t.Text == L.T("home.direct.done_pc", new { site = "bank.example" }))) throw new Exception("Нет ответа под ссылками");
                 foreach (var t in FindAll<TextBlock>(tabs, t => t.IsVisible && t.Text.Contains("bank.example")))
+                    if (t.Text.Contains("обход", StringComparison.OrdinalIgnoreCase)) throw new Exception("В ответе запретное слово: " + t.Text);
+                foreach (var t in FindAll<TextBox>(tabs, t => t.IsVisible && t.IsReadOnly && t.Text.Contains("bank.example")))
                     if (t.Text.Contains("обход", StringComparison.OrdinalIgnoreCase)) throw new Exception("В ответе запретное слово: " + t.Text);
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-home-site-fix.png"));
 

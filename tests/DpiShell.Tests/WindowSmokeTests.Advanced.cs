@@ -40,7 +40,7 @@ public sealed partial class WindowSmokeTests
                 vm.Page = Pages.Sites;
                 Pump();
                 var tabs = Find<TabControl>(w)!;
-                bool Visible(Func<TextBlock, bool> m) => Find<TextBlock>(tabs, t => t.IsVisible && m(t)) is not null;
+                bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
 
                 // Выключен по умолчанию: переключатель сверху, редактора нет, «Свои сайты» на месте.
                 var sw = Find<CheckBox>(tabs, c => c.IsVisible && System.Windows.Automation.AutomationProperties.GetName(c) == "Свои настройки для сайтов") ?? throw new Exception("Нет переключателя «Продвинутый режим»");

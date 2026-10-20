@@ -23,15 +23,15 @@ public sealed class RoleField : Observable
     public string Role { get; }
     public string Label => Role switch
     {
-        "quic" => "QUIC (по спискам)",
-        "discord_udp" => "Голос Discord",
-        "discord_media" => "Медиа Discord",
-        "google" => "YouTube и Google",
-        "general" => "Остальные сайты",
-        "ipset_udp" => "UDP по IP-списку",
-        "ipset_tcp" => "TCP по IP-списку",
-        "game_tcp" => "Игры, TCP",
-        "game_udp" => "Игры, UDP",
+        "quic" => L.T("select.role.quic"),
+        "discord_udp" => L.T("select.role.discord_udp"),
+        "discord_media" => L.T("select.role.discord_media"),
+        "google" => L.T("select.role.google"),
+        "general" => L.T("select.role.general"),
+        "ipset_udp" => L.T("select.role.ipset_udp"),
+        "ipset_tcp" => L.T("select.role.ipset_tcp"),
+        "game_tcp" => L.T("select.role.game_tcp"),
+        "game_udp" => L.T("select.role.game_udp"),
         _ => Role,
     };
     public string Text
@@ -86,10 +86,10 @@ public sealed class StrategyEditor : Observable
     void ResetCommands() => CommandManager.InvalidateRequerySuggested();
 
     public bool Catalog { get; }
-    public string Header => Catalog ? "Копия стратегии" : "Изменить стратегию";
-    public string Note => Catalog
-        ? "Готовые стратегии не меняются — сохранится ваша копия под новым именем."
-        : "Сохранится новая своя стратегия, прежняя останется.";
+    public string Header => L.T(Catalog ? "select.editor.header_copy" : "select.editor.header");
+    public string Note => L.T(Catalog ? "select.editor.note_copy" : "select.editor.note_user");
+    /// <summary>Подпись внизу: {fake} в примере — буквальный плейсхолдер каталога, не подстановка.</summary>
+    public string Footer => L.T("select.editor.footer", new { example = "{fake}/tls_clienthello_www_google_com.bin" });
     public ObservableCollection<RoleField> Fields { get; } = [];
     /// <summary>Роли, которых в стратегии нет: можно добавить.</summary>
     public ObservableCollection<string> MissingRoles { get; } = [];
@@ -149,14 +149,14 @@ public sealed class StrategyEditor : Observable
     void Revalidate()
     {
         var clean = StrategyExchange.CleanTitle(Title);
-        TitleError = string.IsNullOrWhiteSpace(Title) ? "Введите название"
-            : string.Equals(clean, StrategyExchange.CleanTitle(_original), StringComparison.Ordinal) ? "Нужно новое название — прежняя стратегия останется"
+        TitleError = string.IsNullOrWhiteSpace(Title) ? L.T("select.editor.title_empty")
+            : string.Equals(clean, StrategyExchange.CleanTitle(_original), StringComparison.Ordinal) ? L.T("select.editor.title_same")
             : "";
         var bad = Fields.FirstOrDefault(f => f.HasError);
         var roles = Fields.Where(f => f.Normalized.Length > 0).ToDictionary(f => f.Role, f => f.Normalized);
         Summary = HasTitleError ? TitleError
             : bad is not null ? $"{bad.Label}: {bad.Error}"
-            : roles.Count == 0 ? "Нужна хотя бы одна роль с параметрами"
+            : roles.Count == 0 ? L.T("select.editor.no_roles")
             : StrategyExchange.CheckRoles(roles, _fakeExists) ?? "";
         Raise(nameof(CanSave));
         Raise(nameof(ShowSummary));

@@ -14,7 +14,7 @@ public partial class StrategyEditView : UserControl
         var owner = Application.Current?.MainWindow is { IsVisible: true } m ? m : null;
         var w = new Window
         {
-            Title = "DpiShell — " + editor.Header,
+            Title = L.T("select.editor.window_title", new { header = editor.Header }),
             SizeToContent = SizeToContent.WidthAndHeight,
             ResizeMode = ResizeMode.NoResize,
             WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,

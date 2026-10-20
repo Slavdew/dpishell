@@ -49,7 +49,7 @@ public sealed class StrategyViewModelTests : IDisposable
         var back = StrategyExchange.Parse(copied);
         Assert.Equal(s.Title, back.Title);
         Assert.Equal(s.Roles.OrderBy(r => r.Key), back.Roles.OrderBy(r => r.Key));
-        Assert.Equal("Стратегия скопирована — её можно вставить в DpiShell", vm.Toast);
+        Assert.Equal(L.T("select.copied"), vm.Toast);
         Assert.False(vm.ToastError);
     }
 
@@ -267,7 +267,9 @@ public sealed class StrategyViewModelTests : IDisposable
         StrategyChoice C(string src) => new("x", "X", "", src == "search") { Source = src };
         Assert.False(C("flowseal").Removable);
         Assert.False(C("flowseal").HasLabel);
-        Assert.Equal("Сделать копию и изменить", C("flowseal").EditText);
+        Assert.Equal(L.T("home.edit_copy"), C("flowseal").EditText);
+        Assert.NotNull(C("flowseal").EditTip);   // «сохранится копия» — только у готовых
+        Assert.Null(C("user").EditTip);
         Assert.True(C("search").Removable);
         Assert.False(C("search").Personal);
         Assert.Equal("найдена поиском", C("search").Label);
@@ -312,9 +314,9 @@ public sealed class StrategyViewModelTests : IDisposable
     {
         var e = Editor("Исходная");
         e.Title = "Исходная";
-        Assert.Contains("новое название", e.Summary);
+        Assert.Contains(L.T("select.editor.title_same"), e.Summary);
         e.Title = "  ";
-        Assert.Contains("Введите название", e.Summary);
+        Assert.Contains(L.T("select.editor.title_empty"), e.Summary);
         e.Title = "Другая";
         Assert.True(e.CanSave);
         e.Fields.Single().Text = "";                      // пустое поле — роль не используется

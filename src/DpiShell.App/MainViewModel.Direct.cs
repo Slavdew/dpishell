@@ -42,27 +42,27 @@ public sealed partial class MainViewModel
     {
         if (DataStore.NormalizeDomain(DirectSite) is not { } host)
         {
-            DirectMessage = "Впишите адрес сайта, например bank.example.";
+            DirectMessage = L.T("home.direct.empty");
             return;
         }
-        var where = new List<string>();
+        bool pc = false, router = false;
         if (_active)
         {
             if (!await AddPcExcludeAsync(host)) return;
-            where.Add("на этом ПК");
+            pc = true;
         }
         if (Router.Found && Router.RouterEnabled)
         {
             if (!await Router.ExcludeHostAsync(host))
             {
                 // Роутер не принял (нет входа, старая версия) — ПК уже сделан, об остальном скажет строка состояния роутера.
-                DirectMessage = where.Count == 0 ? "На роутере не получилось: войдите на роутер (вкладка «Роутер») и повторите." : $"{host} открывается без оптимизации {where[0]}, а на роутере не получилось — войдите на роутер и повторите.";
+                DirectMessage = L.T(pc ? "home.direct.router_failed_pc" : "home.direct.router_failed", new { site = host });
                 return;
             }
-            where.Add("на роутере");
+            router = true;
         }
         DirectSite = "";
-        DirectMessage = $"{host} теперь открывается без оптимизации ({string.Join(" и ", where)}). Вернуть можно в списке «Открывать без оптимизации» на вкладке «Сайты».";
+        DirectMessage = L.T(pc && router ? "home.direct.done_both" : pc ? "home.direct.done_pc" : "home.direct.done_router", new { site = host });
         Message = DirectMessage;
     }
 

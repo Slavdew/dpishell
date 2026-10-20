@@ -28,6 +28,26 @@
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
 
+        <!-- Выделяемый текст-значение (стратегия, адреса, версии, тексты ошибок): TextBox только для чтения без рамки и фона; «Копировать» — в меню.
+             Перенос и цвет — у места использования (TextWrapping, Foreground); привязку писать с Mode=OneWay. -->
+        <Style x:Key="SelectableText" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="ContextMenu">
+                <Setter.Value>
+                    <ContextMenu>
+                        <MenuItem Header="{l:T common.copy}" Command="ApplicationCommands.Copy" />
+                    </ContextMenu>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="SelectableHint" TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
+            <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+        </Style>
+
         <!-- Ячейка таблицы с личным (процессы, адреса записи): в демо-режиме размывается, см. Demo.cs. -->
         <Style x:Key="SensitiveCell" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
             <Setter Property="local:Demo.Sensitive" Value="True" />
@@ -1049,7 +1069,7 @@
                                Visibility="{Binding HasNote, Converter={StaticResource Vis}}" />
                     <TextBlock Text="{Binding Time}" Style="{StaticResource Hint}" FontSize="13" MinWidth="48" TextAlignment="Right" TextWrapping="NoWrap" />
                 </StackPanel>
-                <TextBlock x:Name="Detail" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding Detail}" Style="{StaticResource Hint}" FontSize="12.5" />
+                <TextBox x:Name="Detail" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding Detail, Mode=OneWay}" Style="{StaticResource SelectableHint}" FontSize="12.5" />
             </Grid>
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding Ok}" Value="False">

@@ -227,7 +227,7 @@ public sealed partial class MainViewModel : Observable
         // Группы — по умолчанию; у помощника свой выбор — подставится, когда он ответит.
         var chosen = new AppState().Groups.ToHashSet();
         foreach (var g in _shell.DefaultTargets.Groups.Where(g => !g.Control)) Groups.Add(new(g.Id, g.Title, chosen.Contains(g.Id)));
-        Groups.Add(new("user", "Свои сайты", chosen.Contains("user")));
+        Groups.Add(new("user", L.T("select.group.user"), chosen.Contains("user")));
         InitHome();       // главная: помехи, итог проверки — MainViewModel.Home.cs
         UpdateStatus();
     }
@@ -657,30 +657,35 @@ public sealed partial class MainViewModel : Observable
         var err = _error ?? _coreProblem;
         var id = CurrentStrategyId;
         bool partial = false;
-        if (Selecting) { Kind = StatusKind.Busy; StatusTitle = _searching ? "Глубокий поиск…" : "Подбор…"; StatusDetail = SelectProgressText; }
+        if (Selecting) { Kind = StatusKind.Busy; StatusTitle = L.T(_searching ? "home.status.deep" : "home.status.select"); StatusDetail = SelectProgressText; }
         else if (Busy) { Kind = StatusKind.Busy; StatusTitle = BusyText; StatusDetail = ""; }
-        else if (err is not null) { Kind = StatusKind.Error; StatusTitle = "Ошибка"; StatusDetail = err; }
+        else if (err is not null) { Kind = StatusKind.Error; StatusTitle = L.T("home.status.error"); StatusDetail = err; }
         else if (_active)
         {
-            Kind = StatusKind.On; StatusTitle = "Работает";
+            Kind = StatusKind.On; StatusTitle = L.T("home.status.running");
             // Совместная работа: тем же местом, одной короткой фразой, кто что ведёт.
-            StatusDetail = (id is null ? "" : "Стратегия: " + StrategyTitle(id)) + (Router.JointOn && Router.HasJointStatus ? (id is null ? "" : " · ") + Router.JointStatus : "");
+            var joint = Router.JointOn && Router.HasJointStatus ? Router.JointStatus : null;
+            StatusDetail = id is null ? joint ?? "" : joint is null ? L.T("home.strategy", new { name = StrategyTitle(id) }) : L.T("home.strategy_joint", new { name = StrategyTitle(id), joint });
             // Проверка нашла, что что-то не открывается: заголовок не зелёный «Работает» (UX-аудит 6, п. 7).
-            if (FailingCheckGroups() is { } bad) { partial = true; StatusTitle = "Открывается не всё"; StatusDetail = "Оптимизация работает. Не открывается: " + bad + (id is null ? "" : " · стратегия " + StrategyTitle(id)); }
+            if (FailingCheckGroups() is { } bad)
+            {
+                partial = true; StatusTitle = L.T("home.status.partial");
+                StatusDetail = id is null ? L.T("home.status.partial_plain", new { groups = bad }) : L.T("home.status.partial_strategy", new { groups = bad, name = StrategyTitle(id) });
+            }
         }
-        else if (ServiceMode && _svc == SvcState.StartPending) { Kind = StatusKind.Busy; StatusTitle = "Запускается…"; StatusDetail = ""; }
+        else if (ServiceMode && _svc == SvcState.StartPending) { Kind = StatusKind.Busy; StatusTitle = L.T("home.status.starting"); StatusDetail = ""; }
         else if (Router.Found && Router.RouterEnabled)
         {
             // Обход делает роутер — для этого ПК тоже: не «Выключено» (читается как «не работает», UX-аудит 2, п. 3).
-            Kind = StatusKind.Off; StatusTitle = "Работает через роутер";
-            StatusDetail = "На этом ПК включать не нужно";
+            Kind = StatusKind.Off; StatusTitle = L.T("home.status.router");
+            StatusDetail = L.T("home.status.router_detail");
             // «Включать не нужно» — только когда открылось всё; иначе заголовок про то, что не открылось.
-            if (FailingCheckGroups() is { } bad) { partial = true; StatusTitle = "Открывается не всё"; StatusDetail = "Оптимизация работает через роутер. Не открывается: " + bad; }
+            if (FailingCheckGroups() is { } bad) { partial = true; StatusTitle = L.T("home.status.partial"); StatusDetail = L.T("home.status.partial_router", new { groups = bad }); }
         }
         else
         {
-            Kind = StatusKind.Off; StatusTitle = "Выключено";
-            StatusDetail = id is not null ? "Выбрана стратегия: " + StrategyTitle(id) : "Нажмите «Включить» — подходящую стратегию подберу сам (2–3 мин)";
+            Kind = StatusKind.Off; StatusTitle = L.T("home.status.off");
+            StatusDetail = id is not null ? L.T("home.strategy", new { name = StrategyTitle(id) }) : L.T("home.status.off_hint");
         }
         // Через роутер — зелёный кружок: обход работает, хоть и не на этом ПК (значок в трее — про этот ПК).
         StatusBrush = partial ? BrushOf(StatusKind.Busy) : BrushOf(Kind == StatusKind.Off && Router.Found && Router.RouterEnabled ? StatusKind.On : Kind);
@@ -713,6 +718,8 @@ public sealed partial class MainViewModel : Observable
     ICommand? _dismissVpnCmd;
 
     string _conflictWarning = "";
+    /// <summary>Имена мешающих программ (для текста подтверждения «Остановить»).</summary>
+    string ConflictNames { get; set; } = "";
     public string ConflictWarning { get => _conflictWarning; private set { if (Set(ref _conflictWarning, value)) { Raise(nameof(HasConflicts)); RaiseIssues(); } } }
     public bool HasConflicts => ConflictWarning.Length > 0;
 
@@ -774,7 +781,7 @@ public sealed partial class MainViewModel : Observable
                 var (note, warning) = StrategyChoice.Describe(st, Names);
                 choices.Add(new(s.Id, ShownTitle(s.Id, s.Title), note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names), ParamsOf(s.Id)) { Opened = StrategyOrder.Opened(st), Tip = TipFor(s.Id, s.Title), Source = s.Source });
             }
-            else choices.Add(new(s.Id, ShownTitle(s.Id, s.Title), "ещё не проверялась", s.Source == "search", parameters: ParamsOf(s.Id)) { Tip = TipFor(s.Id, s.Title), Source = s.Source });
+            else choices.Add(new(s.Id, ShownTitle(s.Id, s.Title), L.T("home.strategy.not_checked_yet"), s.Source == "search", parameters: ParamsOf(s.Id)) { Tip = TipFor(s.Id, s.Title), Source = s.Source });
         }
         StrategyChoices.Clear();
         foreach (var c in Settings.SortByName ? StrategyOrder.SortByName(choices, c => c.Title) : StrategyOrder.SortByOpened(choices, c => c.Opened))
@@ -795,7 +802,7 @@ public sealed partial class MainViewModel : Observable
         if (s is null) return "";
         var f = Helper.Status?.Features;
         var full = StrategyParams.Full(s, _shell.Paths, f is null ? BuildOptions.Default : new(f.Ipset, f.Game));
-        return MixBuilder.Composition(s.Parts, StrategyTitle) is { Length: > 0 } c ? $"Состав: {c}\n\n{full}" : full;
+        return MixBuilder.Composition(s.Parts, StrategyTitle) is { Length: > 0 } c ? L.T("home.params.composition", new { composition = c, @params = full }) : full;
     }
 
     /// <summary>Положить текст в буфер обмена (в тестах — подмена).</summary>
@@ -807,8 +814,8 @@ public sealed partial class MainViewModel : Observable
     public ICommand CopyParamsCmd => _copyParamsCmd ??= new RelayCommand(p =>
     {
         if (p is not StrategyChoice { HasParams: true } c) return;
-        try { CopyText($"{c.Title}\n{c.Params}"); Message = $"Параметры стратегии «{c.Title}» скопированы в буфер обмена."; }
-        catch (System.Runtime.InteropServices.ExternalException) { Fail("Не удалось скопировать — буфер обмена занят другой программой."); }
+        try { CopyText($"{c.Title}\n{c.Params}"); Message = L.T("home.params.copied", new { name = c.Title }); }
+        catch (System.Runtime.InteropServices.ExternalException) { Fail(L.T("home.clipboard_busy")); }
     });
     ICommand? _copyParamsCmd;
 
@@ -850,7 +857,7 @@ public sealed partial class MainViewModel : Observable
         UpdateStatus();
     }
 
-    public string StrategyHeader => CurrentStrategyId is { } id ? "Стратегия: " + StrategyTitle(id) : "Стратегия не выбрана";
+    public string StrategyHeader => CurrentStrategyId is { } id ? L.T("home.strategy", new { name = StrategyTitle(id) }) : L.T("home.strategy.none");
 
     // ---------- режим работы ----------
 
@@ -895,13 +902,11 @@ public sealed partial class MainViewModel : Observable
         await RefreshStatusAsync();
     }
 
-    public string ToggleText => IsRunning ? "Выключить" : PcSecondary ? "Включить и на этом ПК" : "Включить";
+    public string ToggleText => L.T(IsRunning ? "home.toggle.off" : PcSecondary ? "home.toggle.on_pc" : "home.toggle.on");
     public bool CanChoose => !Busy && !IsLoading && !Selecting;
 
     /// <summary>Почему выбор стратегии сейчас недоступен (список серый).</summary>
-    public string ChooseBlockedText => Selecting ? "Идёт подбор — выбрать можно после него."
-        : IsLoading ? "Читаю состояние — выбрать можно через секунду."
-        : "Идёт другая операция — выбрать можно после неё.";
+    public string ChooseBlockedText => L.T(Selecting ? "home.choose_blocked.select" : IsLoading ? "home.choose_blocked.loading" : "home.choose_blocked.busy");
     public ICommand ToggleCmd => _toggleCmd ??= RelayCommand.Async(() => IsRunning ? DisableAsync() : EnableAsync(), () => !Busy && !IsLoading);
     ICommand? _toggleCmd;
 
@@ -956,8 +961,9 @@ public sealed partial class MainViewModel : Observable
             }
             // Обход ПК заработал, а роутер уже «включён» (служба ПК поднялась с Windows, состояние пришло позже ответа роутера) — §6.
             if (_active && Router.Found && Router.RouterEnabled) OnRouterChanged();
-            VpnWarning = vpn.Count == 0 ? "" : $"Включён VPN ({string.Join(", ", vpn)}). С ним оптимизация обычно не нужна, а подбор может показать неверный результат.";
-            ConflictWarning = conflicts.Count == 0 ? "" : $"Мешают похожие программы: {string.Join(", ", conflicts.Select(c => c.Name).Distinct())}.";
+            VpnWarning = vpn.Count == 0 ? "" : L.T("home.vpn.warn", new { names = string.Join(", ", vpn) });
+            ConflictNames = string.Join(", ", conflicts.Select(c => c.Name).Distinct());
+            ConflictWarning = conflicts.Count == 0 ? "" : L.T("home.conflict.warn", new { names = ConflictNames });
         }
         catch (Exception e) { Fail(Texts.Friendly(e)); }
         UpdateStatus();
@@ -1008,7 +1014,7 @@ public sealed partial class MainViewModel : Observable
         return ApplyAsync(id);
     }
 
-    public Task DisableAsync() => WithHelper("Выключаю…", async c =>
+    public Task DisableAsync() => WithHelper(L.T("home.busy.disable"), async c =>
     {
         await c.DisableAsync();
         await RefreshStatusAsync();
@@ -1017,7 +1023,7 @@ public sealed partial class MainViewModel : Observable
     /// <summary>Включить на стратегии; включилось — сразу «Проверить сейчас» (UX-аудит 2, п. 1): итог в карточке — про новое состояние.</summary>
     async Task<bool> ApplyAsync(string id)
     {
-        bool ok = await WithHelper("Включаю…", async c =>
+        bool ok = await WithHelper(L.T("home.busy.enable"), async c =>
         {
             // Выбранная руками — первая в запасных: это делает помощник вместе с включением.
             await c.EnableAsync(id);
@@ -1093,7 +1099,7 @@ public sealed partial class MainViewModel : Observable
     async Task<IReadOnlyList<TargetVerdict>?> CheckNowCoreAsync()
     {
         var groups = CheckedGroups();
-        if (groups.Count == 0) { Message = "Нечего проверять: отметьте группы на вкладке «Подбор»."; return null; }
+        if (groups.Count == 0) { Message = L.T("home.check.nothing"); return null; }
         if (Checking) return null;
         IReadOnlyList<TargetVerdict>? result = null;
         int gen = ++_checkGen;
@@ -1101,7 +1107,7 @@ public sealed partial class MainViewModel : Observable
         if (_checkFor is not null && CheckGroups.Count > 0) _checkWas = null;
         _checkFor = CheckState();
         CheckRows.Clear(); CheckedAt = "";
-        CheckSummary = "Проверяю…";
+        CheckSummary = L.T("home.check.running");
         Checking = true;
         try
         {
@@ -1113,15 +1119,15 @@ public sealed partial class MainViewModel : Observable
             foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, Names));
             result = verdicts;
             // В тех же единицах, что и отметки рядом (п. 5): группы, а не адреса; адреса — в «Подробнее».
-            CheckSummary = $"Открывается {CheckGroups.Count(g => g.Ok)} из {CheckGroups.Count}";
+            CheckSummary = L.T("home.check.summary", new { ok = CheckGroups.Count(g => g.Ok), total = CheckGroups.Count });
             // «Было» — итог до включения: виден, чтобы не гадать, помогло ли.
-            CheckedAt = $"в {L.Time(DateTime.Now)}" + (Covered && _checkWas is { } w ? $" · было {w.Ok} из {w.Total}" : "");
+            CheckedAt = Covered && _checkWas is { } w ? L.T("home.check.at_was", new { time = L.Time(DateTime.Now), ok = w.Ok, total = w.Total }) : L.T("home.check.at", new { time = L.Time(DateTime.Now) });
         }
         catch (Exception e)
         {
             if (gen != _checkGen) return null;
             CheckSummary = "";
-            Fail("Проверка не удалась: " + Texts.Friendly(e));
+            Fail(L.T("home.check.failed", new { reason = Texts.Friendly(e) }));
         }
         finally
         {
@@ -1266,7 +1272,7 @@ public sealed partial class MainViewModel : Observable
     public ScoreRow? SelectedScore { get => _selected; set { if (Set(ref _selected, value)) { Raise(nameof(HasSelectedScore)); Raise(nameof(ApplySelectedText)); CommandManager.InvalidateRequerySuggested(); } } }
     public bool HasSelectedScore => _selected is not null;
     /// <summary>Выбрана лучшая — «Применить лучшую»; другая строка таблицы — «Применить выбранную».</summary>
-    public string ApplySelectedText => _selected is { IsBest: true } ? "Применить лучшую" : "Применить выбранную";
+    public string ApplySelectedText => L.T(_selected is { IsBest: true } ? "select.apply_best" : "select.apply_selected");
 
     public ICommand StartSelectCmd { get; }
     public ICommand StopSelectCmd { get; }
@@ -1277,10 +1283,10 @@ public sealed partial class MainViewModel : Observable
     IReadOnlyList<string>? TakeGroups()
     {
         var ids = Groups.Where(g => g.IsChecked).Select(g => g.Id).ToList();
-        if (ids.Count == 0) { Message = "Отметьте, что проверять."; return null; }
+        if (ids.Count == 0) { Message = L.T("select.pick_groups"); return null; }
         if (ids.Contains("user") && UserTargets.Count == 0 && Helper.Ready)
         {
-            Message = "Список своих сайтов пуст — заполните его на вкладке «Сайты» и сохраните.";
+            Message = L.T("select.user_empty");
             return null;
         }
         return ids;
@@ -1289,7 +1295,7 @@ public sealed partial class MainViewModel : Observable
     bool AnyChecked()
     {
         if (Groups.Any(g => g.IsChecked)) return true;
-        Message = "Отметьте, что проверять.";
+        Message = L.T("select.pick_groups");
         return false;
     }
 
@@ -1297,7 +1303,7 @@ public sealed partial class MainViewModel : Observable
     (IReadOnlyList<string> Groups, bool Full)? RouterSelectOptions()
     {
         var ids = Groups.Where(g => g.IsChecked).Select(g => g.Id).ToList();
-        if (ids.Count == 0) { Message = "Отметьте, что проверять."; return null; }
+        if (ids.Count == 0) { Message = L.T("select.pick_groups"); return null; }
         return (ids, Full);
     }
 
@@ -1321,7 +1327,7 @@ public sealed partial class MainViewModel : Observable
         ResultText = ""; ResultHint = ""; SetBest(null); _resultId = null; OfferDeep = false;
         ResultSummary = ""; ResultExpanded = false;
         SelectProgress = 0; SelectIndeterminate = false;
-        SelectProgressText = "Подготовка…";
+        SelectProgressText = L.T("select.preparing");
     }
 
     /// <summary>Подбор — у помощника (запускает winws); ход и отмена — через канал.</summary>
@@ -1355,10 +1361,10 @@ public sealed partial class MainViewModel : Observable
         var quick = Quick;
         try
         {
-            await Guard("Подбор…", async () =>
+            await Guard(L.T("select.busy.select"), async () =>
             {
                 try { ShowReport(await c.SelectAsync(quick, ids, progress, cts.Token)); }
-                catch (OperationCanceledException) { ResultText = "Подбор остановлен."; }
+                catch (OperationCanceledException) { ResultText = L.T("select.stopped"); }
             });
         }
         finally
@@ -1408,7 +1414,7 @@ public sealed partial class MainViewModel : Observable
             {
                 // Шаги поиска: Index — номер варианта, Message — «роль: …».
                 SelectIndeterminate = true;
-                SelectProgressText = $"Ищу для {RoleTitle(p.Message)}: проверено вариантов — {p.Index}";
+                SelectProgressText = L.T("select.search.progress", new { role = RoleTitle(p.Message), n = p.Index });
             }
             else
             {
@@ -1416,17 +1422,17 @@ public sealed partial class MainViewModel : Observable
                 SelectIndeterminate = false;
                 SelectProgressMax = Math.Max(1, p.Total);
                 SelectProgress = p.Index;
-                SelectProgressText = "Проверяю найденное: " + p.Message;
+                SelectProgressText = L.T("select.search.final", new { step = p.Message });
                 if (p.Last is { } s) Scores.Add(new ScoreRow(s, Names, StrategyTitle));
             }
             UpdateStatus();
         });
         try
         {
-            await Guard("Глубокий поиск…", async () =>
+            await Guard(L.T("select.busy.deep"), async () =>
             {
                 try { ShowSearch(await c.SearchAsync(baseId, ids, progress, cts.Token)); }
-                catch (OperationCanceledException) { ResultText = "Поиск остановлен."; }
+                catch (OperationCanceledException) { ResultText = L.T("select.search.stopped"); }
             });
         }
         finally
@@ -1446,37 +1452,33 @@ public sealed partial class MainViewModel : Observable
     static string RoleTitle(string message) => message.Split(':')[0] switch
     {
         "google" => "YouTube",
-        "general" => "Discord и своих сайтов",
+        "general" => L.T("select.search.role.general"),
         var r => r,
     };
 
     void ShowSearch(SearchReport r)
     {
-        string? stopped = r.Stopped switch
-        {
-            null => null,
-            "остановлено" => "Поиск остановлен",
-            var s => char.ToUpper(s[0]) + s[1..],
-        };
+        // Причина остановки приходит из ядра («остановлено» — отмена окном; прочее — текст ядра как есть).
+        bool cancelled = r.Stopped == "остановлено";
+        string? stopped = r.Stopped is null || cancelled ? null : char.ToUpper(r.Stopped[0]) + r.Stopped[1..];
         if (r.Final is not { } f)
         {
             Scores.Clear();
-            ResultText = stopped is null ? "Новых рабочих сочетаний не нашлось." : stopped + ".";
-            if (stopped is null) ResultHint = "Попробуйте позже или в другой сети.";
+            ResultText = r.Stopped is null ? L.T("select.search.none") : cancelled ? L.T("select.search.stopped") : stopped + ".";
+            if (r.Stopped is null) ResultHint = L.T("select.search.none_hint");
             return;
         }
         ShowReport(f);
-        if (f.Best is { Strategy.Source: "search" } best) ResultText = "Найдена новая: " + best.Strategy.Title;
-        if (stopped is not null) ResultHint = stopped + ". " + ResultHint;
+        if (f.Best is { Strategy.Source: "search" } best) ResultText = L.T("select.search.found", new { name = best.Strategy.Title });
+        if (cancelled) ResultHint = L.T("select.search.stopped_hint", new { hint = ResultHint });
+        else if (stopped is not null) ResultHint = stopped + ". " + ResultHint;
     }
 
     /// <summary>Подбор при включённом обходе: обход на время проверки стоит, стратегии меняются — предупредить.</summary>
     bool ConfirmPauseIfRunning()
     {
         if (!IsRunning) return true;
-        return Confirm(
-            "Оптимизация сейчас включена. На время проверки она будет приостановлена, а стратегии будут меняться одна за другой — " +
-            "сайты, звонки и загрузки могут прерываться.\n\nПосле проверки оптимизация включится на лучшей найденной стратегии. Продолжить?");
+        return Confirm(L.T("select.confirm.pause"));
     }
 
     public ICommand StopConflictsCmd => _stopConflictsCmd ??= RelayCommand.Async(StopConflictsAsync, () => !Busy && !IsLoading && HasConflicts);
@@ -1485,12 +1487,14 @@ public sealed partial class MainViewModel : Observable
     /// <summary>Остановить мешающие обходы одной кнопкой (через помощника: чужие службы и процессы — с правами).</summary>
     async Task StopConflictsAsync()
     {
-        if (!Confirm(ConflictWarning + "\n\nОстановить их сейчас? Настройки этих программ не меняются — их можно будет запустить снова.")) return;
+        if (!Confirm(L.T("home.conflict.confirm", new { names = ConflictNames }))) return;
         StopForeignResult r = new([], []);
-        if (!await WithHelper("Останавливаю похожие программы…", async c => r = await c.StopForeignAsync())) return;
+        if (!await WithHelper(L.T("home.conflict.busy"), async c => r = await c.StopForeignAsync())) return;
         await RefreshStatusAsync();
-        Message = r.Stopped.Count == 0 ? "Нечего останавливать." : "Остановлено: " + string.Join(", ", r.Stopped) + "."
-            + (r.ComeBackOnReboot.Count > 0 ? $" Служба {string.Join(", ", r.ComeBackOnReboot)} запустится снова после перезагрузки — удалите её в программе, которая её поставила." : "");
+        var stopped = string.Join(", ", r.Stopped);
+        Message = r.Stopped.Count == 0 ? L.T("home.conflict.none")
+            : r.ComeBackOnReboot.Count > 0 ? L.T("home.conflict.stopped_service", new { names = stopped, services = string.Join(", ", r.ComeBackOnReboot) })
+            : L.T("home.conflict.stopped", new { names = stopped });
     }
 
     string? _autoApplyId;
@@ -1504,10 +1508,10 @@ public sealed partial class MainViewModel : Observable
         if (await ApplyAsync(id))
         {
             SetBest(null);   // уже в работе — «Применить» не нужна
-            ResultText = $"Применена: {title} — оптимизация работает.";
+            ResultText = L.T("select.applied", new { name = title });
             Message = ResultText;
             var row = Scores.FirstOrDefault(s => s.Id == id);
-            ResultSummary = $"✓ Включена {title}" + (row is null ? "" : $" · {row.Groups} · {row.Share}");
+            ResultSummary = row is null ? L.T("select.summary.applied", new { name = title }) : L.T("select.summary.applied_stats", new { name = title, groups = row.Groups, share = row.Share });
         }
     }
 
@@ -1521,7 +1525,7 @@ public sealed partial class MainViewModel : Observable
 
     /// <summary>Заголовок итога подбора: «Подходит» — только когда открылось всё и нет «подбор тут, скорее всего, не поможет»; иначе — «Лучшая из проверенных».</summary>
     public static string BestTitle(bool perfect, bool addressNote, string strategy) =>
-        (perfect && !addressNote ? "Подходит: " : "Лучшая из проверенных: ") + strategy;
+        L.T(perfect && !addressNote ? "select.best.fits" : "select.best.of_checked", new { name = strategy });
 
     void ShowReport(SelectionReport r)
     {
@@ -1547,19 +1551,18 @@ public sealed partial class MainViewModel : Observable
         if (OfferDeep && best is not null && _addressBlock.ExplainsAllFailures(best.Verdicts.Where(v => !v.Ok).Select(v => v.Target.Url)))
             OfferDeep = false;
         // «Не нашлось…» — только пока у лучшей открылось не всё: «2 из 2» такой фразы не заслуживает.
-        DeepText = best is null ? "Подходящей стратегии не нашлось — можно поискать новые."
-            : best.Perfect ? "" : $"У лучшей открылось {best.GroupsPassed} из {best.GroupsTotal} сервисов — можно поискать новые.";
+        DeepText = best is null ? L.T("select.deep.none")
+            : best.Perfect ? "" : L.T("select.deep.partial", new { ok = best.GroupsPassed, total = best.GroupsTotal });
         if (r.NothingBlocked)
         {
-            ResultText = "Без оптимизации всё открывается: оптимизация не нужна или включён VPN.";
+            ResultText = L.T("select.result.nothing_blocked");
             return;
         }
         if (best is null)
         {
-            ResultText = r.Cancelled ? "Подбор остановлен, подходящей стратегии пока нет." : "Ни одна стратегия не помогла.";
+            ResultText = L.T(r.Cancelled ? "select.result.cancelled_none" : "select.result.none");
             if (!r.Cancelled)
-                ResultHint = (regression.Length > 0 ? regression + " " : "")
-                    + "Проверьте, что свои сайты набраны верно и открываются хотя бы через VPN, или добавьте другие адреса этих сайтов и запустите полный подбор.";
+                ResultHint = (regression.Length > 0 ? regression + " " : "") + L.T("select.result.none_hint");
             else ResultHint = regression;
             return;
         }
@@ -1569,12 +1572,14 @@ public sealed partial class MainViewModel : Observable
         // Подбор дошёл до конца — лучшая сразу ставится в работу (после выхода из Guard, см. AutoApplyAsync).
         if (!r.Cancelled) _autoApplyId = best.Strategy.Id;
         var notes = new List<string>();
-        if (!best.Perfect) notes.Add($"работают {best.GroupsPassed} из {best.GroupsTotal} групп");
-        if (r.Cancelled) notes.Add("подбор остановлен, проверены не все стратегии");
-        if (MixBuilder.IsMix(best.Strategy.Source)) notes.Insert(0, "одной стратегии на всё не нашлось — собрана смешанная");
+        if (!best.Perfect) notes.Add(L.T("select.note.partial", new { ok = best.GroupsPassed, total = best.GroupsTotal }));
+        if (r.Cancelled) notes.Add(L.T("select.note.cancelled"));
+        if (MixBuilder.IsMix(best.Strategy.Source)) notes.Insert(0, L.T("select.note.mix"));
         var blocked = string.Join(", ", r.TestedGroups.Select(g => g.Title));
-        notes.Add("без оптимизации не открывалось: " + blocked);
-        ResultHint = string.Join("; ", notes) + "." + (regression.Length > 0 ? " " + regression : "");
+        notes.Add(L.T("select.note.blocked", new { groups = blocked }));
+        // Пояснения — фрагменты списка (в обоих языках со строчной): с заглавной начинается фраза целиком.
+        var explain = string.Join("; ", notes) + ".";
+        ResultHint = char.ToUpper(explain[0]) + explain[1..] + (regression.Length > 0 ? " " + regression : "");
     }
 
     // ---------- свои сайты ----------
@@ -1620,7 +1625,7 @@ public sealed partial class MainViewModel : Observable
     {
         if (!TargetsDirty) return true;
         if (!await SaveTargetsAsync()) return false;
-        Message = "Свои сайты сохранены — подбор их учтёт.";
+        Message = L.T("select.user_saved");
         return true;
     }
 
