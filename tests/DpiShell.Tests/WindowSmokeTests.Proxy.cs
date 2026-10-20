@@ -65,7 +65,7 @@ public sealed partial class WindowSmokeTests
                 Pump();
                 if (Find<Button>(t2, b => b.Content as string == "Вернуть прежний" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Для пользователя прежний запомнен — нужна доступная «Вернуть прежний»");
                 if (Find<CheckBox>(t2, c => (c.Content as string)?.StartsWith("Ещё и для служб Windows") == true && c.IsVisible) is not null) throw new Exception("Галочка WinHTTP — только для машины");
-                if (Find<TextBlock>(t2, t => t.Text.StartsWith("работает") || t.Text.Contains("работает (HTTP)")) is null) throw new Exception("Нет итога проверки");
+                if (Find<TextBox>(t2, t => t.IsVisible && t.Text.Contains("работает (HTTP)")) is null) throw new Exception("Нет итога проверки");
                 if (snapDir is not null)
                 {
                     Snap(w2, Path.Combine(snapDir, $"{theme}-proxy-filled.png"));

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
+using DpiShell.Core.Localization;
 
 namespace DpiShell.Core;
 
@@ -144,10 +145,10 @@ public static partial class ProxyValues
     public static string? Problem(string? server, string? bypass, string? pac, bool needServerOrPac = true)
     {
         if (!string.IsNullOrWhiteSpace(server) && ParseServer(server) is null)
-            return "Адрес прокси — в виде хост:порт, например 127.0.0.1:7897 (или http=хост:порт;https=хост:порт).";
-        if (!NormalizeBypass(bypass).Ok) return "Исключения — имена и маски через «;», например <local>;*.example.com.";
-        if (!NormalizePac(pac).Ok) return "Адрес автонастройки — ссылка http:// или https://.";
-        if (needServerOrPac && string.IsNullOrWhiteSpace(server) && string.IsNullOrWhiteSpace(pac)) return "Укажите адрес прокси или адрес автонастройки.";
+            return L.T("proxy.problem.server");
+        if (!NormalizeBypass(bypass).Ok) return L.T("proxy.problem.bypass");
+        if (!NormalizePac(pac).Ok) return L.T("proxy.problem.pac");
+        if (needServerOrPac && string.IsNullOrWhiteSpace(server) && string.IsNullOrWhiteSpace(pac)) return L.T("proxy.problem.empty");
         return null;
     }
 
@@ -163,8 +164,8 @@ public static partial class ProxyValues
     {
         var parts = new List<string>();
         if (s.Enabled && s.Server is not null) parts.Add(s.Server);
-        if (s.Pac is not null) parts.Add("автонастройка " + s.Pac);
-        return parts.Count == 0 ? "выключен" : string.Join(" · ", parts);
+        if (s.Pac is not null) parts.Add(L.T("proxy.line.pac", new { value = s.Pac }));
+        return parts.Count == 0 ? L.T("proxy.off") : string.Join(" · ", parts);
     }
 }
 
@@ -184,21 +185,20 @@ public sealed record WinHttpInfo(string? Proxy, string? Bypass)
 /// </summary>
 public static class ProxyHints
 {
-    public static readonly IReadOnlyList<string> Short =
+    public static IReadOnlyList<string> Short =>
     [
-        "Браузеры обычно берут системный прокси; Firefox — по своей настройке.",
-        "Программы со своим прокси (мессенджеры, игры, торренты) системный могут не учитывать.",
-        "После смены прокси часть программ нужно перезапустить.",
-        "Автонастройка (PAC), если она включена, действует раньше обычного прокси.",
+        L.T("proxy.hint.browsers"),
+        L.T("proxy.hint.own_proxy"),
+        L.T("proxy.hint.restart"),
+        L.T("proxy.hint.pac"),
     ];
 
-    public static readonly IReadOnlyList<string> Details =
+    public static IReadOnlyList<string> Details =>
     [
-        "Приложения из Microsoft Store могут не ходить на 127.0.0.1: для них нужно разрешить «loopback» (CheckNetIsolation LoopbackExempt).",
-        "Службы Windows и часть программ берут прокси WinHTTP, а не системный: его можно задать отдельной галочкой.",
-        "Программы на .NET читают прокси при запуске: перезапустите их после смены.",
-        "Строка socks=… в системном прокси браузеры могут понять как SOCKS4; для SOCKS5 надёжнее http-порт того же прокси.",
-        "Адреса из исключений (например <local>) идут напрямую; 127.0.0.1 WinINET не отправляет через прокси сам, если не указано <-loopback>.",
+        L.T("proxy.more.store"),
+        L.T("proxy.more.winhttp"),
+        L.T("proxy.more.socks"),
+        L.T("proxy.more.loopback"),
     ];
 
     public static IReadOnlyList<string> All => [.. Short, .. Details];

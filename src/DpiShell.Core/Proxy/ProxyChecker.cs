@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
+using DpiShell.Core.Localization;
 
 namespace DpiShell.Core;
 
@@ -23,7 +24,7 @@ public static class ProxyChecker
     {
         var spec = ProxyValues.ParseServer(server);
         if (spec?.ForCheck() is not { } use || !ProxyValues.TryHostPort(use.HostPort, out var host, out var port))
-            return new(false, "http", [], "Адрес прокси не подходит для проверки.");
+            return new(false, "http", [], L.T("proxy.chk.bad_address"));
         var list = targets ?? DefaultTargets;
         var probes = new List<ProxyProbe>();
         foreach (var (th, tp) in list)
@@ -34,9 +35,9 @@ public static class ProxyChecker
         int okCount = probes.Count(p => p.Ok);
         int avg = okCount == 0 ? 0 : (int)probes.Where(p => p.Ok).Average(p => p.Ms);
         var kindText = use.Kind == "socks5" ? "SOCKS5" : "HTTP";
-        var summary = okCount == probes.Count ? $"работает ({kindText}): {okCount} из {probes.Count} проверочных адресов, ≈{avg} мс"
-            : okCount > 0 ? $"отвечает не на всё ({kindText}): {okCount} из {probes.Count} проверочных адресов, ≈{avg} мс"
-            : "не отвечает: " + (probes.FirstOrDefault()?.Error ?? "нет ответа");
+        var summary = okCount == probes.Count ? L.T("proxy.chk.ok", new { kind = kindText, ok = okCount, total = probes.Count, ms = avg })
+            : okCount > 0 ? L.T("proxy.chk.partial", new { kind = kindText, ok = okCount, total = probes.Count, ms = avg })
+            : L.T("proxy.chk.fail", new { reason = probes.FirstOrDefault()?.Error ?? L.T("proxy.chk.no_response") });
         return new(okCount == probes.Count && probes.Count > 0, use.Kind, probes, summary);
     }
 
@@ -55,10 +56,10 @@ public static class ProxyChecker
             sw.Stop();
             return error is null ? new(target, true, (int)sw.ElapsedMilliseconds, null) : new(target, false, (int)sw.ElapsedMilliseconds, error);
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new(target, false, (int)timeout.TotalMilliseconds, timeout.TotalSeconds >= 1 ? $"нет ответа за {(int)timeout.TotalSeconds} с" : "нет ответа"); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new(target, false, (int)timeout.TotalMilliseconds, timeout.TotalSeconds >= 1 ? L.T("proxy.chk.timeout", new { s = (int)timeout.TotalSeconds }) : L.T("proxy.chk.no_response")); }
         catch (Exception e) when (e is SocketException or IOException or ObjectDisposedException)
         {
-            return new(target, false, (int)sw.ElapsedMilliseconds, e is SocketException { SocketErrorCode: SocketError.ConnectionRefused } ? "прокси отказал в соединении (не запущен?)" : "ошибка соединения");
+            return new(target, false, (int)sw.ElapsedMilliseconds, e is SocketException { SocketErrorCode: SocketError.ConnectionRefused } ? L.T("proxy.chk.refused") : L.T("proxy.chk.conn_error"));
         }
     }
 
@@ -77,33 +78,33 @@ public static class ProxyChecker
             int eol = text.IndexOf("\r\n", StringComparison.Ordinal);
             if (eol < 0) continue;
             var parts = text[..eol].Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2 || !parts[0].StartsWith("HTTP/", StringComparison.Ordinal) || !int.TryParse(parts[1], out var code)) return "это не HTTP-прокси";
+            if (parts.Length < 2 || !parts[0].StartsWith("HTTP/", StringComparison.Ordinal) || !int.TryParse(parts[1], out var code)) return L.T("proxy.chk.not_http");
             return code switch
             {
                 200 => null,
-                407 => "прокси просит логин и пароль",
-                403 => "прокси запретил этот адрес",
-                _ => $"прокси ответил {code}",
+                407 => L.T("proxy.chk.auth"),
+                403 => L.T("proxy.chk.forbidden"),
+                _ => L.T("proxy.chk.replied", new { code }),
             };
         }
-        return "прокси закрыл соединение без ответа";
+        return L.T("proxy.chk.closed");
     }
 
     static async Task<string?> Socks5Async(NetworkStream s, string host, int port, CancellationToken ct)
     {
         await s.WriteAsync(new byte[] { 5, 1, 0 }, ct);
         var rep = new byte[2];
-        if (!await ReadExactAsync(s, rep, ct) || rep[0] != 5) return "это не SOCKS5-прокси";
-        if (rep[1] == 0xFF) return "SOCKS5-прокси не принял вход без пароля";
-        if (rep[1] != 0) return "SOCKS5-прокси просит логин и пароль";
+        if (!await ReadExactAsync(s, rep, ct) || rep[0] != 5) return L.T("proxy.chk.not_socks");
+        if (rep[1] == 0xFF) return L.T("proxy.chk.socks_no_anon");
+        if (rep[1] != 0) return L.T("proxy.chk.socks_auth");
         var name = Encoding.ASCII.GetBytes(host);
         var req = new List<byte> { 5, 1, 0, 3, (byte)name.Length };
         req.AddRange(name);
         req.Add((byte)(port >> 8)); req.Add((byte)(port & 0xFF));
         await s.WriteAsync(req.ToArray(), ct);
         var head = new byte[4];
-        if (!await ReadExactAsync(s, head, ct)) return "прокси закрыл соединение без ответа";
-        return head[1] == 0 ? null : $"SOCKS5-прокси отказал (код {head[1]})";
+        if (!await ReadExactAsync(s, head, ct)) return L.T("proxy.chk.closed");
+        return head[1] == 0 ? null : L.T("proxy.chk.socks_refused", new { code = head[1] });
     }
 
     static async Task<bool> ReadExactAsync(NetworkStream s, byte[] buf, CancellationToken ct)

@@ -16,8 +16,8 @@ public sealed class ProxyRow(ProxyEntry entry) : Observable
     public string Address => Entry.Server;
     public string Detail => string.Join(" · ", new[]
     {
-        Entry.Bypass is { } b ? "исключения: " + b : null,
-        Entry.Pac is { } p ? "автонастройка: " + p : null,
+        Entry.Bypass is { } b ? L.T("proxy.detail.bypass", new { value = b }) : null,
+        Entry.Pac is { } p ? L.T("proxy.detail.pac", new { value = p }) : null,
     }.Where(x => x is not null));
     public bool HasDetail => Detail.Length > 0;
 }
@@ -77,10 +77,10 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
     {
         var parts = new List<string>();
         if (s.Enabled && s.Server is not null) parts.Add(s.Server);
-        if (s.Pac is not null) parts.Add("автонастройка " + s.Pac);
-        if (autoDetect) parts.Add("автоматически определять настройки");
-        if (parts.Count == 0) return "выключен";
-        if (s.Enabled && s.Server is not null && s.Bypass is not null) parts.Add("исключения: " + s.Bypass);
+        if (s.Pac is not null) parts.Add(L.T("proxy.line.pac", new { value = s.Pac }));
+        if (autoDetect) parts.Add(L.T("proxy.line.autodetect"));
+        if (parts.Count == 0) return L.T("proxy.off");
+        if (s.Enabled && s.Server is not null && s.Bypass is not null) parts.Add(L.T("proxy.detail.bypass", new { value = s.Bypass }));
         return string.Join(" · ", parts);
     }
 
@@ -90,7 +90,7 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
         try { now = await Task.Run(() => Manager().Overview()); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            UserLine = "Не удалось прочитать настройки: " + Texts.Friendly(e);
+            UserLine = L.T("proxy.read_failed", new { error = Texts.Friendly(e) });
             return;
         }
         if (helper.Reader is { } c && c.Compat.Supports("proxy_status"))
@@ -108,12 +108,12 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
         _now = now;
         UserLine = Line(now.User, now.UserAutoDetect);
         MachineLine = Line(now.Machine, now.MachineAutoDetect);
-        WinHttpLine = now.WinHttp.IsDirect ? "напрямую" : now.WinHttp.Proxy + (now.WinHttp.Bypass is { } b ? " · исключения: " + b : "");
+        WinHttpLine = now.WinHttp.IsDirect ? L.T("proxy.winhttp.direct") : now.WinHttp.Bypass is { } b ? L.T("proxy.winhttp.bypass", new { proxy = now.WinHttp.Proxy, bypass = b }) : now.WinHttp.Proxy ?? "";
         Notes.Clear();
         if (now.MachineWide)
-            Notes.Add("Настройки общие для всех пользователей (политика): Windows читает настройки машины, а пользовательские не использует.");
+            Notes.Add(L.T("proxy.note.machine_wide"));
         if (now.PolicyBlocked)
-            Notes.Add("Изменение прокси закреплено политикой (обычно администратором организации): наши правки могут не примениться или вернуться.");
+            Notes.Add(L.T("proxy.note.policy_blocked"));
         Raise(nameof(HasNotes)); Raise(nameof(CanRestore)); Raise(nameof(PreviousText)); Raise(nameof(HasPrevious));
         CommandManager.InvalidateRequerySuggested();
     }
@@ -143,7 +143,7 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
     public bool CanRestore => Previous is not null;
     public bool HasPrevious => Previous is not null;
     ProxySettings? Previous => Target == ProxyTarget.Machine ? _machinePrevious?.Machine : settings.ProxyPrevious;
-    public string PreviousText => Previous is { } p ? "Прежний: " + Line(p, false) : "";
+    public string PreviousText => Previous is { } p ? L.T("proxy.previous", new { line = Line(p, false) }) : "";
 
     // ---------- включить / очистить / вернуть ----------
 
@@ -156,10 +156,11 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
     public ICommand RefreshCmd => _refresh ??= RelayCommand.Async(RefreshAsync);
     ICommand? _refresh;
 
-    static string ShieldLessNote(ProxyOverview? now, ProxyTarget t) =>
+    /// <summary>Сообщение действия; при общих настройках машины (политика) для одного пользователя — с пояснением.</summary>
+    static string WithPolicyNote(string message, ProxyOverview? now, ProxyTarget t) =>
         t != ProxyTarget.Machine && now is { MachineWide: true }
-            ? " Сейчас настройки общие для всех (политика): для одного пользователя они не подействуют — выберите «Для всей машины»."
-            : "";
+            ? L.T("proxy.say.policy_suffix", new { message })
+            : message;
 
     public async Task EnableAsync(ProxyRow? row)
     {
@@ -167,14 +168,14 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
         var e = row.Entry;
         if (ProxyValues.Problem(e.Server, e.Bypass, e.Pac) is { } bad) { Say(bad); return; }
         var next = ProxyValues.Build(e.Server, e.Bypass, e.Pac);
-        await Run("Включаю прокси…", async () =>
+        await Run(L.T("proxy.busy.enable"), async () =>
         {
             var r = await ApplyAsync(next, enable: true, e);
-            Say(r.Message + (r.Ok ? ShieldLessNote(_now, Target) : ""));
+            Say(r.Ok ? WithPolicyNote(r.Message, _now, Target) : r.Message);
         });
     }
 
-    public async Task ClearAsync() => await Run("Выключаю прокси…", async () =>
+    public async Task ClearAsync() => await Run(L.T("proxy.busy.disable"), async () =>
     {
         var cur = ProxyRegistryIo.Read(Registry, ProxyKey.UserSettings);
         var r = await ApplyAsync(cur.Cleared(), enable: false, null);
@@ -183,7 +184,7 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
         Say(r.Message);
     });
 
-    public async Task RestoreAsync() => await Run("Возвращаю прежний прокси…", async () =>
+    public async Task RestoreAsync() => await Run(L.T("proxy.busy.restore"), async () =>
     {
         if (Target == ProxyTarget.Machine)
         {
@@ -202,7 +203,7 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
         Say(o.Message);
     });
 
-    const string OldHelper = "Помощник старее окна и не умеет менять прокси — обновите его на вкладке «Информация и обновления».";
+    static string OldHelper => L.T("proxy.old_helper");
 
     void Remember(ProxySettings? s)
     {
@@ -226,7 +227,7 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
                 }
                 case ProxyTarget.UserAdmin:
                 {
-                    if (await Need() is not { } c) return new(false, "Нужен помощник — без него изменить прокси с правами администратора нельзя.");
+                    if (await Need() is not { } c) return new(false, L.T("proxy.err.need_helper_user"));
                     if (!c.Compat.Supports("proxy_user_set")) return new(false, OldHelper);
                     var r = enable
                         ? await c.ProxyUserSetAsync(true, exact is not null ? (exact.Enabled ? exact.Server : null) : entry!.Server, exact is not null ? exact.Bypass : entry!.Bypass,
@@ -239,7 +240,7 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
                 }
                 default:
                 {
-                    if (await Need() is not { } c) return new(false, "Нужен помощник — без него изменить прокси всей машины нельзя.");
+                    if (await Need() is not { } c) return new(false, L.T("proxy.err.need_helper_machine"));
                     if (!c.Compat.Supports("proxy_machine_set")) return new(false, OldHelper);
                     var r = enable
                         ? await c.ProxyMachineSetAsync(true, entry!.Server, entry.Bypass, entry.Pac, AlsoWinHttp)
@@ -251,7 +252,7 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
                 }
             }
         }
-        catch (HelperUnavailableException e) { helper.MarkLost(e); return new(false, "Помощник не отвечает."); }
+        catch (HelperUnavailableException e) { helper.MarkLost(e); return new(false, L.T("proxy.err.helper_lost")); }
         catch (HelperException e) { return new(false, e.Message); }
     }
 
@@ -276,11 +277,14 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
     {
         if (Selected is not { } row) return;
         Checking = true;
-        CheckText = "Проверяю…";
+        CheckText = L.T("proxy.check.progress");
         try
         {
             var r = await CheckProxy(row.Entry.Server, CancellationToken.None);
-            CheckText = $"{row.Name}: {r.Summary}" + (r.Probes.Count > 0 && !r.Ok ? "\n" + string.Join("\n", r.Probes.Select(p => $"{p.Target} — {(p.Ok ? $"{p.Ms} мс" : p.Error)}")) : "");
+            CheckText = L.T("proxy.check.result", new { name = row.Name, summary = r.Summary })
+                + (r.Probes.Count > 0 && !r.Ok
+                    ? "\n" + string.Join("\n", r.Probes.Select(p => L.T("proxy.check.probe", new { target = p.Target, result = p.Ok ? L.T("proxy.ms", new { ms = p.Ms }) : p.Error })))
+                    : "");
         }
         finally { Checking = false; }
     }
@@ -332,9 +336,9 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
     ProxyEntry? ReadForm(ProxyRow? replacing)
     {
         var name = EditName.Trim();
-        if (name.Length == 0 || name.Length > 40 || name.Any(char.IsControl)) { FormError = "Название — от 1 до 40 знаков."; return null; }
-        if (Items.Any(i => i != replacing && string.Equals(i.Name, name, StringComparison.CurrentCultureIgnoreCase))) { FormError = "Такое название уже есть."; return null; }
-        if (string.IsNullOrWhiteSpace(EditServer)) { FormError = "Укажите адрес прокси, например 127.0.0.1:7897."; return null; }
+        if (name.Length == 0 || name.Length > 40 || name.Any(char.IsControl)) { FormError = L.T("proxy.form.err.name"); return null; }
+        if (Items.Any(i => i != replacing && string.Equals(i.Name, name, StringComparison.CurrentCultureIgnoreCase))) { FormError = L.T("proxy.form.err.duplicate"); return null; }
+        if (string.IsNullOrWhiteSpace(EditServer)) { FormError = L.T("proxy.form.err.no_server"); return null; }
         if (ProxyValues.Problem(EditServer, EditBypass, EditPac) is { } bad) { FormError = bad; return null; }
         return new ProxyEntry(name, ProxyValues.NormalizeServer(EditServer)!, ProxyValues.NormalizeBypass(EditBypass).Value, ProxyValues.NormalizePac(EditPac).Value);
     }
@@ -348,7 +352,7 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
         if (target is not null) Items[Items.IndexOf(target)] = row; else Items.Add(row);
         PersistList();
         Selected = row;
-        Say(target is not null ? "Прокси изменён в списке." : "Прокси добавлен в список.");
+        Say(target is not null ? L.T("proxy.say.updated") : L.T("proxy.say.added"));
     }
 
     void Delete()
@@ -358,13 +362,13 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
         Selected = null;
         EditName = EditServer = EditBypass = EditPac = "";
         PersistList();
-        Say("Прокси убран из списка.");
+        Say(L.T("proxy.say.removed"));
     }
 
     void PersistList()
     {
         settings.ProxyList = [.. Items.Select(i => i.Entry)];
-        try { settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say("Не удалось сохранить список: " + e.Message); }
+        try { settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say(L.T("proxy.say.save_failed", new { error = e.Message })); }
         RaiseList();
     }
 }
