@@ -3,13 +3,14 @@ using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
-namespace DpiShell.App;
+namespace DpiShell.Core.Localization;
 
 /// <summary>
 /// Строки интерфейса (docs/localization.md). Встроенные языки ru (основной, источник правды) и en — ресурсы сборки,
 /// каждый собран из файлов Lang/&lt;код&gt;/&lt;область&gt;.json; пользовательский перевод — один файл &lt;код&gt;.json в папке lang.
 /// Цепочка запасных: выбранный → en → ru → сам ключ (пустой строки не бывает).
-/// Смена языка — сразу: XAML ({l:T}) обновляется через <see cref="LangSource"/>, модели — по <see cref="Changed"/> (Observable).
+/// Лежит в Core: строки ядра (ошибки, причины) тоже идут через L; помощник (служба) пока всегда на русском — языка окна не знает.
+/// Смена языка — сразу: окно подписано на <see cref="Changed"/> (привязки {l:T} и модели).
 /// </summary>
 public static class L
 {
@@ -70,11 +71,7 @@ public static class L
             _chain = BuildChain(code);
             _culture = CultureFor(code);
         }
-        if (changed)
-        {
-            LangSource.Instance.Refresh();
-            Changed?.Invoke();
-        }
+        if (changed) Changed?.Invoke();
     }
 
     static LangPack[] BuildChain(string code)
@@ -191,7 +188,7 @@ public static class L
     static Dictionary<string, LangPack> LoadBuiltIn()
     {
         var asm = typeof(L).Assembly;
-        const string prefix = "DpiShell.App.Lang.";
+        const string prefix = "DpiShell.Core.Lang.";
         var files = new Dictionary<string, List<(string Area, string Json)>>(StringComparer.OrdinalIgnoreCase);
         foreach (var name in asm.GetManifestResourceNames().Where(n => n.StartsWith(prefix, StringComparison.Ordinal) && n.EndsWith(".json", StringComparison.Ordinal)))
         {

@@ -17,6 +17,12 @@
     <EmbeddedResource Include="..\..\router\dpishell\files\usr\libexec\dpishell\uninstall.sh" Link="Router\Scripts\uninstall.sh" LogicalName="DpiShell.Router.uninstall.sh" />
     <EmbeddedResource Include="..\..\router\dpishell\files\usr\share\dpishell\core.json" Link="Router\Scripts\core.json" LogicalName="DpiShell.Router.core.json" />
   </ItemGroup>
+  <!-- Строки интерфейса (docs/localization.md): Lang/<язык>/<область>.json — ресурсы DpiShell.Core.Lang.<язык>.<область>.json.
+       В Core, чтобы тексты ядра (ошибки, причины) шли через тот же L и работали в тестах без окна. -->
+  <ItemGroup>
+    <None Remove="Lang\**\*.json" />
+    <EmbeddedResource Include="Lang\**\*.json" WithCulture="false" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="System.Management" Version="10.0.13" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.13" />

@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-namespace DpiShell.App;
+namespace DpiShell.Core.Localization;
 
 /// <summary>Язык: код, название на своём языке, флаг (ISO 3166, может не быть), автор и версия перевода.</summary>
 public sealed record LangInfo(string Code, string Name, string? Flag, string Author = "", string Version = "", bool BuiltIn = true, string? File = null);

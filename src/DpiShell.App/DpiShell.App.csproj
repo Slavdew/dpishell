@@ -28,10 +28,9 @@
     <EnableCompressionInSingleFile Condition="'$(SelfContained)' == 'true'">true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
-  <!-- Строки интерфейса (docs/localization.md): Lang/<язык>/<область>.json — ресурсы сборки DpiShell.App.Lang.<язык>.<область>.json. -->
+  <!-- Строки интерфейса (docs/localization.md): L и языковые файлы — в DpiShell.Core. -->
   <ItemGroup>
-    <None Remove="Lang\**\*.json" />
-    <EmbeddedResource Include="Lang\**\*.json" WithCulture="false" />
+    <Using Include="DpiShell.Core.Localization" />
   </ItemGroup>
 
   <!-- WinForms и WPF дают одноимённые типы: глобальные using от WinForms убираем, нужные пишем явно. -->

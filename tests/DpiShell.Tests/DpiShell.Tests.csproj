@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="DpiShell.Core.Localization" />
     <Using Include="System.IO" />
     <Using Include="System.Net.Http" />
   </ItemGroup>

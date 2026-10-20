@@ -1,7 +1,7 @@
 namespace DpiShell.App;
 
 /// <summary>
-/// Темы кнопок «(i)»: ключи строк в Lang/&lt;язык&gt;/info.json (текст — info.&lt;тема&gt;, заголовок — info.&lt;тема&gt;.title).
+/// Темы кнопок «(i)»: ключи строк в DpiShell.Core/Lang/&lt;язык&gt;/info.json (текст — info.&lt;тема&gt;, заголовок — info.&lt;тема&gt;.title).
 /// Абзацы — через пустую строку \n\n; первый — ответ «когда включать», в карточке он жирный.
 /// Русский текст — источник правды; docs/info-texts.md — копия для чтения, тест окна сверяет её с ru/info.json.
 /// </summary>

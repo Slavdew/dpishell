@@ -21,10 +21,14 @@ public sealed class LocalizationTests : IDisposable
 {
     public void Dispose() => L.ResetForTests();
 
-    static string AppDir => Path.Combine(Directory.GetParent(Repo.Data)!.FullName, "src", "DpiShell.App");
+    static string Src => Path.Combine(Directory.GetParent(Repo.Data)!.FullName, "src");
+    /// <summary>Языковые файлы — в Core (строки ядра тоже через L).</summary>
+    static string LangDir => Path.Combine(Src, "DpiShell.Core", "Lang");
+    /// <summary>Где ищутся ключи: окно и ядро.</summary>
+    static readonly string[] CodeDirs = ["DpiShell.App", "DpiShell.Core"];
 
     /// <summary>Области: файлы Lang/&lt;язык&gt;/&lt;область&gt;.json (этап 2 — каждая вкладка в своём файле).</summary>
-    static readonly string[] Areas = ["common", "home", "select", "sites", "apps", "hosts", "dns", "proxy", "diag", "router", "settings", "about", "info", "shell"];
+    static readonly string[] Areas = ["common", "home", "select", "sites", "apps", "hosts", "dns", "proxy", "diag", "router", "settings", "about", "info", "shell", "core"];
 
     static LangPack Ru => L.BuiltIn[L.Ru];
     static LangPack En => L.BuiltIn[L.En];
@@ -45,11 +49,11 @@ public sealed class LocalizationTests : IDisposable
     {
         foreach (var lang in new[] { "ru", "en" })
         {
-            var files = Directory.GetFiles(Path.Combine(AppDir, "Lang", lang), "*.json").Select(f => Path.GetFileNameWithoutExtension(f)!).Order().ToArray();
+            var files = Directory.GetFiles(Path.Combine(LangDir, lang), "*.json").Select(f => Path.GetFileNameWithoutExtension(f)!).Order().ToArray();
             Assert.Equal(Areas.Order().ToArray(), files);
             foreach (var area in files)
             {
-                using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppDir, "Lang", lang, area + ".json")));
+                using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(LangDir, lang, area + ".json")));
                 foreach (var p in doc.RootElement.EnumerateObject().Where(p => !p.Name.StartsWith('_')))
                 {
                     Assert.True(p.Name.StartsWith(area + "."), $"{lang}/{area}.json: ключ {p.Name} не начинается с «{area}.»");
@@ -86,20 +90,32 @@ public sealed class LocalizationTests : IDisposable
         }
     }
 
-    // Ключи в коде: любая строка-литерал вида "<область>.<что>" (так ловятся и ключи в тернарных выражениях), в разметке — {l:T ключ}.
+    // Ключи в коде: строки-литералы "<область>.<что>" внутри вызова L.T( / L.Plural( (до конца оператора — так ловятся и ключи
+    // в тернарных выражениях), константы InfoTexts; в разметке — {l:T ключ}. Имена файлов вроде "core.zip" вне L.T не считаются ключами.
     static readonly Regex CodeKey = new("\"((?:" + string.Join("|", Areas) + ")\\.[a-z0-9_.]+)\"", RegexOptions.Compiled);
+    static readonly Regex CallText = new(@"\bL\.(?:T|Plural)\([^;]*", RegexOptions.Compiled);
     static readonly Regex XamlKey = new(@"\{l:T\s+([^}\s,]+)", RegexOptions.Compiled);
 
     /// <summary>Ключи, которые код собирает из частей: заголовки (i) — тема + ".title" (InfoTexts.Title).</summary>
     static bool Composed(string key) => key.StartsWith("info.") && key.EndsWith(".title") && Ru.Strings.ContainsKey(key[..^".title".Length]);
 
-    static HashSet<string> UsedKeys()
+    /// <summary>Ключи из кода и разметки. mentions — любой литерал-ключ (для поиска неиспользуемых: ключ мог уйти в переменную).</summary>
+    static HashSet<string> UsedKeys(bool mentions = false)
     {
         var used = new HashSet<string>();
-        foreach (var f in Directory.GetFiles(AppDir, "*.cs", SearchOption.AllDirectories).Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar)))
-            foreach (Match m in CodeKey.Matches(File.ReadAllText(f))) used.Add(m.Groups[1].Value);
-        foreach (var f in Directory.GetFiles(AppDir, "*.xaml", SearchOption.AllDirectories).Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar)))
-            foreach (Match m in XamlKey.Matches(File.ReadAllText(f))) used.Add(m.Groups[1].Value);
+        static bool Source(string f) => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar) && !f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar);
+        foreach (var dir in CodeDirs.Select(d => Path.Combine(Src, d)))
+        {
+            foreach (var f in Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories).Where(Source))
+            {
+                var text = File.ReadAllText(f);
+                var scope = mentions || Path.GetFileName(f) == "InfoTexts.cs" ? [text] : CallText.Matches(text).Select(m => m.Value);
+                foreach (var part in scope)
+                    foreach (Match m in CodeKey.Matches(part)) used.Add(m.Groups[1].Value);
+            }
+            foreach (var f in Directory.GetFiles(dir, "*.xaml", SearchOption.AllDirectories).Where(Source))
+                foreach (Match m in XamlKey.Matches(File.ReadAllText(f))) used.Add(m.Groups[1].Value);
+        }
         return used;
     }
 
@@ -116,7 +132,7 @@ public sealed class LocalizationTests : IDisposable
     [Fact]
     public void No_orphan_keys_in_ru()
     {
-        var used = UsedKeys();
+        var used = UsedKeys(mentions: true);
         var orphans = Ru.Strings.Keys.Where(k => !used.Contains(k) && !Composed(k)).ToList();
         Assert.True(orphans.Count == 0, "Ключи ru, которых нет в коде и разметке: " + string.Join(", ", orphans));
     }

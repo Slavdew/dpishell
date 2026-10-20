@@ -9,13 +9,13 @@ namespace DpiShell.App;
 public sealed class LangSource : INotifyPropertyChanged
 {
     public static LangSource Instance { get; } = new();
-    LangSource() { }
+    LangSource() => L.Changed += Refresh;
 
     public string this[string key] => L.T(key);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    internal void Refresh() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(Binding.IndexerName));
+    void Refresh() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(Binding.IndexerName));
 }
 
 /// <summary>
