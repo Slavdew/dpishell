@@ -496,5 +496,6 @@
  "router.login.title": "Sign in to router",
  "router.login.intro": "The router administrator password — usually the same as for its settings (LuCI).",
  "router.login.stored": "The password is stored encrypted and only on this PC.",
- "router.login.stored_saved": "The password is stored encrypted and only on this PC. Leave the field empty to sign in with the saved one."
+ "router.login.stored_saved": "The password is stored encrypted and only on this PC. Leave the field empty to sign in with the saved one.",
+  "router.row.start_failed": "start failed: {error}"
 }

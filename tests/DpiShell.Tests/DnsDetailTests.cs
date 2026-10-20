@@ -23,7 +23,7 @@ public sealed class DnsDetailTests : IDisposable
         Assert.Equal("2001:4860:4860::8888, 2001:4860:4860::8844", Info(google, "IPv6"));
         Assert.Equal("https://dns.google/dns-query", Info(google, "Адрес защищённого DNS"));
         Assert.Equal("Google (США)", Info(google, "Оператор"));
-        Assert.Equal("рекомендуем", google.Note);
+        Assert.Equal("рекомендуется", google.Note);
 
         var yandex = pc.Options.Single(o => o.Id == "yandex");
         Assert.Equal("российский: может применять реестр запрещённых сайтов", yandex.Note);
@@ -39,7 +39,7 @@ public sealed class DnsDetailTests : IDisposable
         pc.Selected = google;
         Assert.False(pc.HasSelectedDetail);
         Assert.Equal(4, pc.SelectedInfo.Count);
-        Assert.Equal("рекомендуем", pc.SelectedNote);
+        Assert.Equal("рекомендуется", pc.SelectedNote);
     }
 
     [Fact]

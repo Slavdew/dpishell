@@ -401,7 +401,7 @@ public sealed class FakeHelperBackend : IHelperBackend
     public Task<DnsSetResult> DnsSetAsync(string preset, IReadOnlyList<string>? ips, string? doh, bool fallback, CancellationToken ct)
     {
         Call($"dns_set {preset} {string.Join(",", ips ?? [])} {doh} {fallback}");
-        if (DnsSetFails) return Task.FromResult(new DnsSetResult(false, "Защищённый DNS не ответил — вернул прежние настройки.", DnsValue));
+        if (DnsSetFails) return Task.FromResult(new DnsSetResult(false, "Защищённый DNS Quad9 не ответил — прежние настройки возвращены. Попробуйте другой вариант.", DnsValue));
         DnsValue = DnsValue with { Current = preset, Encrypted = preset != "auto", CanRestore = true };
         return Task.FromResult(new DnsSetResult(true, "Google, защищённый — Ethernet.", DnsValue));
     }

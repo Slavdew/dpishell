@@ -30,13 +30,14 @@ public sealed class LangRouterWindowTests : IDisposable
                 [ { "id": "alt", "group_share": 1.0, "target_share": 0.88, "avg_s": 0.74, "error": null },
                   { "id": "alt9", "group_share": 1.0, "target_share": 0.80, "avg_s": 0.61, "error": null },
                   { "id": "d-17", "title": "fake + multisplit, ts — YouTube", "group_share": 0.5, "target_share": 0.62, "avg_s": 0.83, "error": null, "candidate": true, "ok": 3, "total": 4 },
-                  { "id": "alt2", "group_share": 0.0, "target_share": 0.0, "avg_s": 0, "error": "не открылось ни одной группы" } ]
+                  { "id": "alt2", "group_share": 0.0, "target_share": 0.0, "avg_s": 0, "error": "ломает обычные сайты: vk.com" } ]
                 """,
         };
         var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
         void Shot(FrameworkElement w, string name)
         {
             Pump();
+            CyrillicScan.CheckIfEn(w, "router-" + name);
             if (snapDir is null) return;
             Directory.CreateDirectory(snapDir);
             Save(w is Window win ? (FrameworkElement)System.Windows.Media.VisualTreeHelper.GetChild(win, 0) : w, Path.Combine(snapDir, $"router-{lang}-{name}.png"));

@@ -164,5 +164,6 @@
   "select.editor.name": "Название",
   "select.editor.name.aria": "Название стратегии",
   "select.editor.add_role": "Добавить роль:",
-  "select.editor.footer": "Пустое поле — роль не используется. Файлы фейков — только из папки программы, например {example}."
+  "select.editor.footer": "Пустое поле — роль не используется. Файлы фейков — только из папки программы, например {example}.",
+  "select.group.control": "Обычные сайты"
 }

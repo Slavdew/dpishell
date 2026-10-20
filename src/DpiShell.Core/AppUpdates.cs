@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -125,7 +126,7 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
     {
         var errors = new List<string>();
         bool badSignature = false;
-        if (sources.Count == 0) return new(null, false, false, current, ["Не заданы адреса выпусков (update-sources.json)."]);
+        if (sources.Count == 0) return new(null, false, false, current, [L.T("core.upd.no_sources")]);
         foreach (var src in sources)
         {
             byte[] bytes, sig;
@@ -141,7 +142,7 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
             }
             if (!ReleaseSignature.Verify(bytes, sig, SigningKey))
             {
-                errors.Add($"{Host(src)}: подпись описания выпуска не совпала — источник отброшен");
+                errors.Add(L.T("core.upd.bad_release_sig", new { host = Host(src) }));
                 badSignature = true;
                 continue;
             }
@@ -180,9 +181,9 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
             }
             if (hash == asset.Sha256) return;
             TryDelete(target);
-            errors.Add($"{Host(src)}: sha256 архива не совпал с описанием выпуска — файл отброшен");
+            errors.Add(L.T("core.upd.bad_archive_hash", new { host = Host(src) }));
         }
-        throw new SecurityException($"Архив {asset.Name} не получен: " + string.Join("; ", errors));
+        throw new SecurityException(L.T("core.upd.archive_missing", new { name = asset.Name, errors = string.Join("; ", errors) }));
     }
 
     async Task<HttpResponseMessage> HeadAsync(string url, CancellationToken ct)
@@ -250,10 +251,10 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
 
     static string Reason(Exception e) => e switch
     {
-        TaskCanceledException => "не ответил вовремя",
-        HttpRequestException { StatusCode: System.Net.HttpStatusCode.NotFound } => "нет файла (404)",
-        HttpRequestException { StatusCode: { } sc } => $"ответ {(int)sc}",
-        HttpRequestException => "нет связи",
+        TaskCanceledException => L.T("core.upd.reason.timeout"),
+        HttpRequestException { StatusCode: System.Net.HttpStatusCode.NotFound } => L.T("core.upd.reason.not_found"),
+        HttpRequestException { StatusCode: { } sc } => L.T("core.upd.reason.status", new { code = (int)sc }),
+        HttpRequestException => L.T("core.upd.reason.offline"),
         InvalidDataException d => d.Message,
         _ => e.Message,
     };
@@ -446,7 +447,7 @@ public sealed class AppUpdater(AppUpdateClient client, AppVersionStore store)
     public async Task<AppUpdatePrepared> PrepareAsync(AppUpdateCheck check, IProgress<long>? progress = null, CancellationToken ct = default)
     {
         if (check.Found is not { } found || !check.Available || found.Release.Portable is not { } asset)
-            return new(false, check.OsTooOld ? "Новая версия требует более новую Windows." : "Нет обновления для этого компьютера.");
+            return new(false, L.T(check.OsTooOld ? "core.upd.os_too_old" : "core.upd.none_for_pc"));
         var version = found.Release.Version;
         try
         {
@@ -462,19 +463,19 @@ public sealed class AppUpdater(AppUpdateClient client, AppVersionStore store)
                 }
                 finally { try { if (File.Exists(part)) File.Delete(part); } catch (IOException) { } }
             }
-            return new(true, $"Версия {version} готова — перезапустите программу.", version);
+            return new(true, L.T("core.upd.ready", new { version }), version);
         }
         catch (SecurityException e)
         {
-            return new(false, "Скачанный файл не прошёл проверку: его контрольная сумма не совпала с подписанным описанием выпуска. Обновление отменено, программа не изменена.", Details: e.Message);
+            return new(false, L.T("core.upd.hash_mismatch"), Details: e.Message);
         }
         catch (InvalidDataException e)
         {
-            return new(false, "Архив повреждён или устроен не так, как ждёт программа. Обновление отменено, программа не изменена.", Details: e.Message);
+            return new(false, L.T("core.upd.bad_archive"), Details: e.Message);
         }
         catch (HttpRequestException e)
         {
-            return new(false, "Нет связи с источником обновлений. Повторите позже — программа не изменена.", Details: e.Message);
+            return new(false, L.T("core.upd.offline"), Details: e.Message);
         }
         catch (IOException e) when (IsDiskFull(e))
         {
@@ -482,12 +483,12 @@ public sealed class AppUpdater(AppUpdateClient client, AppVersionStore store)
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return new(false, $"Не удалось записать файлы в {store.Root}: нет доступа или файл занят. Программа не изменена.", Details: e.Message);
+            return new(false, L.T("core.upd.write_failed", new { path = store.Root }), Details: e.Message);
         }
     }
 
     string NoSpace(long free) =>
-        $"Не хватает места на диске {Path.GetPathRoot(Path.GetFullPath(store.Root))}: нужно около {Mb(RequiredFreeBytes)} МБ, свободно {Mb(free)} МБ. Освободите место и повторите — программа не изменена.";
+        L.T("core.upd.no_space", new { disk = Path.GetPathRoot(Path.GetFullPath(store.Root)), need = Mb(RequiredFreeBytes), free = Mb(free) });
 
     // ERROR_DISK_FULL (112) и ERROR_HANDLE_DISK_FULL (39) — младшие 16 бит HResult.
     public static bool IsDiskFull(IOException e) => (e.HResult & 0xFFFF) is 112 or 39;

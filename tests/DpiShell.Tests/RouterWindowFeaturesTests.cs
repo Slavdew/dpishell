@@ -179,13 +179,13 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         vm.DnsPick.Selected = vm.DnsPick.Options.Single(o => o.Id == "provider");
         Assert.False(vm.DnsPick.ApplyCmd.CanExecute(null));   // выбрано то, что уже стоит, — «Применить» неактивна
         Assert.False(vm.DnsPick.CanRestore);
-        Assert.Contains("реестр блокировок", vm.DnsPick.Options.Single(o => o.Id == "yandex").Detail);
+        Assert.Contains("реестр запрещённых сайтов", vm.DnsPick.Options.Single(o => o.Id == "yandex").Detail);
         // Описание варианта роутера: оба шаблона у «Google + Cloudflare», кто держит — по id из пресетов ПК, «рекомендуем» у Google.
         var both = vm.DnsPick.Options.Single(o => o.Id == "default");
         Assert.Equal(["https://dns.google/dns-query", "https://cloudflare-dns.com/dns-query"], both.DohAll);
         Assert.Contains(both.Info, l => l.Label == "Оператор" && l.Value == "Google и Cloudflare (США)");
         Assert.Contains(vm.DnsPick.Options.Single(o => o.Id == "yandex").Info, l => l.Label == "Оператор" && l.Value == "Яндекс (Россия)");
-        Assert.StartsWith("рекомендуем", vm.DnsPick.Options.Single(o => o.Id == "google").Note);
+        Assert.StartsWith("рекомендуется", vm.DnsPick.Options.Single(o => o.Id == "google").Note);
 
         string? asked = null;
         vm.Confirm = q => { asked = q; return true; };
@@ -635,11 +635,11 @@ public sealed class RouterWindowFeaturesTests : IDisposable
     {
         using var r = new FakeRouter
         {
-            WarningsJson = """[ { "code": "flow_offload", "text": "Включён flow offloading" }, { "code": "ipv6", "text": "IPv6 мимо оптимизации" }, { "code": "switched_backup", "text": "Включена запасная alt9" } ]""",
+            WarningsJson = """[ { "code": "flow_offload", "text": "Включён flow offloading" }, { "code": "ipv6", "text": "IPv6 мимо оптимизации" }, { "code": "switched_backup", "text": "Стратегия перестала работать — включена запасная alt9" } ]""",
         };
         var vm = await Connected(r);
         Assert.Equal(new[] { "Исправить", "Исправить", null }, vm.WarningRows.Select(w => w.Fix));
-        Assert.Equal("Включена запасная alt9", vm.WarningRows[2].Text);
+        Assert.Equal("Стратегия перестала работать — включена запасная alt9", vm.WarningRows[2].Text);
         Assert.True(vm.FlowOffloadFixable);
         await vm.FixWarningAsync("flow_offload");
         Assert.True(r.FlowOffloadFixed);

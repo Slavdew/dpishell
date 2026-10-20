@@ -162,5 +162,6 @@
   "select.editor.name": "Name",
   "select.editor.name.aria": "Strategy name",
   "select.editor.add_role": "Add role:",
-  "select.editor.footer": "An empty field means the role is not used. Fake files only from the app folder, e.g. {example}."
+  "select.editor.footer": "An empty field means the role is not used. Fake files only from the app folder, e.g. {example}.",
+  "select.group.control": "Regular sites"
 }

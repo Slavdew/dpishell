@@ -1,0 +1,20 @@
+{
+  "_comment": "Временная область: ключи из router/luci-app-dpishell/lang-src/web.json (router-work, 0b03435); после слияния router-work заменить встроенным ресурсом того файла.",
+  "web.dns.preset.provider": "From the ISP",
+  "web.dns.preset.yandex": "Yandex",
+  "web.strat.and": "and",
+  "web.strat.found": "Found {n} ({when})",
+  "web.strat.mixed": "Mixed",
+  "web.strat.new": "New strategy {n} (search {when})",
+  "web.strat.own": "mine",
+  "web.strat.own_sites": "my sites",
+  "web.strat.rest": "the rest",
+  "web.warn.auto_select_failed": "Automatic search found no working strategy — the previous one stays",
+  "web.warn.auto_selected": "Automatic search turned on {name}",
+  "web.warn.conflict": "A similar program interferes: {names}",
+  "web.warn.dns_fallback": "Secure DNS is unavailable — the ISP’s DNS is temporarily in use",
+  "web.warn.dns_spoofed": "The ISP is spoofing site addresses — apps outside the browser may not work",
+  "web.warn.select_failed": "Strategy search was interrupted: {error}",
+  "web.warn.switched_backup": "The strategy stopped working — backup {name} is on",
+  "web.core.missing": "zapret core is not installed"
+}

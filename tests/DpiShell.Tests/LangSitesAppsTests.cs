@@ -81,7 +81,7 @@ public sealed class LangSitesAppsTests : IDisposable
             var tabs = Find<TabControl>(w)!;
             void Top() { if (Find<ScrollViewer>(tabs, s => s.IsVisible && s.ScrollableHeight > 0) is { } sv) { sv.ScrollToHome(); Pump(); } }
             void Bottom() { if (Find<ScrollViewer>(tabs, s => s.IsVisible && s.ScrollableHeight > 0) is { } sv) { sv.ScrollToEnd(); Pump(); } }
-            void Shot(string name) { if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{name}-{lang}.png")); }
+            void Shot(string name) { CyrillicScan.CheckIfEn(w, name); if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{name}-{lang}.png")); }
 
             // Сайты, этот ПК: свои строки, «Остальные сайты», исключения, «Не сохранено», сообщение об ошибке.
             vm.Page = Pages.Sites;

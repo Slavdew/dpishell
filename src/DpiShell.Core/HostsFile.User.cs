@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -210,9 +211,9 @@ public sealed partial class HostsText
         var skipped = new List<string>();
         foreach (var id in ids.Distinct())
         {
-            if (!TryParseId(id, out var line, out var hash)) { skipped.Add($"{id} — неверный номер строки"); continue; }
-            if (line > _lines.Count || LineHash(_lines[line - 1].Text) != hash) { skipped.Add($"{id} — строка в файле изменилась, проверьте hosts заново"); continue; }
-            if (!foreign.ContainsKey(line)) { skipped.Add($"{id} — это не чужая запись (наша строка или комментарий)"); continue; }
+            if (!TryParseId(id, out var line, out var hash)) { skipped.Add(L.T("core.hosts.skip.bad_id", new { id })); continue; }
+            if (line > _lines.Count || LineHash(_lines[line - 1].Text) != hash) { skipped.Add(L.T("core.hosts.skip.changed", new { id })); continue; }
+            if (!foreign.ContainsKey(line)) { skipped.Add(L.T("core.hosts.skip.not_foreign", new { id })); continue; }
             var text = _lines[line - 1].Text;
             result[line - 1] = ($"{OffMark} {Day(at)}: {text}", _lines[line - 1].Eol);
             done.Add(new HostsOffLine(line, Day(at), text));

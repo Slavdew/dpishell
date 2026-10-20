@@ -8,7 +8,8 @@ public sealed class GroupOption(string id, string title, bool isChecked) : Obser
 {
     bool _checked = isChecked;
     public string Id { get; } = id;
-    public string Title { get; } = title;
+    /// <summary>«Свои сайты» — по ключу на языке окна; остальные названия — из каталога целей.</summary>
+    public string Title => Id == "user" ? L.T("select.group.user") : title;
     public bool IsChecked { get => _checked; set => Set(ref _checked, value); }
 }
 
@@ -100,7 +101,7 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
     {
         if (before is null || r.NothingBlocked) return "";
         var hit = r.Scores
-            .Where(s => s.Error is null || s.Error.StartsWith("ломает обычные сайты", StringComparison.Ordinal))
+            .Where(s => s.Error is null || s.BreaksRegular)
             .Select(s => (s, streak: before.GetValueOrDefault(s.Strategy.Id)?.Streak ?? 0))
             .Where(x => x.streak >= RegressionRuns && Failed(x.s, names) is { Length: > 0 })
             .OrderByDescending(x => x.s.Strategy.Id == currentId).ThenByDescending(x => x.streak)
@@ -163,7 +164,7 @@ public static class StrategyParams
 /// <summary>Названия групп целей для подробностей: из каталога целей и «Свои сайты»; контрольные («Обычные сайты») отмечены.</summary>
 public sealed class GroupNames
 {
-    readonly Dictionary<string, (string Title, bool Control)> _map = new() { ["user"] = (L.T("select.group.user"), false) };
+    readonly Dictionary<string, (string Title, bool Control)> _map = new();
 
     public GroupNames(IEnumerable<TargetGroup> groups)
     {
@@ -172,7 +173,9 @@ public sealed class GroupNames
 
     public static readonly GroupNames Empty = new([]);
 
-    public string Title(string id) => _map.TryGetValue(id, out var g) ? g.Title
+    /// <summary>Название на языке окна: «Свои сайты» и контрольная группа — по ключам (в каталоге целей контрольная названа по-русски), остальные — как в каталоге.</summary>
+    public string Title(string id) => id == "user" ? L.T("select.group.user")
+        : _map.TryGetValue(id, out var g) ? (g.Control ? L.T("select.group.control") : g.Title)
         : AdvancedSites.IsGroupId(id) && int.TryParse(id[4..], out var n) ? L.T("select.group.line", new { n = n + 1 }) : id;
     public bool Control(string id) => _map.TryGetValue(id, out var g) && g.Control;
 }
@@ -246,11 +249,11 @@ public sealed class ScoreRow(StrategyScore s, GroupNames? names = null, Func<str
     public string Share => Unchecked ? "—" : L.T("select.row.share", new { pct = (Score.TargetShare * 100).ToString("0", L.Culture) });
     public string Avg => Score.Verdicts.Any(v => v.Ok) ? L.T("select.row.avg", new { sec = Score.AvgSeconds.ToString("0.00", L.Culture) }) : "—";
     /// <summary>Ошибка запуска или «ломает обычные сайты»; без неё — где не открылись обязательные адреса.</summary>
-    public string Error => Unchecked ? L.T("select.row.not_checked") : Score.Error is null ? CheckRow.Missed(Details) : Score.Error.Length > 80 ? Score.Error[..80] + "…" : Score.Error;
+    public string Error => Unchecked ? L.T("select.row.not_checked") : Score.Error is null ? CheckRow.Missed(Details) : Score.ErrorText is { Length: > 80 } e ? e[..80] + "…" : Score.ErrorText ?? "";
     /// <summary>Пустая колонка выглядит как сбой отрисовки: когда ошибок нет — «нет» серым (UX-аудит 5, п. 17).</summary>
     public string ErrorShown => Error.Length > 0 ? Error : L.T("select.row.none");
     public bool ErrorIsProblem => !Unchecked && Error.Length > 0;
-    public string ErrorFull => Unchecked ? L.T("select.row.not_checked.tip") : Score.Error ?? CheckRow.Missed(Details);
+    public string ErrorFull => Unchecked ? L.T("select.row.not_checked.tip") : Score.ErrorText ?? CheckRow.Missed(Details);
     public bool Usable => Score.Error is null && Score.GroupsPassed > 0;
     public bool IsBest { get => _best; set { if (Set(ref _best, value)) Raise(nameof(Mark)); } }
     public string Mark => IsBest ? "★" : "";
@@ -265,6 +268,7 @@ public sealed class ScoreRow(StrategyScore s, GroupNames? names = null, Func<str
     public bool Unchecked => Score.Error is null && Score.Verdicts.Count == 0;
 
     public IReadOnlyList<CheckRow> Details => _details ??= CheckRow.List(Score.Verdicts, names ?? GroupNames.Empty);
+    protected override void OnLanguageChanged() => _details = null;   // адреса собираются заново на языке окна
     public bool HasDetails => Score.Verdicts.Count > 0;
     public bool Expanded { get => _expanded; set => Set(ref _expanded, value); }
 }
@@ -284,8 +288,10 @@ public sealed record DnsRow(string Host, string System, string Doh, bool Spoofed
 }
 
 /// <summary>Проверка окружения на «Диагностике»: ✓ — в порядке, ⚠ — мешает (что делать — в тексте).</summary>
-public sealed record FindingRow(bool Ok, string Title, string Text, string? Go = null)
+public sealed record FindingRow(bool Ok, string Title, string Text, string? Go = null, SystemFinding? Source = null)
 {
+    /// <summary>Те же данные, тексты — на текущем языке (если находка знает, как собрать себя заново).</summary>
+    public FindingRow Refreshed() => Source is null ? this : Source.Refreshed() is var f ? this with { Title = f.Title, Text = f.Text } : this;
     /// <summary>У находки есть ссылка «Настроить →» на вкладку «Прокси».</summary>
     public bool HasGo => Go == SystemFinding.GoProxy;
     public string Mark => Ok ? "✓" : "⚠";
@@ -349,15 +355,15 @@ public static class Texts
     /// <summary>Исключение → текст для человека.</summary>
     public static string Friendly(Exception e) => e switch
     {
-        System.Net.Http.HttpRequestException => "Не удалось скачать ядро. Проверьте интернет и повторите (GitHub тоже бывает заблокирован — помогает повтор).",
+        System.Net.Http.HttpRequestException => L.T("shell.err.download_core"),
         SecurityException s => s.Message,
-        ConflictException c => $"Мешают похожие программы: {string.Join(", ", c.Conflicts.Select(x => x.Name).Distinct())}. Закройте их и повторите.",
-        UnauthorizedAccessException => "Нет доступа к файлам программы. Возможно, их держит антивирус. " + e.Message,
-        System.ComponentModel.Win32Exception w => "Не удалось запустить ядро zapret (антивирус?): " + w.Message,
+        ConflictException c => L.T("shell.err.conflict", new { names = string.Join(", ", c.Conflicts.Select(x => x.Name).Distinct()) }),
+        UnauthorizedAccessException => L.T("shell.err.access", new { error = e.Message }),
+        System.ComponentModel.Win32Exception w => L.T("shell.err.start_core", new { error = w.Message }),
         // Помощник старше окна не знает новой команды (у помощников до протокола 1.1 нет списка команд — окно не может
         // заранее выключить кнопку). Живой случай 2026-10-17: «Неизвестная команда «dns_set»» вместо «обновите помощника».
         DpiShell.Core.Helper.HelperException { Code: "invalid" } h when h.Message.StartsWith("Неизвестная команда", StringComparison.Ordinal)
-            => "Помощник старее программы и этого не умеет — обновите его на вкладке «Информация и обновления» (один запрос прав администратора).",
+            => L.T("shell.err.helper_old"),
         AggregateException { InnerException: { } inner } => Friendly(inner),
         _ => e.Message,
     };

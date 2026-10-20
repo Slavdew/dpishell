@@ -59,6 +59,7 @@ public sealed class LangTabsHostsDnsProxyDiagTests : IDisposable
                 // Ни одной строки-ключа вида «hosts.try.title» на вкладке.
                 var raw = FindAll<TextBlock>(tabs, t => t.IsVisible && System.Text.RegularExpressions.Regex.IsMatch(t.Text, @"^(hosts|dns|proxy|diag|common)\.[a-z_.]+$")).Select(t => t.Text).ToList();
                 if (raw.Count > 0) throw new Exception($"{name}/{lang}: показаны ключи: {string.Join(", ", raw)}");
+                CyrillicScan.CheckIfEn(tabs, name);
                 if (snapDir is not null)
                 {
                     Directory.CreateDirectory(snapDir);

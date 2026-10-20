@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -113,17 +114,17 @@ public static class HostsCandidates
         {
             var actual = Sha256Lf(bytes);
             if (!actual.Equals(expectedSha256.Trim(), StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException($"Список адресов для hosts повреждён или подменён (sha256 {actual[..12]}…, ожидался {expectedSha256.Trim()[..Math.Min(12, expectedSha256.Trim().Length)]}…).");
+                throw new InvalidDataException(L.T("core.hosts.cand_tampered", new { actual = actual[..12], expected = expectedSha256.Trim()[..Math.Min(12, expectedSha256.Trim().Length)] }));
         }
         return Parse(Encoding.UTF8.GetString(bytes));
     }
 
     public static IReadOnlyList<HostsCandidate> Parse(string json)
     {
-        var doc = JsonSerializer.Deserialize<HostsCandidateFile>(json, Json) ?? throw new InvalidDataException("Пустой список адресов для hosts.");
+        var doc = JsonSerializer.Deserialize<HostsCandidateFile>(json, Json) ?? throw new InvalidDataException(L.T("core.hosts.cand_empty"));
         var list = (doc.Candidates ?? []).Select(c => c with { Host = HostsRules.Normalize(c.Host ?? "") }).ToList();
         var errors = Validate(list);
-        if (errors.Count > 0) throw new InvalidDataException("Список адресов для hosts не прошёл проверку: " + string.Join("; ", errors));
+        if (errors.Count > 0) throw new InvalidDataException(L.T("core.hosts.cand_invalid", new { errors = string.Join("; ", errors) }));
         return list;
     }
 
@@ -133,11 +134,11 @@ public static class HostsCandidates
         var errors = new List<string>();
         foreach (var c in list)
         {
-            if (!HostsRules.IsAllowedHost(c.Host)) errors.Add($"{c.Host}: домен вне белого списка");
-            if (c.Ips is not { Count: > 0 }) errors.Add($"{c.Host}: нет адресов");
+            if (!HostsRules.IsAllowedHost(c.Host)) errors.Add(L.T("core.hosts.cand.not_allowed", new { host = c.Host }));
+            if (c.Ips is not { Count: > 0 }) errors.Add(L.T("core.hosts.cand.no_addresses", new { host = c.Host }));
             foreach (var ip in c.Ips ?? [])
-                if (!HostsRules.TryParsePublic(ip, out _)) errors.Add($"{c.Host}: адрес {ip} не публичный или не разбирается");
-            if (c.OwnerAnyOf is not { Count: > 0 } || c.OwnerAnyOf.Any(string.IsNullOrWhiteSpace)) errors.Add($"{c.Host}: не указан владелец адресов");
+                if (!HostsRules.TryParsePublic(ip, out _)) errors.Add(L.T("core.hosts.cand.not_public", new { host = c.Host, ip }));
+            if (c.OwnerAnyOf is not { Count: > 0 } || c.OwnerAnyOf.Any(string.IsNullOrWhiteSpace)) errors.Add(L.T("core.hosts.cand.no_owner", new { host = c.Host }));
         }
         return errors;
     }

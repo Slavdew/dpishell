@@ -12,7 +12,7 @@ namespace DpiShell.Core.Localization;
 /// Лежит в Core: строки ядра (ошибки, причины) тоже идут через L; помощник (служба) пока всегда на русском — языка окна не знает.
 /// Смена языка — сразу: окно подписано на <see cref="Changed"/> (привязки {l:T} и модели).
 /// </summary>
-public static class L
+public static partial class L
 {
     public const string Ru = "ru";
     public const string En = "en";
@@ -67,6 +67,7 @@ public static class L
             if (code is null || (!BuiltIn.ContainsKey(code) && !_user.ContainsKey(code))) code = DefaultFor(CultureInfo.CurrentUICulture);
             code = BuiltIn.ContainsKey(code) ? code : _user[code].Info.Code;
             changed = code != _current || _chain.Length == 0;
+            _scopedChains.Clear();
             _current = code;
             _chain = BuildChain(code);
             _culture = CultureFor(code);
@@ -93,10 +94,34 @@ public static class L
         catch (CultureNotFoundException) { return CultureInfo.InvariantCulture; }
     }
 
+    // Язык на время одного запроса (помощник отвечает на языке окна, а сам остаётся на русском): AsyncLocal течёт через await.
+    static readonly AsyncLocal<string?> _scoped = new();
+    static readonly Dictionary<string, LangPack[]> _scopedChains = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Строки на языке <paramref name="code"/> на время запроса (в этом потоке и его продолжениях); неизвестный код или null — как выбран.
+    /// Освободить — вернуть прежнее. Нужен помощнику: он общий для окон, свой язык не выбирает.
+    /// </summary>
+    public static IDisposable Scope(string? code)
+    {
+        var previous = _scoped.Value;
+        _scoped.Value = code is not null && IsKnown(code) ? code : previous;
+        return new ScopeEnd(previous);
+    }
+
+    static bool IsKnown(string code) { lock (Gate) return BuiltIn.ContainsKey(code) || _user.ContainsKey(code); }
+
+    sealed class ScopeEnd(string? previous) : IDisposable
+    {
+        public void Dispose() => _scoped.Value = previous;
+    }
+
     static LangPack[] Chain
     {
         get
         {
+            if (_scoped.Value is { } sc)
+                lock (Gate) return _scopedChains.TryGetValue(sc, out var cached) ? cached : _scopedChains[sc] = BuildChain(sc);
             var c = _chain;
             if (c.Length > 0) return c;
             lock (Gate) return _chain = BuildChain(_current);

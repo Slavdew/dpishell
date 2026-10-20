@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Net;
@@ -148,7 +149,7 @@ public sealed class UdpDnsSource(string name, IPAddress server) : IDnsSource
                     if (r.Buffer.Length >= 2 && BinaryPrimitives.ReadUInt16BigEndian(r.Buffer) == id) return DnsWire.Parse(r.Buffer, id);
                 }
             }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested) { last = new TimeoutException("не отвечает"); }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested) { last = new TimeoutException(L.T("core.hosts.finder.silent")); }
             catch (SocketException e) { last = e; }
         }
         throw last!;
@@ -208,7 +209,9 @@ public sealed class DohDnsSource : IDnsSource, IDisposable
 /// <summary>Резолвер Windows: учитывает hosts и DNS, настроенный в системе, — то, что увидит браузер сейчас.</summary>
 public sealed class SystemDnsSource : IDnsSource
 {
-    public string Name => "Система";
+    public string Name => SystemName;
+    /// <summary>Имя системного источника: и признак (по нему сравнивают), и подпись — на языке окна даёт <see cref="DnsSources.Display"/>.</summary>
+    public const string SystemName = "Система";
     public Task<IPAddress[]> ResolveAsync(string host, CancellationToken ct = default) => Dns.GetHostAddressesAsync(host, ct);
 }
 
@@ -240,9 +243,12 @@ public static class DnsSources
         return list;
     }
 
+    /// <summary>Подпись источника на языке окна: системный — по ключу, остальные (Google UDP, Cloudflare DoH…) — как есть.</summary>
+    public static string Display(string source) => source == SystemDnsSource.SystemName ? L.T("core.hosts.source_system") : source;
+
     /// <summary>Пометка для отчёта: российский DNS с реестром блокировок или сторонний непроверенный.</summary>
     public static string? Note(string source) =>
-        Extra.Any(e => e.Name == source) ? "сторонний, не проверен; трафик через их прокси"
+        Extra.Any(e => e.Name == source) ? L.T("core.hosts.source_extra")
         : DnsPresets.All.FirstOrDefault(p => p.Note is not null && source.StartsWith(p.Title + " ", StringComparison.Ordinal))?.Note;
 
     /// <summary>Свой список: строка «адрес [имя]» — UDP, «https://… [имя]» — DoH, «system» — системный. # — комментарий.</summary>
@@ -258,7 +264,7 @@ public static class DnsSources
             if (parts[0].Equals("system", StringComparison.OrdinalIgnoreCase)) list.Add(new SystemDnsSource());
             else if (parts[0].StartsWith("https://", StringComparison.OrdinalIgnoreCase)) list.Add(new DohDnsSource(name, parts[0]));
             else if (IPAddress.TryParse(parts[0], out var ip)) list.Add(new UdpDnsSource(name, ip));
-            else throw new FormatException($"Не понял строку списка DNS: «{line}»");
+            else throw new FormatException(L.T("core.hosts.dns_bad_line", new { line }));
         }
         return list;
     }
@@ -354,9 +360,12 @@ public sealed class HostsFinder(IReadOnlyList<IDnsSource> sources, IEndpointProb
             await Task.WhenAll(todo.Select(r => AskAsync(src, r, checks, ct)));
             var found = todo.Count(r => r.WorksVia(src.Name));
             var errors = todo.Select(r => r.Answers.Last(a => a.Source == src.Name).Error).OfType<string>().ToList();
-            progress?.Report(new($"{src.Name,-16} открывает {found}/{todo.Count}" +
-                (errors.Count > 0 ? $", без ответа {errors.Count} ({errors.GroupBy(e => e).MaxBy(g => g.Count())!.Key})" : "") +
-                $"  ({sw.Elapsed.TotalSeconds:F1} с)"));
+            progress?.Report(new(L.T("core.hosts.finder.progress", new
+            {
+                name = $"{DnsSources.Display(src.Name),-16}", found, total = todo.Count,
+                errors = errors.Count > 0 ? L.T("core.hosts.finder.errors", new { n = errors.Count, kind = errors.GroupBy(e => e).MaxBy(g => g.Count())!.Key }) : "",
+                sec = sw.Elapsed.TotalSeconds.ToString("F1"),
+            })));
         }
 
         var coverage = sources.Select(s =>
@@ -406,9 +415,9 @@ public sealed class HostsFinder(IReadOnlyList<IDnsSource> sources, IEndpointProb
 
     static string Short(Exception e) => e switch
     {
-        TimeoutException or TaskCanceledException => "не отвечает",
-        HttpRequestException h => h.StatusCode is { } c ? $"HTTP {(int)c}" : "нет соединения",
-        SocketException s => s.SocketErrorCode == SocketError.HostNotFound ? "имя не найдено" : s.SocketErrorCode.ToString(),
+        TimeoutException or TaskCanceledException => L.T("core.hosts.finder.silent"),
+        HttpRequestException h => h.StatusCode is { } c ? $"HTTP {(int)c}" : L.T("core.hosts.finder.no_connection"),
+        SocketException s => s.SocketErrorCode == SocketError.HostNotFound ? L.T("core.hosts.finder.no_name") : s.SocketErrorCode.ToString(),
         _ => e.Message,
     };
 }
@@ -419,42 +428,42 @@ public static class HostsFindText
     public static string Report(HostsFindReport r)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"# Подбор адресов {r.At:yyyy-MM-dd HH:mm}, режим: {(r.AllMode ? "все DNS" : "до первого рабочего")}, доменов: {r.Domains.Count}");
-        sb.AppendLine("# Результат зависит от того, включена ли сейчас оптимизация (zapret): с ней открывается больше.");
+        sb.AppendLine(L.T("core.hosts.rep.title", new { at = r.At.ToString("yyyy-MM-dd HH:mm"), mode = L.T(r.AllMode ? "core.hosts.rep.mode_all" : "core.hosts.rep.mode_first"), n = r.Domains.Count }));
+        sb.AppendLine(L.T("core.hosts.rep.depends"));
         sb.AppendLine();
 
         foreach (var d in r.Domains)
         {
-            string state = d.WorksVia("Система") ? "открывается и так"
-                : d.Best is { } b ? $"{b.Ip} ({string.Join(", ", b.Sources)}, {b.Check.Seconds:F2} с)"
-                : d.Answers.All(a => a.Ips.Count == 0) ? "имя не найдено ни одним DNS"
-                : "ни один адрес не открылся — hosts не поможет, нужна оптимизация";
+            string state = d.WorksVia("Система") ? L.T("core.hosts.rep.opens_anyway")
+                : d.Best is { } b ? L.T("core.hosts.rep.best_addr", new { ip = b.Ip, sources = string.Join(", ", b.Sources.Select(DnsSources.Display)), sec = b.Check.Seconds.ToString("F2") })
+                : d.Answers.All(a => a.Ips.Count == 0) ? L.T("core.hosts.rep.no_name")
+                : L.T("core.hosts.rep.none_opened");
             sb.AppendLine($"#  {d.Host,-40} {state}");
         }
 
         if (r.AllMode)
         {
             sb.AppendLine();
-            sb.AppendLine("# Сколько доменов открывает каждый DNS:");
+            sb.AppendLine(L.T("core.hosts.rep.coverage"));
             foreach (var c in r.Coverage.OrderByDescending(c => c.Works).ThenBy(c => c.AvgSeconds))
-                sb.AppendLine($"#  {c.Source,-16} {c.Works,3}/{r.Domains.Count}" + (c.Works > 0 ? $"  ср. {c.AvgSeconds:F2} с" : "") +
-                    (c.Answered < r.Domains.Count ? $"  (ответил на {c.Answered})" : "") +
+                sb.AppendLine($"#  {DnsSources.Display(c.Source),-16} {c.Works,3}/{r.Domains.Count}" + (c.Works > 0 ? L.T("core.hosts.rep.coverage_avg", new { sec = c.AvgSeconds.ToString("F2") }) : "") +
+                    (c.Answered < r.Domains.Count ? L.T("core.hosts.rep.coverage_answered", new { n = c.Answered }) : "") +
                     (DnsSources.Note(c.Source) is { } note ? $"  — {note}" : ""));
             var sys = r.Coverage.FirstOrDefault(c => c.Source == "Система")?.Works ?? 0;
             if (r.BestDns is { } best && best.Works > sys)
-                sb.AppendLine($"# Лучший DNS: {best.Source} — {best.Works} против {sys} у текущего. Строки ниже — только для того, что он не открывает.");
+                sb.AppendLine(L.T("core.hosts.rep.best_dns", new { source = DnsSources.Display(best.Source), works = best.Works, sys }));
             else
-                sb.AppendLine("# Сменой DNS лучше не станет — строки ниже для текущего DNS.");
+                sb.AppendLine(L.T("core.hosts.rep.no_better"));
         }
 
         var withDns = r.AllMode && r.BestDns is { } bd && bd.Works > (r.Coverage.FirstOrDefault(c => c.Source == "Система")?.Works ?? 0) ? bd.Source : null;
         var lines = r.HostsLines(withDns);
         sb.AppendLine();
-        sb.AppendLine(lines.Count == 0 ? "# Строки hosts не нужны." : $"# Строки для hosts ({lines.Count}):");
+        sb.AppendLine(lines.Count == 0 ? L.T("core.hosts.rep.no_lines") : L.T("core.hosts.rep.lines", new { n = lines.Count }));
         foreach (var (d, a) in lines)
-            sb.AppendLine($"{a.Ip} {d.Host}  # {string.Join(", ", a.Sources)}, {a.Check.Seconds:F2} с");
+            sb.AppendLine(L.T("core.hosts.rep.line_note", new { ip = a.Ip, host = d.Host, sources = string.Join(", ", a.Sources.Select(DnsSources.Display)), sec = a.Check.Seconds.ToString("F2") }));
         if (lines.Count > 0)
-            sb.AppendLine("# Адреса сайтов со временем меняются — перепроверяйте раз в месяц или когда сайт перестал открываться.");
+            sb.AppendLine(L.T("core.hosts.rep.recheck"));
         return sb.ToString();
     }
 }

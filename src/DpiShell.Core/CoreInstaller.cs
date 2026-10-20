@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -63,7 +64,7 @@ public sealed class CoreInstaller(AppPaths paths, CoreManifest manifest)
             Exception? failure = null;
             foreach (var url in new[] { manifest.ZipUrl }.Concat(manifest.MirrorUrls ?? []))
             {
-                log?.Report(url == manifest.ZipUrl ? $"Скачиваю ядро {manifest.Version}…" : $"Основной адрес не сработал, пробую запасной: {url}");
+                log?.Report(url == manifest.ZipUrl ? L.T("core.core.downloading", new { version = manifest.Version }) : L.T("core.core.fallback", new { url }));
                 try { await DownloadWithRetriesAsync(http, url, zip, ct); }
                 catch (HttpRequestException e) { failure = e; continue; }
                 var zipHash = Sha256(zip);
@@ -95,7 +96,7 @@ public sealed class CoreInstaller(AppPaths paths, CoreManifest manifest)
             try { Directory.Move(staged, paths.Core); }
             catch { if (Directory.Exists(backup)) Directory.Move(backup, paths.Core); throw; }
             if (Directory.Exists(backup)) Directory.Delete(backup, true);
-            log?.Report($"Ядро {manifest.Version} установлено и проверено.");
+            log?.Report(L.T("core.core.installed", new { version = manifest.Version }));
         }
         finally
         {

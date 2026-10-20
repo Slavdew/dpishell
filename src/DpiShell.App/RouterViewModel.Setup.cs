@@ -190,7 +190,7 @@ public sealed partial class RouterViewModel
         {
             await RefreshStatusCoreAsync();
             if (Compat?.CanCall("strategies") != false) await LoadStrategiesAsync();
-            SetConnection(L.T("router.conn.connected", new { version = _status?.Version ?? _detection?.Status?.Version }), ok: true);
+            SetConnection(() => L.T("router.conn.connected", new { version = _status?.Version ?? _detection?.Status?.Version }), ok: true);
         }
         catch (RouterException e) { Failed(RouterTexts.Friendly(e)); }
     }
@@ -493,7 +493,7 @@ public sealed partial class RouterViewModel
     bool Updated(RouterUpdateJob job)
     {
 
-        SetConnection(L.T("router.conn.connected", new { version = _status?.Version }), ok: true);
+        SetConnection(() => L.T("router.conn.connected", new { version = _status?.Version }), ok: true);
         Say(job.Message is { Length: > 0 } m ? m : L.T("router.update.done", new { version = _status?.Version }));
         return true;
     }
@@ -591,7 +591,7 @@ public sealed partial class RouterViewModel
         _removed = true;
         try { await DetectAsync(); }
         catch (RouterException) { SetDetection(null); }
-        if (!Found) SetConnection(L.T("router.empty.removed"));
+        if (!Found) SetConnection(() => L.T("router.empty.removed"));
         Raise(nameof(EmptyTitle));
     }
 

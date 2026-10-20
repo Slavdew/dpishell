@@ -23,7 +23,7 @@
   "dns.preset.auto_detail": "адреса DNS — от роутера или провайдера",
   "dns.preset.detail_secure": "{ips} · защищённый",
   "dns.preset.detail_plain": "{ips} · без шифрования",
-  "dns.preset.note_recommended": "рекомендуем",
+  "dns.preset.note_recommended": "рекомендуется",
   "dns.status.read_failed": "Не удалось прочитать DNS: {error}",
   "dns.status.provider": "как у провайдера",
   "dns.status.custom": "свои настройки",

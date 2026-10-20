@@ -139,7 +139,13 @@ public sealed partial class ServiceManager(AppPaths paths) : IServiceOps
     private static partial Regex StateRx();
 }
 
-public sealed record Conflict(string Kind, string Name, string Detail);
+public sealed record Conflict(string Kind, string Name, string Detail)
+{
+    /// <summary>Откуда взято (имя и «как выключить» собираются на языке окна заново); null — тексты готовые.</summary>
+    public ZapretInstance? Source { get; init; }
+    public string NameNow => Source is { } z ? Conflicts.ConflictName(z) : Name;
+    public string DetailNow => Source?.HowToStop ?? Detail;
+}
 
 public static class Conflicts
 {
@@ -153,11 +159,11 @@ public static class Conflicts
         catalog ??= LoadCatalog(paths);
         return ZapretDetector.Find(paths, catalog)
             .Where(z => z.Owner != ZapretOwner.DpiShell)
-            .Select(z => new Conflict(z.Kind, ConflictName(z), z.HowToStop))
+            .Select(z => new Conflict(z.Kind, ConflictName(z), z.HowToStop) { Source = z })
             .ToList();
     }
 
-    static string ConflictName(ZapretInstance z)
+    internal static string ConflictName(ZapretInstance z)
     {
         var service = z.Kind == "service";
         var owner = z.OwnerTitle;

@@ -37,6 +37,7 @@ public sealed partial class MainViewModel
             Restore = RestorePcDnsAsync,
             Enabled = () => !Busy && !IsLoading,
         };
+        PcDns.PresetSource = PcPresets;
         SetPcPresets();
         FixDnsCmd = RelayCommand.Async(() => ApplyPcDnsAsync(PcDns.Options.First(o => o.Id == RecommendedDns)), () => !Busy && !IsLoading);
         // «Другой DNS» — сразу к выбору, а не в начало вкладки «DNS» (UX-аудит 2, п. 4): окно прокручивает к карточке и раскрывает список.
@@ -52,9 +53,11 @@ public sealed partial class MainViewModel
     void SetPcPresets()
     {
         _presetsLang = L.Current;
-        PcDns.SetPresets(DnsPresets.All.Select(p => new DnsOption(p.Id, p.Title, PresetDetail(p), false, p.Ips, p.Doh,
-            Owner: p.Owner, Note: PresetNote(p.Id, p.Note))).ToList());
+        PcDns.SetPresets(PcPresets());
     }
+
+    static IReadOnlyList<DnsOption> PcPresets() => DnsPresets.All.Select(p => new DnsOption(p.Id, p.Title, PresetDetail(p), false, p.Ips, p.Doh,
+        Owner: p.Owner, Note: PresetNote(p.Id, p.Note))).ToList();
 
     static string PresetDetail(DnsPreset p)
     {
@@ -88,8 +91,11 @@ public sealed partial class MainViewModel
         }
     }
 
+    DnsStatusInfo? _pcDnsStatus;   // последнее, что прочитали у адаптеров (данные): подписи собираются заново при смене языка
+
     public void ShowPcDns(DnsStatusInfo s)
     {
+        _pcDnsStatus = s;
         if (_presetsLang != L.Current) SetPcPresets();
         var first = s.Adapters.FirstOrDefault();
         var v4 = first?.Servers.Where(ip => !DnsValues.IsIpv6(ip)).ToHashSet() ?? [];

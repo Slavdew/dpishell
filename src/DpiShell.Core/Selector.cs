@@ -1,4 +1,5 @@
 using System.Security.Authentication;
+using DpiShell.Core.Localization;
 
 namespace DpiShell.Core;
 
@@ -9,8 +10,24 @@ public sealed record TargetVerdict(string GroupId, Target Target, bool Ok, doubl
     public bool BrowserFails => Ok && Browser is { Ok: false };
 }
 
-public sealed record StrategyScore(Strategy Strategy, IReadOnlyList<TargetVerdict> Verdicts, int GroupsPassed, int GroupsTotal, string? Error = null)
+public sealed record StrategyScore(Strategy Strategy, IReadOnlyList<TargetVerdict> Verdicts, int GroupsPassed, int GroupsTotal, string? Error = null,
+    string? ErrorCode = null, string? ErrorArg = null)
 {
+    /// <summary>Коды причин отказа (<see cref="ErrorCode"/>): текст берётся из языка окна, а не из записанной строки <see cref="Error"/>.</summary>
+    public const string BreaksCode = "breaks", ExitedCode = "winws_exit", DiedCode = "winws_died";
+
+    /// <summary>Сломан хоть один «обычный сайт» — оценка ноль (на роутере причина приходит текстом: у записи без кода — по началу строки).</summary>
+    public bool BreaksRegular => ErrorCode == BreaksCode || Error?.StartsWith("ломает обычные сайты", StringComparison.Ordinal) == true;
+
+    /// <summary>Причина отказа на языке окна; без кода (текст роутера или записанный раньше) — как есть.</summary>
+    public string? ErrorText => ErrorCode switch
+    {
+        BreaksCode => L.T("core.score.breaks", new { sites = ErrorArg ?? "" }),
+        ExitedCode => L.T("core.score.winws_exit", new { output = ErrorArg ?? "" }),
+        DiedCode => L.T("core.score.winws_died", new { output = ErrorArg ?? "" }),
+        _ => Error,
+    };
+
     public double GroupShare => GroupsTotal == 0 ? 0 : (double)GroupsPassed / GroupsTotal;
     public double TargetShare => Verdicts.Count == 0 ? 0 : (double)Verdicts.Count(v => v.Ok) / Verdicts.Count;
     public double AvgSeconds => Verdicts.Where(v => v.Ok).Select(v => v.BestSeconds).DefaultIfEmpty(99).Average();
@@ -79,7 +96,7 @@ public class Selector(AppPaths paths, HttpProbe probe)
         IReadOnlyList<Strategy> strategies, IReadOnlyList<TargetGroup> groups, bool quick,
         IProgress<SelectorProgress>? progress = null, CancellationToken ct = default, bool mix = false)
     {
-        progress?.Report(new(0, strategies.Count, "Проверка без оптимизации…"));
+        progress?.Report(new(0, strategies.Count, L.T("core.select.baseline")));
         var baseline = await CheckGroupsAsync(groups, ct);
 
         var blocked = KeepForSelection(groups, baseline);
@@ -90,7 +107,7 @@ public class Selector(AppPaths paths, HttpProbe probe)
         {
             if (ct.IsCancellationRequested) return new(baseline, blocked, scores, true);
             var s = strategies[i];
-            progress?.Report(new(i, strategies.Count, $"Стратегия {s.Title}…"));
+            progress?.Report(new(i, strategies.Count, L.T("core.select.strategy", new { title = s.Title })));
             StrategyScore score;
             try { score = await RunOneAsync(s, blocked, ct); }
             catch (OperationCanceledException) { return new(baseline, blocked, scores, true); }
@@ -105,7 +122,7 @@ public class Selector(AppPaths paths, HttpProbe probe)
         // Одной стратегии на всё не нашлось — собрать смешанную из вердиктов этого же прогона и проверить её одним прогоном.
         // Берётся в отчёт, только если лучше лучшей одиночной; иначе всё как было.
         if (MixBuilder.Build(report) is not { } plan) return report;
-        progress?.Report(new(strategies.Count, strategies.Count + 1, "Смешанная: " + plan.Mix.Title));
+        progress?.Report(new(strategies.Count, strategies.Count + 1, L.T("core.select.mixed", new { title = plan.Mix.Title })));
         StrategyScore mixScore;
         try { mixScore = await RunOneAsync(plan.Mix, blocked, ct); }
         catch (OperationCanceledException) { return report with { Cancelled = true }; }
@@ -120,10 +137,10 @@ public class Selector(AppPaths paths, HttpProbe probe)
         var args = WinwsArgs.Build(s, paths);
         using var w = WinwsProcess.Start(paths, args);
         if (!await w.WaitReadyAsync(Settle, ct))
-            return new(s, [], 0, groups.Count(g => g.Goal), "winws завершился: " + Tail(w.Output));
+            return new(s, [], 0, groups.Count(g => g.Goal), "winws завершился: " + Tail(w.Output), StrategyScore.ExitedCode, Tail(w.Output));
         var verdicts = await CheckGroupsAsync(groups, ct);
         int goals = groups.Count(g => g.Goal);
-        if (!w.Alive) return new(s, verdicts, 0, goals, "winws упал во время проверки: " + Tail(w.Output));
+        if (!w.Alive) return new(s, verdicts, 0, goals, "winws упал во время проверки: " + Tail(w.Output), StrategyScore.DiedCode, Tail(w.Output));
         return Score(s, groups, verdicts);
     }
 
@@ -135,7 +152,7 @@ public class Selector(AppPaths paths, HttpProbe probe)
         var broken = verdicts.Where(v => controlIds.Contains(v.GroupId) && !v.Ok)
             .Select(v => Uri.TryCreate(v.Target.Url, UriKind.Absolute, out var u) ? u.Host : v.Target.Url).ToList();
         if (broken.Count > 0)
-            return new(s, verdicts, 0, goals, "ломает обычные сайты: " + string.Join(", ", broken));
+            return new(s, verdicts, 0, goals, "ломает обычные сайты: " + string.Join(", ", broken), StrategyScore.BreaksCode, string.Join(", ", broken));
         return new(s, verdicts, GroupsPassed(groups, verdicts), goals);
     }
 

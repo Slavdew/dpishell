@@ -9,6 +9,19 @@ namespace DpiShell.Core;
 public sealed record SystemFinding(bool Ok, string Title, string Text, string? Go = null)
 {
     public const string GoProxy = "proxy";
+
+    /// <summary>Как собрать заголовок и текст заново (после смены языка окна): данные уже в замыкании.</summary>
+    public Func<(string Title, string Text)>? Render { get; init; }
+
+    /// <summary>Находка, тексты которой собираются по правилу <paramref name="render"/> (и пересобираются на другом языке).</summary>
+    public static SystemFinding Of(bool ok, Func<(string Title, string Text)> render, string? go = null)
+    {
+        var (title, text) = render();
+        return new(ok, title, text, go) { Render = render };
+    }
+
+    /// <summary>Те же данные, тексты — на текущем языке.</summary>
+    public SystemFinding Refreshed() => Render is null ? this : this with { Title = Render().Title, Text = Render().Text };
 }
 
 /// <summary>
@@ -38,29 +51,30 @@ public static class SystemChecks
 
         var bfe = ServiceManager.Query("BFE");
         list.Add(bfe == SvcState.Running
-            ? new(true, L.T("diag.find.bfe.title"), L.T("diag.find.ok_running"))
-            : new(false, L.T("diag.find.bfe.title"), L.T("diag.find.bfe.bad")));
+            ? SystemFinding.Of(true, () => (L.T("diag.find.bfe.title"), L.T("diag.find.ok_running")))
+            : SystemFinding.Of(false, () => (L.T("diag.find.bfe.title"), L.T("diag.find.bfe.bad"))));
 
         list.Add(ProxyFinding(ReadProxy()));
 
         list.Add(Process.GetProcessesByName("AdguardSvc") is { Length: > 0 } ag && Dispose(ag)
-            ? new(false, "Adguard", L.T("diag.find.adguard.bad"))
-            : new(true, "Adguard", L.T("diag.find.adguard.ok")));
+            ? SystemFinding.Of(false, () => ("Adguard", L.T("diag.find.adguard.bad")))
+            : SystemFinding.Of(true, () => ("Adguard", L.T("diag.find.adguard.ok"))));
 
         var services = MatchServices(ReadServices()).Where(s => ServiceManager.Query(s.Name) == SvcState.Running).ToList();
         list.Add(services.Count == 0
-            ? new(true, L.T("diag.find.services.title"), L.T("diag.find.services.ok"))
-            : new(false, L.T("diag.find.services.title"), L.T("diag.find.services.bad", new { list = string.Join(", ", services.Select(s => s.Title).Distinct()) })));
+            ? SystemFinding.Of(true, () => (L.T("diag.find.services.title"), L.T("diag.find.services.ok")))
+            : SystemFinding.Of(false, () => (L.T("diag.find.services.title"), L.T("diag.find.services.bad", new { list = string.Join(", ", services.Select(s => s.Title).Distinct()) }))));
 
-        var path = PathProblem(AppContext.BaseDirectory) ?? PathProblem(paths.Root);
-        list.Add(path is null ? new(true, L.T("diag.find.folder.title"), L.T("diag.find.folder.ok")) : new(false, L.T("diag.find.folder.title"), path));
+        var badPath = PathProblem(AppContext.BaseDirectory) is not null ? AppContext.BaseDirectory : PathProblem(paths.Root) is not null ? paths.Root : null;
+        list.Add(badPath is null ? SystemFinding.Of(true, () => (L.T("diag.find.folder.title"), L.T("diag.find.folder.ok")))
+            : SystemFinding.Of(false, () => (L.T("diag.find.folder.title"), PathProblem(badPath) ?? "")));
 
         try
         {
             var yt = YoutubeLinesOutsideBlock(File.ReadAllBytes(hostsPath ?? HostsFileStore.SystemHostsPath));
             list.Add(yt.Count == 0
-                ? new(true, "hosts", L.T("diag.find.hosts.ok"))
-                : new(false, "hosts", L.T("diag.find.hosts.bad", new { lines = string.Join("; ", yt.Take(3)) + (yt.Count > 3 ? " …" : "") })));
+                ? SystemFinding.Of(true, () => ("hosts", L.T("diag.find.hosts.ok")))
+                : SystemFinding.Of(false, () => ("hosts", L.T("diag.find.hosts.bad", new { lines = string.Join("; ", yt.Take(3)) + (yt.Count > 3 ? " …" : "") }))));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         return list;
@@ -69,8 +83,8 @@ public static class SystemChecks
     static bool Dispose(Process[] ps) { foreach (var p in ps) p.Dispose(); return true; }
 
     public static SystemFinding ProxyFinding((bool Enabled, string? Server) proxy) => proxy.Enabled
-        ? new(false, L.T("diag.find.proxy.title"), L.T("diag.find.proxy.on", new { server = proxy.Server ?? L.T("diag.find.proxy.no_server") }), SystemFinding.GoProxy)
-        : new(true, L.T("diag.find.proxy.title"), L.T("diag.find.proxy.off"));
+        ? SystemFinding.Of(false, () => (L.T("diag.find.proxy.title"), L.T("diag.find.proxy.on", new { server = proxy.Server ?? L.T("diag.find.proxy.no_server") })), SystemFinding.GoProxy)
+        : SystemFinding.Of(true, () => (L.T("diag.find.proxy.title"), L.T("diag.find.proxy.off")));
 
     /// <summary>Действующий системный прокси: настройки пользователя или, если политика делает их общими, настройки машины. Автонастройка — как «включён».</summary>
     static (bool, string?) ReadProxy()

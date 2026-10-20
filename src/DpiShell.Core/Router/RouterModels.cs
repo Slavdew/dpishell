@@ -95,7 +95,11 @@ public sealed record RouterUpdate(bool Available, string? Version, List<string>?
 
 /// <summary>Откуда обновлять: feed — витрина; local — /tmp/dpishell-update (кладёт окно по SSH, <see cref="RouterSsh.UploadUpdateAsync"/>).</summary>
 public enum RouterUpdateSource { Feed, Local }
-public sealed record RouterWarning(string Code, string? Text);
+/// <param name="Code">Код предупреждения (таблица кодов в router-api.md).</param>
+/// <param name="Text">Текст роутера (на его языке; для части кодов — данные: какая стратегия, какая ошибка).</param>
+/// <param name="Key">Ключ строки, если роутер новый и присылает его (окно переводит по нему, а не по <paramref name="Code"/>).</param>
+/// <param name="Params">Подстановки к ключу; время — unix-секундами.</param>
+public sealed record RouterWarning(string Code, string? Text, string? Key = null, Dictionary<string, System.Text.Json.JsonElement>? Params = null);
 
 public sealed record RouterStatus(
     ApiVersion Api, string? Version, string? Engine, RouterCore? Core, bool Enabled, string? Strategy, List<string>? Backups,

@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 namespace DpiShell.Core;
 
 /// <summary>
@@ -78,10 +79,10 @@ public sealed class AddressBlockTracker
     {
         var hosts = Blocked.Select(HostOf).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (hosts.Count == 0) return "";
-        var shown = string.Join(", ", hosts.Take(4)) + (hosts.Count > 4 ? $" и ещё {hosts.Count - 4}" : "");
-        var text = $"Не открылось ни с одной стратегией: {shown} — похоже на блокировку по адресу, подбор стратегии тут, скорее всего, не поможет.";
+        var shown = string.Join(", ", hosts.Take(4)) + (hosts.Count > 4 ? L.T("core.addrblock.more", new { n = hosts.Count - 4 }) : "");
+        var text = L.T("core.addrblock.note", new { hosts = shown });
         if (hosts.Any(h => h.EndsWith("googlevideo.com", StringComparison.OrdinalIgnoreCase)) && Opened(h => h is "www.youtube.com" or "youtube.com"))
-            text += " Сайт YouTube откроется, а видео может не воспроизводиться.";
+            text += L.T("core.addrblock.youtube");
         return text;
     }
 

@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Net;
 using System.Text.Json;
 
@@ -98,7 +99,7 @@ public sealed class HostsManager
         string rec = "";
         // Блок правят повторно — новая запись не нужна: откат один, «убрать блок».
         if (entries.Count > 0 && Recorder.Active(ChangeKinds.HostsBlock).Count == 0)
-            rec = Recorder.Begin(ChangeKinds.HostsBlock, $"Записаны проверенные адреса в файл hosts: {entries.Count}",
+            rec = Recorder.Begin(ChangeKinds.HostsBlock, L.T("core.hosts.mgr.journal_block", new { n = entries.Count }),
                 new System.Text.Json.Nodes.JsonObject { ["block"] = false }, new System.Text.Json.Nodes.JsonObject { ["count"] = entries.Count });
         HostsWriteResult r;
         try { r = File.Apply(entries); }
@@ -113,7 +114,7 @@ public sealed class HostsManager
     {
         var r = File.RemoveBlock();
         SaveApplied([]);
-        Recorder.Close(ChangeKinds.HostsBlock, "блок убран кнопкой «Вернуть как было»");
+        Recorder.Close(ChangeKinds.HostsBlock, L.T("core.hosts.mgr.closed_block"));
         return r;
     }
 
@@ -147,12 +148,12 @@ public sealed class HostsManager
         {
             if (!known.TryGetValue(g.Key, out var c))
             {
-                removed.AddRange(g.Select(e => new HostsCheckRow(e.Host, e.Ip, HostsVerdict.Rejected, null, OwnerState.Unknown, null, DnsState.Unknown, "нет в списке кандидатов")));
+                removed.AddRange(g.Select(e => new HostsCheckRow(e.Host, e.Ip, HostsVerdict.Rejected, null, OwnerState.Unknown, null, DnsState.Unknown, L.T("core.hosts.mgr.not_in_candidates"))));
                 continue;
             }
             var ips = g.Select(e => e.Ip).Where(ip => c.Ips.Contains(ip, StringComparer.OrdinalIgnoreCase)).ToList();
             removed.AddRange(g.Where(e => !ips.Contains(e.Ip, StringComparer.OrdinalIgnoreCase))
-                .Select(e => new HostsCheckRow(e.Host, e.Ip, HostsVerdict.Rejected, null, OwnerState.Unknown, null, DnsState.Unknown, "адреса нет в списке кандидатов")));
+                .Select(e => new HostsCheckRow(e.Host, e.Ip, HostsVerdict.Rejected, null, OwnerState.Unknown, null, DnsState.Unknown, L.T("core.hosts.mgr.addr_not_in_candidates"))));
             if (ips.Count > 0) toCheck.Add(c with { Ips = ips });
         }
 
@@ -223,7 +224,7 @@ public sealed class HostsManager
         {
             if (existing.Contains(e)) { final.Add(e); continue; }
             if (!HostsRules.TryParsePublic(e.Ip, out _) || HostsInput.CleanHost(e.Host) != e.Host)
-            { rejected.Add(new(e.Host, e.Ip, "не публичный адрес или не имя сайта")); continue; }
+            { rejected.Add(new(e.Host, e.Ip, L.T("core.hosts.mgr.not_public"))); continue; }
             fresh.Add(e);
         }
         var probe = _probe();
@@ -237,18 +238,18 @@ public sealed class HostsManager
         for (int i = 0; i < fresh.Count; i++)
         {
             if (checks[i].Ok) final.Add(fresh[i]);
-            else rejected.Add(new(fresh[i].Host, fresh[i].Ip, checks[i].Outcome == EndpointOutcome.BadCertificate ? "сертификат выдан не этому сайту" : "адрес не отвечает"));
+            else rejected.Add(new(fresh[i].Host, fresh[i].Ip, L.T(checks[i].Outcome == EndpointOutcome.BadCertificate ? "core.hosts.mgr.cert_other_site" : "core.hosts.mgr.no_response")));
         }
         string rec = "";
         if (final.Count > 0 && Recorder.Active(ChangeKinds.HostsUser).Count == 0)
-            rec = Recorder.Begin(ChangeKinds.HostsUser, $"Записаны свои строки в файл hosts: {final.Count}",
+            rec = Recorder.Begin(ChangeKinds.HostsUser, L.T("core.hosts.mgr.journal_user", new { n = final.Count }),
                 new System.Text.Json.Nodes.JsonObject { ["lines"] = 0 }, new System.Text.Json.Nodes.JsonObject { ["count"] = final.Count });
         (HostsUserChange change, bool changed, string? backup) w;
         try { w = File.ApplyUser(final); }
         catch { Recorder.Abort(rec); throw; }
         var (change, changed, backup) = w;
         if (rec.Length > 0) { if (changed) Recorder.Done(rec); else Recorder.Abort(rec); }
-        if (final.Count == 0) Recorder.Close(ChangeKinds.HostsUser, "свои строки убраны из hosts");
+        if (final.Count == 0) Recorder.Close(ChangeKinds.HostsUser, L.T("core.hosts.mgr.closed_user"));
         KeepStale(final);
         return new HostsUserResult(changed, change.Added, change.Removed, rejected, backup);
     }
@@ -260,10 +261,10 @@ public sealed class HostsManager
     public HostsCommentResult Comment(IEnumerable<string> ids, ISet<string>? allowed = null)
     {
         var list = ids.ToList();
-        var refused = allowed is null ? [] : list.Where(i => !allowed.Contains(i)).Select(i => $"{i} — строка не из последней проверки").ToList();
+        var refused = allowed is null ? [] : list.Where(i => !allowed.Contains(i)).Select(i => L.T("core.hosts.skip.not_checked", new { id = i })).ToList();
         var ids2 = allowed is null ? list : list.Where(allowed.Contains).ToList();
         var rec = ids2.Count > 0
-            ? Recorder.Begin(ChangeKinds.HostsComment, $"Закомментированы чужие строки в файле hosts (до {ids2.Count})",
+            ? Recorder.Begin(ChangeKinds.HostsComment, L.T("core.hosts.mgr.journal_comment", new { n = ids2.Count }),
                 new System.Text.Json.Nodes.JsonObject { ["commented"] = false }, new System.Text.Json.Nodes.JsonObject { ["count"] = ids2.Count })
             : "";
         (HostsCommentChange c, bool changed, string? backup) w;
@@ -277,7 +278,7 @@ public sealed class HostsManager
     public HostsCommentResult Uncomment()
     {
         var (restored, changed, backup) = File.Uncomment();
-        Recorder.Close(ChangeKinds.HostsComment, "строки возвращены кнопкой «Вернуть закомментированные»");
+        Recorder.Close(ChangeKinds.HostsComment, L.T("core.hosts.mgr.closed_comment"));
         return new HostsCommentResult(changed, restored, [], backup);
     }
 
@@ -288,7 +289,7 @@ public sealed class HostsManager
         SaveApplied([]);
         KeepStale([]);
         foreach (var k in new[] { ChangeKinds.HostsBlock, ChangeKinds.HostsUser, ChangeKinds.HostsComment })
-            Recorder.Close(k, "hosts возвращён кнопкой «Вернуть как было»");
+            Recorder.Close(k, L.T("core.hosts.mgr.closed_all"));
         return new HostsRestoreResult(changed, c.RemovedBlock.Count, c.RemovedUser.Count, c.Uncommented, backup);
     }
 

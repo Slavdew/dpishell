@@ -29,6 +29,8 @@ public sealed class LangHomeSelectTests : IDisposable
         var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
         void Shot(Window w, string name)
         {
+            Pump();
+            CyrillicScan.CheckIfEn(w, name);
             if (snapDir is null) return;
             Directory.CreateDirectory(snapDir);
             Snap(w, Path.Combine(snapDir, name + ".png"));

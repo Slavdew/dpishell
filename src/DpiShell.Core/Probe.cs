@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
@@ -28,7 +29,7 @@ public sealed record TargetSet(List<TargetGroup> Groups)
         JsonSerializer.Deserialize<TargetSet>(File.ReadAllText(path), Json) ?? new([]);
 
     /// <summary>Группа «Свои сайты» из доменов/URL пользователя: каждый адрес обязателен, тело ≥ 1 байта не требуем.</summary>
-    public static TargetGroup UserGroup(IEnumerable<string> entries) => new("user", "Свои сайты",
+    public static TargetGroup UserGroup(IEnumerable<string> entries) => new("user", L.T("select.group.user"),
         entries.Select(e => e.Trim()).Where(e => e.Length > 0)
             .Select(e => new Target(e.Contains("://") ? e : $"https://{e}/")).ToList());
 }
@@ -123,20 +124,20 @@ public sealed class HttpProbe
                     var next = loc is null ? null : (loc.IsAbsoluteUri ? loc : new Uri(url, loc));
                     // Редирект на страницу-заглушку провайдера — признак блокировки.
                     if (next is null || !SameSite(host, next.Host))
-                        return new(t, tls, ProbeOutcome.ForeignRedirect, sw.Elapsed.TotalSeconds, 0, Chain($"{code}: редирект на {next?.Host ?? "?"}"));
+                        return new(t, tls, ProbeOutcome.ForeignRedirect, sw.Elapsed.TotalSeconds, 0, Chain(L.T("core.probe.redirect_foreign", new { code, host = next?.Host ?? "?" })));
                     chain.Add($"{code} → {Short(next, url)}");
                     // Как на роутере: до страницы не дошли — провал, только если нужно тело (MinBytes); иначе сайт отвечает — Ok.
                     if (hop + 1 > MaxRedirects)
                         return t.MinBytes > 0
-                            ? new(t, tls, ProbeOutcome.BadStatus, sw.Elapsed.TotalSeconds, 0, Chain($"не дошли до страницы: больше {MaxRedirects} перенаправлений"))
+                            ? new(t, tls, ProbeOutcome.BadStatus, sw.Elapsed.TotalSeconds, 0, Chain(L.T("core.probe.too_many_redirects", new { max = MaxRedirects })))
                             : new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, 0, RespondsText);
                     url = next;
                     continue;
                 }
                 if (code == 451)
-                    return new(t, tls, ProbeOutcome.Blocked, sw.Elapsed.TotalSeconds, 0, Chain("451: недоступно по требованию закона"));
+                    return new(t, tls, ProbeOutcome.Blocked, sw.Elapsed.TotalSeconds, 0, Chain(L.T("core.probe.blocked_451")));
                 if (code is 403 or 404)
-                    return new(t, tls, ProbeOutcome.BadStatus, sw.Elapsed.TotalSeconds, 0, Chain(code == 403 ? "403: доступ запрещён" : "404: страницы нет"));
+                    return new(t, tls, ProbeOutcome.BadStatus, sw.Elapsed.TotalSeconds, 0, Chain(L.T(code == 403 ? "core.probe.forbidden_403" : "core.probe.not_found_404")));
                 if (code == 400 || code >= 500)
                     return new(t, tls, ProbeOutcome.BadStatus, sw.Elapsed.TotalSeconds, 0, Chain($"HTTP {code}"));
 
@@ -147,9 +148,9 @@ public sealed class HttpProbe
                 while (bytes < MaxBytes && (n = await stream.ReadAsync(buf, cts.Token)) > 0) bytes += n;
 
                 if (bytes < MaxBytes && expected is { } len && bytes < len)
-                    return new(t, tls, ProbeOutcome.Truncated, sw.Elapsed.TotalSeconds, bytes, Chain($"{code}, получено {bytes} из {len}"));
+                    return new(t, tls, ProbeOutcome.Truncated, sw.Elapsed.TotalSeconds, bytes, Chain(L.T("core.probe.truncated_of", new { code, bytes, total = len })));
                 if (bytes < t.MinBytes)
-                    return new(t, tls, ProbeOutcome.Truncated, sw.Elapsed.TotalSeconds, bytes, Chain($"{code}, получено {bytes}, нужно ≥ {t.MinBytes}"));
+                    return new(t, tls, ProbeOutcome.Truncated, sw.Elapsed.TotalSeconds, bytes, Chain(L.T("core.probe.truncated_min", new { code, bytes, min = t.MinBytes })));
                 // Тело не нужно (MinBytes = 0), а сайт ответил переходами или кодом 4xx (антибот, 498…) — для проверки достаточно.
                 if (t.MinBytes == 0 && (chain.Count > 0 || code >= 400))
                     return new(t, tls, ProbeOutcome.Ok, sw.Elapsed.TotalSeconds, bytes, RespondsText);
@@ -159,7 +160,7 @@ public sealed class HttpProbe
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             return new(t, tls, bytes > 0 ? ProbeOutcome.Truncated : ProbeOutcome.Timeout, sw.Elapsed.TotalSeconds, bytes,
-                bytes > 0 ? $"поток оборвался на {bytes} байтах" : "таймаут");
+                bytes > 0 ? L.T("core.probe.stream_cut", new { bytes }) : L.T("core.probe.timeout"));
         }
         catch (HttpRequestException e)
         {
@@ -172,11 +173,11 @@ public sealed class HttpProbe
     }
 
     /// <summary>Служебный адрес (HandshakeOnly): страницы нет и не должно быть, важно само соединение.</summary>
-    public const string HandshakeText = "соединение есть (страницы у этого адреса нет — так и должно быть)";
+    public static string HandshakeText => L.T("core.probe.handshake");
     /// <summary>Тело не требовалось, сервер ответил переходами или антибот-кодом.</summary>
-    public const string RespondsText = "сервер отвечает (для проверки достаточно)";
+    public static string RespondsText => L.T("core.probe.responds");
 
-    static string Kb(long bytes) => bytes >= 1024 ? $"{bytes / 1024} КБ" : $"{bytes} байт";
+    static string Kb(long bytes) => bytes >= 1024 ? L.T("core.probe.kb", new { n = bytes / 1024 }) : L.T("core.probe.bytes", new { n = bytes });
 
     /// <summary>Куда ведёт переход: путь, если хост тот же; иначе хост и путь («www.youtube.com/»).</summary>
     static string Short(Uri next, Uri from) =>

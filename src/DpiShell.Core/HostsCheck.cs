@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Security;
@@ -69,25 +70,25 @@ public sealed class TlsEndpointProbe : IEndpointProbe
         catch (Exception e) when (policy != SslPolicyErrors.None && e is HttpRequestException or AuthenticationException or IOException)
         {
             return new(EndpointOutcome.BadCertificate, sw.Elapsed.TotalSeconds,
-                policy.HasFlag(SslPolicyErrors.RemoteCertificateNameMismatch) ? "чужой сертификат" : "сертификат не прошёл проверку");
+                L.T(policy.HasFlag(SslPolicyErrors.RemoteCertificateNameMismatch) ? "core.hosts.check.foreign_cert" : "core.hosts.check.bad_cert"));
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return new(EndpointOutcome.Timeout, sw.Elapsed.TotalSeconds, "не отвечает");
+            return new(EndpointOutcome.Timeout, sw.Elapsed.TotalSeconds, L.T("core.hosts.check.silent"));
         }
         catch (HttpRequestException e)
         {
             for (Exception? x = e; x is not null; x = x.InnerException)
             {
-                if (x is AuthenticationException) return new(EndpointOutcome.TlsFailed, sw.Elapsed.TotalSeconds, "TLS не установлен");
-                if (x is SocketException se) return new(EndpointOutcome.NoConnect, sw.Elapsed.TotalSeconds, $"не отвечает ({se.SocketErrorCode})");
+                if (x is AuthenticationException) return new(EndpointOutcome.TlsFailed, sw.Elapsed.TotalSeconds, L.T("core.hosts.check.tls_failed"));
+                if (x is SocketException se) return new(EndpointOutcome.NoConnect, sw.Elapsed.TotalSeconds, L.T("core.hosts.check.silent_code", new { code = se.SocketErrorCode }));
             }
             return new(e.HttpRequestError == HttpRequestError.SecureConnectionError ? EndpointOutcome.TlsFailed : EndpointOutcome.NoConnect,
                 sw.Elapsed.TotalSeconds, e.Message);
         }
         catch (IOException e)
         {
-            return new(EndpointOutcome.TlsFailed, sw.Elapsed.TotalSeconds, $"соединение оборвано ({e.Message})");
+            return new(EndpointOutcome.TlsFailed, sw.Elapsed.TotalSeconds, L.T("core.hosts.check.cut", new { error = e.Message }));
         }
     }
 }
@@ -268,7 +269,7 @@ public sealed class HostsVerifier(IEndpointProbe probe, IHostsDns dns, IRdapClie
         IPAddress[] addrs;
         try { addrs = await dns.ResolveAsync(host, ct); }
         catch (Exception e) when (e is not OperationCanceledException) { addrs = []; }
-        if (addrs.Length == 0) return (DnsState.Unknown, "DNS не ответил");
+        if (addrs.Length == 0) return (DnsState.Unknown, L.T("core.hosts.check.dns_silent"));
         var checks = await Task.WhenAll(addrs.Take(3).Select(a => Gated(() => probe.CheckAsync(host, a, ct), ct)));
         var ok = addrs.Zip(checks).FirstOrDefault(x => x.Second.Ok);
         return ok.First is not null

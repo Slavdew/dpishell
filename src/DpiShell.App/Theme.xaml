@@ -192,7 +192,7 @@
             <Setter Property="Focusable" Value="True" />
             <Setter Property="Foreground" Value="{DynamicResource Muted}" />
             <Setter Property="BorderBrush" Value="{DynamicResource ButtonLine}" />
-            <Setter Property="ToolTip" Value="Что это?" />
+            <Setter Property="ToolTip" Value="{l:T common.info.what}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="local:InfoButton">
@@ -1007,7 +1007,7 @@
             <Setter Property="Foreground" Value="{DynamicResource Muted}" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Focusable" Value="False" />
-            <Setter Property="ToolTip" Value="Подробнее: результаты по адресам" />
+            <Setter Property="ToolTip" Value="{l:T common.row_details}" />
             <Setter Property="AutomationProperties.Name" Value="{l:T common.more}" />
             <Setter Property="Template">
                 <Setter.Value>

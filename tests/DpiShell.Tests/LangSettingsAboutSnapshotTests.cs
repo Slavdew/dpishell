@@ -34,6 +34,7 @@ public sealed class LangSettingsAboutSnapshotTests : IDisposable
                 {
                     vm.Page = page;
                     Pump();
+                    CyrillicScan.CheckIfEn(tabs, name);
                     if (snapDir is null) return;
                     Directory.CreateDirectory(snapDir);
                     var content = (FrameworkElement)((ScrollViewer)((TabItem)tabs.SelectedItem).Content).Content;

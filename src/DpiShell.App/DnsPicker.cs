@@ -68,6 +68,23 @@ public sealed class DnsPicker : Observable
         Rebuild();
     }
 
+    /// <summary>
+    /// Откуда взять готовые варианты заново (названия, заметки, описания зависят от языка): при смене языка список собирается из этого источника.
+    /// ПК — <see cref="DnsPresets"/>, роутер — сохранённый ответ dns_presets.
+    /// </summary>
+    public Func<IReadOnlyList<DnsOption>>? PresetSource { get; set; }
+
+    protected override void OnLanguageChanged() => RefreshForLanguage();
+
+    /// <summary>Готовые варианты собираются заново на языке окна (названия, заметки, описания); «Скопировано…» убирается.</summary>
+    public void RefreshForLanguage()
+    {
+        if (PresetSource is { } source) _presets = source();
+        Copied = "";
+        Rebuild();
+        if (_cmp is not null) Raise(nameof(CompareSummary));
+    }
+
     /// <summary>Включить выбранный вариант.</summary>
     public Func<DnsOption, Task> Apply { get; set; } = _ => Task.CompletedTask;
     public Func<Task> Restore { get; set; } = () => Task.CompletedTask;
@@ -124,15 +141,27 @@ public sealed class DnsPicker : Observable
         catch (Exception e) when (e is System.Runtime.InteropServices.COMException or System.Runtime.InteropServices.ExternalException) { Copied = L.T("dns.picker.clipboard_busy"); }
     }
 
-    readonly Dictionary<string, string> _ping = [];
+    readonly Dictionary<string, double?> _ping = [];   // время ответа в мс (данные); подпись «38 мс» собирается при показе
     bool _comparing;
     public bool Comparing { get => _comparing; private set { if (Set(ref _comparing, value)) { Raise(nameof(CompareText)); CommandManager.InvalidateRequerySuggested(); } } }
     public string CompareText => Comparing ? L.T("dns.picker.comparing") : L.T("dns.picker.compare");
 
-    string _compareSummary = "";
-    /// <summary>Итог «Сравнить»: варианты от быстрого к медленному; пусто — не сравнивали.</summary>
-    public string CompareSummary { get => _compareSummary; private set { if (Set(ref _compareSummary, value)) Raise(nameof(HasCompareSummary)); } }
-    public bool HasCompareSummary => CompareSummary.Length > 0;
+    List<(IReadOnlyList<string> Ids, double? Ms)>? _cmp;
+    /// <summary>Итог «Сравнить»: варианты от быстрого к медленному; пусто — не сравнивали. Собирается из результатов (названия — на языке окна).</summary>
+    public string CompareSummary
+    {
+        get
+        {
+            if (_cmp is not { } results) return "";
+            string Title(IReadOnlyList<string> ids) => Options.FirstOrDefault(o => o.Id == ids[0])?.Title ?? ids[0];
+            var fast = results.Where(r => r.Ms is not null).OrderBy(r => r.Ms).Select(r => L.T("dns.picker.compare.item", new { title = Title(r.Ids), ms = $"{r.Ms:0}" })).ToList();
+            var dead = results.Where(r => r.Ms is null).Select(r => Title(r.Ids)).ToList();
+            return fast.Count == 0 ? L.T("dns.picker.compare.none")
+                : dead.Count > 0 ? L.T("dns.picker.compare.fastest_dead", new { fast = string.Join(" · ", fast), dead = string.Join(", ", dead) })
+                : L.T("dns.picker.compare.fastest", new { fast = string.Join(" · ", fast) });
+        }
+    }
+    public bool HasCompareSummary => _cmp is not null;
 
     /// <summary>«Сравнить»: время ответа защищённого DNS каждого варианта с этого ПК (все сразу); итог — рядом с названием.</summary>
     public async Task CompareAsync(CancellationToken ct = default)
@@ -150,14 +179,11 @@ public sealed class DnsPicker : Observable
             }).ToList();
             var results = await Task.WhenAll(jobs);
             foreach (var (g, ms) in results)
-                foreach (var o in g) _ping[o.Id] = ms is { } v ? L.T("dns.picker.ping", new { ms = $"{v:0}" }) : L.T("dns.no_answer");
+                foreach (var o in g) _ping[o.Id] = ms;
             // Итог — строкой под кнопкой: время в закрытом списке без подсказки не найти.
-            var fast = results.Where(r => r.ms is not null).OrderBy(r => r.ms).Select(r => L.T("dns.picker.compare.item", new { title = r.g.First().Title, ms = $"{r.ms:0}" })).ToList();
-            var dead = results.Where(r => r.ms is null).Select(r => r.g.First().Title).ToList();
-            CompareSummary = fast.Count == 0 ? L.T("dns.picker.compare.none")
-                : dead.Count > 0 ? L.T("dns.picker.compare.fastest_dead", new { fast = string.Join(" · ", fast), dead = string.Join(", ", dead) })
-                : L.T("dns.picker.compare.fastest", new { fast = string.Join(" · ", fast) });
+            _cmp = results.Select(r => ((IReadOnlyList<string>)r.g.Select(o => o.Id).ToList(), r.ms)).ToList();
             Rebuild();
+            Raise(nameof(CompareSummary)); Raise(nameof(HasCompareSummary));
         }
         finally { Comparing = false; }
     }
@@ -237,7 +263,8 @@ public sealed class DnsPicker : Observable
         Raise(nameof(HasCustom));
     }
 
-    DnsOption WithPing(DnsOption o) => _ping.TryGetValue(o.Id, out var ms) ? o with { Ping = ms } : o;
+    DnsOption WithPing(DnsOption o) => _ping.TryGetValue(o.Id, out var ms)
+        ? o with { Ping = ms is { } v ? L.T("dns.picker.ping", new { ms = $"{v:0}" }) : L.T("dns.no_answer") } : o;
 
     public bool HasCustom => _s.DnsCustom.Count > 0;
 

@@ -123,5 +123,7 @@
   "home.service.install.tip": "Optimization will work without the window and start after a reboot",
   "home.service.installed": "Service installed",
   "home.service.mode": "Service mode",
-  "home.service.mode.tip": "The service appears the first time optimization is turned on"
+  "home.service.mode.tip": "The service appears the first time optimization is turned on",
+  "home.core.missing": "Core files not found (antivirus?). Open “Diagnostics” → “Restore”.",
+  "home.core.damaged": "Core files are damaged (antivirus?). Open “Diagnostics” → “Restore”."
 }

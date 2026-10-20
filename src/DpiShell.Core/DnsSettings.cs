@@ -31,7 +31,7 @@ public static class DnsPresets
         new("quad9", "Quad9", ["9.9.9.9", "149.112.112.112", "2620:fe::fe", "2620:fe::9"], "https://dns.quad9.net/dns-query",
             L.T("dns.preset.note_quad9"), L.T("dns.preset.owner_quad9")),
         // DoH Яндекса — по 77.88.8.8 и 77.88.8.1, только HTTP/2 (проверено); адреса — yandex.ru/support/dns, базовый режим.
-        new("yandex", "Яндекс", ["77.88.8.8", "77.88.8.1", "2a02:6b8::feed:ff", "2a02:6b8:0:1::feed:ff"],
+        new("yandex", L.T("web.dns.preset.yandex"), ["77.88.8.8", "77.88.8.1", "2a02:6b8::feed:ff", "2a02:6b8:0:1::feed:ff"],
             "https://common.dot.dns.yandex.net/dns-query", L.T("dns.preset.note_yandex"), L.T("dns.preset.owner_yandex")),
     ];
 
@@ -254,7 +254,7 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
         {
             servers = ips is { Count: > 0 } ? ips : throw new ArgumentException("Свой вариант без адресов.");
             template = doh;
-            title = "свой DNS";
+            title = L.T("core.dns.custom_title");
         }
         else
         {
@@ -265,7 +265,7 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
         }
 
         var (picked, _) = Pick(sys.Adapters());
-        if (picked.Count == 0) throw new InvalidOperationException("Не нашёл подключение Ethernet или Wi-Fi с выходом в интернет — менять нечего.");
+        if (picked.Count == 0) throw new InvalidOperationException(L.T("core.dns.no_adapter"));
 
         var backup = LoadBackup() ?? new Backup();
         var before = picked.ToDictionary(a => a.Id, sys.Read);
@@ -280,7 +280,7 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
         // Журнал отката: снимок «было» и «поставим» — ДО первого изменения. Если ничего не меняется — записи нет.
         string rec = "";
         if (picked.Any(a => !DnsSnapshot.SameAddresses(before[a.Id], Fit(a, target))))
-            rec = Recorder.Begin(ChangeKinds.Dns, $"DNS этого компьютера: {title} — {string.Join(", ", picked.Select(a => a.Name))}",
+            rec = Recorder.Begin(ChangeKinds.Dns, L.T("core.dns.journal", new { title, adapters = string.Join(", ", picked.Select(a => a.Name)) }),
                 DnsSnapshot.ToJson(picked, before, null), DnsSnapshot.ToJson(picked, picked.ToDictionary(a => a.Id, a => Fit(a, target)), []));
 
         // Шаблоны: встроенные (Google, Cloudflare, Quad9) уже известны Windows; остальные регистрируем.
@@ -314,8 +314,8 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
         {
             Rollback(picked, before, addedNow, backup);
             Recorder.Abort(rec);
-            var why = encrypt ? $"Защищённый DNS {title} не ответил" : $"DNS {title} не ответил";
-            return new(false, why + " — вернул прежние настройки. Попробуйте другой вариант" + (encrypt && !fallback ? " или разрешите обычный DNS." : "."), Status(backup));
+            var why = L.T(encrypt ? "core.dns.fail_secure" : "core.dns.fail_plain", new { title });
+            return new(false, L.T(encrypt && !fallback ? "core.dns.fail_try_fallback" : "core.dns.fail_try", new { why }), Status(backup));
         }
 
         backup.Choice = choice;
@@ -323,8 +323,8 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
         SaveBackup(backup);
         Recorder.Done(rec, DnsSnapshot.ToJson(picked, picked.ToDictionary(a => a.Id, a => Fit(a, target)), addedNow));
         var names = string.Join(", ", picked.Select(a => a.Name));
-        var how = choice == DnsPresets.Auto ? "DNS как у провайдера" : encrypt ? $"{title}, защищённый" : $"{title}, без шифрования";
-        return new(true, $"{how} — {names}.", Status(backup));
+        var how = choice == DnsPresets.Auto ? L.T("core.dns.how_auto") : L.T(encrypt ? "core.dns.how_secure" : "core.dns.how_plain", new { title });
+        return new(true, L.T("core.dns.result", new { how, adapters = names }), Status(backup));
     }
 
     /// <summary>Нет IPv6 на адаптере — адреса IPv6 не пишем.</summary>
@@ -369,7 +369,7 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
     public Task<DnsSetResult> RestoreAsync(CancellationToken ct)
     {
         var backup = LoadBackup();
-        if (backup is null) return Task.FromResult(new DnsSetResult(true, "DNS не меняли — возвращать нечего.", Status(null)));
+        if (backup is null) return Task.FromResult(new DnsSetResult(true, L.T("core.dns.nothing_to_restore"), Status(null)));
         var now = sys.Adapters().ToDictionary(a => a.Id);
         var restored = new List<string>();
         foreach (var (id, saved) in backup.Adapters)
@@ -382,8 +382,8 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
         foreach (var ip in backup.AddedDoh) sys.UnregisterDoh(ip);
         sys.FlushCache();
         File.Delete(backupFile);
-        Recorder.Close(ChangeKinds.Dns, "DNS возвращён кнопкой «Вернуть как было»");
-        var msg = restored.Count > 0 ? $"DNS — как было: {string.Join(", ", restored)}." : "DNS — как было.";
+        Recorder.Close(ChangeKinds.Dns, L.T("core.dns.restored_journal"));
+        var msg = restored.Count > 0 ? L.T("core.dns.restored", new { list = string.Join(", ", restored) }) : L.T("core.dns.restored_plain");
         return Task.FromResult(new DnsSetResult(true, msg, Status(null)));
     }
 }

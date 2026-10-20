@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -99,10 +100,10 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
     public async Task<ManifestFetch> FetchManifestAsync(IProgress<string>? log = null, CancellationToken ct = default)
     {
         var errors = new List<string>();
-        if (sources.Sources.Count == 0) return new(null, ["Не заданы адреса обновлений (update-sources.json)."]);
+        if (sources.Sources.Count == 0) return new(null, [L.T("core.data.no_sources")]);
         foreach (var src in sources.Sources)
         {
-            log?.Report("Проверяю обновления: " + Host(src));
+            log?.Report(L.T("core.data.checking", new { host = Host(src) }));
             byte[] bytes;
             try { bytes = await GetAsync(src + DataManifest.FileName, MaxManifestBytes, ct); }
             catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException or InvalidDataException && !ct.IsCancellationRequested)
@@ -116,29 +117,29 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
             catch (HttpRequestException e) when (e.StatusCode == System.Net.HttpStatusCode.NotFound) { sig = null; }
             catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException or InvalidDataException && !ct.IsCancellationRequested)
             {
-                errors.Add($"{Host(src)}: подпись манифеста не получена — {Reason(e)}");
+                errors.Add(L.T("core.data.sig_missing", new { host = Host(src), reason = Reason(e) }));
                 continue;
             }
             if (sig is null && RequireSignature)
             {
-                errors.Add($"{Host(src)}: манифест без подписи — отброшен");
+                errors.Add(L.T("core.data.unsigned", new { host = Host(src) }));
                 continue;
             }
             if (sig is not null && !ReleaseSignature.Verify(bytes, sig, SigningKey))
             {
-                errors.Add($"{Host(src)}: подпись манифеста не совпала — источник отброшен");
+                errors.Add(L.T("core.data.sig_mismatch", new { host = Host(src) }));
                 continue;
             }
             DataManifest m;
             try { m = DataManifest.Parse(bytes); }
             catch (Exception e) when (e is JsonException or InvalidDataException)
             {
-                errors.Add($"{Host(src)}: манифест не читается");
+                errors.Add(L.T("core.data.unreadable", new { host = Host(src) }));
                 continue;
             }
             if (m.UpdateProblems() is { Count: > 0 } p)
             {
-                errors.Add($"{Host(src)}: манифест не прошёл проверку ({p[0]})");
+                errors.Add(L.T("core.data.invalid", new { host = Host(src), problem = p[0] }));
                 continue;
             }
             return new(new(m, src, bytes, sig is not null, sig), errors);
@@ -169,9 +170,9 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
             await File.WriteAllBytesAsync(target, bytes, ct);
             if (string.Equals(DataManifest.Sha256(target), sha256, StringComparison.OrdinalIgnoreCase)) return;
             File.Delete(target);
-            errors.Add($"{Host(src)}: sha256 не совпал с манифестом — файл отброшен");
+            errors.Add(L.T("core.data.hash_mismatch", new { host = Host(src) }));
         }
-        throw new SecurityException($"Файл {key} не получен: " + string.Join("; ", errors));
+        throw new SecurityException(L.T("core.data.file_missing", new { key, errors = string.Join("; ", errors) }));
     }
 
     async Task<byte[]> GetAsync(string url, int max, CancellationToken ct)
@@ -199,9 +200,9 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
 
     static string Reason(Exception e) => e switch
     {
-        TaskCanceledException => "не ответил за 5 с",
-        HttpRequestException { StatusCode: { } sc } => $"ответ {(int)sc}",
-        HttpRequestException => "нет связи",
+        TaskCanceledException => L.T("core.data.reason.timeout"),
+        HttpRequestException { StatusCode: { } sc } => L.T("core.upd.reason.status", new { code = (int)sc }),
+        HttpRequestException => L.T("core.upd.reason.offline"),
         InvalidDataException d => d.Message,
         _ => e.Message,
     };
@@ -255,13 +256,13 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
     {
         var fetch = await client.FetchManifestAsync(log, ct);
         if (fetch.Result is not { } got)
-            return new(false, false, false, "Источники обновлений не ответили: " + string.Join("; ", fetch.Errors));
+            return new(false, false, false, L.T("core.data.sources_silent", new { errors = string.Join("; ", fetch.Errors) }));
         var m = got.Manifest;
         var current = paths.SeedManifest;
         if (current is not null && DataManifest.CompareVersions(m.Version, current.Version) <= 0)
-            return new(false, true, false, $"Данные уже последней версии ({current.Version}).", current.Version, false, got.Source, got.Signed);
+            return new(false, true, false, L.T("core.data.up_to_date", new { version = current.Version }), current.Version, false, got.Source, got.Signed);
         if (m.MinAppVersion is { } min && DataUpdateCheck.IsOlder(AppVersion, min))
-            return new(false, false, false, $"Данные {m.Version} требуют новую версию программы ({min}) — скачайте её со страницы релизов.");
+            return new(false, false, false, L.T("core.data.needs_newer_app", new { version = m.Version, min }));
 
         var staged = paths.Updates + ".new";
         try
@@ -274,7 +275,7 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
             {
                 var target = Path.Combine(staged, key.Replace('/', Path.DirectorySeparatorChar));
                 if (File.Exists(target) && string.Equals(DataManifest.Sha256(target), f.Sha256, StringComparison.OrdinalIgnoreCase)) continue;
-                log?.Report($"Скачиваю {key}…");
+                log?.Report(L.T("core.data.downloading", new { key }));
                 if (File.Exists(target)) File.Delete(target);
                 await client.DownloadVerifiedAsync(key, f.Sha256, target, got.Source, ct);
                 downloaded++;
@@ -293,19 +294,19 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
             bool coreChanged = CoreChanged(staged);
             if (coreChanged && InstallCore is { } install)
             {
-                log?.Report("Обновляю ядро…");
+                log?.Report(L.T("core.data.updating_core"));
                 await install(CoreManifest.Load(Path.Combine(staged, "core.json")));
             }
 
             Swap(staged);
             paths.ResetSeed();
-            log?.Report($"Данные обновлены до {m.Version}.");
-            var note = downloaded == 0 ? "" : $" Скачано файлов: {downloaded}.";
-            return new(true, false, false, $"Данные обновлены до {m.Version}.{note}" + (coreChanged ? " Ядро обновлено." : ""), m.Version, coreChanged, got.Source, got.Signed);
+            log?.Report(L.T("core.data.updated_log", new { version = m.Version }));
+            var note = downloaded == 0 ? "" : L.T("core.data.updated_files", new { n = downloaded });
+            return new(true, false, false, L.T("core.data.updated", new { version = m.Version, files = note, core = coreChanged ? L.T("core.data.updated_core") : "" }), m.Version, coreChanged, got.Source, got.Signed);
         }
         catch (Exception e) when (e is SecurityException or IOException or UnauthorizedAccessException or InvalidDataException or JsonException or HttpRequestException)
         {
-            return new(false, false, false, "Обновление не установлено, остались прежние данные: " + e.Message);
+            return new(false, false, false, L.T("core.data.not_installed", new { error = e.Message }));
         }
         finally
         {

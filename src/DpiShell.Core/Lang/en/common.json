@@ -39,5 +39,7 @@
   "common.lang.problem.strings": {
     "one": "{file}: {n} line not used (placeholders or plural forms differ from the original, or longer than 2000 characters): {keys}",
     "other": "{file}: {n} lines not used (placeholders or plural forms differ from the original, or longer than 2000 characters): {keys}"
-  }
+  },
+  "common.info.what": "What is this?",
+  "common.row_details": "Details: results by address"
 }

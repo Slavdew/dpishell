@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -267,7 +268,7 @@ public sealed class HostsFileStore(string hostsPath, string backupDir, Action? a
     }
 
     static HostsWriteException Busy() =>
-        new("Не удалось записать hosts: файл одновременно меняет другая программа. Изменения не внесены, повторите позже.", null);
+        new(L.T("core.hosts.file.busy"), null);
 
     /// <summary>«Вернуть как было»: удалить только наш блок.</summary>
     public HostsWriteResult RemoveBlock() => Apply([]);
@@ -383,13 +384,12 @@ public sealed class HostsFileStore(string hostsPath, string backupDir, Action? a
 
         // Защитник может отменить правку сразу (HostsFileHijack) — проверяем, что на диске то, что записали.
         if (!ReadBytes().AsSpan().SequenceEqual(newBytes))
-            throw new HostsWriteException("Запись в hosts отменена — скорее всего, Защитником Windows (HostsFileHijack) или другой защитой. "
-                + "Если Защитник или другой антивирус показал предупреждение, разрешите изменение (название кнопки зависит от версии) и повторите." + BackupNote(backup), backup);
+            throw new HostsWriteException(L.T("core.hosts.file.undone", new { backup = BackupNote(backup) }), backup);
         try { afterWrite?.Invoke(); } catch { }
         return backup;
     }
 
-    static string BackupNote(string? backup) => backup is null ? "" : $" Копия файла: {backup}";
+    static string BackupNote(string? backup) => backup is null ? "" : L.T("core.hosts.file.backup", new { path = backup });
 
     static string Explain(Exception e, string? backup)
     {
@@ -399,14 +399,12 @@ public sealed class HostsFileStore(string hostsPath, string backupDir, Action? a
         {
             // 1175–1177 — ReplaceFile не смог убрать/подменить файл: его держит другая программа.
             IOException when code is SharingViolation or LockViolation or 1175 or 1176 or 1177 =>
-                "файл hosts занят другой программой (антивирус, блокировщик рекламы). Повторите через минуту",
-            UnauthorizedAccessException when !IsElevated() => "нужны права администратора",
-            UnauthorizedAccessException =>
-                "запись запрещена — файл защищён Защитником Windows, другим антивирусом или политикой организации. " +
-                "Исключения в антивирус DpiShell не добавляет",
+                L.T("core.hosts.file.why_busy"),
+            UnauthorizedAccessException when !IsElevated() => L.T("core.hosts.file.why_admin"),
+            UnauthorizedAccessException => L.T("core.hosts.file.why_denied"),
             _ => e.Message.TrimEnd('.'),
         };
-        return $"Не удалось записать hosts: {why}. Изменения не внесены." + BackupNote(backup);
+        return L.T("core.hosts.file.failed", new { why, backup = BackupNote(backup) });
     }
 
     static bool IsElevated()

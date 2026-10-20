@@ -36,7 +36,10 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames
     IReadOnlyList<CheckRow>? _details;
     public RouterSelectRow Row { get; } = row;
     public string Id => Row.Id;
-    public string Title { get; } = title;
+    /// <summary>Роли стратегии (если известны): автоимя показывается по ним.</summary>
+    public IReadOnlyDictionary<string, string>? Roles { get; init; }
+    /// <summary>Название на языке окна: записанное роутером автоимя переводится при показе.</summary>
+    public string Title => StrategyNaming.DisplayTitle(title, Roles);
     /// <summary>Вариант глубокого поиска (candidate): в списке стратегий роутера его нет — только посмотреть, применить нельзя.</summary>
     public bool IsCandidate => Row.Candidate;
     public string Kind => IsCandidate ? L.T("router.row.candidate") : "";
@@ -49,7 +52,7 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames
     /// <summary>У варианта поиска доля обязательных адресов его части (ok из total) — тоже процентом, как у остальных строк.</summary>
     public string Share => IsCandidate && Row.Total is > 0 ? Percent((double)(Row.Ok ?? 0) / Row.Total.Value * 100) : Percent(Row.TargetShare * 100);
     public string Avg => Row.Error is null && Row.AvgS > 0 ? Seconds(Row.AvgS, "0.00") : "—";
-    public string Error => Row.Error ?? "";
+    public string Error => RouterTexts.SelectError(Row.Error);
     /// <summary>Пустая колонка выглядит как сбой отрисовки: когда ошибок нет — «нет» серым.</summary>
     public string ErrorShown => Error.Length > 0 ? Error : L.T("router.row.none");
     public bool ErrorIsProblem => Error.Length > 0;
@@ -58,6 +61,7 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames
     public string Mark => IsBest ? "★" : "";
 
     /// <summary>Результаты по адресам — если роутер их отдаёт (verdicts); старый роутер присылает только доли.</summary>
+    protected override void OnLanguageChanged() => _details = null;
     public IReadOnlyList<CheckRow> Details => _details ??= (Row.Verdicts ?? []).Select(v =>
     {
         var n = names ?? GroupNames.Empty;
@@ -99,6 +103,19 @@ public static class RouterTexts
 
     public static string Conflict => L.T("router.conflict");
 
+    /// <summary>
+    /// Причина отказа в строке подбора роутера (select_progress.rows[].error): известные формы роутера — «ломает обычные сайты: …»,
+    /// «ошибка запуска: …» — на языке окна, остальное как есть.
+    /// </summary>
+    public static string SelectError(string? error)
+    {
+        if (string.IsNullOrEmpty(error)) return "";
+        const string breaks = "ломает обычные сайты: ", failed = "ошибка запуска: ";
+        if (error.StartsWith(breaks, StringComparison.Ordinal)) return L.T("core.score.breaks", new { sites = error[breaks.Length..] });
+        if (error.StartsWith(failed, StringComparison.Ordinal)) return L.T("router.row.start_failed", new { error = error[failed.Length..] });
+        return error;
+    }
+
     /// <summary>Выключение без человека (§5.1): сторож, кнопка на корпусе, откат неподтверждённого включения.</summary>
     public static bool IsOffCode(string code) => code is "watchdog_off" or "button_off" or "confirm_reverted" or "watchdog_select_failed";
 
@@ -128,13 +145,86 @@ public static class RouterTexts
     }
 
     /// <summary>Предупреждение status.warnings → строка главной. flow_offload и ipv6 роутер исправляет сам (§9).</summary>
-    public static RouterWarningRow Warning(RouterWarning w) => w.Code switch
+    public static RouterWarningRow Warning(RouterWarning w, IReadOnlyList<RouterConflictRow>? conflicts = null) => w.Code switch
     {
-        "flow_offload" => new(w.Code, L.T("router.warn.flow_offload"), L.T("router.warn.fix")),
-        "ipv6" => new(w.Code, L.T("router.warn.ipv6"), L.T("router.warn.fix")),
-        "conflict" => new(w.Code, L.T("router.warn.conflict"), L.T("common.more")),
-        _ => new(w.Code, w.Text ?? w.Code),
+        "flow_offload" or "ipv6" => new(w.Code, WarningText(w, conflicts), L.T("router.warn.fix")),
+        "conflict" => new(w.Code, WarningText(w, conflicts), L.T("common.more")),
+        _ => new(w.Code, WarningText(w, conflicts)),
     };
+
+    /// <summary>
+    /// Текст предупреждения роутера на языке окна: по ключу, если роутер прислал его и он известен; иначе по коду (таблица ниже);
+    /// неизвестный код — текст роутера как есть.
+    /// </summary>
+    public static string WarningText(RouterWarning w, IReadOnlyList<RouterConflictRow>? conflicts = null)
+    {
+        if (w.Key is { Length: > 0 } key && L.Has(key)) return L.T(key, WarningArgs(w));
+        // Старый роутер ключа не присылает: имя стратегии и ошибку берём из его русской фразы по форме (r8: «…включена запасная X», «Автоподбор включил X»).
+        string? name = null, error = null;
+        if (w.Params is not null && w.Params.TryGetValue("name", out var pn) && pn.ValueKind == System.Text.Json.JsonValueKind.String) name = pn.GetString();
+        else if (w.Text is { Length: > 0 } text && OldNameRx.Match(text) is { Success: true } nm) name = nm.Groups[1].Value;
+        if (w.Text is { Length: > 0 } t2 && t2.StartsWith("Подбор прервался: ", StringComparison.Ordinal)) error = t2["Подбор прервался: ".Length..];
+        if (name is not null) name = StrategyNaming.DisplayTitle(name, null);
+        var at = w.Params is not null && TimeParam(w, "time", "at") is { } wt ? Time(wt) : null;
+        // Без имени (форма не узнана) фразу с именем не собрать — остаётся текст роутера.
+        if (name is null && w.Code is "auto_selected" or "switched_backup") return w.Text ?? w.Code;
+        return w.Code switch
+        {
+            "core_missing" => L.T("web.core.missing"),
+            "conflict" => conflicts is { Count: > 0 } ? L.T("web.warn.conflict", new { names = string.Join(", ", conflicts.Select(c => c.Name)) }) : L.T("router.warn.conflict"),
+            "flow_offload" => L.T("router.warn.flow_offload"),
+            "ipv6" => L.T("router.warn.ipv6"),
+            "watchdog_off" => at is null ? L.T("router.off.watchdog") : L.T("router.off.watchdog_at", new { time = at }),
+            "button_off" => at is null ? L.T("router.off.button") : L.T("router.off.button_at", new { time = at }),
+            "confirm_reverted" => at is null ? L.T("router.off.revert_enable") : L.T("router.off.revert_enable_at", new { time = at }),
+            "auto_selected" => w.Text?.StartsWith("Сторож", StringComparison.Ordinal) == true ? L.T("router.wd.select_found", new { name }) : L.T("web.warn.auto_selected", new { name }),
+            "watchdog_select_failed" => L.T("router.wd.select_failed"),
+            "auto_select_failed" => L.T("web.warn.auto_select_failed"),
+            "switched_backup" => L.T("web.warn.switched_backup", new { name }),
+            "dns_fallback" => L.T("web.warn.dns_fallback"),
+            "dns_spoofed" => L.T("web.warn.dns_spoofed"),
+            "select_failed" => L.T("web.warn.select_failed", new { error = error ?? w.Text ?? "" }),
+            _ => w.Text ?? w.Code,
+        };
+    }
+
+    static readonly System.Text.RegularExpressions.Regex OldNameRx = new(@"(?:включена запасная|^Автоподбор включил|подобрал и включил) (.+?)\.?$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>Подстановки к ключу от роутера: строки как есть, числа — как есть, время (time, *_at) в unix-секундах — «ЧЧ:ММ» по часам ПК.</summary>
+    static Dictionary<string, object?> WarningArgs(RouterWarning w)
+    {
+        var args = ParamArgs(w.Params);
+        if (w.Text is { Length: > 0 }) args["text"] = w.Text;
+        return args;
+    }
+
+    /// <summary>Вложенная фраза { key, params, text }: params → подстановки.</summary>
+    static Dictionary<string, object?> NestedArgs(System.Text.Json.JsonElement phrase) =>
+        phrase.TryGetProperty("params", out var p) && p.ValueKind == System.Text.Json.JsonValueKind.Object
+            ? ParamArgs(p.EnumerateObject().ToDictionary(x => x.Name, x => x.Value)) : [];
+
+    static Dictionary<string, object?> ParamArgs(Dictionary<string, System.Text.Json.JsonElement>? ps)
+    {
+        var args = new Dictionary<string, object?>();
+        foreach (var (name, v) in ps ?? [])
+        {
+            if (v.ValueKind == System.Text.Json.JsonValueKind.Number && v.TryGetInt64(out var n))
+                args[name] = name is "time" or "at" || name.EndsWith("_at", StringComparison.Ordinal) ? Time(DateTimeOffset.FromUnixTimeSeconds(n).UtcDateTime) : n;
+            else if (v.ValueKind == System.Text.Json.JsonValueKind.Object && v.TryGetProperty("key", out var nk) && nk.GetString() is { } nested && L.Has(nested))
+                args[name] = L.T(nested, NestedArgs(v));   // вложенная фраза { key, params, text }
+            else if (v.ValueKind == System.Text.Json.JsonValueKind.Object && v.TryGetProperty("text", out var nt)) args[name] = nt.GetString();
+            else args[name] = v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() : v.ToString();
+        }
+        return args;
+    }
+
+    static DateTime? TimeParam(RouterWarning w, params string[] names)
+    {
+        foreach (var n in names)
+            if (w.Params!.TryGetValue(n, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number && v.TryGetInt64(out var s))
+                return DateTimeOffset.FromUnixTimeSeconds(s).UtcDateTime;
+        return null;
+    }
 
     /// <summary>Хост из адреса для списка исключений: «https://www.example.com/a» → «www.example.com».</summary>
     public static string? Host(string url)
@@ -183,7 +273,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     readonly WindowSettings _settings;
     readonly SemaphoreSlim _gate = new(1, 1);
     RouterClient? _client;
-    readonly Dictionary<string, string> _titles = [];
+    // Название и роли (данные): автоимя показывается по ролям и на языке окна при каждом чтении.
+    readonly Dictionary<string, (string Title, IReadOnlyDictionary<string, string>? Roles)> _titles = [];
     readonly Dictionary<string, Dictionary<string, string>> _roles = [];
 
     public RouterViewModel(Shell shell, WindowSettings settings)
@@ -383,8 +474,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public bool CanAct => Connected && !Busy && !Blocked;
     public bool CanConnect => !Busy;
 
-    string _connectionText = L.T("router.conn.not_checked");
-    public string ConnectionText { get => _connectionText; private set { if (Set(ref _connectionText, value)) Raise(nameof(ShowConnectionText)); } }
+    // Состояние подключения хранится правилом сборки (данные в замыкании): «Подключено, DpiShell 0.2.0» читается на языке окна.
+    readonly LiveText _connectionText = new(() => L.T("router.conn.not_checked"));
+    public string ConnectionText { get => _connectionText.Value; private set { _connectionText.Set(value); Raise(); Raise(nameof(ShowConnectionText)); } }
 
     /// <summary>«DpiShell на роутере не найден» в «Подключении» не повторяем: то же уже сказано в карточке выше (UX-аудит 6, п. 14).</summary>
     public bool ShowConnectionText => Searched && (Found || !_connNotFound);
@@ -397,13 +489,16 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     bool _connectionOk;
     public bool ConnectionOk { get => _connectionOk; private set => Set(ref _connectionOk, value); }
 
-    void SetConnection(string text, bool ok = false, bool notFound = false, bool needsPassword = false)
+    void SetConnection(string text, bool ok = false, bool notFound = false, bool needsPassword = false) => SetConnection(() => text, ok, notFound, needsPassword);
+
+    void SetConnection(Func<string> text, bool ok = false, bool notFound = false, bool needsPassword = false)
     {
         _connNotFound = notFound; _connNeedsPassword = needsPassword;
-        ConnectionText = text; ConnectionOk = ok; Raise(nameof(DiagHint)); UpdateHome();
+        _connectionText.Set(text); Raise(nameof(ConnectionText)); Raise(nameof(ShowConnectionText));
+        ConnectionOk = ok; Raise(nameof(DiagHint)); UpdateHome();
     }
 
-    void SetFound(RouterFound f, string? version) => SetConnection(RouterTexts.Found(f, version), notFound: f == RouterFound.NotFound, needsPassword: f == RouterFound.Ok);
+    void SetFound(RouterFound f, string? version) => SetConnection(() => RouterTexts.Found(f, version), notFound: f == RouterFound.NotFound, needsPassword: f == RouterFound.Ok);
 
     RouterClient? ClientFor(string address)
     {
@@ -465,7 +560,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (address is null)
         {
             SetDetection(null);
-            SetConnection(AddressAuto ? L.T("router.addr.unknown") : L.T("router.addr.enter"));
+            SetConnection(() => AddressAuto ? L.T("router.addr.unknown") : L.T("router.addr.enter"));
             return false;
         }
         if (ClientFor(address) is null) { SetDetection(null); return false; }
@@ -512,20 +607,21 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 TrySave();
                 RaisePassword();
             }
-            SetConnection(typed == "" ? L.T("router.conn.has_password") : L.T("router.conn.bad_password"), needsPassword: true);
+            SetConnection(() => typed == "" ? L.T("router.conn.has_password") : L.T("router.conn.bad_password"), needsPassword: true);
             return false;
         }
         catch (RouterException e)
         {
             plain = null;
             Connected = false;
-            SetConnection(RouterTexts.Friendly(e));
+            SetConnection(() => RouterTexts.Friendly(e));
             return false;
         }
         if (typed is not null) RememberPassword(typed);
         plain = null;
         Connected = true;
-        SetConnection(L.T("router.conn.connected", new { version = _detection?.Status?.Version }), ok: true);
+        var detectedVersion = _detection?.Status?.Version;
+        SetConnection(() => L.T("router.conn.connected", new { version = detectedVersion }), ok: true);
         if (SelectOnRouterChosen is null) SelectOnRouter = true;   // роутер подключён — подбирать по умолчанию на нём
         try
         {
@@ -562,7 +658,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         {
             // Тихо: роутер мог пропасть на полпути (смена сети) — блок покажет последнее, следующая проверка уточнит.
             if (e.Failure is RouterFailure.Unreachable or RouterFailure.NoResponse) SetDetection(null);
-            else SetConnection(RouterTexts.Friendly(e));
+            else SetConnection(() => RouterTexts.Friendly(e));
         }
         finally
         {
@@ -726,15 +822,19 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public bool HasWarnings => Warnings.Length > 0;
     public string ToggleText { get => _toggleText; private set => Set(ref _toggleText, value); }
 
+    /// <summary>Название как записано (без перевода автоимени): для строк, которые переводят себя сами.</summary>
+    string RawTitle(string id) => _titles.TryGetValue(id, out var t) ? t.Title : _shell.Catalog.Find(id)?.Title ?? id;
+
     string StrategyTitle(string? id)
     {
         if (id is null) return L.T("router.strategy.none");
-        if (_titles.TryGetValue(id, out var t)) return t;
+        if (_titles.TryGetValue(id, out var t)) return StrategyNaming.DisplayTitle(t.Title, t.Roles);
         // Найденная глубоким поиском на роутере («r-…») — в строках подбора она уже с названием.
         return _shell.Catalog.Find(id)?.Title ?? Scores.FirstOrDefault(s => s.Id == id && s.Title != id)?.Title ?? id;
     }
 
-    void UpdateHome()
+    /// <summary>Тексты главной и вкладки (заголовок, подробности, предупреждения, подпись кнопки) из состояния — без побочных действий.</summary>
+    void ComputeHome()
     {
         var pub = _detection?.Status;
         bool enabled = RouterEnabled;
@@ -759,7 +859,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             parts.Add(RouterTexts.Found(_detection.Found, null) is var t ? char.ToLowerInvariant(t[0]) + t[1..] : "");
         // Выключение сторожем, кнопкой или откатом — отдельной фразой с «Подробнее» (UpdateOff), не строкой предупреждений.
         UpdateOff();
-        var rows = (_status?.Warnings ?? []).Where(w => !RouterTexts.IsOffCode(w.Code) && !(w.Code == "auto_selected" && _wdState == WatchdogSelectState.Found)).Select(RouterTexts.Warning).ToList();
+        var rows = (_status?.Warnings ?? []).Where(w => !RouterTexts.IsOffCode(w.Code) && !(w.Code == "auto_selected" && _wdState == WatchdogSelectState.Found)).Select(w => RouterTexts.Warning(w, Conflicts)).ToList();
         if (!rows.SequenceEqual(WarningRows))
         {
             WarningRows.Clear();
@@ -773,6 +873,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             HomeLine = L.T("router.home.update_available", new { version = upd }) + " · " + HomeLine;
         Warnings = string.Join(" · ", rows.Select(r => r.Text));
         ToggleText = enabled ? L.T("router.toggle.off") : L.T("router.toggle.on");
+    }
+
+    void UpdateHome()
+    {
+        ComputeHome();
         Raise(nameof(RouterEnabled));
         Raise(nameof(FlowOffloadFixable)); Raise(nameof(Ipv6Fixable));
         RaisePc();
@@ -933,12 +1038,22 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     {
         var list = await Call(c => c.StrategiesAsync());
         _catalogVersion = list.CatalogVersion;
-        Strategies.Clear();
+        _strategyItems = list.Items;
         foreach (var s in list.Items)
         {
-            _titles[s.Id] = StrategyNaming.DisplayTitle(s.Title, s.Roles); if (s.Roles is not null) _roles[s.Id] = s.Roles;
-            Strategies.Add(new(s.Id, _titles[s.Id], StrategyNote(s), s.Roles is { Count: > 0 } roles ? L.T("router.strategy.roles") + "\n" + StrategyParams.Roles(roles) : ""));
+            _titles[s.Id] = (s.Title, s.Roles); if (s.Roles is not null) _roles[s.Id] = s.Roles;
         }
+        FillStrategies();
+    }
+
+    IReadOnlyList<RouterStrategyItem> _strategyItems = [];
+
+    /// <summary>Меню стратегий роутера из сохранённого ответа (собирается заново при смене языка).</summary>
+    void FillStrategies()
+    {
+        Strategies.Clear();
+        foreach (var s in _strategyItems)
+            Strategies.Add(new(s.Id, StrategyNaming.DisplayTitle(s.Title, s.Roles), StrategyNote(s), s.Roles is { Count: > 0 } roles ? L.T("router.strategy.roles") + "\n" + StrategyParams.Roles(roles) : ""));
     }
 
     /// <summary>
@@ -1009,9 +1124,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             if (e.Failure == RouterFailure.AccessDenied)
             {
                 Connected = false;
-                SetConnection(L.T("router.conn.relogin"));
+                SetConnection(() => L.T("router.conn.relogin"));
             }
-            else if (e.Failure == RouterFailure.Unreachable) SetConnection(L.T("router.conn.unreachable"));
+            else if (e.Failure == RouterFailure.Unreachable) SetConnection(() => L.T("router.conn.unreachable"));
             // Занят подбором (запущен с другого устройства или страницы роутера) — показать его ход.
             if (e.AppError?.Code == "busy" && !_polling) _ = RefreshStatusSafeAsync();
             return false;
@@ -1149,7 +1264,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                         ? L.T("router.send.rejected_field", new { name = strategy.Title, field = f })
                         : L.T("router.send.rejected", new { name = strategy.Title }), e.AppError);
                 }
-                _titles[routerId] = strategy.Title;
+                _titles[routerId] = (strategy.Title, strategy.Roles);
                 var confirmS = RouterEnabled ? TrialArg : null;
                 await Call(c => c.StrategySetAsync(routerId, confirmS));
                 result = await CheckCoreAsync();
@@ -1450,7 +1565,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         foreach (var r in p.Rows ?? [])
         {
             var i = Scores.ToList().FindIndex(x => x.Id == r.Id);
-            var row = new RouterScoreRow(r, StrategyNaming.DisplayTitle(r.Title ?? StrategyTitle(r.Id), r.Roles ?? _roles.GetValueOrDefault(r.Id)), Names, _groupsTotal);
+            var row = new RouterScoreRow(r, r.Title ?? RawTitle(r.Id), Names, _groupsTotal) { Roles = r.Roles ?? _roles.GetValueOrDefault(r.Id) };
             if (i < 0) Scores.Add(row);
             else if (!Scores[i].Same(r)) { row.Expanded = Scores[i].Expanded; Scores[i] = row; }
         }
@@ -1854,6 +1969,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     /// <summary>Выбор DNS — тот же, что для этого компьютера: готовые с роутера + свои из window.json.</summary>
     public DnsPicker DnsPick { get; }
 
+    IReadOnlyList<RouterDnsPreset> _dnsPresetList = [];
     bool _dnsPresets;
     /// <summary>Роутер знает dns_presets: выбор вариантов вместо одной кнопки «Включить защищённый DNS».</summary>
     public bool DnsPresetsAvailable { get => _dnsPresets; private set { if (Set(ref _dnsPresets, value)) Raise(nameof(DnsSingleButton)); } }
@@ -1866,21 +1982,27 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         try { p = await Call(c => c.DnsPresetsAsync()); }
         catch (RouterException e) when (e.Failure is RouterFailure.NotSupported) { return; }   // старый пакет на роутере — одна кнопка
         if (p.Presets is not { Count: > 0 } list) return;
+        _dnsPresetList = list;
+        DnsPick.PresetSource = () => _dnsPresetList.Select(ToOption).ToList();
         DnsPick.SetPresets(list.Select(ToOption).ToList());
         DnsPresetsAvailable = true;
     }
 
     static DnsOption ToOption(RouterDnsPreset p)
     {
+        // Названия и заметки известных вариантов — по ключам окна (роутер присылает их на своём языке), текст роутера — только для незнакомого id.
+        var known = p.Id == "provider" ? null : DnsPresets.Find(p.Id);
+        var title = p.Id == "provider" ? L.T("web.dns.preset.provider") : known?.Title ?? p.Title;
+        var note = known is not null ? known.Note : p.Note;
         var ips = p.Resolvers is { Count: > 0 } r ? r.SelectMany(x => x.Bootstrap ?? []).Distinct().ToList() : p.Plain ?? [];
         var detail = p.Id == "provider" ? L.T("router.dns.opt.provider")
             : p.Resolvers is { Count: > 0 } ? (p.Resolvers.Count > 1 ? L.T("router.dns.opt.secure_n", new { count = p.Resolvers.Count }) : L.T("router.dns.opt.secure"))
             : L.T("router.dns.opt.plain", new { ips = string.Join(", ", ips) });
-        if (p.Note is { Length: > 0 } n) detail += " · " + n;
+        if (note is { Length: > 0 } n) detail += " · " + n;
         // Описание: адреса и шаблоны — с роутера; кто держит — из пресетов ПК по тому же id (у «Google + Cloudflare» — оба).
         var dohs = (p.Resolvers ?? []).Select(x => x.Doh).OfType<string>().ToList();
         var owner = DnsPresets.Find(p.Id)?.Owner ?? (p.Id == "default" ? L.T("router.dns.owner_default") : null);
-        return new DnsOption(p.Id, p.Title, detail, false, ips, dohs.FirstOrDefault(), dohs, owner, MainViewModel.PresetNote(p.Id, p.Note));
+        return new DnsOption(p.Id, title, detail, false, ips, dohs.FirstOrDefault(), dohs, owner, MainViewModel.PresetNote(p.Id, note));
     }
 
     /// <summary>«Применить» в выборе DNS роутера: готовый — dns_set preset, свой — dns_set custom (адреса — bootstrap при DoH, иначе plain).</summary>
@@ -1977,12 +2099,29 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     public ObservableCollection<RouterConflictRow> Conflicts { get; } = [];
 
-    string _flow = "", _ipv6 = "", _dns = "", _space = "", _diagUpdated = "";
-    public string FlowOffloadText { get => _flow; private set => Set(ref _flow, value); }
-    public string Ipv6Text { get => _ipv6; private set => Set(ref _ipv6, value); }
-    public string DnsText { get => _dns; private set => Set(ref _dns, value); }
-    public string SpaceText { get => _space; private set => Set(ref _space, value); }
-    public string DiagUpdated { get => _diagUpdated; private set => Set(ref _diagUpdated, value); }
+    // Ответ diag (данные) и время: тексты строк собираются при показе — на языке окна.
+    RouterDiag? _diag;
+    DateTime _diagAt;
+    public string FlowOffloadText => _diag is not { } d ? "" : !d.FlowOffload
+        ? (d.Flowoffload is "software" or "hardware" ? L.T("router.diag.flow_handed") : L.T("router.diag.flow_off"))
+        : FlowOffloadFixable ? L.T("router.diag.flow_on_bad") : L.T("router.diag.flow_on");
+    public string Ipv6Text => _diag is not { } d ? "" : !d.Ipv6Wan ? L.T("router.diag.ipv6_none") : Ipv6Fixable ? L.T("router.diag.ipv6_bad") : L.T("router.diag.ipv6_yes");
+    // Время проверки DNS — одно, в карточке «DNS для всей сети»; здесь только итог.
+    public string DnsText => _diag is not { } d ? "" : d.Dns is null ? L.T("router.diag.dns_not_checked") : d.Dns.Spoofed ? L.T("router.diag.dns_spoofed") : L.T("router.diag.dns_clean");
+    public string SpaceText => _diag is not { } d ? "" : L.T(d.OverlayFreeKb < 2048 ? "router.diag.space_low" : "router.diag.space_value", new { value = (d.OverlayFreeKb / 1024.0).ToString("0.#", L.Culture) });
+    public string DiagUpdated => _diag is null ? "" : L.T("router.diag.updated", new { time = L.Time(_diagAt) });
+
+    void FillConflicts()
+    {
+        Conflicts.Clear();
+        foreach (var c in _diag?.Conflicts ?? [])
+            Conflicts.Add(c.Kind == "package"
+                // §9: пакет conflict_stop не останавливает — только удаление.
+                ? new(c.Name, L.T("router.diag.package"), CanStop: false)
+                : new(c.Name, c.Kind == "service"
+                    ? L.T(c.Running ? "router.diag.service_running" : "router.diag.service_stopped")
+                    : L.T(c.Running ? "router.diag.kind_running" : "router.diag.kind_stopped", new { kind = c.Kind })));
+    }
 
     bool _diagLoaded;
     public bool DiagLoaded { get => _diagLoaded; private set { if (Set(ref _diagLoaded, value)) { Raise(nameof(ShowDiagHint)); Raise(nameof(DiagHint)); } } }
@@ -1999,23 +2138,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         if (await Guard(L.T("router.diag.busy"), async () =>
             {
                 var d = await Call(c => c.DiagAsync());
-                Conflicts.Clear();
-                foreach (var c in d.Conflicts ?? [])
-                    Conflicts.Add(c.Kind == "package"
-                        // §9: пакет conflict_stop не останавливает — только удаление.
-                        ? new(c.Name, L.T("router.diag.package"), CanStop: false)
-                        : new(c.Name, c.Kind == "service"
-                            ? L.T(c.Running ? "router.diag.service_running" : "router.diag.service_stopped")
-                            : L.T(c.Running ? "router.diag.kind_running" : "router.diag.kind_stopped", new { kind = c.Kind })));
-                FlowOffloadText = !d.FlowOffload
-                    ? (d.Flowoffload is "software" or "hardware" ? L.T("router.diag.flow_handed") : L.T("router.diag.flow_off"))
-                    : FlowOffloadFixable ? L.T("router.diag.flow_on_bad") : L.T("router.diag.flow_on");
-                Ipv6Text = !d.Ipv6Wan ? L.T("router.diag.ipv6_none") : Ipv6Fixable ? L.T("router.diag.ipv6_bad") : L.T("router.diag.ipv6_yes");
-                // Время проверки DNS — одно, в карточке «DNS для всей сети»; здесь только итог.
-                DnsText = d.Dns is null ? L.T("router.diag.dns_not_checked") : d.Dns.Spoofed ? L.T("router.diag.dns_spoofed") : L.T("router.diag.dns_clean");
-                SpaceText = L.T(d.OverlayFreeKb < 2048 ? "router.diag.space_low" : "router.diag.space_value", new { value = (d.OverlayFreeKb / 1024.0).ToString("0.#", L.Culture) });
+                _diag = d; _diagAt = DateTime.Now;
+                FillConflicts();
+                Raise(nameof(FlowOffloadText)); Raise(nameof(Ipv6Text)); Raise(nameof(DnsText)); Raise(nameof(SpaceText)); Raise(nameof(DiagUpdated));
                 DiagLoaded = true;
-                DiagUpdated = L.T("router.diag.updated", new { time = L.Time(DateTime.Now) });
             }, changes: false))
             Say("");
     }
@@ -2046,6 +2172,16 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     {
         // Команды пересчитываются на потоке окна; в тестах окна нет — ничего не делаем.
         if (Application.Current?.Dispatcher is { } d) d.BeginInvoke(CommandManager.InvalidateRequerySuggested);
+    }
+
+    /// <summary>Смена языка: состояние роутера (подключение, главная, предупреждения, меню стратегий, DNS, диагностика) собирается заново из данных.</summary>
+    protected override void OnLanguageChanged()
+    {
+        ComputeHome();
+        FillStrategies();
+        FillConflicts();
+        DnsPick.RefreshForLanguage();
+        if (_dnsStatus is { } d) ShowDns(d);
     }
 
     public void Dispose()

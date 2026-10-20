@@ -92,27 +92,27 @@ public static partial class AppProfiles
     /// <summary>Что не так с профилем одной фразой; null — можно записывать и подавать winws.</summary>
     public static string? Problem(AppProfile p)
     {
-        if (!IsValidId(p.Id)) return "Неверный номер профиля.";
-        if (string.IsNullOrWhiteSpace(p.Title) || p.Title.Length > MaxTitle || p.Title.Any(char.IsControl)) return "Название профиля пустое, длиннее 60 знаков или с управляющими знаками.";
+        if (!IsValidId(p.Id)) return L.T("core.profile.bad_id");
+        if (string.IsNullOrWhiteSpace(p.Title) || p.Title.Length > MaxTitle || p.Title.Any(char.IsControl)) return L.T("core.profile.bad_title");
         bool tcp = p.TcpPorts.Length > 0, udp = p.UdpPorts.Length > 0;
-        if (!tcp && !udp) return "У профиля нет портов.";
-        if (tcp && NormalizePorts(p.TcpPorts) != p.TcpPorts) return "Порты TCP записаны неверно.";
-        if (udp && NormalizePorts(p.UdpPorts) != p.UdpPorts) return "Порты UDP записаны неверно.";
-        if (p.Addresses.Count is 0 or > MaxAddresses) return $"В профиле должно быть от 1 до {MaxAddresses} адресов.";
+        if (!tcp && !udp) return L.T("core.profile.no_ports");
+        if (tcp && NormalizePorts(p.TcpPorts) != p.TcpPorts) return L.T("core.profile.bad_tcp");
+        if (udp && NormalizePorts(p.UdpPorts) != p.UdpPorts) return L.T("core.profile.bad_udp");
+        if (p.Addresses.Count is 0 or > MaxAddresses) return L.T("core.profile.addr_count", new { max = MaxAddresses });
         foreach (var a in p.Addresses)
         {
             if (!Cidr.TryParse(a, requireLen: false, out var c, out var fixedHost, out _) || fixedHost || c.ToString() != Canonical(a))
-                return $"Адрес «{Short(a)}» записан неверно.";
-            if (IpsetValidator.Forbidden.Any(f => f.Net.Overlaps(c))) return $"Адрес «{Short(a)}» служебный.";
-            if (c.Len < (c.V6 ? 48 : 16)) return $"Подсеть «{Short(a)}» слишком широкая для профиля программы.";
+                return L.T("core.profile.bad_addr", new { addr = Short(a) });
+            if (IpsetValidator.Forbidden.Any(f => f.Net.Overlaps(c))) return L.T("core.profile.service_addr", new { addr = Short(a) });
+            if (c.Len < (c.V6 ? 48 : 16)) return L.T("core.profile.wide_net", new { addr = Short(a) });
         }
         // Параметры оптимизации — тем же белым списком, что и каталог: только game_*, только разрешённые параметры, файлы из fake\.
-        if (tcp && Desync("game_tcp", p.TcpDesync) is { } t) return "Параметры TCP: " + t;
-        if (udp && Desync("game_udp", p.UdpDesync) is { } u) return "Параметры UDP: " + u;
+        if (tcp && Desync("game_tcp", p.TcpDesync) is { } t) return L.T("core.profile.tcp_params", new { problem = t });
+        if (udp && Desync("game_udp", p.UdpDesync) is { } u) return L.T("core.profile.udp_params", new { problem = u });
         return null;
     }
 
-    static string? Desync(string role, string args) => args.Length == 0 ? "не заданы" : WinwsArgs.Problem(role, args);
+    static string? Desync(string role, string args) => args.Length == 0 ? L.T("core.profile.not_set") : WinwsArgs.Problem(role, args);
 
     static string Canonical(string a) => Cidr.TryParse(a, false, out var c, out _, out _) ? c.ToString() : "";
     static string Short(string s) => s.Length > 40 ? s[..40] + "…" : s;

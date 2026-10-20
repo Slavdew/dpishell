@@ -28,7 +28,7 @@ public sealed partial class MainViewModel : Observable
     CancellationTokenSource? _selectCts;
     Task _current = Task.CompletedTask;
     string? _error;
-    string? _coreProblem;
+    CoreState _coreState;   // состояние ядра (данные): текст проблемы собирается при показе
     SvcState _svc = SvcState.Unknown;
     bool _active;   // оптимизация работает в своём режиме: служба запущена или winws помощника жив
     string? _draftStrategy;   // выбрана в списке без помощника — включится по «Включить»
@@ -629,7 +629,8 @@ public sealed partial class MainViewModel : Observable
 
     IReadOnlyList<string> UserTargets => Live?.UserTargets ?? [];
 
-    readonly Dictionary<string, string> _titles = [];
+    // Название и роли (данные): автоимя показывается по ролям и на языке окна при каждом чтении.
+    readonly Dictionary<string, (string Title, IReadOnlyDictionary<string, string>? Roles)> _titles = [];
 
     /// <summary>Название для показа: автоимя найденной стратегии — по её параметрам (роли у помощника), своё имя — как есть.</summary>
     string ShownTitle(string id, string title) =>
@@ -641,7 +642,7 @@ public sealed partial class MainViewModel : Observable
         if (id is null) return "";
         if (Helper.Status?.Strategies.FirstOrDefault(s => s.Id == id) is { } i) return ShownTitle(i.Id, i.Title);
         if (_shell.Catalog.Find(id) is { } s) return s.Title;
-        return _titles.TryGetValue(id, out var t) ? t : id;
+        return _titles.TryGetValue(id, out var t) ? StrategyNaming.DisplayTitle(t.Title, t.Roles) : id;
     }
 
     /// <summary>«YouTube, Discord» — группы, не открывшиеся в последней проверке «Проверить сейчас»; null — проверки нет или открылось всё.</summary>
@@ -652,9 +653,10 @@ public sealed partial class MainViewModel : Observable
         return bad.Count == 0 ? null : string.Join(", ", bad);
     }
 
-    void UpdateStatus()
+    /// <summary>Заголовок и подробности статуса из состояния (без побочных действий): вызывается и при смене языка.</summary>
+    void ComputeStatus()
     {
-        var err = _error ?? _coreProblem;
+        var err = _error ?? CoreProblemText;
         var id = CurrentStrategyId;
         bool partial = false;
         if (Selecting) { Kind = StatusKind.Busy; StatusTitle = L.T(_searching ? "home.status.deep" : "home.status.select"); StatusDetail = SelectProgressText; }
@@ -689,6 +691,12 @@ public sealed partial class MainViewModel : Observable
         }
         // Через роутер — зелёный кружок: обход работает, хоть и не на этом ПК (значок в трее — про этот ПК).
         StatusBrush = partial ? BrushOf(StatusKind.Busy) : BrushOf(Kind == StatusKind.Off && Router.Found && Router.RouterEnabled ? StatusKind.On : Kind);
+    }
+
+    void UpdateStatus()
+    {
+        ComputeStatus();
+        var id = CurrentStrategyId;
         DropStaleCheck();
         MaybeAutoCheck();
         Raise(nameof(ShowSiteFix)); Raise(nameof(ShowRouterSelectLink));
@@ -707,26 +715,53 @@ public sealed partial class MainViewModel : Observable
         StatusChanged?.Invoke();
     }
 
-    string _vpnWarning = "";
-    public string VpnWarning { get => _vpnWarning; private set { if (Set(ref _vpnWarning, value)) { Raise(nameof(HasVpn)); RaiseIssues(); } } }
+    // Хранятся имена (данные), текст собирается при показе — при смене языка он перечитывается сам.
+    string _vpnNames = "";
+    readonly LiveText _vpnWarning = new();
+    string VpnNames
+    {
+        set
+        {
+            _vpnNames = value;
+            _vpnWarning.Set(() => value.Length == 0 ? "" : L.T("home.vpn.warn", new { names = value }));
+            Raise(nameof(VpnWarning)); Raise(nameof(HasVpn)); RaiseIssues();
+        }
+    }
+    public string VpnWarning { get => _vpnWarning.Value; private set { _vpnWarning.Set(value); Raise(); Raise(nameof(HasVpn)); RaiseIssues(); } }
     /// <summary>Плашка VPN на главной: есть VPN и человек не сказал «Понятно» про этот же набор адаптеров.</summary>
-    public bool HasVpn => VpnWarning.Length > 0 && VpnWarning != _vpnDismissed;
+    public bool HasVpn => VpnWarning.Length > 0 && _vpnNames != _vpnDismissed;
 
     string? _vpnDismissed;
     /// <summary>«Понятно, не показывать»: до смены набора VPN-адаптеров (в «Диагностике» VPN виден всегда).</summary>
-    public ICommand DismissVpnCmd => _dismissVpnCmd ??= new RelayCommand(() => { _vpnDismissed = VpnWarning; Raise(nameof(HasVpn)); RaiseIssues(); });
+    public ICommand DismissVpnCmd => _dismissVpnCmd ??= new RelayCommand(() => { _vpnDismissed = _vpnNames; Raise(nameof(HasVpn)); RaiseIssues(); });
     ICommand? _dismissVpnCmd;
 
-    string _conflictWarning = "";
-    /// <summary>Имена мешающих программ (для текста подтверждения «Остановить»).</summary>
-    string ConflictNames { get; set; } = "";
-    public string ConflictWarning { get => _conflictWarning; private set { if (Set(ref _conflictWarning, value)) { Raise(nameof(HasConflicts)); RaiseIssues(); } } }
-    public bool HasConflicts => ConflictWarning.Length > 0;
+    IReadOnlyList<Conflict> _conflicts = [];
+    /// <summary>Мешающие программы (данные): имена собираются на языке окна при показе.</summary>
+    void SetConflicts(IReadOnlyList<Conflict> list)
+    {
+        _conflicts = list;
+        Raise(nameof(ConflictNames)); Raise(nameof(ConflictWarning)); Raise(nameof(HasConflicts)); RaiseIssues();
+    }
+    /// <summary>Имена мешающих программ (для плашки и текста подтверждения «Остановить»).</summary>
+    string ConflictNames => string.Join(", ", _conflicts.Select(c => c.NameNow).Distinct());
+    public string ConflictWarning => _conflicts.Count == 0 ? "" : L.T("home.conflict.warn", new { names = ConflictNames });
+    public bool HasConflicts => _conflicts.Count > 0;
 
     public ObservableCollection<CheckRow> CheckRows { get; } = [];
 
-    string _checkSummary = "";
-    public string CheckSummary { get => _checkSummary; private set => Set(ref _checkSummary, value); }
+    readonly LiveText _checkSummary = new();
+    public string CheckSummary { get => _checkSummary.Value; private set { _checkSummary.Set(value); Raise(); } }
+    void CheckSummaryIs(Func<string> build) { _checkSummary.Set(build); Raise(nameof(CheckSummary)); }
+    /// <summary>Адреса последней проверки (данные): строки таблицы собираются заново при смене языка.</summary>
+    IReadOnlyList<TargetVerdict>? _checkVerdicts;
+
+    void RebuildCheckRows()
+    {
+        if (_checkVerdicts is not { } v || CheckRows.Count == 0) return;
+        CheckRows.Clear();
+        foreach (var x in v) CheckRows.Add(CheckRow.From(x, Names));
+    }
 
     // ---------- выбор стратегии (отдельно от выключателя) ----------
 
@@ -950,20 +985,19 @@ public sealed partial class MainViewModel : Observable
             if (st is not null)
             {
                 (_svc, _active) = (st.Service, st.Active);
-                _coreProblem = CoreProblem(st.Core);
+                _coreState = st.Core;
             }
             else
             {
                 // Без помощника видно только службу; winws режима без службы без помощника не работает.
                 (_svc, _active) = (svc, svc == SvcState.Running);
                 _localStrategy = strategy;
-                _coreProblem = null;
+                _coreState = CoreState.Ok;
             }
             // Обход ПК заработал, а роутер уже «включён» (служба ПК поднялась с Windows, состояние пришло позже ответа роутера) — §6.
             if (_active && Router.Found && Router.RouterEnabled) OnRouterChanged();
-            VpnWarning = vpn.Count == 0 ? "" : L.T("home.vpn.warn", new { names = string.Join(", ", vpn) });
-            ConflictNames = string.Join(", ", conflicts.Select(c => c.Name).Distinct());
-            ConflictWarning = conflicts.Count == 0 ? "" : L.T("home.conflict.warn", new { names = ConflictNames });
+            VpnNames = string.Join(", ", vpn);
+            SetConflicts(conflicts);
         }
         catch (Exception e) { Fail(Texts.Friendly(e)); }
         UpdateStatus();
@@ -984,11 +1018,11 @@ public sealed partial class MainViewModel : Observable
         await RefreshStatusAsync();
     }
 
-    static string? CoreProblem(CoreState c) => c switch
+    string? CoreProblemText => _coreState switch
     {
         CoreState.Ok => null,
-        CoreState.Missing => "Файлы ядра не найдены (антивирус?). Откройте «Диагностику» → «Восстановить».",
-        _ => "Файлы ядра повреждены (антивирус?). Откройте «Диагностику» → «Восстановить».",
+        CoreState.Missing => L.T("home.core.missing"),
+        _ => L.T("home.core.damaged"),
     };
 
     public async Task EnableAsync()
@@ -1068,6 +1102,7 @@ public sealed partial class MainViewModel : Observable
         if (!Checking && CheckGroups.Count > 0) _checkWas = (CheckGroups.Count(g => g.Ok), CheckGroups.Count);
         _checkGen++;
         _checkFor = null;
+        _checkVerdicts = null;
         CheckRows.Clear(); CheckSummary = ""; CheckedAt = "";
         Checking = false;
     }
@@ -1106,8 +1141,9 @@ public sealed partial class MainViewModel : Observable
         // Повторная проверка в том же состоянии — «было» уже не про включение.
         if (_checkFor is not null && CheckGroups.Count > 0) _checkWas = null;
         _checkFor = CheckState();
+        _checkVerdicts = null;
         CheckRows.Clear(); CheckedAt = "";
-        CheckSummary = L.T("home.check.running");
+        CheckSummaryIs(() => L.T("home.check.running"));
         Checking = true;
         try
         {
@@ -1116,12 +1152,14 @@ public sealed partial class MainViewModel : Observable
             var verdicts = ProbeGroups is { } probe ? await probe(groups) : await Task.Run(() => _shell.CheckGroupsAsync(groups));
             await dns;
             if (gen != _checkGen) return null;   // пока проверяли, оптимизацию включили или выключили — итог уже не про это
+            _checkVerdicts = verdicts;
             foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, Names));
             result = verdicts;
             // В тех же единицах, что и отметки рядом (п. 5): группы, а не адреса; адреса — в «Подробнее».
-            CheckSummary = L.T("home.check.summary", new { ok = CheckGroups.Count(g => g.Ok), total = CheckGroups.Count });
+            CheckSummaryIs(() => L.T("home.check.summary", new { ok = CheckGroups.Count(g => g.Ok), total = CheckGroups.Count }));
             // «Было» — итог до включения: виден, чтобы не гадать, помогло ли.
-            CheckedAt = Covered && _checkWas is { } w ? L.T("home.check.at_was", new { time = L.Time(DateTime.Now), ok = w.Ok, total = w.Total }) : L.T("home.check.at", new { time = L.Time(DateTime.Now) });
+            var checkedAt = DateTime.Now;
+            CheckedAtIs(Covered && _checkWas is { } w ? () => L.T("home.check.at_was", new { time = L.Time(checkedAt), ok = w.Ok, total = w.Total }) : () => L.T("home.check.at", new { time = L.Time(checkedAt) }));
         }
         catch (Exception e)
         {
@@ -1174,8 +1212,10 @@ public sealed partial class MainViewModel : Observable
     /// <summary>Системный DNS подменяет адреса проверяемых сайтов (docs/research/dns.md).</summary>
     public bool DnsSpoofed { get => _dnsSpoofed; private set { if (Set(ref _dnsSpoofed, value)) RaiseIssues(); } }
 
-    string _dnsSummary = L.T("dns.summary.initial");
-    public string DnsSummary { get => _dnsSummary; private set => Set(ref _dnsSummary, value); }
+    readonly LiveText _dnsSummary = new(() => L.T("dns.summary.initial"));
+    public string DnsSummary { get => _dnsSummary.Value; private set { _dnsSummary.Set(value); Raise(); } }
+    void DnsSummaryIs(Func<string> build) { _dnsSummary.Set(build); Raise(nameof(DnsSummary)); }
+    DnsComparison[]? _dnsList;   // ответы DNS (данные): строки таблицы и итог собираются на языке окна
 
     bool _dnsChecking;
     public bool DnsChecking { get => _dnsChecking; private set { if (Set(ref _dnsChecking, value)) CommandManager.InvalidateRequerySuggested(); } }
@@ -1191,7 +1231,7 @@ public sealed partial class MainViewModel : Observable
     {
         if (DnsChecking || IsLoading) return;
         DnsChecking = true;
-        DnsSummary = L.T("dns.summary.checking");
+        DnsSummaryIs(() => L.T("dns.summary.checking"));
         try
         {
             var hosts = CheckedGroups().SelectMany(g => g.Targets).Select(t => new Uri(t.Url).Host).Distinct().ToList();
@@ -1200,17 +1240,25 @@ public sealed partial class MainViewModel : Observable
                 using var doh = new DohResolver();
                 return await Task.WhenAll(hosts.Select(h => DnsCheck.CompareAsync(h, doh)));
             });
+            _dnsList = list;
             DnsRows.Clear();
             foreach (var c in list) DnsRows.Add(DnsRow.From(c));
             DnsSpoofed = list.Any(c => c.Spoofed);
-            DnsSummary = list.Length == 0 ? L.T("dns.summary.no_groups")
+            DnsSummaryIs(() => list.Length == 0 ? L.T("dns.summary.no_groups")
                 : DnsSpoofed ? L.T("dns.summary.spoofed")
                 : list.All(c => c.Doh.Length == 0) ? L.T("dns.summary.no_secure")
-                : L.T("dns.summary.clean");
+                : L.T("dns.summary.clean"));
             if (DnsRows.Count > 0) DnsDetailsOpen = true;
         }
         catch (Exception e) { DnsSummary = Texts.Friendly(e); }
         finally { DnsChecking = false; }
+    }
+
+    void RebuildDnsRows()
+    {
+        if (_dnsList is not { } list || DnsRows.Count == 0) return;
+        DnsRows.Clear();
+        foreach (var c in list) DnsRows.Add(DnsRow.From(c));
     }
 
     GroupNames? _names;
@@ -1529,7 +1577,7 @@ public sealed partial class MainViewModel : Observable
 
     void ShowReport(SelectionReport r)
     {
-        foreach (var s in r.Scores) _titles[s.Strategy.Id] = StrategyNaming.DisplayTitle(s.Strategy.Title, s.Strategy.Roles);
+        foreach (var s in r.Scores) _titles[s.Strategy.Id] = (s.Strategy.Title, s.Strategy.Roles);
         // Итоговая таблица — в порядке оценки, лучшая отмечена.
         var ordered = r.Scores.OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds).ToList();
         var best = r.Best;
@@ -1658,10 +1706,14 @@ public sealed partial class MainViewModel : Observable
 
     // ---------- диагностика ----------
 
-    string _serviceText = "", _driverText = "", _coreText = "";
-    public string ServiceText { get => _serviceText; private set => Set(ref _serviceText, value); }
-    public string DriverText { get => _driverText; private set => Set(ref _driverText, value); }
-    public string CoreText { get => _coreText; private set { if (Set(ref _coreText, value)) Raise(nameof(CoreRowText)); } }
+    // Тексты «Диагностики» хранятся правилом сборки (данные в замыкании) и читаются на языке окна.
+    readonly LiveText _serviceText = new(), _driverText = new(), _coreText = new();
+    public string ServiceText { get => _serviceText.Value; private set { _serviceText.Set(value); Raise(); } }
+    public string DriverText { get => _driverText.Value; private set { _driverText.Set(value); Raise(); } }
+    public string CoreText { get => _coreText.Value; private set { _coreText.Set(value); Raise(); Raise(nameof(CoreRowText)); } }
+    void ServiceTextIs(Func<string> build) { _serviceText.Set(build); Raise(nameof(ServiceText)); }
+    void DriverTextIs(Func<string> build) { _driverText.Set(build); Raise(nameof(DriverText)); }
+    void CoreTextIs(Func<string> build) { _coreText.Set(build); Raise(nameof(CoreText)); Raise(nameof(CoreRowText)); }
     /// <summary>Строка «Ядро» на «Информация и обновления»: пустая (ещё не проверяли) — «неизвестно».</summary>
     public string CoreRowText
     {
@@ -1670,7 +1722,7 @@ public sealed partial class MainViewModel : Observable
             // Версия — из ответа помощника, а пока его нет — из поставки (data\core.json рядом с программой).
             var version = string.IsNullOrEmpty(_coreVersion) ? _shell.Installer.Manifest.Version : _coreVersion;
             // Имена повреждённых файлов — на «Диагностике» («Подробнее»); здесь одна фраза.
-            var state = string.IsNullOrEmpty(_coreText) ? "" : _coreBroken ? L.T(_coreMissing ? "about.core.missing" : "about.core.damaged") : L.T("about.core.ok");
+            var state = _coreText.IsEmpty ? "" : _coreBroken ? L.T(_coreMissing ? "about.core.missing" : "about.core.damaged") : L.T("about.core.ok");
             return (version, state) switch
             {
                 ({ Length: > 0 }, { Length: > 0 }) => L.T("about.core.row", new { version, state }),
@@ -1687,6 +1739,33 @@ public sealed partial class MainViewModel : Observable
     public bool CoreBroken { get => _coreBroken; private set => Set(ref _coreBroken, value); }
 
     public ObservableCollection<string> ConflictList { get; } = [];
+    IReadOnlyList<Conflict>? _conflictsShown;
+
+    void RebuildConflictList()
+    {
+        if (_conflictsShown is not { } list) return;
+        ConflictList.Clear();
+        foreach (var c in list) ConflictList.Add(L.T("diag.conflict.line", new { name = c.NameNow, detail = c.DetailNow }));
+    }
+
+    /// <summary>Смена языка: всё, что окно держит готовой строкой, собирается заново из данных (сообщения последних действий остаются).</summary>
+    protected override void OnLanguageChanged()
+    {
+        ComputeStatus();
+        RebuildCheckRows();
+        RebuildDnsRows();
+        RebuildConflictList();
+        PcDns.RefreshForLanguage();
+        if (_pcDnsStatus is { } dnsStatus) ShowPcDns(dnsStatus);
+        for (int i = 0; i < Findings.Count; i++) if (Findings[i].Source is not null) Findings[i] = Findings[i].Refreshed();
+        // Список стратегий на главной: подписи («открыла всё · проверено …»), предупреждения, названия — из статистики; раскрытое остаётся.
+        var open = StrategyChoices.Where(c => c.Expanded || c.ShowParams).ToDictionary(c => c.Id, c => (c.Expanded, c.ShowParams));
+        if (StrategyChoices.Count > 0)
+        {
+            ReloadChoices();
+            foreach (var c in StrategyChoices) if (open.TryGetValue(c.Id, out var f)) (c.Expanded, c.ShowParams) = f;
+        }
+    }
     public ObservableCollection<string> VpnList { get; } = [];
 
     public string CoreFolder => Demo.Path(_shell.Paths.Core, @"C:\Users\user\AppData\Local\DpiShell\core");
@@ -1743,8 +1822,9 @@ public sealed partial class MainViewModel : Observable
     public bool DiagRefreshing { get => _diagRefreshing; private set { if (Set(ref _diagRefreshing, value)) { Raise(nameof(RefreshButtonText)); CommandManager.InvalidateRequerySuggested(); } } }
     public string RefreshButtonText => DiagRefreshing ? L.T("diag.refreshing") : L.T("diag.refresh");
 
-    string _diagUpdated = "";
-    public string DiagUpdated { get => _diagUpdated; private set => Set(ref _diagUpdated, value); }
+    readonly LiveText _diagUpdated = new();
+    public string DiagUpdated { get => _diagUpdated.Value; private set { _diagUpdated.Set(value); Raise(); } }
+    void DiagUpdatedIs(Func<string> build) { _diagUpdated.Set(build); Raise(nameof(DiagUpdated)); }
 
     public async Task RefreshDiagAsync()
     {
@@ -1765,64 +1845,73 @@ public sealed partial class MainViewModel : Observable
             if (st is not null)
             {
                 // Стратегию показываем ту, что реально стоит в службе Windows; чужой файл в службе — отдельно.
-                var state = Texts.Svc(st.Service);
-                var strategy = st.ServiceStrategy is { } ss ? StrategyTitle(ss) : st.StrategyId is { } id && st.Service != SvcState.NotInstalled ? StrategyTitle(id) : null;
-                var foreign = st.Service != SvcState.NotInstalled && !st.ServiceOurCore;
-                ServiceText = st.RunMode == "process" ? L.T("diag.service.process")
-                    : strategy is not null
-                        ? L.T(foreign ? "diag.service.with_strategy_foreign" : "diag.service.with_strategy", new { state, strategy })
-                        : foreign ? L.T("diag.service.foreign", new { state }) : state;
+                ServiceTextIs(() =>
+                {
+                    var state = Texts.Svc(st.Service);
+                    var strategy = st.ServiceStrategy is { } ss ? StrategyTitle(ss) : st.StrategyId is { } id && st.Service != SvcState.NotInstalled ? StrategyTitle(id) : null;
+                    var foreign = st.Service != SvcState.NotInstalled && !st.ServiceOurCore;
+                    return st.RunMode == "process" ? L.T("diag.service.process")
+                        : strategy is not null
+                            ? L.T(foreign ? "diag.service.with_strategy_foreign" : "diag.service.with_strategy", new { state, strategy })
+                            : foreign ? L.T("diag.service.foreign", new { state }) : state;
+                });
                 (_svc, _active) = (st.Service, st.Active);
-                _coreProblem = CoreProblem(st.Core);
+                _coreState = st.Core;
             }
             else
             {
-                ServiceText = local is { } l ? L.T("diag.service.with_strategy", new { state = Texts.Svc(svc), strategy = StrategyTitle(l) }) : Texts.Svc(svc);
+                ServiceTextIs(() => local is { } l ? L.T("diag.service.with_strategy", new { state = Texts.Svc(svc), strategy = StrategyTitle(l) }) : Texts.Svc(svc));
                 (_svc, _active) = (svc, svc == SvcState.Running);
                 _localStrategy = local;
-                _coreProblem = null;
+                _coreState = CoreState.Ok;
             }
-            DriverText = Texts.Svc(drv);
+            DriverTextIs(() => Texts.Svc(drv));
             if (d is not null)
             {
                 var core = d.Core;
                 _coreVersion = d.CoreVersion;
                 CoreBroken = core.State != CoreState.Ok;
                 _coreMissing = core.State == CoreState.Missing;
-                CoreText = core.State switch
+                CoreTextIs(() =>
                 {
-                    CoreState.Ok => L.T("diag.core.ok", new { version = d.CoreVersion }),
-                    CoreState.Missing => L.T("diag.core.missing"),
-                    _ => L.T("diag.core.changed", new { files = string.Join(", ", core.BadFiles) }),
-                };
-                if (core.ExtraFiles.Count > 0) CoreText = L.T("diag.core.extra", new { text = CoreText, files = string.Join(", ", core.ExtraFiles) });
+                    var text = core.State switch
+                    {
+                        CoreState.Ok => L.T("diag.core.ok", new { version = d.CoreVersion }),
+                        CoreState.Missing => L.T("diag.core.missing"),
+                        _ => L.T("diag.core.changed", new { files = string.Join(", ", core.BadFiles) }),
+                    };
+                    return core.ExtraFiles.Count > 0 ? L.T("diag.core.extra", new { text, files = string.Join(", ", core.ExtraFiles) }) : text;
+                });
             }
             else
             {
                 CoreBroken = false;
-                CoreText = Helper.State == HelperState.NotInstalled ? L.T("diag.core.no_helper") : L.T("diag.core.helper_down");
+                var noHelper = Helper.State == HelperState.NotInstalled;
+                CoreTextIs(() => noHelper ? L.T("diag.core.no_helper") : L.T("diag.core.helper_down"));
             }
-            ConflictList.Clear();
-            foreach (var c in conflicts) ConflictList.Add(L.T("diag.conflict.line", new { name = c.Name, detail = c.Detail }));
+            _conflictsShown = conflicts;
+            RebuildConflictList();
             VpnList.Clear();
             foreach (var v in vpn) VpnList.Add(v);
             UpdateStatus();
             if (DnsRows.Count == 0) _ = CheckDnsAsync();
             // Проверки окружения (§4) и временные метки — только чтение: netsh show, sc query, реестр, процессы.
             var (ts, findings) = await Task.Run(() => (TcpTimestamps.IsEnabled(), SystemChecks.Run(_shell.Paths)));
-            TimestampsText = TimestampsLine(ts);
+            TimestampsTextIs(() => TimestampsLine(ts));
             Findings.Clear();
-            foreach (var f in findings) Findings.Add(new FindingRow(f.Ok, f.Title, f.Text, f.Go));
+            foreach (var f in findings) Findings.Add(new FindingRow(f.Ok, f.Title, f.Text, f.Go, f));
             OnHelperChanged();
-            DiagUpdated = L.T("diag.updated", new { time = L.Time(DateTime.Now) });
+            var updated = DateTime.Now;
+            DiagUpdatedIs(() => L.T("diag.updated", new { time = L.Time(updated) }));
         }
         catch (Exception e) { Fail(Texts.Friendly(e)); }
         finally { DiagRefreshing = false; }
     }
 
-    string _timestampsText = "";
+    readonly LiveText _timestampsText = new();
     /// <summary>Решение 8: метки включаются сами при «Включить» и перед подбором — здесь только показываем.</summary>
-    public string TimestampsText { get => _timestampsText; private set => Set(ref _timestampsText, value); }
+    public string TimestampsText { get => _timestampsText.Value; private set { _timestampsText.Set(value); Raise(); } }
+    void TimestampsTextIs(Func<string> build) { _timestampsText.Set(build); Raise(nameof(TimestampsText)); }
 
     public static string TimestampsLine(bool? enabled) => enabled switch
     {

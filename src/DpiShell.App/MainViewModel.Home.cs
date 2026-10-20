@@ -68,9 +68,10 @@ public sealed partial class MainViewModel
     public ObservableCollection<CheckGroupMark> CheckGroups { get; } = [];
     public bool HasCheck => CheckRows.Count > 0 || Checking;
 
-    string _checkedAt = "";
-    /// <summary>«в 14:05» — когда проверяли.</summary>
-    public string CheckedAt { get => _checkedAt; private set => Set(ref _checkedAt, value); }
+    readonly LiveText _checkedAt = new();
+    /// <summary>«в 14:05» — когда проверяли (время хранится, текст собирается при показе).</summary>
+    public string CheckedAt { get => _checkedAt.Value; private set { _checkedAt.Set(value); Raise(); } }
+    void CheckedAtIs(Func<string> build) { _checkedAt.Set(build); Raise(nameof(CheckedAt)); }
 
     void RebuildCheckGroups()
     {

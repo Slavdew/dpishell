@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Net;
 
 namespace DpiShell.Core;
@@ -204,10 +205,10 @@ public sealed class HostsTryout(IEndpointProbe probe, IHostsDns dns, IRdapClient
         IPAddress[] addrs;
         try { addrs = await Gated(() => dns.ResolveAsync(host, ct), ct); }
         catch (Exception e) when (e is not OperationCanceledException) { addrs = []; }
-        if (addrs.Length == 0) return new(DnsState.Unknown, "DNS не ответил", []);
+        if (addrs.Length == 0) return new(DnsState.Unknown, L.T("core.hosts.check.dns_silent"), []);
         var answered = addrs;
         addrs = [.. addrs.Where(HostsRules.IsPublicAddress)];
-        if (addrs.Length == 0) return new(DnsState.Fails, $"DNS вернул заглушку {answered[0]}", []);
+        if (addrs.Length == 0) return new(DnsState.Fails, L.T("core.hosts.check.dns_stub", new { ip = answered[0] }), []);
         var checks = await Task.WhenAll(addrs.Take(3).Select(a => Gated(() => probe.CheckAsync(host, a, ct), ct)));
         var ok = addrs.Zip(checks).FirstOrDefault(x => x.Second.Ok);
         return ok.First is not null

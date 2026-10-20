@@ -134,22 +134,22 @@ public static partial class AdvancedSites
     /// </summary>
     public static string? Problem(AdvancedConfig c, Func<string, bool>? strategyExists = null)
     {
-        if (!IsOthers(c.Others)) return "Остальные адреса: напрямую, по спискам или для всех.";
-        if (c.Rows.Count > MaxRows) return $"Строк больше {MaxRows}.";
+        if (!IsOthers(c.Others)) return L.T("core.adv.others");
+        if (c.Rows.Count > MaxRows) return L.T("core.adv.too_many_rows", new { max = MaxRows });
         for (int i = 0; i < c.Rows.Count; i++)
         {
             var r = c.Rows[i];
             var (d, p) = Domains(r.Domains, i);
             if (p is not null) return p;
-            if (d!.Count != r.Domains.Count || !d.SequenceEqual(r.Domains)) return $"Строка {i + 1}: сайты записаны неверно.";
-            if (!IsStrategyChoice(r.Strategy)) return $"Строка {i + 1}: неверная стратегия.";
-            if (r.Strategy is not (Auto or Direct) && strategyExists is { } ex && !ex(r.Strategy)) return $"Строка {i + 1}: такой стратегии нет.";
+            if (d!.Count != r.Domains.Count || !d.SequenceEqual(r.Domains)) return L.T("core.adv.row_sites", new { n = i + 1 });
+            if (!IsStrategyChoice(r.Strategy)) return L.T("core.adv.row_strategy", new { n = i + 1 });
+            if (r.Strategy is not (Auto or Direct) && strategyExists is { } ex && !ex(r.Strategy)) return L.T("core.adv.row_no_strategy", new { n = i + 1 });
         }
         return null;
     }
 
     /// <summary>Текст «оптимизировать нечего»: остальные напрямую и ни одной строки со своей стратегией (ни профилей программ).</summary>
-    public const string NothingToDo = "Остальные адреса напрямую, а строк со своей стратегией нет — оптимизировать нечего. Добавьте строку или выберите «По спискам».";
+    public static string NothingToDo => L.T("core.adv.nothing_to_do");
 
     public static bool IsEmpty(AdvancedConfig c) => c.Enabled && c.Others == OthersDirect && !c.Rows.Any(r => r.Strategy != Direct);
 
@@ -190,7 +190,7 @@ public static partial class AdvancedSites
         {
             var r = c.Rows[i];
             if (r.Strategy != Auto || r.Domains.Count == 0 || Domain(r.Domains[0]) is not { } first) continue;
-            groups.Add(new(GroupId(i), $"Сайты строки {i + 1}", [new($"https://{first}/")], Extra: true));
+            groups.Add(new(GroupId(i), L.T("core.adv.group_line", new { n = i + 1 }), [new($"https://{first}/")], Extra: true));
         }
         return groups;
     }

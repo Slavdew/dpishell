@@ -61,7 +61,7 @@ public sealed class PcDnsViewModelTests : IDisposable
         vm.RecheckAfterDns = () => { rechecks++; return Task.CompletedTask; };
         await vm.ApplyPcDnsAsync(vm.PcDns.Options.Single(o => o.Id == "google"));
         Assert.Equal(0, rechecks);
-        Assert.Contains("вернул прежние настройки", vm.Message);
+        Assert.Contains("прежние настройки возвращены", vm.Message);
         Assert.False(vm.HasToast);   // не сменилось — и «Вернуть» не предлагаем
     }
 

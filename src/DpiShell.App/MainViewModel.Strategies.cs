@@ -96,7 +96,7 @@ public sealed partial class MainViewModel
     void PresentUnchecked(Strategy s, string resultKey)
     {
         var title = DisplayTitleOf(s);
-        _titles[s.Id] = title;
+        _titles[s.Id] = (s.Title, s.Roles);
         var row = new ScoreRow(new StrategyScore(s, [], 0, 0), Names, StrategyTitle);
         var old = Scores.FirstOrDefault(r => r.Id == s.Id);
         if (old is not null) Scores.Remove(old);

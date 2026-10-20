@@ -1,0 +1,20 @@
+{
+  "_comment": "Временная область: ключи из router/luci-app-dpishell/lang-src/web.json (router-work, 0b03435); после слияния router-work заменить встроенным ресурсом того файла.",
+  "web.dns.preset.provider": "От провайдера",
+  "web.dns.preset.yandex": "Яндекс",
+  "web.strat.and": "и",
+  "web.strat.found": "Найденная {n} ({when})",
+  "web.strat.mixed": "Смешанная",
+  "web.strat.new": "Новая стратегия {n} (поиск {when})",
+  "web.strat.own": "свои",
+  "web.strat.own_sites": "свои сайты",
+  "web.strat.rest": "остальное",
+  "web.warn.auto_select_failed": "Автоподбор не нашёл рабочую стратегию — оставлена прежняя",
+  "web.warn.auto_selected": "Автоподбор включил {name}",
+  "web.warn.conflict": "Мешает похожая программа: {names}",
+  "web.warn.dns_fallback": "Защищённый DNS недоступен — временно работает DNS провайдера",
+  "web.warn.dns_spoofed": "Провайдер подменяет адреса сайтов — приложения вне браузера могут не работать",
+  "web.warn.select_failed": "Подбор прервался: {error}",
+  "web.warn.switched_backup": "Стратегия перестала работать — включена запасная {name}",
+  "web.core.missing": "Ядро zapret не установлено"
+}

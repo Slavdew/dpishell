@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Diagnostics;
 using System.Management;
 using System.Net;
@@ -115,7 +116,7 @@ public sealed class WindowsDnsSystem : IDnsSystem
             p["DNSServerSearchOrder"] = list.Length == 0 ? null : list;
             using var r = mo.InvokeMethod("SetDNSServerSearchOrder", p, null);
             var code = Convert.ToUInt32(r["ReturnValue"]);
-            if (code is not (0 or 1)) throw new InvalidOperationException($"Windows не приняла адреса DNS (код {code}).");
+            if (code is not (0 or 1)) throw new InvalidOperationException(L.T("core.dns.sys.not_accepted", new { code }));
         }
     }
 
@@ -183,7 +184,7 @@ public sealed class WindowsDnsSystem : IDnsSystem
 
     static void Netsh(params string[] args)
     {
-        if (!TryNetsh(args)) throw new InvalidOperationException("Windows не приняла настройку DNS (netsh " + string.Join(' ', args.Take(4)) + ").");
+        if (!TryNetsh(args)) throw new InvalidOperationException(L.T("core.dns.sys.netsh_failed", new { args = string.Join(' ', args.Take(4)) }));
     }
 
     static bool TryNetsh(params string[] args)

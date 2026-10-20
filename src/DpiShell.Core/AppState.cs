@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Text.Json;
 
 namespace DpiShell.Core;
@@ -88,7 +89,7 @@ public static class ResultStore
         var userNo = new Dictionary<string, int>();
         foreach (var v in r.Baseline.Concat(r.Scores.SelectMany(s => s.Verdicts)).Where(v => IsUserGroup(v.GroupId)))
             userNo.TryAdd(v.Target.Url, userNo.Count + 1);
-        string Url(TargetVerdict v) => IsUserGroup(v.GroupId) ? $"свой адрес №{userNo[v.Target.Url]}" : v.Target.Url;
+        string Url(TargetVerdict v) => IsUserGroup(v.GroupId) ? L.T("core.addr.user_n", new { n = userNo[v.Target.Url] }) : v.Target.Url;
         IEnumerable<string> Detail(TargetVerdict v) => v.Probes.Select(x => Hide(v, $"{x.Tls}: {x.Outcome} {x.Detail}"));
         string Hide(TargetVerdict v, string d)
         {
