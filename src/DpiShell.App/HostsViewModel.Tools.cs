@@ -31,14 +31,14 @@ public sealed class TryRowVm : Observable
         Source = r;
         (Verdict, Reason, Tone) = r.Verdict switch
         {
-            HostsTryVerdict.Helps => ("Поможет", "Строка чинит", "ok"),
-            HostsTryVerdict.NotNeeded => ("Не нужна", "Открывается и так", "muted"),
-            HostsTryVerdict.Breaks => ("Сломает", "Сайт перестанет открываться", "bad"),
-            HostsTryVerdict.Useless => ("Не поможет", "Здесь нужна оптимизация, а не hosts", "warn"),
-            HostsTryVerdict.Dangerous => ("Опасно", "Адрес чужой, а не этого сайта", "bad"),
-            _ => ("Блокирует", "Блокировка (ничего не меняет)", "muted"),
+            HostsTryVerdict.Helps => (L.T("hosts.try.verdict.helps"), L.T("hosts.try.reason.helps"), "ok"),
+            HostsTryVerdict.NotNeeded => (L.T("hosts.try.verdict.not_needed"), L.T("hosts.try.reason.not_needed"), "muted"),
+            HostsTryVerdict.Breaks => (L.T("hosts.try.verdict.breaks"), L.T("hosts.try.reason.breaks"), "bad"),
+            HostsTryVerdict.Useless => (L.T("hosts.try.verdict.useless"), L.T("hosts.try.reason.useless"), "warn"),
+            HostsTryVerdict.Dangerous => (L.T("hosts.try.verdict.dangerous"), L.T("hosts.try.reason.dangerous"), "bad"),
+            _ => (L.T("hosts.try.verdict.blocks"), L.T("hosts.try.reason.blocks"), "muted"),
         };
-        Detail = (r.Line > 0 ? $"строка {r.Line} · " : "") + Simple(r);
+        Detail = r.Line > 0 ? L.T("hosts.try.detail", new { line = r.Line, text = Simple(r) }) : Simple(r);
         Technical = Describe(r);
         CanSelect = selectable;
         _selected = selectable && selected;
@@ -46,28 +46,28 @@ public sealed class TryRowVm : Observable
 
     /// <summary>Одной фразой, что выяснила проверка: «Подтверждено: адрес принадлежит GitHub».</summary>
     static string Simple(HostsTryRow r) =>
-        r.Live is null ? "адрес не проверялся"
-        : r.Live.Ok ? (string.IsNullOrWhiteSpace(r.OwnerName) ? "подтверждено: сайт отвечает по этому адресу" : $"подтверждено: адрес принадлежит {r.OwnerName.Trim()}")
-        : r.Live.Outcome == EndpointOutcome.BadCertificate ? "по адресу отвечает другой сайт"
-        : "адрес не отвечает";
+        r.Live is null ? L.T("hosts.try.simple.not_checked")
+        : r.Live.Ok ? (string.IsNullOrWhiteSpace(r.OwnerName) ? L.T("hosts.try.simple.confirmed") : L.T("hosts.try.simple.confirmed_owner", new { owner = r.OwnerName.Trim() }))
+        : r.Live.Outcome == EndpointOutcome.BadCertificate ? L.T("hosts.try.simple.foreign")
+        : L.T("hosts.try.simple.no_response");
 
     /// <summary>Технические признаки: сертификат, владелец сети, как соотносится с DNS.</summary>
     static string Describe(HostsTryRow r)
     {
         var parts = new List<string>();
-        parts.Add(r.Live is null ? "заглушка (0.0.0.0 и подобные) — не проверялся"
-            : r.Live.Ok ? "сертификат верный"
-            : r.Live.Outcome == EndpointOutcome.BadCertificate ? "сертификат не этого сайта"
-            : "адрес не отвечает");
-        if (!string.IsNullOrWhiteSpace(r.OwnerName)) parts.Add($"владелец сети: {r.OwnerName}");
+        parts.Add(r.Live is null ? L.T("hosts.try.tech.stub")
+            : r.Live.Ok ? L.T("hosts.try.tech.cert_ok")
+            : r.Live.Outcome == EndpointOutcome.BadCertificate ? L.T("hosts.try.tech.cert_bad")
+            : L.T("hosts.try.simple.no_response"));
+        if (!string.IsNullOrWhiteSpace(r.OwnerName)) parts.Add(L.T("hosts.try.tech.owner", new { owner = r.OwnerName }));
         parts.Add(r.Match switch
         {
-            DnsMatch.Same => "совпадает с DNS",
-            DnsMatch.SameNet => "из той же сети, что и ответ DNS",
-            DnsMatch.Differs => "отличается от DNS",
-            _ => "DNS не ответил",
+            DnsMatch.Same => L.T("hosts.try.tech.dns_same"),
+            DnsMatch.SameNet => L.T("hosts.try.tech.dns_same_net"),
+            DnsMatch.Differs => L.T("hosts.try.tech.dns_differs"),
+            _ => L.T("hosts.try.tech.dns_none"),
         });
-        parts.Add(r.Dns switch { DnsState.Works => "через DNS открывается", DnsState.Fails => "через DNS не открывается", _ => "DNS не проверен" });
+        parts.Add(r.Dns switch { DnsState.Works => L.T("hosts.try.tech.opens_dns"), DnsState.Fails => L.T("hosts.try.tech.fails_dns"), _ => L.T("hosts.try.tech.dns_unchecked") });
         return string.Join(" · ", parts);
     }
 }
@@ -75,14 +75,14 @@ public sealed class TryRowVm : Observable
 public sealed record UserRowVm(string Host, string Ip, string Date, bool Stale)
 {
     public string Text => $"{Host} → {Ip}";
-    public string Note => Stale ? $"{Date} · адрес больше не работает" : Date;
+    public string Note => Stale ? L.T("hosts.user.note_stale", new { date = Date }) : Date;
     public HostsEntry Entry => new(Host, Ip);
 }
 
 public sealed record OffRowVm(int Line, string Date, string Original)
 {
     public string Text => Original.Trim();
-    public string Note => $"строка {Line} · закомментирована {Date}";
+    public string Note => L.T("hosts.off.note", new { line = Line, date = Date });
 }
 
 /// <summary>
@@ -92,18 +92,9 @@ public sealed record OffRowVm(int Line, string Date, string Original)
 /// </summary>
 public sealed partial class HostsViewModel
 {
-    public const string WriteUserQuestion =
-        "Будет изменён системный файл hosts: в конец добавится блок «DpiShell user» из {0} строк (у каждой пометка dpishell-user), другие строки не трогаем. Копия сохранена. " +
-        "Защитник Windows или другой антивирус может показать предупреждение (например, HostsFileHijack) — это реакция на любую правку hosts; разрешите изменение (название кнопки зависит от версии). Продолжить?";
+    static string RestoreQuestion => L.T("hosts.confirm.restore");
 
-    public const string CommentQuestion =
-        "В файле hosts строк станут комментариями: {0}. Перед каждой появится «# DpiShell off», ничего не удаляется. «Вернуть закомментированные» вернёт всё как было. " +
-        "Защитник Windows или другой антивирус может показать предупреждение — разрешите изменение (название кнопки зависит от версии). Продолжить?";
-
-    public const string RestoreQuestion =
-        "Вернуть hosts как было? Уберём блоки и строки DpiShell и раскомментируем строки, которые закомментировали мы. Всё остальное в файле не меняется.";
-
-    public const string RemoveUserQuestion = "Убрать эти свои строки из hosts? Остальные строки файла не меняются.";
+    static string RemoveUserQuestion => L.T("hosts.confirm.remove_user");
 
     // ---------- разделы вкладки ----------
 
@@ -117,7 +108,7 @@ public sealed partial class HostsViewModel
 
     /// <summary>Помощник старее программы: новых команд у него нет. Подсказка вместо мёртвых кнопок.</summary>
     public bool ToolsUnavailable => _helper.Reader is { } c && !c.Compat.Supports("hosts_try");
-    public string ToolsUnavailableText => "Для этих функций нужен новый помощник — обновите его (один запрос прав администратора).";
+    public string ToolsUnavailableText => L.T("hosts.tools_unavailable");
 
     // ---------- примерить строки ----------
 
@@ -134,7 +125,7 @@ public sealed partial class HostsViewModel
     public bool Trying { get => _trying; private set { if (Set(ref _trying, value)) CommandManager.InvalidateRequerySuggested(); } }
 
     int SelectedTry => TryRows.Count(r => r.Selected);
-    public string WriteSelectedText => SelectedTry > 0 ? $"Записать выбранные ({SelectedTry})" : "Записать выбранные";
+    public string WriteSelectedText => SelectedTry > 0 ? L.T("hosts.write_selected_n", new { n = SelectedTry }) : L.T("hosts.write_selected");
 
     ICommand? _tryCmd, _writeSelectedCmd, _clearTryCmd;
     public ICommand TryCmd => _tryCmd ??= RelayCommand.Async(TryAsync, () => !Busy && PasteText.Trim().Length > 0 && Can("hosts_try"));
@@ -150,20 +141,20 @@ public sealed partial class HostsViewModel
         Raise(nameof(WriteSelectedText));
         if (paste.Entries.Count == 0)
         {
-            TrySummary = "Не нашла ни одной строки вида «адрес имя». Вставьте строки из гайда, например: 140.82.121.3 github.com";
+            TrySummary = L.T("hosts.summary.try_empty");
             return;
         }
         if (await Need() is not { } c) return;
         Busy = true; Trying = true;
-        Done = 0; Total = 1; ProgressText = "Примеряю строки…";
-        var progress = new Progress<HostsCheckProgress>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = $"Проверено {p.Done} из {p.Total}"; });
+        Done = 0; Total = 1; ProgressText = L.T("hosts.progress.try");
+        var progress = new Progress<HostsCheckProgress>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = L.T("hosts.progress.done", new { done = p.Done, total = p.Total }); });
         using var cts = new CancellationTokenSource();
         _cts = cts;
         try
         {
             ShowTry(await c.HostsTryAsync(paste.Entries, progress, cts.Token), paste);
         }
-        catch (OperationCanceledException) { TrySummary = "Проверка остановлена."; }
+        catch (OperationCanceledException) { TrySummary = L.T("hosts.stopped"); }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); TrySummary = e.Message; }
         catch (HelperException e) { TrySummary = e.Message; }
         catch (Exception e) { TrySummary = Texts.Friendly(e); }
@@ -181,7 +172,7 @@ public sealed partial class HostsViewModel
             TryRows.Add(row);
         }
         Raise(nameof(WriteSelectedText));
-        TrySummary = Summarize(report, "Проверено строк", paste);
+        TrySummary = Summarize(report, entries: false, paste);
         TryOpen = true;
         CommandManager.InvalidateRequerySuggested();
     }
@@ -193,19 +184,22 @@ public sealed partial class HostsViewModel
     };
 
     /// <summary>«Проверено строк: 7. Поможет: 2 · сломает: 1 …» — только ненулевые.</summary>
-    static string Summarize(HostsTryReport report, string head, HostsPasteResult? paste)
+    static string Summarize(HostsTryReport report, bool entries, HostsPasteResult? paste)
     {
         int Count(HostsTryVerdict v) => report.Rows.Count(r => r.Verdict == v);
         var parts = new List<string>();
-        void Add(string name, params HostsTryVerdict[] vs) { if (vs.Sum(Count) is > 0 and var n) parts.Add($"{name}: {n}"); }
+        void Add(string key, params HostsTryVerdict[] vs) { if (vs.Sum(Count) is > 0 and var n) parts.Add(L.T(key, new { n })); }
         // Выводы вместо шести счётчиков: что записать можно, что не нужно, а что лучше не записывать (ломает сайт или чужой адрес).
-        Add("можно записать", HostsTryVerdict.Helps);
-        Add("не нужны", HostsTryVerdict.NotNeeded, HostsTryVerdict.Useless, HostsTryVerdict.Blocks);
-        Add("не стоит", HostsTryVerdict.Breaks, HostsTryVerdict.Dangerous);
-        var text = $"{head}: {report.Rows.Count}" + (parts.Count > 0 ? ". " + string.Join(" · ", parts) : "") + ".";
-        if (report.Truncated) text += $" Проверено первых {report.Rows.Count} из {report.Total}.";
-        if (paste is { SkippedLines: > 0 }) text += $" Пропущено строк без адреса или имени: {paste.SkippedLines}.";
-        if (paste is { Truncated: true }) text += $" Взяты первые {HostsPaste.MaxEntries} строк.";
+        Add("hosts.summary.part.can_write", HostsTryVerdict.Helps);
+        Add("hosts.summary.part.not_needed", HostsTryVerdict.NotNeeded, HostsTryVerdict.Useless, HostsTryVerdict.Blocks);
+        Add("hosts.summary.part.avoid", HostsTryVerdict.Breaks, HostsTryVerdict.Dangerous);
+        var count = report.Rows.Count;
+        var text = parts.Count > 0
+            ? L.T(entries ? "hosts.summary.entries_parts" : "hosts.summary.lines_parts", new { n = count, parts = string.Join(" · ", parts) })
+            : L.T(entries ? "hosts.summary.entries" : "hosts.summary.lines", new { n = count });
+        if (report.Truncated) text += L.T("hosts.summary.truncated", new { shown = report.Rows.Count, total = report.Total });
+        if (paste is { SkippedLines: > 0 }) text += L.T("hosts.summary.skipped", new { n = paste.SkippedLines });
+        if (paste is { Truncated: true }) text += L.T("hosts.summary.first_n", new { n = HostsPaste.MaxEntries });
         return text;
     }
 
@@ -218,17 +212,17 @@ public sealed partial class HostsViewModel
         var chosen = TryRows.Where(r => r.Selected && r.Source.Writable).Select(r => r.Source.Entry).ToList();
         if (chosen.Count == 0) return;
         var all = UserRows.Select(r => r.Entry).Concat(chosen).Distinct().ToList();
-        if (!Confirm(string.Format(WriteUserQuestion, all.Count))) return;
+        if (!Confirm(L.T("hosts.confirm.write_user", new { n = all.Count }))) return;
         if (await Need() is not { } c) return;
         Busy = true;
         try
         {
             var r = await c.HostsUserSetAsync(all);
             var written = r.Added.Count;
-            Say(written > 0 ? $"Записано своих строк: {written}. «Вернуть как было» уберёт их." : "Новых строк не записано.");
+            Say(written > 0 ? L.T("hosts.say.user_written", new { n = written }) : L.T("hosts.say.user_none"));
             TrySummary = r.Rejected.Count == 0
-                ? (written > 0 ? $"Записано строк: {written}." : "Эти строки уже записаны.")
-                : $"Записано строк: {written}. Не прошли повторную проверку: " + string.Join("; ", r.Rejected.Select(x => $"{x.Host} — {x.Reason}")) + ".";
+                ? (written > 0 ? L.T("hosts.try.written", new { n = written }) : L.T("hosts.try.already"))
+                : L.T("hosts.try.written_rejected", new { n = written, list = string.Join("; ", r.Rejected.Select(x => L.T("hosts.rejected_item", new { host = x.Host, reason = x.Reason }))) });
             if (written > 0) { TryRows.Clear(); Raise(nameof(WriteSelectedText)); UserOpen = true; }
         }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); Say(e.Message); }
@@ -241,7 +235,7 @@ public sealed partial class HostsViewModel
 
     public ObservableCollection<UserRowVm> UserRows { get; } = [];
     public bool HasUserRows => UserRows.Count > 0;
-    public string UserHeader => UserRows.Count == 0 ? "Своих строк в hosts нет." : $"Записано своих строк: {UserRows.Count}.";
+    public string UserHeader => UserRows.Count == 0 ? L.T("hosts.user.header_none") : L.T("hosts.user.header", new { n = UserRows.Count });
 
     ICommand? _removeUserCmd, _removeAllUserCmd;
     public ICommand RemoveUserCmd => _removeUserCmd ??= new RelayCommand(p => _ = RemoveUserAsync(p as UserRowVm), p => !Busy && p is UserRowVm && Can("hosts_user_set"));
@@ -258,7 +252,7 @@ public sealed partial class HostsViewModel
         try
         {
             await c.HostsUserSetAsync(rest);
-            Say(row is null ? "Готово: свои строки убраны из hosts." : $"Готово: строка для {row.Host} убрана.");
+            Say(row is null ? L.T("hosts.say.user_removed_all") : L.T("hosts.say.user_removed_one", new { host = row.Host }));
         }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); Say(e.Message); }
         catch (HelperException e) { Say(e.Message); }
@@ -279,8 +273,8 @@ public sealed partial class HostsViewModel
     public bool Auditing { get => _auditing; private set { if (Set(ref _auditing, value)) CommandManager.InvalidateRequerySuggested(); } }
 
     int SelectedAudit => AuditRows.Count(r => r.Selected);
-    public string CommentText => SelectedAudit > 0 ? $"Закомментировать выбранные ({SelectedAudit})" : "Закомментировать выбранные";
-    public string UncommentText => $"Вернуть закомментированные ({OffRows.Count})";
+    public string CommentText => SelectedAudit > 0 ? L.T("hosts.audit.comment_n", new { n = SelectedAudit }) : L.T("hosts.audit.comment");
+    public string UncommentText => L.T("hosts.audit.uncomment_n", new { n = OffRows.Count });
     public bool HasOff => OffRows.Count > 0;
     public bool HasProblems => AuditRows.Any(r => r.CanSelect);
 
@@ -298,12 +292,12 @@ public sealed partial class HostsViewModel
         AuditRows.Clear();
         Raise(nameof(CommentText)); Raise(nameof(HasProblems));
         AuditSummary = "";
-        Done = 0; Total = 1; ProgressText = "Проверяю hosts…";
-        var progress = new Progress<HostsCheckProgress>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = $"Проверено {p.Done} из {p.Total}"; });
+        Done = 0; Total = 1; ProgressText = L.T("hosts.progress.audit");
+        var progress = new Progress<HostsCheckProgress>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = L.T("hosts.progress.done", new { done = p.Done, total = p.Total }); });
         using var cts = new CancellationTokenSource();
         _cts = cts;
         try { ShowAudit(await c.HostsAuditAsync(progress, cts.Token)); }
-        catch (OperationCanceledException) { AuditSummary = "Проверка остановлена."; }
+        catch (OperationCanceledException) { AuditSummary = L.T("hosts.stopped"); }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); AuditSummary = e.Message; }
         catch (HelperException e) { AuditSummary = e.Message; }
         catch (Exception e) { AuditSummary = Texts.Friendly(e); }
@@ -323,9 +317,10 @@ public sealed partial class HostsViewModel
         Raise(nameof(CommentText)); Raise(nameof(HasProblems));
         int bad = report.Rows.Count(r => r.Problem);
         AuditSummary = report.Rows.Count == 0
-            ? "В вашем hosts нет чужих строк с адресами сайтов."
-            : (bad == 0 ? "Мешающих строк не нашла. " : $"Мешают строки: {bad}. Отметьте те, что хотите закомментировать — ничего не удаляется. ")
-              + Summarize(report, "Проверено записей", null);
+            ? L.T("hosts.audit.summary_empty")
+            : bad == 0
+                ? L.T("hosts.audit.summary_ok", new { summary = Summarize(report, entries: true, null) })
+                : L.T("hosts.audit.summary_bad", new { n = bad, summary = Summarize(report, entries: true, null) });
         AuditOpen = true;
         CommandManager.InvalidateRequerySuggested();
     }
@@ -334,16 +329,20 @@ public sealed partial class HostsViewModel
     {
         var ids = AuditRows.Where(r => r.Selected && r.LineId is not null).Select(r => r.LineId!).Distinct().ToList();
         if (ids.Count == 0) return;
-        if (!Confirm(string.Format(CommentQuestion, ids.Count))) return;
+        if (!Confirm(L.T("hosts.confirm.comment", new { n = ids.Count }))) return;
         if (await Need() is not { } c) return;
         Busy = true;
         try
         {
             var r = await c.HostsCommentAsync(ids);
             Say(r.Commented.Count > 0
-                ? $"Закомментировано строк: {r.Commented.Count}." + (r.Skipped.Count > 0 ? $" Пропущено: {r.Skipped.Count} (файл изменился — проверьте hosts заново)." : "")
-                : "Ничего не закомментировано." + (r.Skipped.Count > 0 ? " " + r.Skipped[0] : ""));
-            if (r.Commented.Count > 0) AuditSummary = $"Закомментировано строк: {r.Commented.Count}. Верните их кнопкой «Вернуть закомментированные».";
+                ? (r.Skipped.Count > 0
+                    ? L.T("hosts.say.commented_skipped", new { n = r.Commented.Count, skipped = r.Skipped.Count })
+                    : L.T("hosts.say.commented", new { n = r.Commented.Count }))
+                : r.Skipped.Count > 0
+                    ? L.T("hosts.say.comment_none_reason", new { reason = r.Skipped[0] })
+                    : L.T("hosts.say.comment_none"));
+            if (r.Commented.Count > 0) AuditSummary = L.T("hosts.audit.commented", new { n = r.Commented.Count });
             foreach (var row in AuditRows.Where(x => ids.Contains(x.LineId ?? "")).ToList()) AuditRows.Remove(row);
             Raise(nameof(CommentText)); Raise(nameof(HasProblems));
         }
@@ -361,7 +360,7 @@ public sealed partial class HostsViewModel
         try
         {
             var r = await c.HostsUncommentAsync();
-            Say(r.Changed ? $"Готово: строк возвращено — {r.Commented.Count}." : "Закомментированных строк нет.");
+            Say(r.Changed ? L.T("hosts.say.uncommented", new { n = r.Commented.Count }) : L.T("hosts.say.uncomment_none"));
         }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); Say(e.Message); }
         catch (HelperException e) { Say(e.Message); }
@@ -379,10 +378,10 @@ public sealed partial class HostsViewModel
         get
         {
             var parts = new List<string>();
-            if (BlockPresent) parts.Add($"проверенные адреса: {_status!.Block.Entries.Count}");
-            if (UserRows.Count > 0) parts.Add($"свои строки: {UserRows.Count}");
-            if (OffRows.Count > 0) parts.Add($"закомментированные: {OffRows.Count}");
-            return parts.Count == 0 ? "" : "В hosts от DpiShell — " + string.Join(", ", parts) + ".";
+            if (BlockPresent) parts.Add(L.T("hosts.ours.verified", new { n = _status!.Block.Entries.Count }));
+            if (UserRows.Count > 0) parts.Add(L.T("hosts.ours.user", new { n = UserRows.Count }));
+            if (OffRows.Count > 0) parts.Add(L.T("hosts.ours.off", new { n = OffRows.Count }));
+            return parts.Count == 0 ? "" : L.T("hosts.ours", new { parts = string.Join(", ", parts) });
         }
     }
 
@@ -398,7 +397,7 @@ public sealed partial class HostsViewModel
         {
             var r = await c.HostsRestoreAsync();
             _draftOn = false;
-            Say(r.Changed ? "Готово: hosts возвращён как был." : "Изменений DpiShell в hosts нет.");
+            Say(r.Changed ? L.T("hosts.say.restored") : L.T("hosts.say.restore_none"));
         }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); Say(e.Message); }
         catch (HelperException e) { Say(e.Message); }
@@ -426,5 +425,5 @@ public sealed partial class HostsViewModel
 
     /// <summary>«Адрес для X больше не работает — убрать или подобрать новый»: своих строк мы сами не снимаем, только говорим.</summary>
     IEnumerable<string> StaleWarnings() =>
-        UserRows.Where(r => r.Stale).Select(r => $"Адрес для {r.Host} больше не работает — уберите строку или подберите новый адрес.");
+        UserRows.Where(r => r.Stale).Select(r => L.T("hosts.warn.stale", new { host = r.Host }));
 }

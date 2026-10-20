@@ -343,7 +343,7 @@ public sealed class FeatureViewModelTests
         vm.PasteText = "просто текст";
         await vm.TryAsync();
         Assert.Empty(vm.TryRows);
-        Assert.Contains("Не нашла ни одной строки", vm.TrySummary);
+        Assert.Equal(L.T("hosts.summary.try_empty"), vm.TrySummary);
     }
 
     [Fact]
