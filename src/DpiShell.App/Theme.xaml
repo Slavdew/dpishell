@@ -1282,4 +1282,40 @@
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
+
+        <!-- ===== Выгрузка и загрузка настроек (R-settings): значки Fluent UI System Icons 1.1.292, 24 regular, MIT (THIRD-PARTY-NOTICES.txt, docs/vetting.md) и переключатель-сегмент. ===== -->
+        <Geometry x:Key="Ic.arrow_upload">F1 M18.25 3.51a.75.75 0 1 0 0-1.5h-13a.75.75 0 1 0 0 1.5h13ZM11.65 22h.1c.38 0 .7-.28.74-.64l.01-.1V7.56l3.72 3.72c.27.27.68.29.98.07l.08-.07a.75.75 0 0 0 .07-.98l-.07-.08-5-5a.75.75 0 0 0-.97-.07l-.09.07-5 5a.75.75 0 0 0 .98 1.13l.08-.07L11 7.58v13.67c0 .38.28.7.65.75Z</Geometry>
+        <Geometry x:Key="Ic.arrow_download">F1 M18.25 20.5a.75.75 0 1 1 0 1.5h-13a.75.75 0 1 1 0-1.5h13Zm-6.6-18.49h.1c.38 0 .7.28.74.64l.01.1v13.7l3.72-3.73a.75.75 0 0 1 .98-.07l.08.07c.27.27.3.68.07.98l-.07.08-5 5a.75.75 0 0 1-.97.07l-.09-.07-5-5a.75.75 0 0 1 .98-1.13l.08.07L11 16.43V2.76c0-.38.28-.7.65-.75h.1-.1Z</Geometry>
+        <Geometry x:Key="Ic.folder">F1 M3.5 6.25V8h4.63c.2 0 .39-.08.53-.22l1.53-1.53-1.53-1.53a.75.75 0 0 0-.53-.22H5.25c-.97 0-1.75.78-1.75 1.75Zm-1.5 0C2 4.45 3.46 3 5.25 3h2.88c.6 0 1.17.24 1.59.66l1.84 1.84h7.19c1.8 0 3.25 1.46 3.25 3.25v9c0 1.8-1.46 3.25-3.25 3.25H5.25A3.25 3.25 0 0 1 2 17.75V6.25ZM3.5 9.5v8.25c0 .97.78 1.75 1.75 1.75h13.5c.97 0 1.75-.78 1.75-1.75v-9c0-.97-.78-1.75-1.75-1.75h-7.19L9.72 8.84c-.42.42-1 .66-1.6.66H3.5Z</Geometry>
+        <Geometry x:Key="Ic.warning">F1 M13 17a1 1 0 1 0-2 0 1 1 0 0 0 2 0Zm-.26-7.85a.75.75 0 0 0-1.5.1l.01 4.5v.1a.75.75 0 0 0 1.5-.1v-4.5l-.01-.1Zm1.23-5.5a2.25 2.25 0 0 0-3.94 0L2.3 17.67A2.25 2.25 0 0 0 4.26 21h15.49c1.71 0 2.8-1.84 1.96-3.34l-7.74-14Zm-2.63.74a.75.75 0 0 1 1.32 0l7.74 14a.75.75 0 0 1-.65 1.11H4.25a.75.75 0 0 1-.65-1.11l7.74-14Z</Geometry>
+
+        <!-- Сегмент «Выгрузка | Загрузка», «Добавить | Заменить»: RadioButton в рамке (Border с Line) — выбранный залит акцентом. -->
+        <Style x:Key="Seg" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource Text}" />
+            <Setter Property="Padding" Value="12,5" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="B" Background="Transparent" CornerRadius="5" Padding="{TemplateBinding Padding}" Margin="1">
+                            <ContentPresenter x:Name="C" HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="B" Property="Background" Value="{DynamicResource Hover}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="B" Property="Background" Value="{DynamicResource Accent}" />
+                                <Setter TargetName="C" Property="TextElement.Foreground" Value="{DynamicResource OnAccent}" />
+                                <Setter TargetName="C" Property="TextElement.FontWeight" Value="SemiBold" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="B" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </ResourceDictionary>

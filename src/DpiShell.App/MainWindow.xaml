@@ -2363,6 +2363,44 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- Свои настройки (R-settings, п. 14): выгрузка и загрузка папкой или .zip — окно TransferView. -->
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="{l:T settings.transfer.title}" Style="{StaticResource H2}" />
+                                    <DockPanel Margin="0,4,0,0">
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                            <Button Command="{Binding ExportSettingsCmd}" Margin="0,0,8,0" Padding="12,7" AutomationProperties.Name="{l:T settings.transfer.export_btn}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Path Data="{StaticResource Ic.arrow_upload}" Fill="{DynamicResource Text}" Width="16" Height="16" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{l:T settings.transfer.export_btn}" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Command="{Binding ImportSettingsCmd}" Margin="0" Padding="12,7" AutomationProperties.Name="{l:T settings.transfer.import_btn}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Path Data="{StaticResource Ic.arrow_download}" Fill="{DynamicResource Text}" Width="16" Height="16" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{l:T settings.transfer.import_btn}" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                                                </StackPanel>
+                                            </Button>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock Text="{l:T settings.transfer.row}" />
+                                            <TextBlock Text="{l:T settings.transfer.hint}" Style="{StaticResource Hint}" FontSize="13" Margin="0,2,0,0" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Адреса сайтов для проверок (R-settings, п. 17): защищённый DNS или как у системы. -->
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="{l:T settings.checkdns.title}" Style="{StaticResource H2}" />
+                                    <RadioButton GroupName="CheckDns" Content="{l:T settings.checkdns.secure}" IsChecked="{Binding CheckDnsSecure}" Margin="0,3,0,0" HorizontalAlignment="Left" />
+                                    <TextBlock Text="{l:T settings.checkdns.secure_hint}" Style="{StaticResource Hint}" FontSize="13" Margin="26,0,0,6" />
+                                    <RadioButton GroupName="CheckDns" Content="{l:T settings.checkdns.system}" IsChecked="{Binding CheckDnsSystem}" Margin="0,3,0,0" HorizontalAlignment="Left" />
+                                    <TextBlock Text="{l:T settings.checkdns.system_hint}" Style="{StaticResource Hint}" FontSize="13" Margin="26,0,0,0" />
+                                </StackPanel>
+                            </Border>
+
                             <!-- Откат всего: список из журналов (помощника и окна), «Отменить всё», отчёт по пунктам. Над «Очисткой и удалением». -->
                             <Border Style="{StaticResource Card}" Margin="0,18,0,0" DataContext="{Binding Changes}" x:Name="ChangesCard">
                                 <StackPanel>

@@ -112,6 +112,7 @@ public sealed partial class MainViewModel : Observable
         };
         Autostart = new Autostart(settings) { Say = s => Message = s, Fail = Fail };
         Lang = new LangViewModel(settings);
+        shell.CheckDnsMode = CheckDns.Normalize(settings.CheckDns);
 
         RetryCmd = RelayCommand.Async(InitializeAsync, () => ShowLoadActions);
         OpenWithoutHelperCmd = RelayCommand.Async(OpenWithoutHelperAsync, () => ShowLoadActions);
@@ -1152,8 +1153,10 @@ public sealed partial class MainViewModel : Observable
         {
             var dns = ProbeGroups is null ? CheckDnsAsync() : Task.CompletedTask;   // подмена проверки — и DNS без сети не трогаем
             // По DoH и, где DNS системы даёт другой адрес, — по пути браузера (BrowserCheck): только эти цели, по очереди.
+            _shell.CheckDnsMode = CheckDnsMode;
             var verdicts = ProbeGroups is { } probe ? await probe(groups) : await Task.Run(() => _shell.CheckGroupsAsync(groups));
             await dns;
+            if (ProbeGroups is null && AddressSourceNote(_shell.LastAddressSource, fragment: false, onlyFallback: true) is { } fb) Message = fb;
             if (gen != _checkGen) return null;   // пока проверяли, оптимизацию включили или выключили — итог уже не про это
             _checkVerdicts = verdicts;
             foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, Names));
@@ -1233,6 +1236,15 @@ public sealed partial class MainViewModel : Observable
     public async Task CheckDnsAsync()
     {
         if (DnsChecking || IsLoading) return;
+        // «Адреса для проверок — как у системы»: защищённый DNS не трогаем совсем, сравнивать не с чем.
+        if (CheckDnsSystem)
+        {
+            _dnsList = [];
+            DnsRows.Clear();
+            DnsSpoofed = false;
+            DnsSummaryIs(() => L.T("dns.summary.system"));
+            return;
+        }
         DnsChecking = true;
         DnsSummaryIs(() => L.T("dns.summary.checking"));
         try
@@ -1417,7 +1429,7 @@ public sealed partial class MainViewModel : Observable
         {
             await Guard(L.T("select.busy.select"), async () =>
             {
-                try { ShowReport(await c.SelectAsync(quick, ids, progress, cts.Token)); }
+                try { ShowReport(await c.SelectAsync(quick, ids, progress, cts.Token, CheckDnsMode)); }
                 catch (OperationCanceledException) { ResultText = L.T("select.stopped"); }
             });
         }
@@ -1485,7 +1497,7 @@ public sealed partial class MainViewModel : Observable
         {
             await Guard(L.T("select.busy.deep"), async () =>
             {
-                try { ShowSearch(await c.SearchAsync(baseId, ids, progress, cts.Token)); }
+                try { ShowSearch(await c.SearchAsync(baseId, ids, progress, cts.Token, CheckDnsMode)); }
                 catch (OperationCanceledException) { ResultText = L.T("select.search.stopped"); }
             });
         }
@@ -1616,7 +1628,8 @@ public sealed partial class MainViewModel : Observable
         {
             ResultText = L.T(r.Cancelled ? "select.result.cancelled_none" : "select.result.none");
             if (!r.Cancelled)
-                ResultHint = (regression.Length > 0 ? regression + " " : "") + L.T("select.result.none_hint");
+                ResultHint = (regression.Length > 0 ? regression + " " : "") + L.T("select.result.none_hint")
+                    + (AddressSourceNote(r.AddressSource, fragment: false) is { } addr0 ? " " + addr0 : "");
             else ResultHint = regression;
             return;
         }
@@ -1631,6 +1644,7 @@ public sealed partial class MainViewModel : Observable
             var notes = new List<string>();
             if (!best.Perfect) notes.Add(L.T("select.note.partial", new { ok = best.GroupsPassed, total = best.GroupsTotal }));
             if (r.Cancelled) notes.Add(L.T("select.note.cancelled"));
+            if (AddressSourceNote(r.AddressSource, fragment: true) is { } addr) notes.Add(addr);
             if (MixBuilder.IsMix(best.Strategy.Source)) notes.Insert(0, L.T("select.note.mix"));
             var blocked = string.Join(", ", r.TestedGroups.Select(g => Names.Title(g.Id)));
             notes.Add(L.T("select.note.blocked", new { groups = blocked }));

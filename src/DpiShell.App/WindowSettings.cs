@@ -57,6 +57,8 @@ public sealed class WindowSettings
     public ProxySettings? ProxyPrevious { get; set; }
     /// <summary>Защищённый DNS не отвечает — разрешить обычный (по умолчанию нет: только защищённый).</summary>
     public bool DnsFallback { get; set; }
+    /// <summary>Откуда подбор и проверки берут адреса сайтов: "doh" (защищённый DNS, по умолчанию) или "system" (как у системы) — Настройки, п. 17.</summary>
+    public string CheckDns { get; set; } = Core.CheckDns.Secure;
 
     /// <summary>Порядок списка стратегий: "result" (по числу открывшихся сайтов) или "name" (по имени). Один на оба списка и на ПК, и на роутере.</summary>
     public string StrategySort { get; set; } = StrategyOrder.ByResult;

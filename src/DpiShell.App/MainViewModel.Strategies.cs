@@ -136,7 +136,7 @@ public sealed partial class MainViewModel
         {
             await Guard(L.T("select.busy.check"), async () =>
             {
-                try { ShowOneReport(id, await c.StrategyCheckAsync(id, ids, progress, cts.Token)); }
+                try { ShowOneReport(id, await c.StrategyCheckAsync(id, ids, progress, cts.Token, CheckDnsMode)); }
                 catch (OperationCanceledException) { ResultText = L.T("select.check.stopped"); PendingCheckId = id; }
             });
         }

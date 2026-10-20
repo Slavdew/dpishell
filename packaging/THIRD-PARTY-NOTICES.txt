@@ -2854,7 +2854,7 @@ Fluent UI System Icons (значки меню и блоков окна)
 ==============================================================================
 
 Пакет @fluentui/svg-icons 1.1.292 (Microsoft, github.com/microsoft/fluentui-system-icons), набор «24 regular»:
-home, wand, globe, games, network_check, pulse, router, settings, info, panel_left_contract, panel_left_expand, server, arrow_routing, wrench.
+home, wand, globe, games, network_check, pulse, router, settings, info, panel_left_contract, panel_left_expand, server, arrow_routing, wrench, arrow_upload, arrow_download, folder, warning.
 Геометрия SVG перенесена в src/DpiShell.App/Theme.xaml (ресурсы Ic.*).
 
 MIT License
