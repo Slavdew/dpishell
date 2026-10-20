@@ -6,6 +6,7 @@
   "common.retry": "Повторить",
   "common.close": "Закрыть",
   "common.close_message": "Закрыть сообщение",
+  "common.copy": "Копировать",
   "common.more": "Подробнее",
   "common.info": "Пояснение",
   "common.info.name": "Пояснение: {topic}",

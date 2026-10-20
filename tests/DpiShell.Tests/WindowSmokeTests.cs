@@ -567,7 +567,7 @@ public sealed partial class WindowSmokeTests
                     // Помощник молчит дольше 10 с — выход с заставки (UX-аудит, п. 46).
                     var text = vm.LoadingText;
                     SetProp(vm, "LoadSlow", true);
-                    SetProp(vm, "LoadingText", "Помощник отвечает дольше обычного. Можно подождать, повторить или открыть окно без него — только для просмотра.");
+                    SetProp(vm, "LoadingText", L.T("shell.loading.slow"));
                     Pump();
                     Snap(w, Path.Combine(snapDir, $"{theme}-loading-slow.png"));
                     SetProp(vm, "LoadSlow", false);
@@ -591,8 +591,9 @@ public sealed partial class WindowSmokeTests
                         // Обновления и версии — только на «Информация и обновления»; в «Настройках» их нет.
                         var tabsAbout = Find<TabControl>(w)!;
                         bool Has(string text) => Find<TextBlock>(tabsAbout, t => t.Text == text && t.IsVisible) is not null
+                                                 || Find<TextBox>(tabsAbout, t => t.Text == text && t.IsVisible) is not null
                                                  || Find<Button>(tabsAbout, b => b.Content as string == text && b.IsVisible) is not null;
-                        string[] aboutOnly = ["Версия", "Проверить обновления", "Обновить списки", "Ядро zapret (bol-van)", "DpiShell на роутере", "Программа", "Помощник", "Данные"];
+                        string[] aboutOnly = [L.T("about.version.title"), L.T("about.app.check_button"), L.T("about.lists.update"), L.T("about.row.core"), L.T("about.row.router"), L.T("about.row.app"), L.T("about.row.helper"), L.T("about.row.data")];
                         foreach (var t in aboutOnly)
                             if (Has(t) != (page == Pages.About))
                                 throw new Exception($"«{t}»: {(page == Pages.About ? "нет на «Информация и обновления»" : "осталось в «Настройках»")}");
@@ -1534,7 +1535,7 @@ public sealed partial class WindowSmokeTests
         if (mode.Content as string != "Режим службы") throw new Exception($"Галочка режима называется «{mode.Content}»");
         if (mode.IsChecked != (vm.Helper.Status?.RunMode != "process")) throw new Exception("Галочка режима не совпадает с режимом помощника");
         // Пояснение под галочкой — коротко, без первого лица: что будет в этом режиме.
-        var hint = vm.ServiceMode ? "Оптимизация работает без окна и запускается после перезагрузки" : "Оптимизация работает, только пока программа открыта";
+        var hint = L.T(vm.ServiceMode ? "settings.run_mode.hint_service" : "settings.run_mode.hint_process");
         if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == hint && t.IsVisible) is null) throw new Exception($"Под галочкой режима нет «{hint}»");
     }
 
@@ -1957,8 +1958,10 @@ public sealed partial class WindowSmokeTests
                     Pump();
                 }
                 bool Has(MainWindow w, string text) =>
-                    Find<TextBlock>(w, t => t.Text == text && t.IsVisible) is not null || Find<Button>(w, b => b.Content as string == text && b.IsVisible) is not null;
-                bool HasPart(MainWindow w, string part) => Find<TextBlock>(w, t => t.Text.Contains(part) && t.IsVisible) is not null;
+                    Find<TextBlock>(w, t => t.Text == text && t.IsVisible) is not null || Find<TextBox>(w, t => t.Text == text && t.IsVisible) is not null
+                    || Find<Button>(w, b => b.Content as string == text && b.IsVisible) is not null;
+                bool HasPart(MainWindow w, string part) => Find<TextBlock>(w, t => t.Text.Contains(part) && t.IsVisible) is not null
+                    || Find<TextBox>(w, t => t.Text.Contains(part) && t.IsVisible) is not null;
                 void Shot(MainWindow w, string name)
                 {
                     if (snapDir is null) return;
@@ -1970,23 +1973,23 @@ public sealed partial class WindowSmokeTests
                 var (vm, w, _) = NewWindow(AppUpdateTests.Serve(new MapHandler(), AppUpdateTests.A, "1.2.0"), "1.0.0", _ => new TaskCompletionSource().Task);
                 vm.Updates.CheckCmd.Execute(null);
                 Until(() => vm.Updates.AppReleaseReady, "проверка выпуска");
-                foreach (var t in new[] { "Что нового", "• Быстрее подбор", "• Исправлен трей", "Обновить до 1.2.0" })
+                foreach (var t in new[] { L.T("about.app.whats_new"), "• Быстрее подбор", "• Исправлен трей", L.T("about.app.update_button", new { version = "1.2.0" }) })
                     if (!Has(w, t)) throw new Exception($"Нет «{t}» при доступном обновлении");
-                if (Has(w, "Проверить обновления")) throw new Exception("Две главные кнопки: «Проверить обновления» рядом с «Обновить до X»");
-                if (Has(w, "Скачать программу 1.2.0") || HasPart(w, "Вернуть прежнюю")) throw new Exception("Лишние кнопки при доступном обновлении");
+                if (Has(w, L.T("about.app.check_button"))) throw new Exception("Две главные кнопки: «Проверить обновления» рядом с «Обновить до X»");
+                if (Has(w, L.T("about.app.download_button", new { version = "1.2.0" })) || HasPart(w, L.T("about.app.rollback_button", new { version = "" }).Trim())) throw new Exception("Лишние кнопки при доступном обновлении");
                 Shot(w, "ready");
 
                 // 2. Идёт обновление: ход виден, кнопка неактивна. Перезапуск не завершается — как окно за миг до выхода.
                 vm.Updates.UpdateAppCmd.Execute(null);
-                Until(() => vm.Updates.AppProgressText.Contains("Перезапускаю"), "подготовка версии");
-                if (!HasPart(w, "Перезапускаю программу")) throw new Exception("Ход обновления не виден");
+                Until(() => vm.Updates.AppProgressText == L.T("about.app.restarting", new { version = "1.2.0" }), "подготовка версии");
+                if (!HasPart(w, L.T("about.app.restarting", new { version = "1.2.0" }))) throw new Exception("Ход обновления не виден");
                 if (Find<ProgressBar>(w, p => p.IsVisible && p.IsIndeterminate) is null) throw new Exception("Нет полосы хода обновления");
-                if (Find<Button>(w, b => b.Content as string == "Обновить до 1.2.0" && b.IsVisible && b.IsEnabled) is not null) throw new Exception("Кнопка обновления активна во время обновления");
+                if (Find<Button>(w, b => b.Content as string == L.T("about.app.update_button", new { version = "1.2.0" }) && b.IsVisible && b.IsEnabled) is not null) throw new Exception("Кнопка обновления активна во время обновления");
                 Shot(w, "running");
-                typeof(UpdatesViewModel).GetField("_appProgress", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(vm.Updates, "Скачиваю версию 1.2.0: 34 МБ");
+                typeof(UpdatesViewModel).GetField("_appProgress", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(vm.Updates, L.T("about.app.downloading_mb", new { version = "1.2.0", mb = 34 }));
                 vm.Updates.Refresh();
                 Pump();
-                if (!HasPart(w, "Скачиваю версию 1.2.0: 34 МБ")) throw new Exception("Ход скачивания не виден");
+                if (!HasPart(w, L.T("about.app.downloading_mb", new { version = "1.2.0", mb = 34 }))) throw new Exception("Ход скачивания не виден");
                 Shot(w, "download");
                 Close(w);
 
@@ -2000,7 +2003,7 @@ public sealed partial class WindowSmokeTests
                 if (!HasPart(w2, "Скачанный файл не прошёл проверку") || HasPart(w2, "sha256")) throw new Exception("Нет первой фразы об ошибке или технический хвост на виду");
                 if (!vm2.Updates.AppErrorMore.Contains("программа не изменена") || !vm2.Updates.AppErrorMore.Contains("sha256")) throw new Exception("Остаток и хвост не под «Подробнее»");
                 if (Find<Button>(w2, b => b.Content as string == "Повторить" && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Повторить» под ошибкой");
-                if (Find<Button>(w2, b => b.Content as string == "Обновить до 1.2.0" && b.IsVisible && b.IsEnabled) is null) throw new Exception("После ошибки нельзя повторить");
+                if (Find<Button>(w2, b => b.Content as string == L.T("about.app.update_button", new { version = "1.2.0" }) && b.IsVisible && b.IsEnabled) is null) throw new Exception("После ошибки нельзя повторить");
                 if (store2.IsInstalled("1.2.0")) throw new Exception("Подменённый архив распакован");
                 Shot(w2, "error");
                 Close(w2);
@@ -2021,7 +2024,7 @@ public sealed partial class WindowSmokeTests
                 var connect = vm3.Router.ConnectAsync("secret");
                 Until(() => connect.IsCompleted, "вход на роутер");
                 if (!connect.GetAwaiter().GetResult()) throw new Exception("Роутер не принял вход");
-                foreach (var t in new[] { "Программа обновлена до версии 1.2.0.", "Вернуть прежнюю версию (1.0.0)", "0.2.0-r8 · страница LuCI 0.2.0-r5", "Ядро на роутере", "v72.13" })
+                foreach (var t in new[] { L.T("about.app.updated", new { version = "1.2.0" }), L.T("about.app.rollback_button", new { version = "1.0.0" }), "0.2.0-r8 · страница LuCI 0.2.0-r5", "Ядро на роутере", "v72.13" })
                     if (!Has(w3, t)) throw new Exception($"Нет «{t}» после обновления");
                 Shot(w3, "done");
                 Close(w3);
@@ -2073,14 +2076,14 @@ public sealed partial class WindowSmokeTests
                 }
 
                 // Карточка стоит над «Очисткой и удалением».
-                var clean = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Очистка и удаление")!;
+                var clean = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == L.T("settings.cleanup.title"))!;
                 var tabsRoot = Find<TabControl>(w)!;
                 if (Card().TranslatePoint(new Point(0, 0), tabsRoot).Y >= clean.TranslatePoint(new Point(0, 0), tabsRoot).Y)
                     throw new Exception("«Изменения DpiShell» должны стоять над «Очисткой и удалением»");
-                if (!Has("Изменения DpiShell") || !Has("Отменить всё") || !Has("Вернутся значения, которые были до DpiShell; более поздние правки не затрагиваются."))
+                if (!Has(L.T("settings.changes.title")) || !Has(L.T("settings.changes.undo_all")) || !Has(L.T("settings.changes.promise")))
                     throw new Exception("В карточке нет заголовка, кнопки или обещания");
-                if (!Has("Пока ничего: DpiShell ещё не меняла настройки этого компьютера.")) throw new Exception("Нет пустого состояния");
-                if (Find<Button>(Card(), b => b.Content as string == "Отменить всё")!.IsEnabled) throw new Exception("«Отменить всё» активна при пустом журнале");
+                if (!Has(L.T("settings.changes.empty"))) throw new Exception("Нет пустого состояния");
+                if (Find<Button>(Card(), b => b.Content as string == L.T("settings.changes.undo_all"))!.IsEnabled) throw new Exception("«Отменить всё» активна при пустом журнале");
                 ScrollToCard();
                 Shot("empty");
 
@@ -2092,10 +2095,10 @@ public sealed partial class WindowSmokeTests
                 vm.Autostart.Recorder.Begin(ChangeKinds.Autostart, "Включён запуск окна вместе с Windows (свёрнутым в трей)", null, null);
                 WaitUi(vm.Changes.RefreshAsync());
                 Pump();
-                if (vm.Changes.Items.Count != 4 || !Find<Button>(Card(), b => b.Content as string == "Отменить всё")!.IsEnabled) throw new Exception("Список записей не появился");
+                if (vm.Changes.Items.Count != 4 || !Find<Button>(Card(), b => b.Content as string == L.T("settings.changes.undo_all"))!.IsEnabled) throw new Exception("Список записей не появился");
                 // Список свёрнут, в заголовке — число пунктов; «Отменить всё» доступна и так. Раскрывается — строки видны.
                 var list = (Expander)w.FindName("ChangesList")!;
-                if (list.IsExpanded || list.Header as string != "4 пункта") throw new Exception($"Список изменений не свёрнут или заголовок «{list.Header}»");
+                if (list.IsExpanded || list.Header as string != L.Plural("settings.changes.count", 4)) throw new Exception($"Список изменений не свёрнут или заголовок «{list.Header}»");
                 if (Has("DNS этого компьютера: Google — Ethernet")) throw new Exception("Строки видны в свёрнутом списке");
                 ScrollToCard();
                 Shot("collapsed");
@@ -2115,10 +2118,10 @@ public sealed partial class WindowSmokeTests
                     new("5", "Включены временные метки TCP (настройка Windows)", now.AddMinutes(-4), UndoStatus.AlreadyBack, "настройка уже выключена"),
                 ]);
                 Pump();
-                if (!Has("Не тронул: изменено после DpiShell") || !Has("Не смог") || !Has("Уже было как раньше") || !Has("Вернул"))
+                if (!Has(L.T("settings.changes.status_skipped")) || !Has(L.T("settings.changes.status_failed")) || !Has(L.T("settings.changes.status_same")) || !Has(L.T("settings.changes.status_restored")))
                     throw new Exception("В отчёте нет всех четырёх исходов");
-                if (Find<TextBlock>(Card(), t => t.Text.StartsWith("Пункты «не тронул»") && t.IsVisible) is null) throw new Exception("Нет вопроса про изменённое после нас");
-                if (FindAll<TextBlock>(Card()).Any(t => t.Text.Contains("обход", StringComparison.OrdinalIgnoreCase))) throw new Exception("В карточке осталось слово «обход»");
+                if (Find<TextBlock>(Card(), t => t.Text == L.T("settings.changes.question") && t.IsVisible) is null) throw new Exception("Нет вопроса про изменённое после нас");
+                if (FindAll<TextBlock>(Card()).Any(t => System.Text.RegularExpressions.Regex.IsMatch(t.Text, @"\bобход", System.Text.RegularExpressions.RegexOptions.IgnoreCase))) throw new Exception("В карточке осталось слово «обход»");
                 ScrollToCard();
                 Shot("report");
 

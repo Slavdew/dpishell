@@ -43,7 +43,7 @@ public partial class App : Application
         catch (UnauthorizedAccessException)
         {
             // Мьютекс создала копия, запущенная с правами (прежняя версия), — окно без прав к нему не допущено: копия уже есть.
-            MessageBox.Show("DpiShell уже запущен с правами администратора. Закройте его (значок в трее → «Выход») и откройте снова.",
+            MessageBox.Show(L.T("shell.app.already_admin"),
                 "DpiShell", MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown(0);
             return;
@@ -95,7 +95,7 @@ public partial class App : Application
         try { shell = new Shell(); }
         catch (Exception ex)
         {
-            MessageBox.Show("Не найдены файлы программы (папка data рядом с DpiShell). Распакуйте архив заново.\n\n" + ex.Message,
+            MessageBox.Show(L.T("shell.app.no_data", new { error = ex.Message }),
                 "DpiShell", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
             return;
@@ -133,7 +133,7 @@ public partial class App : Application
         {
             // Окно не открылось — сказать и выйти, а не висеть в фоне без окна.
             TryLog(ex);
-            MessageBox.Show($"Не удалось открыть окно DpiShell. Подробности — в {ErrorLog}.\n\n" + Texts.Friendly(ex),
+            MessageBox.Show(L.T("shell.app.open_failed", new { log = ErrorLog, error = Texts.Friendly(ex) }),
                 "DpiShell", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
             return;

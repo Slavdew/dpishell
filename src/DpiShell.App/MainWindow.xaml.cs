@@ -127,11 +127,11 @@ public partial class MainWindow : Window
         if (router.Strategies.FirstOrDefault(s => s.Id == router.CurrentStrategyId) is { HasParams: true } current)
         {
             menu.Items.Add(new System.Windows.Controls.Separator());
-            var copy = new System.Windows.Controls.MenuItem { Header = "Скопировать параметры: " + current.Title };
+            var copy = new System.Windows.Controls.MenuItem { Header = L.T("shell.router_menu.copy", new { title = current.Title }) };
             copy.Click += (_, _) => router.CopyParams(current);
             menu.Items.Add(copy);
         }
-        if (menu.Items.Count == 0) menu.Items.Add(new System.Windows.Controls.MenuItem { Header = "Список стратегий роутера пуст", IsEnabled = false });
+        if (menu.Items.Count == 0) menu.Items.Add(new System.Windows.Controls.MenuItem { Header = L.T("shell.router_menu.empty"), IsEnabled = false });
         menu.IsOpen = true;
     }
 
@@ -185,7 +185,7 @@ public partial class MainWindow : Window
     {
         // Отметка — в настройках окна (%LocalAppData%): папка программы окну без прав закрыта.
         if (_vm.Settings.TrayHintShown) return;
-        _tray.Hint("Программа свернулась в трей. Выход — правой кнопкой по значку.");
+        _tray.Hint(L.T("shell.tray.hint"));
         _vm.Settings.TrayHintShown = true;
         try { _vm.Settings.Save(); }
         catch { /* подсказка не важна */ }
@@ -225,7 +225,7 @@ public partial class MainWindow : Window
     async Task PrepareExitAsync()
     {
         // «Все адреса» без программы не вернутся сами до следующего запуска — спросить (architecture.md «IP-списки и игровой режим»).
-        if (_vm.Net.AnyActive && !_vm.Busy && _vm.Confirm("Сейчас идёт проверка по всем адресам (10 минут). Вернуть обычный режим перед выходом?"))
+        if (_vm.Net.AnyActive && !_vm.Busy && _vm.Confirm(L.T("shell.exit.confirm_addresses")))
         {
             // Через помощника: режимы меняет только он (без него «Все адреса» и не включить).
             if (_vm.Helper.Client is { } c)
@@ -237,7 +237,7 @@ public partial class MainWindow : Window
         // Подбор держит временный winws и остановленную службу — дать ему вернуть всё на место.
         if (_vm.Busy)
         {
-            _vm.Message = "Завершаю текущую операцию…";
+            _vm.Message = L.T("shell.exit.busy");
             await _vm.WhenIdleAsync(TimeSpan.FromSeconds(20));
         }
     }

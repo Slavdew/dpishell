@@ -81,7 +81,7 @@ public sealed class AppUpdateWindowTests
         Assert.Contains("1.2.0", r.Vm.AppReleaseTitle);
         Assert.Equal("1.2.0", r.Settings.UpdatesApp);
         Assert.False(r.Vm.HasAppError);
-        Assert.Contains(r.Said, s => s.Contains("Обновить до 1.2.0"));
+        Assert.Contains(r.Said, s => s == L.T("about.app.found_new", new { version = "1.2.0" }));
         // Работающая программа и её папка не тронуты, пока человек не нажал.
         Assert.False(r.Store.IsInstalled("1.2.0"));
         Assert.Empty(r.Restarts);
@@ -135,7 +135,7 @@ public sealed class AppUpdateWindowTests
         Assert.Equal("exe 1.2.0", File.ReadAllText(plan.Exe));
         Assert.Equal(new AppVersionsState("1.2.0", "1.0.0", r.Exe, Pending: "1.2.0"), r.Store.State);
         Assert.True(r.Vm.AppBusy);                                  // окно закрывается — кнопки не оживают
-        Assert.Contains("Перезапускаю", r.Vm.AppProgressText);
+        Assert.Equal(L.T("about.app.restarting", new { version = "1.2.0" }), r.Vm.AppProgressText);
         Assert.False(r.Vm.HasAppError);
         Assert.Empty(Directory.EnumerateFiles(r.Store.Root, "*.part"));
     }
@@ -196,8 +196,9 @@ public sealed class AppUpdateWindowTests
         using var r = new Rig(Release()) { RestartFails = true };
         await r.Vm.CheckAsync(quiet: true);
         await r.UpdateAsync();
-        Assert.Contains("запустить её не вышло", r.Vm.AppError);
-        Assert.Contains("Прежняя версия продолжает работать", r.Vm.AppError);
+        var parts = L.T("about.app.start_failed", new { version = "1.2.0", reason = "\u0001" }).Split('\u0001');   // до и после причины
+        Assert.StartsWith(parts[0], r.Vm.AppError);
+        Assert.EndsWith(parts[1].Trim(), r.Vm.AppError);
         Assert.Equal(new AppVersionsState(), r.Store.State);        // запись о переключении откатена
         Assert.False(r.Vm.AppBusy);
     }
@@ -225,7 +226,7 @@ public sealed class AppUpdateWindowTests
         r.Store.Save(new("1.2.0", "1.0.0", prevExe));
         r.Vm.AnnounceStart(null, null);                             // перечитать наличие отката
         Assert.True(r.Vm.CanRollback);
-        Assert.Equal("Вернуть прежнюю версию (1.0.0)", r.Vm.RollbackText);
+        Assert.Equal(L.T("about.app.rollback_button", new { version = "1.0.0" }), r.Vm.RollbackText);
 
         r.Vm.RollbackCmd.Execute(null);
         await r.Wait(() => r.Restarts.Count > 0);
@@ -267,15 +268,14 @@ public sealed class AppUpdateWindowTests
     {
         using var r = new Rig(new MapHandler(), current: "1.2.0");
         r.Vm.AnnounceStart("1.0.0", null);
-        Assert.Equal("Программа обновлена до версии 1.2.0.", r.Vm.AppNotice);
-        Assert.Contains("Программа обновлена до версии 1.2.0.", r.Said);
+        Assert.Equal(L.T("about.app.updated", new { version = "1.2.0" }), r.Vm.AppNotice);
+        Assert.Contains(L.T("about.app.updated", new { version = "1.2.0" }), r.Said);
 
         r.Vm.AnnounceStart("1.3.0", null);
-        Assert.Equal("Возвращена версия 1.2.0.", r.Vm.AppNotice);
+        Assert.Equal(L.T("about.app.rolled_back", new { version = "1.2.0" }), r.Vm.AppNotice);
 
         r.Vm.AnnounceStart("1.3.0", "1.3.0");
-        Assert.Contains("1.3.0 не запустилась", r.Vm.AppNotice);
-        Assert.Contains("открыта прежняя версия 1.2.0", r.Vm.AppNotice);
+        Assert.Equal(L.T("about.app.start_failed_back", new { version = "1.3.0", current = "1.2.0" }), r.Vm.AppNotice);
 
         r.Vm.AnnounceStart(null, null);
         Assert.False(r.Vm.HasAppNotice);

@@ -8,8 +8,8 @@ namespace DpiShell.App;
 /// </summary>
 public sealed class SingleInstance
 {
-    public const string NotRespondingText = "DpiShell уже запущен, но не отвечает. Завершить старую копию?";
-    public const string KillFailedText = "Не удалось завершить старую копию DpiShell. Завершите DpiShell.exe в диспетчере задач и откройте программу снова.";
+    public static string NotRespondingText => L.T("shell.single.not_responding");
+    public static string KillFailedText => L.T("shell.single.kill_failed");
 
     /// <summary>Взять право единственной копии; true — других копий нет (или прежняя завершилась).</summary>
     public required Func<bool> Acquire { get; init; }

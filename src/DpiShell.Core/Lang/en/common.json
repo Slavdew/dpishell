@@ -6,6 +6,7 @@
   "common.retry": "Retry",
   "common.close": "Close",
   "common.close_message": "Close message",
+  "common.copy": "Copy",
   "common.more": "Details",
   "common.info": "Explanation",
   "common.info.name": "Explanation: {topic}",

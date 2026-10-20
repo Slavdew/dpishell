@@ -2209,21 +2209,21 @@
                 <TabItem Header="{l:T common.nav.settings}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
-                            <TextBlock Text="Настройки" Style="{StaticResource H1}" />
+                            <TextBlock Text="{l:T common.nav.settings}" Style="{StaticResource H1}" />
 
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="Работа" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T settings.work.title}" Style="{StaticResource H2}" />
                                     <!-- Режим службы (п. 4 аудита): настройка «на один раз», не действие главной. -->
                                     <CheckBox Content="{l:T settings.service.mode}" IsChecked="{Binding ServiceMode}" IsEnabled="{Binding CanChoose}" HorizontalAlignment="Left" Margin="0,4,0,0" />
                                     <TextBlock Text="{Binding RunModeHint}" Style="{StaticResource Hint}" Margin="26,2,0,0" />
                                     <!-- Автозапуск окна при входе (architecture.md «Окно, трей, автозапуск»): ключ Run пользователя, окно — в трее. -->
-                                    <CheckBox Content="Запускать вместе с Windows (в трее)" IsChecked="{Binding Autostart.Enabled}" Margin="0,12,0,0" HorizontalAlignment="Left" />
+                                    <CheckBox Content="{l:T settings.autostart.label}" IsChecked="{Binding Autostart.Enabled}" Margin="0,12,0,0" HorizontalAlignment="Left" />
                                     <TextBlock Text="{Binding Autostart.Hint}" Style="{StaticResource Hint}" Margin="26,2,0,0" />
-                                    <TextBlock Text="При закрытии окна" Style="{StaticResource Hint}" Margin="0,12,0,2" />
+                                    <TextBlock Text="{l:T settings.close.title}" Style="{StaticResource Hint}" Margin="0,12,0,2" />
                                     <WrapPanel>
-                                        <RadioButton Content="Сворачивать в трей" IsChecked="{Binding CloseTray}" Margin="0,3,24,3" />
-                                        <RadioButton Content="Закрывать программу" IsChecked="{Binding CloseExit}" Margin="0,3,24,3" />
+                                        <RadioButton Content="{l:T settings.close.tray}" IsChecked="{Binding CloseTray}" Margin="0,3,24,3" />
+                                        <RadioButton Content="{l:T settings.close.exit}" IsChecked="{Binding CloseExit}" Margin="0,3,24,3" />
                                     </WrapPanel>
                                     <TextBlock Text="{Binding CloseHint}" Style="{StaticResource Hint}" Margin="0,4,0,0" Visibility="{Binding HasCloseHint, Converter={StaticResource Vis}}" />
                                 </StackPanel>
@@ -2231,9 +2231,9 @@
 
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="Для опытных" Style="{StaticResource H2}" />
-                                    <CheckBox Content="Показывать инструменты для опытных" IsChecked="{Binding ShowAdvancedSetting}" HorizontalAlignment="Left" Margin="0,4,0,0" />
-                                    <TextBlock Text="Сейчас это «Отладка подключений» на вкладке «Игры и программы»: запись подключений программы, выбор нужных и сохранение профиля." Style="{StaticResource Hint}" Margin="26,2,0,0" TextWrapping="Wrap" />
+                                    <TextBlock Text="{l:T settings.advanced.title}" Style="{StaticResource H2}" />
+                                    <CheckBox Content="{l:T settings.advanced.check}" IsChecked="{Binding ShowAdvancedSetting}" HorizontalAlignment="Left" Margin="0,4,0,0" />
+                                    <TextBlock Text="{l:T settings.advanced.hint}" Style="{StaticResource Hint}" Margin="26,2,0,0" TextWrapping="Wrap" />
                                     <!-- Шаблон перевода (docs/localization.md): все ключи, английский текст и русский рядом. -->
                                     <DockPanel Margin="0,12,0,0" Visibility="{Binding ShowAdvancedSetting, Converter={StaticResource Vis}}">
                                         <Button DockPanel.Dock="Right" Content="{l:T settings.lang.template}" Command="{Binding ExportLangTemplateCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
@@ -2244,11 +2244,11 @@
 
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="Оформление" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T settings.appearance.title}" Style="{StaticResource H2}" />
                                     <WrapPanel>
-                                        <RadioButton Content="Как в Windows" IsChecked="{Binding ThemeAuto}" Margin="0,3,24,3" />
-                                        <RadioButton Content="Светлое" IsChecked="{Binding ThemeLight}" Margin="0,3,24,3" />
-                                        <RadioButton Content="Тёмное" IsChecked="{Binding ThemeDark}" Margin="0,3,24,3" />
+                                        <RadioButton Content="{l:T settings.theme.auto}" IsChecked="{Binding ThemeAuto}" Margin="0,3,24,3" />
+                                        <RadioButton Content="{l:T settings.theme.light}" IsChecked="{Binding ThemeLight}" Margin="0,3,24,3" />
+                                        <RadioButton Content="{l:T settings.theme.dark}" IsChecked="{Binding ThemeDark}" Margin="0,3,24,3" />
                                     </WrapPanel>
                                 </StackPanel>
                             </Border>
@@ -2280,12 +2280,12 @@
                             <!-- Роутер: сохранённый пароль виден и здесь, рядом с остальными данными на этом компьютере. -->
                             <Border Style="{StaticResource Card}" DataContext="{Binding Router}" Visibility="{Binding HasSavedPassword, Converter={StaticResource Vis}}">
                                 <StackPanel>
-                                    <TextBlock Text="Роутер" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T common.nav.router}" Style="{StaticResource H2}" />
                                     <WrapPanel>
                                         <TextBlock Text="{Binding SavedPasswordText}" VerticalAlignment="Center" />
                                         <TextBlock Text=" · " VerticalAlignment="Center" />
-                                        <Button Content="Забыть" Style="{StaticResource LinkButton}" Command="{Binding ForgetPasswordCmd}" VerticalAlignment="Center"
-                                                ToolTip="Стереть сохранённый пароль роутера с этого компьютера" />
+                                        <Button Content="{l:T settings.router.forget}" Style="{StaticResource LinkButton}" Command="{Binding ForgetPasswordCmd}" VerticalAlignment="Center"
+                                                ToolTip="{l:T settings.router.forget_tip}" />
                                     </WrapPanel>
                                 </StackPanel>
                             </Border>
@@ -2294,11 +2294,11 @@
                             <Border Style="{StaticResource Card}" Margin="0,18,0,0" DataContext="{Binding Changes}" x:Name="ChangesCard">
                                 <StackPanel>
                                     <DockPanel>
-                                        <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="Отменить всё" Command="{Binding UndoAllCmd}"
+                                        <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="{l:T settings.changes.undo_all}" Command="{Binding UndoAllCmd}"
                                                 VerticalAlignment="Center" Margin="12,0,0,0" />
                                         <TextBlock Text="{l:T settings.changes.title}" Style="{StaticResource H2}" VerticalAlignment="Center" />
                                     </DockPanel>
-                                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{l:T settings.changes.hint}" />
+                                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{l:T settings.changes.promise}" />
                                     <TextBlock Text="{Binding EmptyText}" Style="{StaticResource Hint}" Margin="0,8,0,0" Visibility="{Binding ShowEmpty, Converter={StaticResource Vis}}" />
                                     <Expander x:Name="ChangesList" Header="{Binding CountText}" IsExpanded="{Binding ListOpen}" Margin="0,8,0,0"
                                               Visibility="{Binding HasItems, Converter={StaticResource Vis}}">
@@ -2313,9 +2313,9 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
                                     </Expander>
-                                    <TextBlock Text="{Binding HelperNote}" Style="{StaticResource Hint}" Margin="0,8,0,0" TextWrapping="Wrap"
-                                               Visibility="{Binding HasHelperNote, Converter={StaticResource Vis}}" />
-                                    <!-- Отчёт: вернул / уже было как раньше / не тронул (изменено после нас) / не смог — с причиной. -->
+                                    <TextBox Text="{Binding HelperNote, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Muted}" Margin="0,8,0,0"
+                                             Visibility="{Binding HasHelperNote, Converter={StaticResource Vis}}" />
+                                    <!-- Отчёт: возвращено / уже было как раньше / пропущено (изменено после нас) / не удалось — с причиной. -->
                                     <StackPanel Margin="0,12,0,0" Visibility="{Binding HasReport, Converter={StaticResource Vis}}">
                                         <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" TextWrapping="Wrap" />
                                         <ItemsControl ItemsSource="{Binding Report}" Margin="0,6,0,0">
@@ -2336,8 +2336,8 @@
                                                             </TextBlock>
                                                             <TextBlock Text="{Binding Title}" TextWrapping="Wrap" local:Demo.Sensitive="True" />
                                                         </WrapPanel>
-                                                        <TextBlock Text="{Binding Note}" Style="{StaticResource Hint}" Margin="0,1,0,0" TextWrapping="Wrap"
-                                                                   Visibility="{Binding HasNote, Converter={StaticResource Vis}}" />
+                                                        <TextBox Text="{Binding Note, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Muted}" Margin="0,1,0,0"
+                                                                 Visibility="{Binding HasNote, Converter={StaticResource Vis}}" />
                                                     </StackPanel>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
@@ -2351,23 +2351,23 @@
                             <!-- Удаление — отдельно, спокойным стилем, с тем, как вернуть (UX-аудит, «Опасные действия», п. 18–19). -->
                             <Border Style="{StaticResource Card}" Margin="0,18,0,14">
                                 <StackPanel>
-                                    <TextBlock Text="Очистка и удаление" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T settings.cleanup.title}" Style="{StaticResource H2}" />
                                     <DockPanel Margin="0,4,0,0">
-                                        <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="Очистить историю" Command="{Binding ClearHistoryCmd}"
+                                        <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="{l:T settings.cleanup.clear_history}" Command="{Binding ClearHistoryCmd}"
                                                 VerticalAlignment="Center" Margin="12,0,0,0" />
                                         <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center"
-                                                   Text="Результаты подборов, статистика и логи. Свои сайты и найденные стратегии останутся." />
+                                                   Text="{l:T settings.cleanup.clear_history_hint}" />
                                     </DockPanel>
                                     <DockPanel Margin="0,12,0,0">
-                                        <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="Удалить службу оптимизации" Command="{Binding RemoveServiceCmd}"
+                                        <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="{l:T settings.cleanup.remove_service}" Command="{Binding RemoveServiceCmd}"
                                                 VerticalAlignment="Center" Margin="12,0,0,0" />
                                         <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center"
-                                                   Text="Останавливает и убирает службу оптимизации и драйвер WinDivert, возвращает настройки Windows, которые меняла программа. Вернуть — «Включить» на главной." />
+                                                   Text="{l:T settings.cleanup.remove_service_hint}" />
                                     </DockPanel>
                                     <DockPanel Margin="0,12,0,0" Visibility="{Binding CanUninstallHelper, Converter={StaticResource Vis}}">
-                                        <Button DockPanel.Dock="Right" Content="Удалить помощника" Command="{Binding UninstallHelperCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                        <Button DockPanel.Dock="Right" Content="{l:T settings.cleanup.uninstall_helper}" Command="{Binding UninstallHelperCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
                                         <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center"
-                                                   Text="Помощник — служба, которая делает изменения с правами администратора. Без него окно только для просмотра; при первом действии программа предложит поставить его снова (один запрос прав)." />
+                                                   Text="{l:T settings.cleanup.uninstall_helper_hint}" />
                                     </DockPanel>
                                 </StackPanel>
                             </Border>
@@ -2383,11 +2383,11 @@
                     </TabItem.Header>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
-                            <TextBlock Text="Информация и обновления" Style="{StaticResource H1}" />
+                            <TextBlock Text="{l:T common.nav.about}" Style="{StaticResource H1}" />
 
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="Версия" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T about.version.title}" Style="{StaticResource H2}" />
                                     <Grid Margin="0,4,0,0">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
@@ -2401,22 +2401,22 @@
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
-                                        <TextBlock Grid.Row="0" Text="Программа" Style="{StaticResource Hint}" Margin="0,2,16,2" />
-                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding AppVersionText}" Margin="0,2,0,2" />
-                                        <TextBlock Grid.Row="1" Text="Помощник" Style="{StaticResource Hint}" Margin="0,2,16,2" />
+                                        <TextBlock Grid.Row="0" Text="{l:T about.row.app}" Style="{StaticResource Hint}" Margin="0,2,16,2" />
+                                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding AppVersionText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,2,0,2" />
+                                        <TextBlock Grid.Row="1" Text="{l:T about.row.helper}" Style="{StaticResource Hint}" Margin="0,2,16,2" />
                                         <StackPanel Grid.Row="1" Grid.Column="1">
-                                            <TextBlock Text="{Binding HelperText}" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                            <TextBlock Text="Помощник — служба, которая делает изменения с правами администратора." Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,2" />
+                                            <TextBox Text="{Binding HelperText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,2,0,0" />
+                                            <TextBlock Text="{l:T about.helper.hint}" Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,2" />
                                         </StackPanel>
-                                        <TextBlock Grid.Row="2" Text="Данные" Style="{StaticResource Hint}" Margin="0,2,16,2" />
-                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Updates.StatusText}" TextWrapping="Wrap" Margin="0,2,0,2" />
-                                        <TextBlock Grid.Row="3" Text="Ядро zapret (bol-van)" Style="{StaticResource Hint}" Margin="0,2,16,2" />
+                                        <TextBlock Grid.Row="2" Text="{l:T about.row.data}" Style="{StaticResource Hint}" Margin="0,2,16,2" />
+                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Updates.StatusText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,2,0,2" />
+                                        <TextBlock Grid.Row="3" Text="{l:T about.row.core}" Style="{StaticResource Hint}" Margin="0,2,16,2" />
                                         <StackPanel Grid.Row="3" Grid.Column="1">
-                                            <TextBlock Text="{Binding CoreRowText}" TextWrapping="Wrap" Margin="0,2,0,2" />
-                                            <Button ContentTemplate="{StaticResource Shield}" Content="Восстановить" Command="{Binding RepairCoreCmd}" HorizontalAlignment="Left"
+                                            <TextBox Text="{Binding CoreRowText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,2,0,2" />
+                                            <Button ContentTemplate="{StaticResource Shield}" Content="{l:T about.core.repair}" Command="{Binding RepairCoreCmd}" HorizontalAlignment="Left"
                                                     Visibility="{Binding CoreBroken, Converter={StaticResource Vis}}" />
                                         </StackPanel>
-                                        <TextBlock Grid.Row="4" Text="DpiShell на роутере" Style="{StaticResource Hint}" Margin="0,2,16,2" />
+                                        <TextBlock Grid.Row="4" Text="{l:T about.row.router}" Style="{StaticResource Hint}" Margin="0,2,16,2" />
                                         <StackPanel Grid.Row="4" Grid.Column="1" DataContext="{Binding Router}">
                                             <TextBlock Text="{Binding PackageVersionText}" TextWrapping="Wrap" Margin="0,2,0,2" />
                                             <TextBlock Text="{Binding PackageUpdateText}" FontWeight="SemiBold" Margin="0,2,0,2"
@@ -2424,12 +2424,12 @@
                                             <WrapPanel>
                                                 <Button Content="{Binding UpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}"
                                                         Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
-                                                <Button Content="Установить на роутер" Style="{StaticResource LinkButton}" Command="{Binding InstallCmd}"
+                                                <Button Content="{l:T about.router.install}" Style="{StaticResource LinkButton}" Command="{Binding InstallCmd}"
                                                         Visibility="{Binding ShowPackageInstall, Converter={StaticResource Vis}}" />
                                             </WrapPanel>
                                         </StackPanel>
                                         <!-- Ядро, установленное на роутере (status.core.installed_version, роутер 0.2.0-r8); нет входа или старый роутер — строки нет. -->
-                                        <TextBlock Grid.Row="5" Text="Ядро на роутере" Style="{StaticResource Hint}" Margin="0,2,16,2" Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
+                                        <TextBlock Grid.Row="5" Text="{l:T about.row.router_core}" Style="{StaticResource Hint}" Margin="0,2,16,2" Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
                                         <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Router.RouterCoreText}" TextWrapping="Wrap" Margin="0,2,0,2"
                                                    Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
                                     </Grid>
@@ -2440,18 +2440,18 @@
                                     <StackPanel DataContext="{Binding Updates}">
                                         <!-- Блок «Списки» — только когда есть новые (одна кнопка); блок «Программа» — одна главная кнопка по состоянию (UX-аудит 5, п. 3). -->
                                         <StackPanel Margin="0,12,0,0" Visibility="{Binding DataAvailable, Converter={StaticResource Vis}}">
-                                            <TextBlock Text="Списки" Style="{StaticResource Hint}" />
+                                            <TextBlock Text="{l:T about.lists.title}" Style="{StaticResource Hint}" />
                                             <TextBlock Text="{Binding AvailableText}" FontWeight="SemiBold" Margin="0,2,0,0" TextWrapping="Wrap" />
-                                            <Button ContentTemplate="{StaticResource Shield}" Content="Обновить списки" Style="{StaticResource Primary}" Command="{Binding InstallCmd}"
+                                            <Button ContentTemplate="{StaticResource Shield}" Content="{l:T about.lists.update}" Style="{StaticResource Primary}" Command="{Binding InstallCmd}"
                                                     HorizontalAlignment="Left" Margin="0,8,0,0" />
                                         </StackPanel>
-                                        <TextBlock Text="Программа" Style="{StaticResource Hint}" Margin="0,14,0,0" />
+                                        <TextBlock Text="{l:T about.row.app}" Style="{StaticResource Hint}" Margin="0,14,0,0" />
                                         <!-- Программа: подписанное описание выпуска получено — «Что нового» и «Обновить до X» (права не нужны);
                                              не получено — подсказка и ссылка на страницу релизов. -->
                                         <StackPanel Margin="0,12,0,0" Visibility="{Binding AppReleaseReady, Converter={StaticResource Vis}}">
-                                            <TextBlock Text="{Binding AppReleaseTitle}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBox Text="{Binding AppReleaseTitle, Mode=OneWay}" Style="{StaticResource SelectableText}" FontWeight="SemiBold" />
                                             <StackPanel Margin="0,6,0,0" Visibility="{Binding HasAppNotes, Converter={StaticResource Vis}}">
-                                                <TextBlock Text="Что нового" Style="{StaticResource Hint}" Margin="0,0,0,2" />
+                                                <TextBlock Text="{l:T about.app.whats_new}" Style="{StaticResource Hint}" Margin="0,0,0,2" />
                                                 <ItemsControl ItemsSource="{Binding AppNotes}">
                                                     <ItemsControl.ItemTemplate>
                                                         <DataTemplate>
@@ -2461,21 +2461,21 @@
                                                 </ItemsControl>
                                             </StackPanel>
                                             <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
-                                                       Text="Файл проверяется по подписи и контрольной сумме, права администратора не нужны. Текущая версия остаётся рядом — к ней можно вернуться." />
+                                                       Text="{l:T about.app.verify_note}" />
                                         </StackPanel>
-                                        <TextBlock Text="{Binding AppOsNote}" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="{Binding HasAppOsNote, Converter={StaticResource Vis}}" />
+                                        <TextBox Text="{Binding AppOsNote, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,8,0,0" Visibility="{Binding HasAppOsNote, Converter={StaticResource Vis}}" />
                                         <TextBlock Text="{Binding AppText}" Margin="0,8,0,0" TextWrapping="Wrap"
                                                    Visibility="{Binding AppHintOnly, Converter={StaticResource Vis}}" />
                                         <StackPanel Margin="0,8,0,0" Visibility="{Binding AppBusy, Converter={StaticResource Vis}}" AutomationProperties.LiveSetting="Polite">
-                                            <TextBlock Text="{Binding AppProgressText}" TextWrapping="Wrap" />
+                                            <TextBox Text="{Binding AppProgressText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
                                             <ProgressBar Height="6" IsIndeterminate="True" Margin="0,6,0,0" />
                                         </StackPanel>
                                         <TextBlock Text="{Binding AppNotice}" Margin="0,8,0,0" TextWrapping="Wrap" FontWeight="SemiBold"
                                                    Visibility="{Binding HasAppNotice, Converter={StaticResource Vis}}" />
                                         <StackPanel Margin="0,8,0,0" Visibility="{Binding HasAppError, Converter={StaticResource Vis}}" AutomationProperties.LiveSetting="Assertive">
-                                            <TextBlock Text="{Binding AppErrorShort}" TextWrapping="Wrap" Foreground="{DynamicResource Danger}" />
+                                            <TextBox Text="{Binding AppErrorShort, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Danger}" />
                                             <Expander Header="{l:T common.more}" Margin="0,2,0,0" Visibility="{Binding HasAppErrorMore, Converter={StaticResource Vis}}">
-                                                <TextBlock Text="{Binding AppErrorMore}" Style="{StaticResource Hint}" Margin="0,2,0,0" FontSize="12" TextWrapping="Wrap" />
+                                                <TextBox Text="{Binding AppErrorMore, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Muted}" Margin="0,2,0,0" FontSize="12" />
                                             </Expander>
                                             <Button Content="{l:T common.retry}" Command="{Binding RetryCmd}" HorizontalAlignment="Left" Margin="0,6,0,0" />
                                         </StackPanel>
@@ -2486,9 +2486,9 @@
                                         <WrapPanel Margin="0,10,0,0">
                                             <Button Content="{Binding AppUpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateAppCmd}"
                                                     Visibility="{Binding AppReleaseReady, Converter={StaticResource Vis}}" />
-                                            <Button Content="Проверить обновления" Command="{Binding CheckCmd}"
+                                            <Button Content="{l:T about.app.check_button}" Command="{Binding CheckCmd}"
                                                     Visibility="{Binding ShowCheckButton, Converter={StaticResource Vis}}" />
-                                            <Button Content="{Binding RollbackText}" Command="{Binding RollbackCmd}" ToolTip="Запустить прежнюю версию, она сохранена рядом"
+                                            <Button Content="{Binding RollbackText}" Command="{Binding RollbackCmd}" ToolTip="{l:T about.app.rollback_tip}"
                                                     Visibility="{Binding CanRollback, Converter={StaticResource Vis}}" />
                                         </WrapPanel>
                                     </StackPanel>
@@ -2497,19 +2497,19 @@
 
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="Информация" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T about.info.title}" Style="{StaticResource H2}" />
                                     <WrapPanel Margin="0,4,0,0">
-                                        <TextBlock Text="DpiShell — на основе " VerticalAlignment="Center" />
+                                        <TextBlock Text="{l:T about.info.based_on}" VerticalAlignment="Center" Margin="0,0,4,0" />
                                         <Button Content="zapret (bol-van) ↗" Style="{StaticResource LinkButton}" Command="{Binding OpenZapretCmd}" VerticalAlignment="Center" Margin="0" />
                                     </WrapPanel>
                                     <WrapPanel Margin="0,6,0,0">
-                                        <TextBlock Text="Репозиторий: " VerticalAlignment="Center" />
+                                        <TextBlock Text="{l:T about.info.repo}" VerticalAlignment="Center" Margin="0,0,4,0" />
                                         <Button Content="github.com/Slavdew/dpishell ↗" Style="{StaticResource LinkButton}" Command="{Binding OpenRepoCmd}" VerticalAlignment="Center" Margin="0" />
                                     </WrapPanel>
-                                    <TextBlock Text="Лицензия — MIT." Margin="0,6,0,0" />
+                                    <TextBlock Text="{l:T about.info.license}" Margin="0,6,0,0" />
                                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,6,0,0"
-                                               Text="Лицензии сторонних компонентов — в файле THIRD-PARTY-NOTICES.txt рядом с программой." />
-                                    <Button Content="Открыть лицензии" Command="{Binding OpenNoticesCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                               Text="{l:T about.info.third_party}" />
+                                    <Button Content="{l:T about.info.open_licenses}" Command="{Binding OpenNoticesCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
                                             Visibility="{Binding HasNotices, Converter={StaticResource Vis}}" />
                                 </StackPanel>
                             </Border>
@@ -2586,7 +2586,7 @@
                     <!-- Не ответил или отвечает дольше 10 с — выход с первого экрана (UX-аудит, п. 46). -->
                     <WrapPanel Margin="0,4,0,0" Visibility="{Binding ShowLoadActions, Converter={StaticResource Vis}}">
                         <Button Content="{l:T common.retry}" Style="{StaticResource Primary}" Command="{Binding RetryCmd}" />
-                        <Button Content="Открыть без помощника" Command="{Binding OpenWithoutHelperCmd}" ToolTip="Окно — только для просмотра; помощник подключится сам, когда ответит" />
+                        <Button Content="{l:T shell.overlay.open_without_helper}" Command="{Binding OpenWithoutHelperCmd}" ToolTip="{l:T shell.overlay.open_without_helper_tip}" />
                     </WrapPanel>
                 </StackPanel>
             </Border>

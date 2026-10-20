@@ -165,7 +165,7 @@ public sealed class HomeViewModelTests : IDisposable
         Assert.False(vm.ShowLoadActions);
         for (int i = 0; i < 300 && !vm.LoadSlow; i++) await Task.Delay(10);
         Assert.True(vm.ShowLoadActions);
-        Assert.StartsWith("Помощник отвечает дольше обычного", vm.LoadingText);
+        Assert.Equal(L.T("shell.loading.slow"), vm.LoadingText);
         Assert.True(vm.RetryCmd.CanExecute(null));
         Assert.True(vm.OpenWithoutHelperCmd.CanExecute(null));
         // «Повторить» — заново, с новым сроком; прежнее ожидание отменено и заставку не трогает.

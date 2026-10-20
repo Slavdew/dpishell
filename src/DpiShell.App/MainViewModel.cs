@@ -135,7 +135,7 @@ public sealed partial class MainViewModel : Observable
         OpenLogsCmd = new RelayCommand(() => OpenFolder(Path.Combine(WindowSettings.DefaultDir, "logs")));
         OpenResultsCmd = RelayCommand.Async(OpenResultsAsync);
         RemoveServiceCmd = RelayCommand.Async(RemoveServiceAsync, () => !Busy && !IsLoading);
-        FixHelperCmd = RelayCommand.Async(async () => { if (await InstallHelperAsync()) Message = "Помощник установлен."; }, () => !Busy);
+        FixHelperCmd = RelayCommand.Async(async () => { if (await InstallHelperAsync()) Message = L.T("about.helper.installed"); }, () => !Busy);
         UninstallHelperCmd = RelayCommand.Async(UninstallHelperAsync, () => !Busy && !IsLoading);
 
         // Обход на роутере (docs/dev/router-api.md §6): своя логика, свои команды; сюда — только строка состояния и переходы.
@@ -240,23 +240,22 @@ public sealed partial class MainViewModel : Observable
     /// <summary>Помощник есть, но не отвечает / устарел / чужой — текст и кнопка «Переустановить».</summary>
     public string HelperProblem => Helper.State is HelperState.NotResponding or HelperState.Denied or HelperState.Outdated ? Helper.Problem : "";
     public bool HasHelperProblem => HelperProblem.Length > 0;
-    public string FixHelperText => Helper.State == HelperState.Outdated ? "Обновить помощника" : "Переустановить помощника";
+    public string FixHelperText => L.T(Helper.State == HelperState.Outdated ? "about.helper.fix_update" : "about.helper.fix_reinstall");
 
     /// <summary>Состояние помощника — на вкладке «Информация и обновления».</summary>
     public string HelperText => Helper.State switch
     {
-        HelperState.Connected => "работает" + (Helper.Reader?.HelperVersion is { Length: > 0 } v ? $" (версия {v})" : ""),
-        HelperState.Outdated => "устарел — обновится по первому действию",
+        HelperState.Connected => Helper.Reader?.HelperVersion is { Length: > 0 } v ? L.T("about.helper.state_running_v", new { version = v }) : L.T("about.helper.state_running"),
+        HelperState.Outdated => L.T("about.helper.state_outdated"),
         HelperState.NotResponding or HelperState.Denied => Helper.Problem,
-        HelperState.NotInstalled => "не установлен — окно в режиме просмотра",
-        _ => "проверяется…",
+        HelperState.NotInstalled => L.T("about.helper.state_missing"),
+        _ => L.T("about.helper.state_checking"),
     };
     public bool CanUninstallHelper => Helper.State is not (HelperState.NotInstalled or HelperState.Unknown);
 
     public ICommand FixHelperCmd { get; }
     public ICommand UninstallHelperCmd { get; }
 
-    const string ViewOnly = "Без помощника окно работает в режиме просмотра: проверка сайтов, DNS и роутер доступны, менять оптимизацию на ПК — нет.";
 
     void OnHelperChanged()
     {
@@ -281,13 +280,12 @@ public sealed partial class MainViewModel : Observable
         }
         var question = Helper.State switch
         {
-            HelperState.Outdated => "Помощника DpiShell нужно обновить до версии окна: обычно один запрос прав администратора, дальше без вопросов (при обновлении или удалении помощника Windows спросит снова).\n\nОбновить сейчас?",
-            HelperState.NotResponding => Helper.Problem + "\n\nПереустановить помощника? Это один запрос прав администратора.",
-            HelperState.Denied => Helper.Problem + "\n\nПереустановить помощника для вас? Это один запрос прав администратора.",
-            _ => "Нужен помощник DpiShell: обычно один запрос прав администратора, дальше без вопросов (при обновлении или удалении помощника Windows спросит снова).\n\n" +
-                 "Он включает оптимизацию, подбирает стратегии и меняет системные настройки по командам этого окна. Установить?",
+            HelperState.Outdated => L.T("shell.helper.ask_update"),
+            HelperState.NotResponding => L.T("shell.helper.ask_reinstall", new { problem = Helper.Problem }),
+            HelperState.Denied => L.T("shell.helper.ask_reinstall_user", new { problem = Helper.Problem }),
+            _ => L.T("shell.helper.ask_install"),
         };
-        if (!AskHelper(question)) { Message = ViewOnly; return null; }
+        if (!AskHelper(question)) { Message = L.T("shell.helper.view_only"); return null; }
         return await InstallHelperAsync() ? Helper.Client : null;
     }
 
@@ -296,7 +294,7 @@ public sealed partial class MainViewModel : Observable
     {
         if (_installing) return false;
         _installing = true;
-        Busy = true; BusyText = "Устанавливаю помощника…"; Message = "Подтвердите запрос прав администратора — обычно он нужен один раз.";
+        Busy = true; BusyText = L.T("shell.helper.busy_install"); Message = L.T("shell.helper.confirm_prompt");
         UpdateStatus();
         SetupOutcome r;
         try { r = await Helper.InstallAsync(); }
@@ -310,10 +308,10 @@ public sealed partial class MainViewModel : Observable
         switch (r.Result)
         {
             case SetupResult.Declined:
-                Fail("Права не выданы. " + ViewOnly);
+                Fail(L.T("shell.helper.declined"));
                 return false;
             case SetupResult.Failed:
-                Fail("Помощник не установился: " + r.Error);
+                Fail(L.T("shell.helper.install_failed", new { error = r.Error }));
                 return false;
         }
         Message = "";
@@ -327,21 +325,20 @@ public sealed partial class MainViewModel : Observable
         if (Helper.Ready)
         {
             await Changes.RefreshAsync();
-            if (Changes.Count > 0 && Confirm($"Перед удалением помощника отменить всё, что сделала DpiShell (записей: {Changes.Count})?\n\n" + ChangesViewModel.Promise
-                    + "\n\nПосле удаления помощника отменить будет нельзя. «Нет» — удалить помощника, оставив настройки как есть."))
+            if (Changes.Count > 0 && Confirm(L.T("shell.helper.uninstall_undo_first", new { count = Changes.Count })))
                 await Changes.UndoAllAsync(ask: false);
         }
-        if (!Confirm("Удалить помощника DpiShell? Обычно нужен один запрос прав администратора. Окно останется в режиме просмотра; служба оптимизации, если стоит, не удаляется — для этого «Удалить службу оптимизации»."))
+        if (!Confirm(L.T("shell.helper.uninstall_confirm")))
             return;
-        Busy = true; BusyText = "Удаляю помощника…"; UpdateStatus();
+        Busy = true; BusyText = L.T("shell.helper.busy_uninstall"); UpdateStatus();
         try
         {
             var r = await Helper.UninstallAsync();
             Message = r.Result switch
             {
-                SetupResult.Done => "Помощник удалён. " + ViewOnly,
-                SetupResult.Declined => "Права не выданы — помощник остался.",
-                _ => "Помощника удалить не удалось: " + r.Error,
+                SetupResult.Done => L.T("shell.helper.uninstalled"),
+                SetupResult.Declined => L.T("shell.helper.uninstall_declined"),
+                _ => L.T("shell.helper.uninstall_failed", new { error = r.Error }),
             };
         }
         finally { Busy = false; BusyText = ""; UpdateStatus(); }
@@ -518,7 +515,7 @@ public sealed partial class MainViewModel : Observable
 
     public bool ShowOverlay => IsLoading;
 
-    string _loadingText = "Подключаюсь к помощнику…";
+    string _loadingText = L.T("shell.loading.connecting");
     public string LoadingText { get => _loadingText; private set => Set(ref _loadingText, value); }
 
     /// <summary>
@@ -529,7 +526,7 @@ public sealed partial class MainViewModel : Observable
     {
         _loadCts?.Cancel();
         var cts = _loadCts = new CancellationTokenSource();
-        IsLoading = true; LoadFailed = false; LoadSlow = false; LoadingText = "Подключаюсь к помощнику…";
+        IsLoading = true; LoadFailed = false; LoadSlow = false; LoadingText = L.T("shell.loading.connecting");
         _ = MarkSlowAsync(cts.Token);
         try
         {
@@ -563,7 +560,7 @@ public sealed partial class MainViewModel : Observable
         try { await Task.Delay(LoadSlowAfter, ct); }
         catch (OperationCanceledException) { return; }
         if (!IsLoading || LoadFailed) return;
-        LoadingText = "Помощник отвечает дольше обычного. Можно подождать, повторить или открыть окно без него — только для просмотра.";
+        LoadingText = L.T("shell.loading.slow");
         LoadSlow = true;
     }
 
@@ -864,7 +861,7 @@ public sealed partial class MainViewModel : Observable
         set { if (value != ServiceMode) _ = SetRunModeAsync(value); }
     }
 
-    public string RunModeHint => L.T(ServiceMode ? "settings.service.on" : "settings.service.off");
+    public string RunModeHint => L.T(ServiceMode ? "settings.run_mode.hint_service" : "settings.run_mode.hint_process");
 
     /// <summary>
     /// Главная, под «Включить»: без службы — кнопка «Установить службу»; в режиме службы — надпись. «Служба установлена» — только когда
@@ -888,7 +885,7 @@ public sealed partial class MainViewModel : Observable
 
     async Task SetRunModeAsync(bool service)
     {
-        await WithHelper(service ? "Перехожу на работу без окна…" : "Перехожу на работу из программы…", async c =>
+        await WithHelper(L.T(service ? "settings.run_mode.busy_service" : "settings.run_mode.busy_process"), async c =>
         {
             await c.SetRunModeAsync(service);
             await FetchAsync(full: false);
@@ -1668,18 +1665,18 @@ public sealed partial class MainViewModel : Observable
             // Версия — из ответа помощника, а пока его нет — из поставки (data\core.json рядом с программой).
             var version = string.IsNullOrEmpty(_coreVersion) ? _shell.Installer.Manifest.Version : _coreVersion;
             // Имена повреждённых файлов — на «Диагностике» («Подробнее»); здесь одна фраза.
-            var state = string.IsNullOrEmpty(_coreText) ? "" : _coreBroken ? _coreAbout : "в порядке";
+            var state = string.IsNullOrEmpty(_coreText) ? "" : _coreBroken ? L.T(_coreMissing ? "about.core.missing" : "about.core.damaged") : L.T("about.core.ok");
             return (version, state) switch
             {
-                ({ Length: > 0 }, { Length: > 0 }) => $"{version} · {state}",
+                ({ Length: > 0 }, { Length: > 0 }) => L.T("about.core.row", new { version, state }),
                 ({ Length: > 0 }, _) => version,
                 (_, { Length: > 0 }) => state,
-                _ => "неизвестно",
+                _ => L.T("about.core.unknown"),
             };
         }
     }
     string? _coreVersion;
-    string _coreAbout = "файлы повреждены, возможно, антивирусом";
+    bool _coreMissing;
 
     bool _coreBroken;
     public bool CoreBroken { get => _coreBroken; private set => Set(ref _coreBroken, value); }
@@ -1783,7 +1780,7 @@ public sealed partial class MainViewModel : Observable
                 var core = d.Core;
                 _coreVersion = d.CoreVersion;
                 CoreBroken = core.State != CoreState.Ok;
-                _coreAbout = core.State == CoreState.Missing ? "файлы не найдены, возможно, удалены антивирусом" : "файлы повреждены, возможно, антивирусом";
+                _coreMissing = core.State == CoreState.Missing;
                 CoreText = core.State switch
                 {
                     CoreState.Ok => $"в порядке (версия {d.CoreVersion})",
@@ -1917,7 +1914,7 @@ public sealed partial class MainViewModel : Observable
     public bool HasCloseHint => CloseHint.Length > 0;
 
     /// <summary>Восстановить ядро — помощник останавливает обход, ставит файлы заново и возвращает как было.</summary>
-    Task RepairCoreAsync() => WithHelper("Восстанавливаю ядро…", async c =>
+    Task RepairCoreAsync() => WithHelper(L.T("about.core.busy"), async c =>
     {
         await c.CoreRepairAsync(new Progress<string>(s => Message = s));
         await RefreshDiagAsync();
@@ -1928,17 +1925,17 @@ public sealed partial class MainViewModel : Observable
     async Task RemoveServiceAsync()
     {
         if (!Confirm(ServiceMode
-                ? "Удалить службу оптимизации и драйвер WinDivert? Оптимизация перестанет работать, пока вы снова не нажмёте «Включить»."
-                : "Удалить службу оптимизации и драйвер WinDivert? Оптимизация из программы, если включена, прервётся до следующего включения."))
+                ? L.T("settings.remove_service.confirm_service")
+                : L.T("settings.remove_service.confirm_process")))
             return;
-        if (await WithHelper("Удаляю службу…", async c =>
+        if (await WithHelper(L.T("settings.remove_service.busy"), async c =>
             {
                 await Router.JointShutdownAsync();   // совместная работа выключается, связка на роутере снимается (pc_link_del)
                 await c.RemoveAllAsync();
                 await RefreshDiagAsync();
                 await RefreshStatusAsync();
             }))
-            Message = "Служба и драйвер удалены. Помощника можно удалить отдельной кнопкой.";
+            Message = L.T("settings.remove_service.done");
     }
 
     public ICommand ClearHistoryCmd => _clearHistoryCmd ??= RelayCommand.Async(ClearHistoryAsync, () => !Busy && !IsLoading && !Selecting);
@@ -1946,11 +1943,11 @@ public sealed partial class MainViewModel : Observable
 
     async Task ClearHistoryAsync()
     {
-        if (!Confirm("Удалить результаты подборов, статистику и логи?\nСвои сайты, найденные стратегии и включённая оптимизация останутся.")) return;
+        if (!Confirm(L.T("settings.history.confirm"))) return;
         int n = 0;
-        if (!await WithHelper("Очищаю историю…", async c => n = await c.ClearHistoryAsync())) return;
+        if (!await WithHelper(L.T("settings.history.busy"), async c => n = await c.ClearHistoryAsync())) return;
         await ReloadChoicesAsync();
-        Message = $"История очищена: удалено файлов — {n}.";
+        Message = L.T("settings.history.done", new { count = n });
     }
 
     /// <summary>

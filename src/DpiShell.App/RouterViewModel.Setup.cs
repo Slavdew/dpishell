@@ -74,7 +74,7 @@ public sealed partial class RouterViewModel
 
     /// <summary>«Пароль сохранён на этом компьютере» (зашифрован, только для этого пользователя Windows).</summary>
     public string SavedPasswordText => RouterSecrets.Unprotect(_settings.RouterPassword) == ""
-        ? "Пароль не задан — так и запомнено на этом компьютере" : "Пароль сохранён на этом компьютере (зашифрован)";
+        ? L.T("settings.router.password_empty") : L.T("settings.router.password_saved");
 
     void RaisePassword()
     {
