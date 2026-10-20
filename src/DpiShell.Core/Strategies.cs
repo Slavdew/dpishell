@@ -32,7 +32,9 @@ public sealed record StrategyCatalog(string Engine, int Version, string Source, 
 /// Default — как при подборе: IP-список выключен (заглушка), игровой режим выключен.
 /// </summary>
 /// <param name="Advanced">Продвинутый режим «сайты → стратегия» (включён и строки разрешены); null — как обычно.</param>
-public sealed record BuildOptions(IpsetMode Ipset = IpsetMode.Off, GameMode Game = GameMode.Off, IReadOnlyList<AppProfile>? Profiles = null, AdvancedPlan? Advanced = null)
+/// <param name="Joint">Совместная работа с роутером (§7): роутер ведёт YouTube, Discord и остальное, этот ПК — только свои сайты и строки продвинутого режима; null — как обычно.</param>
+public sealed record BuildOptions(IpsetMode Ipset = IpsetMode.Off, GameMode Game = GameMode.Off, IReadOnlyList<AppProfile>? Profiles = null, AdvancedPlan? Advanced = null,
+    JointBuild? Joint = null)
 {
     public static readonly BuildOptions Default = new();
 
@@ -51,7 +53,11 @@ public sealed record BuildOptions(IpsetMode Ipset = IpsetMode.Off, GameMode Game
         // Профили программ (ТЗ 13): в state.json их мог тронуть кто угодно — в командную строку идут только прошедшие проверку.
         var profiles = s.AppProfiles.Where(p => AppProfiles.Problem(p) is null).Take(AppProfiles.MaxProfiles).ToList();
         var advanced = find is null ? null : AdvancedSites.Plan(s.Advanced, find, currentId);
-        return new(mode, ParseGame(s.GameMode), profiles.Count > 0 ? profiles : null, advanced);
+        // Связка действует, пока её продлевают: срок вышел (окно закрыто, роутер недоступен) — ПК сразу по полной настройке, как с «Все адреса».
+        var joint = s.Joint is { Active: true, Until: { } leaseEnd } && leaseEnd > utcNow
+            ? new JointBuild([.. s.Joint.Owned.Where(AdvancedSites.IsDomain).Take(JointRules.MaxDomains)])
+            : null;
+        return new(mode, ParseGame(s.GameMode), profiles.Count > 0 ? profiles : null, advanced, joint);
     }
 
     public static IpsetMode ParseIpset(string? s) => s switch { "list" => IpsetMode.List, "any" => IpsetMode.Any, _ => IpsetMode.Off };
@@ -167,6 +173,8 @@ public static class WinwsArgs
         if (o.GameTcp && (s.Roles.GetValueOrDefault("game_tcp") ?? DeriveGameTcp(s.Roles.GetValueOrDefault("general"))) is { } t)
             roles["game_tcp"] = t;
         if (o.GameUdp) roles["game_udp"] = s.Roles.GetValueOrDefault("game_udp") ?? GameUdpDefault;
+        // Совместная работа: YouTube, Discord, IP-списки и игры ведёт роутер — на ПК остаются только общие роли (по своим сайтам).
+        if (o.Joint is not null) roles = roles.Where(r => r.Key is "quic" or "general").ToDictionary(r => r.Key, r => r.Value);
         return roles;
     }
 
@@ -208,7 +216,10 @@ public static class WinwsArgs
         ];
         // Продвинутый режим: «для всех адресов» — общие роли без своего списка имён, только исключения (как «Все сайты» на роутере).
         var adv = o.Advanced;
-        var general = adv?.Others == AdvancedSites.OthersAll ? excludes : hostlists;
+        var joint = o.Joint;
+        // Совместная работа: общие роли ловят только свои сайты ПК (general.txt и «для всех адресов» — дело роутера), остальные адреса идут мимо.
+        string[] own = [$"--hostlist={L(DataStore.UserGeneral)}", .. excludes];
+        var general = joint is not null ? own : adv?.Others == AdvancedSites.OthersAll ? excludes : hostlists;
         var filters = new Dictionary<string, string[]>
         {
             ["quic"] = ["--filter-udp=443", .. general],
@@ -243,9 +254,11 @@ public static class WinwsArgs
         bool first = true;
         // Строки продвинутого режима — самые первые профили (первое совпадение): сайты строки → десинк общей роли её стратегии (и QUIC, если он есть).
         // Домены — только прошедшие строгий шаблон, параметры — только из белого списка; своих параметров строка не несёт.
+        // Совместная работа: сайты, которые ведёт роутер, из строк выпадают («ведёт роутер»): у адреса один хозяин.
+        var routerOwned = joint?.Owned ?? [];
         foreach (var row in adv?.Applied ?? [])
         {
-            var domains = row.Domains.Where(AdvancedSites.IsDomain).Take(AdvancedSites.MaxDomains).ToList();
+            var domains = row.Domains.Where(AdvancedSites.IsDomain).Where(d => !JointRules.OwnedBy(d, routerOwned)).Take(AdvancedSites.MaxDomains).ToList();
             if (domains.Count == 0) continue;
             foreach (var (role, filter) in new[] { ("general", "--filter-tcp=80,443"), ("quic", "--filter-udp=443") })
             {
@@ -259,7 +272,8 @@ public static class WinwsArgs
             }
         }
         // Сайты «напрямую» — исключения во всех ролях каталога (в режиме IP-списка нулевая фаза ipset-профиля их всё равно может задеть: имя ещё не известно).
-        var direct = adv?.Direct.Where(AdvancedSites.IsDomain).ToList() ?? [];
+        // При связке к ним добавляются сайты, которые ведёт роутер, но записаны у ПК в «Свои сайты» (список winws не правим): их на ПК не трогаем.
+        var direct = (adv?.Direct ?? []).Concat(routerOwned).Where(AdvancedSites.IsDomain).Distinct().ToList();
         string[] directArgs = direct.Count > 0 ? ["--hostlist-exclude-domains=" + string.Join(',', direct)] : [];
         // Профили программ идут сразу после строк продвинутого режима и до общих ролей: winws берёт первый подходящий профиль, а general и quic ловили бы те же порты.
         foreach (var pr in profiles)
@@ -279,7 +293,7 @@ public static class WinwsArgs
         foreach (var role in RoleOrder)
         {
             // «Остальные адреса — напрямую»: роли каталога не включаются, работают только строки (и профили программ).
-            if (adv?.Others == AdvancedSites.OthersDirect) break;
+            if (joint is null && adv?.Others == AdvancedSites.OthersDirect) break;
             if (!roles.TryGetValue(role, out var desync)) continue;
             if (!first) args.Add("--new");
             first = false;

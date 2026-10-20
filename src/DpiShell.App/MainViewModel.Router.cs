@@ -48,6 +48,8 @@ public sealed partial class MainViewModel
     public async Task<bool> RouterGateAsync(bool select)
     {
         if (!(Router.Found && Router.RouterEnabled)) return true;
+        // Совместная работа с роутером (mixed-strategies.md §7): ПК включается вместе с роутером — он ведёт только свои сайты, двойной обработки нет.
+        if (!select && await JointBeforeEnableAsync()) return true;
         if (!Router.Connected)
         {
             var login = Choose("Оптимизация уже работает на роутере — для всех устройств дома, и для этого ПК тоже. "
@@ -91,7 +93,8 @@ public sealed partial class MainViewModel
     /// </summary>
     void OnRouterChanged()
     {
-        if (_switchingToRouter || Busy || Selecting || IsLoading || !IsRunning || !Router.RouterEnabled || !Router.Found) return;
+        // Совместная работа включена: ПК не выключается из-за роутера — он ведёт свои сайты (а роутер пропал или не принял связку — работает по полной настройке).
+        if (_switchingToRouter || Busy || Selecting || IsLoading || !IsRunning || !Router.RouterEnabled || !Router.Found || Router.JointOn) return;
         _ = SwitchToRouterAsync();
     }
 
@@ -113,6 +116,18 @@ public sealed partial class MainViewModel
         while ((Busy || Selecting) && DateTime.UtcNow < until) await Task.Delay(100);
         var deferred = _resumeDeferred;
         _resumeDeferred = null;
+        if (Router.JointOn)
+        {
+            // Совместная работа: ПК не выключается из-за роутера. Связка (или возврат к полной настройке) — первой проверкой, оптимизация — после неё.
+            if (deferred is not null && Helper.Client is { } jc)
+            {
+                await JointBeforeEnableAsync();
+                try { await jc.EnableAsync(deferred); }
+                catch (Exception e) when (e is HelperException or HelperUnavailableException) { Fail(Texts.Friendly(e)); }
+                await RefreshStatusAsync();
+            }
+            return;
+        }
         if (Router.Found && Router.RouterEnabled)
         {
             if (IsRunning) await SwitchToRouterAsync();

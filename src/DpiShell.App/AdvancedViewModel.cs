@@ -108,6 +108,8 @@ public sealed class AdvancedViewModel : Observable
     public Func<Task<string?>> Revert { get; set; } = () => Task.FromResult<string?>(null);
     public Func<bool> CanRevertNow { get; set; } = () => true;
     public BuiltinLists? Builtin { get; set; }
+    /// <summary>Сайты, которые ведёт роутер при совместной работе (docs/research/mixed-strategies.md §7): строка с таким сайтом на ПК не применяется.</summary>
+    public Func<IReadOnlyList<string>> RouterOwned { get; set; } = () => [];
     public Action<string> Say { get; set; } = _ => { };
 
     // ---------- состояние ----------
@@ -263,12 +265,17 @@ public sealed class AdvancedViewModel : Observable
                     parts.Add("Оптимизация эти сайты не трогает.");
                     break;
             }
-            if (Builtin is { } b)
+            var routerOwned = RouterOwned();
+            var theirs = routerOwned.Count == 0 ? [] : r.Parsed.Where(d => AdvancedSites.Domain(d) is { } n && JointRules.OwnedBy(n, routerOwned)).ToList();
+            if (theirs.Count > 0)
+                parts.Add($"{string.Join(", ", theirs.Take(3))} — ведёт роутер, на этом ПК не применяется.");
+            else if (Builtin is { } b)
             {
                 var covered = r.Parsed.Select(d => (d, list: AdvancedSites.Domain(d) is { } n ? b.Covering(n) : null)).FirstOrDefault(x => x.list is not null);
                 if (covered.list is not null) parts.Add($"{covered.d} есть в списке {covered.list}: ваша строка важнее.");
             }
-            r.Hint = string.Join(" ", parts);
+            // Несколько фраз — каждая с точкой («Авто — сейчас X. youtube.com — ведёт роутер, …»).
+            r.Hint = string.Join(" ", parts.Count > 1 ? parts.Select(p => p.EndsWith('.') ? p : p + ".") : parts);
         }
     }
 

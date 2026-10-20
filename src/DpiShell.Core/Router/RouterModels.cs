@@ -112,7 +112,17 @@ public sealed record RouterStatus(
     // С 0.2.0-r8: версии установленных пакетов (dpishell, luci-app-dpishell). Старый роутер — null.
     RouterPackages? Packages = null,
     // С 0.2.0-r9: продвинутый режим (§5.1 advanced_get): включён ли и сколько строк. Старый роутер — null.
-    RouterAdvancedSummary? Advanced = null);
+    RouterAdvancedSummary? Advanced = null,
+    // С 0.2.0-r9: сколько ПК ведут свои сайты вместе с роутером (pc_link_*). Старый роутер — null.
+    int? PcLinks = null);
+
+/// <summary>Ответ pc_link_set: до когда связка действует и какие из присланных сайтов роутер оставил себе (<c>ignored</c> — адреса YouTube, Discord, строк продвинутого режима).</summary>
+public sealed record RouterPcLinkSet(DateTime? ExpiresAt, List<string>? Ignored = null);
+
+/// <summary>Связка ПК из pc_link_get: <c>active</c> — действует сейчас (не истекла и оптимизация на роутере включена).</summary>
+public sealed record RouterPcLink(string Id, List<string>? Macs, int Domains, int Ignored, DateTime? SeenAt, DateTime? ExpiresAt, bool Active);
+
+public sealed record RouterPcLinks(List<RouterPcLink> Items);
 
 /// <summary>status.advanced (роутер 0.2.0-r9): включён ли продвинутый режим и сколько в нём строк.</summary>
 public sealed record RouterAdvancedSummary(bool Enabled, int Rows);

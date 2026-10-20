@@ -87,6 +87,12 @@ public interface IHelperBackend : IHelperCatalog
     /// <summary>Сохранить: режим, остальные адреса и строки (сайты и стратегия — «auto», «direct» или id; других полей нет). Оптимизация перезапускается на новых строках.</summary>
     AdvancedInfo AdvancedSet(bool enabled, string others, IReadOnlyList<AdvancedRowInput> rows);
 
+    // ---------- совместная работа с роутером (API 1.9) ----------
+    /// <summary>Что этот ПК готов взять на себя при совместной работе (свои сайты, строки, имена приманок) и действует ли связка. Только чтение.</summary>
+    JointInfo JointGet();
+    /// <summary>Включить/выключить связку и продлить её (срок <see cref="JointRules.Lease"/>); owned — сайты ПК, которые ведёт роутер. Оптимизация перезапускается, если изменилась командная строка.</summary>
+    JointInfo JointSet(bool active, IReadOnlyList<string> owned);
+
     // ---------- откат всего (журнал изменений, API 1.6) ----------
     /// <summary>Что сделала программа в системе и можно откатить: из журнала, понятными словами.</summary>
     ChangesList ChangesList();
@@ -477,6 +483,8 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
         DropRecording();
         shell.ClearAppProfiles();
         shell.ClearAdvanced();
+        lock (_jointLock) { _jointTimer?.Dispose(); _jointTimer = null; }
+        shell.ClearJoint();
         shell.State.Enabled = false;
         shell.SaveState();
     }
@@ -592,6 +600,32 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
         return shell.AdvancedInfo();
     }
 
+    // ---------- совместная работа с роутером ----------
+
+    readonly object _jointLock = new();
+    Timer? _jointTimer;
+
+    public JointInfo JointGet() => shell.JointInfo();
+
+    public JointInfo JointSet(bool active, IReadOnlyList<string> owned)
+    {
+        shell.SetJoint(active, owned);
+        lock (_jointLock)
+        {
+            _jointTimer?.Dispose();
+            _jointTimer = null;
+            // Окно не продлило связку (закрыто, ноутбук ушёл из дома) — ПК сам возвращается к полной настройке.
+            if (active) _jointTimer = new Timer(_ => ExpireJoint(), null, JointRules.Lease + TimeSpan.FromSeconds(2), Timeout.InfiniteTimeSpan);
+        }
+        return shell.JointInfo();
+    }
+
+    void ExpireJoint()
+    {
+        try { shell.ExpireJoint(); }
+        catch (Exception e) when (e is InvalidOperationException or System.Security.SecurityException or IOException) { }
+    }
+
     /// <summary>Смена DNS в системе; в тестах — подмена в памяти (реестр и сеть машины не трогаются).</summary>
     public IDnsSystem DnsSystem { get; init; } = new WindowsDnsSystem();
     DnsManager? _dns;
@@ -622,6 +656,7 @@ public sealed class ShellHelperBackend(Shell shell) : IHelperBackend
             e.Register(new CoreUndoer(() => shell.Installer, shell.Paths));
             e.Register(new AppProfileUndoer(id => shell.State.AppProfiles.FirstOrDefault(p => p.Id == id), shell.RemoveAppProfile));
             e.Register(new AdvancedUndoer(() => shell.State.Advanced, shell.RestoreAdvanced));
+            e.Register(new JointUndoer(() => shell.State.Joint, shell.RestoreJointOff));
             return _changes = e;
         }
     }

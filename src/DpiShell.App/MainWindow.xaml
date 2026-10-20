@@ -1906,6 +1906,26 @@
                                 </Grid>
                             </Border>
 
+                            <!-- Совместная работа с роутером (mixed-strategies.md §7, договор pc_link_*): выключена по умолчанию; включена — роутер ведёт YouTube и Discord
+                                 для всей сети, этот ПК — свои сайты. Короткий статус, под ним — что ведёт роутер. Работает только при обоих приложениях. -->
+                            <Border Style="{StaticResource Card}" Visibility="{Binding JointCardVisible, Converter={StaticResource Vis}}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="Совместная работа с роутером" Style="{StaticResource H2}" />
+                                        <local:InfoButton Topic="{x:Static local:InfoTexts.Joint}" Margin="8,0,0,8" />
+                                    </StackPanel>
+                                    <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding JointWanted}" IsEnabled="{Binding JointAvailable}" HorizontalAlignment="Left"
+                                              AutomationProperties.Name="Совместная работа с роутером">
+                                        <TextBlock Text="Включить" FontSize="15" FontWeight="SemiBold" />
+                                    </CheckBox>
+                                    <TextBlock Text="{Binding JointStatus}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="50,4,0,0"
+                                               Visibility="{Binding HasJointStatus, Converter={StaticResource Vis}}" />
+                                    <TextBlock Text="{Binding JointNotes}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="50,2,0,0" local:Demo.Sensitive="True"
+                                               Visibility="{Binding HasJointNotes, Converter={StaticResource Vis}}" />
+                                    <TextBlock Text="{Binding JointHint}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="50,4,0,0" />
+                                </StackPanel>
+                            </Border>
+
                             <!-- «Роутер: что мешает» (diag, чужие обходы с «Остановить», отчёт; router-api §6) — рядом с плашками состояния. -->
                             <Border Style="{StaticResource Card}" Visibility="{Binding Found, Converter={StaticResource Vis}}">
                                 <StackPanel>

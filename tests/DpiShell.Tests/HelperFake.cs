@@ -64,13 +64,21 @@ public sealed class FakeHelperBackend : IHelperBackend
 
     public bool TcpTimestampsOn() { Call("tcp_timestamps_on"); return true; }
 
+    /// <summary>enable/disable меняют то, что отвечает status (оптимизация на ПК включена/выключена); по умолчанию — нет.</summary>
+    public bool TrackEnabled { get; set; }
+
     public void Enable(string strategyId)
     {
         Call("enable " + strategyId);
         if (EnableThrows is { } e) throw e;
+        if (TrackEnabled) StatusValue = StatusValue with { Enabled = true, Active = true, StrategyId = strategyId, Service = SvcState.Running };
     }
 
-    public void Disable() => Call("disable");
+    public void Disable()
+    {
+        Call("disable");
+        if (TrackEnabled) StatusValue = StatusValue with { Enabled = false, Active = false, Service = SvcState.Stopped };
+    }
     public void SetRunMode(bool service) => Call("set_run_mode " + service);
 
     async Task<bool> HangAsync(Action report, CancellationToken ct)
@@ -350,6 +358,29 @@ public sealed class FakeHelperBackend : IHelperBackend
         AdvancedValue = new(enabled, others, [.. rows.Select(r => new AdvancedRowInfo(r.Domains, r.Strategy,
             r.Strategy == AdvancedSites.Direct ? null : r.Strategy == AdvancedSites.Auto ? StatusValue.StrategyId : r.Strategy))]);
         return AdvancedValue;
+    }
+
+    /// <summary>Что отвечает joint_get; joint_set меняет Active и Owned.</summary>
+    public JointInfo JointValue { get; set; } = new("00000000-0000-4000-8000-0000000000a1", false, [], ["mysite.example", "youtube.com"], [],
+        ["www.google.com", "4pda.to", "max.ru"], true, [], "alt9", true, ["mysite.example", "youtube.com"], 0);
+    /// <summary>joint_set отвечает отказом с этим текстом (как Shell при ошибке).</summary>
+    public string? JointFails { get; set; }
+    /// <summary>joint_set отвечает «занято» (идёт подбор).</summary>
+    public bool JointBusy { get; set; }
+
+    public JointInfo JointGet()
+    {
+        Call("joint_get");
+        return JointValue;
+    }
+
+    public JointInfo JointSet(bool active, IReadOnlyList<string> owned)
+    {
+        Call($"joint_set {active} {string.Join(",", owned)}");
+        if (JointBusy) throw new HelperException(HelperErrors.Busy, "Идёт подбор");
+        if (JointFails is { } f) throw new InvalidOperationException(f);
+        JointValue = JointValue with { Active = active, Owned = active ? owned : [] };
+        return JointValue;
     }
 
     /// <summary>Что отвечает dns_status (dns_set/dns_restore меняют Current).</summary>

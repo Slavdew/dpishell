@@ -139,6 +139,7 @@ public sealed partial class MainViewModel : Observable
         windowChanges.Register(new DelegateUndoer([ChangeKinds.RouterDns], Router.UndoDnsAsync));
         windowChanges.Register(new DelegateUndoer([ChangeKinds.RouterEnable], Router.UndoEnableAsync));
         windowChanges.Register(new DelegateUndoer([ChangeKinds.RouterAdvanced], Router.UndoAdvancedAsync));
+        windowChanges.Register(new DelegateUndoer([ChangeKinds.RouterJoint], Router.UndoJointAsync));
         // «Вернуть как было» в карточке «Продвинутый режим» на роутере: откат записи журнала окна.
         Router.Advanced.Revert = async () =>
         {
@@ -166,6 +167,7 @@ public sealed partial class MainViewModel : Observable
         WireRouterPc();   // оптимизация ПК и роутера вместе не работают (router-api §6) — MainViewModel.Router.cs
         InitPcDns();      // DNS этого компьютера — MainViewModel.Dns.cs
         InitAdvanced();   // продвинутый режим «сайты → стратегия» на этом ПК — MainViewModel.Advanced.cs
+        InitJoint();      // совместная работа с роутером: роутер ведёт YouTube и Discord, ПК — свои сайты — MainViewModel.Joint.cs
 
         Net = new NetViewModel(helper)
         {
@@ -626,7 +628,12 @@ public sealed partial class MainViewModel : Observable
         if (Selecting) { Kind = StatusKind.Busy; StatusTitle = _searching ? "Глубокий поиск…" : "Подбор…"; StatusDetail = SelectProgressText; }
         else if (Busy) { Kind = StatusKind.Busy; StatusTitle = BusyText; StatusDetail = ""; }
         else if (err is not null) { Kind = StatusKind.Error; StatusTitle = "Ошибка"; StatusDetail = err; }
-        else if (_active) { Kind = StatusKind.On; StatusTitle = "Работает"; StatusDetail = id is null ? "" : "Стратегия: " + StrategyTitle(id); }
+        else if (_active)
+        {
+            Kind = StatusKind.On; StatusTitle = "Работает";
+            // Совместная работа: тем же местом, одной короткой фразой, кто что ведёт.
+            StatusDetail = (id is null ? "" : "Стратегия: " + StrategyTitle(id)) + (Router.JointOn && Router.HasJointStatus ? (id is null ? "" : " · ") + Router.JointStatus : "");
+        }
         else if (ServiceMode && _svc == SvcState.StartPending) { Kind = StatusKind.Busy; StatusTitle = "Запускается…"; StatusDetail = ""; }
         else if (Router.Found && Router.RouterEnabled)
         {
@@ -953,6 +960,7 @@ public sealed partial class MainViewModel : Observable
             await RefreshStatusAsync();
             Page = Pages.Home;
         });
+        if (ok) Router.JointRecheck();   // другая стратегия — другие приманки: роутеру они уходят сразу
         if (ok && IsRunning && CheckedGroups().Count > 0) await CheckNowAsync();
         return ok;
     }
@@ -1520,6 +1528,7 @@ public sealed partial class MainViewModel : Observable
             ? $"Сохранено сайтов: {r.Saved.Count}."
             : $"Сохранено сайтов: {r.Saved.Count}. Не распознаны и убраны: {string.Join(", ", r.Rejected)}.";
         Raise(nameof(TargetsDirty));
+        Router.JointRecheck();   // свои сайты — часть связки: роутеру они уходят сразу, а не через минуту
         return true;
     }
 
@@ -1802,6 +1811,7 @@ public sealed partial class MainViewModel : Observable
             return;
         if (await WithHelper("Удаляю службу…", async c =>
             {
+                await Router.JointShutdownAsync();   // совместная работа выключается, связка на роутере снимается (pc_link_del)
                 await c.RemoveAllAsync();
                 await RefreshDiagAsync();
                 await RefreshStatusAsync();

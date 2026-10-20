@@ -64,7 +64,7 @@ public sealed class Shell
         if (check.State == CoreState.Ok && IsAdmin())
         {
             // Программу закрыли во время «Все адреса» — срок вышел, вернуть; служба после обновления программы — на новые аргументы.
-            try { if (!RevertExpiredAllAddresses()) RefreshServiceIfOutdated(); }
+            try { if (!RevertExpiredAllAddresses() && !ExpireJoint()) RefreshServiceIfOutdated(); }
             catch (Exception e) when (e is InvalidOperationException or SecurityException or IOException) { log?.Report(e.Message); }
         }
         return check;
@@ -269,6 +269,7 @@ public sealed class Shell
         // Продвинутый режим без единой строки со стратегией и «остальные напрямую»: winws нечего обрабатывать (и без профилей программ).
         if (options.Advanced is { Others: AdvancedSites.OthersDirect } adv && !adv.Applied.Any() && options.Profiles is null)
             throw new InvalidOperationException(AdvancedSites.NothingToDo);
+        if (JointNothingToDo(options)) throw new InvalidOperationException(JointTexts.NothingToDo);
         var args = WinwsArgs.Build(s, Paths, options);
         if (ServiceMode)
         {
@@ -768,6 +769,123 @@ public sealed class Shell
         State.Advanced = new();
         State.Save(Paths);
         Journal.Close(ChangeKinds.Advanced, "настройки удалены кнопкой «Удалить службу оптимизации»");
+    }
+
+    // ---------- совместная работа с роутером (docs/research/mixed-strategies.md §7) ----------
+
+    /// <summary>Когда у ПК нечего вести при связке: нет своих сайтов, нет строк со своей стратегией и профилей программ (после отдачи роутеру его адресов).</summary>
+    public bool JointNothingToDo(BuildOptions options)
+    {
+        if (options.Joint is not { } j) return false;
+        bool OwnedByRouter(string d) => JointRules.OwnedBy(d, j.Owned);
+        return Data.ReadUserDomains().All(OwnedByRouter)
+            && !(options.Advanced?.Applied.Any(r => r.Domains.Any(d => !OwnedByRouter(d))) ?? false)
+            && options.Profiles is null;
+    }
+
+    /// <summary>
+    /// Что этот ПК готов взять на себя при совместной работе (ответ <c>joint_get</c>): свои сайты, сайты строк продвинутого режима
+    /// (в том числе «напрямую»: роутеру тоже не стоит их трогать), имена приманок и действует ли связка. Номер ПК создаётся при первом обращении.
+    /// </summary>
+    public JointInfo JointInfo()
+    {
+        if (State.Joint.PcId is null) { State.Joint.PcId = Guid.NewGuid().ToString("D"); State.Save(Paths); }
+        var rows = State.Advanced.Enabled ? State.Advanced.Rows.SelectMany(r => r.Domains) : [];
+        // Приманки — по параметрам тех ролей, что остаются на ПК при связке: общая и QUIC у стратегии ПК, у стратегий строк и у профилей программ.
+        var desyncs = new List<(string Role, string Desync)>();
+        void Roles(Strategy? s)
+        {
+            if (s is null) return;
+            foreach (var role in new[] { "general", "quic" })
+                if (s.Roles.GetValueOrDefault(role) is { } d) desyncs.Add((role, d));
+        }
+        var current = State.StrategyId is { } id ? FindStrategy(id) : null;
+        Roles(current);
+        if (AdvancedSites.Plan(State.Advanced, FindStrategy, State.StrategyId) is { } plan)
+            foreach (var row in plan.Applied) Roles(row.Strategy);
+        foreach (var p in State.AppProfiles)
+        {
+            if (p.TcpDesync.Length > 0) desyncs.Add(("game_tcp", p.TcpDesync));
+            if (p.UdpDesync.Length > 0) desyncs.Add(("game_udp", p.UdpDesync));
+        }
+        var decoys = JointDecoys.Of(desyncs, ReadFake, () => JointDecoys.SupplyNames(Paths.Fake));
+        var j = State.Joint;
+        var own = Data.ReadUserDomains();
+        var work = own.Concat(State.Advanced.Enabled ? State.Advanced.Rows.Where(r => r.Strategy != AdvancedSites.Direct).SelectMany(r => r.Domains) : []).Distinct().ToList();
+        return new(j.PcId!, CurrentOptions.Joint is not null, [.. j.Owned], own, [.. rows], decoys.Names, decoys.Reliable, decoys.Notes,
+            State.StrategyId, State.Enabled, work, State.AppProfiles.Count);
+    }
+
+    byte[]? ReadFake(string name)
+    {
+        if (name.Contains('/') || name.Contains('\\') || name.Contains("..")) return null;
+        try { var f = Path.Combine(Paths.Fake, name); return File.Exists(f) ? File.ReadAllBytes(f) : null; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>
+    /// Включить или выключить связку и продлить её (<see cref="JointRules.Lease"/>). <paramref name="owned"/> — сайты ПК, которые ведёт роутер.
+    /// Командная строка меняется только если изменились режим или список — тогда работающая оптимизация перезапускается; не запустилась — всё возвращается.
+    /// Запись в журнал отката — ДО сохранения.
+    /// </summary>
+    public JointConfig SetJoint(bool active, IReadOnlyList<string> owned)
+    {
+        var clean = JointRules.Clean(owned);
+        if (clean.Count != owned.Count && owned.Any(o => !AdvancedSites.IsDomain(o))) throw new InvalidOperationException("Сайт вида example.com.");
+        if (clean.Count > JointRules.MaxDomains) throw new InvalidOperationException($"Сайтов больше {JointRules.MaxDomains}.");
+        var before = State.Joint.Clone();
+        var next = new JointConfig { Active = active, Owned = active ? clean : [], Until = active ? DateTime.UtcNow + JointRules.Lease : null, PcId = before.PcId };
+        if (!active && !before.Active) { return before; }
+
+        // Журнал: включение — «было выключено»; выключение самой функцией закрывает запись; смена списка при включённой связке правит «стало».
+        string rec = "";
+        var open = Journal.Active(ChangeKinds.Joint).FirstOrDefault();
+        if (active && open is null && !before.Active) rec = Journal.Begin(ChangeKinds.Joint, JointTexts.JournalTitle, before.ToJson(), next.ToJson());
+        else if (active && open is not null && !next.SameBuild(before)) Journal.Update(open.Id, next.ToJson());
+
+        State.Joint = next;
+        State.Save(Paths);
+        if (!next.SameBuild(before))
+        {
+            try { ReapplyIfActive(); }
+            catch (Exception e) when (e is InvalidOperationException or SecurityException or IOException or ConflictException)
+            {
+                // winws с новой настройкой не поднялся — связка возвращается, оптимизация запускается на прежней.
+                State.Joint = before;
+                State.Save(Paths);
+                Journal.Abort(rec);
+                try { ReapplyIfActive(); } catch (Exception again) when (again is InvalidOperationException or SecurityException or IOException) { }
+                throw;
+            }
+        }
+        Journal.Done(rec);
+        if (!active) Journal.Close(ChangeKinds.Joint, "совместная работа выключена");
+        return next;
+    }
+
+    /// <summary>Срок связки вышел (окно не продлило): ПК возвращается к полной настройке. True — вернули.</summary>
+    public bool ExpireJoint()
+    {
+        if (State.Joint is not { Active: true, Until: { } until } || until > DateTime.UtcNow) return false;
+        SetJoint(false, []);
+        return true;
+    }
+
+    /// <summary>Откат записи журнала: связка выключается, ПК работает по полной настройке. Журнал не трогается — его ведёт движок отката.</summary>
+    public void RestoreJointOff()
+    {
+        if (!State.Joint.Active) return;
+        State.Joint = new JointConfig { PcId = State.Joint.PcId };
+        State.Save(Paths);
+        ReapplyIfActive();
+    }
+
+    /// <summary>«Удалить полностью»: связка снимается (номер ПК остаётся).</summary>
+    public void ClearJoint()
+    {
+        State.Joint = new JointConfig { PcId = State.Joint.PcId };
+        State.Save(Paths);
+        Journal.Close(ChangeKinds.Joint, "настройки удалены кнопкой «Удалить службу оптимизации»");
     }
 
     public void SaveState() => State.Save(Paths);

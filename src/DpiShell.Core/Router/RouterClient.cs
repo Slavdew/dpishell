@@ -205,9 +205,54 @@ public sealed class RouterClient : IDisposable
     public Task<RouterStrategies> StrategiesAsync(CancellationToken ct = default) => CallAsync<RouterStrategies>("strategies", null, ct);
     public Task<RouterSelectProgress> SelectProgressAsync(CancellationToken ct = default) => CallAsync<RouterSelectProgress>("select_progress", null, ct);
     public Task<RouterTargets> TargetsGetAsync(CancellationToken ct = default) => CallAsync<RouterTargets>("targets_get", null, ct);
-    /// <summary>name: user-general, user-exclude или exclude (стандартные исключения, только чтение).</summary>
+    /// <summary>
+    /// name: user-general, user-exclude, exclude (стандартные исключения, только чтение) или встроенный список роли — google, discord, general
+    /// (роутер 0.2.0-r9, только чтение: по ним ПК понимает, какие адреса ведёт роутер).
+    /// </summary>
     public Task<RouterLines> ListsGetAsync(string name, CancellationToken ct = default) =>
-        CallAsync<RouterLines>("lists_get", new JsonObject { ["name"] = name == "exclude" ? name : CheckListName(name) }, ct);
+        CallAsync<RouterLines>("lists_get", new JsonObject { ["name"] = name is "exclude" or "google" or "discord" or "general" ? name : CheckListName(name) }, ct);
+
+    // ---------- совместная работа с ПК (§5.2 pc_link_*, роутер 0.2.0-r9) ----------
+
+    /// <summary>Методы договора, без которых совместная работа невозможна.</summary>
+    public static readonly IReadOnlyList<string> PcLinkMethods = ["pc_link_set", "pc_link_del", "pc_link_get"];
+
+    static readonly System.Text.RegularExpressions.Regex PcIdRx = new(@"^[A-Za-z0-9-]{8,64}\z");
+
+    /// <summary>MAC в виде aa:bb:cc:dd:ee:ff (из «-» или «:», любой регистр); не MAC — null.</summary>
+    public static string? NormalizeMac(string? mac)
+    {
+        if (mac is null) return null;
+        var hex = mac.Trim().Replace("-", "").Replace(":", "").ToLowerInvariant();
+        return hex.Length == 12 && hex.All(Uri.IsHexDigit) ? string.Join(':', Enumerable.Range(0, 6).Select(i => hex.Substring(i * 2, 2))) : null;
+    }
+
+    /// <summary>
+    /// Связка этого ПК: роутер не трогает <paramref name="domains"/> (сайты ПК и имена его приманок) для устройства с этими MAC и продлевает срок
+    /// (повтор того же <paramref name="id"/> — обновление). Домены роутера (YouTube, Discord, строки продвинутого режима) роутер не берёт — они в ответе <c>ignored</c>.
+    /// </summary>
+    public Task<RouterPcLinkSet> PcLinkSetAsync(string id, IReadOnlyList<string> macs, IReadOnlyList<string> domains, CancellationToken ct = default)
+    {
+        if (!PcIdRx.IsMatch(id)) throw new ArgumentException("Номер ПК — 8–64 знака: буквы, цифры, дефис");
+        var m = macs.Select(NormalizeMac).ToList();
+        if (m.Count is 0 or > 8 || m.Any(x => x is null)) throw new ArgumentException("MAC ПК: от 1 до 8 адресов вида aa:bb:cc:dd:ee:ff");
+        if (domains.Count > 500 || !domains.All(AdvancedSites.IsDomain)) throw new ArgumentException("Сайты связки: до 500 имён вида example.com");
+        return CallAsync<RouterPcLinkSet>("pc_link_set", new JsonObject
+        {
+            ["id"] = id,
+            ["macs"] = new JsonArray(m.Select(x => (JsonNode)x!).ToArray()),
+            ["domains"] = new JsonArray(domains.Select(d => (JsonNode)d).ToArray()),
+        }, ct);
+    }
+
+    /// <summary>Снять связку (неизвестный id — тоже успех).</summary>
+    public Task PcLinkDelAsync(string id, CancellationToken ct = default)
+    {
+        if (!PcIdRx.IsMatch(id)) throw new ArgumentException("Номер ПК — 8–64 знака: буквы, цифры, дефис");
+        return CallAsync("pc_link_del", new JsonObject { ["id"] = id }, ct);
+    }
+
+    public Task<RouterPcLinks> PcLinkGetAsync(CancellationToken ct = default) => CallAsync<RouterPcLinks>("pc_link_get", null, ct);
     public Task<RouterSiteCheckResult> SiteCheckResultAsync(CancellationToken ct = default) => CallAsync<RouterSiteCheckResult>("site_check_result", null, ct);
     public Task<RouterDnsStatus> DnsStatusAsync(CancellationToken ct = default) => CallAsync<RouterDnsStatus>("dns_status", null, ct);
     public Task<RouterDiag> DiagAsync(CancellationToken ct = default) => CallAsync<RouterDiag>("diag", null, ct);

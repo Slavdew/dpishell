@@ -328,7 +328,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         {
             if (!Set(ref _connected, value)) return;
             Raise(nameof(NeedLogin)); Raise(nameof(CanAct)); Raise(nameof(ScheduleEditable)); RaiseCompat(); Raise(nameof(SelectOnRouterVisible)); Raise(nameof(SelectOnPcVisible));
-            Raise(nameof(TargetsOnRouterVisible)); Raise(nameof(TargetsOnPcVisible));
+            Raise(nameof(TargetsOnRouterVisible)); Raise(nameof(TargetsOnPcVisible)); Raise(nameof(JointAvailable)); Raise(nameof(JointCardVisible));
             if (!value) { Selecting = false; DiagLoaded = false; DnsPresetsAvailable = false; }
             Raise(nameof(DiagHint));
             Requery();
@@ -507,12 +507,20 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             if (e.Failure is RouterFailure.Unreachable or RouterFailure.NoResponse) SetDetection(null);
             else SetConnection(RouterTexts.Friendly(e));
         }
-        finally { _refreshing = false; }
+        finally
+        {
+            _refreshing = false;
+            JointRecheck();   // сеть сменилась или роутер вернулся: адаптер и MAC могли стать другими — связка проверяется сразу
+        }
     }
 
     /// <summary>Тихое обновление по таймеру окна — раз в минуту, когда ничего не идёт.</summary>
-    public Task TickAsync() =>
-        Busy || Selecting || _refreshing || DateTime.Now - _refreshedAt < TimeSpan.FromMinutes(1) ? Task.CompletedTask : RefreshAsync();
+    public async Task TickAsync()
+    {
+        if (Busy || Selecting || _refreshing || DateTime.Now - _refreshedAt < TimeSpan.FromMinutes(1)) return;
+        await RefreshAsync();
+        await JointTickSafeAsync();   // совместная работа: продление связки не реже раза в час, проверка «действует ли» — раз в минуту
+    }
 
     // ---------- главная ----------
 
@@ -708,6 +716,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         RaisePc();
         RememberBypass();
         Changed?.Invoke();
+        JointKick();
     }
 
     /// <summary>Предупреждения роутера — по строке, у исправимых кнопка (flow_offload, ipv6 — §9).</summary>
@@ -748,12 +757,15 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     // ---------- этот ПК и роутер вместе (router-api §6) ----------
 
     /// <summary>Обход включён и на этом ПК, и на роутере: пакеты обрабатываются дважды, сайты ломаются.</summary>
-    public bool BothOn => RouterEnabled && PcRunning();
+    public bool BothOn => RouterEnabled && PcRunning() && !JointCovers;
+
+    /// <summary>Совместная работа включена и не откатилась: ПК и роутер работают вместе по договору (у каждого свои адреса) — «включён и там, и там» не помеха.</summary>
+    bool JointCovers => _joint is { Wanted: true } j && j.State != JointState.Fallback;
     public ICommand StopPcCmd { get; }
     public ICommand StopRouterCmd { get; }
 
     /// <summary>Окно сообщает, что обход на ПК включился или выключился.</summary>
-    public void PcChanged() => RaisePc();
+    public void PcChanged() { RaisePc(); JointKick(); }
 
     void RaisePc()
     {

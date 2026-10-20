@@ -195,6 +195,22 @@ public sealed class AdvancedUndoer(Func<AdvancedConfig> current, Action<Advanced
     }
 }
 
+/// <summary>
+/// Совместная работа с роутером на ПК: связка выключается, ПК работает по полной настройке. Если связка уже выключена (вышел срок, выключили кнопкой) —
+/// «уже как было». Сама связка на роутере — запись окна (<see cref="ChangeKinds.RouterJoint"/>).
+/// </summary>
+public sealed class JointUndoer(Func<JointConfig> current, Action restoreOff) : IChangeUndoer
+{
+    public IReadOnlyCollection<string> Kinds { get; } = [ChangeKinds.Joint];
+
+    public Task<UndoOutcome> UndoAsync(ChangeEntry e, CancellationToken ct)
+    {
+        if (!current().Active) return Task.FromResult(UndoOutcome.Already("совместная работа уже выключена"));
+        restoreOff();
+        return Task.FromResult(UndoOutcome.Restored("совместная работа выключена: этот ПК работает по полной настройке"));
+    }
+}
+
 /// <summary>Профиль программы: удаляется, если он такой, каким мы его записали.</summary>
 public sealed class AppProfileUndoer(Func<string, AppProfile?> find, Func<string, bool> remove) : IChangeUndoer
 {

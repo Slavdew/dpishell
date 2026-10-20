@@ -50,6 +50,9 @@ public sealed class AppState
     /// <summary>Продвинутый режим «сайты → стратегия» (docs/research/mixed-strategies.md §6): выключен по умолчанию; строки хранятся и при выключенном режиме.</summary>
     public AdvancedConfig Advanced { get; set; } = new();
 
+    /// <summary>Совместная работа с роутером (mixed-strategies.md §7): выключена по умолчанию; связка действует, пока окно её продлевает (<see cref="JointConfig.Until"/>).</summary>
+    public JointConfig Joint { get; set; } = new();
+
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
     public static AppState Load(AppPaths p)

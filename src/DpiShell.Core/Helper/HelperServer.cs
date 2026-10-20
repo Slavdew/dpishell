@@ -373,6 +373,8 @@ public sealed class HelperServer : IAsyncDisposable
             case "app_profile_remove": return new { removed = await Task.Run(() => b.AppProfileRemove(c.Str("id")!), ct) };
             case "advanced_get": return await Task.Run(b.AdvancedGet, ct);
             case "advanced_set": return await Task.Run(() => b.AdvancedSet(c.Bool("enabled"), c.Str("others")!, c.Rows("rows")!), ct);
+            case "joint_get": return await Task.Run(b.JointGet, ct);
+            case "joint_set": return await Task.Run(() => b.JointSet(c.Bool("active"), c.List("owned") ?? []), ct);
         }
         // Белый список и диспетчер должны совпадать — тест проверяет, что сюда не попасть.
         throw new HelperRequestException(c.Id, $"Команда «{c.Cmd}» не поддерживается.");

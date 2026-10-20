@@ -412,6 +412,16 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public Task<AdvancedInfo> AdvancedGetAsync(CancellationToken ct = default) => CallAsync<AdvancedInfo>("advanced_get", null, null, ct);
 
     /// <summary>Сохранить режим, остальные адреса и строки. Помощник проверяет сайты и стратегии и перезапускает оптимизацию; ошибка — исключение с причиной.</summary>
+    /// <summary>Совместная работа с роутером (API 1.9): что этот ПК готов взять на себя (свои сайты, строки, имена приманок) и действует ли связка.</summary>
+    public Task<JointInfo> JointGetAsync(CancellationToken ct = default) => CallAsync<JointInfo>("joint_get", null, null, ct);
+
+    /// <summary>Включить или выключить связку и продлить её; <paramref name="owned"/> — сайты ПК, которые ведёт роутер. Оптимизация перезапускается, если изменилась командная строка.</summary>
+    public Task<JointInfo> JointSetAsync(bool active, IReadOnlyList<string>? owned = null, CancellationToken ct = default)
+    {
+        IReadOnlyList<string> list = active ? owned ?? [] : [];
+        return CallAsync<JointInfo>("joint_set", new { active, owned = list }, null, ct);
+    }
+
     public Task<AdvancedInfo> AdvancedSetAsync(bool enabled, string others, IReadOnlyList<AdvancedRowInput> rows, CancellationToken ct = default) =>
         CallAsync<AdvancedInfo>("advanced_set", new { enabled, others, rows = rows.Select(r => new { domains = r.Domains, strategy = r.Strategy }) }, null, ct);
 }

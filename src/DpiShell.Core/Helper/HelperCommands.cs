@@ -56,6 +56,8 @@ public enum ArgKind
     ProxyPac,
     /// <summary>Строки продвинутого режима [{domains: [домен…], strategy}]: домены — строгий шаблон (<see cref="AdvancedSites.IsDomain"/>), стратегия — auto, direct или id из каталога. Других полей нет.</summary>
     AdvancedRows,
+    /// <summary>Сайты вида example.com — строгий шаблон (<see cref="AdvancedSites.IsDomain"/>), без повторов; на выходе список строк.</summary>
+    Domains,
 }
 
 public sealed record ArgSpec(string Name, ArgKind Kind, bool Required = false, string[]? Choices = null, int MaxItems = 0);
@@ -201,6 +203,12 @@ public static partial class HelperCommands
             new ArgSpec("enabled", ArgKind.Bool, Required: true),
             new ArgSpec("others", ArgKind.Choice, Required: true, Choices: [AdvancedSites.OthersDirect, AdvancedSites.OthersLists, AdvancedSites.OthersAll]),
             new ArgSpec("rows", ArgKind.AdvancedRows, Required: true, MaxItems: AdvancedSites.MaxRows)),
+        // Совместная работа с роутером (API 1.9): joint_get — что ПК готов взять на себя (свои сайты, строки, имена приманок) и действует ли связка; joint_set —
+        // включить/выключить и продлить связку. Ни путей, ни параметров winws: только флаг и список сайтов ПК, которые ведёт роутер (строгий шаблон имени).
+        new("joint_get", false, false),
+        new("joint_set", true, false,
+            new ArgSpec("active", ArgKind.Bool, Required: true),
+            new ArgSpec("owned", ArgKind.Domains, MaxItems: JointRules.MaxDomains)),
     ];
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);
@@ -495,6 +503,20 @@ public static partial class HelperCommands
                     rows.Add(new(domains, strategy));
                 }
                 return rows;
+            }
+
+            case ArgKind.Domains:
+            {
+                if (v is not JsonArray arr) throw new HelperRequestException(id, $"{Where()}: нужен список сайтов.");
+                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, $"{Where()}: больше {s.MaxItems} сайтов.");
+                var list = new List<string>(arr.Count);
+                foreach (var item in arr)
+                {
+                    var d = item is null ? "" : String(id, Where(), item, 253);
+                    if (!AdvancedSites.IsDomain(d)) throw new HelperRequestException(id, $"{Where()}: «{Short(d)}» — не сайт вида example.com.");
+                    if (!list.Contains(d)) list.Add(d);
+                }
+                return list;
             }
 
             case ArgKind.Roles:

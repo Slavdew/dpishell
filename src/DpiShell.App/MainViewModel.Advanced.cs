@@ -78,6 +78,7 @@ public sealed partial class MainViewModel
             }
         }
         await RefreshStatusAsync();
+        Router.JointRecheck();   // строки продвинутого режима — часть связки
         return new(info is null ? null : ToState(info), warn);
     }
 

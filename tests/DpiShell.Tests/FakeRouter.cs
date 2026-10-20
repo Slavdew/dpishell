@@ -149,7 +149,10 @@ public sealed class FakeRouter : IDisposable
     }
 
     /// <summary>status.methods роутера 0.2.0 — все методы, что знает подделка.</summary>
-    public const string Methods020 = """["advanced_get","advanced_set","apply","check_now","confirm","conflict_stop","core_install","diag","disable","dns_analyze","dns_enable","dns_presets","dns_restore","dns_set","dns_status","enable","flow_offload_fix","ipv6_set","lists_get","lists_set","mode_set","report","schedule_set","select_cancel","select_progress","select_start","site_check","site_check_result","status","strategies","strategies_user_set","strategy_set","targets_get","targets_set","uninstall","update_check","update_install"]""";
+    public const string Methods020 = """["advanced_get","advanced_set","apply","check_now","confirm","conflict_stop","core_install","diag","disable","dns_analyze","dns_enable","dns_presets","dns_restore","dns_set","dns_status","enable","flow_offload_fix","ipv6_set","lists_get","lists_set","mode_set","pc_link_del","pc_link_get","pc_link_set","report","schedule_set","select_cancel","select_progress","select_start","site_check","site_check_result","status","strategies","strategies_user_set","strategy_set","targets_get","targets_set","uninstall","update_check","update_install"]""";
+
+    /// <summary>status.methods роутера 0.2.0 до совместной работы (без pc_link_*).</summary>
+    public const string MethodsNoPcLink = """["advanced_get","advanced_set","apply","check_now","confirm","conflict_stop","core_install","diag","disable","dns_analyze","dns_enable","dns_presets","dns_restore","dns_set","dns_status","enable","flow_offload_fix","ipv6_set","lists_get","lists_set","mode_set","report","schedule_set","select_cancel","select_progress","select_start","site_check","site_check_result","status","strategies","strategies_user_set","strategy_set","targets_get","targets_set","uninstall","update_check","update_install"]""";
 
     // ---------- аварийный выключатель (§5.1, §5.2): проба с confirm, last_off, сторож ----------
 
@@ -405,7 +408,7 @@ public sealed class FakeRouter : IDisposable
                   "fail_streak": 0,
                   "schedule": { "enabled": {{(ScheduleEnabled ? "true" : "false")}}, "hours": {{ScheduleHours.ToString(System.Globalization.CultureInfo.InvariantCulture)}}, "auto_select": {{(AutoSelect ? "true" : "false")}}{{(KillSwitch ? $", \"watchdog\": {(WatchdogEnabled ? "true" : "false")}" : "")}} },
                   "jobs": { "select": {{(SelectRunningJob ? "true" : "false")}}, "check": false, "core_install": false, "dns_analyze": false, "site_check": false, "dns": false, "update": {{(_updateRunning ? "true" : "false")}} },
-                  "warnings": {{Warnings()}}{{UpdateField()}}{{KillSwitchFields()}}{{AdvancedField()}} }
+                  "warnings": {{Warnings()}}{{UpdateField()}}{{KillSwitchFields()}}{{AdvancedField()}}{{PcLinksField()}} }
                 """,
             "strategies" => StrategiesJson,
             "advanced_get" => AdvancedGet(),
@@ -458,7 +461,14 @@ public sealed class FakeRouter : IDisposable
             "targets_get" => System.Text.Json.JsonSerializer.Serialize(new { items = UserTargets.Select(t => new { url = t.Url, important = t.Important }) }),
             "lists_get" => args["name"]?.GetValue<string>() == "exclude"
                 ? """{ "lines": ["gosuslugi.ru"], "editable": false }"""
+                : args["name"]?.GetValue<string>() is "google" or "discord" or "general" && !BuiltinListsOn
+                    ? """{"error":{"code":"invalid","text":"Нет такого списка","field":"name"}}"""
+                : args["name"]?.GetValue<string>() is { } builtin && Builtin.TryGetValue(builtin, out var bl)
+                    ? $$"""{ "lines": {{System.Text.Json.JsonSerializer.Serialize(bl)}}, "editable": false }"""
                 : $$"""{ "lines": {{System.Text.Json.JsonSerializer.Serialize(Lists.GetValueOrDefault(args["name"]!.GetValue<string>()) ?? ["example.com"])}}, "editable": true }""",
+            "pc_link_set" => PcLinkSet(args),
+            "pc_link_del" => Do(() => { PcLinkDelCalls++; Links.Remove(args["id"]!.GetValue<string>()); }),
+            "pc_link_get" => PcLinkGet(),
             "diag" => $$"""{ "conflicts": {{ConflictsJson}}, "flow_offload": {{(FlowOffloadFixed ? "false" : "true")}}, "flowoffload": "{{(FlowOffloadFixed ? "software" : "none")}}","ipv6_wan": true, "dns": { "spoofed": true, "checked_at": "2026-10-16T21:00:00Z" }, "overlay_free_kb": 18000 }""",
             "report" => """{ "text": "отчёт роутера" }""",
             "core_install" => """{ "started": true }""",
@@ -585,6 +595,92 @@ public sealed class FakeRouter : IDisposable
         if (Enabled && KillSwitch && LastConfirmS is { } s) { Pending = (s, Strategy); _advancedBefore ??= before; }
         return "{}";
     }
+
+    // ---------- совместная работа (§5.2 pc_link_set/del/get, §5.1 lists_get встроенные; роутер 0.2.0-r9) ----------
+
+    /// <summary>Отдавать status.pc_links (роутер r9).</summary>
+    public bool PcLinksField_On { get; set; } = true;
+    /// <summary>lists_get отдаёт встроенные google, discord, general (r9); иначе — invalid, как роутер до r9.</summary>
+    public bool BuiltinListsOn { get; set; } = true;
+    /// <summary>Встроенные списки ролей роутера (только чтение).</summary>
+    public Dictionary<string, List<string>> Builtin { get; } = new()
+    {
+        ["google"] = ["youtube.com", "googlevideo.com", "ytimg.com", "play.google.com", "google.ru"],
+        ["discord"] = ["discord.com", "discord.gg", "discordapp.com", "discord.media"],
+        ["general"] = ["rutracker.org", "example.net"],
+    };
+
+    public sealed class PcLinkRow
+    {
+        public string Id { get; set; } = "";
+        public List<string> Macs { get; set; } = [];
+        public List<string> Domains { get; set; } = [];
+        public List<string> Ignored { get; set; } = [];
+        public DateTime ExpiresAt { get; set; }
+        public bool Expired { get; set; }
+    }
+
+    /// <summary>Связки ПК на роутере по id.</summary>
+    public Dictionary<string, PcLinkRow> Links { get; } = [];
+    public int PcLinkSetCalls { get; private set; }
+    public int PcLinkDelCalls { get; private set; }
+    /// <summary>Последние аргументы pc_link_set — как пришли на роутер.</summary>
+    public JsonObject? LastPcLinkSet { get; private set; }
+    /// <summary>Роутер отказывает в pc_link_set (failed) — продление не удаётся.</summary>
+    public bool PcLinkSetFails { get; set; }
+    /// <summary>Срок связки с момента pc_link_set (на стенде — 24 ч).</summary>
+    public TimeSpan PcLinkTtl { get; set; } = TimeSpan.FromHours(24);
+    /// <summary>Читать ли status.pc_links как число связок.</summary>
+    string PcLinksField() => PcLinksField_On ? $", \"pc_links\": {Links.Count}" : "";
+
+    /// <summary>Домены, которыми владеет роутер: встроенные google и discord и строки его продвинутого режима (договор §5.2 pc_link_set).</summary>
+    IEnumerable<string> RouterOwnedNames() => Builtin["google"].Concat(Builtin["discord"]).Concat(AdvancedEnabled ? AdvancedRows.SelectMany(r => r.Domains) : []);
+
+    static bool Related(string a, string b) => a == b || a.EndsWith("." + b) || b.EndsWith("." + a);
+
+    string PcLinkSet(JsonObject args)
+    {
+        PcLinkSetCalls++;
+        LastPcLinkSet = (JsonObject)args.DeepClone();
+        if (PcLinkSetFails) return """{"error":{"code":"failed","text":"Не удалось сохранить связку"}}""";
+        var id = args["id"]?.GetValue<string>() ?? "";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(id, "^[A-Za-z0-9-]{8,64}$")) return AdvancedInvalid("id", "id: 8–64 знака");
+        if (args["macs"] is not JsonArray macs || macs.Count is 0 or > 8) return AdvancedInvalid("macs", "macs: от 1 до 8 адресов");
+        for (int i = 0; i < macs.Count; i++)
+            if (!System.Text.RegularExpressions.Regex.IsMatch(macs[i]?.GetValue<string>() ?? "", "^([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}$")) return AdvancedInvalid($"macs[{i}]", "MAC вида aa:bb:cc:dd:ee:ff");
+        if (args["domains"] is not JsonArray ds || ds.Count > 500) return AdvancedInvalid("domains", "domains: до 500 имён");
+        var doms = new List<string>();
+        for (int i = 0; i < ds.Count; i++)
+        {
+            var d = ds[i]?.GetValue<string>() ?? "";
+            if (!DomainRx.IsMatch(d)) return AdvancedInvalid($"domains[{i}]", "Домен вида example.com");
+            doms.Add(d);
+        }
+        var owned = RouterOwnedNames().ToList();
+        var ignored = doms.Where(d => owned.Any(o => Related(d, o))).ToList();
+        if (!Links.TryGetValue(id, out var row) && Links.Count >= 4) return AdvancedInvalid("id", "Не больше 4 ПК");
+        row ??= Links[id] = new PcLinkRow { Id = id };
+        row.Macs = [.. macs.Select(m => m!.GetValue<string>().ToLowerInvariant().Replace('-', ':'))];
+        row.Domains = [.. doms.Where(d => !ignored.Contains(d))];
+        row.Ignored = ignored;
+        row.ExpiresAt = DateTime.UtcNow + PcLinkTtl;
+        row.Expired = false;
+        return new JsonObject { ["expires_at"] = row.ExpiresAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"), ["ignored"] = new JsonArray(ignored.Select(x => (JsonNode)x).ToArray()) }.ToJsonString();
+    }
+
+    string PcLinkGet()
+    {
+        var items = Links.Values.Select(r => new JsonObject
+        {
+            ["id"] = r.Id, ["macs"] = new JsonArray(r.Macs.Select(m => (JsonNode)m).ToArray()), ["domains"] = r.Domains.Count, ["ignored"] = r.Ignored.Count,
+            ["seen_at"] = "2026-10-20T12:00:00Z", ["expires_at"] = r.ExpiresAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"),
+            ["active"] = !r.Expired && r.ExpiresAt > DateTime.UtcNow && Enabled,
+        });
+        return new JsonObject { ["items"] = new JsonArray(items.ToArray()) }.ToJsonString();
+    }
+
+    /// <summary>Связка без продления 24 ч перестала действовать (active: false).</summary>
+    public void ExpireLinks() { foreach (var r in Links.Values) r.Expired = true; }
 
     string Step0(string payload) { _selectStep = -1; _cancelled = false; return payload; }
 

@@ -83,6 +83,7 @@ public class HelperChannelTests
             ["proxy_user_set"] = new { enabled = false },
             ["proxy_machine_set"] = new { enabled = true, server = "127.0.0.1:7897", winhttp = true },
             ["advanced_set"] = new { enabled = true, others = "lists", rows = new object[] { new { domains = new[] { "example.com" }, strategy = "alt9" } } },
+            ["joint_set"] = new { active = true, owned = new[] { "youtube.com" } },
         };
         foreach (var cmd in HelperCommands.Specs.Keys.Where(k => k != "cancel"))
             await c.CallAsync(cmd, args.GetValueOrDefault(cmd));
