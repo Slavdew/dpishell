@@ -66,9 +66,30 @@ function zipStore(files) {
 	return new Blob(parts.concat(central, [new Uint8Array(e.buffer)]), { type: 'application/zip' });
 }
 
-function inflateRaw(bytes) {
-	var ds = new DecompressionStream('deflate-raw');
-	return new window.Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer().then(function(b) { return new Uint8Array(b); });
+// Распаковка с пределом: заголовок архива может врать о размере (zip-бомба) — читаем поток по кускам и бросаем при превышении.
+var INFLATE_MAX = 1024 * 1024;
+
+function inflateRaw(bytes, max) {
+	max = max || INFLATE_MAX;
+	var reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+	var chunks = [], total = 0;
+	var pump = function() {
+		return reader.read().then(function(r) {
+			if (r.done) {
+				var out = new Uint8Array(total), at = 0;
+				chunks.forEach(function(c) { out.set(c, at); at += c.length; });
+				return out;
+			}
+			total += r.value.length;
+			if (total > max) {
+				reader.cancel();
+				throw new Error('too big');
+			}
+			chunks.push(r.value);
+			return pump();
+		});
+	};
+	return pump();
 }
 
 function deflateRaw(bytes) {
@@ -136,7 +157,7 @@ function decodeStrategy(text) {
 		return Promise.reject(new Error(api.t('web.xfer.bad_strategy')));
 	var packed;
 	try { packed = unb64url(lines[0].slice(11)); } catch (e) { return Promise.reject(new Error(api.t('web.xfer.bad_strategy'))); }
-	return inflateRaw(packed).then(function(raw) {
+	return inflateRaw(packed, 16 * 1024 + 1).then(function(raw) {
 		if (raw.length > 16 * 1024)
 			throw new Error(api.t('web.xfer.bad_strategy'));
 		var o = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw));
@@ -466,7 +487,9 @@ return baseclass.extend({
 				return Promise.resolve(null);
 			if (e.size > max)
 				return Promise.reject(new Error(api.t('web.xfer.file_big', { file: name })));
-			return e.bytes().then(function(b) {
+			return e.bytes().catch(function() {
+				throw new Error(api.t('web.xfer.file_big', { file: name }));
+			}).then(function(b) {
 				if (b.length > max)
 					throw new Error(api.t('web.xfer.file_big', { file: name }));
 				var t = new TextDecoder('utf-8', { fatal: true }).decode(b);
