@@ -193,6 +193,14 @@ function injectStyle() {
 		'ul.tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;scrollbar-width:none}ul.tabs::-webkit-scrollbar{display:none}ul.tabs>li{flex:none}',
 		'@media (prefers-color-scheme:dark){.dps-muted{color:inherit;opacity:.75}}',
 		'[data-darkmode="true"] .dps-muted{color:inherit;opacity:.75}',
+		// «Что мешает»: строка проверки — отметка, вывод, кнопка справа; сверху итог.
+		'.dps-check-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--border-color-low,rgba(128,128,128,.25))}',
+		'.dps-check-row .btn{margin:0 0 0 auto}',
+		'.dps-cr-mark{width:1.2em;text-align:center;font-weight:700;flex:none}',
+		'.dps-cr-text{flex:1 1 16em;min-width:0}',
+		'.dps-cr-ok .dps-cr-mark{color:var(--success-color-high,#080)}.dps-cr-bad .dps-cr-mark{color:var(--error-color-high,#c00)}',
+		'.dps-cr-sum{font-size:1.1em;font-weight:600;margin:.3em 0 .5em}',
+		'.dps-cr-sum-ok{color:var(--success-color-high,#080)}.dps-cr-sum-bad{color:var(--error-color-high,#c00)}',
 		'.dps-danger{border:1px solid var(--error-color-high,#c33);border-radius:8px;padding:12px 16px}',
 		// Индикатор опроса LuCI («Обновление» вверху справа): наши страницы опрашивают роутер постоянно, он горит всегда,
 		// и его принимали за незаконченное обновление DpiShell. Ход заданий страницы показывают сами.
@@ -250,6 +258,27 @@ return baseclass.extend({
 
 	has: function(key) {
 		return LANG[key] != null || BASE[key] != null;
+	},
+
+	// Название стратегии на языке страницы: автоимена роутера (select.uc) — по разбору; имена каталога (general (ALT3)) и
+	// свои — как есть (замечания владельца 2026-10-20, п. 3).
+	stratTitle: function(t) {
+		if (t == null)
+			return '';
+		t = String(t);
+		var m = /^Новая стратегия (\d+) \(поиск ([^)]+)\)$/.exec(t);
+		if (m)
+			return this.t('web.strat.new', { n: m[1], when: m[2] });
+		m = /^Найденная (\d+) \(([^)]+)\)$/.exec(t);
+		if (m)
+			return this.t('web.strat.found', { n: m[1], when: m[2] });
+		if (/^Смешанная · /.test(t)) {
+			var self = this;
+			return t.replace(/^Смешанная/, this.t('web.strat.mixed'))
+				.replace(/свои сайты/g, this.t('web.strat.own_sites')).replace(/(^|[ ·])свои(?= )/g, function(x, p) { return p + self.t('web.strat.own'); })
+				.replace(/остальное/g, this.t('web.strat.rest')).replace(/ и /g, ' ' + this.t('web.strat.and') + ' ');
+		}
+		return t;
 	},
 
 	langCode: function() {

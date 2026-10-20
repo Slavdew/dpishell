@@ -184,3 +184,14 @@ home.params.tip
 home.params.copy
 router.strategy.roles
 router.strategy.copied
+router.diag.conflicts
+router.diag.flow
+router.diag.ipv6
+router.diag.dns_spoofed
+router.diag.dns_not_checked
+dns.preset.owner_google
+dns.preset.owner_cloudflare
+dns.preset.owner_quad9
+dns.preset.owner_yandex
+dns.preset.note_quad9
+dns.preset.note_yandex

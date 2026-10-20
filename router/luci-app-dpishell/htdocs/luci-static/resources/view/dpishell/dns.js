@@ -9,8 +9,11 @@
 // Названия — как в окне ПК (вкладка «DNS» и DNS роутера на вкладке «Роутер»), матрица ПК×роутер п. 41–45.
 
 // Кто держит сервер — подпись к варианту (перед заметкой из dns-presets.json).
-var OWNERS = { provider: 'web.dns.owner.provider', 'default': 'router.dns.owner_default', google: 'web.dns.owner.google',
-	cloudflare: 'web.dns.owner.cloudflare', quad9: 'web.dns.owner.quad9', yandex: 'web.dns.owner.yandex' };
+// Названия, владельцы и заметки — по id варианта ключами словаря (как в окне ПК, dns.preset.*); текст роутера — только для
+// неизвестного id (замечания владельца 2026-10-20, п. 7: «От провайдера», «Яндекс» оставались в английском).
+var OWNERS = { provider: 'web.dns.owner.provider', 'default': 'router.dns.owner_default', google: 'dns.preset.owner_google',
+	cloudflare: 'dns.preset.owner_cloudflare', quad9: 'dns.preset.owner_quad9', yandex: 'dns.preset.owner_yandex' };
+var NOTES = { provider: 'web.dns.note.provider', 'default': 'web.dns.note.default', quad9: 'dns.preset.note_quad9', yandex: 'dns.preset.note_yandex' };
 
 return view.extend({
 	handleSaveApply: null,
@@ -177,7 +180,7 @@ return view.extend({
 		list = list.map(function(x) {
 			return Object.assign({}, x, {
 				title: x.id != 'custom' && api.has('web.dns.preset.' + x.id) ? api.t('web.dns.preset.' + x.id) : x.title,
-				note: api.has('web.dns.note.' + x.id) ? api.t('web.dns.note.' + x.id) : x.note
+				note: NOTES[x.id] ? api.t(NOTES[x.id]) : x.note
 			});
 		});
 

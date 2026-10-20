@@ -165,7 +165,7 @@ return view.extend({
 		var rows = p.rows || [];
 		for (var i = 0; i < rows.length; i++)
 			if (rows[i].id == id)
-				return rows[i].title || id;
+				return api.stratTitle(rows[i].title || id);
 		return id;
 	},
 
@@ -263,7 +263,7 @@ return view.extend({
 				last.push(api.btn(api.t('web.select.check_one'), function() { return self.checkOne(r.id); }, 'cbi-button-neutral'));
 			t.appendChild(E('tr', { 'class': 'tr' }, [
 				E('td', { 'class': 'td', 'data-title': cols[0] }, [
-					isBest ? E('b', {}, r.title || r.id) : (r.title || r.id),
+					isBest ? E('b', {}, api.stratTitle(r.title || r.id)) : api.stratTitle(r.title || r.id),
 					r.needs_ts ? E('div', { 'class': 'dps-muted', 'style': 'font-size:.85em' }, api.t('web.select.needs_ts')) : '',
 					self.details(r)
 				]),

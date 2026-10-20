@@ -124,13 +124,45 @@
     "Ядро zapret",
     "zapret core"
   ],
+  "web.diag.bad": [
+    "Мешает: {list}",
+    "Interferes: {list}"
+  ],
   "web.diag.conflict": [
     "Мешает похожая программа: {name}. Пока она работает, включение и подбор недоступны.",
     "A similar program interferes: {name}. While it runs, turning on and strategy search are unavailable."
   ],
+  "web.diag.conflict_row": [
+    "{name} — мешает оптимизации",
+    "{name} — interferes with optimization"
+  ],
+  "web.diag.conflicts_none": [
+    "не найдены — не мешают",
+    "none found — no interference"
+  ],
+  "web.diag.dns_clean": [
+    "подмены нет — не мешает",
+    "no spoofing — no interference"
+  ],
+  "web.diag.dns_label": [
+    "DNS провайдера",
+    "ISP’s DNS"
+  ],
   "web.diag.flow": [
     "Ускорение сети (flow offloading) мешает оптимизации. «Исправить» передаст ускорение zapret: скорость обычно почти не меняется, на быстрых тарифах с аппаратным ускорением может снизиться.",
     "Network acceleration (flow offloading) interferes with optimization. “Fix” hands acceleration over to zapret: speed usually barely changes, but on fast plans with hardware acceleration it may drop."
+  ],
+  "web.diag.flow_handed": [
+    "передано оптимизации — не мешает",
+    "handed over to optimization — no interference"
+  ],
+  "web.diag.flow_off": [
+    "выключено — не мешает",
+    "off — no interference"
+  ],
+  "web.diag.flow_on": [
+    "включено — мешает оптимизации",
+    "on — interferes with optimization"
   ],
   "web.diag.intro": [
     "Роутер проверяет, что мешает оптимизации: похожие программы, ускорение сети, подмена DNS. Без нажатия кнопки ничего не меняется.",
@@ -144,8 +176,20 @@
     "Сайты по IPv6 идут мимо оптимизации: она включена только для IPv4. «Исправить» включит её и для IPv6.",
     "Sites over IPv6 bypass optimization: it is on for IPv4 only. “Fix” turns it on for IPv6 too."
   ],
+  "web.diag.ipv6_bad": [
+    "есть — сайты по IPv6 идут мимо оптимизации",
+    "present — sites over IPv6 bypass optimization"
+  ],
+  "web.diag.ipv6_none": [
+    "нет — не мешает",
+    "none — no interference"
+  ],
+  "web.diag.ipv6_on": [
+    "есть, оптимизация включена и для IPv6 — не мешает",
+    "present, optimization is on for IPv6 too — no interference"
+  ],
   "web.diag.none": [
-    "Помех не найдено",
+    "Ничего не мешает",
     "Nothing interferes"
   ],
   "web.diag.package": [
@@ -252,37 +296,13 @@
     "как было до DpiShell",
     "as before DpiShell"
   ],
-  "web.dns.note.quad9": [
-    "блокирует вредоносные сайты",
-    "blocks malicious sites"
-  ],
-  "web.dns.note.yandex": [
-    "российский: по закону может применять реестр блокировок",
-    "Russian: may apply the national block list by law"
-  ],
   "web.dns.optional": [
     "Необязательно",
     "Optional"
   ],
-  "web.dns.owner.cloudflare": [
-    "Cloudflare, США",
-    "Cloudflare, USA"
-  ],
-  "web.dns.owner.google": [
-    "Google, США",
-    "Google, USA"
-  ],
   "web.dns.owner.provider": [
     "Адреса выдаёт провайдер, ответы он может подменять",
     "Addresses come from the ISP, which may spoof responses"
-  ],
-  "web.dns.owner.quad9": [
-    "Quad9, некоммерческий фонд, Швейцария",
-    "Quad9, non-profit foundation, Switzerland"
-  ],
-  "web.dns.owner.yandex": [
-    "Яндекс",
-    "Yandex"
   ],
   "web.dns.preset.provider": [
     "От провайдера",
@@ -759,6 +779,34 @@
   "web.src.timer": [
     "по расписанию",
     "on schedule"
+  ],
+  "web.strat.and": [
+    "и",
+    "and"
+  ],
+  "web.strat.found": [
+    "Найденная {n} ({when})",
+    "Found {n} ({when})"
+  ],
+  "web.strat.mixed": [
+    "Смешанная",
+    "Mixed"
+  ],
+  "web.strat.new": [
+    "Новая стратегия {n} (поиск {when})",
+    "New strategy {n} (search {when})"
+  ],
+  "web.strat.own": [
+    "свои",
+    "mine"
+  ],
+  "web.strat.own_sites": [
+    "свои сайты",
+    "my sites"
+  ],
+  "web.strat.rest": [
+    "остальное",
+    "the rest"
   ],
   "web.uninst.busy": [
     "Удаление DpiShell… страницу не закрывайте",

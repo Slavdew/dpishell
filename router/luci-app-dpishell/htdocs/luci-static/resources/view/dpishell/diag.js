@@ -84,28 +84,54 @@ return view.extend({
 			dom.content(this.el.findings, api.errorLine(d.__error));
 			return;
 		}
-		function finding(cls, text, action) {
-			return E('div', { 'class': 'alert-message ' + cls }, E('div', { 'class': 'dps-warn' }, [E('span', {}, text), action || '']));
+		// Каждая проверка — строкой с оценкой ✓/⚠ и выводом словами («выключено — не мешает»), сверху итог (замечания
+		// владельца 2026-10-20, п. 9: «выключено» без вывода читалось как проблема). Так же — «Что мешает» в окне ПК.
+		var bad = [];
+		function row(state, label, text, action, info) {
+			if (state == 'bad')
+				bad.push(label);
+			return E('div', { 'class': 'dps-check-row dps-cr-' + state }, [
+				E('span', { 'class': 'dps-cr-mark' }, state == 'ok' ? '✓' : state == 'bad' ? '⚠' : '•'),
+				E('span', { 'class': 'dps-cr-text' }, [E('b', {}, label), ': ' + text, info ? api.info(info) : '']),
+				action || ''
+			]);
 		}
-		(d.conflicts || []).forEach(function(c) {
-			if (!c.running)
-				return;
+		var rows = [];
+		var running = (d.conflicts || []).filter(function(c) { return c.running; });
+		if (!running.length)
+			rows.push(row('ok', api.t('router.diag.conflicts'), api.t('web.diag.conflicts_none')));
+		running.forEach(function(c) {
 			if (c.kind == 'package')
-				return kids.push(finding('warning', api.t('web.diag.package', { name: c.name })));
-			kids.push(finding('warning', api.t('web.diag.conflict', { name: c.name }),
-				api.btn(api.t('router.diag.stop'), function() { return self.conflictStop(c.name); }, 'cbi-button-remove')));
+				rows.push(row('bad', api.t('router.diag.conflicts'), api.t('web.diag.conflict_row', { name: c.name }), null, api.t('web.diag.package', { name: c.name })));
+			else
+				rows.push(row('bad', api.t('router.diag.conflicts'), api.t('web.diag.conflict_row', { name: c.name }),
+					api.btn(api.t('router.diag.stop'), function() { return self.conflictStop(c.name); }, 'cbi-button-remove'), api.t('web.diag.conflict', { name: c.name })));
 		});
 		if (d.flow_offload)
-			kids.push(finding('warning', api.t('web.diag.flow'),
-				api.btn(api.t('router.warn.fix'), function() { return self.act('flow_offload_fix'); }, 'cbi-button-apply')));
-		if (d.ipv6_wan)
-			kids.push(finding('notice', api.t('web.diag.ipv6'),
-				api.btn(api.t('router.warn.fix'), function() { return self.act('ipv6_set', { enabled: true }); }, 'cbi-button-apply')));
-		if (d.dns && d.dns.spoofed)
-			kids.push(finding('warning', d.dns.checked_at ? api.t('router.dns.spoofed_at', { time: api.time(d.dns.checked_at) }) : api.t('router.dns.spoofed'),
+			rows.push(row('bad', api.t('router.diag.flow'), api.t('web.diag.flow_on'),
+				api.btn(api.t('router.warn.fix'), function() { return self.act('flow_offload_fix'); }, 'cbi-button-apply'), api.t('web.diag.flow')));
+		else
+			rows.push(row('ok', api.t('router.diag.flow'), api.t(d.flowoffload && d.flowoffload != 'none' ? 'web.diag.flow_handed' : 'web.diag.flow_off')));
+		if (!d.ipv6_wan)
+			rows.push(row('ok', api.t('router.diag.ipv6'), api.t('web.diag.ipv6_none')));
+		else if (d.ipv6)
+			rows.push(row('ok', api.t('router.diag.ipv6'), api.t('web.diag.ipv6_on')));
+		else
+			rows.push(row('bad', api.t('router.diag.ipv6'), api.t('web.diag.ipv6_bad'),
+				api.btn(api.t('router.warn.fix'), function() { return self.act('ipv6_set', { enabled: true }); }, 'cbi-button-apply'), api.t('web.diag.ipv6')));
+		var dn = d.dns || {}, when = dn.checked_at ? ' · ' + api.t('router.home.checked', { time: api.time(dn.checked_at) }) : '';
+		if (dn.spoofed === true)
+			rows.push(row('bad', api.t('web.diag.dns_label'), api.t('router.diag.dns_spoofed') + when,
 				api.btn(api.t('router.dns.enable'), function() { api.dnsEnableDialog(function() { self.reload(); }); }, 'cbi-button-apply')));
-		if (!kids.length)
-			kids.push(api.line(api.t('web.diag.none'), 'dps-ok'));
+		else if (dn.spoofed === false)
+			rows.push(row('ok', api.t('web.diag.dns_label'), api.t('web.diag.dns_clean') + when));
+		else
+			rows.push(row('unknown', api.t('web.diag.dns_label'), api.t('router.diag.dns_not_checked'),
+				api.btn(api.t('dns.check'), function() { api.go('dns'); }, 'cbi-button-neutral')));
+		kids.push(bad.length
+			? E('div', { 'class': 'dps-cr-sum dps-cr-sum-bad' }, '⚠ ' + api.t('web.diag.bad', { list: bad.filter(function(x, i, a) { return a.indexOf(x) == i; }).join(', ') }))
+			: E('div', { 'class': 'dps-cr-sum dps-cr-sum-ok' }, '✓ ' + api.t('web.diag.none')));
+		kids = kids.concat(rows);
 		if (d.overlay_free_kb != null)
 			kids.push(api.line(api.t('router.diag.space') + ': ' + (d.overlay_free_kb >= 1024 ? api.t('router.diag.space_value', { value: Math.round(d.overlay_free_kb / 1024) })
 				: api.t('web.diag.space_kb', { value: d.overlay_free_kb })), 'dps-muted'));

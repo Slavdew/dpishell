@@ -198,7 +198,7 @@ return view.extend({
 		var items = this.strategies.items || [];
 		for (var i = 0; i < items.length; i++)
 			if (items[i].id == id)
-				return api.t('home.strategy', { name: items[i].title });
+				return api.t('home.strategy', { name: api.stratTitle(items[i].title) });
 		return api.t('home.strategy', { name: id });
 	},
 
@@ -211,7 +211,7 @@ return view.extend({
 		if (!this.status.strategy)
 			sel.appendChild(E('option', { value: '' }, api.t('web.main.not_selected')));
 		items.forEach(function(it) {
-			var label = it.runs > 0 ? api.t('web.main.opt_stats', { name: it.title, passed: it.passed, runs: it.runs }) : it.title;
+			var label = it.runs > 0 ? api.t('web.main.opt_stats', { name: api.stratTitle(it.title), passed: it.passed, runs: it.runs }) : api.stratTitle(it.title);
 			sel.appendChild(E('option', { value: it.id }, label));
 		});
 		sel.value = this.pending || this.status.strategy || '';
@@ -236,7 +236,7 @@ return view.extend({
 			E('pre', { 'class': 'dps-pre' }, text),
 			E('div', { 'class': 'dps-actions' }, [api.btn(api.t('home.params.copy'), function() {
 				api.copy(text);
-				msg.textContent = api.t('router.strategy.copied', { name: it.title });
+				msg.textContent = api.t('router.strategy.copied', { name: api.stratTitle(it.title) });
 			}), msg])
 		]);
 		dom.content(this.el.params, det);

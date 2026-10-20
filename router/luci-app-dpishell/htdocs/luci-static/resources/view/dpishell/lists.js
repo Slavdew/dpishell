@@ -172,7 +172,7 @@ return view.extend({
 		var items = strategies.items || [];
 		var name = function(id) {
 			var s = items.filter(function(x) { return x.id == id; })[0];
-			return s ? s.title : id;
+			return s ? api.stratTitle(s.title) : id;
 		};
 		var on = E('input', { type: 'checkbox' });
 		var rowsBox = E('div');
@@ -186,7 +186,7 @@ return view.extend({
 			var doms = E('input', { type: 'text', 'class': 'cbi-input-text', placeholder: 'example.com, cdn.example.com', value: r ? (r.domains || []).join(', ') : '' });
 			var sel = E('select', { 'class': 'cbi-input-select' }, [
 				E('option', { value: 'auto' }, api.t('sites.adv.choice.auto')), E('option', { value: 'direct' }, api.t('sites.adv.choice.direct'))
-			].concat(items.map(function(s) { return E('option', { value: s.id }, s.title); })));
+			].concat(items.map(function(s) { return E('option', { value: s.id }, api.stratTitle(s.title)); })));
 			sel.value = r ? r.strategy : 'auto';
 			var note = E('div', { 'class': 'dps-muted', 'style': 'font-size:.9em;width:100%' },
 				r && r.strategy == 'auto' ? (r.resolved ? api.t('sites.adv.hint.auto_now', { strategy: name(r.resolved) }) : api.t('sites.adv.hint.auto_pending'))
