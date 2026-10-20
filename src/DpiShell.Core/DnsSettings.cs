@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using DpiShell.Core.Localization;
 
 namespace DpiShell.Core;
 
@@ -18,19 +19,20 @@ public static class DnsPresets
     public const string Auto = "auto";
     public const string Custom = "custom";
 
-    public static IReadOnlyList<DnsPreset> All { get; } =
+    /// <summary>Свежий список при каждом обращении: названия и заметки зависят от языка.</summary>
+    public static IReadOnlyList<DnsPreset> All =>
     [
-        new(Auto, "Как у провайдера (автоматически)", [], null),
+        new(Auto, L.T("dns.preset.auto_title"), [], null),
         new("google", "Google", ["8.8.8.8", "8.8.4.4", "2001:4860:4860::8888", "2001:4860:4860::8844"], "https://dns.google/dns-query",
-            Owner: "Google (США)"),
+            Owner: L.T("dns.preset.owner_google")),
         new("cloudflare", "Cloudflare", ["1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001"], "https://cloudflare-dns.com/dns-query",
-            Owner: "Cloudflare (США)"),
+            Owner: L.T("dns.preset.owner_cloudflare")),
         // 9.9.9.9 — основной режим Quad9: отвечает ошибкой на известные вредоносные домены (quad9.net/service/service-addresses-and-features).
         new("quad9", "Quad9", ["9.9.9.9", "149.112.112.112", "2620:fe::fe", "2620:fe::9"], "https://dns.quad9.net/dns-query",
-            "отсеивает известные вредоносные сайты", "фонд Quad9 (Швейцария)"),
+            L.T("dns.preset.note_quad9"), L.T("dns.preset.owner_quad9")),
         // DoH Яндекса — по 77.88.8.8 и 77.88.8.1, только HTTP/2 (проверено); адреса — yandex.ru/support/dns, базовый режим.
         new("yandex", "Яндекс", ["77.88.8.8", "77.88.8.1", "2a02:6b8::feed:ff", "2a02:6b8:0:1::feed:ff"],
-            "https://common.dot.dns.yandex.net/dns-query", "российский: может применять реестр запрещённых сайтов", "Яндекс (Россия)"),
+            "https://common.dot.dns.yandex.net/dns-query", L.T("dns.preset.note_yandex"), L.T("dns.preset.owner_yandex")),
     ];
 
     /// <summary>Что принимает команда dns_set: готовые и «свой».</summary>

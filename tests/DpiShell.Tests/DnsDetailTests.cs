@@ -84,16 +84,20 @@ public sealed class DnsDetailTests : IDisposable
         Assert.True(pc.CompareCmd.CanExecute(null));
         await pc.CompareAsync();
         Assert.Equal(4, asked.Count);   // у «как у провайдера» шаблона нет
-        Assert.Equal("38 мс", pc.Options.Single(o => o.Id == "google").Ping);
-        Assert.Equal("нет ответа", pc.Options.Single(o => o.Id == "quad9").Ping);
+        var ms38 = L.T("dns.picker.ping", new { ms = "38" });
+        Assert.Equal(ms38, pc.Options.Single(o => o.Id == "google").Ping);
+        Assert.Equal(L.T("dns.no_answer"), pc.Options.Single(o => o.Id == "quad9").Ping);
         Assert.Equal("", pc.Options.Single(o => o.Id == "auto").Ping);
         Assert.Equal("google", pc.Selected!.Id);   // выбор не сбился
-        Assert.Equal("38 мс", Info(pc.Selected, "Ответ с этого ПК"));
-        Assert.Equal("Сравнить скорость", pc.CompareText);
+        Assert.Equal(ms38, Info(pc.Selected, L.T("dns.picker.response_time")));
+        Assert.Equal(L.T("dns.picker.compare"), pc.CompareText);
         // Итог виден строкой, не только в закрытом списке: первым — самый быстрый.
         Assert.True(pc.HasCompareSummary);
-        Assert.StartsWith("Быстрее всех: " + pc.Options.Single(o => o.Id == "google").Title + " 38 мс", pc.CompareSummary);
-        Assert.Contains("Нет ответа: " + pc.Options.Single(o => o.Id == "quad9").Title, pc.CompareSummary);
+        var googleTitle = pc.Options.Single(o => o.Id == "google").Title;
+        var quad9Title = pc.Options.Single(o => o.Id == "quad9").Title;
+        Assert.Contains(L.T("dns.picker.compare.item", new { title = googleTitle, ms = "38" }), pc.CompareSummary);
+        Assert.True(pc.CompareSummary.IndexOf(googleTitle + " 38", StringComparison.Ordinal) < pc.CompareSummary.IndexOf(" 51", StringComparison.Ordinal));
+        Assert.EndsWith(quad9Title + ".", pc.CompareSummary);   // нет ответа — в конце
     }
 
     [Fact]
