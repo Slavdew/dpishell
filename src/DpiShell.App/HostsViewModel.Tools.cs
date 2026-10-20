@@ -422,7 +422,7 @@ public sealed partial class HostsViewModel
             Raise(p);
     }
 
-    static string FormatDate(string iso) => DateTime.TryParse(iso, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? $"{d:dd.MM.yyyy}" : iso;
+    static string FormatDate(string iso) => DateTime.TryParse(iso, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? L.Date(d) : iso;
 
     /// <summary>«Адрес для X больше не работает — убрать или подобрать новый»: своих строк мы сами не снимаем, только говорим.</summary>
     IEnumerable<string> StaleWarnings() =>

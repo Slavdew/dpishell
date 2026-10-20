@@ -1,0 +1,42 @@
+{
+  "_meta": { "language": "English", "code": "en", "flag": "gb" },
+
+  "common.ready": "Done.",
+  "common.cancel": "Cancel",
+  "common.retry": "Retry",
+  "common.close": "Close",
+  "common.close_message": "Close message",
+  "common.more": "Details",
+  "common.info": "Explanation",
+  "common.info.name": "Explanation: {topic}",
+  "common.shield.tip": "Needs the DpiShell helper: one administrator rights prompt",
+
+  "common.nav.home": "Home",
+  "common.nav.select": "Search",
+  "common.nav.sites": "Sites",
+  "common.nav.apps": "Games & apps",
+  "common.nav.hosts": "Fix addresses",
+  "common.nav.dns": "DNS",
+  "common.nav.proxy": "Proxy",
+  "common.nav.diag": "Diagnostics",
+  "common.nav.router": "Router",
+  "common.nav.settings": "Settings",
+  "common.nav.about": "About & updates",
+  "common.nav.about.menu": "About & updates",
+
+  "common.lang.name": "Interface language",
+  "common.lang.tip": "Interface language: {language}",
+  "common.lang.current": "Selected",
+  "common.lang.problems": "Translation files",
+  "common.lang.problem.read": "{file}: cannot be read — {error}",
+  "common.lang.problem.big": "{file}: file is larger than 2 MB — skipped",
+  "common.lang.problem.json": "{file}: JSON error — {error}",
+  "common.lang.problem.meta": "{file}: no _meta with language and code — skipped",
+  "common.lang.problem.code": "{file}: invalid language code “{code}” — skipped",
+  "common.lang.problem.builtin": "{file}: language {code} is built in — a custom translation needs another code",
+  "common.lang.problem.duplicate": "{file}: language {code} is already taken from another file — skipped",
+  "common.lang.problem.strings": {
+    "one": "{file}: {n} line not used (placeholders or plural forms differ from the original, or longer than 2000 characters): {keys}",
+    "other": "{file}: {n} lines not used (placeholders or plural forms differ from the original, or longer than 2000 characters): {keys}"
+  }
+}

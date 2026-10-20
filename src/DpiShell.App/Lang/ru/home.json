@@ -1,0 +1,7 @@
+{
+  "home.service.install": "Установить службу",
+  "home.service.install.tip": "Оптимизация будет работать без окна и запускаться после перезагрузки",
+  "home.service.installed": "Служба установлена",
+  "home.service.mode": "Режим службы",
+  "home.service.mode.tip": "Служба появится при первом включении оптимизации"
+}

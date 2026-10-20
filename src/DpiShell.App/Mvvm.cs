@@ -6,6 +6,15 @@ namespace DpiShell.App;
 
 public abstract class Observable : INotifyPropertyChanged
 {
+    // Смена языка: все живые модели поднимают PropertyChanged("") — вычисляемые строки читаются заново (docs/localization.md).
+    static readonly ConditionalWeakTable<Observable, object?> Live = new();
+    static Observable() => L.Changed += () =>
+    {
+        foreach (var (o, _) in Live.ToArray()) o.Raise(string.Empty);
+    };
+
+    protected Observable() => Live.AddOrUpdate(this, null);
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     protected void Raise([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new(name));

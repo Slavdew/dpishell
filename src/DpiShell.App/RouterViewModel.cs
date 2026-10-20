@@ -145,7 +145,7 @@ public static class RouterTexts
 
     /// <summary>Время роутера (UTC) → «ЧЧ:ММ» по часам этого ПК.</summary>
     public static string Time(DateTime? at) => at is { } t
-        ? (t.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(t, DateTimeKind.Utc) : t).ToLocalTime().ToString("HH:mm")
+        ? L.Time((t.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(t, DateTimeKind.Utc) : t).ToLocalTime())
         : "";
 
     public const string NotFoundText = "DpiShell на роутере не найден";
@@ -939,7 +939,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         else if (s.FromPc) parts.Add("с ПК");
         if (s.Last is { } last)
         {
-            var at = last.At is { } t ? $" {t.ToLocalTime():dd.MM} в {t.ToLocalTime():HH:mm}" : "";
+            var at = last.At is { } t ? $" {L.DayMonth(t.ToLocalTime())} в {L.Time(t.ToLocalTime())}" : "";
             parts.Add(last.Ok ? $"✓ проверено{at}"
                 : $"✗ проверено{at}" + (last.Failed is { Count: > 0 } f ? ", не открылось: " + string.Join(", ", f) : ""));
         }
@@ -1991,7 +1991,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 DnsText = d.Dns is null ? "не проверялся" : d.Dns.Spoofed ? "провайдер подменяет адреса сайтов" : "подмены нет";
                 SpaceText = $"{d.OverlayFreeKb / 1024.0:0.#} МБ" + (d.OverlayFreeKb < 2048 ? " — мало, обновления могут не поместиться" : "");
                 DiagLoaded = true;
-                DiagUpdated = $"обновлено в {DateTime.Now:HH:mm}";
+                DiagUpdated = $"обновлено в {L.Time(DateTime.Now)}";
             }, changes: false))
             Say("");
     }

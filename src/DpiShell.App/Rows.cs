@@ -77,7 +77,7 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
             broken = newest.ControlBroken;
         }
         else return ("ещё не проверялась", "");
-        if (Checked(newest?.File ?? st.Last!.File) is { } at) parts.Add($"проверено {at:dd.MM} в {at:HH:mm}");
+        if (Checked(newest?.File ?? st.Last!.File) is { } at) parts.Add($"проверено {L.DayMonth(at)} в {L.Time(at)}");
         return (string.Join(" · ", parts), broken ? "ломает обычные сайты" : "");
     }
 

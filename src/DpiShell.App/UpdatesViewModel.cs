@@ -458,7 +458,7 @@ public sealed class UpdatesViewModel : Observable
 
     static string Day(string? version) =>
         version is not null && DateOnly.TryParseExact(version.Split('.')[0], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)
-            ? d.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture) : version ?? "";
+            ? L.Date(d.ToDateTime(TimeOnly.MinValue)) : version ?? "";
 
-    static string When(DateTime t) => t.ToString("dd.MM 'в' HH:mm", CultureInfo.InvariantCulture);
+    static string When(DateTime t) => $"{L.DayMonth(t)} в {L.Time(t)}";
 }

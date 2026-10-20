@@ -1,0 +1,16 @@
+{
+  "settings.service.mode": "Service mode",
+  "settings.service.on": "Optimization works without the window and starts after a reboot",
+  "settings.service.off": "Optimization works only while the app is open",
+  "settings.close.hint": "Closing the app turns optimization off.",
+
+  "settings.lang.title": "Language",
+  "settings.lang.hint": "A custom translation is a <code>.json file in the lang folder next to the app or in %AppData%\\DpiShell\\lang.",
+  "settings.lang.template": "Export translation template",
+  "settings.lang.template.hint": "A file with every string: the value is the English text, the Russian one is next to it. Once the values are translated and _meta is filled in, the file works as a custom translation.",
+  "settings.lang.template.saved": "Translation template saved: {path}",
+
+  "settings.changes.title": "DpiShell changes",
+  "settings.changes.count": { "one": "{n} item", "other": "{n} items" },
+  "settings.changes.hint": "Values from before DpiShell come back; later edits are not touched."
+}

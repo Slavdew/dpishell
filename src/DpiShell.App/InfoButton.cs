@@ -16,9 +16,15 @@ public sealed class InfoButton : Button
     public static readonly DependencyProperty TopicProperty =
         DependencyProperty.Register(nameof(Topic), typeof(string), typeof(InfoButton), new PropertyMetadata(null,
             // Экранный диктор читает не «Кнопка», а о чём пояснение.
-            (d, e) => AutomationProperties.SetName(d, e.NewValue is string t ? "Пояснение: " + t : "Пояснение")));
+            (d, e) => ((InfoButton)d).UpdateName()));
 
-    /// <summary>Ключ раздела в <see cref="InfoTexts"/> (заголовок из docs/info-texts.md).</summary>
+    void UpdateName()
+    {
+        if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(UpdateName); return; }
+        AutomationProperties.SetName(this, Topic is { } t ? L.T("common.info.name", new { topic = InfoTexts.Title(t) }) : L.T("common.info"));
+    }
+
+    /// <summary>Ключ темы — <see cref="InfoTexts"/> (info.&lt;тема&gt; в языковых файлах).</summary>
     public string? Topic { get => (string?)GetValue(TopicProperty); set => SetValue(TopicProperty, value); }
 
     /// <summary>Что покажет карточка.</summary>
@@ -29,7 +35,10 @@ public sealed class InfoButton : Button
 
     public InfoButton()
     {
-        AutomationProperties.SetName(this, "Пояснение");
+        UpdateName();
+        // Язык сменили — имя для диктора по-новому (карточка и так собирается при каждом открытии).
+        Loaded += (_, _) => L.Changed += UpdateName;
+        Unloaded += (_, _) => L.Changed -= UpdateName;
         _text = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 420, FontSize = 13.5, LineHeight = 20 };
         _text.SetResourceReference(TextBlock.ForegroundProperty, "Text");
         var card = new Border

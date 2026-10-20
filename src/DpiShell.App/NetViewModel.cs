@@ -177,7 +177,7 @@ public sealed class NetViewModel : Observable
     public bool HasList => _f.List is not null;
 
     public string ListText => _f.List is { } m
-        ? $"{m.Lines:N0} подсетей, обновлён {(m.Updated ?? m.InstalledAt).ToLocalTime():dd.MM.yyyy}, покрывает {m.Ipv4Share * 100:0.#} % адресов интернета"
+        ? $"{m.Lines:N0} подсетей, обновлён {L.Date((m.Updated ?? m.InstalledAt).ToLocalTime())}, покрывает {m.Ipv4Share * 100:0.#} % адресов интернета"
         : "Список не загружен. «Обновить список» скачает его.";
 
     string _updateNote = "";
@@ -224,7 +224,7 @@ public sealed class NetViewModel : Observable
         await AfterChange();
         Refresh();
         if (r is null) return;
-        UpdateNote = r.Applied ? "" : r.NeedsConfirm ? "Новый список не применён — оставлен прежний." : $"{r.Message} Последняя попытка: {DateTime.Now:dd.MM.yyyy HH:mm}.";
+        UpdateNote = r.Applied ? "" : r.NeedsConfirm ? "Новый список не применён — оставлен прежний." : $"{r.Message} Последняя попытка: {L.Date(DateTime.Now)} {L.Time(DateTime.Now)}.";
         Say(r.Applied ? r.Message : r.NeedsConfirm ? "Оставлен прежний IP-список." : r.Message);
     }
 

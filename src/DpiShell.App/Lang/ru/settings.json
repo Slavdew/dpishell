@@ -1,0 +1,16 @@
+{
+  "settings.service.mode": "Режим службы",
+  "settings.service.on": "Оптимизация работает без окна и запускается после перезагрузки",
+  "settings.service.off": "Оптимизация работает, только пока программа открыта",
+  "settings.close.hint": "Закрытие программы выключит оптимизацию.",
+
+  "settings.lang.title": "Язык",
+  "settings.lang.hint": "Свой перевод — файл <код>.json в папке lang рядом с программой или в %AppData%\\DpiShell\\lang.",
+  "settings.lang.template": "Выгрузить шаблон перевода",
+  "settings.lang.template.hint": "Файл со всеми строками: значение — английский текст, рядом — русский. После перевода значений и заполнения _meta файл годится как свой перевод.",
+  "settings.lang.template.saved": "Шаблон перевода сохранён: {path}",
+
+  "settings.changes.title": "Изменения DpiShell",
+  "settings.changes.count": { "one": "{n} пункт", "few": "{n} пункта", "many": "{n} пунктов", "other": "{n} пункта" },
+  "settings.changes.hint": "Вернутся значения, которые были до DpiShell; более поздние правки не затрагиваются."
+}

@@ -16,6 +16,8 @@ public sealed class WindowSettings
 {
     /// <summary>"system" / "light" / "dark".</summary>
     public string Theme { get; set; } = "system";
+    /// <summary>Язык окна (код: ru, en или свой перевод из папки lang). Null — не выбирали: русский для ru/uk/be/kk Windows, иначе английский.</summary>
+    public string? Language { get; set; }
     /// <summary>"tray" — крестик сворачивает в трей, "exit" — закрывает программу.</summary>
     public string CloseAction { get; set; } = "tray";
     /// <summary>Адрес роутера; null — основной шлюз.</summary>

@@ -1,0 +1,44 @@
+{
+  "_meta": { "language": "Русский", "code": "ru", "flag": "ru" },
+
+  "common.ready": "Готово.",
+  "common.cancel": "Отмена",
+  "common.retry": "Повторить",
+  "common.close": "Закрыть",
+  "common.close_message": "Закрыть сообщение",
+  "common.more": "Подробнее",
+  "common.info": "Пояснение",
+  "common.info.name": "Пояснение: {topic}",
+  "common.shield.tip": "Нужен помощник DpiShell: один запрос прав администратора",
+
+  "common.nav.home": "Главная",
+  "common.nav.select": "Подбор",
+  "common.nav.sites": "Сайты",
+  "common.nav.apps": "Игры и программы",
+  "common.nav.hosts": "Починить адреса",
+  "common.nav.dns": "DNS",
+  "common.nav.proxy": "Прокси",
+  "common.nav.diag": "Диагностика",
+  "common.nav.router": "Роутер",
+  "common.nav.settings": "Настройки",
+  "common.nav.about": "Информация и обновления",
+  "common.nav.about.menu": "Информация\nи обновления",
+
+  "common.lang.name": "Язык интерфейса",
+  "common.lang.tip": "Язык интерфейса: {language}",
+  "common.lang.current": "Выбран",
+  "common.lang.problems": "Файлы перевода",
+  "common.lang.problem.read": "{file}: не читается — {error}",
+  "common.lang.problem.big": "{file}: файл больше 2 МБ — пропущен",
+  "common.lang.problem.json": "{file}: ошибка в JSON — {error}",
+  "common.lang.problem.meta": "{file}: нет _meta с language и code — пропущен",
+  "common.lang.problem.code": "{file}: неверный код языка «{code}» — пропущен",
+  "common.lang.problem.builtin": "{file}: язык {code} встроен в программу — у своего перевода нужен другой код",
+  "common.lang.problem.duplicate": "{file}: язык {code} уже взят из другого файла — пропущен",
+  "common.lang.problem.strings": {
+    "one": "{file}: {n} строка не взята (подстановки или формы числа не как в оригинале, или длиннее 2000 знаков): {keys}",
+    "few": "{file}: {n} строки не взяты (подстановки или формы числа не как в оригинале, или длиннее 2000 знаков): {keys}",
+    "many": "{file}: {n} строк не взято (подстановки или формы числа не как в оригинале, или длиннее 2000 знаков): {keys}",
+    "other": "{file}: {n} строки не взято (подстановки или формы числа не как в оригинале, или длиннее 2000 знаков): {keys}"
+  }
+}

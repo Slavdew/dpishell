@@ -132,7 +132,7 @@ public sealed partial class HostsViewModel : Observable
             if (_status is null) return _helper.Reader is null ? "Состояние файла hosts покажет помощник DpiShell." : "";
             var n = _status.Block.Entries.Count;
             if (n == 0) return _status.Block.Present ? "Блок DpiShell в hosts пустой." : "Ничего не записано — hosts без изменений.";
-            var at = _status.AppliedAt is { } a ? $" {a:dd.MM.yyyy} в {a:HH:mm}" : "";
+            var at = _status.AppliedAt is { } a ? $" {L.Date(a)} в {L.Time(a)}" : "";
             return $"Записано адресов: {n}{at}. Проверка раз в день; устаревшие убираются сами.";
         }
     }

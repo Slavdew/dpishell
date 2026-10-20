@@ -62,7 +62,7 @@ public static class RouterLoginDialog
         var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
         var login = new Button { Content = "Войти", IsDefault = true };
         if (Application.Current?.TryFindResource("Primary") is Style primary) login.Style = primary;
-        var cancel = new Button { Content = "Отмена", IsCancel = true };
+        var cancel = new Button { Content = L.T("common.cancel"), IsCancel = true };
         buttons.Children.Add(login);
         buttons.Children.Add(cancel);
         panel.Children.Add(buttons);

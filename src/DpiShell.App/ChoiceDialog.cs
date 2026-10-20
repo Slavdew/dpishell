@@ -35,7 +35,7 @@ public static class ChoiceDialog
             b.Click += (_, _) => { result = index; w.Close(); };
             buttons.Children.Add(b);
         }
-        buttons.Children.Add(new Button { Content = "Отмена", IsCancel = true });
+        buttons.Children.Add(new Button { Content = L.T("common.cancel"), IsCancel = true });
         ((Button)buttons.Children[^1]).Click += (_, _) => w.Close();
         panel.Children.Add(buttons);
         w.Content = panel;

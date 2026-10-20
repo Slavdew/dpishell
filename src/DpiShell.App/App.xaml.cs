@@ -105,6 +105,10 @@ public partial class App : Application
         var settings = WindowSettings.Load(legacy: shell.Paths);
         ThemeManager.Apply(settings.Theme);
         ThemeManager.Listen();
+        // Язык — до окна: свои переводы из папок lang (битый файл пропускается, причина — в «Диагностике»), затем выбранный.
+        L.LoadUser(L.UserDirs);
+        L.Set(settings.Language);
+        foreach (var p in L.Problems) TryLog(new InvalidDataException(p));
 
         var helper = new HelperLink { Post = a => Dispatcher.BeginInvoke(a) };
         var vm = new MainViewModel(shell, helper, settings);

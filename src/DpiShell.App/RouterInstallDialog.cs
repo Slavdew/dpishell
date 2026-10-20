@@ -71,7 +71,7 @@ static class DialogKit
         box.SetBinding(TextBox.TextProperty, new Binding(textPath) { Mode = BindingMode.OneWay });
         AutomationProperties.SetName(box, "Журнал");
         box.TextChanged += (_, _) => box.ScrollToEnd();
-        return new Expander { Header = "Подробнее", Content = box, Margin = new Thickness(0, 4, 0, 8) }.Show(visiblePath);
+        return new Expander { Header = L.T("common.more"), Content = box, Margin = new Thickness(0, 4, 0, 8) }.Show(visiblePath);
     }
 
     public static Button Button(string text, bool primary = false, bool cancel = false)
@@ -170,7 +170,7 @@ public static class RouterInstallDialog
         var install = DialogKit.Button("Установить", primary: true).Enable(nameof(RouterInstallViewModel.CanTryInstall)).Show(nameof(RouterInstallViewModel.ShowCheck));
         install.SetBinding(System.Windows.Controls.ContentControl.ContentProperty, nameof(RouterInstallViewModel.InstallText));
         var select = DialogKit.Button("Подобрать на роутере", primary: true).Show(nameof(RouterInstallViewModel.CanGoSelect));
-        var close = DialogKit.Button("Закрыть", cancel: true);
+        var close = DialogKit.Button(L.T("common.close"), cancel: true);
         install.IsDefault = true;   // «Установить» сама проверит роутер; «Проверить роутер» — второстепенная
         vm.PropertyChanged += (_, e) =>
         {
@@ -279,9 +279,9 @@ public static class RouterUninstallDialog
         var remove = DialogKit.Button("Удалить").Enable(nameof(RouterUninstallViewModel.CanRemove)).Show(nameof(RouterUninstallViewModel.IsConfirm));
         if (Application.Current?.TryFindResource("DangerButton") is Style danger) remove.Style = danger;
         var reinstall = DialogKit.Button("Установить заново", primary: true).Show(nameof(RouterUninstallViewModel.IsDone));
-        var cancel = DialogKit.Button("Отмена", cancel: true).Show(nameof(RouterUninstallViewModel.IsConfirm));
+        var cancel = DialogKit.Button(L.T("common.cancel"), cancel: true).Show(nameof(RouterUninstallViewModel.IsConfirm));
         cancel.IsDefault = true;   // Enter — отмена: удаление не в один клик
-        var close = DialogKit.Button("Закрыть").Show(nameof(RouterUninstallViewModel.IsDone));
+        var close = DialogKit.Button(L.T("common.close")).Show(nameof(RouterUninstallViewModel.IsDone));
         foreach (var b in new[] { remove, reinstall, cancel, close }) buttons.Children.Add(b);
         panel.Children.Add(buttons);
         w.Content = panel;
@@ -325,7 +325,7 @@ public static class HostKeyDialog
         panel.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 16) });
         var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
         var trust = DialogKit.Button("Доверять новому");
-        var cancel = DialogKit.Button("Отмена", primary: true, cancel: true);
+        var cancel = DialogKit.Button(L.T("common.cancel"), primary: true, cancel: true);
         cancel.IsDefault = true;
         trust.Click += (_, _) => { trusted = true; w.Close(); };
         cancel.Click += (_, _) => w.Close();
