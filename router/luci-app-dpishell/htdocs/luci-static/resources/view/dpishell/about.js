@@ -6,6 +6,7 @@
 
 // Вкладка «Информация и обновления»: версии (пакет, страница, ядро, договор), вся работа с обновлением DpiShell; что внутри и где код.
 // Плашка «Доступно обновление» на других вкладках ведёт сюда. Тексты — как на такой же вкладке окна ПК.
+// Внизу — свои переводы, которые не взяты (api.langProblems).
 
 return view.extend({
 	handleSaveApply: null,
@@ -13,36 +14,37 @@ return view.extend({
 	handleReset: null,
 
 	load: function() {
-		return api.safe('status');
+		return api.lang().then(function() { return api.safe('status'); });
 	},
 
 	render: function(s) {
 		var self = this;
 		this.status = s;
 		if (s.__error)
-			return E('div', {}, [E('h2', {}, 'Информация и обновления'), api.card(null, [api.errorLine(s.__error)])]);
+			return E('div', {}, [E('h2', {}, api.t('about.title')), api.card(null, [api.errorLine(s.__error)])]);
 
 		this.el = {
 			versions: E('div'),
 			update: E('div'),
 			err: E('div', { 'class': 'dps-error' }),
-			check: api.btn('Проверить обновления', function() { return self.checkUpdate(); }, 'cbi-button-neutral')
+			check: api.btn(api.t('router.update.check'), function() { return self.checkUpdate(); }, 'cbi-button-neutral')
 		};
 		var link = function(href, text) { return E('a', { href: href, target: '_blank', rel: 'noopener' }, text); };
 		var view = E('div', {}, [
-			E('h2', {}, 'Информация и обновления'),
-			api.card('Версия', [
+			E('h2', {}, api.t('about.title')),
+			api.card(api.t('web.about.version'), [
 				this.el.versions,
 				this.el.update,
 				E('div', { 'class': 'dps-actions' }, [this.el.check]),
 				this.el.err
 			]),
-			api.card('Информация', [
-				api.line(['DpiShell на основе ', link('https://github.com/bol-van/zapret', 'zapret'), ' (bol-van).']),
+			api.card(api.t('web.about.info'), [
+				api.line([api.t('web.about.based_on') + ' ', link('https://github.com/bol-van/zapret', 'zapret'), ' (bol-van).']),
 				api.line([link('https://github.com/Slavdew/dpishell', 'github.com/Slavdew/dpishell'), ' · ',
-					link('https://github.com/Slavdew/dpishell/blob/master/docs/router/README.md', 'Инструкция для роутера')]),
-				api.line('Лицензия MIT.', 'dps-muted')
-			])
+					link('https://github.com/Slavdew/dpishell/blob/master/docs/router/README.md', api.t('web.about.guide'))]),
+				api.line(api.t('web.about.license'), 'dps-muted')
+			]),
+			this.langCard()
 		]);
 		this.render2();
 		poll.add(L.bind(this.tick, this), 3);
@@ -66,17 +68,17 @@ return view.extend({
 		var self = this, s = this.status, p = s.packages || {}, c = s.core || {}, j = s.jobs || {};
 		var core;
 		if (j.core_install)
-			core = E('span', { 'class': 'spinning' }, 'Загружаем ядро zapret…');
+			core = E('span', { 'class': 'spinning' }, api.t('web.core.loading'));
 		else if (!c.installed)
-			core = E('span', {}, ['не установлено ',
-				api.btn('Загрузить ядро', function() { return self.act('core_install'); }, 'cbi-button-apply')]);
+			core = E('span', {}, [api.t('router.core.not_installed') + ' ',
+				api.btn(api.t('web.core.download'), function() { return self.act('core_install'); }, 'cbi-button-apply')]);
 		else
-			core = (c.installed_version || c.version || '—') + (c.hash_ok === false ? ' — файлы повреждены, «Восстановить» на вкладке «Диагностика»' : '');
+			core = (c.installed_version || c.version || '—') + (c.hash_ok === false ? ' — ' + api.t('web.core.broken_short') : '');
 		dom.content(this.el.versions, [
 			api.row('DpiShell', E('span', {}, p.dpishell || s.version || '—')),
-			api.row('Страница LuCI', E('span', {}, p['luci-app-dpishell'] || '—')),
-			api.row('Ядро zapret (bol-van)', core),
-			api.row('Договор с программой на ПК', E('span', {}, s.api ? 'api ' + s.api : '—'))
+			api.row(api.t('web.about.luci'), E('span', {}, p['luci-app-dpishell'] || '—')),
+			api.row(api.t('web.core.title'), core),
+			api.row(api.t('web.about.api'), E('span', {}, s.api ? 'api ' + s.api : '—'))
 		]);
 		// update_check запускает задание в фоне: пока оно не взяло замок, jobs.update ещё false — ждём смены checked_at (до минуты).
 		var ck = this.checking, at = s.update && s.update.checked_at;
@@ -92,25 +94,36 @@ return view.extend({
 		if (this.updating) {
 			this.el.updateStep = this.el.updateStep || E('div', { 'class': 'dps-muted' });
 			dom.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
-				E('span', { 'class': 'spinning' }, 'Обновляю DpiShell… страница перезагрузится сама'), this.el.updateStep]));
+				E('span', { 'class': 'spinning' }, api.t('web.about.updating')), this.el.updateStep]));
 			return;
 		}
 		if (running) {
-			dom.content(this.el.update, E('div', { 'class': 'dps-line' }, E('span', { 'class': 'spinning' }, 'Проверяю обновления…')));
+			dom.content(this.el.update, E('div', { 'class': 'dps-line' }, E('span', { 'class': 'spinning' }, api.t('web.about.checking'))));
 			return;
 		}
 		if (!u || !u.available) {
-			dom.content(this.el.update, api.line(u && u.checked_at ? 'Обновлений нет · проверено ' + api.time(u.checked_at) : 'Новая версия проверяется раз в сутки.', 'dps-muted'));
+			dom.content(this.el.update, api.line(u && u.checked_at ? api.t('web.about.no_updates', { time: api.time(u.checked_at) }) : api.t('web.about.daily'), 'dps-muted'));
 			return;
 		}
 		var notes = u.notes || [];
 		dom.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
 			E('div', { 'class': 'dps-warn' }, [
-				E('span', {}, [E('b', {}, 'Доступна версия ' + (u.version || '').replace(/-r\d+$/, '')),
+				E('span', {}, [E('b', {}, api.t('router.update.available', { version: (u.version || '').replace(/-r\d+$/, '') })),
 					notes.length ? E('ul', { 'style': 'margin:.3em 0 0 1.2em' }, notes.map(function(n) { return E('li', {}, n); })) : '']),
-				api.btn('Обновить', function() { return self.updateInstall(); }, 'cbi-button-apply')
+				api.btn(api.t('web.about.update_to', { version: (u.version || '').replace(/-r\d+$/, '') }), function() { return self.updateInstall(); }, 'cbi-button-apply')
 			])
 		]));
+	},
+
+	// Свои переводы с ошибками (api.langProblems) — видно, почему файл или строки не взяты.
+	langCard: function() {
+		var probs = api.langProblems();
+		if (!probs.length)
+			return '';
+		return api.card(api.t('web.about.lang_problems'), [
+			api.line(api.t('web.about.lang_problems_hint'), 'dps-muted'),
+			E('ul', { 'class': 'dps-list' }, probs.map(function(p) { return E('li', {}, p); }))
+		]);
 	},
 
 	act: function(method) {
@@ -139,9 +152,10 @@ return view.extend({
 					var sec = Math.round((Date.now() - started) / 1000);
 					var j = !s.__error && s.update && s.update.job;
 					// Ход (update_job.step); пока rpcd перезапускается, ответа нет — это и есть перезапуск.
-					self.el.updateStep.textContent = (s.__error ? 'Перезапуск служб роутера' :
-						({ download: 'Скачиваю пакеты', install: 'Устанавливаю' + (j && j.target ? ' ' + j.target : ''), restart: 'Перезапуск служб роутера' }[j && j.step] || 'Готовлюсь')) +
-						' · ' + api.duration(sec);
+					var step = s.__error ? 'restart' : (j && j.step);
+					self.el.updateStep.textContent = (['download', 'install', 'restart'].indexOf(step) >= 0
+						? api.t('router.update.step.' + step) + (step == 'install' && j && j.target ? ' ' + j.target : '')
+						: api.t('web.about.preparing')) + ' · ' + api.duration(sec);
 					if (s.__error && Date.now() - started < 300000)
 						return;
 					if (!s.__error && s.jobs && s.jobs.update)
@@ -151,7 +165,7 @@ return view.extend({
 					if (job && job.ok === false) {
 						self.updating = false;
 						self.status = s;
-						self.el.err.textContent = job.message;
+						self.el.err.textContent = api.msg(job.message_msg || job.message);
 						self.render2();
 						poll.start();
 						return;

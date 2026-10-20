@@ -5,15 +5,21 @@
 'require dom';
 'require dpishell.api as api';
 
-// Вкладка «Оптимизация» — главный экран (architecture.md «Страница роутера»).
+// Вкладка «Главная» (architecture.md «Страница роутера»; названия — как в окне ПК, матрица ПК×роутер).
 
-var HOURS = [[0.5, '30 мин'], [1, '1 ч'], [3, '3 ч'], [6, '6 ч'], [12, '12 ч'], [24, '24 ч']];
+var HOURS = [[0.5, '30m'], [1, '1h'], [3, '3h'], [6, '6h'], [12, '12h'], [24, '24h']];
 // Сколько роутер ждёт «Да, оставить» после включения со страницы (router-api.md confirm_s).
 var CONFIRM_S = 180;
+var GROUP_KEYS = { user: 'select.group.user' };
 
 var WARN_CLASS = {
 	switched_backup: 'notice', auto_selected: 'notice', dns_fallback: 'warning'
 };
+
+// Порядок стратегий «по имени» — естественный: ALT2, ALT3 … ALT10.
+function byName(a, b) {
+	return String(a.title).localeCompare(String(b.title), undefined, { numeric: true, sensitivity: 'base' });
+}
 
 return view.extend({
 	handleSaveApply: null,
@@ -21,7 +27,9 @@ return view.extend({
 	handleReset: null,
 
 	load: function() {
-		return Promise.all([api.safe('status'), api.safe('strategies')]);
+		return api.lang().then(function() {
+			return Promise.all([api.safe('status'), api.safe('strategies')]);
+		});
 	},
 
 	render: function(data) {
@@ -31,13 +39,14 @@ return view.extend({
 		this.progress = null;
 		this.tickNo = 0;
 		this.lastWarnJson = null;
-		this.siteTicks = 0;
+		this.order = 'result';
+		try { this.order = window.localStorage.getItem('dpishell-order') || 'result'; } catch (e) {}
 
 		if (this.status.__error) {
 			return E('div', {}, [
 				E('h2', {}, 'DpiShell'),
-				api.card('Оптимизация', [api.errorLine(this.status.__error),
-					api.line('Если пакет только что установлен — обновите страницу через минуту.', 'dps-muted')])
+				api.card(null, [api.errorLine(this.status.__error),
+					api.line(api.t('web.main.just_installed'), 'dps-muted')])
 			]);
 		}
 
@@ -46,21 +55,25 @@ return view.extend({
 			dot: E('span', { 'class': 'dps-dot' }),
 			state: E('div', { 'class': 'dps-hero-title' }),
 			stateSub: E('div', { 'class': 'dps-hero-sub' }),
-			toggle: api.btn('Включить', function() { return self.toggle(); }, 'cbi-button-positive dps-big'),
-			select: api.btn('Подобрать стратегию', function() { return self.openSelect(); }, 'cbi-button-neutral'),
-			check: api.btn('Проверить сайты', function() { return self.checkNow(); }, 'cbi-button-neutral'),
+			toggle: api.btn(api.t('router.enable'), function() { return self.toggle(); }, 'cbi-button-positive dps-big'),
+			select: api.btn(api.t('router.select'), function() { return self.openSelect(); }, 'cbi-button-neutral'),
+			check: api.btn(api.t('home.check_now'), function() { return self.checkNow(); }, 'cbi-button-neutral'),
 			err: E('div', { 'class': 'dps-error' }),
-			// Стратегия и режим — не сразу: обход для всей сети перезапускается (UX-аудит п. 50).
-			strategy: E('select', { 'class': 'cbi-input-select', 'style': 'width:100%;max-width:36em', 'change': function(ev) { self.pend('strategy', ev.target.value); } }),
-			apply: E('div', { 'class': 'dps-actions', 'style': 'display:none' }, [
-				api.btn('Применить', function() { return self.applyPending(); }, 'cbi-button-apply'),
-				api.btn('Отмена', function() { self.cancelPending(); }, 'cbi-button-neutral'),
-				E('span', { 'class': 'dps-muted' }, 'Оптимизация для всей сети перезапустится — сайты моргнут на пару секунд.')
+			// Стратегия — не сразу: оптимизация для всей сети перезапускается (UX-аудит п. 50).
+			strategy: E('select', { 'class': 'cbi-input-select', 'style': 'width:100%;max-width:36em', 'change': function(ev) { self.pend(ev.target.value); } }),
+			order: E('select', { 'class': 'cbi-input-select', 'style': 'width:auto', 'change': function(ev) { self.setOrder(ev.target.value); } }, [
+				E('option', { value: 'result', title: api.t('home.order.by_result.tip') }, api.t('home.order.by_result')),
+				E('option', { value: 'name', title: api.t('home.order.by_name.tip') }, api.t('home.order.by_name'))
 			]),
-			modeAll: null, modeLists: null,
+			apply: E('div', { 'class': 'dps-actions', 'style': 'display:none' }, [
+				api.btn(api.t('web.apply'), function() { return self.applyPending(); }, 'cbi-button-apply'),
+				api.btn(api.t('common.cancel'), function() { self.cancelPending(); }, 'cbi-button-neutral'),
+				E('span', { 'class': 'dps-muted' }, api.t('web.main.restart_note'))
+			]),
+			params: E('div'),
 			ts: E('div', { 'class': 'dps-line', 'style': 'display:none' }, [
-				'Компьютерам на Windows нужна настройка — без неё оптимизация для них не работает',
-				api.info('Эта стратегия требует, чтобы Windows отправляла метки времени в соединениях (TCP timestamps); по умолчанию они выключены. Приложение DpiShell на компьютере включает их само. Вручную — в командной строке от администратора: netsh interface tcp set global timestamps=enabled. Телефоны, ТВ и приставки на большинстве моделей настраивать не нужно.')
+				api.t('web.main.ts_need'),
+				api.info(api.t('web.main.ts_info'))
 			]),
 			warnings: E('div'),
 			// Включение на пробу (architecture.md «Аварийный выключатель»): без «Да, оставить» роутер сам вернёт прежнее.
@@ -70,21 +83,17 @@ return view.extend({
 			lastCheck: E('div', { 'class': 'dps-line' }),
 			schedOn: E('input', { type: 'checkbox', change: function() { self.saveSchedule(); } }),
 			schedHours: E('select', { 'class': 'cbi-input-select', change: function() { self.saveSchedule(); } },
-				HOURS.map(function(h) { return E('option', { value: String(h[0]) }, h[1]); })),
+				HOURS.map(function(h) { return E('option', { value: String(h[0]) }, api.t('router.schedule.opt.' + h[1])); })),
 			schedAuto: E('input', { type: 'checkbox', change: function() { self.saveSchedule(); } }),
 			schedWatch: E('input', { type: 'checkbox', change: function() { self.saveSchedule(); } }),
-			schedMsg: E('div', { 'class': 'dps-line dps-muted' }),
-			siteUrl: E('input', { type: 'text', 'class': 'cbi-input-text', placeholder: 'example.com', style: 'width:100%;max-width:28em', keydown: function(ev) { if (ev.key == 'Enter') self.siteCheck(); } }),
-			siteBtn: api.btn('Проверить', function() { return self.siteCheck(); }, 'cbi-button-action'),
-			siteResult: E('div', { 'class': 'dps-line' })
+			schedMsg: E('div', { 'class': 'dps-line dps-muted' })
 		};
-		this.el.modeAll = api.radio('dps-mode', 'all', 'Все сайты', true, function() { self.pend('mode', 'all'); });
-		this.el.modeLists = api.radio('dps-mode', 'lists', 'Только YouTube, Discord и мои списки', false, function() { self.pend('mode', 'lists'); });
-		this.pending = {};
+		this.el.order.value = this.order;
+		this.pending = null;
 
 		// Порядок — как во вкладке «Роутер» окна ПК (UX-аудит, макет страницы роутера).
 		var view = E('div', {}, [
-			E('h2', {}, 'DpiShell — оптимизация соединения'),
+			E('h2', {}, api.t('web.main.title')),
 			this.el.update,
 			api.card(null, [
 				E('div', { 'class': 'dps-hero' }, [
@@ -99,24 +108,20 @@ return view.extend({
 				this.el.err,
 				this.el.ts
 			]),
-			api.card('Сайт не открывается', [
-				api.line('Роутер проверит адрес с оптимизацией и без. Если сайт открывается только без оптимизации — предложит добавить его в исключения.', 'dps-muted'),
-				E('div', { 'class': 'dps-actions' }, [this.el.siteUrl, this.el.siteBtn]),
-				this.el.siteResult
-			]),
-			api.card('Настройки', [
-				api.row(['Для каких сайтов', api.info('«Все сайты» — оптимизация для любого сайта, кроме исключений; это основной режим. «Только из списков» — только для сайтов из списков (YouTube, Discord, свои). После смены роутер сам проверяет, что сайты открываются.')],
-					E('div', {}, [this.el.modeAll, this.el.modeLists])),
-				api.row(['Стратегия', api.info('Стратегия — способ, которым оптимизация обманывает оборудование провайдера; у разных провайдеров работают разные. Если не знаете, какую выбрать, нажмите «Подобрать» — роутер проверит сам и включит лучшую.')], this.el.strategy),
+			api.card(null, [
+				api.row([api.t('router.strategy'), api.info(api.t('web.main.strategy_info'))], this.el.strategy),
+				api.row(api.t('home.order.label'), this.el.order),
+				this.el.params,
 				this.el.apply
 			]),
-			api.card('Проверять сам', [
-				E('label', { 'class': 'dps-check' }, [this.el.schedOn, 'Проверять сайты каждые ', this.el.schedHours]),
-				E('label', { 'class': 'dps-check' }, [this.el.schedAuto, 'Если не помогло — подобрать заново',
-					api.info('Если оптимизация перестала работать и запасные стратегии не помогли, роутер сам запустит быстрый подбор и включит найденную — не чаще раза в 6 часов. Пока идёт подбор (обычно несколько минут), сайты в сети могут открываться с перебоями в непредсказуемый момент, поэтому по умолчанию выключено.')]),
-				E('label', { 'class': 'dps-check' }, [this.el.schedWatch, 'Выключать оптимизацию, если с ней пропал интернет',
-					api.info('Раз в 5 минут роутер проверяет несколько обычных сайтов. Если с оптимизацией они не открываются, а без неё открываются — обычно оптимизация выключается, причина видна здесь, и роутер один раз сам подбирает стратегию: нашёл — включает, нет — оптимизация остаётся выключенной до вашего «Включить» или «Подобрать». Поломки на других сайтах сторож может не заметить. Если интернета нет и без оптимизации, это обрыв у провайдера: оптимизация остаётся.')]),
-				E('p', { 'class': 'dps-muted' }, 'Без страницы: на большинстве роутеров с OpenWrt нажатие reset на 2 секунды выключает оптимизацию без перезагрузки, но на вашем может работать иначе. Не держите 5 секунд и дольше — обычно это сброс к заводским настройкам.'),
+			api.siteCheckCard('main'),
+			api.card(api.t('router.schedule.title'), [
+				E('label', { 'class': 'dps-check' }, [this.el.schedOn, api.t('router.schedule.enabled') + ' ', this.el.schedHours]),
+				E('label', { 'class': 'dps-check' }, [this.el.schedAuto, api.t('router.schedule.reselect'),
+					api.info(api.t('web.main.reselect_info'))]),
+				E('label', { 'class': 'dps-check' }, [this.el.schedWatch, api.t('router.watchdog.check'),
+					api.info(api.t('web.main.watchdog_info'))]),
+				E('p', { 'class': 'dps-muted' }, api.t('web.main.reset_note')),
 				this.el.schedMsg
 			])
 		]);
@@ -129,12 +134,12 @@ return view.extend({
 		return view;
 	},
 
-	// Опрос: раз в 3 с, во время подбора/проверки сайта — раз в 1 с.
+	// Опрос: раз в 3 с, во время подбора/проверки — раз в 1 с.
 	tick: function() {
 		var self = this;
 		this.tickNo++;
 		this.renderConfirm();
-		var fast = this.status.jobs && (this.status.jobs.select || this.status.jobs.site_check || this.status.jobs.check);
+		var fast = this.status.jobs && (this.status.jobs.select || this.status.jobs.check);
 		if (!fast && (this.tickNo % 3) != 0)
 			return Promise.resolve();
 		return api.safe('status').then(function(s) {
@@ -158,58 +163,89 @@ return view.extend({
 						self.fillStrategies();
 					}
 				});
-			if (self.siteTicks > 0)
-				return self.pollSite();
 		});
 	},
 
-	// Состояние для панели: kind — ok | off | err | busy (цвет точки).
+	// Состояние для панели — как на главной окна ПК: kind — ok | off | err | busy (цвет точки).
 	stateText: function() {
 		var s = this.status, j = s.jobs || {};
 		if (j.select) {
 			var p = this.progress;
-			return { kind: 'busy', title: 'Идёт подбор' + (p && p.total ? ' — %d из %d'.format(Math.min(p.index || 1, p.total), p.total) : ''),
-				sub: (p && p.message) || 'Сайты в сети могут открываться с перебоями' };
+			return { kind: 'busy', title: api.t(p && p.depth == 'deep' ? 'home.status.deep' : 'home.status.select'),
+				sub: p && p.total ? api.t('router.select.progress', { index: Math.min(p.index || 1, p.total), total: p.total }) : api.t('web.main.select_sub') };
 		}
 		if (j.core_install)
-			return { kind: 'busy', title: 'Загрузка ядра zapret…' };
+			return { kind: 'busy', title: api.t('web.core.loading') };
 		if (!s.core.installed)
-			return { kind: 'err', title: 'Ядро zapret не установлено', sub: 'Нажмите «Загрузить ядро» ниже' };
+			return { kind: 'err', title: api.t('web.core.missing'), sub: api.t('web.core.missing_hint') };
 		if (s.core.hash_ok === false)
-			return { kind: 'err', title: 'Файлы zapret повреждены', sub: 'Нажмите «Восстановить» во вкладке «Диагностика»' };
+			return { kind: 'err', title: api.t('web.core.broken'), sub: api.t('web.core.broken_hint') };
 		var title = this.strategyTitle(s.strategy);
 		if (j.check)
-			return { kind: 'busy', title: 'Идёт проверка сайтов', sub: s.enabled ? title : '' };
+			return { kind: 'busy', title: api.t('home.check.running'), sub: s.enabled ? title : '' };
 		if (!s.enabled)
-			return { kind: 'off', title: 'Оптимизация выключена', sub: s.strategy ? 'Будет включена ' + title : 'Стратегия не выбрана — «Включить» подберёт её сам' };
+			return { kind: 'off', title: api.t('home.status.off'), sub: s.strategy ? title : api.t('web.main.off_no_strategy') };
 		var lc = s.last_check;
+		var when = lc && lc.at ? api.t('router.home.checked', { time: api.time(lc.at) }) : api.t('router.wd.not_checked');
 		if (lc && lc.ok === false)
-			return { kind: 'err', title: 'Оптимизация работает не на всех сайтах', sub: title + ' · проверено в ' + api.time(lc.at) };
-		return { kind: 'ok', title: 'Оптимизация работает', sub: title + (lc && lc.at ? ' · проверено в ' + api.time(lc.at) : ' · ещё не проверялся') };
+			return { kind: 'err', title: api.t('home.status.partial'), sub: title + ' · ' + when };
+		return { kind: 'ok', title: api.t('home.status.running'), sub: title + ' · ' + when };
 	},
 
 	strategyTitle: function(id) {
 		if (!id)
-			return 'стратегия не выбрана';
+			return api.t('home.strategy.none');
 		var items = this.strategies.items || [];
 		for (var i = 0; i < items.length; i++)
 			if (items[i].id == id)
-				return 'стратегия ' + items[i].title;
-		return 'стратегия ' + id;
+				return api.t('home.strategy', { name: api.stratTitle(items[i].title) });
+		return api.t('home.strategy', { name: id });
 	},
 
+	// Список стратегий: «по результату» — порядок роутера (по статистике подборов), «по имени» — на странице.
 	fillStrategies: function() {
-		var sel = this.el.strategy, items = this.strategies.items || [];
+		var sel = this.el.strategy, items = (this.strategies.items || []).slice();
+		if (this.order == 'name')
+			items.sort(byName);
 		dom.content(sel, []);
 		if (!this.status.strategy)
-			sel.appendChild(E('option', { value: '' }, 'Не выбрана — нажмите «Подобрать»'));
+			sel.appendChild(E('option', { value: '' }, api.t('web.main.not_selected')));
 		items.forEach(function(it) {
-			var label = it.title;
-			if (it.runs > 0)
-				label += ' — открыла всё в %d из %d подборов'.format(it.passed, it.runs);
+			var label = it.runs > 0 ? api.t('web.main.opt_stats', { name: api.stratTitle(it.title), passed: it.passed, runs: it.runs }) : api.stratTitle(it.title);
 			sel.appendChild(E('option', { value: it.id }, label));
 		});
-		sel.value = this.status.strategy || '';
+		sel.value = this.pending || this.status.strategy || '';
+		this.renderParams();
+	},
+
+	// «Параметры» выбранной стратегии — роли и аргументы nfqws (strategies.items[].roles), как на главной окна ПК (матрица п. 8).
+	renderParams: function() {
+		var self = this, id = this.pending || this.status.strategy;
+		var it = (this.strategies.items || []).filter(function(x) { return x.id == id; })[0];
+		var roles = it && it.roles ? Object.keys(it.roles) : [];
+		if (!roles.length) {
+			dom.content(this.el.params, []);
+			return;
+		}
+		var text = roles.map(function(r) { return r + ': ' + it.roles[r]; }).join('\n');
+		var msg = E('span', { 'class': 'dps-muted' });
+		var det = E('details', { 'class': 'dps-details', open: this.paramsOpen ? '' : null,
+			toggle: function() { self.paramsOpen = det.open; } }, [
+			E('summary', { title: api.t('home.params.tip') }, api.t('home.params.show')),
+			E('div', { 'class': 'dps-muted' }, api.t('router.strategy.roles')),
+			E('pre', { 'class': 'dps-pre' }, text),
+			E('div', { 'class': 'dps-actions' }, [api.btn(api.t('home.params.copy'), function() {
+				api.copy(text);
+				msg.textContent = api.t('router.strategy.copied', { name: api.stratTitle(it.title) });
+			}), msg])
+		]);
+		dom.content(this.el.params, det);
+	},
+
+	setOrder: function(v) {
+		this.order = v;
+		try { window.localStorage.setItem('dpishell-order', v); } catch (e) {}
+		this.fillStrategies();
 	},
 
 	fillSchedule: function() {
@@ -227,33 +263,30 @@ return view.extend({
 		this.el.state.textContent = st.title;
 		this.el.stateSub.textContent = st.sub || '';
 		this.el.dot.className = 'dps-dot dps-dot-' + st.kind;
-		this.el.toggle.textContent = s.enabled ? 'Выключить' : 'Включить';
+		this.el.toggle.textContent = api.t(s.enabled ? 'web.main.disable' : 'router.enable');
 		this.el.toggle.className = 'btn cbi-button dps-big ' + (s.enabled ? 'cbi-button-neutral' : 'cbi-button-positive');
-		this.el.check.title = s.enabled ? '' : 'Сначала включите оптимизацию';
+		this.el.check.title = s.enabled ? '' : api.t('web.main.check_needs_on');
 		this.el.toggle.disabled = busy || !s.core.installed;
 		this.el.select.disabled = busy || !s.core.installed;
 		this.el.check.disabled = busy || !s.enabled || j.check;
 		this.el.strategy.disabled = busy;
-		if (document.activeElement != this.el.strategy && !this.pending.strategy && this.el.strategy.value != (s.strategy || ''))
+		if (document.activeElement != this.el.strategy && !this.pending && this.el.strategy.value != (s.strategy || ''))
 			this.fillStrategies();
-		if (!this.pending.mode) {
-			this.el.modeAll.firstChild.checked = s.mode != 'lists';
-			this.el.modeLists.firstChild.checked = s.mode == 'lists';
-		}
-		this.el.modeAll.firstChild.disabled = this.el.modeLists.firstChild.disabled = busy;
 		this.el.ts.style.display = (s.enabled && s.needs_tcp_timestamps) ? '' : 'none';
 
 		var lc = s.last_check;
 		if (lc && lc.at) {
-			var src = { manual: 'по кнопке', timer: 'по таймеру', app: 'из приложения' }[lc.source] || '';
-			// Итог проверки значками (ux-audit-web п.3): ✓ YouTube  ✗ Discord, ниже — когда.
+			var groups = lc.groups || [];
+			var okN = groups.filter(function(g) { return g.ok; }).length;
+			var src = { manual: 'web.src.manual', timer: 'web.src.timer', app: 'web.src.app' }[lc.source];
+			// Итог проверки значками (ux-audit-web п.3) и строкой «Открывается N из M», как на ПК (матрица п. 4).
 			dom.content(this.el.lastCheck, [
-				E('div', { 'class': 'dps-verdicts' }, (lc.groups || []).map(function(g) {
+				E('div', { 'class': 'dps-verdicts' }, groups.map(function(g) {
 					return E('span', { 'class': g.ok ? 'dps-v-ok' : 'dps-v-bad' }, (g.ok ? '✓ ' : '✗ ') +
-						({ youtube: 'YouTube', discord: 'Discord', user: 'Свои адреса' }[g.id] || g.id));
+						(GROUP_KEYS[g.id] ? api.t(GROUP_KEYS[g.id]) : ({ youtube: 'YouTube', discord: 'Discord' }[g.id] || g.id)));
 				})),
-				E('div', { 'class': 'dps-muted' }, 'Проверено ' + api.time(lc.at) + (src ? ' ' + src : '') +
-					(lc.ok ? '' : ' — не всё открывается'))
+				E('div', { 'class': 'dps-muted' }, (groups.length ? api.t('home.check.summary', { ok: okN, total: groups.length }) + ' · ' : '') +
+					api.t('web.main.checked', { time: api.time(lc.at) }) + (src ? ' ' + api.t(src) : ''))
 			]);
 		} else
 			dom.content(this.el.lastCheck, []);
@@ -279,8 +312,8 @@ return view.extend({
 		}
 		if (!this.el.confirm.firstChild)
 			dom.content(this.el.confirm, [this.el.confirmText, ' ',
-				api.btn('Да, оставить', function() { return self.act('confirm'); }, 'cbi-button-positive')]);
-		this.el.confirmText.textContent = 'Всё работает? Иначе через %d:%02d роутер вернёт как было.'.format(Math.floor(left / 60), left % 60);
+				api.btn(api.t('router.trial.keep'), function() { return self.act('confirm'); }, 'cbi-button-positive')]);
+		this.el.confirmText.textContent = api.t('web.main.trial_ask', { time: '%d:%02d'.format(Math.floor(left / 60), left % 60) });
 		this.el.confirm.style.display = '';
 	},
 
@@ -292,8 +325,8 @@ return view.extend({
 		this.lastUpdateKey = key;
 		dom.content(this.el.update, !u || !u.available ? [] : E('div', { 'class': 'alert-message notice' }, [
 			E('div', { 'class': 'dps-warn' }, [
-				E('b', {}, 'Доступно обновление DpiShell ' + (u.version || '').replace(/-r\d+$/, '')),
-				api.btn('Подробнее', function() { api.go('about'); }, 'cbi-button-apply')
+				E('b', {}, api.t('router.update.available', { version: (u.version || '').replace(/-r\d+$/, '') })),
+				api.btn(api.t('router.details'), function() { api.go('about'); }, 'cbi-button-apply')
 			])
 		]));
 	},
@@ -304,37 +337,37 @@ return view.extend({
 			var action = null;
 			switch (w.code) {
 			case 'dns_spoofed':
-				action = api.btn('Включить защищённый DNS', function() { api.dnsEnableDialog(function() { api.go('dns'); }); }, 'cbi-button-apply');
+				action = api.btn(api.t('router.dns.enable'), function() { api.dnsEnableDialog(function() { api.go('dns'); }); }, 'cbi-button-apply');
 				break;
 			case 'conflict':
 				// Останавливает по-настоящему (службы); пакет — только удалить, процесс — разбор в «Диагностике» (п. 49).
-				action = api.btn('Остановить', function() { return self.stopConflicts(); }, 'cbi-button-apply');
+				action = api.btn(api.t('router.diag.stop'), function() { return self.stopConflicts(); }, 'cbi-button-apply');
 				break;
 			case 'core_missing':
-				action = api.btn('Загрузить ядро', function() { return self.coreInstall(); }, 'cbi-button-apply');
+				action = api.btn(api.t('web.core.download'), function() { return self.coreInstall(); }, 'cbi-button-apply');
 				break;
 			case 'auto_select_failed':
 			case 'watchdog_select_failed':
-				action = api.btn('Подобрать', function() { return self.openSelect(); }, 'cbi-button-apply');
+				action = api.btn(api.t('router.select'), function() { return self.openSelect(); }, 'cbi-button-apply');
 				break;
 			case 'flow_offload':
-				action = api.btn('Исправить', function() { return self.act('flow_offload_fix'); }, 'cbi-button-apply');
+				action = api.btn(api.t('router.warn.fix'), function() { return self.act('flow_offload_fix'); }, 'cbi-button-apply');
 				break;
 			case 'ipv6':
-				action = api.btn('Исправить', function() { return self.act('ipv6_set', { enabled: true }); }, 'cbi-button-apply');
+				action = api.btn(api.t('router.warn.fix'), function() { return self.act('ipv6_set', { enabled: true }); }, 'cbi-button-apply');
 				break;
 			case 'dns_fallback':
-				action = api.btn('Подробнее', function() { api.go('dns'); }, 'cbi-button-neutral');
+				action = api.btn(api.t('router.details'), function() { api.go('dns'); }, 'cbi-button-neutral');
 				break;
 			case 'watchdog_off':
 			case 'button_off':
 			case 'confirm_reverted':
 				// «Включить» — главная кнопка панели выше; здесь только другой путь.
-				action = api.btn('Подобрать другую стратегию', function() { return self.openSelect(); }, 'cbi-button-neutral');
+				action = api.btn(api.t('web.main.select_other'), function() { return self.openSelect(); }, 'cbi-button-neutral');
 				break;
 			}
 			return E('div', { 'class': 'alert-message ' + (WARN_CLASS[w.code] || 'warning') },
-				E('div', { 'class': 'dps-warn' }, [E('span', {}, w.text || w.code), action || '']));
+				E('div', { 'class': 'dps-warn' }, [E('span', {}, api.msg(w) || w.code), action || '']));
 		}));
 	},
 
@@ -369,7 +402,7 @@ return view.extend({
 	stopConflicts: function() {
 		var self = this;
 		this.el.err.textContent = '';
-		if (!window.confirm('Остановить похожую программу? Она выключится и не запустится после перезагрузки роутера; включить её снова можно в её настройках.'))
+		if (!window.confirm(api.t('web.main.stop_confirm')))
 			return Promise.resolve();
 		return api.call('diag').then(function(d) {
 			var running = (d.conflicts || []).filter(function(c) { return c.running; });
@@ -380,8 +413,8 @@ return view.extend({
 			}, Promise.resolve()).then(function() {
 				if (other.length)
 					self.el.err.textContent = other.map(function(c) {
-						return c.kind == 'package' ? 'Удалите пакет ' + c.name + ' (apk del ' + c.name + ')' : 'Работает ' + c.name + ' — подробнее в «Диагностике»';
-					}).join('. ');
+						return api.t(c.kind == 'package' ? 'web.main.remove_pkg' : 'web.main.conflict_more', { name: c.name });
+					}).join(' ');
 				return self.act('status');
 			});
 		}).catch(function(e) { self.el.err.textContent = api.text(e); });
@@ -392,37 +425,28 @@ return view.extend({
 	},
 
 	openSelect: function() {
-		var self = this;
 		api.selectDialog(this.status, function() { api.go('select'); });
 		return Promise.resolve();
 	},
 
-	// Выбранное, но не применённое: стратегия и режим (кнопка «Применить»).
-	pend: function(what, value) {
-		var cur = what == 'mode' ? (this.status.mode == 'lists' ? 'lists' : 'all') : (this.status.strategy || '');
-		if (!value || value == cur)
-			delete this.pending[what];
-		else
-			this.pending[what] = value;
-		this.el.apply.style.display = Object.keys(this.pending).length ? '' : 'none';
+	// Выбранная, но не применённая стратегия (кнопка «Применить»).
+	pend: function(value) {
+		this.pending = (!value || value == (this.status.strategy || '')) ? null : value;
+		this.el.apply.style.display = this.pending ? '' : 'none';
+		this.renderParams();
 	},
 
 	cancelPending: function() {
-		this.pending = {};
+		this.pending = null;
 		this.el.apply.style.display = 'none';
 		this.fillStrategies();
-		this.el.modeAll.firstChild.checked = this.status.mode != 'lists';
-		this.el.modeLists.firstChild.checked = this.status.mode == 'lists';
 	},
 
 	applyPending: function() {
-		var self = this, p = this.pending;
-		var chain = Promise.resolve();
-		if (p.strategy)
-			chain = chain.then(function() { return self.act('strategy_set', { id: p.strategy, confirm_s: CONFIRM_S }); });
-		if (p.mode)
-			chain = chain.then(function() { return self.act('mode_set', { mode: p.mode }); });
-		return chain.then(function() { self.cancelPending(); }, function() { self.cancelPending(); });
+		var self = this, id = this.pending;
+		if (!id)
+			return Promise.resolve();
+		return this.act('strategy_set', { id: id, confirm_s: CONFIRM_S }).then(function() { self.cancelPending(); }, function() { self.cancelPending(); });
 	},
 
 	saveSchedule: function() {
@@ -434,7 +458,7 @@ return view.extend({
 			auto_select: this.el.schedAuto.checked,
 			watchdog: this.el.schedWatch.checked
 		}).then(function() {
-			self.el.schedMsg.textContent = 'Сохранено';
+			self.el.schedMsg.textContent = api.t('web.saved');
 			setTimeout(function() { self.el.schedMsg.textContent = ''; }, 2000);
 		}, function(e) {
 			self.el.schedMsg.textContent = api.text(e);
@@ -444,85 +468,5 @@ return view.extend({
 
 	coreInstall: function() {
 		return this.act('core_install').catch(function() {});
-	},
-
-	// «Сайт не открывается с обходом»
-	siteCheck: function() {
-		var self = this;
-		var url = (this.el.siteUrl.value || '').trim();
-		if (!url) {
-			this.el.siteResult.textContent = 'Введите адрес сайта';
-			return Promise.resolve();
-		}
-		if (!/^https?:\/\//i.test(url))
-			url = 'https://' + url;
-		dom.content(this.el.siteResult, E('span', { 'class': 'spinning' }, 'Проверяем ' + url + '…'));
-		return api.call('site_check', { url: url }).then(function() {
-			self.siteTicks = 90;
-			self.status.jobs.site_check = true;
-		}, function(e) {
-			self.el.siteResult.textContent = api.text(e);
-		});
-	},
-
-	pollSite: function() {
-		var self = this;
-		this.siteTicks--;
-		return api.safe('site_check_result').then(function(r) {
-			if (r.__error) {
-				self.siteTicks = 0;
-				self.el.siteResult.textContent = api.text(r.__error);
-				return;
-			}
-			if (r.running && self.siteTicks > 0)
-				return;
-			self.siteTicks = 0;
-			if (r.running) {
-				self.el.siteResult.textContent = 'Проверка затянулась — попробуйте ещё раз позже';
-				return;
-			}
-			self.renderSiteResult(r);
-		});
-	},
-
-	renderSiteResult: function(r) {
-		var self = this;
-		function part(label, x) {
-			if (!x)
-				return E('div', {}, label + ': нет данных');
-			return E('div', { 'class': x.ok ? 'dps-ok' : 'dps-error' },
-				label + ': ' + (x.ok ? 'открывается' : 'не открывается') + (x.detail ? ' (' + x.detail + ')' : ''));
-		}
-		var kids = [E('div', {}, [E('b', {}, r.url || '')])];
-		if (r.error) {
-			kids.push(E('div', { 'class': 'dps-error' }, r.error));
-			dom.content(this.el.siteResult, kids);
-			return;
-		}
-		kids.push(part('С оптимизацией', r.with_bypass), part('Без оптимизации', r.without_bypass));
-		if (r.suggest_exclude) {
-			var host = (r.url || '').replace(/^https?:\/\//i, '').replace(/[:/].*$/, '');
-			kids.push(E('div', { 'class': 'dps-actions' }, [
-				api.btn('Добавить ' + host + ' в исключения', function() { return self.addExclude(host); }, 'cbi-button-apply')
-			]));
-		} else if (r.with_bypass && !r.with_bypass.ok)
-			kids.push(E('div', { 'class': 'dps-muted' }, 'Сайт не открывается и без оптимизации — дело не в ней.'));
-		else
-			kids.push(E('div', { 'class': 'dps-muted' }, 'С оптимизацией сайт открывается — исключение не нужно.'));
-		dom.content(this.el.siteResult, kids);
-	},
-
-	addExclude: function(host) {
-		var self = this;
-		return api.call('lists_get', { name: 'user-exclude' }).then(function(l) {
-			var lines = l.lines || [];
-			if (lines.indexOf(host) < 0)
-				lines.push(host);
-			return api.call('lists_set', { name: 'user-exclude', lines: lines });
-		}).then(function() {
-			dom.content(self.el.siteResult, E('div', { 'class': 'dps-ok' }, host + ' добавлен в исключения'));
-		}, function(e) {
-			self.el.siteResult.appendChild(api.errorLine(e));
-		});
 	}
 });

@@ -187,17 +187,23 @@ function cancel_requested() {
 	return true;
 }
 
-function strategy_order() {
+function strategy_order(current) {
 	let stats = st.read_json(`${st.P.etc}/stats.json`, {});
 	let all = [];
 	for (let c in st.catalogs())
 		for (let s in c.strategies)
 			push(all, s);
-	// Порядок по статистике (architecture.md «Порядок по статистике»): стабильные — первыми, новые — между проверенно рабочими и нерабочими.
+	// Как быстрый подбор окна ПК («до первой рабочей, начиная с прежних», матрица ПК×роутер п. 24): включённая — первой,
+	// затем открывшие всё при последней проверке, затем по доле удачных подборов (architecture.md «Порядок по статистике»):
+	// стабильные — первыми, новые — между проверенно рабочими и нерабочими.
+	let key = x => [x.id == current ? 1 : 0, stats[x.id]?.last?.ok ? 1 : 0,
+		stats[x.id]?.runs ? 1.0 * stats[x.id].passed / stats[x.id].runs : 0.5];
 	return sort(all, (a, b) => {
-		let ra = stats[a.id]?.runs ? 1.0 * stats[a.id].passed / stats[a.id].runs : 0.5;
-		let rb = stats[b.id]?.runs ? 1.0 * stats[b.id].passed / stats[b.id].runs : 0.5;
-		return rb - ra;
+		let ka = key(a), kb = key(b);
+		for (let i = 0; i < 3; i++)
+			if (ka[i] != kb[i])
+				return kb[i] > ka[i] ? 1 : -1;
+		return 0;
 	});
 }
 
@@ -243,6 +249,13 @@ function baseline_groups(groups, cache) {
 	return filter(groups, g => length(g.targets));
 }
 
+// Сообщение хода и итога: text — для старых окон, message_msg — ключ общего словаря и сырые параметры (router-api.md §9, 2026-10-20).
+function say(p, key, text, params) {
+	p.message = text;
+	p.message_msg = { key, params: params ?? {}, text };
+	return p;
+}
+
 // Последняя проверка стратегии для списка стратегий (router-api.md §5.1 strategies.items[].last): что не открылось — названиями групп.
 const GROUP_TITLE = { youtube: 'YouTube', discord: 'Discord', user: 'Свои адреса', control: 'Обычные сайты' };
 
@@ -276,10 +289,13 @@ function finish(p, rows, groups, s, ts_was, restore) {
 		}
 		p.best = best.id;
 		p.backups = backups;
-		p.message = e ? `Не удалось включить ${best.id}: ${e}` : `Включена ${best.title}`;
+		if (e)
+			say(p, 'web.msg.apply_failed', `Не удалось включить ${best.id}: ${e}`, { name: best.title ?? best.id, error: e });
+		else
+			say(p, 'web.select.result_applied', `Включена ${best.title}`, { name: best.title ?? best.id });
 	} else {
 		restore();
-		p.message = 'Рабочей стратегии не найдено';
+		say(p, 'select.result.none', 'Рабочей стратегии не найдено');
 	}
 	p.running = false;
 	p.finished_at = time();
@@ -289,7 +305,35 @@ function finish(p, rows, groups, s, ts_was, restore) {
 	return p;
 }
 
+// Итог проверки выбранных стратегий (select_run с ids): статистика, без включения; всё — как было до проверки.
+function finish_ids(p, rows, groups, ts_was, restore) {
+	let stats = st.read_json(`${st.P.etc}/stats.json`, {});
+	for (let r in rows) {
+		let x = stats[r.id] ??= { runs: 0, passed: 0 };
+		x.runs++;
+		if (r.perfect) x.passed++;
+		x.last = last_of(!!r.perfect, map(filter(r.verdicts ?? [], v => !v.ok), v => v.group));
+	}
+	st.write_atomic(`${st.P.etc}/stats.json`, sprintf('%J\n', stats));
+	restore();
+	let ok = filter(rows, r => r.perfect);
+	p.best = length(ok) ? ok[0].id : null;
+	p.applied = false;
+	p.backups = [];
+	if (length(rows) == 1)
+		say(p, rows[0].perfect ? 'web.msg.one_ok' : 'web.msg.one_partial', rows[0].perfect ? `${rows[0].title}: всё открывается` : `${rows[0].title}: открывается не всё`,
+			{ name: rows[0].title, ok: rows[0].groups_ok, total: rows[0].groups_total });
+	p.running = false;
+	p.finished_at = time();
+	progress(p);
+	st.write_status_json();
+	return p;
+}
+
 const SEARCH_REFINE = 30, SEARCH_CONTROL_EVERY = 10;
+// Предел глубокого поиска — «до 15 мин», как на ПК (матрица ПК×роутер п. 25): перебор приёмов — до 13 мин, остальное —
+// полная проверка собранных. Живой замер у владельца — 10,4 мин (2026-10-20).
+const SEARCH_MAX_S = 13 * 60;
 const SEARCH_LIMITED = 'Провайдер, похоже, временно ограничил соединения — продолжите поиск позже';
 
 function same_roles(a, b) {
@@ -448,6 +492,10 @@ function deep_search(p, groups, s, ts_was, cache) {
 				state.stop = 'cancel';
 				return null;
 			}
+			if (time() - state.t0 > SEARCH_MAX_S) {
+				state.stop = 'time';
+				return null;
+			}
 			let strat = { id: 'search', title: 'поиск', roles: { ...base.roles, [role]: desync } };
 			if (cat.validate(strat, r_all))
 				return null;
@@ -585,15 +633,20 @@ function deep_search(p, groups, s, ts_was, cache) {
 	return { generated, stop: state.stop, base };
 }
 
-// Подбор. args: { groups, mode: full|quick, depth: main|deep, started_by }
+// Подбор. args: { groups, mode: full|quick, depth: main|deep, ids?: [id], started_by }
+// ids — проверить только эти стратегии (как «Проверить только её» на ПК): без автоприменения, прежняя стратегия и вкл/выкл
+// возвращаются, запасные не трогаются; best — проверенная, если открыла всё.
 function select_run(args) {
 	let s = st.settings();
 	let prev = { enabled: s.enabled, strategy: s.strategy };
 	let groups = load_groups(args.groups, s.mode, true);
 	let ts_was = ts_get();
-	let deep = args.depth == 'deep';
+	let ids = type(args.ids) == 'array' && length(args.ids) ? args.ids : null;
+	let deep = args.depth == 'deep' && !ids;
 	let p = { running: true, started_by: args.started_by ?? 'app', depth: deep ? 'deep' : 'main', index: 0, total: 0, eta_s: null,
-		message: 'Проверка без оптимизации', rows: [], finished_at: null, cancelled: false, best: null, applied: false, backups: [] };
+		groups: map(groups, g => g.id), ids, rows: [], finished_at: null, cancelled: false, best: null, applied: false, backups: [] };
+	p.groups = filter(p.groups, g => g != 'control');
+	say(p, 'web.msg.baseline', 'Проверка без оптимизации');
 	progress(p);
 	let cache = {};
 	let restore = () => {
@@ -605,7 +658,8 @@ function select_run(args) {
 	};
 	let cancelled = () => {
 		restore();
-		p = { ...p, running: false, cancelled: true, applied: false, finished_at: time(), message: deep ? 'Поиск остановлен' : 'Подбор остановлен' };
+		p = { ...p, running: false, cancelled: true, applied: false, finished_at: time() };
+		say(p, deep ? 'web.msg.search_stopped' : 'web.msg.select_stopped', deep ? 'Поиск остановлен' : 'Подбор остановлен');
 		progress(p);
 		return p;
 	};
@@ -614,30 +668,39 @@ function select_run(args) {
 	groups = baseline_groups(groups, cache);
 	if (!length(filter(groups, g => !g.control))) {
 		restore();
-		p = { ...p, running: false, finished_at: time(), message: 'всё открывается и без оптимизации — подбирать нечего' };
+		p = { ...p, running: false, finished_at: time() };
+		say(p, 'select.result.nothing_blocked', 'всё открывается и без оптимизации — подбирать нечего');
 		progress(p);
 		return p;
 	}
 
 	// 2. Список для полной проверки: готовые стратегии или (глубокий поиск) базовая + собранные из найденных приёмов.
-	let list, note = null;
+	let list, note = null, note_key = null;
 	if (deep) {
 		let ds = deep_search(p, groups, s, ts_was, cache);
 		if (ds.stop == 'cancel')
 			return cancelled();
 		if (!length(ds.generated)) {
 			restore();
-			p = { ...p, running: false, finished_at: time(), eta_s: 0,
-				message: ds.stop == 'limited' ? SEARCH_LIMITED : 'Глубокий поиск не нашёл рабочих приёмов — прежнее состояние восстановлено' };
+			p = { ...p, running: false, finished_at: time(), eta_s: 0 };
+			if (ds.stop == 'limited')
+				say(p, 'web.msg.limited', SEARCH_LIMITED);
+			else
+				say(p, 'web.msg.deep_none', 'Глубокий поиск: подходящей стратегии не нашлось. Всё возвращено как было.');
 			progress(p);
 			return p;
 		}
 		if (ds.stop == 'limited')
-			note = SEARCH_LIMITED;
+			note = SEARCH_LIMITED, note_key = 'web.msg.limited';
+		else if (ds.stop == 'time')
+			note = 'Поиск ограничен 15 минутами', note_key = 'web.msg.time_limit';
 		list = [ds.base, ...ds.generated];
 		p.total = p.index + length(list);
+	} else if (ids) {
+		list = filter(map(ids, id => cat.find(st.catalogs(), id)), x => x);
+		p.total = length(list);
 	} else {
-		list = strategy_order();
+		list = strategy_order(prev.enabled ? prev.strategy : null);
 		p.total = length(list);
 	}
 
@@ -648,7 +711,7 @@ function select_run(args) {
 			return cancelled();
 		let strat = list[i];
 		p.index = start + i + 1;
-		p.message = `${strat.title ?? strat.id}`;
+		say(p, 'web.msg.checking', `${strat.title ?? strat.id}`, { name: strat.title ?? strat.id });
 		p.eta_s = i ? int(1.0 * (time() - t0) / i * (length(list) - i)) : (deep ? null : p.eta_s);
 		progress(p);
 		let row = eval_strategy(strat, groups, items, cache, s, ts_was);
@@ -659,6 +722,10 @@ function select_run(args) {
 			break;
 		sleep(300);
 	}
+
+	// Проверка выбранных: статистика — как у подбора, включённое — как было.
+	if (ids)
+		return finish_ids(p, rows, groups, ts_was, restore);
 
 	// 3. Найденное, прошедшее полную проверку, — в свои стратегии роутера (до включения: apply ищет по id).
 	if (deep) {
@@ -675,7 +742,7 @@ function select_run(args) {
 		let mix = mix_from(rows, list, groups);
 		if (mix) {
 			p.index = p.total = p.index + 1;
-			p.message = mix.title;
+			say(p, 'web.msg.checking', mix.title, { name: mix.title });
 			progress(p);
 			let row = { ...eval_strategy(mix, groups, items, cache, s, ts_was), parts: mix.parts };
 			// Как MixBuilder.BeatsSingle: больше доля групп, при равной — больше доля адресов, чем у лучшей одиночной.
@@ -697,7 +764,7 @@ function select_run(args) {
 		resolve_adv(rows);
 	p = finish(p, rows, groups, s, ts_was, restore);
 	if (note) {
-		p.message = `${p.message}. ${note}`;
+		say(p, 'web.msg.with_note', `${p.message}. ${note}`, { message: p.message_msg, note: { key: note_key, text: note } });
 		progress(p);
 	}
 	return p;

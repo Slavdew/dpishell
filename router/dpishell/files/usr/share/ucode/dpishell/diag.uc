@@ -67,6 +67,8 @@ function diag() {
 		// Разгрузку ведёт zapret (после flow_offload_fix): none | software | hardware — обходу не мешает.
 		flowoffload: st.settings().flowoffload,
 		ipv6_wan: ipv6_wan(),
+		// Оптимизация для IPv6 включена (ipv6_set) — «IPv6 у провайдера» не мешает.
+		ipv6: !!st.settings().ipv6,
 		dns: { spoofed: dns?.spoofed ?? null, checked_at: dns?.checked_at ?? null },
 		overlay_free_kb: overlay_free_kb(),
 	};

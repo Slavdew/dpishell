@@ -141,6 +141,35 @@ function doh_timing(list) {
 	return out;
 }
 
+// «Сравнить скорость» (dns_compare, как на ПК): время ответа защищённого DNS каждого варианта, в т. ч. своего.
+// Запросы — параллельно (curl по 4 с), чтобы вызов ubus уложился в свой срок; у варианта с двумя серверами — быстрейший.
+function compare() {
+	let list = filter(presets(), p => length(p.resolvers ?? []));
+	let c = custom();
+	if (c && length(c.resolvers ?? []))
+		push(list, { id: 'custom', resolvers: c.resolvers });
+	let cmds = [];
+	for (let i = 0; i < length(list); i++)
+		for (let r in list[i].resolvers) {
+			let host = pr.host_of(r.doh);
+			let ip = filter(r.bootstrap ?? [], x => match(x, /^[0-9.]+$/))[0];
+			let res = ip ? `--resolve ${q(`${host}:443:${ip}`)}` : '';
+			push(cmds, `( echo "${i} $(curl -sS -o /dev/null --max-time 4 -w '%{http_code} %{time_total}' ${res} -H 'accept: application/dns-message' ${q(`${r.doh}?dns=${PROBE_QUERY}`)} 2>/dev/null)" ) &`);
+		}
+	let out = sh(`${join('\n', cmds)}\nwait`).out;
+	let best = {};
+	for (let line in split(trim(out), '\n')) {
+		let w = split(trim(line), ' ');
+		let i = +w[0];
+		if (w[1] == '200' && list[i]) {
+			let ms = int(+w[2] * 1000);
+			if (best[i] == null || ms < best[i])
+				best[i] = ms;
+		}
+	}
+	return map(list, (p, i) => ({ id: p.id, ms: best[i] ?? null }));
+}
+
 function analyze() {
 	let servers = provider_servers();
 	let rows = [], spoofed = false;
@@ -354,4 +383,4 @@ function watch() {
 	return null;
 }
 
-export { analyze, status, enable, restore, watch, apply, presets, current_id, CUSTOM };
+export { analyze, status, enable, restore, watch, apply, presets, current_id, compare, CUSTOM };
