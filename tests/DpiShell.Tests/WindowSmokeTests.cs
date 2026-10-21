@@ -1028,7 +1028,8 @@ public sealed partial class WindowSmokeTests
                         // «Диагностика» — только этот ПК: карточки роутера (и его отчёт) переехали на вкладку «Роутер».
                         foreach (var text in new[] { L.T("router.diag.title") })   // «Похожие программы» совпадает с блоком проверок ПК — не сверяем
                             if (Find<TextBlock>(tabs, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» осталось на «Диагностике»");
-                        if (Find<Button>(tabs, b => b.Content as string == L.T("router.diag.save_report") && b.IsVisible) is not null) throw new Exception("«Сохранить отчёт роутера» осталось на «Диагностике»");
+                        // «Сохранить отчёт» на «Диагностике» — отчёт этого ПК (diag.report.save); отчёт роутера — на вкладке «Роутер», подпись у них одна.
+                        if (Find<Button>(tabs, b => b.Content as string == L.T("diag.report.save") && b.IsVisible && b.IsEnabled) is null) throw new Exception("На «Диагностике» нет кнопки «Сохранить отчёт»");
                         if (Find<TextBlock>(tabs, t => t.Text == "Похожие программы" && t.IsVisible) is null) throw new Exception("На «Диагностике» нет проверок этого ПК");
                     }
                     if (page == Pages.Sites)
