@@ -111,7 +111,7 @@ public sealed class LangRouterWindowTests : IDisposable
                     vm.GoTo(page);
                     Pump();
                     var tabs = Find<TabControl>(w)!;
-                    if (page == Pages.Home && (Find<TextBlock>(tabs, t => t.Text == vm.RouterStateText && t.IsVisible) is null || Find<Button>(tabs, b => b.Content as string == L.T("home.router.label") && b.IsVisible) is null)) throw new Exception("На главной нет строки роутера");
+                    if (page == Pages.Home && (Find<TextBlock>(tabs, t => t.Inlines.OfType<System.Windows.Documents.Run>().Any(r => r.Text == vm.RouterStateText) && t.IsVisible) is null || Find<Button>(tabs, b => b.Content as string == L.T("home.router.label") && b.IsVisible) is null)) throw new Exception("На главной нет строки роутера");
                     if (page == Pages.Router)
                     {
                         if (Find<TextBlock>(tabs, t => t.Text == L.T("router.diag.title") && t.IsVisible) is null) throw new Exception("Нет «Роутер: что мешает»");

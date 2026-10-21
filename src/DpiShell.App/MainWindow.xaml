@@ -107,16 +107,17 @@
 
                                     </Grid>
                                     <!-- Две строки на всю ширину — от левого края круглого значка; стратегии — справа одной колонкой друг под другом. -->
-                                    <Grid Margin="20,16,20,0">
+                                    <Grid Margin="20,16,20,14">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="18" />
-                                            <ColumnDefinition Width="100" />
-                                            <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="80" />
                                             <ColumnDefinition Width="200" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
@@ -132,15 +133,11 @@
                                             </Ellipse.Style>
                                         </Ellipse>
                                         <TextBlock Grid.Column="1" Text="{l:T home.pc.label}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0" TextWrapping="NoWrap" />
-                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                                            <TextBlock Text="{Binding PcStateText}" Style="{StaticResource Hint}" VerticalAlignment="Center" TextWrapping="Wrap" />
-                                            <Button Style="{StaticResource BadgeButton}" Command="{Binding TogglePcPanelCmd}" ToolTip="{Binding PcHealthTip}"
-                                                    AutomationProperties.Name="{Binding PcHealthTip}">
-                                                <ContentControl Content="{Binding PcHealth}" ContentTemplate="{StaticResource HealthIcon}" Focusable="False" />
-                                            </Button>
-                                        </StackPanel>
-                                        <TextBlock Grid.Column="3" Text="{l:T home.strategy.label}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,8,0" TextWrapping="NoWrap" />
-                                        <Border Grid.Column="4" Background="{DynamicResource InputBack}" BorderBrush="{DynamicResource InputLine}" BorderThickness="1" CornerRadius="6" Padding="8,5" Margin="0,3">
+                                        <!-- Состояние переносится, значок — сразу за текстом (в строке текста). -->
+                                        <TextBlock Grid.Column="2" Style="{StaticResource Hint}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0"><Run Text="{Binding PcStateText, Mode=OneWay}" /><InlineUIContainer BaselineAlignment="Center"><Button Style="{StaticResource BadgeButton}" Command="{Binding TogglePcPanelCmd}" ToolTip="{Binding PcHealthTip}"
+                                                    AutomationProperties.Name="{Binding PcHealthTip}"><ContentControl Content="{Binding PcHealth}" ContentTemplate="{StaticResource HealthIcon}" Focusable="False" /></Button></InlineUIContainer></TextBlock>
+                                        <TextBlock Grid.Column="3" Text="{l:T home.strategy.label}" Style="{StaticResource Hint}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" TextWrapping="NoWrap" />
+                                        <Border Grid.Column="4" Background="{DynamicResource InputBack}" BorderBrush="{DynamicResource InputLine}" BorderThickness="1" CornerRadius="6" Padding="8,5" Margin="0,3" VerticalAlignment="Center">
                                             <TextBox Text="{Binding PcStrategyText, Mode=OneWay}" Style="{StaticResource SelectableText}" FontFamily="Consolas" TextWrapping="NoWrap"
                                                      ToolTip="{Binding PcStrategyText}" AutomationProperties.Name="{l:T home.strategy.pc_aria}" />
                                         </Border>
@@ -163,18 +160,14 @@
                                         <Button Grid.Row="1" Grid.Column="1" Content="{l:T home.router.label}" Style="{StaticResource LinkButton}" Command="{Binding GoRouterCmd}" FontSize="14" FontWeight="SemiBold"
                                                 Margin="-4,0,6,0" HorizontalAlignment="Left" VerticalAlignment="Center" ToolTip="{l:T home.router.details.aria}" AutomationProperties.Name="{l:T home.router.details.aria}"
                                                 Visibility="{Binding ShowRouterRow, Converter={StaticResource Vis}}" />
-                                        <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0" Visibility="{Binding ShowRouterRow, Converter={StaticResource Vis}}">
-                                            <TextBlock Text="{Binding RouterStateText}" Style="{StaticResource Hint}" VerticalAlignment="Center" TextWrapping="Wrap" />
-                                            <Button Style="{StaticResource BadgeButton}" Command="{Binding ToggleRouterPanelCmd}" ToolTip="{Binding RouterHealthTip}"
-                                                    AutomationProperties.Name="{Binding RouterHealthTip}" Visibility="{Binding ShowRouterHealth, Converter={StaticResource Vis}}">
-                                                <ContentControl Content="{Binding RouterHealth}" ContentTemplate="{StaticResource HealthIcon}" Focusable="False" />
-                                            </Button>
-                                        </StackPanel>
-                                        <TextBlock Grid.Row="1" Grid.Column="3" Text="{l:T home.strategy.label}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,8,0" TextWrapping="NoWrap"
+                                        <TextBlock Grid.Row="1" Grid.Column="2" Style="{StaticResource Hint}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0"
+                                                   Visibility="{Binding ShowRouterRow, Converter={StaticResource Vis}}"><Run Text="{Binding RouterStateText, Mode=OneWay}" /><InlineUIContainer BaselineAlignment="Center"><Button Style="{StaticResource BadgeButton}" Command="{Binding ToggleRouterPanelCmd}" ToolTip="{Binding RouterHealthTip}"
+                                                    AutomationProperties.Name="{Binding RouterHealthTip}" Visibility="{Binding ShowRouterHealth, Converter={StaticResource Vis}}"><ContentControl Content="{Binding RouterHealth}" ContentTemplate="{StaticResource HealthIcon}" Focusable="False" /></Button></InlineUIContainer></TextBlock>
+                                        <TextBlock Grid.Row="1" Grid.Column="3" Text="{l:T home.strategy.label}" Style="{StaticResource Hint}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" TextWrapping="NoWrap"
                                                    Visibility="{Binding ShowRouterStrategy, Converter={StaticResource Vis}}" />
-                                        <Button Grid.Row="1" Grid.Column="4" Click="RouterStrategy_Click" IsEnabled="{Binding Router.CanAct}" Padding="8,5" Margin="0,3" HorizontalContentAlignment="Stretch"
+                                        <Button Grid.Row="1" Grid.Column="4" Click="RouterStrategy_Click" IsEnabled="{Binding Router.CanAct}" Padding="8,5" Margin="0,3" VerticalAlignment="Center" HorizontalContentAlignment="Stretch"
                                                 ToolTip="{l:T router.strategy_tip}" AutomationProperties.Name="{l:T router.strategy_tip}" Visibility="{Binding ShowRouterStrategy, Converter={StaticResource Vis}}">
-                                            <DockPanel>
+                                            <DockPanel Width="182">
                                                 <Path DockPanel.Dock="Right" Data="{StaticResource HomeIcon.ChevronDown}" Fill="{DynamicResource Muted}" Width="12" Height="12" Stretch="Uniform" Margin="6,0,0,0" />
                                                 <TextBlock Text="{Binding RouterStrategyText}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding RouterStrategyText}" />
                                             </DockPanel>
@@ -184,35 +177,35 @@
                                                 Visibility="{Binding ShowRouterStrategy, Converter={StaticResource Vis}}">
                                             <Path Data="{StaticResource HomeIcon.Copy}" Fill="{DynamicResource Text}" Width="16" Height="16" Stretch="Uniform" />
                                         </Button>
+                                        <!-- Под строкой роутера, от колонки состояния: фраза о выключении без человека и действия роутера (охват только колонок без Auto — без цикла раскладки у переносимого текста). -->
+                                        <StackPanel Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="3">
+                                            <!-- Выключение без человека (сторож, кнопка, откат пробы) — фразой под строкой роутера. -->
+                                            <TextBlock Text="{Binding Router.OffText}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                                       Visibility="{Binding Router.HasOff, Converter={StaticResource Vis}}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource Danger}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Router.OffAlert}" Value="False"><Setter Property="Foreground" Value="{DynamicResource Text}" /></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <!-- Действия роутера — тише кнопки ПК. -->
+                                            <WrapPanel Margin="0,8,0,0" Visibility="{Binding ShowRouterRow, Converter={StaticResource Vis}}">
+                                                <Button Content="{Binding Router.ToggleText}" Command="{Binding Router.ToggleCmd}" Style="{StaticResource Small}" ToolTip="{Binding Router.MethodsTip}"
+                                                        ToolTipService.ShowOnDisabled="True" Visibility="{Binding ShowRouterToggle, Converter={StaticResource Vis}}" />
+                                                <Button Content="{Binding Router.ReEnableText}" Command="{Binding Router.ReEnableCmd}" Style="{StaticResource Small}"
+                                                        Visibility="{Binding ShowRouterReEnable, Converter={StaticResource Vis}}" />
+                                                <Button Content="{l:T router.check}" Command="{Binding Router.CheckCmd}" Style="{StaticResource Small}" ToolTip="{Binding Router.MethodsTip}"
+                                                        ToolTipService.ShowOnDisabled="True" Visibility="{Binding ShowRouterCheck, Converter={StaticResource Vis}}" />
+                                                <Button Content="{l:T router.select}" Command="{Binding Router.GoSelectCmd}" Style="{StaticResource Small}" ToolTip="{Binding Router.MethodsTip}"
+                                                        ToolTipService.ShowOnDisabled="True" Visibility="{Binding ShowRouterSelect, Converter={StaticResource Vis}}" />
+                                                <Button Content="{l:T router.login}" Command="{Binding Router.LoginCmd}" Style="{StaticResource Small}"
+                                                        Visibility="{Binding ShowRouterLogin, Converter={StaticResource Vis}}" />
+                                            </WrapPanel>
+                                        </StackPanel>
                                     </Grid>
-                                    <!-- Под строкой роутера, от колонки состояния: фраза о выключении без человека и действия роутера (вне сетки — без цикла раскладки у переносимого текста). -->
-                                    <StackPanel Margin="138,0,20,14">
-                                        <!-- Выключение без человека (сторож, кнопка, откат пробы) — фразой под строкой роутера. -->
-                                        <TextBlock Text="{Binding Router.OffText}" TextWrapping="Wrap" Margin="0,4,0,0"
-                                                   Visibility="{Binding Router.HasOff, Converter={StaticResource Vis}}">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="{DynamicResource Danger}" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Router.OffAlert}" Value="False"><Setter Property="Foreground" Value="{DynamicResource Text}" /></DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <!-- Действия роутера — тише кнопки ПК. -->
-                                        <WrapPanel Margin="0,8,0,0" Visibility="{Binding ShowRouterRow, Converter={StaticResource Vis}}">
-                                            <Button Content="{Binding Router.ToggleText}" Command="{Binding Router.ToggleCmd}" Style="{StaticResource Small}" ToolTip="{Binding Router.MethodsTip}"
-                                                    ToolTipService.ShowOnDisabled="True" Visibility="{Binding ShowRouterToggle, Converter={StaticResource Vis}}" />
-                                            <Button Content="{Binding Router.ReEnableText}" Command="{Binding Router.ReEnableCmd}" Style="{StaticResource Small}"
-                                                    Visibility="{Binding ShowRouterReEnable, Converter={StaticResource Vis}}" />
-                                            <Button Content="{l:T router.check}" Command="{Binding Router.CheckCmd}" Style="{StaticResource Small}" ToolTip="{Binding Router.MethodsTip}"
-                                                    ToolTipService.ShowOnDisabled="True" Visibility="{Binding ShowRouterCheck, Converter={StaticResource Vis}}" />
-                                            <Button Content="{l:T router.select}" Command="{Binding Router.GoSelectCmd}" Style="{StaticResource Small}" ToolTip="{Binding Router.MethodsTip}"
-                                                    ToolTipService.ShowOnDisabled="True" Visibility="{Binding ShowRouterSelect, Converter={StaticResource Vis}}" />
-                                            <Button Content="{l:T router.login}" Command="{Binding Router.LoginCmd}" Style="{StaticResource Small}"
-                                                    Visibility="{Binding ShowRouterLogin, Converter={StaticResource Vis}}" />
-                                        </WrapPanel>
-                                    </StackPanel>
 
                                     <!-- Второстепенное — внизу карточки: «Проверить сейчас», ссылки, «Сайт не открывается?» → «Проверить сайт». -->
                                     <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="20,10,20,12">

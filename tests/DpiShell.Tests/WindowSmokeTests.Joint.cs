@@ -78,8 +78,8 @@ public sealed partial class WindowSmokeTests
                 // Главная: в строке «Этот ПК» — что он ведёт, в строке роутера — YouTube и Discord.
                 vm.GoTo(Pages.Home);
                 Pump();
-                if (!Visible(t => t.Text == L.T("home.pc.state.on_joint"))) throw new Exception("На главной нет фразы о совместной работе");
-                if (!Visible(t => t.Text.Contains(L.T("home.router.state.joint")) && t.Text == vm.RouterStateText)) throw new Exception("В строке роутера нет «YouTube и Discord»");
+                if (!Visible(t => t.Inlines.OfType<System.Windows.Documents.Run>().Any(r => r.Text == L.T("home.pc.state.on_joint")))) throw new Exception("На главной нет фразы о совместной работе");
+                if (!Visible(t => vm.RouterStateText.Contains(L.T("home.router.state.joint")) && t.Inlines.OfType<System.Windows.Documents.Run>().Any(r => r.Text == vm.RouterStateText))) throw new Exception("В строке роутера нет «YouTube и Discord»");
                 PumpUntil(() => vm.HasCheck && !vm.Checking && vm.CheckSummary.StartsWith("Открывается"), "после включения связкой проверка сайтов не пошла сама");
                 Pump();
                 if (!Visible(t => t.Text.StartsWith("Открывается ") && t.Text.Contains(" из "))) throw new Exception("В состоянии «Работает» нет строки «Открывается N из M»");

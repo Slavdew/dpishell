@@ -687,6 +687,26 @@ public sealed partial class WindowSmokeTests
                             throw new Exception("Подсказка про сохранённый пароль — а сохранённого нет");
                         if (snapDir is not null) Snap(login, Path.Combine(snapDir, $"{theme}-router-login.png"));
                         login.Close();
+                        // Вопрос «Оптимизация уже работает на роутере» с пояснениями под действиями; «Работать вместе» недоступна — подсказка вместо пояснения.
+                        foreach (var nothing in new[] { false, true })
+                        {
+                            var ask = ChoiceDialog.Create(new(L.T("router.both.title"), L.T("router.both_choice.text"),
+                            [
+                                new(L.T("router.choice.joint"), L.T("router.choice.joint.detail"), "HomeIcon.Router", Enabled: !nothing, DisabledHint: L.T("router.choice.joint.nothing")),
+                                new(L.T("router.choice.select_router"), L.T("router.choice.select_router.detail"), "HomeIcon.Wand"),
+                                new(L.T("router.choice.only_pc"), L.T("router.choice.only_pc.detail"), "HomeIcon.Home"),
+                            ], L.T("router.both.footer"), "HomeIcon.Router"), _ => { });
+                            ask.WindowStartupLocation = WindowStartupLocation.Manual;
+                            ask.Left = ask.Top = -20000;
+                            ask.ShowActivated = false;
+                            ask.Show();
+                            Pump();
+                            if (Find<Button>(ask, b => b.IsCancel) is null || FindAll<Button>(ask, b => b.Style == (Style)w.FindResource("ChoiceCard")).Count() != 3)
+                                throw new Exception("В вопросе о роутере не три действия карточками и «Отмена»");
+                            if (!VisibleText(ask, t => t.Text == (nothing ? L.T("router.choice.joint.nothing") : L.T("router.choice.joint.detail")))) throw new Exception("Нет пояснения у «Работать вместе»");
+                            if (snapDir is not null) Snap(ask, Path.Combine(snapDir, $"{theme}-router-choice{(nothing ? "-nothing" : "")}.png"));
+                            ask.Close();
+                        }
                     }
                     if (snapDir is null) continue;
                     SetProp(vm, "IsLoading", false);
@@ -997,7 +1017,7 @@ public sealed partial class WindowSmokeTests
                     if (page == Pages.Home)
                     {
                         // Роутер — строкой со ссылкой на вкладку, стратегией (выбор) и своими кнопками; обход делает он — кнопка ПК без выделения.
-                        if (Find<TextBlock>(tabs, t => t.Text == vm.RouterStateText && t.Text.StartsWith(L.T("home.router.state.on")) && t.IsVisible) is null) throw new Exception("На главной нет строки роутера");
+                        if (Find<TextBlock>(tabs, t => t.Inlines.OfType<System.Windows.Documents.Run>().Any(r => r.Text == vm.RouterStateText) && vm.RouterStateText.StartsWith(L.T("home.router.state.on")) && t.IsVisible) is null) throw new Exception("На главной нет строки роутера");
                         if (Find<Button>(tabs, b => b.Content as string == L.T("home.router.label") && b.IsVisible) is null) throw new Exception("У строки роутера нет ссылки на вкладку");
                         if (Find<Button>(tabs, b => b.Content as string == L.T("router.toggle.off") && b.IsVisible) is null) throw new Exception("Под строкой роутера нет «Выключить на роутере»");
                         if (Find<TextBlock>(tabs, t => t.Text == vm.RouterStrategyText && t.IsVisible) is null) throw new Exception("Нет выбора стратегии роутера");

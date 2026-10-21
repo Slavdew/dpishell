@@ -153,7 +153,7 @@ public sealed partial class MainViewModel
                 ? new(Health.Error, L.T("router.diag.conflicts"), L.T("home.pc.conflicts", new { names = ConflictNames }), L.T("home.stop"), StopConflictsCmd, Shield: true,
                     Short: L.T("home.conflict.warn", new { names = ConflictNames }))
                 : new(Health.Ok, L.T("router.diag.conflicts"), L.T("home.pc.none")));
-            list.Add(HasVpn ? new(Health.Warn, L.T("home.pc.vpn.label"), L.T("home.pc.vpn.on", new { names = _vpnNames }), L.T("home.vpn.dismiss"), DismissVpnCmd)
+            list.Add(HasVpn ? new(Health.Warn, L.T("home.pc.vpn.label"), (_vpnNames.Length > 0 ? L.T("home.pc.vpn.on", new { names = _vpnNames }) : VpnWarning), L.T("home.vpn.dismiss"), DismissVpnCmd)
                 : _vpnNames.Length > 0 ? new(Health.Ok, L.T("home.pc.vpn.label"), L.T("home.pc.vpn.known", new { names = _vpnNames }))
                 : new(Health.Ok, L.T("home.pc.vpn.label"), L.T("home.pc.vpn.off")));
             if (Hosts.ForeignHosts is { } foreign)
@@ -161,7 +161,7 @@ public sealed partial class MainViewModel
                     ? new(Health.Warn, L.T("home.pc.foreign.label"), string.Join(", ", foreign), L.T("home.pc.open_hosts"), GoHostsCmd)
                     : new(Health.Ok, L.T("home.pc.foreign.label"), L.T("home.pc.none")));
             if (Updates.DataAvailable)
-                list.Add(new(Health.Warn, L.T("home.pc.lists.label"), Updates.AvailableText, L.T("home.pc.lists.go"), GoAboutCmd));
+                list.Add(new(Health.Warn, L.T("home.pc.lists.label"), Lower(Updates.AvailableText), L.T("home.pc.lists.go"), GoAboutCmd));
             return list;
         }
     }
