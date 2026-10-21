@@ -1,4 +1,0 @@
-<?xml version="1.0"?>
-<TestSequence>
-  <Test Name="DpiShell.Tests.TransferWindowTests.Check_dns_setting_reaches_shell_helper_and_dns_summary" DisplayName="DpiShell.Tests.TransferWindowTests.Check_dns_setting_reaches_shell_helper_and_dns_summary" Source="C:\Dev\zapret-automation\.claude\worktrees\agent-a5dac603c617539d5\tests\DpiShell.Tests\bin\Debug\net10.0-windows\DpiShell.Tests.dll" Completed="False" />
-</TestSequence>

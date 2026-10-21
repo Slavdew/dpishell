@@ -46,9 +46,9 @@
   "home.direct.empty": "Enter a site address, e.g. bank.example.",
   "home.direct.router_failed": "Failed on the router: sign in on the “Router” tab and retry.",
   "home.direct.router_failed_pc": "{site}: opens without optimization on the PC, failed on the router — sign in to the router and retry.",
-  "home.direct.done_pc": "{site} now opens without optimization (on the PC). To undo, use the “Sites” tab.",
-  "home.direct.done_router": "{site} now opens without optimization (on the router). To undo, use the “Sites” tab.",
-  "home.direct.done_both": "{site} now opens without optimization (on the PC and on the router). To undo, use the “Sites” tab.",
+  "home.direct.done_pc": "{site} added to “Exclusions” on the PC: optimization does not touch it. To remove — “Sites” → “Exclusions”.",
+  "home.direct.done_router": "{site} added to “Exclusions” on the router: optimization does not touch it. To remove — “Sites” → “Exclusions”.",
+  "home.direct.done_both": "{site} added to “Exclusions” on the PC and on the router: optimization does not touch it. To remove — “Sites” → “Exclusions”.",
   "home.status.deep": "Deep search…",
   "home.status.select": "Strategy search…",
   "home.status.error": "Error",
@@ -213,6 +213,6 @@
   "home.sitecheck.only_without": "Does not open with optimization, opens without it.",
   "home.sitecheck.fails_with": "Does not open with optimization. Without it — checked after adding to exclusions.",
   "home.sitecheck.closed": "Does not open even without optimization — the cause is elsewhere.",
-  "home.sitecheck.excluded_closed": "{site} is in exclusions but does not open without optimization either — the cause is elsewhere. Remove it from exclusions on the “Sites” tab.",
+  "home.sitecheck.excluded_closed": "{site} is in “Exclusions” but does not open without optimization either — the cause is elsewhere. To remove — “Sites” → “Exclusions”.",
   "home.pc.state.on_status": "on · {status}"
 }
