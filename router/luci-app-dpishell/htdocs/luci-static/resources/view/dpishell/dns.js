@@ -98,7 +98,8 @@ return view.extend({
 		var name = known.indexOf(job.action) >= 0 ? api.t('router.dns.job.' + job.action) : job.action;
 		if (job.running)
 			return E('div', { 'class': 'spinning' }, api.t('router.dns.job.running', { action: name }));
-		var m = api.msg(job.message_msg || job.message);
+		// При успехе роутер пишет в message «Готово» по-русски — на странице вместо него web.done.
+		var m = job.ok === false ? api.msg(job.message_msg || job.message) : null;
 		var text = job.ok === false
 			? (m ? api.t('router.dns.job.failed_msg', { action: name, message: m }) : api.t('router.dns.job.failed', { action: name }))
 			: name + ': ' + (m || api.t('web.done'));
@@ -126,6 +127,8 @@ return view.extend({
 			else
 				kids.push(api.line(api.t('web.dns.not_checked'), 'dps-muted'));
 			(d.servers || []).forEach(function(s) {
+				// Имя от роутера — русское название варианта; на странице — по id, в языке страницы.
+				s = { id: s.id, doh_ok: s.doh_ok, ms: s.ms, name: self.presetTitle(s.id) || s.name };
 				kids.push(api.line(!s.doh_ok ? api.t('router.dns.server_fail', { name: s.name })
 					: s.ms != null ? api.t('router.dns.server_ok_ms', { name: s.name, ms: s.ms }) : api.t('router.dns.server_ok', { name: s.name }),
 					s.doh_ok ? 'dps-muted' : 'dps-error'));
