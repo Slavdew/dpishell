@@ -38,7 +38,7 @@
 	},
 
 	"admin/services/dpishell/dns": {
-		"title": "DNS",
+		"title": "Network",
 		"order": 4,
 		"action": {
 			"type": "view",

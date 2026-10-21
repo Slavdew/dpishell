@@ -32,6 +32,7 @@ return view.extend({
 		var status = data[0].__error ? {} : data[0];
 		var listsMode = status.mode == 'lists';
 		this.excludeArea = null;
+		this.advOn = !data[5].__error && !!data[5].enabled;
 
 		return E('div', {}, [
 			E('h2', {}, api.t('common.nav.sites')),
@@ -47,6 +48,17 @@ return view.extend({
 		]);
 	},
 
+	// Строка исключений «^домен» (только сам домен, без поддоменов) показывается как «домен (только сам сайт)»;
+	// хранение прежнее. Разбор принимает обе подписи (ru/en) и «^» руками.
+	showLine: function(x) {
+		return x.charAt(0) == '^' ? x.slice(1) + ' (' + api.t('web.sites.only_self') + ')' : x;
+	},
+
+	storeLine: function(x) {
+		var m = /^\s*(\S+)\s*\((?:только сам сайт|this site only)\)\s*$/i.exec(x);
+		return m ? '^' + m[1].replace(/^\^/, '') : x;
+	},
+
 	// «Для каких сайтов оптимизация» (перенесено с главной, матрица п. 12): смена режима перезапускает оптимизацию — «Применить».
 	modeCard: function(status) {
 		var msg = E('div', { 'class': 'dps-line' });
@@ -54,6 +66,9 @@ return view.extend({
 		var all = api.radio('dps-mode', 'all', api.t('sites.mode.all'), cur == 'all', changed);
 		var lists = api.radio('dps-mode', 'lists', api.t('sites.mode.lists'), cur == 'lists', changed);
 		var hint = E('div', { 'class': 'dps-muted' });
+		var locked = E('div', { 'class': 'dps-muted' }, api.t('web.sites.mode_locked'));
+		this.modeRadios = [all, lists];
+		this.modeLocked = locked;
 		var apply = E('div', { 'class': 'dps-actions', 'style': 'display:none' }, [
 			api.btn(api.t('web.apply'), function() {
 				var mode = lists.firstChild.checked ? 'lists' : 'all';
@@ -79,13 +94,22 @@ return view.extend({
 		}
 		changed();
 		var busy = status.jobs && (status.jobs.select || status.jobs.core_install);
-		all.firstChild.disabled = lists.firstChild.disabled = !!busy;
+		this.modeBusy = !!busy;
+		this.syncMode(this.advOn);
 		return api.card(api.t('sites.mode.title'), [
 			E('div', {}, [all, lists]),
+			locked,
 			hint,
 			apply,
 			msg
 		]);
+	},
+
+	// Пока включены «Свои настройки для сайтов», режим берётся оттуда («Остальные сайты») — переключатель здесь неактивен.
+	syncMode: function(advOn) {
+		var off = this.modeBusy || advOn;
+		this.modeRadios.forEach(function(r) { r.firstChild.disabled = off; });
+		this.modeLocked.style.display = advOn ? '' : 'none';
 	},
 
 	// Сайт добавлен в исключения из «Сайт не открывается» — дописать в поле ниже, если там нет несохранённых правок.
@@ -105,14 +129,14 @@ return view.extend({
 		if (got.__error)
 			return api.card(title, [api.errorLine(got.__error)]);
 		var ta = E('textarea', { 'class': 'cbi-input-textarea dps-textarea', rows: 8, spellcheck: 'false',
-			input: function() { ta.dataset.dirty = '1'; } }, (got.lines || []).join('\n'));
+			input: function() { ta.dataset.dirty = '1'; } }, (got.lines || []).map(function(x) { return self.showLine(x); }).join('\n'));
 		if (name == 'user-exclude')
 			this.excludeArea = ta;
 		var msg = E('div', { 'class': 'dps-line' });
 		var save = api.btn(api.t('web.save'), function() {
 			msg.className = 'dps-line';
 			msg.textContent = '';
-			var lines = ta.value.split('\n');
+			var lines = ta.value.split('\n').map(function(x) { return self.storeLine(x); });
 			return api.call('lists_set', { name: name, lines: lines }).then(function() {
 				delete ta.dataset.dirty;
 				msg.className = 'dps-line dps-ok';
@@ -149,6 +173,7 @@ return view.extend({
 	},
 
 	readOnlyList: function(title, got, descr) {
+		var self = this;
 		if (got.__error)
 			return api.card(title, [api.errorLine(got.__error)]);
 		var lines = got.lines || [];
@@ -156,7 +181,7 @@ return view.extend({
 			api.line(descr, 'dps-muted'),
 			E('details', {}, [
 				E('summary', { style: 'cursor:pointer' }, api.t('web.sites.show_list', { n: lines.length })),
-				E('textarea', { 'class': 'cbi-input-textarea dps-textarea', rows: 10, readonly: '' }, lines.join('\n'))
+				E('textarea', { 'class': 'cbi-input-textarea dps-textarea', rows: 10, readonly: '' }, lines.map(function(x) { return self.showLine(x); }).join('\n'))
 			])
 		]);
 	},
@@ -174,12 +199,18 @@ return view.extend({
 			var s = items.filter(function(x) { return x.id == id; })[0];
 			return s ? api.stratTitle(s.title) : id;
 		};
-		var on = E('input', { type: 'checkbox' });
+		var on = E('input', { type: 'checkbox', change: function() { showOthers(); } });
+		var othersHead = E('p', { 'style': 'margin:.6em 0 .2em' });
 		var rowsBox = E('div');
 		var msg = E('div', { 'class': 'dps-line' });
 		var others = {};
-		var othersBox = E('div', {}, [['lists', api.t('sites.adv.recommended')], ['all', api.t('sites.mode.all')], ['direct', api.t('sites.adv.others.direct')]]
+		var othersBox = E('div', {}, [['lists', api.t('web.sites.others_lists')], ['all', api.t('sites.mode.all')], ['direct', api.t('sites.adv.others.direct')]]
 			.map(function(o) { others[o[0]] = api.radio('dps-adv-others', o[0], o[1], false); return others[o[0]]; }));
+
+		// «Остальные сайты» действуют только при включённых своих настройках — иначе блок скрыт (режим выбирается в карточке выше).
+		function showOthers() {
+			othersHead.style.display = othersBox.style.display = on.checked ? '' : 'none';
+		}
 
 		function addRow(r) {
 			var row = E('div', { 'class': 'dps-target dps-adv-row' });
@@ -205,13 +236,17 @@ return view.extend({
 				rowsBox.removeChild(rowsBox.firstChild);
 			(g.rows || []).forEach(addRow);
 			Object.keys(others).forEach(function(k) { others[k].firstChild.checked = (g.others || 'lists') == k; });
+			showOthers();
 		}
+		othersHead.appendChild(E('b', {}, api.t('sites.adv.others.title')));
+		othersHead.appendChild(api.info(api.t('web.adv.others_info')));
 		fill(got);
 
 		function reload(text, cls) {
 			return api.call('advanced_get').then(function(g) {
 				got = g;
 				fill(g);
+				self.syncMode(!!g.enabled);
 				msg.className = 'dps-line ' + (cls || '');
 				msg.textContent = text || '';
 			});
@@ -259,8 +294,7 @@ return view.extend({
 				api.info(api.t('web.adv.info'))]),
 			rowsBox,
 			E('div', { 'class': 'dps-actions' }, [add]),
-			E('p', { 'style': 'margin:.6em 0 .2em' }, [E('b', {}, api.t('sites.adv.others.title')),
-				api.info(api.t('web.adv.others_info'))]),
+			othersHead,
 			othersBox,
 			E('div', { 'class': 'dps-actions' }, [save, discard, revert]),
 			msg

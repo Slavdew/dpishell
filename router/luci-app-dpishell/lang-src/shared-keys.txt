@@ -149,7 +149,6 @@ sites.adv.nothing_to_revert
 sites.adv.on
 sites.adv.others.direct
 sites.adv.others.title
-sites.adv.recommended
 sites.adv.revert
 sites.adv.row.remove
 sites.adv.title
@@ -166,7 +165,7 @@ sites.router.target.important
 sites.router.target.remove
 common.nav.home
 common.nav.select
-common.nav.dns
+common.nav.net
 common.nav.diag
 common.nav.about
 router.off.button_at

@@ -80,7 +80,7 @@ function langCandidates() {
 
 // Вкладки DpiShell: заголовки в menu.d — по-английски (LuCI переводит их своим каталогом, нашего там нет), здесь — на языке
 // страниц. Меню тема рисует не сразу — несколько попыток.
-var TAB_KEYS = { main: 'common.nav.home', select: 'common.nav.select', lists: 'common.nav.sites', dns: 'common.nav.dns',
+var TAB_KEYS = { main: 'common.nav.home', select: 'common.nav.select', lists: 'common.nav.sites', dns: 'common.nav.net',
 	diag: 'common.nav.diag', about: 'common.nav.about' };
 
 function translateTabs() {

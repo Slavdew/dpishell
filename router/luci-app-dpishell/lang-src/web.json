@@ -489,8 +489,8 @@
     "No strategy selected — “Turn on” starts a strategy search"
   ],
   "web.main.opt_stats": [
-    "{name} — всё открыто в {passed} из {runs} подборов",
-    "{name} — everything opened in {passed} of {runs} searches"
+    "{name} — открывала всё в {passed} из {runs} подборов",
+    "{name} — opened everything in {passed} of {runs} searches"
   ],
   "web.main.remove_pkg": [
     "Удалите пакет {name} (apk del {name}).",
@@ -729,8 +729,20 @@
     "Open without optimization: sites it breaks. One domain per line, e.g. example.com."
   ],
   "web.sites.exclude_info": [
-    "Строка example.com закрывает и все поддомены (video.example.com). Только сам домен, без поддоменов — строка с ^: ^example.com. Сюда же попадают сайты, добавленные в «Сайт не открывается».",
-    "The line example.com also covers all subdomains (video.example.com). For the domain itself only, without subdomains, start the line with ^: ^example.com. Sites added via “Site does not open” also land here."
+    "Строка example.com закрывает и все поддомены (video.example.com). Только сам домен, без поддоменов — строка «example.com (только сам сайт)». Сюда же попадают сайты, добавленные в «Сайт не открывается».",
+    "The line example.com also covers all subdomains (video.example.com). For the domain itself only, without subdomains, write “example.com (this site only)”. Sites added via “Site does not open” also land here."
+  ],
+  "web.sites.only_self": [
+    "только сам сайт",
+    "this site only"
+  ],
+  "web.sites.others_lists": [
+    "Только из списков (рекомендуется)",
+    "Lists only (recommended)"
+  ],
+  "web.sites.mode_locked": [
+    "Включены «Свои настройки для сайтов» — для остальных сайтов действует выбор «Остальные сайты» в той карточке.",
+    "“Per-site settings” is on — the “Other sites” choice in that card applies to all other sites."
   ],
   "web.sites.general_descr": [
     "Сайты, для которых нужна оптимизация, кроме YouTube и Discord. Домен на строку. Действует в режиме «Только из списков».",

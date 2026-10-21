@@ -44,8 +44,8 @@ return view.extend({
 		};
 
 		var view = E('div', {}, [
-			E('h2', {}, api.t('dns.title')),
-			api.card(null, [
+			E('h2', {}, api.t('common.nav.net')),
+			api.card(api.t('dns.title'), [
 				api.line([api.t('web.dns.intro'), api.info(api.t('web.dns.intro_info'))], 'dps-muted'),
 				this.el.state,
 				this.el.body,
