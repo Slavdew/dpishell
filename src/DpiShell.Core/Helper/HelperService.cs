@@ -79,6 +79,29 @@ public sealed class HelperLog(AppPaths paths)
     readonly object _lock = new();
     string File => Path.Combine(paths.Logs, "helper.log");
 
+    /// <summary>Сколько последних строк журнала отдаёт <c>log_tail</c> («Сохранить отчёт»).</summary>
+    public const int TailLines = 200;
+
+    /// <summary>Последние <paramref name="count"/> строк helper.log (читается и пока помощник в него пишет); нет журнала или не читается — пусто.</summary>
+    public static IReadOnlyList<string> Tail(AppPaths paths, int count)
+    {
+        try
+        {
+            var file = Path.Combine(paths.Logs, "helper.log");
+            if (!System.IO.File.Exists(file)) return [];
+            using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var sr = new StreamReader(fs, System.Text.Encoding.UTF8);
+            var queue = new Queue<string>();
+            while (sr.ReadLine() is { } line)
+            {
+                queue.Enqueue(line);
+                if (queue.Count > count) queue.Dequeue();
+            }
+            return [.. queue];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return []; }
+    }
+
     public void Write(string message)
     {
         lock (_lock)

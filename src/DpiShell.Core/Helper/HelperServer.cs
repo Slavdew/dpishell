@@ -356,6 +356,7 @@ public sealed class HelperServer : IAsyncDisposable
             case "clear_history": return new { removed = await Task.Run(b.ClearHistory, ct) };
             case "read_results": return await Task.Run(b.ReadResults, ct);
             case "details": return await Task.Run(b.Details, ct);
+            case "log_tail": return new { lines = await Task.Run(b.LogTail, ct) };
             case "choose": await Task.Run(() => b.Choose(c.Str("strategy")!), ct); return null;
             case "tcp_timestamps_on": return new { enabled = await Task.Run(b.TcpTimestampsOn, ct) };
             case "data_update": return await Task.Run(() => b.UpdateDataAsync(c.Bool("confirmed"), log, ct), ct);

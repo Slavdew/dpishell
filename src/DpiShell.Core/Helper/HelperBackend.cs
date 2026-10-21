@@ -54,6 +54,8 @@ public interface IHelperBackend : IHelperCatalog
     ResultsSnapshot ReadResults();
     /// <summary>Сведения из закрытой папки для окна без прав: hosts, свои подсети, ядро, найденные стратегии.</summary>
     HelperDetails Details();
+    /// <summary>Последние строки журнала помощника (<see cref="HelperLog.TailLines"/>), старые вперёд; журнала нет — пусто.</summary>
+    IReadOnlyList<string> LogTail();
     /// <summary>Выбрать стратегию без включения обхода (обход включён — окно зовёт enable).</summary>
     void Choose(string strategyId);
     /// <summary>Включить временные метки TCP (их требует стратегия роутера, router-api §6). true — включены.</summary>
@@ -507,6 +509,8 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
     }
 
     public int ClearHistory() => ResultStore.ClearHistory(shell.Paths);
+
+    public IReadOnlyList<string> LogTail() => HelperLog.Tail(shell.Paths, HelperLog.TailLines);
 
     public ResultsSnapshot ReadResults()
     {

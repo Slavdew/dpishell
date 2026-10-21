@@ -45,6 +45,8 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
     public Func<string, CancellationToken, Task<ProxyCheckResult>> CheckProxy { get; set; } = (s, ct) => ProxyChecker.CheckAsync(s, ct: ct);
 
     ProxyOverview? _now;
+    /// <summary>Что прочитано в последний раз (для отчёта на «Диагностике»); null — ещё не читали.</summary>
+    public ProxyOverview? Current => _now;
     ProxyBackup? _machinePrevious;
 
     public ObservableCollection<ProxyRow> Items { get; } = [];

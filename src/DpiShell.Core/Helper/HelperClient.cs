@@ -415,6 +415,9 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
 
     public Task<ResultsSnapshot> ReadResultsAsync(CancellationToken ct = default) => CallAsync<ResultsSnapshot>("read_results", null, null, ct);
     public Task<HelperDetails> DetailsAsync(CancellationToken ct = default) => CallAsync<HelperDetails>("details", null, null, ct);
+    /// <summary>Последние строки журнала помощника (API 1.13).</summary>
+    public async Task<IReadOnlyList<string>> LogTailAsync(CancellationToken ct = default) =>
+        (await CallAsync("log_tail", null, null, ct)).GetProperty("lines").Deserialize<List<string>>() ?? [];
     public Task ChooseAsync(string strategyId, CancellationToken ct = default) => CallAsync("choose", new { strategy = strategyId }, null, ct);
     /// <summary>Включить метки TCP (нужны стратегии роутера); true — включены.</summary>
     public async Task<bool> TcpTimestampsOnAsync(CancellationToken ct = default) =>

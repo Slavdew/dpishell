@@ -152,6 +152,8 @@ public static partial class HelperCommands
         new("read_results", false, false),
         // Окну без прав: сведения из закрытой папки (hosts-статус, свои подсети, ядро, найденные стратегии).
         new("details", false, false),
+        // Хвост журнала помощника (API 1.13): журнал лежит в закрытой папке, окну для «Сохранить отчёт» его отдаёт помощник — последние строки, без аргументов.
+        new("log_tail", false, false),
         // Выбрать стратегию, не включая обход (запомнить у помощника).
         new("choose", true, false, new ArgSpec("strategy", ArgKind.StrategyId, Required: true)),
         // Метки TCP нужны стратегии роутера (router-api §6) — включить на этом ПК, не включая обход.

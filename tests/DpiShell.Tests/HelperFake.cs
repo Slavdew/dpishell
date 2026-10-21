@@ -271,6 +271,10 @@ public sealed class FakeHelperBackend : IHelperBackend
     /// <summary>Что отвечает read_results; по умолчанию — одна стратегия с общей статистикой.</summary>
     public ResultsSnapshot? ResultsValue { get; set; }
 
+    /// <summary>Что отвечает log_tail.</summary>
+    public IReadOnlyList<string> LogTailValue { get; set; } = [];
+    public IReadOnlyList<string> LogTail() { Call("log_tail"); return LogTailValue; }
+
     public ResultsSnapshot ReadResults()
     {
         Call("read_results");

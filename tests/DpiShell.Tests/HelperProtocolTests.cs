@@ -172,7 +172,7 @@ public class HelperProtocolTests
             "rec_start", "rec_status", "rec_stop", "app_profiles", "app_profile_set", "app_profile_remove",
             "changes_list", "changes_undo_all", "changes_undo",
             "proxy_status", "proxy_user_set", "proxy_machine_set", "proxy_machine_restore",
-            "advanced_get", "advanced_set", "joint_get", "joint_set", "settings_export_read", "settings_import",
+            "advanced_get", "advanced_set", "joint_get", "joint_set", "settings_export_read", "settings_import", "log_tail",
         ];
         Assert.Equal(spec.Order(), HelperCommands.Specs.Keys.Order());
         // Команды DNS описаны в helper-protocol §3 (часть старых там записана сокращённо: hosts_check/preview/…).
@@ -190,10 +190,11 @@ public class HelperProtocolTests
         Assert.Contains("`user_exclude_set {lines}`", doc);
         Assert.Contains("1.10 — сайты без оптимизации на ПК", doc);
         Assert.Contains("1.11 — выгрузка и загрузка своих настроек", doc);
+        Assert.Contains("`log_tail`", doc);
         Assert.All(["settings_export_read", "settings_import {plan}"], cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.Contains($"Текущая версия — `{HelperProtocol.Api}`", doc);
         // Только чтение — не занимает «одну операцию за раз».
-        Assert.Equal(["advanced_get", "app_profiles", "cancel", "changes_list", "details", "dns_status", "hosts_preview", "joint_get", "proxy_status", "read_results", "rec_status", "settings_export_read", "status"],
+        Assert.Equal(["advanced_get", "app_profiles", "cancel", "changes_list", "details", "dns_status", "hosts_preview", "joint_get", "log_tail", "proxy_status", "read_results", "rec_status", "settings_export_read", "status"],
             HelperCommands.Specs.Values.Where(s => !s.Exclusive).Select(s => s.Name).Order());
     }
 
