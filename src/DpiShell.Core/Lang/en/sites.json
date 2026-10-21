@@ -21,7 +21,7 @@
  "sites.mode.lists": "Lists only",
  "sites.mode.all": "All sites",
  "sites.mode.all_warn": "May interfere with some sites (for example, banks). Add them to exclusions if so.",
- "sites.router.my.hint": "The router checks them during strategy search, for all devices at home. Up to 50 addresses. The strategy is not considered working without the “important” ones.",
+ "sites.router.my.hint": "The router checks them during strategy search, usually for all devices at home. Up to 50 addresses. The strategy is not considered working without the “important” ones.",
  "sites.router.targets_empty": "No addresses. Add one or copy from the PC.",
  "sites.router.target.name": "Address",
  "sites.router.target.important": "important",

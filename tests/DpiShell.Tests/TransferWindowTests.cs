@@ -67,6 +67,9 @@ public sealed class TransferWindowTests : IDisposable
         Assert.Contains("settings_export_read", f.Backend.Calls);
         Assert.False(t.CanExport == false && t.HasExportPath);
 
+        // По умолчанию — архив .zip (один файл можно отправить в мессенджере); папка — переключением.
+        Assert.True(t.ExportZip);
+        t.ExportZip = false;
         // Папка.
         t.Provider = "Тест-ТВ"; t.Note = "заметка";
         await t.ExportAsync();
@@ -98,6 +101,7 @@ public sealed class TransferWindowTests : IDisposable
         vm.ChooseSaveZip = (_, _, name) => { saved = name; return _t.Sub("x.zip"); };
         var t = Open(f, vm, import: false);
         await t.EnsureExportAsync();
+        t.ExportZip = false;
         t.BrowseExportCmd.Execute(null);
         Assert.StartsWith(_t.Sub("picked"), t.ExportPath);
         t.ExportZip = true;

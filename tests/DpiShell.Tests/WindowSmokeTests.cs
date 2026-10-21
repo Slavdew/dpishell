@@ -1412,7 +1412,7 @@ public sealed partial class WindowSmokeTests
                 if (Find<Button>(d, b => b.Content as string == "Проверить роутер" && b.IsVisible && b.IsEnabled && b.IsDefault && b.Style == (Style)d.FindResource("Primary")) is null)
                     throw new Exception("Роутер не подходит, а «Проверить роутер» не главная");
                 if (FindAll<Button>(d, b => b.Content as string == "Проверить роутер" && b.IsVisible).Count() != 1) throw new Exception("«Проверить роутер» показана дважды");
-                if (Find<TextBlock>(d, t => t.IsVisible && t.Text == L.T("router.install.unavailable")) is null) throw new Exception("Нет пояснения, почему «Установить» недоступна");
+                if (Find<TextBlock>(d, t => t.IsVisible && t.Text == i.UnsuitableText) is null) throw new Exception("Нет пояснения, почему «Установить» недоступна");
                 Shot(d, "install-unsuitable");
                 router.SshConnector = new FakeSshConnector(RouterSetupViewModelTests.Ssh(fake, offline, failed));
                 Task.Run(() => i.CheckAsync("secret")).GetAwaiter().GetResult();

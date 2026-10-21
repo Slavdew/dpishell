@@ -222,7 +222,7 @@ public sealed class HomeViewModelTests : IDisposable
         foreach (var g in vm.Groups) g.IsChecked = g.Id is "youtube" or "discord";
 
         await vm.CheckNowAsync();
-        Assert.Equal("Открывается 2 из 2", vm.CheckSummary);
+        Assert.Equal("Открывается 1 из 2", vm.CheckSummary);   // как в заголовке: в браузере YouTube не откроется
         Assert.Equal("⚠", vm.CheckGroups.Single(g => g.Title == "YouTube").Mark);
         Assert.Equal("✓", vm.CheckGroups.Single(g => g.Title == "Discord").Mark);
         Assert.True(vm.HasBrowserWarning);

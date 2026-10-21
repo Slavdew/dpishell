@@ -425,7 +425,7 @@
   "core.rt.compat.too_old": "DpiShell on the router is too old — update it on the router",
   "core.rt.compat.router_newer_blocked": "DpiShell on the router is newer than the app — update the app. Only status, update and removal work for now",
   "core.rt.compat.outdated": "DpiShell on the router is outdated — update it. Only status, update and removal are available for now",
-  "core.rt.compat.needs_app": "DpiShell on the router needs app {min} or newer. Only status, update and removal work for now.",
+  "core.rt.compat.needs_app": "This DpiShell version on the router needs the PC app {min} or newer — “About & updates”. Only status, update and removal work for now.",
   "core.rt.compat.router_newer": "DpiShell on the router is newer than the app — update the app to get the new features.",
   "core.rt.compat.router_older": "DpiShell on the router is older than the app — some buttons are inactive, update DpiShell on the router",
   "core.rt.ssh.no_result": "The removal left no result{stderr}",

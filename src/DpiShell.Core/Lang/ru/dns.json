@@ -20,7 +20,7 @@
   "dns.row.no_name": "имени нет",
   "dns.no_answer": "нет ответа",
   "dns.recommended.text": "Включить защищённый DNS",
-  "dns.recommended.hint": "{name}, для Ethernet и Wi-Fi. Вернуть — кнопкой в сообщении или на вкладке «DNS».",
+  "dns.recommended.hint": "{name}, для Ethernet и Wi-Fi. Вернуть — кнопкой в сообщении или в «Сети» → «DNS».",
   "dns.preset.auto_detail": "адреса DNS — от роутера или провайдера",
   "dns.preset.detail_secure": "{ips} · защищённый",
   "dns.preset.detail_plain": "{ips} · без шифрования",

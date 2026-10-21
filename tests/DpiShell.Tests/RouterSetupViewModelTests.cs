@@ -425,7 +425,7 @@ public sealed class RouterSetupViewModelTests : IDisposable
         var vm = Make(r, new FakeSshConnector(new FakeSsh()));
         Assert.True(await vm.ConnectAsync("secret"));
         Assert.True(vm.Blocked);
-        Assert.Contains("DpiShell на роутере нужна программа 99.0.0 или новее", vm.CompatText);
+        Assert.Contains("нужна программа на ПК 99.0.0 или новее", vm.CompatText);
         Assert.True(vm.CompatNeedsApp);
         Assert.False(vm.CanAct);
         Assert.False(vm.GoSelectCmd.CanExecute(null));

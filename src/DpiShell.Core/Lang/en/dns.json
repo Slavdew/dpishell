@@ -20,7 +20,7 @@
   "dns.row.no_name": "no such name",
   "dns.no_answer": "no response",
   "dns.recommended.text": "Turn on secure DNS",
-  "dns.recommended.hint": "{name}, for Ethernet and Wi-Fi. To undo — use the button in the message or the “DNS” tab.",
+  "dns.recommended.hint": "{name}, for Ethernet and Wi-Fi. To undo — use the button in the message or “Network” → “DNS”.",
   "dns.preset.auto_detail": "DNS addresses come from the router or ISP",
   "dns.preset.detail_secure": "{ips} · secure",
   "dns.preset.detail_plain": "{ips} · unencrypted",
