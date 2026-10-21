@@ -537,8 +537,8 @@
     "TCP timestamps are off by default in Windows. Without them some sites may not open from the computer. The DpiShell app on the PC turns them on automatically; manually — in an administrator command prompt: netsh interface tcp set global timestamps=enabled. Phones, TVs and set-top boxes usually need no setup."
   ],
   "web.main.ts_need": [
-    "Стратегии нужна настройка Windows на компьютерах",
-    "The strategy needs a Windows setting on computers"
+    "Для этой стратегии на компьютерах нужны метки времени TCP",
+    "This strategy needs TCP timestamps on the computers"
   ],
   "web.main.watchdog_info": [
     "Раз в 5 минут проверяются несколько обычных сайтов. Если с оптимизацией они не открываются, а без неё открываются — оптимизация обычно выключается автоматически, причина видна здесь, и один раз запускается подбор: стратегия найдена — включается, нет — оптимизация выключена до «Включить» или «Подобрать». Сбои на других сайтах сторож может не заметить. Если интернета нет и без оптимизации — это обрыв у провайдера, оптимизация остаётся включённой.",
@@ -626,7 +626,7 @@
   ],
   "web.select.checked_one": [
     "Проверка {time}: {name}",
-    "Check {time}: {name}"
+    "Checked at {time}: {name}"
   ],
   "web.select.done": [
     "Подбор завершён {time}.",
