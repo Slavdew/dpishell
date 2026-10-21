@@ -10,7 +10,7 @@
   "web.strat.own_sites": "my sites",
   "web.strat.rest": "the rest",
   "web.warn.auto_select_failed": "Automatic search found no working strategy — the previous one stays",
-  "web.warn.auto_selected": "Automatic search turned on {name}",
+  "web.warn.auto_selected": "Automatic search applied {name}",
   "web.warn.conflict": "A similar program interferes: {names}",
   "web.warn.dns_fallback": "Secure DNS is unavailable — the ISP’s DNS is temporarily in use",
   "web.warn.dns_spoofed": "The ISP is spoofing site addresses — apps outside the browser may not work",

@@ -858,7 +858,7 @@
   ],
   "web.warn.auto_selected": [
     "Автоподбор включил {name}",
-    "Automatic search turned on {name}"
+    "Automatic search applied {name}"
   ],
   "web.warn.conflict": [
     "Мешает похожая программа: {names}",

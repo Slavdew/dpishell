@@ -67,7 +67,7 @@ public sealed class RelocalizeTests : IDisposable
         // Старый роутер: ключа нет — имя берётся из фразы по коду.
         Assert.Equal("The strategy stopped working — backup alt9 is on", App.RouterTexts.WarningText(new("switched_backup", "Стратегия перестала работать — включена запасная alt9")));
         Assert.Equal("The ISP is spoofing site addresses — apps outside the browser may not work", App.RouterTexts.WarningText(new("dns_spoofed", "Провайдер подменяет адреса сайтов — приложения вне браузера могут не работать")));
-        Assert.Equal("Automatic search turned on general (ALT)", App.RouterTexts.WarningText(new("auto_selected", "Автоподбор включил general (ALT)")));
+        Assert.Equal("Automatic search applied general (ALT)", App.RouterTexts.WarningText(new("auto_selected", "Автоподбор включил general (ALT)")));
         Assert.Equal("Strategy search was interrupted: boom", App.RouterTexts.WarningText(new("select_failed", "Подбор прервался: boom")));
         // Неизвестный код — текст роутера как есть.
         Assert.Equal("Что-то новое", App.RouterTexts.WarningText(new("brand_new", "Что-то новое")));
