@@ -6,8 +6,8 @@
 
 | | Что | Документация | Релизы |
 |---|---|---|---|
-| **Windows-приложение** | окно без прав администратора + служба-помощник; подбор стратегий, IP-списки, игровой режим, «Починить адреса», DNS в один клик, управление роутером | [docs/windows/README.md](docs/windows/README.md) | `windows-vX.Y.Z` (portable-архив) |
-| **Пакет для роутера с OpenWrt** | `dpishell` + `luci-app-dpishell`: оптимизация для всей сети, подбор с самого роутера, страница `/dpi`, DNS для всей сети, API для приложения | [docs/router/README.md](docs/router/README.md) | `router-vX.Y.Z` (пакеты и офлайн-набор) |
+| **Windows-приложение** | окно без прав администратора + служба-помощник; подбор стратегий, проверка сайтов, исключения, игровой режим, вкладка «Сеть» (DNS, прокси, адреса в hosts), управление роутером, окно на русском и английском | [docs/windows/README.md](docs/windows/README.md) | `windows-vX.Y.Z` (portable-архив) |
+| **Пакет для роутера с OpenWrt** | `dpishell` + `luci-app-dpishell`: оптимизация для всей сети, подбор с самого роутера, страница `/dpi` на русском и английском, DNS для всей сети, API для приложения | [docs/router/README.md](docs/router/README.md) | `router-vX.Y.Z` (пакеты и офлайн-набор) |
 
 Они видят друг друга по [договору](docs/dev/router-api.md); каждый работает и сам по себе. Установка самой OpenWrt — под ответственность пользователя.
 
@@ -17,14 +17,16 @@
 
 | | Светлая | Тёмная |
 |---|---|---|
-| **Главная** — включить, что открывается, что мешает | <img src="docs/screenshots/home-light.png" width="420" alt="Главная, светлая тема"> | <img src="docs/screenshots/home-dark.png" width="420" alt="Главная, тёмная тема"> |
+| **Главная** — состояние ПК и роутера, сайты, проверка одного сайта | <img src="docs/screenshots/home-light.png" width="420" alt="Главная, светлая тема"> | <img src="docs/screenshots/home-dark.png" width="420" alt="Главная, тёмная тема"> |
 | **Подбор** — результат проверки стратегий | <img src="docs/screenshots/select-light.png" width="420" alt="Подбор стратегии, светлая тема"> | <img src="docs/screenshots/select-dark.png" width="420" alt="Подбор стратегии, тёмная тема"> |
-| **Роутер** — состояние и действия | <img src="docs/screenshots/router-light.png" width="420" alt="Роутер, светлая тема"> | <img src="docs/screenshots/router-dark.png" width="420" alt="Роутер, тёмная тема"> |
+| **Сайты** — свои сайты, исключения | <img src="docs/screenshots/sites-light.png" width="420" alt="Сайты, светлая тема"> | <img src="docs/screenshots/sites-dark.png" width="420" alt="Сайты, тёмная тема"> |
 | **Игры и программы** — настройка под игру | <img src="docs/screenshots/apps-light.png" width="420" alt="Игры и программы, светлая тема"> | <img src="docs/screenshots/apps-dark.png" width="420" alt="Игры и программы, тёмная тема"> |
-| **DNS** — защищённый DNS этого компьютера | <img src="docs/screenshots/dns-light.png" width="420" alt="DNS, светлая тема"> | <img src="docs/screenshots/dns-dark.png" width="420" alt="DNS, тёмная тема"> |
+| **Сеть** — DNS, прокси, адреса в hosts | <img src="docs/screenshots/net-light.png" width="420" alt="Сеть, светлая тема"> | <img src="docs/screenshots/net-dark.png" width="420" alt="Сеть, тёмная тема"> |
+| **Роутер** — состояние и действия | <img src="docs/screenshots/router-light.png" width="420" alt="Роутер, светлая тема"> | <img src="docs/screenshots/router-dark.png" width="420" alt="Роутер, тёмная тема"> |
+| **Настройки** — язык, свои настройки, оформление | <img src="docs/screenshots/settings-light.png" width="420" alt="Настройки, светлая тема"> | <img src="docs/screenshots/settings-dark.png" width="420" alt="Настройки, тёмная тема"> |
 | **Информация и обновления** — версии, списки | <img src="docs/screenshots/about-light.png" width="420" alt="Информация и обновления, светлая тема"> | <img src="docs/screenshots/about-dark.png" width="420" alt="Информация и обновления, тёмная тема"> |
 
-Остальные вкладки («Сайты», «Починить адреса», «Диагностика», «Настройки») — в [docs/screenshots/](docs/screenshots/).
+Вкладка «Диагностика» — в [docs/screenshots/](docs/screenshots/).
 
 ## Скачать (бета)
 
