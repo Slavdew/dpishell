@@ -63,8 +63,15 @@ public sealed partial class RouterViewModel
         return res;
     }
 
-    /// <summary>Кратко о роутере для строки на главной: «работает · YouTube и Discord · проверено в 10:01».</summary>
-    public string HomeStateText
+    /// <summary>Строка «Роутер» на главной — только состояние; подробности — в <see cref="HomeStateTip"/>.</summary>
+    public string HomeStateText =>
+        Selecting || WdRunning ? L.T("home.router.state.selecting")
+        : NeedLogin ? L.T("home.router.state.login")
+        : RouterEnabled ? L.T("home.router.state.on")
+        : L.T("home.router.state.off");
+
+    /// <summary>Подсказка к строке «Роутер»: «работает · YouTube и Discord · проверено в 10:01».</summary>
+    public string HomeStateTip
     {
         get
         {
@@ -155,6 +162,9 @@ public sealed partial class RouterViewModel
             list.Add(new(Health.Warn, "", w.Text, w.HasFix ? w.Fix : null, w.HasFix ? FixWarningCmd : null, w.Code));
         if (TimestampsNeedAction)
             list.Add(new(Health.Warn, "", TimestampsNeed, L.T("router.enable"), EnableTimestampsCmd, Shield: true));
+        // Обновление — пунктом «!», а не хвостом строки: ставится на вкладке «Информация и обновления», где видны шаги.
+        if (!Updating && _status?.Update is { Available: true, Version: { } uv })
+            list.Add(new(Health.Warn, L.T("home.r.update.label"), L.T("router.update.available", new { version = uv }), L.T("home.r.update.go"), GoUpdatesCmd));
         if (WatchdogAvailable)
             list.Add(_watchdog ? new(Health.Ok, L.T("home.r.watchdog.label"), L.T("home.r.watchdog.on"))
                 : new(Health.Warn, L.T("home.r.watchdog.label"), L.T("home.r.watchdog.off"), L.T("router.enable"), EnableWatchdogCmd));

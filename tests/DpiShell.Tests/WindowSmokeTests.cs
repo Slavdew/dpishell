@@ -1214,7 +1214,8 @@ public sealed partial class WindowSmokeTests
                     router.GetType().GetProperty("UpdateLog")!.SetValue(router, "");
                     vm.GoTo(Pages.Home);
                     Pump();
-                    if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text.Contains("доступно обновление 0.2.1-r1") && t.IsVisible) is null && !router.HomeLine.Contains("предупрежд"))
+                    // Обновление роутера — пунктом «!» в панели роутера на главной.
+                    if (!router.HomeItems([]).Any(i => i.Value.Contains("0.2.1-r1")) && !router.HomeLine.Contains("предупрежд"))
                         throw new Exception("На главной нет «доступно обновление»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-update-home.png"));
                 }

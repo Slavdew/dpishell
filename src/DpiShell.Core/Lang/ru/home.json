@@ -127,7 +127,7 @@
   "home.router.state.login": "нужен вход",
   "home.router.state.on": "работает",
   "home.router.state.joint": "YouTube и Discord",
-  "home.router.state.off": "оптимизация выключена",
+  "home.router.state.off": "выключен",
   "home.health.ok": "Всё в порядке",
   "home.health.none": "Ещё не проверялось",
   "home.health.error": "Ошибка: {text}",
@@ -216,5 +216,7 @@
   "home.sitecheck.fails_with": "С оптимизацией не открывается. Без неё — проверится после добавления в исключения.",
   "home.sitecheck.closed": "Не открывается и без оптимизации — дело не в ней.",
   "home.sitecheck.excluded_closed": "{site} в «Исключениях», но и без оптимизации не открывается — дело не в ней. Убрать — «Сайты» → «Исключения».",
-  "home.pc.state.on_status": "работает · {status}"
+  "home.pc.state.on_status": "работает · {status}",
+  "home.r.update.label": "Обновление",
+  "home.r.update.go": "К обновлению"
 }

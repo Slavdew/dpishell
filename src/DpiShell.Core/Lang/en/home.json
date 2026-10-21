@@ -127,7 +127,7 @@
   "home.router.state.login": "sign-in needed",
   "home.router.state.on": "on",
   "home.router.state.joint": "YouTube and Discord",
-  "home.router.state.off": "optimization is off",
+  "home.router.state.off": "off",
   "home.health.ok": "All good",
   "home.health.none": "Not checked yet",
   "home.health.error": "Error: {text}",
@@ -214,5 +214,7 @@
   "home.sitecheck.fails_with": "Does not open with optimization. Without it — checked after adding to exclusions.",
   "home.sitecheck.closed": "Does not open even without optimization — the cause is elsewhere.",
   "home.sitecheck.excluded_closed": "{site} is in “Exclusions” but does not open without optimization either — the cause is elsewhere. To remove — “Sites” → “Exclusions”.",
-  "home.pc.state.on_status": "on · {status}"
+  "home.pc.state.on_status": "on · {status}",
+  "home.r.update.label": "Update",
+  "home.r.update.go": "Go to update"
 }

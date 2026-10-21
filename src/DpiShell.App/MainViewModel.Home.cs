@@ -78,7 +78,11 @@ public sealed partial class MainViewModel
 
     // ---------- строки «Этот ПК» и «Роутер» ----------
 
+    /// <summary>В строке — только состояние (решение владельца); что ведёт ПК и почему — в подсказке <see cref="PcStateTip"/>.</summary>
     public string PcStateText =>
+        Selecting ? L.T("home.pc.state.selecting") : IsRunning ? L.T("home.pc.state.on") : L.T("home.pc.state.off");
+
+    public string PcStateTip =>
         Selecting ? L.T("home.pc.state.selecting")
         : IsRunning ? (Router.JointOn && Router.Found && !Router.JointIsFallback ? L.T("home.pc.state.on_joint")
             // Совместная работа откатилась (роутер пропал и т. п.) — почему ПК работает сам, тем же местом.
@@ -95,6 +99,7 @@ public sealed partial class MainViewModel
     /// <summary>Строка роутера — только когда DpiShell на роутере найден (и «Показывать роутер» не снят: тогда Found = false).</summary>
     public bool ShowRouterRow => Router.Found;
     public string RouterStateText => Router.HomeStateText;
+    public string RouterStateTip => Router.HomeStateTip;
     public string RouterStrategyText => Router.CurrentStrategyTitle;
     public bool ShowRouterStrategy => Router.Found && Router.Connected;
     public bool ShowRouterToggle => Router.Connected && !Router.CanReEnable && Router.ShowRouterActions;
@@ -122,6 +127,9 @@ public sealed partial class MainViewModel
                 list.Add(new(Health.Error, "", L.T("home.warn.both_on"), L.T("home.stop_pc"), Router.StopPcCmd));
             if (CoreProblemText is { } core)
                 list.Add(new(Health.Error, L.T("home.pc.core.label"), core, L.T("home.pc.core.fix"), GoDiagCmd));
+            // Совместная работа откатилась (роутер пропал и т. п.): ПК работает сам — почему, пунктом «!» (строка показывает только состояние).
+            if (IsRunning && Router.JointIsFallback && Router.HasJointStatus)
+                list.Add(new(Health.Warn, L.T("router.joint.title"), Router.JointStatus));
             // Сайты — те, что ведёт этот ПК (при совместной работе — свои сайты; через роутер — в панели роутера).
             if (IsRunning)
             {
@@ -410,7 +418,7 @@ public sealed partial class MainViewModel
                      (nameof(PcHealth), () => PcHealth), (nameof(PcHealthTip), () => PcHealthTip), (nameof(RouterHealth), () => RouterHealth),
                      (nameof(RouterHealthTip), () => RouterHealthTip), (nameof(ShowRouterHealth), () => ShowRouterHealth), (nameof(PanelTitle), () => PanelTitle),
                      (nameof(TilesMeta), () => TilesMeta), (nameof(HasCheckDetails), () => HasCheckDetails), (nameof(ShowCheckDetails), () => ShowCheckDetails),
-                     (nameof(HeroState), () => HeroState), (nameof(HeroDetail), () => HeroDetail), (nameof(PcStateText), () => PcStateText),
+                     (nameof(HeroState), () => HeroState), (nameof(HeroDetail), () => HeroDetail), (nameof(PcStateText), () => PcStateText), (nameof(PcStateTip), () => PcStateTip), (nameof(RouterStateTip), () => RouterStateTip),
                      (nameof(PcStrategyText), () => PcStrategyText), (nameof(ShowRouterRow), () => ShowRouterRow), (nameof(RouterStateText), () => RouterStateText),
                      (nameof(RouterStrategyText), () => RouterStrategyText), (nameof(ShowRouterStrategy), () => ShowRouterStrategy), (nameof(ShowRouterToggle), () => ShowRouterToggle),
                      (nameof(ShowRouterReEnable), () => ShowRouterReEnable), (nameof(ShowRouterCheck), () => ShowRouterCheck), (nameof(ShowRouterSelect), () => ShowRouterSelect),

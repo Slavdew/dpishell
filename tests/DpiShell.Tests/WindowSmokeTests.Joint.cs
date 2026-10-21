@@ -78,8 +78,9 @@ public sealed partial class WindowSmokeTests
                 // Главная: в строке «Этот ПК» — что он ведёт, в строке роутера — YouTube и Discord.
                 vm.GoTo(Pages.Home);
                 Pump();
-                if (!Visible(t => t.Inlines.OfType<System.Windows.Documents.Run>().Any(r => r.Text == L.T("home.pc.state.on_joint")))) throw new Exception("На главной нет фразы о совместной работе");
-                if (!Visible(t => vm.RouterStateText.Contains(L.T("home.router.state.joint")) && t.Inlines.OfType<System.Windows.Documents.Run>().Any(r => r.Text == vm.RouterStateText))) throw new Exception("В строке роутера нет «YouTube и Discord»");
+                // В строке — только состояние (решение владельца), что ведёт ПК — в подсказке строки.
+                if (vm.PcStateTip != L.T("home.pc.state.on_joint")) throw new Exception("В подсказке строки «Этот ПК» нет фразы о совместной работе");
+                if (!vm.RouterStateTip.Contains(L.T("home.router.state.joint"))) throw new Exception("В подсказке строки роутера нет «YouTube и Discord»");
                 PumpUntil(() => vm.HasCheck && !vm.Checking && vm.CheckSummary.StartsWith("Открывается"), "после включения связкой проверка сайтов не пошла сама");
                 Pump();
                 if (!Visible(t => t.Text.StartsWith("Открывается ") && t.Text.Contains(" из "))) throw new Exception("В состоянии «Работает» нет строки «Открывается N из M»");
@@ -116,7 +117,7 @@ public sealed partial class WindowSmokeTests
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-joint-fallback.png"));
                 vm.GoTo(Pages.Home);
                 Pump();
-                if (!Visible(t => t.Text.Contains("Роутер не найден — этот ПК работает сам"))) throw new Exception("На главной нет фразы отката");
+                if (!vm.PcItems.Any(i => i.Value.Contains("Роутер не найден — этот ПК работает сам"))) throw new Exception("На главной (панель ПК) нет фразы отката");
                 Close(w);
                 Stop(vm, f);
             }
