@@ -45,11 +45,9 @@ public sealed partial class WindowSmokeTests
                     var vm = TestWindow.Model(shell, link, settings);
                     vm.Apps.ListProcesses = () => [new(900, "chrome.exe", "Новая вкладка"), new(2000, "game.exe", "Моя игра")];
                     Fill(vm, shell);
-                    // «Сайты»: формат ввода — на example.com (это поле не размыто), список сохранён.
-                    vm.TargetsText = "example.com\r\nvideo.example.com\r\nchat.example.org\r\nhttps://cdn.example.net/";
-                    vm.SaveTargetsCmd.Execute(null);
-                    for (int i = 0; i < 500 && vm.TargetsDirty; i++) { Pump(); Thread.Sleep(10); }
-                    if (vm.TargetsDirty) throw new Exception("Список сайтов не сохранился: " + vm.TargetsMessage);
+                    // «Сайты»: формат ввода — на example.com (это поле не размыто). Список — сразу в данные помощника, затем окно перечитывает.
+                    shell.SetUserTargets(["example.com", "video.example.com", "chat.example.org", "https://cdn.example.net/"]);
+                    WaitUi((Task)typeof(MainViewModel).GetMethod("FetchAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, [false])!);
                     // Ничего с машины: шлюз и TCP-метки роутера — подмена (иначе читались бы настройки Windows).
                     vm.Router.Gateway = () => "192.168.1.1";
                     vm.Router.PcTimestamps = () => true;
@@ -68,18 +66,12 @@ public sealed partial class WindowSmokeTests
                         Snap(w, Path.Combine(dir, $"{theme}-{name}.png"));
                     }
 
-                    // Главная: «Подробнее» проверки (адреса DNS этого компьютера — размыты), затем список стратегий.
+                    // Главная: список стратегий (новая главная — «Подробнее» проверки на плитке, отдельного снимка не нужно).
                     vm.GoTo(Pages.Home);
-                    Pump();
-                    var more = Find<System.Windows.Controls.Expander>(Find<System.Windows.Controls.TabControl>(w)!, e => e.Header as string == "Подробнее" && e.IsVisible)
-                        ?? throw new Exception("На главной нет «Подробнее» проверки");
-                    more.IsExpanded = true;
-                    Pump();
-                    Snap(w, Path.Combine(dir, $"{theme}-home-details.png"));
-                    more.IsExpanded = false;
                     vm.ShowStrategies = true;
                     Pump();
                     Snap(w, Path.Combine(dir, $"{theme}-home-strategies.png"));
+                    vm.ShowStrategies = false;
 
                     // Роутер подключён: FakeRouter в процессе (loopback), пароль не сохраняется на диск вне временной папки.
                     using var fake = new FakeRouter().As020().AsR8();
@@ -90,6 +82,10 @@ public sealed partial class WindowSmokeTests
                     vm.GoTo(Pages.Router);
                     Pump();
                     Snap(w, Path.Combine(dir, $"{theme}-router.png"));
+                    // Главная с роутером: строки «Этот ПК» и «Роутер».
+                    vm.GoTo(Pages.Home);
+                    Pump();
+                    Snap(w, Path.Combine(dir, $"{theme}-home-router.png"));
 
                     // «Игры и программы»: простой режим «Начать» → «Готово» → «Заработало?» (профиль в списке), затем для опытных — запись со списком.
                     vm.GoTo(Pages.Apps);
