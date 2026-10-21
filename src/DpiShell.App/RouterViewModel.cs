@@ -1306,7 +1306,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     bool _addressNoteOn;
     /// <summary>«Не открылось ни с одной стратегией: … — похоже на блокировку по адресу…»; пусто, когда таких адресов нет. Собирается из учёта адресов при показе.</summary>
     string? _addressNoteFixed;   // готовая строка — только если её поставили извне (тесты)
-    public string AddressNote { get => _addressNoteFixed ?? (_addressNoteOn ? _addressBlock.Note() : ""); private set { _addressNoteFixed = value; Raise(); Raise(nameof(HasAddressNote)); } }
+    public string AddressNote { get => _addressNoteFixed ?? (_addressNoteOn ? Texts.WithNextStep(_addressBlock.Note(), router: true) : ""); private set { _addressNoteFixed = value; Raise(); Raise(nameof(HasAddressNote)); } }
     void SetAddressNote(bool on) { _addressNoteFixed = null; _addressNoteOn = on; Raise(nameof(AddressNote)); Raise(nameof(HasAddressNote)); }
     public bool HasAddressNote => AddressNote.Length > 0;
 
@@ -1604,7 +1604,14 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         {
             SetBest(best, p.Applied);
             var backups = (p.Backups ?? []).Select(StrategyTitle).ToList();
-            ResultText = L.T(p.Applied ? "router.select.result_applied" : HasAddressNote ? "router.select.result_best" : "router.select.result_ok", new { name = StrategyTitle(best) });
+            // Включена сама — «Включена»; иначе «Подходит» только когда открылось всё (при частичном — «Лучшая из проверенных: … — открывается N из M»).
+            var bestRow = Scores.FirstOrDefault(s => s.Id == best);
+            bool perfect = bestRow is null || bestRow.Row.GroupShare >= 0.999;
+            int? gok = bestRow?.Row.GroupsOk, gtotal = bestRow?.Row.GroupsTotal is > 0 ? bestRow.Row.GroupsTotal : _groupsTotal > 0 ? _groupsTotal : null;
+            gok ??= gtotal is { } gt0 && bestRow is not null ? (int)Math.Round(bestRow.Row.GroupShare * gt0) : null;
+            ResultText = p.Applied ? L.T("router.select.result_applied", new { name = StrategyTitle(best) })
+                : !perfect && gok is { } okN && gtotal is { } totN ? L.T("router.select.result_best_partial", new { name = StrategyTitle(best), ok = okN, total = totN })
+                : L.T(HasAddressNote || !perfect ? "router.select.result_best" : "router.select.result_ok", new { name = StrategyTitle(best) });
             ResultHint = backups.Count > 0
                 ? L.T(p.Applied ? "router.select.hint_backups_applied" : "router.select.hint_backups_apply", new { list = string.Join(", ", backups) })
                 : p.Applied ? L.T("router.select.hint_applied") : L.T("router.select.hint_apply");

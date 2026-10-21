@@ -435,7 +435,7 @@ public sealed partial class MainViewModel : Observable
     }
 
     bool _busy;
-    public bool Busy { get => _busy; private set { if (Set(ref _busy, value)) { Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); CommandManager.InvalidateRequerySuggested(); } } }
+    public bool Busy { get => _busy; private set { if (Set(ref _busy, value)) { Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(StopConflictsTip)); CommandManager.InvalidateRequerySuggested(); } } }
 
     string _busyText = "";
     public string BusyText { get => _busyText; private set => Set(ref _busyText, value); }
@@ -512,7 +512,7 @@ public sealed partial class MainViewModel : Observable
     // ---------- загрузка ----------
 
     bool _isLoading = true;
-    public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); CommandManager.InvalidateRequerySuggested(); } } }
+    public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(StopConflictsTip)); CommandManager.InvalidateRequerySuggested(); } } }
 
     bool _loadFailed;
     public bool LoadFailed { get => _loadFailed; private set { if (Set(ref _loadFailed, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); CommandManager.InvalidateRequerySuggested(); } } }
@@ -707,7 +707,7 @@ public sealed partial class MainViewModel : Observable
         Raise(nameof(ShowSiteFix));
         Raise(nameof(IsRunning)); Raise(nameof(ResultApplied));
         Raise(nameof(ToggleText)); Raise(nameof(PcSecondary)); Raise(nameof(PcPrimary));
-        Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); RaiseSitesDirty();
+        Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(StopConflictsTip)); RaiseSitesDirty();
         Router.PcChanged();
         Raise(nameof(StrategyHeader));
         RaiseRunMode();
@@ -1105,7 +1105,7 @@ public sealed partial class MainViewModel : Observable
 
     void DropCheck()
     {
-        if (!Checking && CheckGroups.Count > 0) _checkWas = (CheckGroups.Count(g => g.Ok), CheckGroups.Count);
+        if (!Checking && CheckGroups.Count > 0) _checkWas = (CheckGroups.Count(g => g.Ok && !g.Browser), CheckGroups.Count);
         _checkGen++;
         _checkFor = null;
         _checkVerdicts = null;
@@ -1164,7 +1164,7 @@ public sealed partial class MainViewModel : Observable
             foreach (var v in verdicts) CheckRows.Add(CheckRow.From(v, Names));
             result = verdicts;
             // В тех же единицах, что и отметки рядом (п. 5): группы, а не адреса; адреса — в «Подробнее».
-            CheckSummaryIs(() => L.T("home.check.summary", new { ok = CheckGroups.Count(g => g.Ok), total = CheckGroups.Count }));
+            CheckSummaryIs(() => L.T("home.check.summary", new { ok = CheckGroups.Count(g => g.Ok && !g.Browser), total = CheckGroups.Count }));
             // «Было» — итог до включения: виден, чтобы не гадать, помогло ли.
             var checkedAt = DateTime.Now;
             _checkedTime = checkedAt;
@@ -1293,7 +1293,7 @@ public sealed partial class MainViewModel : Observable
     public bool Full { get => !_quick; set => Quick = !value; }
 
     bool _selecting;
-    public bool Selecting { get => _selecting; private set { if (Set(ref _selecting, value)) { Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); CommandManager.InvalidateRequerySuggested(); } } }
+    public bool Selecting { get => _selecting; private set { if (Set(ref _selecting, value)) { Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(StopConflictsTip)); CommandManager.InvalidateRequerySuggested(); } } }
 
     int _progress, _progressMax = 1;
     public int SelectProgress { get => _progress; private set => Set(ref _progress, value); }
@@ -1385,7 +1385,7 @@ public sealed partial class MainViewModel : Observable
     bool _addressNoteOn;
     /// <summary>«Не открылось ни с одной стратегией: … — похоже на блокировку по адресу…»; пусто, когда таких адресов нет. Собирается из учёта адресов при показе.</summary>
     string? _addressNoteFixed;   // готовая строка — только если её поставили извне (тесты)
-    public string AddressNote { get => _addressNoteFixed ?? (_addressNoteOn ? _addressBlock.Note() : ""); private set { _addressNoteFixed = value; Raise(); Raise(nameof(HasAddressNote)); } }
+    public string AddressNote { get => _addressNoteFixed ?? (_addressNoteOn ? Texts.WithNextStep(_addressBlock.Note(), router: false) : ""); private set { _addressNoteFixed = value; Raise(); Raise(nameof(HasAddressNote)); } }
     void SetAddressNote(bool on) { _addressNoteFixed = null; _addressNoteOn = on; Raise(nameof(AddressNote)); Raise(nameof(HasAddressNote)); }
     public bool HasAddressNote => AddressNote.Length > 0;
 
@@ -1550,6 +1550,9 @@ public sealed partial class MainViewModel : Observable
         return Confirm(L.T("select.confirm.pause"));
     }
 
+    /// <summary>Подсказка серой «Остановить» у похожих программ: почему сейчас нельзя; пусто — кнопка доступна.</summary>
+    public string StopConflictsTip => Busy || IsLoading ? L.T(IsLoading ? "diag.conflicts.stop_loading" : "diag.conflicts.stop_busy") : "";
+
     public ICommand StopConflictsCmd => _stopConflictsCmd ??= RelayCommand.Async(StopConflictsAsync, () => !Busy && !IsLoading && HasConflicts);
     ICommand? _stopConflictsCmd;
 
@@ -1593,8 +1596,9 @@ public sealed partial class MainViewModel : Observable
     }
 
     /// <summary>Заголовок итога подбора: «Подходит» — только когда открылось всё и нет «подбор тут, скорее всего, не поможет»; иначе — «Лучшая из проверенных».</summary>
-    public static string BestTitle(bool perfect, bool addressNote, string strategy) =>
-        L.T(perfect && !addressNote ? "select.best.fits" : "select.best.of_checked", new { name = strategy });
+    public static string BestTitle(bool perfect, bool addressNote, string strategy, int ok = 0, int total = 0) =>
+        !perfect && total > 0 ? L.T("select.best.of_checked_partial", new { name = strategy, ok, total })
+        : L.T(perfect && !addressNote ? "select.best.fits" : "select.best.of_checked", new { name = strategy });
 
     void ShowReport(SelectionReport r)
     {
@@ -1638,7 +1642,7 @@ public sealed partial class MainViewModel : Observable
         }
         SetBest(best.Strategy.Id);
         // «Подходит» — только когда открылось всё и рядом нет «подбор, скорее всего, не поможет»; иначе заголовок не обещает успех (UX-аудит 7, п. 7).
-        ResultText = BestTitle(best.Perfect, HasAddressNote, best.Strategy.Title);
+        ResultText = BestTitle(best.Perfect, HasAddressNote, best.Strategy.Title, best.GroupsPassed, best.GroupsTotal);
         // Подбор дошёл до конца — лучшая сразу ставится в работу (после выхода из Guard, см. AutoApplyAsync).
         if (!r.Cancelled) _autoApplyId = best.Strategy.Id;
         // Подсказка собирается из данных подбора при показе — на языке окна.
@@ -1834,6 +1838,10 @@ public sealed partial class MainViewModel : Observable
     public bool HasNotices => File.Exists(NoticesPath);
     public ICommand OpenRepoCmd => _openRepoCmd ??= new RelayCommand(() => OpenLink(RepoUrl));
     ICommand? _openRepoCmd;
+    public const string IssuesUrl = RepoUrl + "/issues";
+    /// <summary>«Сообщить о проблеме» — страница обращений на GitHub.</summary>
+    public ICommand OpenIssuesCmd => _openIssuesCmd ??= new RelayCommand(() => OpenLink(IssuesUrl));
+    ICommand? _openIssuesCmd;
     public ICommand OpenZapretCmd => _openZapretCmd ??= new RelayCommand(() => OpenLink(ZapretUrl));
     ICommand? _openZapretCmd;
     public ICommand OpenNoticesCmd => _openNoticesCmd ??= new RelayCommand(() => OpenLink(NoticesPath));

@@ -268,7 +268,12 @@ public sealed partial class MainViewModel
                         tiles.Add(new(Names.Title(g.Key), Health.Error,
                             items.Count > 1 && g.Key == "user" && opened > 0 ? L.T("home.tile.some", new { ok = opened, total = items.Count }) : L.T("home.tile.closed"), Join(who)));
                     else if (browser is not null)
-                        tiles.Add(new(Names.Title(g.Key), Health.Warn, L.T("home.tile.browser"), Join(Texts.BrowserReason(browser.Browser!.Reason), who)));
+                        {
+                        // Виноват DNS — исправление тут же, на плитке (та же кнопка, что в панели «Этот ПК»).
+                        bool dns = browser.Browser!.Reason is BrowserPath.DnsReason or BrowserPath.WindowsOnlyReason;
+                        tiles.Add(new(Names.Title(g.Key), Health.Warn, L.T("home.tile.browser"), Join(Texts.BrowserReason(browser.Browser!.Reason), who),
+                            dns ? RecommendedDnsText : null, dns ? FixDnsCmd : null, Shield: dns));
+                    }
                     else
                         tiles.Add(new(Names.Title(g.Key), Health.Ok,
                             items.Count > 1 && g.Key == "user" ? L.T("home.tile.some", new { ok = opened, total = items.Count }) : L.T("home.tile.opens"), Join(time, who)));

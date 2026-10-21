@@ -299,6 +299,10 @@ public sealed record FindingRow(bool Ok, string Title, string Text, string? Go =
 
 public static class Texts
 {
+    /// <summary>К заметке «похоже на блокировку по адресу» — что можно сделать дальше (одной строкой, без обещаний). Пустая заметка остаётся пустой.</summary>
+    public static string WithNextStep(string note, bool router) =>
+        note.Length == 0 ? note : note + " " + L.T(router ? "select.addr.next_router" : "select.addr.next");
+
     public static string Svc(SvcState s) => s switch
     {
         SvcState.NotInstalled => L.T("diag.svc.not_installed"),

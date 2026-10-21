@@ -708,13 +708,32 @@ public sealed class RouterInstallViewModel : Observable
     /// <summary>Шаг сценария из итога (step) → шаг диалога.</summary>
     static int StepOfResult(string step) => step switch { "key" or "feed" => 1, "packages" => 2, "core" => 3, "status" or "done" => 4, _ => 0 };
 
-    static string FailText(RouterInstallResult r) => r.Step switch
+    /// <summary>Что делать после сбоя установки: совет по пути, которым шла установка (через интернет ПК или роутера), и в каком состоянии остался роутер (по шагу сбоя).</summary>
+    string FailText(RouterInstallResult r)
     {
-        "packages" => L.T("router.install.fail_packages"),
-        "core" => L.T("router.install.fail_core"),
-        "key" => L.T("router.install.fail_key"),
-        _ => r.Message,
-    };
+        bool viaPc = _verdict is { NeedsTunnel: true };
+        return r.Step switch
+        {
+            "packages" => L.T(viaPc ? "router.install.fail_packages_pc" : "router.install.fail_packages"),
+            "core" => L.T(viaPc ? "router.install.fail_core_pc" : "router.install.fail_core"),
+            "key" => L.T("router.install.fail_key"),
+            _ => r.Message,
+        };
+    }
+
+    /// <summary>Под «Роутер не подходит»: исправимые причины (чужой пакет) и неисправимые (архитектура, память, версия) — разные слова.</summary>
+    static readonly HashSet<string> FixableBlockers = ["foreign_package"];
+    public string UnsuitableText
+    {
+        get
+        {
+            if (_verdict is not { CanInstall: false } v || v.Blockers.Count == 0) return L.T("router.install.unavailable");
+            int fixable = v.Blockers.Count(b => FixableBlockers.Contains(b.Code));
+            return fixable == v.Blockers.Count ? L.T("router.install.unavailable")
+                : fixable == 0 ? L.T("router.install.unavailable_hard")
+                : L.T("router.install.unavailable_mixed");
+        }
+    }
 
     void Step(int i, int state = RouterInstallStep.Running)
     {
@@ -783,7 +802,7 @@ public sealed class RouterInstallViewModel : Observable
         TunnelNote = v.CanInstall && v.NeedsTunnel ? TunnelText : "";
         Log(VerdictTitle + (VerdictText.Length > 0 ? "\n" + VerdictText : ""));
         Raise(nameof(CanInstall));
-        foreach (var n in new[] { nameof(Unsuitable), nameof(CanTryInstall), nameof(ShowCheckPlain), nameof(ShowCheckPrimary) }) Raise(n);
+        foreach (var n in new[] { nameof(Unsuitable), nameof(UnsuitableText), nameof(CanTryInstall), nameof(ShowCheckPlain), nameof(ShowCheckPrimary) }) Raise(n);
     }
 
     /// <summary>«Установить»: установка целиком; при успехе — вход тем же паролем.</summary>

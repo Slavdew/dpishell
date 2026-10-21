@@ -1448,6 +1448,10 @@
                         <TextBlock Text="{Binding Status}" FontSize="13" Margin="0,4,0,0" TextWrapping="Wrap" />
                         <TextBlock Text="{Binding Detail}" Style="{StaticResource Hint}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
                                    Visibility="{Binding HasDetail, Converter={StaticResource Vis}}" />
+                        <Button Content="{Binding Action}" ContentTemplate="{StaticResource Shield}" Command="{Binding Command}" HorizontalAlignment="Left"
+                                Padding="12,5" Margin="0,8,0,0" FontSize="13" Visibility="{Binding ShowShield, Converter={StaticResource Vis}}" />
+                        <Button Content="{Binding Action}" Command="{Binding Command}" HorizontalAlignment="Left"
+                                Padding="12,5" Margin="0,8,0,0" FontSize="13" Visibility="{Binding ShowPlain, Converter={StaticResource Vis}}" />
                     </StackPanel>
                 </Grid>
             </Border>

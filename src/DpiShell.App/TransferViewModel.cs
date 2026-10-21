@@ -123,8 +123,8 @@ public sealed class TransferViewModel : Observable
     string _note = "";
     public string Note { get => _note; set => Set(ref _note, value); }
 
-    bool _zip;
-    /// <summary>Куда: false — папка, true — архив .zip.</summary>
+    bool _zip = true;
+    /// <summary>Куда: false — папка, true — архив .zip (по умолчанию: один файл можно отправить в мессенджере).</summary>
     public bool ExportZip
     {
         get => _zip;
@@ -257,6 +257,7 @@ public sealed class TransferViewModel : Observable
             var r = await Task.Run(() => zip ? SettingsExport.WriteZip(path, state, chosen, meta) : SettingsExport.Write(path, state, chosen, meta));
             _exportedTo = r.Folder;
             var text = L.T("settings.transfer.export_done", new { sections = string.Join(", ", r.Sections.Select(SettingsSections.Title)) }) + " " + r.Folder;
+            if (zip) text += " " + L.T("settings.transfer.export_zip_hint");
             if (r.Skipped.Count > 0) text += " " + L.T("settings.transfer.export_skipped", new { list = string.Join("; ", r.Skipped.Select(x => x.ToString())) });
             ExportResultText = text;
             Say(L.T("settings.transfer.export_done", new { sections = string.Join(", ", r.Sections.Select(SettingsSections.Title)) }));

@@ -41,9 +41,13 @@ public sealed record HealthItem(Health State, string Label, string Value, string
 }
 
 /// <summary>Плитка сайта на главной: цветная полоса по состоянию, короткая подпись, ниже — время и кто ведёт.</summary>
-public sealed record SiteTile(string Title, Health State, string Status, string Detail)
+public sealed record SiteTile(string Title, Health State, string Status, string Detail, string? Action = null, ICommand? Command = null, bool Shield = false)
 {
     public bool HasDetail => Detail.Length > 0;
+    public bool HasAction => Action is not null && Command is not null;
+    /// <summary>Кнопка исправления на плитке: со щитом (спросит права) — только пока помощника нет.</summary>
+    public bool ShowShield => Shield && HasAction;
+    public bool ShowPlain => !Shield && HasAction;
 }
 
 /// <summary>Строка «Проверяется само»: что проверяется и как часто (значения — из настроек расписания и сторожа).</summary>

@@ -117,8 +117,8 @@
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                         <Border BorderBrush="{DynamicResource ButtonLine}" BorderThickness="1" CornerRadius="6" Background="{DynamicResource ButtonBack}">
                             <StackPanel Orientation="Horizontal">
-                                <RadioButton Style="{StaticResource Seg}" GroupName="TransferKind" Content="{l:T settings.transfer.kind_folder}" IsChecked="{Binding ExportFolder}" />
                                 <RadioButton Style="{StaticResource Seg}" GroupName="TransferKind" Content="{l:T settings.transfer.kind_zip}" IsChecked="{Binding ExportZip}" />
+                                <RadioButton Style="{StaticResource Seg}" GroupName="TransferKind" Content="{l:T settings.transfer.kind_folder}" IsChecked="{Binding ExportFolder}" />
                             </StackPanel>
                         </Border>
                     </StackPanel>

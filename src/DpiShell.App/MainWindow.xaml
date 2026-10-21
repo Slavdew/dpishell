@@ -737,9 +737,7 @@
                             </Grid.RowDefinitions>
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel Margin="0,0,0,10">
-                            <!-- Продвинутый режим «сайты → стратегия»: переключатель сверху, выключен по умолчанию (docs/research/mixed-strategies.md §6). -->
-                            <local:AdvancedView DataContext="{Binding AdvancedPc}" />
-                            <DockPanel Margin="0,14,0,10">
+                            <DockPanel Margin="0,4,0,10">
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="16,0,0,0">
                                     <TextBlock Text="{l:T sites.builtin_lists}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                                     <local:InfoButton Topic="{x:Static local:InfoTexts.DomainLists}" />
@@ -762,6 +760,8 @@
                                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" Height="100"
                                      FontFamily="Consolas" FontSize="14" Padding="8" />
                             <TextBox Text="{Binding ExcludeMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" />
+                            <!-- Продвинутый режим «сайты → стратегия» — после «Своих сайтов» и «Исключений» (аудит перед бетой, С-17): выключен по умолчанию (docs/research/mixed-strategies.md §6). -->
+                            <local:AdvancedView DataContext="{Binding AdvancedPc}" Margin="0,14,0,0" />
                             </StackPanel>
                             </ScrollViewer>
                             <!-- Одна кнопка и один статус на вкладку (UX-аудит 6, п. 2): сохраняет и свои сайты, и строки «Свои настройки для сайтов». -->
@@ -1826,6 +1826,7 @@
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
                                                Text="{l:T diag.conflicts.note}" />
                                     <Button ContentTemplate="{StaticResource Shield}" Content="{l:T diag.conflicts.stop}" Command="{Binding StopConflictsCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                            ToolTip="{Binding StopConflictsTip}" ToolTipService.ShowOnDisabled="True"
                                             Visibility="{Binding ConflictList.Count, Converter={StaticResource NonZero}}" />
                                 </StackPanel>
                             </Border>
@@ -1911,6 +1912,7 @@
                                 <Button Content="{l:T diag.open_logs}" Command="{Binding OpenLogsCmd}" />
                                 <Button Content="{l:T diag.open_results}" Command="{Binding OpenResultsCmd}" />
                                 <Button Content="{l:T diag.report.save}" Command="{Binding SaveReportCmd}" ToolTip="{l:T diag.report.tip}" />
+                                <Button Content="{l:T diag.report.issue}" Style="{StaticResource LinkButton}" Command="{Binding OpenIssuesCmd}" VerticalAlignment="Center" />
                             </WrapPanel>
                         </StackPanel>
                     </ScrollViewer>
@@ -2672,6 +2674,10 @@
                                     <WrapPanel Margin="0,6,0,0">
                                         <TextBlock Text="{l:T about.info.repo}" VerticalAlignment="Center" Margin="0,0,4,0" />
                                         <Button Content="github.com/Slavdew/dpishell ↗" Style="{StaticResource LinkButton}" Command="{Binding OpenRepoCmd}" VerticalAlignment="Center" Margin="0" />
+                                    </WrapPanel>
+                                    <WrapPanel Margin="0,6,0,0">
+                                        <TextBlock Text="{l:T about.info.issues}" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                        <Button Content="{l:T about.info.issues_link}" Style="{StaticResource LinkButton}" Command="{Binding OpenIssuesCmd}" VerticalAlignment="Center" Margin="0" />
                                     </WrapPanel>
                                     <TextBlock Text="{l:T about.info.license}" Margin="0,6,0,0" />
                                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,6,0,0"

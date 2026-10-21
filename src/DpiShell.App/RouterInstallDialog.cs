@@ -133,8 +133,9 @@ public static class RouterInstallDialog
         title.Style = titleStyle;
         verdict.Children.Add(title);
         verdict.Children.Add(DialogKit.Text(nameof(RouterInstallViewModel.VerdictText), new Thickness(0, 2, 0, 2)).Show(nameof(RouterInstallViewModel.HasVerdictText)));
-        verdict.Children.Add(DialogKit.Hint(L.T("router.install.unavailable"), new Thickness(0, 4, 0, 0))
-            .Show(nameof(RouterInstallViewModel.Unsuitable)));
+        var unavailable = DialogKit.Text(nameof(RouterInstallViewModel.UnsuitableText), new Thickness(0, 4, 0, 0));
+        if (Application.Current?.TryFindResource("Hint") is Style hintStyle) unavailable.Style = hintStyle;
+        verdict.Children.Add(unavailable.Show(nameof(RouterInstallViewModel.Unsuitable)));
         verdict.Children.Add(DialogKit.Plate(DialogKit.Text(nameof(RouterInstallViewModel.TunnelNote), new Thickness(0)), new Thickness(0, 6, 0, 0))
             .Show(nameof(RouterInstallViewModel.HasTunnelNote)));
         verdict.Margin = new Thickness(0, 0, 0, 10);
