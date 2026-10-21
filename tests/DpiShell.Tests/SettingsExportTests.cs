@@ -179,7 +179,7 @@ public sealed class SettingsExportTests : IDisposable
         Assert.Equal(4, p.Data.Advanced!.Rows.Count);
         Assert.NotNull(p.Data.Advanced.Rows[0].StrategyFile);
         Assert.Equal("Игра", p.Data.Apps!.Single().Title);
-        Assert.Equal("27015-27030", p.Data.Apps[0].Udp);
+        Assert.Equal("27015-27030", p.Data!.Apps![0].Udp);
         Assert.Equal("Rich provider", Export(Rich(), "m", new ExportMeta("Rich provider", "n")).Manifest!.Provider);
     }
 
@@ -405,7 +405,7 @@ public sealed class SettingsExportTests : IDisposable
             """);
         var p = SettingsImport.Read(f);
         Assert.DoesNotContain(p.Data.Strategies!, s => s.Name.Contains("..") || s.Name.Contains(' ') || s.Name == "inner");
-        Assert.Equal(2, p.Data.Strategies.Count);
+        Assert.Equal(2, p.Data!.Strategies!.Count);
         Assert.Equal(["ok4.example"], p.Data.Advanced!.Rows.Single().Domains);
         Assert.Equal(3, p.ProblemsOf("advanced").Count());
         Assert.Contains(p.Problems, x => x.File == "apps/a..b.json");

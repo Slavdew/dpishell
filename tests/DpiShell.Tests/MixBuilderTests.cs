@@ -137,7 +137,7 @@ public sealed class MixBuilderTests : IDisposable
             Scored(b, groups, new() { ["youtube"] = 0, ["discord"] = 2 }),
             Scored(bad, groups, new() { ["youtube"] = 2, ["discord"] = 2 }, broken: "x"));
         var plan = MixBuilder.Build(r)!;
-        Assert.Equal("alt", plan.Youtube.Strategy.Id);
+        Assert.Equal("alt", plan.Youtube!.Strategy.Id);
         Assert.Equal("alt10", plan.Discord!.Strategy.Id);
     }
 
@@ -164,13 +164,13 @@ public sealed class MixBuilderTests : IDisposable
             Scored(quiet, groups, new() { ["youtube"] = 2, ["discord"] = 0 }),
             Scored(other, groups, new() { ["youtube"] = 0, ["discord"] = 2 }));
         // Лучшей одиночной по порядку Best станет первая из равных (loud) — берём её; без этого выбрала бы тихую.
-        Assert.Equal(r.Best!.Strategy.Id, MixBuilder.Build(r)!.Youtube.Strategy.Id);
+        Assert.Equal(r.Best!.Strategy.Id, MixBuilder.Build(r)!.Youtube!.Strategy.Id);
 
         var r2 = Report(groups,
             Scored(other, groups, new() { ["youtube"] = 0, ["discord"] = 2 }),
             Scored(loud, groups, new() { ["youtube"] = 1, ["discord"] = 0 }),
             Scored(quiet, groups, new() { ["youtube"] = 1, ["discord"] = 0 }));
-        Assert.Equal("quiet", MixBuilder.Build(r2)!.Youtube.Strategy.Id);   // равны по доле — тише приём
+        Assert.Equal("quiet", MixBuilder.Build(r2)!.Youtube!.Strategy.Id);   // равны по доле — тише приём
     }
 
     [Fact]

@@ -200,7 +200,7 @@ public class WinwsArgsBuildTests
         var catalog = StrategyCatalog.Load(Repo.Strategies).Strategies;
         Assert.Equal(catalog.Count, golden.EnumerateObject().Count());
         foreach (var s in catalog)
-            Assert.Equal(golden.GetProperty(s.Id).EnumerateArray().Select(x => x.GetString()).ToList(), WinwsArgs.Build(s, paths).Select(Norm).ToList());
+            Assert.Equal(golden.GetProperty(s.Id).EnumerateArray().Select(x => x.GetString()!).ToList(), WinwsArgs.Build(s, paths).Select(Norm).ToList());
     }
 
     [Fact]
