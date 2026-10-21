@@ -18,6 +18,8 @@ public sealed class HelperClientOptions
     /// Тесты выключают: их сервер работает от текущего пользователя.
     /// </summary>
     public bool RequireTrustedServer { get; init; } = true;
+    /// <summary>Язык окна, на котором помощник отвечает (API 1.13): берётся на каждый запрос, чтобы смена языка действовала сразу. null — как выбран в окне.</summary>
+    public Func<string?>? Language { get; init; }
 }
 
 /// <summary>
@@ -41,6 +43,8 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public int Protocol { get; private set; }
     /// <summary>Версия протокола помощника «мажор.минор» (из hello; помощник до 1.1 её не шлёт — «1.0»).</summary>
     public string HelperApi { get; private set; } = HelperCompat.LegacyApi;
+    /// <summary>Язык ответов помощника на каждый запрос (API 1.13); null — язык окна.</summary>
+    public Func<string?>? Language { get; init; }
     /// <summary>
     /// Совместимость с помощником: после подключения — по hello, после <see cref="StatusAsync"/> — ещё и по списку команд.
     /// Мажор другой — <see cref="CallAsync"/> отказывает сам (код <c>incompatible</c>), кроме status и cancel.
@@ -71,7 +75,7 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
             if (o.RequireTrustedServer && !IsTrustedOwner(pipe))
                 throw new HelperException(HelperErrors.Denied, L.T("core.helper.not_by_system"));
 
-            var client = new HelperClient(pipe);
+            var client = new HelperClient(pipe) { Language = o.Language };
             await client.HandshakeAsync(o.ConnectTimeout, ct);
             client._readLoop = Task.Run(client.ReadLoopAsync);
             return client;
@@ -146,6 +150,8 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
         var pending = new Pending(progress) { Cmd = cmd };
         _pending[id] = pending;
         var request = new JsonObject { ["id"] = id, ["cmd"] = cmd };
+        // Язык ответа — только помощнику 1.13+: прежний отвергает неизвестные поля запроса и отвечает по-русски.
+        if (HelperCompat.AtLeast(HelperApi, HelperProtocol.LangApi) && (Language?.Invoke() ?? L.Current) is { Length: > 0 } lang) request["lang"] = lang;
         if (args is not null) request["args"] = args as JsonNode ?? JsonSerializer.SerializeToNode(args, args.GetType(), HelperProtocol.Json);
 
         try

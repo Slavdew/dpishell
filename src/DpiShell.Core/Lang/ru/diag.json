@@ -4,7 +4,7 @@
   "diag.refreshing": "Проверка…",
   "diag.optimization.label": "Оптимизация:",
   "diag.driver": "Драйвер",
-  "diag.core_files": "Файлы ядра",
+  "diag.core_files": "Ядро zapret",
   "diag.timestamps": "Временные метки TCP",
   "diag.core_broken": "Файлы ядра повреждены — обычно это антивирус.",
   "diag.repair": "Восстановить",

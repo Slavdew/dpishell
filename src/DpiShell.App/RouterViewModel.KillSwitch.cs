@@ -43,10 +43,12 @@ public sealed partial class RouterViewModel
         RouterTrialState.Checking => _trialDeadline is { } d
             ? L.T("router.trial.checking", new { time = RouterTexts.Countdown(d - UtcNow()) })
             : L.T("router.trial.checking_soon"),
-        RouterTrialState.Failed => L.T("router.trial.failed"),
-        RouterTrialState.Unknown => L.T("router.trial.unknown"),
-        _ => L.T("router.trial.ask"),
+        RouterTrialState.Failed => L.T("router.trial.failed", new { time = LeftText }),
+        RouterTrialState.Unknown => L.T("router.trial.unknown", new { time = LeftText }),
+        _ => L.T("router.trial.ask", new { time = LeftText }),
     };
+
+    string LeftText => RouterTexts.Countdown(_trialDeadline is { } d ? d - UtcNow() : TimeSpan.Zero);
 
     /// <summary>Кнопки и отсчёт рядом с ними — только когда решает человек (проверка не прошла или её нет).</summary>
     public bool TrialAsk => !TrialChecking;
@@ -91,7 +93,7 @@ public sealed partial class RouterViewModel
             while (!_disposed && Connected && _trialDeadline is { } d)
             {
                 Raise(nameof(TrialCountdown));
-                if (_trialState == RouterTrialState.Checking) Raise(nameof(TrialText));
+                Raise(nameof(TrialText));
                 if (UtcNow() < d) { await Task.Delay(TrialTick); continue; }
                 if (++late > 3) { _trialDeadline = null; break; }
                 await Task.Delay(TrialGrace);

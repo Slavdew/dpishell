@@ -1,6 +1,6 @@
 {
   "export.section.sites": "Own sites",
-  "export.section.exclude": "Open without optimization",
+  "export.section.exclude": "Exclusions",
   "export.section.strategies": "Strategies: found and own",
   "export.section.advanced": "Per-site settings",
   "export.section.apps": "Game and app profiles",

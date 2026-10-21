@@ -4,6 +4,7 @@ using System.Security.Principal;
 using System.Text.Json;
 using DpiShell.Core;
 using DpiShell.Core.Helper;
+using DpiShell.Core.Localization;
 
 namespace DpiShell.Tests;
 
@@ -165,6 +166,49 @@ public class HelperChannelTests
         f.Backend.Release.SetResult();
         await select.WaitAsync(Wait);
         await c.EnableAsync("alt9");   // замок освобождён
+    }
+
+    /// <summary>API 1.13: помощник отвечает на языке окна, причём на запрос, а не на соединение — два окна с разными языками не мешают друг другу.</summary>
+    [Fact]
+    public async Task Helper_answers_in_the_language_of_each_window()
+    {
+        await using var f = new HelperFixture();
+        string lang = "en";
+        await using var en = await HelperClient.ConnectAsync(new HelperClientOptions { PipeName = f.PipeName, RequireTrustedServer = false, Language = () => lang });
+        await using var ru = await HelperClient.ConnectAsync(new HelperClientOptions { PipeName = f.PipeName, RequireTrustedServer = false, Language = () => "ru" });
+        var select = ru.SelectAsync(quick: true);
+        await f.Backend.LongStarted.Task.WaitAsync(Wait);
+
+        string Expected(string code) { using (L.Scope(code)) return HelperErrors.Text(HelperErrors.Busy); }
+        var e = await Assert.ThrowsAsync<HelperException>(() => en.EnableAsync("alt9"));
+        Assert.StartsWith(Expected("en"), e.Message);
+        Assert.Contains("helper is busy", e.Message);
+        var r = await Assert.ThrowsAsync<HelperException>(() => ru.SearchAsync());
+        Assert.StartsWith(Expected("ru"), r.Message);
+        Assert.Contains("Помощник занят", r.Message);
+
+        lang = "ru";   // смена языка окна действует со следующего запроса
+        var e2 = await Assert.ThrowsAsync<HelperException>(() => en.EnableAsync("alt9"));
+        Assert.Contains("Помощник занят", e2.Message);
+        f.Backend.Release.SetResult();
+        await select.WaitAsync(Wait);
+    }
+
+    [Fact]
+    public async Task Lang_field_is_validated_and_old_helper_api_gets_no_lang()
+    {
+        await using var f = new HelperFixture();
+        using var raw = await f.RawAsync();
+        Assert.Contains("\"ok\":true", await raw.AskAsync("""{"id":1,"cmd":"status","lang":"en"}"""));
+        Assert.Contains("\"ok\":true", await raw.AskAsync("""{"id":2,"cmd":"status","lang":"xx"}"""));   // неузнанный язык — ответ на своём
+        Assert.Contains("\"code\":\"invalid\"", await raw.AskAsync("""{"id":3,"cmd":"status","lang":"en; rm"}"""));
+        Assert.Contains("\"code\":\"invalid\"", await raw.AskAsync("""{"id":4,"cmd":"status","lang":5}"""));
+
+        Assert.True(HelperCompat.AtLeast("1.13", HelperProtocol.LangApi));
+        Assert.True(HelperCompat.AtLeast("1.20", HelperProtocol.LangApi));
+        Assert.False(HelperCompat.AtLeast("1.12", HelperProtocol.LangApi));
+        Assert.False(HelperCompat.AtLeast(null, HelperProtocol.LangApi));
+        Assert.False(HelperCompat.AtLeast("2.0", "garbage"));
     }
 
     [Fact]

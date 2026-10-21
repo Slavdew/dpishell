@@ -94,7 +94,7 @@ public sealed class RouterKillSwitchTests : IDisposable
         await vm.ToggleAsync();
         Assert.Equal(0, r.ConfirmCalls);
         Assert.True(vm.TrialVisible);
-        Assert.Equal("Часть сайтов с этого ПК не открылась. Оставить оптимизацию?", vm.TrialText);
+        Assert.Equal("Часть сайтов с этого ПК не открылась. Оставить оптимизацию? Иначе через 3:00 роутер вернёт как было.", vm.TrialText);
         Assert.True(vm.TrialAsk);
         // Отсчёт — от left_s по часам ПК, не от until роутера.
         Assert.Equal(L.T("router.trial.countdown", new { time = "3:00" }), vm.TrialCountdown);
@@ -115,7 +115,7 @@ public sealed class RouterKillSwitchTests : IDisposable
         using var r = Router();
         using var vm = await Connected(r, sitesOpen: null);
         await vm.EnableAsync();
-        Assert.Equal("Проверить сайты с этого ПК не удалось. Всё работает?", vm.TrialText);
+        Assert.Equal("Проверить сайты с этого ПК не удалось. Всё работает? Иначе через 3:00 роутер вернёт как было.", vm.TrialText);
         await vm.RevertTrialAsync();
         Assert.False(r.Enabled);
         Assert.False(vm.TrialVisible);

@@ -56,6 +56,13 @@ public sealed record HelperCompat(HelperCompatLevel Level, string HelperApi, IRe
         return new(HelperCompatLevel.Ok, api, set, outdated, outdated ? L.T("core.helper.compat.new_version") : null);
     }
 
+    /// <summary>Версия протокола <paramref name="api"/> не ниже <paramref name="min"/> (оба «мажор.минор»); нечитаемая — нет.</summary>
+    public static bool AtLeast(string? api, string min)
+    {
+        if (Parse(string.IsNullOrWhiteSpace(api) ? LegacyApi : api.Trim()) is not { } a || Parse(min) is not { } m) return false;
+        return a.Major > m.Major || (a.Major == m.Major && a.Minor >= m.Minor);
+    }
+
     static (int Major, int Minor)? Parse(string s)
     {
         var p = s.Split('.');

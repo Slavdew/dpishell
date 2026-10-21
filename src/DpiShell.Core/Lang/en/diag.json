@@ -4,7 +4,7 @@
   "diag.refreshing": "Checking…",
   "diag.optimization.label": "Optimization:",
   "diag.driver": "Driver",
-  "diag.core_files": "Core files",
+  "diag.core_files": "zapret core",
   "diag.timestamps": "TCP timestamps",
   "diag.core_broken": "Core files are damaged — usually caused by antivirus.",
   "diag.repair": "Restore",

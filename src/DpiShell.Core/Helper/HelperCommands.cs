@@ -74,6 +74,8 @@ public sealed record CommandSpec(string Name, bool Exclusive, bool Long, params 
 /// <summary>Проверенный запрос. Аргументы уже приведены к типам (bool, string, IReadOnlyList&lt;string&gt;).</summary>
 public sealed record HelperCall(long Id, CommandSpec Spec, IReadOnlyDictionary<string, object> Args, long? Target = null)
 {
+    /// <summary>Язык окна для ответа на этот запрос (API 1.13, поле <c>lang</c>); null — не прислан, помощник отвечает на своём.</summary>
+    public string? Lang { get; init; }
     /// <summary>SID пользователя, подключившегося к каналу (определён сервером по токену, не из запроса). Нужен командам «для пользователя».</summary>
     public string? ClientSid { get; init; }
     public string Cmd => Spec.Name;
@@ -229,7 +231,10 @@ public static partial class HelperCommands
     /// <summary>Имена команд белого списка по алфавиту — поле <c>commands</c> в ответе status (helper-protocol §6).</summary>
     public static IReadOnlyList<string> Names { get; } = [.. All.Select(c => c.Name).Order(StringComparer.Ordinal)];
 
-    static readonly HashSet<string> TopLevel = ["id", "cmd", "args", "target"];
+    static readonly HashSet<string> TopLevel = ["id", "cmd", "args", "target", "lang"];
+
+    [GeneratedRegex("^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8}){0,3}$")]
+    private static partial Regex LangRx();
 
     /// <summary>Разобрать и проверить строку запроса. Любое отступление — <see cref="HelperRequestException"/>.</summary>
     public static HelperCall Parse(string line, IHelperCatalog catalog)
@@ -251,6 +256,14 @@ public static partial class HelperCommands
         foreach (var (k, _) in o)
             if (!TopLevel.Contains(k)) throw new HelperRequestException(id, $"Лишнее поле «{Short(k)}».");
 
+        // lang (API 1.13): код языка окна для ответа; неузнанный помощником код ничего не меняет.
+        string? lang = null;
+        if (o["lang"] is { } lv)
+        {
+            if (lv is not JsonValue lval || !lval.TryGetValue<string>(out lang) || !LangRx().IsMatch(lang) || lang.Length > 16)
+                throw new HelperRequestException(id, "lang: нужен код языка, например ru или en.");
+        }
+
         if (o["cmd"] is not JsonValue cv || !cv.TryGetValue<string>(out var cmd))
             throw new HelperRequestException(id, "Нет поля cmd.");
         if (!Specs.TryGetValue(cmd, out var spec))
@@ -261,7 +274,7 @@ public static partial class HelperCommands
             if (o.ContainsKey("args")) throw new HelperRequestException(id, "У cancel нет аргументов — только target.");
             if (o["target"] is not JsonValue tv || !tv.TryGetValue<long>(out var target) || target <= 0)
                 throw new HelperRequestException(id, "cancel: нужен target — id отменяемого запроса.");
-            return new HelperCall(id, spec, new Dictionary<string, object>(), target);
+            return new HelperCall(id, spec, new Dictionary<string, object>(), target) { Lang = lang };
         }
         if (o.ContainsKey("target")) throw new HelperRequestException(id, "Лишнее поле «target».");
 
@@ -314,7 +327,7 @@ public static partial class HelperCommands
         }
         if (spec.Name == "app_profile_set" && !args.ContainsKey("tcp") && !args.ContainsKey("udp"))
             throw new HelperRequestException(id, "app_profile_set: нужны порты TCP или UDP.");
-        return new HelperCall(id, spec, args);
+        return new HelperCall(id, spec, args) { Lang = lang };
     }
 
     static object Check(long id, string cmd, ArgSpec s, JsonNode v, IHelperCatalog catalog)

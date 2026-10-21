@@ -88,7 +88,7 @@ public sealed partial class WindowSmokeTests
                 // Тот же сайт — в списке на «Сайтах».
                 vm.GoTo(Pages.Sites);
                 Pump();
-                var list = Find<TextBox>(Find<TabControl>(w)!, t => t.IsVisible && System.Windows.Automation.AutomationProperties.GetName(t) == "Открывать без оптимизации") ?? throw new Exception("На «Сайтах» нет списка «Открывать без оптимизации»");
+                var list = Find<TextBox>(Find<TabControl>(w)!, t => t.IsVisible && System.Windows.Automation.AutomationProperties.GetName(t) == "Исключения") ?? throw new Exception("На «Сайтах» нет списка «Открывать без оптимизации»");
                 if (list.Text.Trim() != "bank.example") throw new Exception("В списке исключений не тот сайт: " + list.Text);
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-sites-exclude.png"));
                 Close(w);

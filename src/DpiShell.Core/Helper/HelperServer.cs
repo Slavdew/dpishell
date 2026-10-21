@@ -256,6 +256,8 @@ public sealed class HelperServer : IAsyncDisposable
 
     async Task ExecuteAsync(HelperCall call, Connection conn, CancellationTokenSource cts)
     {
+        // Язык ответа — на запрос, а не на помощника: окон может быть несколько, и у каждого свой. Scope живёт в этом запросе и его продолжениях.
+        using var lang = L.Scope(call.Lang);
         bool held = false;
         try
         {

@@ -702,6 +702,7 @@
                                      FontFamily="Consolas" FontSize="14" Padding="8" />
                             <!-- Простой список исключений ПК (UX-аудит 7, п. 5): сюда же сайт попадает с Главной по «Сайт не открывается?». Строки «Напрямую» продвинутого режима — отдельно. -->
                             <TextBlock Text="{l:T sites.exclude.title}" Style="{StaticResource H2}" Margin="0,14,0,0" />
+                            <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,2" Text="{l:T sites.exclude.caption}" />
                             <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,6"
                                        Text="{l:T sites.exclude.hint}" />
                             <TextBox Text="{Binding ExcludeText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AutomationProperties.Name="{l:T sites.exclude.title}" local:Demo.Sensitive="True"
@@ -831,7 +832,8 @@
                                              FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="{l:T sites.router.lists.general_name}" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2">
-                                    <TextBlock Text="{l:T sites.router.lists.exclude}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                    <TextBlock Text="{l:T sites.router.lists.exclude}" Style="{StaticResource Hint}" Margin="0,0,0,0" />
+                                    <TextBlock Text="{l:T sites.exclude.caption}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
                                     <TextBox Text="{Binding ListExcludeText, UpdateSourceTrigger=PropertyChanged}" local:Demo.Sensitive="True" AcceptsReturn="True" Height="110"
                                              FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="{l:T sites.router.lists.exclude_name}" />
                                 </StackPanel>
@@ -2643,7 +2645,6 @@
                 <WrapPanel Margin="-4,8,0,0" Visibility="{Binding TrialAsk, Converter={StaticResource Vis}}">
                     <Button Content="{l:T router.trial.keep}" Style="{StaticResource Primary}" Command="{Binding TrialKeepCmd}" Margin="4,0,8,0" />
                     <Button Content="{l:T router.trial.revert}" Command="{Binding TrialRevertCmd}" Margin="0,0,12,0" />
-                    <TextBlock Text="{Binding TrialCountdown}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
                 </WrapPanel>
             </StackPanel>
         </Border>

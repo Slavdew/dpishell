@@ -809,7 +809,7 @@ public sealed partial class WindowSmokeTests
                         // Роутера нет: только свои сайты ПК — без карточек роутера и заглушек про исключения.
                         foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", L.T("sites.router.lists.exclude"), L.T("router.diag.title") })
                             if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» на «Сайтах» без роутера");
-                        if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Открывать без оптимизации" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет списка «Открывать без оптимизации»");
+                        if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Исключения" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет списка «Открывать без оптимизации»");
                         if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Свои сайты" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет поля своих сайтов ПК");
                     }
                     if (page == NetPages.Dns)
