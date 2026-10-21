@@ -485,7 +485,7 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.Equal("Работает через роутер", vm.StatusTitle);
         Assert.Equal("На этом ПК включать не нужно", vm.StatusDetail);
         string? asked = null;
-        vm.Choose = (t, _) => { asked = t; return -1; };   // «Отмена» — на ПК ничего не включаем (и не трогаем sc.exe)
+        vm.ChooseDetailed = r => { asked = r.Title + " " + r.Text; return -1; };   // «Отмена» — на ПК ничего не включаем (и не трогаем sc.exe)
         await vm.EnableAsync();
         Assert.Contains("обрабатывается дважды", asked);
         Assert.False(vm.Busy);

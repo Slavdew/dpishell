@@ -16,5 +16,15 @@
   "web.warn.dns_spoofed": "Провайдер подменяет адреса сайтов — приложения вне браузера могут не работать",
   "web.warn.select_failed": "Подбор прервался: {error}",
   "web.warn.switched_backup": "Стратегия перестала работать — включена запасная {name}",
-  "web.core.missing": "Ядро zapret не установлено"
+  "web.core.missing": "Ядро zapret не установлено",
+  "web.diag.conflict_row": "{name} — мешает оптимизации",
+  "web.diag.conflicts_none": "не найдены — не мешают",
+  "web.diag.dns_clean": "подмены нет — не мешает",
+  "web.diag.dns_label": "DNS провайдера",
+  "web.diag.flow_handed": "передано оптимизации — не мешает",
+  "web.diag.flow_off": "выключено — не мешает",
+  "web.diag.flow_on": "включено — мешает оптимизации",
+  "web.diag.ipv6_bad": "есть — сайты по IPv6 идут мимо оптимизации",
+  "web.diag.ipv6_none": "нет — не мешает",
+  "web.diag.ipv6_on": "есть, оптимизация включена и для IPv6 — не мешает"
 }

@@ -167,6 +167,9 @@ public sealed partial class HostsViewModel : Observable
     }
 
     public bool HasWarnings => Warnings.Count > 0;
+
+    /// <summary>Чужие записи в hosts на адреса, которые чинит «Починить адреса» (для панели «Этот ПК» на главной); null — состояние hosts ещё не читали.</summary>
+    public IReadOnlyList<string>? ForeignHosts => _status is not { } s ? null : Enabled ? s.Conflicts.Select(c => c.Host).Distinct().ToList() : [];
     /// <summary>Заголовок свёрнутого списка замечаний: первый экран вкладки начинается с действия, а не с тревог.</summary>
     public string WarningsHeader => Warnings.Count is var n && n == 0 ? "" : L.Plural("hosts.warnings_header", n);
 

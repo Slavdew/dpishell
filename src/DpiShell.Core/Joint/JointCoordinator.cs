@@ -151,6 +151,23 @@ public sealed class JointCoordinator(IJointRouter router, IJointPc pc)
         finally { _gate.Release(); }
     }
 
+    /// <summary>
+    /// Есть ли у ПК что вести при связке (то же правило, что у проверки связки и <c>Shell.JointNothingToDo</c>): свои сайты не роутера или профили программ.
+    /// null — не узнать (нет помощника, роутер не ответил). Ничего не меняет.
+    /// </summary>
+    public async Task<bool?> HasWorkAsync(CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            if (await SafeGetAsync(ct) is not { } info) return null;
+            if (!_namesLoaded) await LoadRouterNamesAsync(ct);
+            return HasWork(info, JointRules.Select(info, _routerNames));
+        }
+        catch (RouterException) { return null; }
+        finally { _gate.Release(); }
+    }
+
     /// <summary>Выключить (переключатель, «Удалить полностью», «Отменить всё»): сначала ПК возвращается к полной настройке, потом связка на роутере снимается.</summary>
     public async Task StopAsync(CancellationToken ct = default)
     {

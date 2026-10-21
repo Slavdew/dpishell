@@ -121,7 +121,7 @@ public sealed class FirstRunAuditTests : IDisposable
         var vm = Model(await f.LinkAsync());
         await vm.RefreshStatusAsync();
         Assert.False(vm.ShowSiteFix);
-        Assert.False(vm.ShowRouterSelectLink);   // без роутера ссылка «Подобрать на роутере» ничего не говорит
+        Assert.False(vm.ShowRouterRow);   // без роутера строки роутера на главной нет
         f.Backend.StatusValue = Status(active: true);
         await vm.RefreshStatusAsync();
         Assert.True(vm.ShowSiteFix);
@@ -172,6 +172,62 @@ public sealed class FirstRunAuditTests : IDisposable
         await vm.OpenDirectAsync();
         Assert.StartsWith("Впишите адрес сайта", vm.DirectMessage);
         Assert.DoesNotContain(f.Backend.Calls, c => c.StartsWith("user_exclude_set"));
+    }
+
+    // ---------- п. 15 (решение владельца): «Проверить сайт» с оптимизацией и без неё ----------
+
+    [Fact]
+    public async Task SiteCheck_Opens_SaysSo_NoExcludeButton()
+    {
+        await using var f = new HelperFixture();
+        f.Backend.StatusValue = Status(active: true);
+        var vm = Model(await f.LinkAsync());
+        await vm.RefreshStatusAsync();
+        vm.ProbeGroups = Probe(() => true);
+        vm.DirectSite = "bank.example";
+        await vm.SiteCheckAsync();
+        Assert.Equal(SiteCheckOutcome.Opens, vm.SiteOutcome);
+        Assert.Equal(L.T("home.sitecheck.opens"), vm.SiteCheckLine);
+        Assert.False(vm.ShowAddExclude);
+        Assert.DoesNotContain(f.Backend.Calls, c => c.StartsWith("user_exclude_set"));
+    }
+
+    [Fact]
+    public async Task SiteCheck_FailsWithOptimization_AddToExclusions_ThenChecksWithout()
+    {
+        await using var f = new HelperFixture();
+        f.Backend.StatusValue = Status(active: true);
+        var vm = Model(await f.LinkAsync());
+        await vm.RefreshStatusAsync();
+        vm.ProbeGroups = Probe(() => false);
+        vm.DirectSite = "https://Bank.Example/login";
+        await vm.SiteCheckAsync();
+        // На ПК «без неё» до исключения не проверить — так и сказано, кнопка «Добавить в исключения» есть.
+        Assert.Equal(SiteCheckOutcome.FailsWith, vm.SiteOutcome);
+        Assert.True(vm.ShowAddExclude);
+        await vm.AddCheckedToExcludeAsync();
+        Assert.Contains(f.Backend.Calls, c => c == "user_exclude_set bank.example");
+        // И без оптимизации не открылось — дело не в ней; сайт остался в исключениях, об этом сказано.
+        Assert.Equal(SiteCheckOutcome.Closed, vm.SiteOutcome);
+        Assert.Equal(L.T("home.sitecheck.closed"), vm.SiteCheckLine);
+        Assert.Contains("bank.example", vm.DirectMessage);
+    }
+
+    [Fact]
+    public async Task SiteCheck_OptimizationOff_FailsMeansNotOptimization()
+    {
+        await using var f = new HelperFixture();
+        f.Backend.StatusValue = Status(active: false);
+        var vm = Model(await f.LinkAsync());
+        await vm.RefreshStatusAsync();
+        vm.ProbeGroups = Probe(() => false);
+        vm.DirectSite = "bank.example";
+        await vm.SiteCheckAsync();
+        Assert.Equal(SiteCheckOutcome.Closed, vm.SiteOutcome);
+        Assert.False(vm.ShowAddExclude);
+        vm.DirectSite = "не адрес";
+        await vm.SiteCheckAsync();
+        Assert.StartsWith("Впишите адрес сайта", vm.DirectMessage);
     }
 
     [Fact]

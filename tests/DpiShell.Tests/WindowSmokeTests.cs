@@ -722,18 +722,29 @@ public sealed partial class WindowSmokeTests
                     // Главная раскрыта: все помехи и список стратегий; затем прокручена до конца.
                     if (page == Pages.Home)
                     {
-                        // «Проверить сейчас» → «Подробнее»: те же строки по адресам.
-                        var more = Find<Expander>(Find<TabControl>(w)!, e => e.Header as string == "Подробнее" && e.IsVisible)!;
-                        more.IsExpanded = true;
+                        // Плитки → «Подробнее»: те же строки по адресам.
+                        vm.CheckDetailsOpen = true;
                         Pump();
+                        var more = Find<Border>(Find<TabControl>(w)!, b => b.IsVisible && b.Child is StackPanel sp && FindAll<ItemsControl>(sp).Any(i => i.ItemsSource == vm.CheckRows))!;
                         if (!VisibleText(more, t => t.Text.Contains("TLS 1.3 и TLS 1.2: 301 → "))) throw new Exception("В «Подробнее» проверки нет подробностей по TLS");
                         // Адреса разошлись — оба пути с адресами: программа (DoH) и путь через DNS Windows.
                         if (!VisibleText(more, t => t.Text.Contains("Через Windows (DNS Windows: 195.208.4.1)"))) throw new Exception("В «Подробнее» нет пути через DNS Windows");
                         if (!VisibleText(w, t => t.Text.StartsWith("⚠ В браузере не откроется: YouTube"))) throw new Exception("В итоге нет ⚠ про браузер");
+                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.IsVisible && s.ScrollableHeight > 0) is { } dsv0)
+                        {
+                            dsv0.ScrollToVerticalOffset(more.TranslatePoint(new Point(0, 0), (UIElement)dsv0.Content).Y - 140);
+                            Pump();
+                        }
                         Snap(w, Path.Combine(snapDir, $"{theme}-home-check-detail.png"));
-                        more.IsExpanded = false;
+                        vm.CheckDetailsOpen = false;
+                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.IsVisible && s.ScrollableHeight > 0) is { } dsv1) dsv1.ScrollToHome();
                         Pump();
-                        vm.ShowAllIssues = true;
+                        // Панели на месте плиток: «Этот ПК: …» (рекомендации и ошибки с кнопками исправления).
+                        vm.TogglePcPanelCmd.Execute(null);
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-home-pc-panel.png"));
+                        vm.ClosePanelCmd.Execute(null);
+                        Pump();
                         vm.ShowStrategies = true;
                         var detailed = vm.StrategyChoices.First(c => c.HasWarning);
                         // Только последний прогон (17.10): прошлые подборы о сегодняшней сети не говорят.
@@ -781,17 +792,16 @@ public sealed partial class WindowSmokeTests
                             Snap(w, Path.Combine(snapDir, $"{theme}-home-end.png"));
                             hv.ScrollToHome();
                         }
-                        vm.ShowAllIssues = false;
                         vm.ShowStrategies = false;
                         Pump();
-                        // Идёт «Проверить сейчас» (сама после «Включить», UX-аудит 2, п. 1): в карточке «Проверяю…», прежних отметок нет.
+                        // Идёт «Проверить сейчас» (сама после «Включить», UX-аудит 2, п. 1): плитки «Проверка…», прежних отметок нет.
                         var rows = vm.CheckRows.ToList();
                         var summary = vm.CheckSummary;
                         vm.CheckRows.Clear();
-                        SetProp(vm, "CheckSummary", "Проверяю…");
+                        SetProp(vm, "CheckSummary", "Проверка…");
                         SetProp(vm, "Checking", true);
                         Pump();
-                        if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "Проверяю…" && t.IsVisible) is null) throw new Exception("Нет «Проверяю…» в карточке");
+                        if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == L.T("home.check.running") && t.IsVisible) is null) throw new Exception("Нет «Проверка…» на плитках");
                         Snap(w, Path.Combine(snapDir, $"{theme}-home-checking.png"));
                         SetProp(vm, "Checking", false);
                         SetProp(vm, "CheckSummary", summary);
@@ -986,9 +996,19 @@ public sealed partial class WindowSmokeTests
                     var tabs = Find<TabControl>(w)!;
                     if (page == Pages.Home)
                     {
-                        // Роутер — одной строкой со ссылкой на вкладку; обход делает он — кнопка ПК второстепенная.
-                        if (Find<TextBlock>(tabs, t => t.Text == "Оптимизация работает на роутере" && t.IsVisible) is null) throw new Exception("На главной нет строки роутера");
-                        if (Find<Button>(tabs, b => b.Content as string == "Подробнее →" && b.IsVisible) is null) throw new Exception("У строки роутера нет ссылки на вкладку");
+                        // Роутер — строкой со ссылкой на вкладку, стратегией (выбор) и своими кнопками; обход делает он — кнопка ПК без выделения.
+                        if (Find<TextBlock>(tabs, t => t.Text == vm.RouterStateText && t.Text.StartsWith(L.T("home.router.state.on")) && t.IsVisible) is null) throw new Exception("На главной нет строки роутера");
+                        if (Find<Button>(tabs, b => b.Content as string == L.T("home.router.label") && b.IsVisible) is null) throw new Exception("У строки роутера нет ссылки на вкладку");
+                        if (Find<Button>(tabs, b => b.Content as string == L.T("router.toggle.off") && b.IsVisible) is null) throw new Exception("Под строкой роутера нет «Выключить на роутере»");
+                        if (Find<TextBlock>(tabs, t => t.Text == vm.RouterStrategyText && t.IsVisible) is null) throw new Exception("Нет выбора стратегии роутера");
+                        // Значок роутера: панель «Роутер: …» на месте плиток.
+                        vm.ToggleRouterPanelCmd.Execute(null);
+                        Pump();
+                        PumpUntil(() => !vm.Router.Busy, "diag роутера для панели не дочитался");
+                        if (!VisibleText(tabs, t => t.Text == vm.PanelTitle && t.Text.StartsWith(L.T("common.nav.router")))) throw new Exception("Нет панели «Роутер: …»");
+                        if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-home-router-panel.png")); }
+                        vm.ClosePanelCmd.Execute(null);
+                        Pump();
                         if (Find<Button>(tabs, b => b.Content as string == L.T("home.toggle.on_pc") && b.IsVisible && b.Style != (Style)w.FindResource("Primary")) is null)
                             throw new Exception("При оптимизации на роутере кнопка ПК должна быть второстепенной «Включить и на этом ПК»");
                         if (Find<ComboBox>(tabs) is not null) throw new Exception("На главной появился выпадающий список");
@@ -1191,7 +1211,7 @@ public sealed partial class WindowSmokeTests
                     var tabs = Find<TabControl>(w)!;
                     if (!VisibleText(tabs, t => t.Text.StartsWith("Сторож выключил оптимизацию") && t.Text.Contains("с ней пропал интернет"))) throw new Exception("На главной нет фразы о стороже");
                     if (Find<Button>(tabs, b => b.Content as string == L.T("router.trial.reenable") && b.IsVisible && b.IsEnabled) is null) throw new Exception("На главной нет «Попробовать снова»");
-                    if (Find<Button>(tabs, b => b.Content as string == L.T("home.find_on_router") && b.IsVisible && b.IsEnabled) is null) throw new Exception("В плашке главной нет «Подобрать заново»");
+                    if (Find<Button>(tabs, b => b.Content as string == L.T("router.select") && b.IsVisible && b.IsEnabled) is null) throw new Exception("Под строкой роутера нет «Подобрать»");
                     if (Find<Button>(tabs, b => b.Content as string == "Включить снова") is not null) throw new Exception("Осталась «Включить снова»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-home.png"));
                     vm.GoTo(Pages.Router);
@@ -1495,7 +1515,8 @@ public sealed partial class WindowSmokeTests
         if (Find<ComboBox>(tabs) is not null) throw new Exception("На главной остался выпадающий список");
         var primary = new List<Button>();
         Collect(tabs, primary);
-        if (primary.Count(b => b.IsVisible && b.Style == (Style)w.FindResource("Primary")) != 1) throw new Exception("На главной должна быть одна главная кнопка");
+        // Цветом — только когда нужно действие (выключено, роутер не ведёт); и тогда одна.
+        if (primary.Count(b => b.IsVisible && b.Style == (Style)w.FindResource("Primary")) != (vm.PcAccent ? 1 : 0)) throw new Exception("Главная кнопка выделена не по правилу «только когда нужно действие»");
         var list = Find<ListBox>(tabs) ?? throw new Exception("На главной нет списка стратегий");
         if (list.IsVisible) throw new Exception("Список стратегий должен быть свёрнут до «Показать стратегии»");
         vm.ShowStrategies = true;
@@ -1519,19 +1540,34 @@ public sealed partial class WindowSmokeTests
         if (vm.SortByName) throw new Exception("«по результату» не вернулся");
         vm.ShowStrategies = false;
 
-        // Наполнение: подмена DNS и VPN — видна только первая (DNS), заголовок и «Ещё 1» считают одно и то же (UX-аудит 2, п. 6).
-        // Обновление списков — не помеха: видно всегда, не под ⚠.
-        // Кнопка DNS уже в карточке состояния: плашки DNS и счёта помех нет, остаётся одна плашка VPN без заголовка «Нашлось».
-        if (Find<TextBlock>(tabs, t => t.Text.StartsWith("⚠ Нашл") && t.IsVisible) is not null || vm.HasIssuesHeader)
-            throw new Exception($"Заголовок «Нашлось…» при одной помехе: «{vm.IssuesTitle}»");
+        // Вариант A: строка «Этот ПК» со стратегией (выделяемой) и копированием; без роутера строки роутера нет.
         Button? Visible(string text) => Find<Button>(tabs, b => b.Content as string == text && b.IsVisible);
-        if (Visible("Ещё 1") is not null) throw new Exception("«Ещё 1» при одной помехе");
-        if (Visible("Включить защищённый DNS") is null) throw new Exception("Нет кнопки DNS в карточке состояния");
-        int dnsButtons = 0;
-        foreach (var b in FindAll<Button>(tabs, b => b.Content as string == "Включить защищённый DNS" && b.IsVisible)) dnsButtons++;
-        if (dnsButtons != 1) throw new Exception($"Кнопок «Включить защищённый DNS» на главной: {dnsButtons}, ждали 1");
-        if (!vm.Updates.DataAvailable || Visible("К обновлениям →") is null) throw new Exception("Обновление списков спрятано вместе с помехами");
-        if (Visible("Понятно, не показывать") is null) throw new Exception("Плашка VPN не видна");
+        if (Find<TextBlock>(tabs, t => t.Text == L.T("home.pc.label") && t.IsVisible) is null) throw new Exception("Нет строки «Этот ПК»");
+        if (Find<TextBox>(tabs, t => t.Text == vm.PcStrategyText && t.IsVisible && t.IsReadOnly) is null) throw new Exception("Стратегия ПК не выделяемым текстом");
+        if (Find<Button>(tabs, b => b.Command == vm.CopyPcStrategyCmd && b.IsVisible) is null) throw new Exception("Нет кнопки «Скопировать стратегию» у ПК");
+        if (Visible(L.T("home.router.label")) is not null) throw new Exception("Строка роутера без роутера");
+        // Отдельной карточки помех нет: VPN и DNS — пункты панели «Этот ПК», значок — «!» с подсказкой.
+        if (Visible("Понятно, не показывать") is not null) throw new Exception("Плашка VPN осталась на главной");
+        if (vm.PcHealth is not (Health.Warn or Health.Error)) throw new Exception($"Значок ПК: {vm.PcHealth}, ждали «!» или «✗»");
+        var badge = Find<Button>(tabs, b => b.Command == vm.TogglePcPanelCmd && b.IsVisible) ?? throw new Exception("Нет значка состояния у «Этот ПК»");
+        if (badge.ToolTip as string != vm.PcHealthTip || vm.PcHealthTip.Length == 0) throw new Exception("У значка ПК нет подсказки");
+        if (vm.Tiles.Count == 0 || Find<ItemsControl>(tabs, i => i.ItemTemplate == (DataTemplate)w.FindResource("SiteTileTemplate") && i.IsVisible) is null) throw new Exception("Нет плиток сайтов");
+        badge.Command.Execute(null);
+        Pump();
+        if (Find<ItemsControl>(tabs, i => i.ItemTemplate == (DataTemplate)w.FindResource("SiteTileTemplate") && i.IsVisible) is not null) throw new Exception("Панель ПК не заменила плитки");
+        if (!VisibleText(tabs, t => t.Text == vm.PanelTitle && t.Text.StartsWith(L.T("home.pc.label")))) throw new Exception("Нет заголовка панели «Этот ПК: …»");
+        if (Visible("Понятно, не показывать") is null) throw new Exception("В панели ПК нет пункта VPN с кнопкой");
+        int dnsButtons = FindAll<Button>(tabs, b => b.Content as string == "Включить защищённый DNS" && b.IsVisible).Count();
+        if (dnsButtons != 1) throw new Exception($"Кнопок «Включить защищённый DNS» в панели: {dnsButtons}, ждали 1");
+        if (!vm.Updates.DataAvailable || Visible(L.T("home.pc.lists.go")) is null) throw new Exception("Обновление списков не в панели ПК");
+        badge.Command.Execute(null);   // повторный щелчок — снова плитки
+        Pump();
+        if (vm.Panel != HomePanel.None || Find<ItemsControl>(tabs, i => i.ItemTemplate == (DataTemplate)w.FindResource("SiteTileTemplate") && i.IsVisible) is null)
+            throw new Exception("Повторный щелчок по значку не вернул плитки");
+        // «Проверяется само» — карточка внизу, две колонки.
+        if (!VisibleText(tabs, t => t.Text == L.T("home.auto.title")) || !VisibleText(tabs, t => t.Text == L.T("home.auto.hosts"))) throw new Exception("Нет карточки «Проверяется само»");
+        // «Сайт не открывается?» → «Проверить сайт»; «Открыть без оптимизации» на главной нет.
+        if (Visible("Открыть без оптимизации") is not null) throw new Exception("На главной осталась «Открыть без оптимизации»");
     }
 
     /// <summary>Строка таблицы подбора: отметка провала видна без раскрытия; стрелка раскрывает строки по всем адресам.</summary>
@@ -1642,6 +1678,10 @@ public sealed partial class WindowSmokeTests
         var stub = new ProbeResult(yt.Target, SslProtocols.Tls13, ProbeOutcome.ForeignRedirect, 0.1, 0, "302: редирект на warning.rt.ru");
         var ytBrowser = yt with { Browser = new BrowserPath([System.Net.IPAddress.Parse("195.208.4.1")], [System.Net.IPAddress.Parse("142.250.74.14")], false, null,
             [stub, stub with { Tls = SslProtocols.Tls12 }]) };
+        // Данные проверки (из них — плитки сайтов и панели главной) и строки по адресам, как после «Проверить сейчас».
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        typeof(MainViewModel).GetField("_checkVerdicts", flags)!.SetValue(vm, new List<TargetVerdict> { ytBrowser, img, ggpht, dc, gw });
+        typeof(MainViewModel).GetField("_checkedTime", flags)!.SetValue(vm, (DateTime?)new DateTime(2026, 10, 20, 10, 2, 0));
         foreach (var v in new[] { ytBrowser, img, ggpht, dc, gw }) vm.CheckRows.Add(CheckRow.From(v, vm.Names));
 
         var rows = new List<ScoreRow>

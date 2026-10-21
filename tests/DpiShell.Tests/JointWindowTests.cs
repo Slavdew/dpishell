@@ -376,6 +376,49 @@ public sealed class JointWindowTests : IDisposable
         Assert.Single(router.Links);
     }
 
+    // ---------- «Включить» на ПК при работающем роутере: «Работать вместе» (ответ владельца к п. 1) ----------
+
+    [Fact]
+    public async Task Enable_with_router_on_offers_work_together_first_and_it_enables_joint_and_the_pc()
+    {
+        using var router = NewRouter();
+        var (vm, f, _) = await OpenAsync(router, pcRunning: false);
+        await using var _ = f;
+        ChoiceRequest? asked = null;
+        vm.ChooseDetailed = r => { asked = r; return (int)MainViewModel.RouterChoice.Joint; };
+        await vm.EnableAsync();
+        Assert.NotNull(asked);
+        Assert.Equal([L.T("router.choice.joint"), L.T("router.choice.select_router"), L.T("router.choice.only_pc")], asked!.Options.Select(o => o.Title));
+        Assert.True(asked.Options[0].Enabled);
+        Assert.All(asked.Options, o => Assert.NotEmpty(o.Detail));
+        Assert.Equal(L.T("router.both.footer"), asked.Footer);
+        await ActiveAsync(vm);
+        Assert.True(vm.Router.JointWanted);   // выбор запомнен переключателем «Совместная работа»
+        Assert.Contains("enable alt9", f.Backend.Calls);
+        Assert.True(router.Enabled);          // роутер не выключали
+        // Следующее включение — без вопроса.
+        asked = null;
+        await vm.DisableAsync();
+        await vm.EnableAsync();
+        Assert.Null(asked);
+    }
+
+    [Fact]
+    public async Task Work_together_is_grey_with_a_hint_when_the_pc_has_nothing_to_handle()
+    {
+        using var router = NewRouter();
+        var (vm, f, _) = await OpenAsync(router, pcRunning: false);
+        await using var _ = f;
+        f.Backend.JointValue = f.Backend.JointValue with { Own = [], Work = [] };
+        ChoiceRequest? asked = null;
+        vm.ChooseDetailed = r => { asked = r; return -1; };
+        await vm.EnableAsync();
+        Assert.False(asked!.Options[0].Enabled);
+        Assert.Equal(L.T("router.choice.joint.nothing"), asked.Options[0].Shown);
+        Assert.False(vm.IsRunning);
+        Assert.Empty(router.Links);
+    }
+
     // ---------- строки продвинутого режима ----------
 
     [Fact]

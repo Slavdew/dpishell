@@ -45,7 +45,7 @@ public sealed partial class WindowSmokeTests
                 Button? Link(string content) => Find<Button>(tabs, b => b.IsVisible && b.Content as string == content);
 
                 // Выключено: «Открывается 1 из 2», главная кнопка одна, ссылка про сломавшийся сайт спрятана (чинить пока нечего).
-                if (!Visible(t => t.Text == "Открывается 1 из 2")) throw new Exception("До включения нет итога проверки");
+                if (!Visible(t => t.Text.StartsWith("Открывается 1 из 2 · в "))) throw new Exception("До включения нет итога проверки");
                 if (Link("Не помогло? → Подобрать") is null) throw new Exception("Нет ссылки «Не помогло? → Подобрать»");
                 if (Link("Сайт не открывается?") is not null) throw new Exception("«Сайт не открывается?» видна, пока оптимизация выключена");
                 if (Link(L.T("home.find_on_router")) is not null) throw new Exception("«Подобрать на роутере» видна без роутера");
@@ -62,20 +62,28 @@ public sealed partial class WindowSmokeTests
                 on = true;
                 WaitUi(vm.EnableAsync());
                 Pump();
-                if (!Visible(t => t.Text == "Открывается 2 из 2")) throw new Exception("После включения нет «Открывается 2 из 2»");
-                if (!Visible(t => t.Text.StartsWith("в ") && t.Text.EndsWith(" · было 1 из 2"))) throw new Exception("Рядом с итогом нет «было 1 из 2»");
+                if (!Visible(t => t.Text.StartsWith("Открывается 2 из 2 · в ") && t.Text.EndsWith(" · было 1 из 2"))) throw new Exception("После включения нет «Открывается 2 из 2 · в … · было 1 из 2»");
                 if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-home-working-was.png")); }
 
-                // «Сайт не открывается?» → адрес → «Открыть без оптимизации».
+                // «Сайт не открывается?» → «Проверить сайт: с оптимизацией и без неё» → итог строкой → «Добавить в исключения» (п. 15, решение владельца).
                 if (Link("Сайт не открывается?") is not { } fix) throw new Exception("Нет «Сайт не открывается?» при работающей оптимизации");
-                if (Find<TextBox>(tabs, t => t.IsVisible && System.Windows.Automation.AutomationProperties.GetName(t) == "Адрес сайта без оптимизации") is not null) throw new Exception("Панель адреса раскрыта сама");
+                string aria = L.T("home.direct.site.aria");
+                if (Find<TextBox>(tabs, t => t.IsVisible && System.Windows.Automation.AutomationProperties.GetName(t) == aria) is not null) throw new Exception("Блок «Проверить сайт» раскрыт сам");
                 fix.Command.Execute(null);
                 Pump();
-                var box = Find<TextBox>(tabs, t => t.IsVisible && System.Windows.Automation.AutomationProperties.GetName(t) == "Адрес сайта без оптимизации") ?? throw new Exception("Панель адреса не раскрылась");
-                if (Link("Открыть без оптимизации") is null) throw new Exception("Нет кнопки «Открыть без оптимизации»");
+                var box = Find<TextBox>(tabs, t => t.IsVisible && System.Windows.Automation.AutomationProperties.GetName(t) == aria) ?? throw new Exception("Блок «Проверить сайт» не раскрылся");
+                if (!Visible(t => t.Text == L.T("home.sitecheck.title")) || Link(L.T("home.sitecheck.button")) is null) throw new Exception("Нет подписи или кнопки «Проверить»");
+                if (Link("Открыть без оптимизации") is not null) throw new Exception("Осталась кнопка «Открыть без оптимизации»");
                 box.Text = "https://Bank.Example/login";
                 Pump();
-                WaitUi(vm.OpenDirectAsync());
+                on = false;   // с оптимизацией сайт не открывается
+                WaitUi(vm.SiteCheckAsync());
+                Pump();
+                if (!Visible(t => t.Text == L.T("home.sitecheck.fails_with"))) throw new Exception("Нет итога «С оптимизацией не открывается»");
+                if (Find<Button>(tabs, b => b.IsVisible && b.Content as string == L.T("home.sitecheck.add")) is null) throw new Exception("Нет «Добавить в исключения»");
+                if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-home-sitecheck.png"));
+                on = true;    // без оптимизации — открывается
+                WaitUi(vm.AddCheckedToExcludeAsync());
                 Pump();
                 if (!f.Backend.Calls.Contains("user_exclude_set bank.example")) throw new Exception("Сайт не ушёл в список исключений ПК: " + string.Join(" | ", f.Backend.Calls));
                 if (!Visible(t => t.Text == L.T("home.direct.done_pc", new { site = "bank.example" }))) throw new Exception("Нет ответа под ссылками");

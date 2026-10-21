@@ -16,5 +16,15 @@
   "web.warn.dns_spoofed": "The ISP is spoofing site addresses — apps outside the browser may not work",
   "web.warn.select_failed": "Strategy search was interrupted: {error}",
   "web.warn.switched_backup": "The strategy stopped working — backup {name} is on",
-  "web.core.missing": "zapret core is not installed"
+  "web.core.missing": "zapret core is not installed",
+  "web.diag.conflict_row": "{name} — interferes with optimization",
+  "web.diag.conflicts_none": "none found — no interference",
+  "web.diag.dns_clean": "no spoofing — no interference",
+  "web.diag.dns_label": "ISP’s DNS",
+  "web.diag.flow_handed": "handed over to optimization — no interference",
+  "web.diag.flow_off": "off — no interference",
+  "web.diag.flow_on": "on — interferes with optimization",
+  "web.diag.ipv6_bad": "present — sites over IPv6 bypass optimization",
+  "web.diag.ipv6_none": "none — no interference",
+  "web.diag.ipv6_on": "present, optimization is on for IPv6 too — no interference"
 }

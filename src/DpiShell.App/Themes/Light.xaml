@@ -33,4 +33,10 @@
     <SolidColorBrush x:Key="Track" Color="#E5E7EB" />
     <SolidColorBrush x:Key="ScrollThumb" Color="#C4C8CF" />
     <SolidColorBrush x:Key="ScrollThumbHover" Color="#9CA3AF" />
+
+    <!-- ===== Главная (вариант A, R-home): значки состояния ✓ / ! / ✗ и круглый значок статуса ===== -->
+    <SolidColorBrush x:Key="WarnText" Color="#B45309" />
+    <SolidColorBrush x:Key="OkSoft" Color="#E3F5E8" />
+    <SolidColorBrush x:Key="DangerSoft" Color="#FBE4E4" />
+    <SolidColorBrush x:Key="WarnSoft" Color="#FEF3DC" />
 </ResourceDictionary>

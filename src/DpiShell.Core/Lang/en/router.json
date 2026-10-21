@@ -460,10 +460,9 @@
  "router.login_choice.text": "Optimization is already running on the router — for all devices at home, including this PC. Together with the router, optimization on the PC breaks sites.\n\nTo manage it, sign in to the router.",
  "router.login_choice.button": "Sign in to the router",
  "router.select_choice.text": "Optimization is running on the router, so a strategy search on this PC will give a wrong result: strategies will work only “paired” with the router.",
- "router.both_choice.text": "Optimization is already running on the router — for all devices at home, including this PC. They cannot work together: traffic is processed twice.",
+ "router.both_choice.text": "For all devices at home, including this PC. Turning it on here too works only together with the router — otherwise traffic is processed twice.",
  "router.choice.select_router": "Find strategy on the router",
  "router.choice.pause_router": "Turn off on router during the search",
- "router.choice.swap": "Turn off on router, turn on for this PC",
  "router.resume.confirm": "Search finished. Turn optimization back on for the router?",
  "router.resume.confirm_pc": "Search finished. Turn optimization back on for the router? It will then be turned off on this PC.",
  "router.resume.done": "Optimization is running on the router again.",
@@ -507,5 +506,13 @@
   "router.log.uninstall_ssh": "Removal over SSH ({host})",
   "router.log.uninstall_failed": "Removal failed",
   "router.log.removed": "Removed",
-  "router.dns.servers_header": "Server responses"
+  "router.dns.servers_header": "Server responses",
+ "router.both.title": "Optimization is already running on the router",
+ "router.both.footer": "“Work together” is remembered: next time without asking. To change — “Router” → “Joint mode”.",
+ "router.choice.joint": "Work together",
+ "router.choice.joint.detail": "The router handles YouTube and Discord, this PC — my sites and games.",
+ "router.choice.joint.nothing": "This PC has nothing to handle yet. Add your sites (“Sites”) or a game profile (“Games & apps”).",
+ "router.choice.select_router.detail": "Find a better strategy — for all devices at home.",
+ "router.choice.only_pc": "Only on this PC",
+ "router.choice.only_pc.detail": "Turn off on router and turn on for this PC."
 }

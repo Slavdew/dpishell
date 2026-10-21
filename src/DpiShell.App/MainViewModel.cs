@@ -694,6 +694,7 @@ public sealed partial class MainViewModel : Observable
             StatusDetail = id is not null ? L.T("home.strategy", new { name = StrategyTitle(id) }) : L.T("home.status.off_hint");
         }
         // Через роутер — зелёный кружок: обход работает, хоть и не на этом ПК (значок в трее — про этот ПК).
+        _partial = partial;
         StatusBrush = partial ? BrushOf(StatusKind.Busy) : BrushOf(Kind == StatusKind.Off && Router.Found && Router.RouterEnabled ? StatusKind.On : Kind);
     }
 
@@ -703,7 +704,7 @@ public sealed partial class MainViewModel : Observable
         var id = CurrentStrategyId;
         DropStaleCheck();
         MaybeAutoCheck();
-        Raise(nameof(ShowSiteFix)); Raise(nameof(ShowRouterSelectLink));
+        Raise(nameof(ShowSiteFix));
         Raise(nameof(IsRunning)); Raise(nameof(ResultApplied));
         Raise(nameof(ToggleText)); Raise(nameof(PcSecondary)); Raise(nameof(PcPrimary));
         Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); RaiseSitesDirty();
@@ -755,8 +756,8 @@ public sealed partial class MainViewModel : Observable
     public ObservableCollection<CheckRow> CheckRows { get; } = [];
 
     readonly LiveText _checkSummary = new();
-    public string CheckSummary { get => _checkSummary.Value; private set { _checkSummary.Set(value); Raise(); } }
-    void CheckSummaryIs(Func<string> build) { _checkSummary.Set(build); Raise(nameof(CheckSummary)); }
+    public string CheckSummary { get => _checkSummary.Value; private set { _checkSummary.Set(value); Raise(); Raise(nameof(HeroDetail)); } }
+    void CheckSummaryIs(Func<string> build) { _checkSummary.Set(build); Raise(nameof(CheckSummary)); Raise(nameof(HeroDetail)); }
     /// <summary>Адреса последней проверки (данные): строки таблицы собираются заново при смене языка.</summary>
     IReadOnlyList<TargetVerdict>? _checkVerdicts;
 
@@ -941,7 +942,8 @@ public sealed partial class MainViewModel : Observable
         await RefreshStatusAsync();
     }
 
-    public string ToggleText => L.T(IsRunning ? "home.toggle.off" : PcSecondary ? "home.toggle.on_pc" : "home.toggle.on");
+    /// <summary>Роутер найден — «Выключить на ПК»: на главной рядом его собственная кнопка.</summary>
+    public string ToggleText => L.T(IsRunning ? (Router.Found ? "home.toggle.off_pc" : "home.toggle.off") : PcSecondary ? "home.toggle.on_pc" : "home.toggle.on");
     public bool CanChoose => !Busy && !IsLoading && !Selecting;
 
     /// <summary>Почему выбор стратегии сейчас недоступен (список серый).</summary>
@@ -1082,7 +1084,7 @@ public sealed partial class MainViewModel : Observable
     public bool Checking
     {
         get => _checking;
-        private set { if (Set(ref _checking, value)) { Raise(nameof(HasCheck)); CommandManager.InvalidateRequerySuggested(); } }
+        private set { if (Set(ref _checking, value)) { Raise(nameof(HasCheck)); RaiseIssues(); CommandManager.InvalidateRequerySuggested(); } }
     }
 
     /// <summary>Для какого состояния обхода (включён, стратегия) сделана проверка; другое состояние — итог устарел.</summary>
@@ -1107,7 +1109,7 @@ public sealed partial class MainViewModel : Observable
         _checkGen++;
         _checkFor = null;
         _checkVerdicts = null;
-        CheckRows.Clear(); CheckSummary = ""; CheckedAt = "";
+        CheckRows.Clear(); CheckSummary = ""; CheckedAt = ""; _checkedTime = null;
         Checking = false;
     }
 
@@ -1165,6 +1167,7 @@ public sealed partial class MainViewModel : Observable
             CheckSummaryIs(() => L.T("home.check.summary", new { ok = CheckGroups.Count(g => g.Ok), total = CheckGroups.Count }));
             // «Было» — итог до включения: виден, чтобы не гадать, помогло ли.
             var checkedAt = DateTime.Now;
+            _checkedTime = checkedAt;
             CheckedAtIs(Covered && _checkWas is { } w ? () => L.T("home.check.at_was", new { time = L.Time(checkedAt), ok = w.Ok, total = w.Total }) : () => L.T("home.check.at", new { time = L.Time(checkedAt) }));
         }
         catch (Exception e)
@@ -1779,6 +1782,8 @@ public sealed partial class MainViewModel : Observable
         _message = _message == "" ? "" : L.BuiltIn.Values.Any(p => p.Strings.TryGetValue("common.ready", out var r) && r.Text == _message) ? ReadyText : L.Relocalize(_message, own: true);
         Retranslate(ref _result); Retranslate(ref _appliedLine); Retranslate(ref _deepText);
         foreach (var t in new[] { _resultHint, _checkSummary, _dnsSummary, _checkedAt, _timestampsText, _diagUpdated }) t.Retranslate();
+        // Главная: списки и строки, собранные на прежнем языке, — заново (вычисляемые свойства прочтутся после этого).
+        _pcItems = _routerItems = null; _tiles = null; _autoRows = null; _homeShown.Clear();
         Retranslate(ref _directMessage); Retranslate(ref _toast); Retranslate(ref _toastAction);
         ComputeStatus();
         RebuildCheckRows();

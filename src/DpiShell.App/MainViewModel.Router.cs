@@ -13,6 +13,12 @@ public sealed partial class MainViewModel
     /// <summary>Выбор из нескольких действий: индекс кнопки, -1 — «Отмена» (в тестах подменяется).</summary>
     public Func<string, IReadOnlyList<string>, int> Choose { get; set; } = ChoiceDialog.Show;
 
+    /// <summary>Вопрос с пояснениями под кнопками: индекс действия, -1 — «Отмена» (в тестах подменяется).</summary>
+    public Func<ChoiceRequest, int> ChooseDetailed { get; set; } = ChoiceDialog.Show;
+
+    /// <summary>Действия вопроса «Оптимизация уже работает на роутере» по порядку кнопок.</summary>
+    public enum RouterChoice { Joint = 0, SelectOnRouter = 1, OnlyPc = 2 }
+
     /// <summary>Роутер выключили на время подбора на ПК — после подбора спросить, включить ли обратно.</summary>
     bool _routerPausedForSelect;
     bool _switchingToRouter;
@@ -43,7 +49,9 @@ public sealed partial class MainViewModel
 
     /// <summary>
     /// Перед «Включить» и подбором на ПК: обход уже работает на роутере — не включаем второй, а предлагаем
-    /// «Подобрать на роутере» или выключить роутер (на время подбора — с вопросом после него). true — можно продолжать на ПК.
+    /// «Работать вместе» (совместная работа: роутер — YouTube и Discord, ПК — свои сайты и игры), «Подобрать на роутере»
+    /// или выключить роутер (на время подбора — с вопросом после него). true — можно продолжать на ПК.
+    /// «Работать вместе» запоминается переключателем «Совместная работа» — дальше включение идёт без вопроса (<see cref="JointBeforeEnableAsync"/>).
     /// </summary>
     public async Task<bool> RouterGateAsync(bool select)
     {
@@ -57,12 +65,8 @@ public sealed partial class MainViewModel
             if (login == 0) Router.LoginCmd.Execute(null);
             return false;
         }
-        var choice = Choose(select
-                ? L.T("router.select_choice.text")
-                : L.T("router.both_choice.text"),
-            select
-                ? [L.T("router.choice.select_router"), L.T("router.choice.pause_router")]
-                : [L.T("router.choice.select_router"), L.T("router.choice.swap")]);
+        if (!select) return await BothChoiceAsync();
+        var choice = Choose(L.T("router.select_choice.text"), [L.T("router.choice.select_router"), L.T("router.choice.pause_router")]);
         if (choice == 0)
         {
             Router.SelectOnRouter = true;
@@ -73,6 +77,34 @@ public sealed partial class MainViewModel
         if (!await Router.DisableAsync()) return false;
         _routerPausedForSelect = select;
         return true;
+    }
+
+    /// <summary>«Включить» на ПК, когда работает роутер (ответ владельца к п. 1): первой — «Работать вместе»; у ПК нечего вести — она серая с подсказкой.</summary>
+    async Task<bool> BothChoiceAsync()
+    {
+        bool? hasWork = await Router.JointHasWorkAsync();
+        var choice = (RouterChoice)ChooseDetailed(new(L.T("router.both.title"), L.T("router.both_choice.text"),
+        [
+            new(L.T("router.choice.joint"), L.T("router.choice.joint.detail"), "HomeIcon.Router", Enabled: hasWork != false, DisabledHint: L.T("router.choice.joint.nothing")),
+            new(L.T("router.choice.select_router"), L.T("router.choice.select_router.detail"), "HomeIcon.Wand"),
+            new(L.T("router.choice.only_pc"), L.T("router.choice.only_pc.detail"), "HomeIcon.Home"),
+        ], L.T("router.both.footer"), "HomeIcon.Router"));
+        switch (choice)
+        {
+            case RouterChoice.Joint:
+                // Совместная работа включает и оптимизацию на ПК (только своё); выбор остаётся включённым переключателем на «Роутере».
+                await Router.StartJointAsync();
+                await RefreshStatusAsync();
+                return false;
+            case RouterChoice.SelectOnRouter:
+                Router.SelectOnRouter = true;
+                Page = Pages.Select;
+                return false;
+            case RouterChoice.OnlyPc:
+                return await Router.DisableAsync();
+            default:
+                return false;
+        }
     }
 
     /// <summary>После подбора на ПК, если роутер выключали на его время: «Включить на роутере обратно?» — тогда обход ПК выключается.</summary>

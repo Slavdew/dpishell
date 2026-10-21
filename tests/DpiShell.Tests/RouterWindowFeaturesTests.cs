@@ -394,9 +394,9 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         var vm = Main(r);
         await vm.Router.ConnectAsync("secret");
         IReadOnlyList<string>? options = null;
-        vm.Choose = (_, o) => { options = o; return 0; };
+        vm.ChooseDetailed = r => { options = r.Options.Select(o => o.Title).ToList(); return (int)MainViewModel.RouterChoice.SelectOnRouter; };
         await vm.EnableAsync();
-        Assert.Equal(new[] { L.T("router.choice.select_router"), L.T("router.choice.swap") }, options);
+        Assert.Equal(new[] { L.T("router.choice.joint"), L.T("router.choice.select_router"), L.T("router.choice.only_pc") }, options);
         Assert.Equal(Pages.Select, vm.Page);
         Assert.True(vm.Router.SelectOnRouter);
         Assert.True(r.Enabled);
@@ -408,7 +408,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         using var r = new FakeRouter();
         var vm = Main(r);
         await vm.Router.ConnectAsync("secret");
-        vm.Choose = (_, _) => 1;
+        vm.ChooseDetailed = _ => (int)MainViewModel.RouterChoice.OnlyPc;
         await vm.EnableAsync();
         Assert.False(r.Enabled);
         Assert.Equal(1, Count(r, "disable"));
