@@ -13,7 +13,7 @@ public sealed record CoreManifest(string Version, string ZipUrl, string ZipSha25
 
     public static CoreManifest Load(string path) =>
         JsonSerializer.Deserialize<CoreManifest>(File.ReadAllText(path), Json)
-        ?? throw new InvalidDataException($"Пустой манифест ядра: {path}");
+        ?? throw new InvalidDataException(L.T("core.core.manifest_empty", new { path }));
 }
 
 public enum CoreState { Ok, Missing, Modified }
@@ -70,7 +70,7 @@ public sealed class CoreInstaller(AppPaths paths, CoreManifest manifest)
                 var zipHash = Sha256(zip);
                 if (string.Equals(zipHash, manifest.ZipSha256, StringComparison.OrdinalIgnoreCase)) { failure = null; break; }
                 File.Delete(zip);
-                failure = new SecurityException($"Хеш архива ядра с {url} не совпал: ожидался {manifest.ZipSha256}, получен {zipHash}. Файл удалён.");
+                failure = new SecurityException(L.T("core.core.zip_hash", new { url, expected = manifest.ZipSha256, actual = zipHash }));
             }
             if (failure is not null) throw failure;
 
@@ -81,12 +81,12 @@ public sealed class CoreInstaller(AppPaths paths, CoreManifest manifest)
                 foreach (var (name, hash) in manifest.Files)
                 {
                     var entry = archive.GetEntry(manifest.ZipDir + name)
-                        ?? throw new SecurityException($"В архиве нет {manifest.ZipDir}{name}");
+                        ?? throw new SecurityException(L.T("core.core.entry_missing", new { file = manifest.ZipDir + name }));
                     var target = Path.Combine(staged, name);
                     entry.ExtractToFile(target);
                     var h = Sha256(target);
                     if (!string.Equals(h, hash, StringComparison.OrdinalIgnoreCase))
-                        throw new SecurityException($"Хеш {name} не совпал с манифестом.");
+                        throw new SecurityException(L.T("core.core.file_hash", new { name }));
                 }
             }
 
@@ -126,7 +126,7 @@ public sealed class CoreInstaller(AppPaths paths, CoreManifest manifest)
                 await Task.Delay(1500 * (i + 1), ct);
             }
         }
-        throw new HttpRequestException($"Не удалось скачать {url}: {last?.Message}", last);
+        throw new HttpRequestException(L.T("core.core.download_failed", new { url, error = last?.Message }), last);
     }
 }
 

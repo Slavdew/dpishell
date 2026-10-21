@@ -75,7 +75,7 @@ public sealed class ChangeUndoEngine(ChangeJournal journal)
 
     public async Task<UndoReport> UndoAsync(string id, CancellationToken ct = default)
     {
-        var e = journal.Active().FirstOrDefault(x => x.Id == id) ?? throw new InvalidOperationException("Такой записи нет в журнале — возможно, её уже откатили.");
+        var e = journal.Active().FirstOrDefault(x => x.Id == id) ?? throw new InvalidOperationException(L.T("core.undo.no_entry"));
         return new([await UndoOneAsync(e, ct)]);
     }
 

@@ -38,7 +38,7 @@ public sealed class AppUpdateTests
         var o = new JsonObject
         {
             ["schema"] = 1, ["product"] = "dpishell-windows", ["version"] = version, ["tag"] = tag ?? "windows-v" + version,
-            ["min_os"] = minOs ?? "10.0.17763", ["changes"] = new JsonArray("Быстрее подбор", "Исправлен трей"),
+            ["min_os"] = minOs ?? "10.0.17763", ["changes"] = new JsonArray("Быстрее подбор", "Исправлен трей"), ["changes_en"] = new JsonArray("Faster search", "Tray fixed"),
             ["assets"] = new JsonArray(new JsonObject { ["name"] = asset ?? AppRelease.PortableName(version), ["sha256"] = Convert.ToHexStringLower(SHA256.HashData(zip)) }),
         };
         return Encoding.UTF8.GetBytes(o.ToJsonString() + "\n");
@@ -68,6 +68,25 @@ public sealed class AppUpdateTests
         var same = await Client(Serve(new MapHandler(), A, "1.2.0"), A).CheckAsync("1.2.0.0");
         Assert.False(same.Newer);
         Assert.False(same.Available);
+    }
+
+    /// <summary>«Что нового» на языке окна: английский, если он есть в подписанном release.json; иначе русский (Б-2 аудита перед бетой).</summary>
+    [Fact]
+    public async Task Check_Changes_FollowWindowLanguage_FallBackToRussian()
+    {
+        var r = await Client(Serve(new MapHandler(), A, "1.2.0"), A).CheckAsync("1.0.0");
+        var rel = r.Found!.Release;
+        Assert.Equal(["Faster search", "Tray fixed"], rel.ChangesFor(L.En));
+        Assert.Equal(["Быстрее подбор", "Исправлен трей"], rel.ChangesFor(L.Ru));
+        Assert.Equal(["Быстрее подбор", "Исправлен трей"], rel.ChangesFor("de"));
+        Assert.Equal(["Быстрее подбор", "Исправлен трей"], (rel with { ChangesEn = null }).ChangesFor(L.En));
+
+        // Старый release.json без changes_en читается: перевода нет — русский и в английском окне.
+        var old = JsonNode.Parse(ReleaseJson("1.3.0", GoodZip("1.3.0")))!.AsObject();
+        old.Remove("changes_en");
+        var parsed = AppRelease.Parse(Encoding.UTF8.GetBytes(old.ToJsonString()));
+        Assert.Null(parsed.ChangesEn);
+        Assert.Equal(parsed.Changes, parsed.ChangesFor(L.En));
     }
 
     [Fact]
@@ -392,6 +411,9 @@ public sealed class AppUpdateTests
         Assert.Equal(v, AppRelease.CurrentVersion);
         // Заметки к выпуску текущей версии есть — иначе CI не выпустит тег.
         var notes = JsonNode.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(Repo.Data)!, "packaging", "release-notes.json")))!.AsObject();
-        Assert.NotEmpty(notes[v]!.AsArray());
+        // Запись версии — {"ru": [...], "en": [...]}, перевод один к одному (packaging/release-json.py сверяет то же).
+        var entry = notes[v]!.AsObject();
+        Assert.NotEmpty(entry["ru"]!.AsArray());
+        Assert.Equal(entry["ru"]!.AsArray().Count, entry["en"]!.AsArray().Count);
     }
 }

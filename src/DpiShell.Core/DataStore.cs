@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Text.RegularExpressions;
 
 namespace DpiShell.Core;
@@ -29,7 +30,7 @@ public sealed partial class DataStore(AppPaths paths)
 
     static void CopyDir(string from, string to, string? skip = null)
     {
-        if (!Directory.Exists(from)) throw new DirectoryNotFoundException($"Нет данных поставки: {from}");
+        if (!Directory.Exists(from)) throw new DirectoryNotFoundException(L.T("core.data.no_bundle", new { path = from }));
         foreach (var f in Directory.GetFiles(from))
             if (!string.Equals(Path.GetFileName(f), skip, StringComparison.OrdinalIgnoreCase))
                 File.Copy(f, Path.Combine(to, Path.GetFileName(f)), overwrite: true);

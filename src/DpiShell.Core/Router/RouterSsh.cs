@@ -92,7 +92,7 @@ public sealed partial class RouterSsh(ISshSession ssh)
     {
         var r = await ssh.RunAsync($"cat {UninstallResultPath} 2>/dev/null", null, null, ct);
         if (RouterScriptJson.LastJsonLine(r.Stdout) is null) return null;
-        return RouterScriptJson.Parse<RouterUninstallResult>(r.Stdout, "Удаление");
+        return RouterScriptJson.Parse<RouterUninstallResult>(r.Stdout, L.T("core.rt.pre.what_uninstall"));
     }
 
     // ---------- фиды роутера (для белого списка прокси) ----------
@@ -175,10 +175,10 @@ public sealed partial class RouterSsh(ISshSession ssh)
     /// </summary>
     public async Task UploadUpdateAsync(IReadOnlyList<RouterUpdateFile> files, CancellationToken ct = default)
     {
-        if (files.Count == 0) throw new ArgumentException("Нет пакетов обновления");
+        if (files.Count == 0) throw new ArgumentException(L.T("core.rt.ssh.no_packages"));
         foreach (var f in files)
         {
-            if (!UpdatePackageName().IsMatch(f.Name)) throw new ArgumentException($"Не пакет DpiShell: {f.Name}");
+            if (!UpdatePackageName().IsMatch(f.Name)) throw new ArgumentException(L.T("core.rt.ssh.not_pkg", new { name = f.Name }));
             if (Sha256File(f.LocalPath) is var h && !h.Equals(f.Sha256, StringComparison.OrdinalIgnoreCase))
                 throw new SecurityException(L.T("core.rt.ssh.pkg_hash", new { name = f.Name }));
         }

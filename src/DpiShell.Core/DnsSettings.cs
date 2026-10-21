@@ -252,13 +252,13 @@ public sealed class DnsManager(IDnsSystem sys, string backupFile)
         string title;
         if (choice == DnsPresets.Custom)
         {
-            servers = ips is { Count: > 0 } ? ips : throw new ArgumentException("Свой вариант без адресов.");
+            servers = ips is { Count: > 0 } ? ips : throw new ArgumentException(L.T("core.dns.custom_empty"));
             template = doh;
             title = L.T("core.dns.custom_title");
         }
         else
         {
-            var p = DnsPresets.Find(choice) ?? throw new ArgumentException("Нет такого варианта DNS.");
+            var p = DnsPresets.Find(choice) ?? throw new ArgumentException(L.T("core.dns.unknown"));
             servers = p.Ips;
             template = p.Doh;
             title = p.Title;

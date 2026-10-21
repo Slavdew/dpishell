@@ -1,29 +1,58 @@
 {
-  "_comment": "Что нового в программе для Windows — для окна «Доступно обновление» и страницы релиза. Ключ — версия X.Y.Z (= Version в Directory.Build.props); коротко, словами пользователя, до 15 строк. Нет записи для версии — тег windows-vX.Y.Z не выпускается (packaging/release-json.py). min_os — минимальная Windows (10.0.17763 = Windows 10 1809); на более старой окно обновление не предлагает.",
+  "_comment": "Что нового в программе для Windows — для окна «Доступно обновление» и страницы релиза. Ключ — версия X.Y.Z (= Version в Directory.Build.props); значение — {\"ru\": [...], \"en\": [...]}: коротко, словами пользователя, до 15 строк; строки en — перевод строк ru один к одному (нет en — окно показывает русский; прежний вид, просто список, читается как ru). Нет записи для версии — тег windows-vX.Y.Z не выпускается (packaging/release-json.py). min_os — минимальная Windows (10.0.17763 = Windows 10 1809); на более старой окно обновление не предлагает.",
   "min_os": "10.0.17763",
-  "0.10.0": [
-    "Выгрузка и загрузка своих настроек папкой или архивом .zip с текстовыми файлами: сайты, исключения, стратегии, настройки для сайтов, профили игр, подсети, DNS и (осторожно) строки hosts — чтобы делиться ими, например, с абонентами того же провайдера",
-    "Перед загрузкой — предпросмотр: что добавится, что заменится, что пропущено и почему; «Отменить всё» возвращает прежнее",
-    "Окно на русском и английском: переключатель — флаг внизу меню; можно подключить свой перевод",
-    "Новая главная: строки «Этот ПК» и «Роутер» со значками состояния, плитки сайтов, «Проверить сайт» с кнопкой «Добавить в исключения», раздел «Проверяется само»",
-    "Меню слева со значками, его можно свернуть; вкладка «Сеть» объединяет DNS, прокси и «Починить адреса»; «Исключения» на вкладке «Сайты»",
-    "«Установить службу» на главной; «Показывать роутер» в «Настройках»",
-    "«Работать вместе» с роутером: роутер ведёт YouTube и Discord, ПК — свои сайты",
-    "«Адреса сайтов для проверок»: через защищённый DNS или как у системы",
-    "«Сохранить отчёт» на «Диагностике»: один текстовый файл для обращения за помощью, личное скрыто",
-    "Страница роутера на русском и английском, «Что мешает» с оценкой, проверка одной стратегии, выгрузка и загрузка настроек и на роутере",
-    "Бета: QUIC, IPv6 и совместная работа на реальном роутере пока не проверены на живом железе"
-  ],
-  "0.9.6": [
-    "Бета для проверки — спасибо, что пробуете! Если что-то не работает, напишите, что видели (лучше со снимком экрана).",
-    "Оптимизация соединения с YouTube и Discord одной кнопкой: программа сама подбирает рабочую стратегию",
-    "Проверка сайтов: видно, что открывается, а что нет — и стало ли лучше",
-    "Окно работает без прав администратора — разрешение обычно спрашивается один раз, при установке помощника",
-    "DNS — своя вкладка: защищённый DNS для этого компьютера в один клик и «Вернуть как было»",
-    "«Починить адреса»: проверенные адреса для GitHub, Telegram и Discord с предпросмотром и откатом",
-    "Свои стратегии: скопировать, вставить, изменить",
-    "Вкладка «Информация и обновления»: версии, списки и данные",
-    "Роутер с OpenWrt: установка, обновление и удаление DpiShell на роутере прямо из этого окна",
-    "Списки и стратегии обновляются сами, с проверкой подписи"
-  ]
+  "0.10.0": {
+    "ru": [
+      "Выгрузка и загрузка своих настроек папкой или архивом .zip с текстовыми файлами: сайты, исключения, стратегии, настройки для сайтов, профили игр, подсети, DNS и (осторожно) строки hosts — чтобы делиться ими, например, с абонентами того же провайдера",
+      "Перед загрузкой — предпросмотр: что добавится, что заменится, что пропущено и почему; «Отменить всё» возвращает прежнее",
+      "Окно на русском и английском: переключатель — флаг внизу меню; можно подключить свой перевод",
+      "Новая главная: строки «Этот ПК» и «Роутер» со значками состояния, плитки сайтов, «Проверить сайт» с кнопкой «Добавить в исключения», раздел «Проверяется само»",
+      "Меню слева со значками, его можно свернуть; вкладка «Сеть» объединяет DNS, прокси и «Починить адреса»; «Исключения» на вкладке «Сайты»",
+      "«Установить службу» на главной; «Показывать роутер» в «Настройках»",
+      "«Работать вместе» с роутером: роутер ведёт YouTube и Discord, ПК — свои сайты",
+      "«Адреса сайтов для проверок»: через защищённый DNS или как у системы",
+      "«Сохранить отчёт» на «Диагностике»: один текстовый файл для обращения за помощью, личное скрыто",
+      "Страница роутера на русском и английском, «Что мешает» с оценкой, проверка одной стратегии, выгрузка и загрузка настроек и на роутере",
+      "Бета: QUIC, IPv6 и совместная работа на реальном роутере пока не проверены на живом железе"
+    ],
+    "en": [
+      "Exporting and importing your settings as a folder or a .zip of text files: sites, exclusions, strategies, per-site settings, game profiles, subnets, DNS and (with care) hosts lines — to share them, for example, with subscribers of the same ISP",
+      "A preview before importing: what will be added, what replaced, what skipped and why; “Undo all” restores the previous state",
+      "The window is available in Russian and English: the switch is the flag at the bottom of the menu; you can also add your own translation",
+      "New Home screen: “This PC” and “Router” rows with status icons, site tiles, “Check a site” with an “Add to exclusions” button, a “Checked automatically” section",
+      "Menu on the left with icons that can be collapsed; the “Network” tab combines DNS, proxy and “Fix addresses”; “Exclusions” moved to the “Sites” tab",
+      "“Install service” on the Home screen; “Show router” in “Settings”",
+      "“Work together” with a router: the router handles YouTube and Discord, the PC handles your own sites",
+      "“Site addresses for checks”: through secure DNS or as the system resolves them",
+      "“Save report” on “Diagnostics”: one text file for asking for help, personal data hidden",
+      "The router page in Russian and English, “What interferes” with a rating, checking a single strategy, exporting and importing settings on the router as well",
+      "Beta: QUIC, IPv6 and joint work on a real router have not been tested on live hardware yet"
+    ]
+  },
+  "0.9.6": {
+    "ru": [
+      "Бета для проверки — спасибо, что пробуете! Если что-то не работает, напишите, что видели (лучше со снимком экрана).",
+      "Оптимизация соединения с YouTube и Discord одной кнопкой: программа сама подбирает рабочую стратегию",
+      "Проверка сайтов: видно, что открывается, а что нет — и стало ли лучше",
+      "Окно работает без прав администратора — разрешение обычно спрашивается один раз, при установке помощника",
+      "DNS — своя вкладка: защищённый DNS для этого компьютера в один клик и «Вернуть как было»",
+      "«Починить адреса»: проверенные адреса для GitHub, Telegram и Discord с предпросмотром и откатом",
+      "Свои стратегии: скопировать, вставить, изменить",
+      "Вкладка «Информация и обновления»: версии, списки и данные",
+      "Роутер с OpenWrt: установка, обновление и удаление DpiShell на роутере прямо из этого окна",
+      "Списки и стратегии обновляются сами, с проверкой подписи"
+    ],
+    "en": [
+      "A beta for testing — thanks for trying it! If something does not work, write what you saw (a screenshot helps).",
+      "Optimizing the connection to YouTube and Discord with one button: the app finds a working strategy on its own",
+      "Site checks: you can see what opens and what does not, and whether it got better",
+      "The window works without administrator rights — permission is usually requested once, when the helper is installed",
+      "DNS has its own tab: secure DNS for this computer in one click and “Restore the previous setting”",
+      "“Fix addresses”: verified addresses for GitHub, Telegram and Discord with a preview and undo",
+      "Own strategies: copy, paste, edit",
+      "“About & updates” tab: versions, lists and data",
+      "Router with OpenWrt: install, update and remove DpiShell on the router right from this window",
+      "Lists and strategies update on their own, with signature verification"
+    ]
+  }
 }

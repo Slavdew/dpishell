@@ -59,7 +59,17 @@ public sealed class AdvancedRowVm : Observable
     public string DomainsText { get => _domains; set { if (Set(ref _domains, value)) _edited(); } }
 
     /// <summary>«auto», «direct» или id стратегии (ComboBox.SelectedValue).</summary>
-    public string Strategy { get => _strategy; set { if (Set(ref _strategy, value)) _edited(); } }
+    public string Strategy
+    {
+        get => _strategy;
+        set
+        {
+            // Пересборка списка вариантов (смена языка) обнуляет выбор ComboBox, и привязка пишет null: это не выбор человека.
+            // Строка сохраняет прежнее, а RefreshChoice() после пересборки возвращает выбор в список.
+            if (value is null) return;
+            if (Set(ref _strategy, value)) _edited();
+        }
+    }
 
     public string Hint { get => _hint; set { if (Set(ref _hint, value)) Raise(nameof(HasHint)); } }
 

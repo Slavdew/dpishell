@@ -36,7 +36,7 @@ public sealed class RouterClient : IDisposable
     public RouterClient(string address, HttpClient? http = null)
     {
         Address = address.Trim().TrimEnd('/');
-        if (Address.Contains("://") || Address.Contains('/')) throw new ArgumentException("Адрес роутера — без схемы и пути, например 192.168.1.1");
+        if (Address.Contains("://") || Address.Contains('/')) throw new ArgumentException(L.T("core.rt.arg.address"));
         _base = new Uri($"http://{Address}/");
         _ownsHttp = http is null;
         _http = http ?? new HttpClient(new SocketsHttpHandler { UseProxy = false, ConnectTimeout = TimeSpan.FromSeconds(3) });
@@ -237,10 +237,10 @@ public sealed class RouterClient : IDisposable
     /// </summary>
     public Task<RouterPcLinkSet> PcLinkSetAsync(string id, IReadOnlyList<string> macs, IReadOnlyList<string> domains, CancellationToken ct = default)
     {
-        if (!PcIdRx.IsMatch(id)) throw new ArgumentException("Номер ПК — 8–64 знака: буквы, цифры, дефис");
+        if (!PcIdRx.IsMatch(id)) throw new ArgumentException(L.T("core.rt.arg.pc_id"));
         var m = macs.Select(NormalizeMac).ToList();
-        if (m.Count is 0 or > 8 || m.Any(x => x is null)) throw new ArgumentException("MAC ПК: от 1 до 8 адресов вида aa:bb:cc:dd:ee:ff");
-        if (domains.Count > 500 || !domains.All(AdvancedSites.IsDomain)) throw new ArgumentException("Сайты связки: до 500 имён вида example.com");
+        if (m.Count is 0 or > 8 || m.Any(x => x is null)) throw new ArgumentException(L.T("core.rt.arg.pc_mac"));
+        if (domains.Count > 500 || !domains.All(AdvancedSites.IsDomain)) throw new ArgumentException(L.T("core.rt.arg.pc_domains"));
         return CallAsync<RouterPcLinkSet>("pc_link_set", new JsonObject
         {
             ["id"] = id,
@@ -252,7 +252,7 @@ public sealed class RouterClient : IDisposable
     /// <summary>Снять связку (неизвестный id — тоже успех).</summary>
     public Task PcLinkDelAsync(string id, CancellationToken ct = default)
     {
-        if (!PcIdRx.IsMatch(id)) throw new ArgumentException("Номер ПК — 8–64 знака: буквы, цифры, дефис");
+        if (!PcIdRx.IsMatch(id)) throw new ArgumentException(L.T("core.rt.arg.pc_id"));
         return CallAsync("pc_link_del", new JsonObject { ["id"] = id }, ct);
     }
 
@@ -278,7 +278,7 @@ public sealed class RouterClient : IDisposable
     static JsonObject WithConfirm(JsonObject args, int? confirmS)
     {
         if (confirmS is not { } s) return args;
-        if (s is < MinConfirmS or > MaxConfirmS) throw new ArgumentOutOfRangeException(nameof(confirmS), "Срок пробы на роутере — 60–600 с");
+        if (s is < MinConfirmS or > MaxConfirmS) throw new ArgumentOutOfRangeException(nameof(confirmS), L.T("core.rt.arg.confirm_s"));
         args["confirm_s"] = s;
         return args;
     }
@@ -303,7 +303,7 @@ public sealed class RouterClient : IDisposable
     public Task ScheduleSetAsync(bool enabled, double hours, bool autoSelect = false, bool? watchdog = null, CancellationToken ct = default)
     {
         // §9: добавлено 0.5 (раз в 30 мин).
-        if (hours is not (0.5 or 1 or 3 or 6 or 12 or 24)) throw new ArgumentOutOfRangeException(nameof(hours), "Часы проверки: 0.5, 1, 3, 6, 12 или 24");
+        if (hours is not (0.5 or 1 or 3 or 6 or 12 or 24)) throw new ArgumentOutOfRangeException(nameof(hours), L.T("core.rt.arg.hours"));
         var args = new JsonObject { ["enabled"] = enabled, ["hours"] = hours, ["auto_select"] = autoSelect };
         if (watchdog is { } w) args["watchdog"] = w;
         return CallAsync("schedule_set", args, ct);
@@ -316,7 +316,7 @@ public sealed class RouterClient : IDisposable
     /// <summary>«Сайт не открывается с обходом»: проверка с обходом и без, итог — <see cref="SiteCheckResultAsync"/>. Голое имя роутер дополнит сам.</summary>
     public Task<RouterStarted> SiteCheckAsync(string url, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(url) || url.Length > 2048 || url.Any(char.IsWhiteSpace)) throw new ArgumentException("Адрес сайта — одной строкой без пробелов");
+        if (string.IsNullOrWhiteSpace(url) || url.Length > 2048 || url.Any(char.IsWhiteSpace)) throw new ArgumentException(L.T("core.rt.arg.site_url"));
         return CallAsync<RouterStarted>("site_check", new JsonObject { ["url"] = url.Trim() }, ct);
     }
 
@@ -331,26 +331,26 @@ public sealed class RouterClient : IDisposable
     public Task<RouterStarted> DnsSetAsync(string preset, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(preset) || preset.Length > 32 || !preset.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_'))
-            throw new ArgumentException("Нет такого варианта DNS");
+            throw new ArgumentException(L.T("core.rt.arg.dns_unknown"));
         return CallAsync<RouterStarted>("dns_set", new JsonObject { ["preset"] = preset }, ct);
     }
 
     /// <summary>Свой вариант: с шаблоном DoH адреса уходят как bootstrap, без него — как обычный DNS (plain).</summary>
     public Task<RouterStarted> DnsSetCustomAsync(RouterDnsCustom custom, CancellationToken ct = default)
     {
-        if (!DnsValues.IsTitle(custom.Title)) throw new ArgumentException("Название варианта — до 40 символов, без кавычек");
-        if (custom.Doh is not null && !DnsValues.IsDohTemplate(custom.Doh)) throw new ArgumentException("Защищённый DNS — адрес вида https://сервер/путь");
+        if (!DnsValues.IsTitle(custom.Title)) throw new ArgumentException(L.T("core.rt.arg.dns_title"));
+        if (custom.Doh is not null && !DnsValues.IsDohTemplate(custom.Doh)) throw new ArgumentException(L.T("core.rt.arg.dns_doh"));
         static JsonArray? Ips(List<string>? l)
         {
             if (l is null || l.Count == 0) return null;
-            if (l.Count > DnsValues.MaxServers) throw new ArgumentException("Не больше 4 адресов");
-            return new JsonArray(l.Select(ip => (JsonNode)(DnsValues.NormalizeIp(ip) ?? throw new ArgumentException($"«{ip}» — не адрес IPv4/IPv6"))).ToArray());
+            if (l.Count > DnsValues.MaxServers) throw new ArgumentException(L.T("core.rt.arg.dns_max", new { max = DnsValues.MaxServers }));
+            return new JsonArray(l.Select(ip => (JsonNode)(DnsValues.NormalizeIp(ip) ?? throw new ArgumentException(L.T("core.rt.arg.dns_not_ip", new { ip })))).ToArray());
         }
         var c = new JsonObject { ["title"] = custom.Title.Trim() };
         if (custom.Doh is { } d) c["doh"] = d;
         if (Ips(custom.Bootstrap) is { } b) c["bootstrap"] = b;
         if (Ips(custom.Plain) is { } p) c["plain"] = p;
-        if (custom.Doh is null && c["plain"] is null) throw new ArgumentException("Нужен защищённый DNS или адреса");
+        if (custom.Doh is null && c["plain"] is null) throw new ArgumentException(L.T("core.rt.arg.dns_need"));
         return CallAsync<RouterStarted>("dns_set", new JsonObject { ["custom"] = c }, ct);
     }
 
@@ -363,13 +363,13 @@ public sealed class RouterClient : IDisposable
     /// </summary>
     public Task AdvancedSetAsync(bool enabled, string others, IReadOnlyList<RouterAdvancedRow> rows, int? confirmS = null, CancellationToken ct = default)
     {
-        if (!AdvancedSites.IsOthers(others)) throw new ArgumentException("Остальные адреса: direct, lists или all");
-        if (rows.Count > AdvancedSites.MaxRows) throw new ArgumentException($"На роутере — не больше {AdvancedSites.MaxRows} строк");
+        if (!AdvancedSites.IsOthers(others)) throw new ArgumentException(L.T("core.rt.arg.others"));
+        if (rows.Count > AdvancedSites.MaxRows) throw new ArgumentException(L.T("core.rt.arg.rows_max", new { max = AdvancedSites.MaxRows }));
         var list = new JsonArray();
         foreach (var r in rows)
         {
-            if (r.Domains.Count is 0 or > AdvancedSites.MaxDomains || !r.Domains.All(AdvancedSites.IsDomain)) throw new ArgumentException("В строке от 1 до 50 сайтов вида example.com");
-            if (!AdvancedSites.IsStrategyChoice(r.Strategy)) throw new ArgumentException("Стратегия строки: auto, direct или id из списка");
+            if (r.Domains.Count is 0 or > AdvancedSites.MaxDomains || !r.Domains.All(AdvancedSites.IsDomain)) throw new ArgumentException(L.T("core.rt.arg.row_domains"));
+            if (!AdvancedSites.IsStrategyChoice(r.Strategy)) throw new ArgumentException(L.T("core.rt.arg.row_strategy"));
             list.Add(new JsonObject { ["domains"] = new JsonArray(r.Domains.Select(d => (JsonNode)d).ToArray()), ["strategy"] = r.Strategy });
         }
         return CallAsync("advanced_set", WithConfirm(new JsonObject { ["enabled"] = enabled, ["others"] = others, ["rows"] = list }, confirmS), ct);
@@ -377,13 +377,13 @@ public sealed class RouterClient : IDisposable
 
     public Task TargetsSetAsync(IReadOnlyList<RouterTarget> items, CancellationToken ct = default)
     {
-        if (items.Count > 50) throw new ArgumentException("На роутере — не больше 50 своих сайтов");
+        if (items.Count > 50) throw new ArgumentException(L.T("core.rt.arg.own_max"));
         return CallAsync("targets_set", new JsonObject { ["items"] = JsonSerializer.SerializeToNode(items, Json) }, ct);
     }
 
     public Task ListsSetAsync(string name, IReadOnlyList<string> lines, CancellationToken ct = default)
     {
-        if (lines.Count > 5000) throw new ArgumentException("В списке на роутере — не больше 5000 строк");
+        if (lines.Count > 5000) throw new ArgumentException(L.T("core.rt.arg.list_max"));
         return CallAsync("lists_set", new JsonObject { ["name"] = CheckListName(name), ["lines"] = new JsonArray(lines.Select(l => (JsonNode)l).ToArray()) }, ct);
     }
 
@@ -414,7 +414,7 @@ public sealed class RouterClient : IDisposable
     public Task<RouterStarted> UpdateCheckAsync(CancellationToken ct = default) => CallAsync<RouterStarted>("update_check", null, ct);
 
     static string CheckListName(string name) =>
-        name is "user-general" or "user-exclude" ? name : throw new ArgumentException("Список роутера: user-general или user-exclude");
+        name is "user-general" or "user-exclude" ? name : throw new ArgumentException(L.T("core.rt.arg.list_name"));
 
     /// <summary>
     /// Найденная на ПК стратегия → формат роутера (§5.2, §5.3): id по шаблону <c>^u-[a-z0-9-]{1,48}$</c>, название до 80 символов,

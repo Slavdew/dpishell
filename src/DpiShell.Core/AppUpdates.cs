@@ -16,12 +16,14 @@ public sealed record AppReleaseAsset(string Name, string Sha256);
 
 /// <summary>
 /// Описание выпуска программы для Windows (<c>release.json</c> релиза <c>windows-vX.Y.Z</c>):
-/// <c>{ schema: 1, product, version, tag, min_os, changes: [..], assets: [{ name, sha256 }] }</c>. Собирает CI
+/// <c>{ schema: 1, product, version, tag, min_os, changes: [..], changes_en: [..], assets: [{ name, sha256 }] }</c>. Собирает CI
 /// (<c>packaging/release-json.py</c>), подписывает ключом выпусков. Принимается только с верной подписью.
 /// </summary>
 /// <param name="MinOs">Минимальная Windows (<c>10.0.17763</c>); null — без ограничения.</param>
-/// <param name="Changes">Что нового — словами пользователя (packaging/release-notes.json).</param>
-public sealed partial record AppRelease(int Schema, string Version, string Tag, string? MinOs, IReadOnlyList<string> Changes, IReadOnlyList<AppReleaseAsset> Assets)
+/// <param name="Changes">Что нового по-русски — словами пользователя (packaging/release-notes.json).</param>
+/// <param name="ChangesEn">То же по-английски (<c>changes_en</c>); null — перевода нет, окно показывает русский.</param>
+public sealed partial record AppRelease(int Schema, string Version, string Tag, string? MinOs, IReadOnlyList<string> Changes, IReadOnlyList<AppReleaseAsset> Assets,
+    IReadOnlyList<string>? ChangesEn = null)
 {
     public const string FileName = "release.json";
     public const string SignatureName = FileName + ReleaseSignature.Extension;
@@ -41,6 +43,9 @@ public sealed partial record AppRelease(int Schema, string Version, string Tag, 
     /// <summary>Имя portable-архива выпуска (как пишет packaging/make-portable.ps1).</summary>
     public static string PortableName(string version) => $"DpiShell-{version}-portable.zip";
 
+    /// <summary>Что нового на языке окна: нет перевода на этот язык — русский.</summary>
+    public IReadOnlyList<string> ChangesFor(string language) => language == L.En && ChangesEn is { Count: > 0 } en ? en : Changes;
+
     /// <summary>Архив для этого компьютера (win-x64 portable); null — в выпуске его нет.</summary>
     public AppReleaseAsset? Portable => Assets.FirstOrDefault(a => a.Name == PortableName(Version));
 
@@ -48,29 +53,31 @@ public sealed partial record AppRelease(int Schema, string Version, string Tag, 
 
     sealed record FileForm(
         int Schema, string? Product, string? Version, string? Tag, string? MinOs,
-        List<string>? Changes, List<AssetForm>? Assets);
+        List<string>? Changes, List<AssetForm>? Assets, List<string>? ChangesEn);
     sealed record AssetForm(string? Name, string? Sha256);
 
     /// <summary>Разобрать и проверить поля. Не то — <see cref="InvalidDataException"/>.</summary>
     public static AppRelease Parse(byte[] bytes)
     {
         FileForm f;
-        try { f = JsonSerializer.Deserialize<FileForm>(bytes, Json) ?? throw new InvalidDataException("пустой release.json"); }
-        catch (JsonException e) { throw new InvalidDataException("release.json не читается: " + e.Message); }
-        if (f.Schema != 1) throw new InvalidDataException($"неизвестная схема release.json ({f.Schema})");
-        if (f.Product is not null && f.Product != "dpishell-windows") throw new InvalidDataException("release.json — не программы для Windows");
-        if (f.Version is not { } v || !SemVerRx().IsMatch(v)) throw new InvalidDataException("версия выпуска — не X.Y.Z");
-        if (f.Tag != TagPrefix + v) throw new InvalidDataException($"тег {f.Tag} не совпадает с версией {v}");
-        if (f.MinOs is { } os && !System.Version.TryParse(os, out _)) throw new InvalidDataException("min_os — не версия Windows");
-        var changes = (f.Changes ?? []).Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Length > 300 ? c[..300] : c).Take(30).ToList();
+        try { f = JsonSerializer.Deserialize<FileForm>(bytes, Json) ?? throw new InvalidDataException(L.T("core.app.rel.empty")); }
+        catch (JsonException e) { throw new InvalidDataException(L.T("core.app.rel.unreadable", new { error = e.Message })); }
+        if (f.Schema != 1) throw new InvalidDataException(L.T("core.app.rel.schema", new { schema = f.Schema }));
+        if (f.Product is not null && f.Product != "dpishell-windows") throw new InvalidDataException(L.T("core.app.rel.product"));
+        if (f.Version is not { } v || !SemVerRx().IsMatch(v)) throw new InvalidDataException(L.T("core.app.rel.version"));
+        if (f.Tag != TagPrefix + v) throw new InvalidDataException(L.T("core.app.rel.tag", new { tag = f.Tag, version = v }));
+        if (f.MinOs is { } os && !System.Version.TryParse(os, out _)) throw new InvalidDataException(L.T("core.app.rel.min_os"));
+        static List<string> Lines(List<string>? list) => (list ?? []).Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Length > 300 ? c[..300] : c).Take(30).ToList();
+        var changes = Lines(f.Changes);
+        var changesEn = Lines(f.ChangesEn);
         var assets = new List<AppReleaseAsset>();
         foreach (var a in f.Assets ?? [])
         {
             if (a.Name is not { } n || !AssetNameRx().IsMatch(n) || a.Sha256 is not { } h || !Sha256Rx().IsMatch(h))
-                throw new InvalidDataException("файл выпуска с негодным именем или хешем");
+                throw new InvalidDataException(L.T("core.app.rel.bad_asset"));
             assets.Add(new(n, h.ToLowerInvariant()));
         }
-        return new(1, v, f.Tag, f.MinOs, changes, assets);
+        return new(1, v, f.Tag, f.MinOs, changes, assets, changesEn.Count > 0 ? changesEn : null);
     }
 
     /// <summary>a &lt; b для «X.Y.Z» (и «X.Y.Z.W» — четвёртая часть отбрасывается). Не версия — false.</summary>
@@ -100,7 +107,7 @@ public sealed record AppUpdateCheck(FetchedRelease? Found, bool Newer, bool OsTo
     /// <summary>Предложить обновление: есть новее, Windows подходит и архив для неё в выпуске есть.</summary>
     public bool Available => Newer && !OsTooOld && Found?.Release.Portable is not null;
     public string? Version => Found?.Release.Version;
-    public IReadOnlyList<string> Changes => Found?.Release.Changes ?? [];
+    public IReadOnlyList<string> Changes => Found?.Release.ChangesFor(L.Current) ?? [];
 }
 
 /// <summary>
@@ -199,7 +206,7 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
     async Task<byte[]> GetBytesAsync(string url, int max, CancellationToken ct)
     {
         using var resp = await HeadAsync(url, ct);
-        if (resp.Content.Headers.ContentLength > max) throw new InvalidDataException("файл слишком большой");
+        if (resp.Content.Headers.ContentLength > max) throw new InvalidDataException(L.T("core.upd.file_too_big"));
         using var body = CancellationTokenSource.CreateLinkedTokenSource(ct);
         body.CancelAfter(PerSourceTimeout);
         await using var s = await resp.Content.ReadAsStreamAsync(body.Token);
@@ -208,7 +215,7 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
         int n;
         while ((n = await s.ReadAsync(buf, body.Token)) > 0)
         {
-            if (ms.Length + n > max) throw new InvalidDataException("файл слишком большой");
+            if (ms.Length + n > max) throw new InvalidDataException(L.T("core.upd.file_too_big"));
             ms.Write(buf, 0, n);
         }
         return ms.ToArray();
@@ -218,7 +225,7 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
     async Task<string> GetFileAsync(string url, string target, IProgress<long>? progress, CancellationToken ct)
     {
         using var resp = await HeadAsync(url, ct);
-        if (resp.Content.Headers.ContentLength > MaxArchiveBytes) throw new InvalidDataException("архив слишком большой");
+        if (resp.Content.Headers.ContentLength > MaxArchiveBytes) throw new InvalidDataException(L.T("core.upd.archive_too_big"));
         using var body = CancellationTokenSource.CreateLinkedTokenSource(ct);
         body.CancelAfter(BodyTimeout);
         await using var s = await resp.Content.ReadAsStreamAsync(body.Token);
@@ -231,7 +238,7 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
             while ((n = await s.ReadAsync(buf, body.Token)) > 0)
             {
                 total += n;
-                if (total > MaxArchiveBytes) throw new InvalidDataException("архив слишком большой");
+                if (total > MaxArchiveBytes) throw new InvalidDataException(L.T("core.upd.archive_too_big"));
                 sha.AppendData(buf, 0, n);
                 await f.WriteAsync(buf.AsMemory(0, n), body.Token);
                 progress?.Report(total);
@@ -288,7 +295,7 @@ public sealed class AppVersionStore(string? root = null)
     static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower, WriteIndented = true };
 
     public string PathFor(string version) =>
-        AppRelease.SemVerRx().IsMatch(version) ? Path.Combine(Root, version) : throw new ArgumentException("версия — не X.Y.Z", nameof(version));
+        AppRelease.SemVerRx().IsMatch(version) ? Path.Combine(Root, version) : throw new ArgumentException(L.T("core.app.version_format"), nameof(version));
 
     public string ExeFor(string version) => Path.Combine(PathFor(version), ExeName);
 
@@ -334,20 +341,20 @@ public sealed class AppVersionStore(string? root = null)
                 {
                     var name = e.FullName.Replace('\\', '/');
                     if (!name.StartsWith(ArchiveFolder, StringComparison.Ordinal))
-                        throw new InvalidDataException($"в архиве лишняя запись {e.FullName}");
+                        throw new InvalidDataException(L.T("core.app.zip.extra_entry", new { name = e.FullName }));
                     var rel = name[ArchiveFolder.Length..];
                     if (rel.Length == 0) continue;
                     var dest = Path.GetFullPath(Path.Combine(staged, rel.Replace('/', Path.DirectorySeparatorChar)));
                     if (!dest.StartsWith(stagedFull, StringComparison.OrdinalIgnoreCase) || rel.Split('/').Contains(".."))
-                        throw new InvalidDataException($"запись архива выходит за папку: {e.FullName}");
+                        throw new InvalidDataException(L.T("core.app.zip.outside", new { name = e.FullName }));
                     if (name.EndsWith('/')) { Directory.CreateDirectory(dest); continue; }
                     total += e.Length;
-                    if (total > MaxUnpackedBytes) throw new InvalidDataException("архив распаковывается в слишком большой объём");
+                    if (total > MaxUnpackedBytes) throw new InvalidDataException(L.T("core.app.zip.too_big"));
                     Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
                     e.ExtractToFile(dest, overwrite: false);
                 }
             }
-            if (!File.Exists(Path.Combine(staged, ExeName))) throw new InvalidDataException($"в архиве нет {ExeName}");
+            if (!File.Exists(Path.Combine(staged, ExeName))) throw new InvalidDataException(L.T("core.app.zip.no_exe", new { name = ExeName }));
             if (Directory.Exists(target)) Directory.Delete(target, true);
             Directory.Move(staged, target);
             return target;
@@ -499,7 +506,7 @@ public sealed class AppUpdater(AppUpdateClient client, AppVersionStore store)
     /// </summary>
     public RestartPlan RestartInto(string version, bool record = true)
     {
-        if (!store.IsInstalled(version)) throw new InvalidOperationException($"версия {version} не распакована");
+        if (!store.IsInstalled(version)) throw new InvalidOperationException(L.T("core.app.not_unpacked", new { version }));
         if (record) store.RecordSwitch(CurrentVersion, CurrentExe, version, pending: true);
         return new(store.ExeFor(version), version, [WaitPidArg, CurrentPid.ToString(System.Globalization.CultureInfo.InvariantCulture), UpdatedFromArg, CurrentVersion]);
     }

@@ -181,7 +181,7 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
         head.CancelAfter(PerSourceTimeout);
         using var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, head.Token);
         resp.EnsureSuccessStatusCode();
-        if (resp.Content.Headers.ContentLength > max) throw new InvalidDataException("файл слишком большой");
+        if (resp.Content.Headers.ContentLength > max) throw new InvalidDataException(L.T("core.upd.file_too_big"));
         using var body = CancellationTokenSource.CreateLinkedTokenSource(ct);
         body.CancelAfter(BodyTimeout);
         await using var s = await resp.Content.ReadAsStreamAsync(body.Token);
@@ -190,7 +190,7 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
         int n;
         while ((n = await s.ReadAsync(buf, body.Token)) > 0)
         {
-            if (ms.Length + n > max) throw new InvalidDataException("файл слишком большой");
+            if (ms.Length + n > max) throw new InvalidDataException(L.T("core.upd.file_too_big"));
             ms.Write(buf, 0, n);
         }
         return ms.ToArray();
@@ -319,7 +319,7 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
     DataUpdateResult? Validate(string staged, DataManifest m, bool confirmed, bool signed)
     {
         if (m.Mismatches(staged) is { Count: > 0 } bad)
-            throw new SecurityException("не совпали хеши: " + string.Join(", ", bad));
+            throw new SecurityException(L.T("core.data.hash_list", new { files = string.Join(", ", bad) }));
         try
         {
             StrategyCatalog.Load(Path.Combine(staged, "strategies.json"));
@@ -331,7 +331,7 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
         }
         catch (Exception e) when (e is JsonException or InvalidDataException or IOException or ArgumentException or KeyNotFoundException or InvalidOperationException)
         {
-            throw new InvalidDataException("новые данные не прошли проверку: " + e.Message);
+            throw new InvalidDataException(L.T("core.data.validation_failed", new { error = e.Message }));
         }
         var packageCore = Path.Combine(paths.Package, "core.json");
         if (!signed && CoreChanged(staged) && !(File.Exists(packageCore) && DataManifest.Sha256(packageCore) == DataManifest.Sha256(Path.Combine(staged, "core.json"))))
@@ -341,7 +341,7 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
             var core = CoreManifest.Load(Path.Combine(staged, "core.json"));
             if (!core.ZipUrl.StartsWith(OfficialCoreReleases, StringComparison.Ordinal) || !UpdateSources.IsSafeHttps(core.ZipUrl) || core.ZipUrl.Contains("..")
                 || core.MirrorUrls is { Count: > 0 })
-                throw new SecurityException("новое ядро — только из релизов bol-van/zapret, без запасных адресов");
+                throw new SecurityException(L.T("core.data.core_official_only"));
         }
         var ipset = Path.Combine(staged, "lists", IpLists.AllFile);
         if (File.Exists(ipset))
@@ -349,7 +349,7 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
             var lists = new IpLists(paths);
             var previous = lists.HasList ? lists.Read(IpLists.AllFile).ToHashSet() : null;
             var v = IpsetValidator.ValidateFile(ipset, IpsetKind.Main, previous);
-            if (!v.Accepted) throw new InvalidDataException("IP-список не принят: " + string.Join(" ", v.Errors));
+            if (!v.Accepted) throw new InvalidDataException(L.T("core.data.ip_not_accepted", new { errors = string.Join(" ", v.Errors) }));
             if (v.NeedsConfirm && !confirmed)
                 return new(false, false, true, string.Join(" ", v.Confirm), m.Version);
         }

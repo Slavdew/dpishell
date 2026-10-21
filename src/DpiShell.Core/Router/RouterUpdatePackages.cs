@@ -12,12 +12,12 @@ public sealed record RouterReleaseInfo(int Schema, string Version, string Tag, s
     public static RouterReleaseInfo Parse(byte[] bytes)
     {
         RouterReleaseInfo r;
-        try { r = JsonSerializer.Deserialize<RouterReleaseInfo>(bytes, RouterScriptJson.Json) ?? throw new InvalidDataException("пустой release.json"); }
-        catch (JsonException e) { throw new InvalidDataException("release.json роутера не читается: " + e.Message); }
-        if (r.Schema != 1) throw new InvalidDataException($"неизвестная схема release.json ({r.Schema})");
-        if (string.IsNullOrEmpty(r.Version) || r.Tag != RouterUpdatePackages.TagPrefix + r.Version) throw new InvalidDataException($"тег {r.Tag} не совпадает с версией {r.Version}");
+        try { r = JsonSerializer.Deserialize<RouterReleaseInfo>(bytes, RouterScriptJson.Json) ?? throw new InvalidDataException(L.T("core.app.rel.empty")); }
+        catch (JsonException e) { throw new InvalidDataException(L.T("core.rt.upd.rel_unreadable", new { error = e.Message })); }
+        if (r.Schema != 1) throw new InvalidDataException(L.T("core.app.rel.schema", new { schema = r.Schema }));
+        if (string.IsNullOrEmpty(r.Version) || r.Tag != RouterUpdatePackages.TagPrefix + r.Version) throw new InvalidDataException(L.T("core.app.rel.tag", new { tag = r.Tag, version = r.Version }));
         foreach (var a in r.Assets ?? [])
-            if (a.Name is null || a.Sha256 is not { Length: 64 } h || !h.All(Uri.IsHexDigit)) throw new InvalidDataException("файл выпуска с негодным именем или хешем");
+            if (a.Name is null || a.Sha256 is not { Length: 64 } h || !h.All(Uri.IsHexDigit)) throw new InvalidDataException(L.T("core.app.rel.bad_asset"));
         return r with { Assets = r.Assets ?? [] };
     }
 }

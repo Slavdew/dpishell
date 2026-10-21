@@ -5,7 +5,7 @@
   python packaging/release-json.py write <папка> [<тег>]   — после make-portable.ps1: пишет <папка>/release.json
 
 Версия — <Version> в Directory.Build.props (единый источник). Тег (windows-vX.Y.Z) должен совпадать с ней,
-для версии должна быть запись в packaging/release-notes.json (словами пользователя) — иначе выход с ошибкой.
+для версии должна быть запись в packaging/release-notes.json (словами пользователя; у версии {ru, en}) — иначе выход с ошибкой.
 В папке должен лежать DpiShell-<версия>-portable.zip (имя пишет make-portable.ps1 по версии exe — вторая сверка).
 """
 import hashlib, json, pathlib, re, sys
@@ -25,7 +25,12 @@ tag = args[0] if args and args[0] else None
 props = (ROOT / 'Directory.Build.props').read_text(encoding='utf-8')
 version = re.search(r'<Version>([^<]+)</Version>', props).group(1).strip()
 notes = json.loads((ROOT / 'packaging/release-notes.json').read_text(encoding='utf-8'))
-changes = notes.get(version) or []
+entry = notes.get(version) or []
+# Запись версии: {"ru": [...], "en": [...]} (en — перевод ru один к одному); прежний вид — просто список — это ru без перевода.
+if isinstance(entry, list):
+    entry = {'ru': entry}
+changes = entry.get('ru') or []
+changes_en = entry.get('en') or []
 min_os = notes.get('min_os')
 
 errors = []
@@ -35,6 +40,10 @@ if tag and tag != f'windows-v{version}':
     errors.append(f'тег {tag} не совпадает с версией {version} в Directory.Build.props')
 if tag and not changes:
     errors.append(f'нет заметок к {version} в packaging/release-notes.json — выпуск без них не выпускаем')
+if changes_en and len(changes_en) != len(changes):
+    errors.append(f'английских заметок к {version} {len(changes_en)}, русских {len(changes)} — перевод должен быть один к одному')
+if changes_en and len(changes_en) > 15:
+    errors.append(f'английских заметок к {version} больше 15 строк')
 if len(changes) > 15:
     errors.append(f'заметок к {version} больше 15 строк')
 if min_os is not None and not re.fullmatch(r'\d+\.\d+\.\d+', min_os):
@@ -42,7 +51,9 @@ if min_os is not None and not re.fullmatch(r'\d+\.\d+\.\d+', min_os):
 if errors:
     sys.exit('\n'.join(errors))
 if mode == 'check':
-    print(f'версия {version}, тег {tag or "-"}, заметок {len(changes)}')
+    print(f'версия {version}, тег {tag or "-"}, заметок {len(changes)}, на английском {len(changes_en)}')
+    if not changes_en:
+        print('предупреждение: нет английских заметок — окно покажет русские')
     sys.exit(0)
 
 zip_name = f'DpiShell-{version}-portable.zip'
@@ -54,5 +65,7 @@ doc = {
     'schema': 1, 'product': 'dpishell-windows', 'version': version, 'tag': f'windows-v{version}',
     'min_os': min_os, 'changes': changes, 'assets': assets,
 }
+if changes_en:
+    doc['changes_en'] = changes_en
 (out / 'release.json').write_bytes((json.dumps(doc, ensure_ascii=False, indent=2) + '\n').encode('utf-8'))
 print(f'release.json: {version}, файлов {len(assets)}, изменений {len(changes)}, sha256 {assets[0]["sha256"]}')

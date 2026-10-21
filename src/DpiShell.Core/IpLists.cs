@@ -23,10 +23,10 @@ public sealed record DataManifest(string Version, Dictionary<string, DataFile> F
 
     public static DataManifest Load(string path) =>
         JsonSerializer.Deserialize<DataManifest>(File.ReadAllText(path), Json)
-        ?? throw new InvalidDataException($"Пустой манифест данных: {path}");
+        ?? throw new InvalidDataException(Loc.T("core.data.manifest_empty_path", new { path }));
 
     public static DataManifest Parse(byte[] utf8) =>
-        JsonSerializer.Deserialize<DataManifest>(utf8, Json) ?? throw new InvalidDataException("Пустой манифест данных.");
+        JsonSerializer.Deserialize<DataManifest>(utf8, Json) ?? throw new InvalidDataException(Loc.T("core.data.manifest_empty"));
 
     /// <summary>Что не так с манифестом для установки обновления (пусто — годен): версия, ключи, хеши, адреса.</summary>
     public IReadOnlyList<string> UpdateProblems()

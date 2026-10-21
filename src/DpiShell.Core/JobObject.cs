@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Runtime.InteropServices;
 
 namespace DpiShell.Core;
@@ -14,7 +15,7 @@ public sealed class JobObject : IDisposable
     public JobObject()
     {
         _handle = CreateJobObject(IntPtr.Zero, null);
-        if (_handle == IntPtr.Zero) throw new InvalidOperationException("Не удалось создать объект задания Windows");
+        if (_handle == IntPtr.Zero) throw new InvalidOperationException(L.T("core.job.create"));
         var info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION { BasicLimitInformation = { LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE } };
         int size = Marshal.SizeOf<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>();
         var ptr = Marshal.AllocHGlobal(size);
@@ -22,7 +23,7 @@ public sealed class JobObject : IDisposable
         {
             Marshal.StructureToPtr(info, ptr, false);
             if (!SetInformationJobObject(_handle, JobObjectExtendedLimitInformation, ptr, (uint)size))
-                throw new InvalidOperationException("Не удалось настроить объект задания Windows");
+                throw new InvalidOperationException(L.T("core.job.configure"));
         }
         finally { Marshal.FreeHGlobal(ptr); }
     }
@@ -30,7 +31,7 @@ public sealed class JobObject : IDisposable
     public void Add(System.Diagnostics.Process p)
     {
         if (!AssignProcessToJobObject(_handle, p.Handle))
-            throw new InvalidOperationException($"Не удалось привязать процесс {p.Id} к программе (код {Marshal.GetLastWin32Error()})");
+            throw new InvalidOperationException(L.T("core.job.attach", new { pid = p.Id, code = Marshal.GetLastWin32Error() }));
     }
 
     public void Dispose() => CloseHandle(_handle);

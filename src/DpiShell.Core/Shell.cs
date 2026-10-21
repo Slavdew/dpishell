@@ -262,7 +262,7 @@ public sealed class Shell
         EnsureCoreIntact();
         ThrowIfConflicts();
         EnsureTcpTimestamps();
-        var s = FindStrategy(strategyId) ?? throw new ArgumentException($"Нет стратегии {strategyId}");
+        var s = FindStrategy(strategyId) ?? throw new ArgumentException(L.T("core.shell.no_strategy", new { id = strategyId }));
         // Список «По списку» удалён/изменён антивирусом — вернуть из поставки, иначе winws не стартует без файла.
         if (CurrentOptions.Ipset == IpsetMode.List && !IpLists.HasList) IpLists.SeedFromPackage();
         SyncAppProfileFiles();   // файлы адресов профилей программ должны быть на диске до запуска winws
@@ -620,7 +620,7 @@ public sealed class Shell
         foreach (var p in add)
         {
             if (AppProfiles.Problem(p) is { } problem) throw new InvalidOperationException(problem);
-            if (State.AppProfiles.Count >= AppProfiles.MaxProfiles) throw new InvalidOperationException($"Профилей уже {AppProfiles.MaxProfiles} — удалите ненужный.");
+            if (State.AppProfiles.Count >= AppProfiles.MaxProfiles) throw new InvalidOperationException(L.T("core.shell.profiles_max", new { max = AppProfiles.MaxProfiles }));
             State.AppProfiles.RemoveAll(x => x.Id == p.Id);
             State.AppProfiles.Add(p);
         }

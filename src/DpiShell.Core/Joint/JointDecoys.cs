@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -71,7 +72,7 @@ public static partial class JointDecoys
             bool tcpRole = role is not ("quic" or "game_udp" or "discord_udp" or "ipset_udp");
             if (plainFake && tcpRole)
             {
-                if (rndsni) { reliable = false; notes.Add("TLS-приманка со случайным именем"); }
+                if (rndsni) { reliable = false; notes.Add(L.T("core.joint.note.rndsni")); }
                 else if (customTls.Count == 0 && !mods.Any(m => m.StartsWith("sni=", StringComparison.Ordinal))) Add(BuiltinTls);
                 if (All("--dpi-desync-fake-http").Count == 0) Add(BuiltinHttp);
             }
@@ -81,7 +82,7 @@ public static partial class JointDecoys
             foreach (var v in quic) Add(NameOfValue(v, readFake));
             if (role == "quic" && plainFake && quic.Count == 0)
             {
-                reliable = false; notes.Add("QUIC-приманка без файла");
+                reliable = false; notes.Add(L.T("core.joint.note.quic_nofile"));
             }
 
             // hostfakesplit: фейк хоста — host=<имя> (слева добавляется случайный поддомен: поддомены исключения покрывает), иначе имя случайное.
@@ -89,7 +90,7 @@ public static partial class JointDecoys
             {
                 var host = All("--dpi-desync-hostfakesplit-mod").SelectMany(v => v.Split(',', StringSplitOptions.RemoveEmptyEntries))
                     .Where(m => m.StartsWith("host=", StringComparison.Ordinal)).Select(m => m[5..]).ToList();
-                if (host.Count == 0) { reliable = false; notes.Add("hostfakesplit со случайным именем"); }
+                if (host.Count == 0) { reliable = false; notes.Add(L.T("core.joint.note.hostfake_random")); }
                 foreach (var h in host) Add(h);
             }
         }
@@ -97,7 +98,7 @@ public static partial class JointDecoys
         if (!reliable)
         {
             foreach (var n in supplyNames?.Invoke() ?? [BuiltinTls, BuiltinHttp]) Add(n);
-            notes.Add("список — все имена фейков из поставки");
+            notes.Add(L.T("core.joint.note.all_supply"));
         }
         return new(names, reliable, notes.Distinct().ToList());
     }

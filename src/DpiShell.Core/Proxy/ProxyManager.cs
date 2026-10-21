@@ -123,7 +123,7 @@ public sealed class ProxyManager(IProxyRegistry reg, IWinHttpProxy winHttp)
             {
                 ProxyRegistryIo.Write(reg, ProxyKey.MachineSettings, null, next);
                 if (ProxyRegistryIo.PerUserPolicy(reg) != nextPer) ProxyRegistryIo.SetPerUserPolicy(reg, nextPer);
-                if (winhttp is not null && !winHttp.Set(winhttp)) throw new IOException("Windows не приняла прокси для служб (WinHTTP).");
+                if (winhttp is not null && !winHttp.Set(winhttp)) throw new IOException(L.T("core.proxy.winhttp_refused"));
             });
         Notifier.Changed();
 

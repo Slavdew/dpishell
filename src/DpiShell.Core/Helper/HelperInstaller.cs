@@ -70,18 +70,18 @@ public sealed class HelperInstaller(AppPaths paths)
         if (IsInHelperDir(paths, source)) throw new InvalidOperationException(L.T("core.helper.install_from_helper_dir"));
 
         // Сначала закрыть папку, потом класть в неё исполняемый файл.
-        log?.Report("Закрываю папку программы от изменений…");
+        log?.Report(L.T("core.helper.inst.harden"));
         paths.Harden();
 
         bool exists = ServiceManager.Query(HelperProtocol.ServiceName) != SvcState.NotInstalled;
         if (exists)
         {
-            log?.Report("Останавливаю прежнюю версию помощника…");
+            log?.Report(L.T("core.helper.inst.stop_old"));
             ServiceManager.Sc(ScStopArgs());
             ServiceManager.WaitFor(HelperProtocol.ServiceName, SvcState.Stopped, TimeSpan.FromSeconds(30));
         }
 
-        log?.Report("Копирую помощника…");
+        log?.Report(L.T("core.helper.inst.copy"));
         DeleteWhenReleased(dir);
         Directory.CreateDirectory(dir);
         foreach (var rel in FilesToCopy(source))
@@ -99,11 +99,11 @@ public sealed class HelperInstaller(AppPaths paths)
         Check(ServiceManager.Sc(exists ? ScConfigArgs(helperExe) : ScCreateArgs(helperExe)), L.T(exists ? "core.helper.sc_reconfigure" : "core.helper.sc_create"));
         ServiceManager.Sc(ScDescriptionArgs());
         ServiceManager.Sc(ScFailureArgs());
-        log?.Report("Запускаю помощника…");
+        log?.Report(L.T("core.helper.inst.start"));
         Check(ServiceManager.Sc(ScStartArgs()), L.T("core.helper.sc_start"));
         if (!ServiceManager.WaitFor(HelperProtocol.ServiceName, SvcState.Running, TimeSpan.FromSeconds(20)))
             throw new InvalidOperationException(L.T("core.helper.start_timeout"));
-        log?.Report("Помощник установлен.");
+        log?.Report(L.T("core.helper.inst.done"));
     }
 
     /// <summary>Удаление: остановить и удалить службу, стереть папку помощника. Данные программы (state, результаты) остаются.</summary>
@@ -112,13 +112,13 @@ public sealed class HelperInstaller(AppPaths paths)
         if (!Shell.IsAdmin()) throw new UnauthorizedAccessException(L.T("core.helper.need_admin_uninstall"));
         if (ServiceManager.Query(HelperProtocol.ServiceName) != SvcState.NotInstalled)
         {
-            log?.Report("Останавливаю помощника…");
+            log?.Report(L.T("core.helper.inst.stop"));
             ServiceManager.Sc(ScStopArgs());
             ServiceManager.WaitFor(HelperProtocol.ServiceName, SvcState.Stopped, TimeSpan.FromSeconds(30));
             Check(ServiceManager.Sc(ScDeleteArgs()), L.T("core.helper.sc_delete"));
         }
         DeleteWhenReleased(HelperDir(paths));
-        log?.Report("Помощник удалён.");
+        log?.Report(L.T("core.helper.inst.removed"));
     }
 
     /// <summary>

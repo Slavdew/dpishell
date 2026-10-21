@@ -70,7 +70,7 @@ public static class DnsWire
         foreach (var label in host.TrimEnd('.').Split('.'))
         {
             var b = Encoding.ASCII.GetBytes(label);
-            if (b.Length is 0 or > 63) throw new ArgumentException($"Недопустимое имя: {host}");
+            if (b.Length is 0 or > 63) throw new ArgumentException(L.T("core.hosts.dns.bad_name", new { host }));
             buf.Add((byte)b.Length);
             buf.AddRange(b);
         }
@@ -81,9 +81,9 @@ public static class DnsWire
     /// <summary>Адреса A/AAAA из ответа. id = null — не сверять (DoH шлёт id 0). Ошибка сервера (RCODE ≠ 0 и ≠ NXDOMAIN) — исключение.</summary>
     public static IPAddress[] Parse(ReadOnlySpan<byte> msg, ushort? id = null)
     {
-        if (msg.Length < 12) throw new InvalidDataException("короткий ответ DNS");
-        if (id is { } want && BinaryPrimitives.ReadUInt16BigEndian(msg) != want) throw new InvalidDataException("чужой ответ DNS");
-        if ((msg[2] & 0x80) == 0) throw new InvalidDataException("это не ответ DNS");
+        if (msg.Length < 12) throw new InvalidDataException(L.T("core.hosts.dns.short"));
+        if (id is { } want && BinaryPrimitives.ReadUInt16BigEndian(msg) != want) throw new InvalidDataException(L.T("core.hosts.dns.foreign"));
+        if ((msg[2] & 0x80) == 0) throw new InvalidDataException(L.T("core.hosts.dns.not_reply"));
         var rcode = msg[3] & 0x0F;
         if (rcode == 3) return [];
         if (rcode != 0) throw new InvalidDataException($"DNS RCODE {rcode}");
@@ -94,11 +94,11 @@ public static class DnsWire
         for (int i = 0; i < an; i++)
         {
             pos = SkipName(msg, pos);
-            if (pos + 10 > msg.Length) throw new InvalidDataException("обрезанный ответ DNS");
+            if (pos + 10 > msg.Length) throw new InvalidDataException(L.T("core.hosts.dns.truncated"));
             var type = BinaryPrimitives.ReadUInt16BigEndian(msg[pos..]);
             var len = BinaryPrimitives.ReadUInt16BigEndian(msg[(pos + 8)..]);
             pos += 10;
-            if (pos + len > msg.Length) throw new InvalidDataException("обрезанный ответ DNS");
+            if (pos + len > msg.Length) throw new InvalidDataException(L.T("core.hosts.dns.truncated"));
             if (type == TypeA && len == 4 || type == TypeAaaa && len == 16) result.Add(new IPAddress(msg.Slice(pos, len)));
             pos += len;
         }
@@ -109,7 +109,7 @@ public static class DnsWire
     {
         while (true)
         {
-            if (pos >= msg.Length) throw new InvalidDataException("обрезанное имя в ответе DNS");
+            if (pos >= msg.Length) throw new InvalidDataException(L.T("core.hosts.dns.truncated_name"));
             var len = msg[pos];
             if ((len & 0xC0) == 0xC0) return pos + 2;   // ссылка на имя выше: имя кончается здесь
             if (len == 0) return pos + 1;

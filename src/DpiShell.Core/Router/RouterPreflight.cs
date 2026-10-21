@@ -50,26 +50,26 @@ public static class RouterScriptJson
 
     public static T Parse<T>(string stdout, string what)
     {
-        var line = LastJsonLine(stdout) ?? throw new RouterSshException(RouterSshFailure.Protocol, $"{what}: роутер не вернул итог");
+        var line = LastJsonLine(stdout) ?? throw new RouterSshException(RouterSshFailure.Protocol, L.T("core.rt.pre.no_result", new { what }));
         try { return JsonSerializer.Deserialize<T>(line, Json) ?? throw new JsonException("пусто"); }
-        catch (JsonException e) { throw new RouterSshException(RouterSshFailure.Protocol, $"{what}: ответ роутера не по договору ({e.Message})", e); }
+        catch (JsonException e) { throw new RouterSshException(RouterSshFailure.Protocol, L.T("core.rt.pre.bad_reply", new { what, error = e.Message }), e); }
     }
 
     public static RouterPreflight ParsePreflight(string stdout)
     {
-        var p = Parse<RouterPreflight>(stdout, "Проверка роутера");
-        if (p.Schema != 1 || p.Mode != "check") throw new RouterSshException(RouterSshFailure.Protocol, $"Проверка роутера: неизвестный формат (schema {p.Schema}, {p.Mode})");
+        var p = Parse<RouterPreflight>(stdout, L.T("core.rt.pre.what_check"));
+        if (p.Schema != 1 || p.Mode != "check") throw new RouterSshException(RouterSshFailure.Protocol, L.T("core.rt.pre.unknown_format", new { what = L.T("core.rt.pre.what_check"), schema = p.Schema, mode = p.Mode }));
         return p;
     }
 
     public static RouterAfterUninstall ParseAfterUninstall(string stdout)
     {
-        var p = Parse<RouterAfterUninstall>(stdout, "Проверка после удаления");
-        if (p.Schema != 1 || p.Mode != "after-uninstall") throw new RouterSshException(RouterSshFailure.Protocol, "Проверка после удаления: неизвестный формат");
+        var p = Parse<RouterAfterUninstall>(stdout, L.T("core.rt.pre.what_after"));
+        if (p.Schema != 1 || p.Mode != "after-uninstall") throw new RouterSshException(RouterSshFailure.Protocol, L.T("core.rt.pre.unknown_format", new { what = L.T("core.rt.pre.what_after"), schema = p.Schema, mode = p.Mode }));
         return p with { Left = p.Left ?? [] };
     }
 
-    public static RouterInstallResult ParseInstall(string stdout) => Parse<RouterInstallResult>(stdout, "Установка");
+    public static RouterInstallResult ParseInstall(string stdout) => Parse<RouterInstallResult>(stdout, L.T("core.rt.pre.what_install"));
 
     /// <summary>Строка хода «# Ключ витрины DpiShell» → «Ключ витрины DpiShell»; не строка хода — null.</summary>
     public static string? ProgressLine(string line) => line.StartsWith("# ", StringComparison.Ordinal) ? line[2..].Trim() : null;

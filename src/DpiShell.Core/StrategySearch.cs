@@ -331,7 +331,7 @@ public static class UserStrategies
             throw new InvalidDataException(problem);
         var all = Load(p);
         if (all.Count(s => IsPersonal(s.Source)) >= MaxPersonal)
-            throw new InvalidOperationException($"Своих стратегий уже {MaxPersonal} — удалите ненужные.");
+            throw new InvalidOperationException(L.T("core.search.personal_max", new { max = MaxPersonal }));
         var stamp = DateTime.Now.ToString("yyMMdd-HHmmss");
         string id;
         int n = 0;

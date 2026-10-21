@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Diagnostics;
 using System.Text;
 
@@ -33,7 +34,7 @@ public sealed class WinwsProcess : IDisposable
             RedirectStandardError = true,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
-        var p = Process.Start(psi) ?? throw new InvalidOperationException("winws не запустился");
+        var p = Process.Start(psi) ?? throw new InvalidOperationException(L.T("core.winws.not_started"));
         // Любой наш winws (подбор, режим без службы) завершается вместе с программой — даже при её аварийном выходе.
         try { Job.Add(p); }
         catch (InvalidOperationException) { if (!p.HasExited) p.Kill(); p.Dispose(); throw; }
@@ -70,7 +71,7 @@ public sealed class WinwsProcess : IDisposable
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(10));
         try { await p._p.WaitForExitAsync(cts.Token); }
-        catch (OperationCanceledException) { p.Stop(); return (false, "dry-run не завершился за 10 с"); }
+        catch (OperationCanceledException) { p.Stop(); return (false, L.T("core.winws.dry_run_timeout")); }
         p._p.WaitForExit(); // дочитать вывод
         return (p._p.ExitCode == 0, p.Output);
     }

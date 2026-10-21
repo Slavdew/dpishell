@@ -109,7 +109,7 @@ public sealed class WindowsDnsSystem : IDnsSystem
         // guid — из Guid.Parse: в запрос попадают только шестнадцатеричные цифры, дефисы и скобки.
         using var q = new ManagementObjectSearcher(@"root\cimv2", $"SELECT * FROM Win32_NetworkAdapterConfiguration WHERE SettingID='{guid.ToUpperInvariant()}'");
         using var found = q.Get();
-        var mo = found.Cast<ManagementObject>().FirstOrDefault() ?? throw new InvalidOperationException("Адаптер не найден в WMI.");
+        var mo = found.Cast<ManagementObject>().FirstOrDefault() ?? throw new InvalidOperationException(L.T("core.dns.adapter_missing"));
         using (mo)
         {
             using var p = mo.GetMethodParameters("SetDNSServerSearchOrder");
@@ -145,7 +145,7 @@ public sealed class WindowsDnsSystem : IDnsSystem
 
     public bool RegisterDoh(string ip, string template, bool fallback)
     {
-        if (DnsValues.NormalizeIp(ip) is not { } n || n != ip || !DnsValues.IsDohTemplate(template)) throw new ArgumentException("Недопустимый адрес или шаблон.");
+        if (DnsValues.NormalizeIp(ip) is not { } n || n != ip || !DnsValues.IsDohTemplate(template)) throw new ArgumentException(L.T("core.dns.bad_addr_template"));
         // autoupgrade=no: шаблон только известен системе, включается на адаптере (DohFlags) — как у встроенных.
         string[] args = ["dnsclient", "", "encryption", "server=" + n, "dohtemplate=" + template, "autoupgrade=no", "udpfallback=" + (fallback ? "yes" : "no")];
         args[1] = "add";
@@ -157,7 +157,7 @@ public sealed class WindowsDnsSystem : IDnsSystem
 
     public void UnregisterDoh(string ip)
     {
-        if (DnsValues.NormalizeIp(ip) is not { } n || n != ip) throw new ArgumentException("Недопустимый адрес.");
+        if (DnsValues.NormalizeIp(ip) is not { } n || n != ip) throw new ArgumentException(L.T("core.dns.bad_addr"));
         TryNetsh("dnsclient", "delete", "encryption", "server=" + n, "protocol=doh");
     }
 
@@ -194,7 +194,7 @@ public sealed class WindowsDnsSystem : IDnsSystem
             UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
-        using var p = Process.Start(psi) ?? throw new InvalidOperationException("netsh не запустился.");
+        using var p = Process.Start(psi) ?? throw new InvalidOperationException(L.T("core.dns.netsh_failed"));
         _ = p.StandardOutput.ReadToEndAsync();
         _ = p.StandardError.ReadToEndAsync();
         if (!p.WaitForExit(15_000)) { try { p.Kill(); } catch (InvalidOperationException) { } return false; }
