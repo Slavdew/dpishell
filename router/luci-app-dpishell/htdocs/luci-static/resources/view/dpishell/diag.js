@@ -60,14 +60,15 @@ return view.extend({
 			api.card(api.t('web.core.title'), [this.el.core]),
 			api.card(api.t('web.diag.report'), [
 				api.line(api.t('web.diag.report_descr'), 'dps-muted'),
-				E('div', { 'class': 'dps-actions' }, [api.btn(api.t('router.diag.save_report'), function() { return self.report(); }, 'cbi-button-action')])
+				E('div', { 'class': 'dps-actions' }, [api.btn(api.t('router.diag.save_report'), function() { return self.report(); }, 'cbi-button-action'),
+					E('a', { href: 'https://github.com/Slavdew/dpishell/issues', target: '_blank', rel: 'noopener', style: 'align-self:center' }, api.t('diag.report.issue'))])
 			]),
 			// Выгрузка и загрузка своих настроек (docs/settings-export.md, общий формат с окном ПК; там — «Настройки»,
 			// здесь — рядом с отчётом: страницы «Настройки» у роутера нет).
 			api.card(api.t('web.xfer.title'), [
 				api.line([api.t('web.xfer.descr'), api.info(api.t('web.xfer.info'))], 'dps-muted'),
 				E('div', { 'class': 'dps-actions' }, [
-					api.btn(api.t('web.xfer.export'), function() { return xfer.exportDialog().catch(function(e) { self.el.err.textContent = api.text(e); }); }, 'cbi-button-action'),
+					api.btn(api.t('web.xfer.export'), function() { return xfer.exportDialog().catch(function(e) { api.fail(self.el.err, e); }); }, 'cbi-button-action'),
 					api.btn(api.t('web.xfer.import'), function() { xfer.importDialog(function() { self.reload(); }); }, 'cbi-button-neutral')
 				])
 			]),
@@ -241,7 +242,7 @@ return view.extend({
 			self.status.jobs.core_install = true;
 			self.renderCore();
 		}, function(e) {
-			self.el.err.textContent = api.text(e);
+			api.fail(self.el.err, e);
 		});
 	},
 
@@ -251,7 +252,7 @@ return view.extend({
 		return api.call(method, args).then(function() {
 			return self.reload();
 		}, function(e) {
-			self.el.err.textContent = api.text(e);
+			api.fail(self.el.err, e);
 		});
 	},
 
@@ -261,7 +262,7 @@ return view.extend({
 		return api.call('conflict_stop', { name: name }).then(function() {
 			return self.reload();
 		}, function(e) {
-			self.el.err.textContent = api.text(e);
+			api.fail(self.el.err, e);
 		});
 	},
 
@@ -306,7 +307,7 @@ return view.extend({
 				});
 			}, 2000);
 		}, function(e) {
-			self.el.err.textContent = api.text(e);
+			api.fail(self.el.err, e);
 		});
 	},
 
@@ -318,7 +319,7 @@ return view.extend({
 			var name = 'dpishell-report-%04d%02d%02d-%02d%02d.txt'.format(d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes());
 			api.download(name, r.text || '');
 		}, function(e) {
-			self.el.err.textContent = api.text(e);
+			api.fail(self.el.err, e);
 		});
 	}
 });

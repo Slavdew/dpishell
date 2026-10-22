@@ -38,6 +38,10 @@ check('сброс', c('000 0 56 0.2 ', '', 'Recv failure: Connection reset by pe
 check('TLS', c('000 0 35 0.2 ', '', 'SSL connect error').outcome == 'tls_failed');
 check('таймаут', c('000 0 28 9.0 ', '').outcome == 'timeout');
 check('чужой редирект', c('302 0 0 0.2 http://warning.rt.ru/', 'HTTP/1.1 302\r\nlocation: http://warning.rt.ru/\r\n').outcome == 'foreign_redirect');
+// Текст редиректа — и ключом (router-api.md §9): окно и страница переводят «редирект на <хост>».
+let fr = c('302 0 0 0.2 http://warning.rt.ru/', 'HTTP/1.1 302\r\n');
+check('чужой редирект — ключом', fr.detail_msg?.key == 'router.probe.redirect' && fr.detail_msg?.params?.host == 'warning.rt.ru' && fr.detail == 'редирект на warning.rt.ru', fr);
+check('редирект на непонятный адрес — ключом', c('302 0 0 0.2 http://bad_host!/', 'HTTP/1.1 302\r\n').detail_msg?.key == 'router.probe.redirect_other');
 let rd = c('301 0 0 0.2 https://m.youtube.com/', 'HTTP/1.1 301\r\n');
 check('свой редирект — идти дальше', rd.outcome == 'redirect' && rd.next == 'https://m.youtube.com/', rd);
 check('чужой от исходного сайта на 2-м шаге', c('302 0 0 0.2 http://warning.rt.ru/', '', '', { url: 'https://m.youtube.com/', site: 'youtube.com' }).outcome == 'foreign_redirect');

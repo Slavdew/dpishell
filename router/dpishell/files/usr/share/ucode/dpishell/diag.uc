@@ -147,8 +147,9 @@ function site_check(url) {
 	let w = with_b[0], wo = without[0];
 	return {
 		running: false, url,
-		with_bypass: { ok: w.ok, detail: w.detail },
-		without_bypass: { ok: wo.ok, detail: length(added) ? wo.detail : 'оптимизацию для адреса отключить не удалось' },
+		with_bypass: w.detail_msg ? { ok: w.ok, detail: w.detail, detail_msg: w.detail_msg } : { ok: w.ok, detail: w.detail },
+		without_bypass: length(added) && wo.detail_msg ? { ok: wo.ok, detail: wo.detail, detail_msg: wo.detail_msg }
+			: { ok: wo.ok, detail: length(added) ? wo.detail : 'оптимизацию для адреса отключить не удалось' },
 		suggest_exclude: !w.ok && wo.ok && length(added) > 0,
 	};
 }

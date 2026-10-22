@@ -500,7 +500,7 @@ public sealed partial class RouterViewModel
             ? L.T("router.update.title_failed_cur", new { version = _status?.Update?.Version, current = cur })
             : L.T("router.update.title_failed", new { version = _status?.Update?.Version }))
         : L.T("router.update.available", new { version = _status?.Update?.Version });
-    public string UpdateNotes => string.Join("\n", (_status?.Update?.Notes ?? []).Select(n => "• " + n));
+    public string UpdateNotes => string.Join("\n", (_status?.Update?.NotesFor(L.Current) ?? []).Select(n => "• " + n));
     public bool HasUpdateNotes => UpdateNotes.Length > 0 && !Updating;
 
     void RaiseUpdate()

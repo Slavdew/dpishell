@@ -1,4 +1,4 @@
-"""release.json пакетов роутера: версия, api, min_app, изменения, файлы с sha256 (router-api.md §5).
+"""release.json пакетов роутера: версия, api, min_app, изменения (changes — ru, changes_en — en), файлы с sha256 (router-api.md §5).
 
 Запуск в CI после сборки: python3 router/tools/release-json.py <папка с .apk> [<тег>]
 Пишет <папка>/release.json. Заодно сверяет версии: PKG_VERSION обоих Makefile, VERSION в state.uc и тег
@@ -52,7 +52,18 @@ if not changes:
     changes = [l.removeprefix('Роутер: ') for l in log.splitlines() if l]
 if tag and not notes.get(version):
     errors.append(f'нет заметок к {version} в router/release-notes.json — релиз без них не выпускаем')
+# Английский перевод — раздел "en" под тем же ключом версии, строки один к одному с русскими; роутер берёт первые 15.
+changes_en = (notes.get('en') or {}).get(version) or []
+if notes.get(version) and len(changes) > 15:
+    errors.append(f'заметок к {version} {len(changes)} — больше 15 строк (роутер покажет первые 15)')
+if changes_en and not notes.get(version):
+    errors.append(f'к {version} есть английские заметки, а русских нет')
+if changes_en and len(changes_en) != len(changes):
+    errors.append(f'английских заметок к {version} {len(changes_en)}, русских {len(changes)} — перевод должен быть один к одному')
+if errors:
     sys.exit('\n'.join(errors))
+if not changes_en:
+    print('предупреждение: нет английских заметок — страница и окно покажут русские')
 
 assets = [{'name': f.name, 'sha256': hashlib.sha256(f.read_bytes()).hexdigest()}
           for f in sorted(out.glob('*.apk'))]
@@ -60,5 +71,7 @@ doc = {
     'schema': 1, 'product': 'dpishell-router', 'version': version, 'tag': f'router-v{version}',
     'api': api, 'min_app': min_app, 'pkg': 'apk', 'changes': changes, 'assets': assets,
 }
+if changes_en:
+    doc['changes_en'] = changes_en
 (out / 'release.json').write_text(json.dumps(doc, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-print(f'release.json: {version}, api {api}, файлов {len(assets)}, изменений {len(changes)}')
+print(f'release.json: {version}, api {api}, файлов {len(assets)}, изменений {len(changes)}, на английском {len(changes_en)}')

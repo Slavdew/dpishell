@@ -152,7 +152,7 @@ return view.extend({
 		this.wasHidden = false;
 		return api.safe('status').then(function(s) {
 			if (s.__error) {
-				self.el.err.textContent = api.text(s.__error);
+				api.fail(self.el.err, s.__error);
 				return;
 			}
 			var wasSelecting = self.status.jobs && self.status.jobs.select;
@@ -219,7 +219,7 @@ return view.extend({
 		if (!this.status.strategy)
 			sel.appendChild(E('option', { value: '' }, api.t('web.main.not_selected')));
 		items.forEach(function(it) {
-			var label = it.runs > 0 ? api.t('web.main.opt_stats', { name: api.stratTitle(it.title), passed: it.passed, runs: it.runs }) : api.stratTitle(it.title);
+			var label = it.runs > 0 ? api.t(it.passed > 0 ? 'web.main.opt_stats' : 'web.main.opt_stats_none', { name: api.stratTitle(it.title), passed: it.passed, runs: it.runs }) : api.stratTitle(it.title);
 			sel.appendChild(E('option', { value: it.id }, label));
 		});
 		sel.value = this.pending || this.status.strategy || '';
@@ -391,7 +391,7 @@ return view.extend({
 				return r;
 			});
 		}, function(e) {
-			self.el.err.textContent = api.text(e);
+			api.fail(self.el.err, e);
 			throw e;
 		});
 	},
@@ -425,7 +425,7 @@ return view.extend({
 					}).join(' ');
 				return self.act('status');
 			});
-		}).catch(function(e) { self.el.err.textContent = api.text(e); });
+		}).catch(function(e) { api.fail(self.el.err, e); });
 	},
 
 	checkNow: function() {
@@ -469,7 +469,7 @@ return view.extend({
 			self.el.schedMsg.textContent = api.t('web.saved');
 			setTimeout(function() { self.el.schedMsg.textContent = ''; }, 2000);
 		}, function(e) {
-			self.el.schedMsg.textContent = api.text(e);
+			api.fail(self.el.schedMsg, e);
 			self.fillSchedule();
 		});
 	},

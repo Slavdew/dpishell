@@ -596,5 +596,10 @@
  "router.security.dns_wan.ok": "answers the home network only",
  "router.security.dns_wan.local": "also listens on the external address, but answers only local networks",
  "router.security.dns_wan.warn": "ready to answer queries from the internet if the firewall lets them through",
- "router.security.dns_wan.fix": "Option: “Local service only” in “Network” → “DHCP and DNS”, or exclude the wan interface."
+ "router.security.dns_wan.fix": "Option: “Local service only” in “Network” → “DHCP and DNS”, or exclude the wan interface.",
+ "router.probe.redirect": "redirect to {host}",
+ "router.probe.redirect_other": "redirect to another address",
+ "router.probe.after_hops": "{detail} (after {n} redirects)",
+ "router.probe.tls": "TLS {tls}: {detail}",
+ "router.probe.pair": "{a}; {b}"
 }

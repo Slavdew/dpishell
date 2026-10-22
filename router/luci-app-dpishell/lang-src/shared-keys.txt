@@ -261,3 +261,9 @@ router.security.dns_wan.ok
 router.security.dns_wan.local
 router.security.dns_wan.warn
 router.security.dns_wan.fix
+diag.report.issue
+router.probe.after_hops
+router.probe.pair
+router.probe.redirect
+router.probe.redirect_other
+router.probe.tls

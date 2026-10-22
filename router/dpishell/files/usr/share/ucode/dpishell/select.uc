@@ -114,13 +114,28 @@ function run_checks(items, cache) {
 
 // Разбивка строки подбора по целям для «Подробнее» (router-api.md §5.1 select_progress): исход одной строкой,
 // у провала — что сломалось и на какой версии TLS.
+// detail_msg — та же строка ключами (router-api.md §9), если хоть одна часть пришла ключом (редирект на чужой адрес и т. п.).
 function brief_verdicts(vs) {
 	return map(vs, v => {
 		let bad = filter(v.probes, p => !p.ok);
-		let detail = length(bad)
-			? join('; ', map(bad, p => length(v.probes) > 1 && p.tls ? `TLS ${p.tls}: ${p.detail}` : p.detail))
-			: (v.probes[0]?.detail ?? '');
-		return { group: v.group, url: v.url, ok: v.ok, detail, seconds: 1.0 * int(v.seconds * 100 + 0.5) / 100 };
+		let parts = length(bad) ? bad : (v.probes[0] ? [v.probes[0]] : []);
+		let keyed = length(filter(parts, p => p.detail_msg)) > 0;
+		let pieces = map(parts, p => {
+			let text = length(bad) && length(v.probes) > 1 && p.tls ? `TLS ${p.tls}: ${p.detail}` : (p.detail ?? '');
+			let m = p.detail_msg ?? { text: p.detail ?? '' };
+			return { text, msg: text != (p.detail ?? '') ? { key: 'router.probe.tls', params: { tls: p.tls, detail: m }, text } : m };
+		});
+		let detail = join('; ', map(pieces, x => x.text));
+		let r = { group: v.group, url: v.url, ok: v.ok, detail, seconds: 1.0 * int(v.seconds * 100 + 0.5) / 100 };
+		if (keyed && length(pieces)) {
+			let msg = pieces[0].msg, text = pieces[0].text;
+			for (let i = 1; i < length(pieces); i++) {
+				text = `${text}; ${pieces[i].text}`;
+				msg = { key: 'router.probe.pair', params: { a: msg, b: pieces[i].msg }, text };
+			}
+			r.detail_msg = msg;
+		}
+		return r;
 	});
 }
 

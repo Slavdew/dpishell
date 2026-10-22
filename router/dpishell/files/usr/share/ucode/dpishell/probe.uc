@@ -140,7 +140,13 @@ function classify(t, out_prefix) {
 	let headers = readfile(`${out_prefix}.h`);
 	// Вывод curl — в текст исхода, не длиннее 300 знаков.
 	let errtext = substr(trim(readfile(`${out_prefix}.e`) ?? ''), 0, 300);
-	let res = (outcome, detail) => ({ outcome, ok: outcome == 'ok', seconds: secs, bytes, detail });
+	// detail_msg — та же фраза ключом словаря (router-api.md §9): окно и страница показывают её на своём языке.
+	let res = (outcome, detail, detail_msg) => {
+		let r = { outcome, ok: outcome == 'ok', seconds: secs, bytes, detail };
+		if (detail_msg)
+			r.detail_msg = detail_msg;
+		return r;
+	};
 
 	if (code == 0) {
 		if (exitcode == 28)
@@ -161,9 +167,9 @@ function classify(t, out_prefix) {
 		let to = host_of(loc) ?? host_of(t.url);
 		// Имя из заголовка Location пишет сайт (или подмена провайдера) — в текст и дальше только чистым (security-audit-router №2).
 		if (!match(to ?? '', /^[a-z0-9.-]{1,253}$/))
-			return res('foreign_redirect', 'редирект на другой адрес');
+			return res('foreign_redirect', 'редирект на другой адрес', { key: 'router.probe.redirect_other', params: {}, text: 'редирект на другой адрес' });
 		if (!same_site(t.site ?? host_of(t.url), to))
-			return res('foreign_redirect', `редирект на ${to}`);
+			return res('foreign_redirect', `редирект на ${to}`, { key: 'router.probe.redirect', params: { host: to }, text: `редирект на ${to}` });
 		// Свой редирект: check_batch идёт по нему до конечной страницы (до MAX_REDIRECTS) и судит по ней.
 		let r = res('redirect', `HTTP ${code} → ${to}`);
 		r.next = match(loc, /^https?:\/\//) ? loc : null;
@@ -290,8 +296,12 @@ function check_batch(items, opts) {
 		else if (r.outcome == 'redirect')
 			r = { ...r, outcome: 'ok', ok: true, detail: 'сервер отвечает (для проверки достаточно)' };
 		delete r.next;
-		if (hops[i])
-			r = { ...r, final_url: cur[i].url, detail: `${r.detail} (после ${hops[i]} редир.)` };
+		if (hops[i]) {
+			let text = `${r.detail} (после ${hops[i]} редир.)`;
+			r = { ...r, final_url: cur[i].url, detail: text };
+			if (r.detail_msg)
+				r.detail_msg = { key: 'router.probe.after_hops', params: { detail: r.detail_msg, n: hops[i] }, text };
+		}
 		push(results, { ...r, url: items[i].target.url, tls: items[i].tls, dns: items[i].dns });
 	}
 	for (let f in lsdir(dir) ?? [])

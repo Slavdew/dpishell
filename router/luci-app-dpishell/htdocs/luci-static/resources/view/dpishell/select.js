@@ -303,7 +303,7 @@ return view.extend({
 			self.lastJson = null;
 			return self.tick();
 		}, function(e) {
-			self.el.err.textContent = api.text(e);
+			api.fail(self.el.err, e);
 		});
 	},
 
@@ -324,7 +324,7 @@ return view.extend({
 			self.lastJson = null;
 			return self.tick();
 		}, function(e) {
-			self.el.err.textContent = api.text(e);
+			api.fail(self.el.err, e);
 		});
 	},
 
@@ -338,7 +338,7 @@ return view.extend({
 			self.lastJson = null;
 			return self.tick();
 		}, function(e) {
-			self.el.err.textContent = api.text(e);
+			api.fail(self.el.err, e);
 		});
 	}
 });

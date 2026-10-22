@@ -162,12 +162,69 @@ function declare(method) {
 	return declared[method];
 }
 
-function makeError(text, code, field) {
+// method и args — что вызывали: для «Подробнее» и «Скопировать» у ошибки (действие; введённое — скрывается).
+function makeError(text, code, field, method, args) {
 	var e = new Error(text);
 	e.code = code || 'failed';
 	if (field)
 		e.field = field;
+	e.method = method || null;
+	e.args = args || null;
+	e.at = new Date();
 	return e;
+}
+
+// Описание ошибки для «Подробнее»/«Скопировать» (как в окне ПК, ErrorReport): ошибка, действие, время, версии. Личное скрыто,
+// как в отчёте окна (SupportReport.Scrub): адреса IP и MAC, логин в адресе, пароли и ключи, а также введённое в вызов (сайты, адреса, строки).
+var VERS = null, VERS_ASKED = false, BOARD = null;
+var callBoard = rpc.declare({ object: 'system', method: 'board' });
+
+function versionsFrom(s) {
+	if (!s || typeof s != 'object' || s.error)
+		return;
+	var p = s.packages || {}, c = s.core || {};
+	VERS = { dpishell: p.dpishell || s.version || null, luci: p['luci-app-dpishell'] || null,
+		core: c.installed_version || c.version || null, api: s.api != null ? String(s.api) : null };
+}
+
+function hideList(args) {
+	var out = [];
+	var add = function(v) {
+		if (out.length >= 300 || v == null)
+			return;
+		if (Array.isArray(v))
+			return v.forEach(add);
+		if (typeof v == 'object')
+			return Object.keys(v).forEach(function(k) { add(v[k]); });
+		if (typeof v != 'string')
+			return;
+		v = v.trim();
+		if (v.length >= 3)
+			out.push(v);
+		var h = /^[a-z]+:\/\/([^\/:?#\s]+)/i.exec(v);
+		if (h && h[1].length >= 3)
+			out.push(h[1]);
+	};
+	add(args);
+	return out.sort(function(a, b) { return b.length - a.length; });
+}
+
+function scrub(text, hide, mark) {
+	text = String(text == null ? '' : text);
+	(hide || []).forEach(function(n) {
+		var i, from = 0;
+		while ((i = text.toLowerCase().indexOf(n.toLowerCase(), from)) >= 0) {
+			text = text.slice(0, i) + mark + text.slice(i + n.length);
+			from = i + mark.length;
+		}
+	});
+	return text
+		.replace(/(:\/\/)([^\/\s@]+)@/g, '$1' + mark + '@')
+		.replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+\/=-]{6,}/gi, '$1 ' + mark)
+		.replace(/(\b(?:password|passwd|pwd|pass|token|secret|api[_-]?key|authorization|cookie)\b)(\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;&]+)/gi, '$1$2' + mark)
+		.replace(/(^|[^\d.])((?:\d{1,3}\.){3}\d{1,3})(?!\d)/g, '$1' + mark)
+		.replace(/(^|[^0-9A-Fa-f:-])((?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2})(?![0-9A-Fa-f:-])/g, '$1' + mark)
+		.replace(/(^|[^\w:.])((?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}|(?:[0-9A-Fa-f]{1,4}:){0,6}[0-9A-Fa-f]{1,4}::(?:[0-9A-Fa-f]{1,4}:){0,5}[0-9A-Fa-f]{0,4}|::(?:[0-9A-Fa-f]{1,4}:){0,5}[0-9A-Fa-f]{1,4})(?![\w:])/g, '$1' + mark);
 }
 
 function injectStyle() {
@@ -240,6 +297,10 @@ function injectStyle() {
 		'.dps-preset .btn{padding:0 .6em;font-size:.9em}',
 		'.dps-preset-info{margin-left:1.7em;font-size:.95em;overflow-wrap:anywhere}',
 		'.dps-pre{white-space:pre-wrap;word-break:break-word;max-height:16em;overflow:auto;font-family:monospace;font-size:.9em}',
+		// Ошибка: «Подробнее» и «Скопировать» рядом с текстом, описание — обычным цветом.
+		'.dps-fail-acts{display:inline-flex;gap:.6em;align-items:center;margin-left:.6em;white-space:nowrap}',
+		'.dps-fail-acts .btn{padding:0 .6em;font-size:.9em;margin:0}',
+		'.dps-fail-more{color:var(--text-color-high,inherit);margin:.4em 0 0;padding:.5em .8em;border-left:3px solid var(--error-color-high,#c00);background:var(--background-color-low,#f6f6f6)}',
 		'@media (max-width:480px){.dps-actions .btn,.dps-actions button{flex:1 1 auto}}',
 		// Шесть вкладок на телефоне в строку не входят — переносом во вторую строку, без прокрутки вбок.
 		'@media (max-width:700px){#tabmenu .tabs{display:flex;flex-wrap:wrap;overflow:visible;white-space:normal;height:auto}}'
@@ -322,6 +383,14 @@ return baseclass.extend({
 		return LANG_CODE;
 	},
 
+	// Что нового в обновлении на языке страницы: notes_en (роутер с 0.2.0-r15) — для любого языка, кроме русского; перевода нет — notes.
+	updateNotes: function(u) {
+		if (!u)
+			return [];
+		var en = Array.isArray(u.notes_en) ? u.notes_en : [];
+		return LANG_CODE != 'ru' && en.length ? en : (u.notes || []);
+	},
+
 	// Сообщение роутера { key, params, text } (router-api.md §9, 2026-10-20): по ключу, если он есть в словаре, иначе text.
 	// params сырые: time и *_at — unix-секунды, вложенная фраза — { key, params }.
 	msg: function(m) {
@@ -334,7 +403,7 @@ return baseclass.extend({
 			var p = {};
 			Object.keys(m.params || {}).forEach(function(k) {
 				var v = m.params[k];
-				if (v && typeof v == 'object' && v.key)
+				if (v && typeof v == 'object' && (v.key || v.text != null))
 					p[k] = self.msg(v);
 				else if ((k == 'time' || /_at$/.test(k)) && typeof v == 'number')
 					p[k] = self.time(v);
@@ -373,17 +442,19 @@ return baseclass.extend({
 				if (ret === 0)
 					return {};
 				var known = [2, 4, 5, 6, 7].indexOf(ret) >= 0;
-				throw makeError(known ? self.t('web.err.ubus_' + ret) : self.t('web.err.ubus', { code: ret }), 'ubus');
+				throw makeError(known ? self.t('web.err.ubus_' + ret) : self.t('web.err.ubus', { code: ret }), 'ubus ' + ret, null, method, args);
 			}
 			if (ret == null)
 				return {};
 			if (ret.error) {
 				var e = ret.error;
-				throw makeError(self.msg(e) || self.t('web.err.generic'), e.code, e.field);
+				throw makeError(self.msg(e) || self.t('web.err.generic'), e.code, e.field, method, args);
 			}
+			if (method == 'status')
+				versionsFrom(ret);
 			return ret;
 		}, function(err) {
-			throw makeError(self.t('web.err.network'), 'network');
+			throw makeError(self.t('web.err.network'), 'network', null, method, args);
 		});
 	},
 
@@ -417,8 +488,81 @@ return baseclass.extend({
 		return E('div', { 'class': 'dps-line ' + (cls || '') }, children);
 	},
 
+	// Ошибка строкой с «Подробнее» (полное описание) и «Скопировать» — как в окне ПК. Одно место для всех страниц:
+	// errorLine(e) — новый элемент, fail(box, e) — в готовый блок ошибки (e == null — очистить).
 	errorLine: function(e) {
-		return E('div', { 'class': 'dps-error' }, this.text(e));
+		return E('div', { 'class': 'dps-error' }, this.errorParts(e));
+	},
+
+	fail: function(box, e) {
+		// Та же ошибка при опросе — блок не пересобирается: раскрытое «Подробнее» не сворачивается.
+		var text = e ? this.text(e) : '';
+		if (e && box.getAttribute('data-fail') === text && box.firstChild)
+			return box;
+		box.setAttribute('data-fail', text);
+		return this.content(box, e ? this.errorParts(e) : '');
+	},
+
+	// Ошибка не из вызова (итог задания и т. п.): текст, метод-действие и его аргументы (введённое — скрывается в описании).
+	error: function(text, method, args) {
+		return makeError(text, 'failed', null, method, args);
+	},
+
+	errorParts: function(e) {
+		var self = this;
+		this.askVersions();
+		var pre = E('pre', { 'class': 'dps-pre dps-fail-more', style: 'display:none' }, '');
+		var more = E('a', { href: '#', 'class': 'dps-fail-link', click: function(ev) {
+			ev.preventDefault();
+			var open = pre.style.display == 'none';
+			if (open)
+				pre.textContent = self.errorReport(e);
+			pre.style.display = open ? '' : 'none';
+			more.textContent = self.t(open ? 'web.fail.hide' : 'web.fail.details');
+		} }, this.t('web.fail.details'));
+		var copy = this.copyBtn(this.t('web.fail.copy'), function() { return self.errorReport(e); });
+		return [E('span', {}, this.text(e)), E('span', { 'class': 'dps-fail-acts' }, [more, copy]), pre];
+	},
+
+	// Текст «Скопировать»: ошибка, действие, время, код, версии; личное скрыто.
+	errorReport: function(e) {
+		var mark = this.t('web.fail.hidden'), hide = hideList(e && e.args);
+		var clean = function(x) { return scrub(String(x).replace(/\s*[\r\n]+\s*/g, ' ').trim(), hide, mark); };
+		var at = (e && e.at instanceof Date) ? e.at : new Date();
+		var lines = [this.t('web.fail.title'),
+			this.t('web.fail.time', { v: '%04d-%02d-%02d %02d:%02d:%02d'.format(at.getFullYear(), at.getMonth() + 1, at.getDate(), at.getHours(), at.getMinutes(), at.getSeconds()) })];
+		if (e && e.method)
+			lines.push(this.t('web.fail.action', { v: e.method }));
+		lines.push(this.t('web.fail.text', { v: clean(this.text(e)) }));
+		if (e && (e.code || e.field))
+			lines.push(this.t('web.fail.code', { v: clean([e.code, e.field].filter(Boolean).join(', ')) }));
+		var v = VERS || {}, parts = [];
+		parts.push('DpiShell ' + (v.dpishell || '—'));
+		parts.push('luci-app-dpishell ' + (v.luci || '—'));
+		if (v.core)
+			parts.push(this.t('web.core.title') + ' ' + v.core);
+		if (v.api)
+			parts.push('api ' + v.api);
+		if (BOARD)
+			parts.push(BOARD);
+		parts.push(this.t('web.fail.page_lang', { v: LANG_CODE }));
+		lines.push(this.t('web.fail.versions', { v: parts.join(' · ') }));
+		lines.push(this.t('web.fail.private'));
+		return lines.join('\n');
+	},
+
+	// Версии для описания ошибки: из последнего status, иначе — один запрос в фоне; OpenWrt — из system.board (без имени роутера).
+	askVersions: function() {
+		if (VERS_ASKED)
+			return;
+		VERS_ASKED = true;
+		if (!VERS)
+			this.safe('status');
+		L.resolveDefault(callBoard(), null).then(function(b) {
+			var r = b && b.release;
+			if (r && (r.description || r.version))
+				BOARD = String(r.description || ('OpenWrt ' + r.version)) + (r.target ? ' (' + r.target + ')' : '');
+		});
 	},
 
 	// Кнопка «(i)»: раскрывает пояснение под строкой. Один элемент — можно класть в любой список детей E().
@@ -532,7 +676,7 @@ return baseclass.extend({
 						if (onStarted)
 							onStarted();
 					}, function(e) {
-						errBox.textContent = self.text(e);
+						self.fail(errBox, e);
 					});
 				}) }, self.t('select.start'))
 			])
@@ -563,7 +707,7 @@ return baseclass.extend({
 						if (onDone)
 							onDone();
 					}, function(e) {
-						errBox.textContent = self.text(e);
+						self.fail(errBox, e);
 					});
 				}) }, self.t('router.enable'))
 			])
@@ -686,7 +830,7 @@ return baseclass.extend({
 			if (note)
 				kids.unshift(E('div', { 'class': 'dps-ok' }, note));
 			if (r.error) {
-				kids.push(E('div', { 'class': 'dps-error' }, self.msg(r.error_msg || r.error)));
+				kids.push(self.errorLine(self.error(self.msg(r.error_msg || r.error), 'site_check', { url: r.url })));
 				show(kids);
 				return;
 			}

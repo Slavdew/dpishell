@@ -258,7 +258,7 @@ return view.extend({
 			self.speed = {};
 			(r.items || []).forEach(function(it) { self.speed[it.id] = it.ms; });
 		}, function(e) {
-			self.el.presetErr.textContent = api.text(e);
+			api.fail(self.el.presetErr, e);
 		}).then(function() {
 			self.comparing = false;
 			self.renderPresets(false);
@@ -285,7 +285,7 @@ return view.extend({
 				self.wait();
 			});
 		}, function(e) {
-			self.el.presetErr.textContent = api.text(e);
+			api.fail(self.el.presetErr, e);
 		});
 	},
 
@@ -295,7 +295,7 @@ return view.extend({
 		return api.call('dns_analyze').then(function() {
 			self.wait();
 		}, function(e) {
-			self.el.err.textContent = api.text(e);
+			api.fail(self.el.err, e);
 		});
 	},
 
@@ -305,7 +305,7 @@ return view.extend({
 		return api.call('dns_restore').then(function() {
 			self.wait();
 		}, function(e) {
-			self.el.err.textContent = api.text(e);
+			api.fail(self.el.err, e);
 		});
 	}
 });

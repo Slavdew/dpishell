@@ -16,6 +16,10 @@
     "Обновления проверяются раз в сутки.",
     "Updates are checked once a day."
   ],
+  "web.about.faq": [
+    "Вопросы и ответы",
+    "FAQ"
+  ],
   "web.about.guide": [
     "Инструкция",
     "Guide"
@@ -201,8 +205,8 @@
     "Report"
   ],
   "web.diag.report_descr": [
-    "Версии, настройки оптимизации и DNS, хвост журнала роутера — текстовым файлом.",
-    "Versions, optimization and DNS settings, the tail of the router log — as a text file."
+    "Версии, настройки оптимизации и DNS, хвост журнала роутера — текстовым файлом; личное скрыто. Приложите его к сообщению о проблеме.",
+    "Versions, optimization and DNS settings, the tail of the router log — as a text file; private data hidden. Attach it to a problem report."
   ],
   "web.diag.space_kb": [
     "{value} КБ",
@@ -456,6 +460,54 @@
     "Адрес вида https://example.com/",
     "An address like https://example.com/"
   ],
+  "web.fail.action": [
+    "Действие: {v}",
+    "Action: {v}"
+  ],
+  "web.fail.code": [
+    "Код: {v}",
+    "Code: {v}"
+  ],
+  "web.fail.copy": [
+    "Скопировать",
+    "Copy"
+  ],
+  "web.fail.details": [
+    "Подробнее",
+    "Details"
+  ],
+  "web.fail.hidden": [
+    "[скрыто]",
+    "[hidden]"
+  ],
+  "web.fail.hide": [
+    "Скрыть",
+    "Hide"
+  ],
+  "web.fail.page_lang": [
+    "язык страницы {v}",
+    "page language {v}"
+  ],
+  "web.fail.private": [
+    "Личное скрыто: адреса IP и MAC, введённые сайты и адреса, пароли и ключи.",
+    "Private data hidden: IP and MAC addresses, entered sites and addresses, passwords and keys."
+  ],
+  "web.fail.text": [
+    "Ошибка: {v}",
+    "Error: {v}"
+  ],
+  "web.fail.time": [
+    "Время: {v}",
+    "Time: {v}"
+  ],
+  "web.fail.title": [
+    "DpiShell на роутере — ошибка",
+    "DpiShell on the router — error"
+  ],
+  "web.fail.versions": [
+    "Версии: {v}",
+    "Versions: {v}"
+  ],
   "web.line_err": [
     "Строка {n}: {error}",
     "Line {n}: {error}"
@@ -491,6 +543,10 @@
   "web.main.opt_stats": [
     "{name} — открывала всё в {passed} из {runs} подборов",
     "{name} — opened everything in {passed} of {runs} searches"
+  ],
+  "web.main.opt_stats_none": [
+    "{name} — в подборах ещё не открывала всё",
+    "{name} — has not opened everything in a search yet"
   ],
   "web.main.remove_pkg": [
     "Удалите пакет {name} (apk del {name}).",
@@ -645,8 +701,8 @@
     "Full — all strategies, the best one is chosen; quick — until the first working one, starting with the previous ones. If the ready-made ones do not help, “Deep search” generates and tests new strategies — up to 15 minutes. During the search optimization for the whole network switches several times — sites and games will be interrupted."
   ],
   "web.select.ip_blocked": [
-    "не ответил ни с одной стратегией, похоже на блокировку по адресу",
-    "did not respond with any strategy, looks like an IP block"
+    "не ответил ни с одной стратегией — похоже на блокировку по адресу; подбор тут обычно не помогает, можно попробовать «Искать глубже»",
+    "did not respond with any strategy — looks like an IP block; a search usually does not help here, “Deep search” is worth a try"
   ],
   "web.select.mode_info": [
     "Полный проверяет все стратегии и показывает таблицу — так видно самую надёжную. Быстрый — до первой рабочей. Лучшая стратегия включается автоматически.",
@@ -870,7 +926,7 @@
   ],
   "web.warn.auto_selected": [
     "Автоподбор включил {name}",
-    "Automatic search applied {name}"
+    "Auto-search switched to {name}"
   ],
   "web.warn.conflict": [
     "Мешает похожая программа: {names}",

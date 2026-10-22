@@ -744,7 +744,7 @@ return baseclass.extend({
 			body.textContent = '';
 			self.readPick(files).then(function(entries) { return self.parse(entries); }).then(function(pkg) {
 				self.showPlan(pkg, body, err, onDone);
-			}).catch(function(e) { err.textContent = e.message; });
+			}).catch(function(e) { api.fail(err, e); });
 		};
 		pickDir.addEventListener('change', function() { picked(pickDir.files); });
 		pickZip.addEventListener('change', function() { picked(pickZip.files); });
@@ -794,7 +794,7 @@ return baseclass.extend({
 					rows.push(E('div', { 'class': 'dps-xfer-row dps-muted' }, (api.has('web.xfer.sec.' + x.section) ? api.t('web.xfer.sec.' + x.section) : x.section) + ': ' + api.t('web.xfer.skipped', { reason: x.reason })));
 				});
 				dom(planBox, rows.length ? rows : E('p', {}, api.t('web.xfer.nothing_in')));
-			}, function(e) { err.textContent = api.text(e); });
+			}, function(e) { api.fail(err, e); });
 		}
 		function dom(el, kids) {
 			while (el.firstChild) el.removeChild(el.firstChild);

@@ -598,5 +598,10 @@
  "router.security.dns_wan.ok": "отвечает только домашней сети",
  "router.security.dns_wan.local": "слушает и внешний адрес, но отвечает только своим сетям",
  "router.security.dns_wan.warn": "готов отвечать на запросы из интернета, если их пропустит межсетевой экран",
- "router.security.dns_wan.fix": "Вариант: «Только локальные запросы» в «Сеть» → «DHCP и DNS» или исключить интерфейс wan."
+ "router.security.dns_wan.fix": "Вариант: «Только локальные запросы» в «Сеть» → «DHCP и DNS» или исключить интерфейс wan.",
+ "router.probe.redirect": "редирект на {host}",
+ "router.probe.redirect_other": "редирект на другой адрес",
+ "router.probe.after_hops": "{detail} (после {n} редир.)",
+ "router.probe.tls": "TLS {tls}: {detail}",
+ "router.probe.pair": "{a}; {b}"
 }
