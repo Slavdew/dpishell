@@ -170,7 +170,7 @@ public class HelperProtocolTests
             "strategy_add", "strategy_delete", "strategy_check",
             "hosts_try", "hosts_audit", "hosts_user_set", "hosts_comment", "hosts_uncomment", "hosts_restore",
             "rec_start", "rec_status", "rec_stop", "app_profiles", "app_profile_set", "app_profile_remove",
-            "changes_list", "changes_undo_all", "changes_undo",
+            "changes_list", "changes_undo_all", "changes_undo", "changes_undo_group",
             "proxy_status", "proxy_user_set", "proxy_machine_set", "proxy_machine_restore",
             "advanced_get", "advanced_set", "joint_get", "joint_set", "settings_export_read", "settings_import", "log_tail",
         ];
@@ -183,7 +183,8 @@ public class HelperProtocolTests
         Assert.All(["strategy_add {title, roles, source}", "strategy_delete {strategy}", "strategy_check {strategy, groups?}"], cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.All(["hosts_try {entries}", "hosts_audit", "hosts_user_set {entries}", "hosts_comment {ids}", "hosts_uncomment", "hosts_restore"],
             cmd => Assert.Contains("`" + cmd + "`", doc));
-        Assert.All(["changes_list", "changes_undo_all", "changes_undo {id}"], cmd => Assert.Contains("`" + cmd + "`", doc));
+        Assert.All(["changes_list", "changes_undo_all", "changes_undo {id}", "changes_undo_group {id}"], cmd => Assert.Contains("`" + cmd + "`", doc));
+        Assert.Contains("1.15 — отмена загрузки настроек отдельно", doc);
         Assert.All(["proxy_status", "proxy_user_set {enabled, server?, bypass?, pac?}", "proxy_machine_set {enabled, server?, bypass?, pac?, winhttp?}", "proxy_machine_restore"],
             cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.All(["joint_get", "joint_set {active, owned?}"], cmd => Assert.Contains("`" + cmd + "`", doc));

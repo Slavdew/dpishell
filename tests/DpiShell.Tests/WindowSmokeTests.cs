@@ -2132,8 +2132,10 @@ public sealed partial class WindowSmokeTests
     }
 
     /// <summary>
-    /// «Настройки» → «Что сделала DpiShell» (откат всего): пустой журнал, список записей, отчёт по пунктам с вопросом про чужие правки.
-    /// Без ошибок привязок в обеих темах. Снимки: &lt;тема&gt;-settings-changes-empty|list|report.png.
+    /// «Настройки» → «Что сделала DpiShell» (откат всего): пустой журнал, список записей, отчёт по пунктам с вопросом про чужие правки,
+    /// отмена по пунктам (загрузка настроек — «Отменить загрузку», её пункт и ядро — подпись почему), «Удалить DpiShell с этого ПК…» по шагам
+    /// и тост ошибки с раскрытым «Подробнее». Без ошибок привязок в обеих темах.
+    /// Снимки: &lt;тема&gt;-settings-changes-empty|list|report|per-item|uninstall.png, &lt;тема&gt;-error-details.png.
     /// </summary>
     [Fact]
     public void Settings_ChangesCard_BindsAndSnaps()
@@ -2149,8 +2151,11 @@ public sealed partial class WindowSmokeTests
                 var settings = TestWindow.Settings(shell);
                 settings.Theme = theme;
                 var f = new HelperFixture();
-                var link = Task.Run(f.LinkAsync).GetAwaiter().GetResult();
+                var setup = new OkSetup();
+                var link = Task.Run(() => f.LinkAsync(setup)).GetAwaiter().GetResult();
                 var vm = TestWindow.Model(shell, link, settings);
+                vm.ProgramFolder = () => @"D:\Apps\DpiShell";
+                vm.WindowFolder = () => @"C:\Users\user\AppData\Local\DpiShell";
                 var w = Open(vm);
                 SetProp(vm, "IsLoading", false);
                 vm.GoTo(Pages.Settings);
@@ -2222,6 +2227,46 @@ public sealed partial class WindowSmokeTests
                 if (FindAll<TextBlock>(Card()).Any(t => System.Text.RegularExpressions.Regex.IsMatch(t.Text, @"\bобход", System.Text.RegularExpressions.RegexOptions.IgnoreCase))) throw new Exception("В карточке осталось слово «обход»");
                 ScrollToCard();
                 Shot("report");
+
+                // Отмена по пунктам: загрузка — «Отменить загрузку», её DNS — «вместе с загрузкой», ядро — только «Отменить всё»,
+                // ранний DNS — «сначала поздний»; у остальных — «Отменить».
+                f.Backend.ChangesValue.Add(new("d4d4d4d4d4d4", at.AddMinutes(50), ChangeKinds.SettingsImport, "Загружены настройки из файлов: свои сайты, hosts, DNS", true));
+                f.Backend.ChangesValue.Add(new("e5e5e5e5e5e5", at.AddMinutes(51), ChangeKinds.Dns, "DNS этого компьютера: Cloudflare — Ethernet", true, "d4d4d4d4d4d4"));
+                f.Backend.ChangesValue.Add(new("f6f6f6f6f6f6", at.AddMinutes(-5), ChangeKinds.Core, "Установлено ядро zapret 72.9", true));
+                WaitUi(vm.Changes.RefreshAsync());
+                vm.Changes.Show([]);
+                Pump();
+                foreach (var text in new[] { L.T("settings.changes.row.undo_import"), L.T("settings.changes.row.undo"), L.T("settings.changes.row.in_import"),
+                             L.T("settings.changes.row.only_all"), L.T("settings.changes.row.newer_first") })
+                    if (!Has(text)) throw new Exception($"Нет «{text}» в списке изменений");
+                ScrollToCard();
+                Shot("per-item");
+
+                // «Удалить DpiShell с этого ПК…»: шаги по очереди и папки, которые осталось удалить вручную.
+                vm.Confirm = _ => true;
+                if (Find<Button>(Find<TabControl>(w)!, b => b.Content as string == L.T("settings.uninstall.button") && b.IsVisible) is null) throw new Exception("Нет кнопки «Удалить DpiShell с этого ПК…»");
+                var removal = vm.UninstallPcAsync();
+                WaitUi(removal);
+                if (!removal.Result) throw new Exception("Удаление не дошло до конца: " + vm.Message);
+                Pump();
+                if (setup.Calls.LastOrDefault() != "--uninstall-helper " + HelperLink.PurgeArg) throw new Exception("Помощник удалялся без --purge");
+                var steps = (FrameworkElement)w.FindName("UninstallSteps")!;
+                if (!steps.IsVisible || Find<TextBlock>(steps, t => t.Text == L.T("settings.uninstall.left_title") && t.IsVisible) is null) throw new Exception("Нет шагов удаления или списка папок");
+                {
+                    var sv = Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0)!;
+                    sv.ScrollToEnd();
+                    Pump();
+                }
+                Shot("uninstall");
+
+                // Ошибка: тост с «Подробнее» — полное описание и «Скопировать».
+                vm.Fail(L.T("shell.helper.uninstall_failed", new { error = "код 1" }), new InvalidOperationException("sc delete: 1072"));
+                vm.ErrorDetailsCmd.Execute(null);
+                Pump();
+                var details = (FrameworkElement)w.FindName("ToastErrorText")!;
+                if (!details.IsVisible) throw new Exception("«Подробнее» у ошибки не раскрылось");
+                if (Find<Button>(w, b => b.Content as string == L.T("shell.error.copy") && b.IsVisible) is null) throw new Exception("Нет «Скопировать» у ошибки");
+                if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-error-details.png"));
 
                 Close(w);
                 Stop(vm, f);

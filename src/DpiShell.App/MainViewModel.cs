@@ -68,7 +68,7 @@ public sealed partial class MainViewModel : Observable
             Message = L.T("settings.lang.template.saved", new { path = file });
             OpenFolderAction(Path.GetDirectoryName(file)!);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Fail(Texts.Friendly(e)); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Fail(Texts.Friendly(e), e); }
     });
     ICommand? _exportLangCmd;
     /// <summary>Открыть папку в Проводнике (в тестах подменяется).</summary>
@@ -187,6 +187,8 @@ public sealed partial class MainViewModel : Observable
             Say = s => Message = s,
             Confirm = s => Confirm(s),
             Guard = Guard,
+            // Отменили — всё, что окно показывает из данных помощника (сайты, hosts, DNS, профили), перечитать.
+            AfterUndo = () => AfterImportAsync(),
         };
         WireRouterPc();   // оптимизация ПК и роутера вместе не работают (router-api §6) — MainViewModel.Router.cs
         InitPcDns();      // DNS этого компьютера — MainViewModel.Dns.cs
@@ -369,7 +371,7 @@ public sealed partial class MainViewModel : Observable
         else if (Helper.Client is { } c && Helper.Status is { RunMode: "process", Enabled: true, Active: false, StrategyId: { } id })
         {
             try { await c.EnableAsync(id); }
-            catch (Exception e) when (e is HelperException or HelperUnavailableException) { _error = Texts.Friendly(e); Fail(_error); }
+            catch (Exception e) when (e is HelperException or HelperUnavailableException) { _error = Texts.Friendly(e); Fail(_error, e); }
             await FetchAsync(full: false);
         }
         await RefreshStatusAsync();
@@ -482,7 +484,7 @@ public sealed partial class MainViewModel : Observable
         {
             if (e is HelperUnavailableException u) Helper.MarkLost(u);
             _error = Texts.Friendly(e);
-            Fail(_error);
+            Fail(_error, e);
             // Чужие программы обхода: что именно мешает — на «Диагностике».
             if (e is ConflictException or HelperException { Code: HelperErrors.Conflict }) Page = Pages.Diag;
             return false;
@@ -575,7 +577,7 @@ public sealed partial class MainViewModel : Observable
         _loadCts?.Cancel();
         LoadFailed = false;
         try { await OpenAsync(); }
-        catch (Exception e) { Fail(Texts.Friendly(e)); }
+        catch (Exception e) { Fail(Texts.Friendly(e), e); }
     }
 
     /// <summary>Снять заставку и наполнить окно: от помощника, если он на связи, иначе — то, что видно без прав.</summary>
@@ -894,7 +896,7 @@ public sealed partial class MainViewModel : Observable
             await FetchAsync(full: false);
             if (Live?.StrategyId == id) _draftStrategy = null;
         }
-        catch (Exception e) when (e is HelperException or HelperUnavailableException) { Fail(Texts.Friendly(e)); }
+        catch (Exception e) when (e is HelperException or HelperUnavailableException) { Fail(Texts.Friendly(e), e); }
         UpdateStatus();
     }
 
@@ -1006,7 +1008,7 @@ public sealed partial class MainViewModel : Observable
             VpnNames = string.Join(", ", vpn);
             SetConflicts(conflicts);
         }
-        catch (Exception e) { Fail(Texts.Friendly(e)); }
+        catch (Exception e) { Fail(Texts.Friendly(e), e); }
         UpdateStatus();
     }
 
@@ -1947,7 +1949,7 @@ public sealed partial class MainViewModel : Observable
             var updated = DateTime.Now;
             DiagUpdatedIs(() => L.T("diag.updated", new { time = L.Time(updated) }));
         }
-        catch (Exception e) { Fail(Texts.Friendly(e)); }
+        catch (Exception e) { Fail(Texts.Friendly(e), e); }
         finally { DiagRefreshing = false; }
     }
 
@@ -1995,7 +1997,7 @@ public sealed partial class MainViewModel : Observable
 
     void SaveSettings()
     {
-        try { Settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Fail(Texts.Friendly(e)); }
+        try { Settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Fail(Texts.Friendly(e), e); }
     }
 
     /// <summary>"system" / "light" / "dark" — в window.json, применяется сразу.</summary>
@@ -2116,7 +2118,7 @@ public sealed partial class MainViewModel : Observable
                 { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
             }
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Fail(Texts.Friendly(e)); return; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Fail(Texts.Friendly(e), e); return; }
         if (r.Results.Count == 0) Message = L.T("diag.results.none");
         OpenFolder(dir);
     }
@@ -2128,6 +2130,6 @@ public sealed partial class MainViewModel : Observable
             Directory.CreateDirectory(path);
             Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true });
         }
-        catch (Exception e) { Fail(Texts.Friendly(e)); }
+        catch (Exception e) { Fail(Texts.Friendly(e), e); }
     }
 }

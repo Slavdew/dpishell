@@ -51,5 +51,17 @@
   "shell.helper.install_exit": "код {code}; подробности — в журнале помощника (logs\\helper.log)",
   "shell.undo.no_record": "Записи об изменении нет — вернуть нечего.",
   "shell.about_text": "DpiShell {version} · помощник: {helper}",
-  "shell.open_failed": "Не удалось открыть: {error}"
+  "shell.open_failed": "Не удалось открыть: {error}",
+  "shell.error.details": "Подробнее",
+  "shell.error.hide": "Скрыть",
+  "shell.error.copy": "Скопировать",
+  "shell.error.copied": "Описание ошибки скопировано.",
+  "shell.error.title": "DpiShell — ошибка",
+  "shell.error.time": "Время: {v}",
+  "shell.error.action": "Действие: {v}",
+  "shell.error.text": "Ошибка: {v}",
+  "shell.error.detail": "Подробности: {v}",
+  "shell.error.router": "Роутер: {v}",
+  "shell.error.none": "нет",
+  "shell.error.private": "Личное скрыто: адреса и имена ПК и сети, свои сайты, адреса прокси и роутера."
 }

@@ -106,8 +106,11 @@ public sealed class HelperInstaller(AppPaths paths)
         log?.Report(L.T("core.helper.inst.done"));
     }
 
-    /// <summary>Удаление: остановить и удалить службу, стереть папку помощника. Данные программы (state, результаты) остаются.</summary>
-    public void Uninstall(IProgress<string>? log = null)
+    /// <summary>
+    /// Удаление: остановить и удалить службу, стереть папку помощника. Данные программы (state, результаты, журнал изменений) остаются —
+    /// кроме <paramref name="purge"/> («Удалить DpiShell с этого ПК»): тогда стирается вся %ProgramData%\DpiShell (<see cref="AppPaths.Purge"/>).
+    /// </summary>
+    public void Uninstall(IProgress<string>? log = null, bool purge = false)
     {
         if (!Shell.IsAdmin()) throw new UnauthorizedAccessException(L.T("core.helper.need_admin_uninstall"));
         if (ServiceManager.Query(HelperProtocol.ServiceName) != SvcState.NotInstalled)
@@ -119,6 +122,8 @@ public sealed class HelperInstaller(AppPaths paths)
         }
         DeleteWhenReleased(HelperDir(paths));
         log?.Report(L.T("core.helper.inst.removed"));
+        // Последним: журнал помощника лежит там же — после этого в него ничего не пишется.
+        if (purge) paths.Purge();
     }
 
     /// <summary>

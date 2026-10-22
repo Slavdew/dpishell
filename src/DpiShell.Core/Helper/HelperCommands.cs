@@ -197,6 +197,8 @@ public static partial class HelperCommands
         new("changes_list", false, false),
         new("changes_undo_all", true, true),
         new("changes_undo", true, true, new ArgSpec("id", ArgKind.ChangeId, Required: true)),
+        // API 1.15: действие вместе с записями, сделанными внутри него (загрузка настроек и её hosts, DNS, профили), — остальной журнал не трогается.
+        new("changes_undo_group", true, true, new ArgSpec("id", ArgKind.ChangeId, Required: true)),
         // Системный прокси (API 1.7). Ни путей реестра, ни имён значений команды не принимают: адрес — хост:порт, исключения — имена и маски,
         // PAC — http(s). «Для пользователя» помощник пишет в ветку пользователя ЭТОГО канала (SID клиента), «для машины» — HKLM + политику
         // ProxySettingsPerUser и по желанию WinHTTP. enabled=false — «Очистить» (прежнее запоминается), без остальных аргументов.

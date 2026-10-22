@@ -563,6 +563,7 @@ public sealed class Shell
         if (CurrentOptions.Ipset == mode && State.IpsetMode != "any") return;
         State.IpsetMode = BuildOptions.Format(mode);
         State.IpsetAnyUntil = null;
+        State.IpsetByGame = false;   // режим списка выбран рукой — игровой режим его больше не вернёт
         if (mode == IpsetMode.Off) State.GameMode = BuildOptions.Format(GameMode.Off);
         State.Save(Paths);
         ReapplyIfActive();
@@ -621,9 +622,20 @@ public sealed class Shell
                 {
                     State.IpsetMode = BuildOptions.Format(IpsetMode.List);
                     State.IpsetAnyUntil = null;
+                    State.IpsetByGame = true;
                     note = L.T("core.shell.game_uses_list");
                 }
             }
+        }
+        else if (State.IpsetByGame)
+        {
+            // Включить → выключить = как было: список, который включил сам игровой режим, выключается.
+            if (State.IpsetMode == BuildOptions.Format(IpsetMode.List))
+            {
+                State.IpsetMode = BuildOptions.Format(IpsetMode.Off);
+                note = L.T("core.shell.game_list_off");
+            }
+            State.IpsetByGame = false;
         }
         State.GameMode = BuildOptions.Format(mode);
         State.Save(Paths);
@@ -897,6 +909,19 @@ public sealed class Shell
         State.Advanced = next;
         State.Save(Paths);
         ReapplyIfActive();
+    }
+
+    /// <summary>
+    /// Откат загрузки настроек, которая правила уже открытую запись продвинутого режима: вернуть прежнее через тот же путь, что кнопки окна, —
+    /// открытая запись обновит «что поставили» или закроется, если вернулись к её началу. Открытой записи нет — просто вернуть.
+    /// </summary>
+    public void RevertAdvancedTo(AdvancedConfig was)
+    {
+        if (Journal.Active(ChangeKinds.Advanced).Count == 0) { RestoreAdvanced(was); return; }
+        var next = was.Clone();
+        foreach (var r in next.Rows)
+            r.Resolved = State.Advanced.Rows.FirstOrDefault(x => x.Strategy == AdvancedSites.Auto && r.Strategy == AdvancedSites.Auto && x.Domains.SequenceEqual(r.Domains))?.Resolved;
+        ApplyAdvanced(next);
     }
 
     /// <summary>«Удалить полностью»: строки и режим сбрасываются.</summary>

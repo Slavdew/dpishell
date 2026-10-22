@@ -121,6 +121,21 @@ public sealed class AppPaths
         return removed;
     }
 
+    /// <summary>
+    /// «Удалить DpiShell с этого ПК»: стереть папку программы (<see cref="Root"/>) целиком — только этот точный путь, по ссылкам не заходя
+    /// (<see cref="SafeFolder.DeleteTree"/>). Отложенные в сторону чужие папки рядом (<c>DpiShell.untrusted-…</c>) не трогаются.
+    /// Файл может держать только что остановленная служба или антивирус — повтор до <paramref name="timeout"/>, потом — исходная ошибка.
+    /// </summary>
+    public void Purge(TimeSpan? timeout = null)
+    {
+        var until = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(20));
+        while (true)
+        {
+            try { SafeFolder.DeleteTree(Root); return; }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException && DateTime.UtcNow < until) { Thread.Sleep(300); }
+        }
+    }
+
     static bool IsElevated()
     {
         using var id = System.Security.Principal.WindowsIdentity.GetCurrent();

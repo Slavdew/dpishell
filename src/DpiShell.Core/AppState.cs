@@ -42,6 +42,8 @@ public sealed class AppState
     public string IpsetModeBeforeAny { get; set; } = "off";
     /// <summary>Игровой режим: "off" (по умолчанию), "all" (TCP+UDP — переключатель окна), "tcp"/"udp" — только отладочная консоль.</summary>
     public string GameMode { get; set; } = "off";
+    /// <summary>IP-список включил игровой режим (был «выкл»): при выключении игрового режима список выключается — как было до него. Выбор режима списка рукой сбрасывает.</summary>
+    public bool IpsetByGame { get; set; }
     /// <summary>«Починить адреса» (hosts, architecture.md «Починить адреса») включено. По умолчанию выключено.</summary>
     public bool HostsFix { get; set; }
     /// <summary>Когда последний раз перепроверяли записи hosts (локальное время) — окно делает это раз в сутки и при старте.</summary>

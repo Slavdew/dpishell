@@ -255,6 +255,18 @@ public sealed class HostsManager
     }
 
     /// <summary>
+    /// Откат загрузки настроек: вернуть свои строки, которые стояли до неё, без живой проверки (они уже были в файле). Пусто — своих строк больше нет,
+    /// записи журнала о них закрываются. Чужие строки не трогаются: свои узнаются по пометке.
+    /// </summary>
+    public bool RestoreUser(IReadOnlyList<HostsEntry> lines)
+    {
+        var (_, changed, _) = File.ApplyUser(lines);
+        if (lines.Count == 0) Recorder.Close(ChangeKinds.HostsUser, L.T("core.hosts.mgr.closed_user"));
+        KeepStale(lines);
+        return changed;
+    }
+
+    /// <summary>
     /// «Закомментировать выбранные»: строки по «номер:хеш». <paramref name="allowed"/> — какие строки вообще можно трогать
     /// (помощник передаёт мешающие из последней проверки; null — любые чужие). Хеш не совпал — строка изменилась после проверки, пропуск.
     /// </summary>

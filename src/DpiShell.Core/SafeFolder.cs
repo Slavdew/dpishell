@@ -160,6 +160,26 @@ static class SafeFolder
         return true;
     }
 
+    /// <summary>
+    /// Стереть папку целиком, не заходя по ссылкам (правило владельца об удалении): ссылка (junction, symlink) удаляется сама — то, на что она
+    /// указывает, не трогается; у жёсткой ссылки удаляется только это имя. Нет папки — ничего.
+    /// </summary>
+    public static void DeleteTree(string dir)
+    {
+        if (Attributes(dir) is not { } a) return;
+        if ((a & FileAttributes.ReparsePoint) != 0) { DeleteLink(dir, a); return; }
+        if ((a & FileAttributes.Directory) == 0) { File.SetAttributes(dir, FileAttributes.Normal); File.Delete(dir); return; }
+        foreach (var entry in Directory.EnumerateFileSystemEntries(dir).ToList())
+        {
+            if (Attributes(entry) is not { } e) continue;
+            if ((e & FileAttributes.ReparsePoint) != 0) DeleteLink(entry, e);
+            else if ((e & FileAttributes.Directory) != 0) DeleteTree(entry);
+            else { if ((e & FileAttributes.ReadOnly) != 0) File.SetAttributes(entry, FileAttributes.Normal); File.Delete(entry); }
+        }
+        if ((a & FileAttributes.ReadOnly) != 0) File.SetAttributes(dir, a & ~FileAttributes.ReadOnly);
+        Directory.Delete(dir, recursive: false);
+    }
+
     /// <summary>Сколько имён у файла (больше одного — жёсткая ссылка). Не открылся — 1: решит дальнейшая смена прав.</summary>
     internal static uint LinkCount(string file)
     {

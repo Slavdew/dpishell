@@ -107,6 +107,8 @@ public interface IHelperBackend : IHelperCatalog
     Task<UndoReport> ChangesUndoAllAsync(CancellationToken ct);
     /// <summary>Откатить одну запись журнала.</summary>
     Task<UndoReport> ChangesUndoAsync(string id, CancellationToken ct);
+    /// <summary>Откатить действие вместе с записями, сделанными внутри него (загрузка настроек, API 1.15).</summary>
+    Task<UndoReport> ChangesUndoGroupAsync(string id, CancellationToken ct);
 
     // ---------- системный прокси (API 1.7) ----------
     /// <summary>Что стоит сейчас (ветка пользователя канала, машина, политика, WinHTTP) и есть ли что вернуть. Только чтение.</summary>
@@ -697,6 +699,13 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
     public async Task<UndoReport> ChangesUndoAsync(string id, CancellationToken ct)
     {
         var r = await Changes.UndoAsync(id, ct);
+        AfterUndo(r);
+        return r;
+    }
+
+    public async Task<UndoReport> ChangesUndoGroupAsync(string id, CancellationToken ct)
+    {
+        var r = await Changes.UndoGroupAsync(id, ct);
         AfterUndo(r);
         return r;
     }

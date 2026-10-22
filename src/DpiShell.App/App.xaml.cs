@@ -121,7 +121,7 @@ public partial class App : Application
         vm.LocalDns = new WindowsDnsSystem();   // только чтение DNS адаптеров без помощника; меняет помощник
         vm.Updates.Http = () => new System.Net.Http.HttpClient(new System.Net.Http.SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(5) })
             { Timeout = Timeout.InfiniteTimeSpan };
-        RelayCommand.OnError = ex => { TryLog(ex); vm.Fail(Texts.Friendly(ex)); };
+        RelayCommand.OnError = ex => { TryLog(ex); vm.Fail(Texts.Friendly(ex), ex); };
         try
         {
             var window = new MainWindow(vm);
@@ -157,7 +157,7 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// --helper (служба, вызывает SCM), --install-helper [SID] и --uninstall-helper (окно запускает их с runas).
+    /// --helper (служба, вызывает SCM), --install-helper [SID] и --uninstall-helper [--purge] (окно запускает их с runas).
     /// Null — обычный запуск окна. Ход установки — в журнал помощника (logs\helper.log), окно показывает код выхода.
     /// </summary>
     static int? HelperMode(string[] args)
@@ -169,7 +169,7 @@ public partial class App : Application
         {
             "--helper" => HelperEntry.RunService(args),
             "--install-helper" => HelperEntry.Install(args.Length > 1 ? args[1] : null, log),
-            "--uninstall-helper" => HelperEntry.Uninstall(log),
+            "--uninstall-helper" => HelperEntry.Uninstall(log, purge: args.Skip(1).Contains(HelperLink.PurgeArg)),
             _ => null,
         };
     }
@@ -185,7 +185,7 @@ public partial class App : Application
     {
         e.Handled = true;
         TryLog(e.Exception);
-        if (MainWindow is { IsLoaded: true, DataContext: MainViewModel vm }) vm.Fail(Texts.Friendly(e.Exception));
+        if (MainWindow is { IsLoaded: true, DataContext: MainViewModel vm }) vm.Fail(Texts.Friendly(e.Exception), e.Exception);
         else
         {
             // Ошибка до того, как окно показалось: без окна приложение бесполезно и висело бы в фоне.

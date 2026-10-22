@@ -162,6 +162,9 @@
                     </StackPanel>
                     <TextBox Text="{Binding ImportResultText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,10,0,0"
                              Visibility="{Binding HasImportResult, Converter={StaticResource Vis}}" />
+                    <!-- С-19: отменить только эту загрузку (вместе с её hosts, DNS, профилями), не «Отменить всё». -->
+                    <Button x:Name="UndoImport" Content="{l:T settings.transfer.undo_import}" ContentTemplate="{StaticResource Shield}" Command="{Binding UndoImportCmd}"
+                            HorizontalAlignment="Left" Margin="0,8,0,0" Visibility="{Binding ShowUndoImport, Converter={StaticResource Vis}}" />
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>

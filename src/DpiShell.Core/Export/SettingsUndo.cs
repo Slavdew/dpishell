@@ -6,8 +6,9 @@ namespace DpiShell.Core.Export;
 
 /// <summary>
 /// Откат загрузки настроек: возвращает прежние свои сайты, исключения и подсети (если сейчас стоит то, что поставила загрузка — иначе не трогаем),
-/// убирает добавленные стратегии (кроме выбранной сейчас) и возвращает профили, которые «заменить» убрало. Новые профили, продвинутый режим, hosts и DNS
-/// откатываются своими записями журнала, сделанными в той же загрузке.
+/// убирает добавленные стратегии (кроме выбранной сейчас) и возвращает профили, которые «заменить» убрало. Свои строки hosts и продвинутый режим —
+/// если загрузка правила уже открытую их запись (своей записи у загрузки нет): прежнее хранится в записи загрузки. Новые профили, DNS и новые записи
+/// hosts/продвинутого режима откатываются своими записями (они — часть загрузки, <see cref="ChangeEntry.Group"/>; «Отменить загрузку» идёт по ним первой).
 /// </summary>
 public sealed class SettingsImportUndoer(Shell shell) : IChangeUndoer
 {
@@ -16,6 +17,15 @@ public sealed class SettingsImportUndoer(Shell shell) : IChangeUndoer
     static readonly JsonSerializerOptions Snap = new() { PropertyNameCaseInsensitive = true };
 
     static List<string> Strings(JsonNode? n) => n is JsonArray a ? [.. a.Select(x => x?.GetValue<string>() ?? "")] : [];
+
+    /// <summary>Строки hosts без учёта порядка (файл хранит их по-своему).</summary>
+    static bool Same(IEnumerable<string> a, IEnumerable<string> b) => a.Order(StringComparer.Ordinal).SequenceEqual(b.Order(StringComparer.Ordinal), StringComparer.Ordinal);
+
+    static HostsEntry? Entry(string line)
+    {
+        var p = line.Split(' ', 2, StringSplitOptions.TrimEntries);
+        return p.Length == 2 && p[0].Length > 0 && p[1].Length > 0 ? new HostsEntry(p[1], p[0]) : null;
+    }
 
     public Task<UndoOutcome> UndoAsync(ChangeEntry e, CancellationToken ct)
     {
@@ -40,6 +50,40 @@ public sealed class SettingsImportUndoer(Shell shell) : IChangeUndoer
         Part("subnets", SettingsSections.Title(SettingsSections.Subnets), () => shell.IpLists.Read(IpLists.UserFile), v => shell.WriteUserIpset(v, false, true));
         Part("subnets_exclude", L.T("export.undo.subnets_exclude"),
             () => shell.IpLists.Read(IpLists.UserExcludeFile), v => shell.WriteUserIpset(v, true, true));
+
+        // Продвинутый режим — до стратегий: прежние строки ссылаются на прежние стратегии, загруженные ещё на месте.
+        if (before["advanced"] is { } advWas && after["advanced"] is { } advOurs)
+        {
+            var was = AdvancedConfig.FromJson(advWas);
+            var cur = shell.State.Advanced;
+            var title = SettingsSections.Title(SettingsSections.Advanced);
+            if (!cur.SameChoice(was))
+            {
+                if (!cur.SameChoice(AdvancedConfig.FromJson(advOurs))) changed.Add(title);
+                else
+                {
+                    try { shell.RevertAdvancedTo(was); restored.Add(title); }
+                    catch (Exception ex) when (ex is InvalidOperationException or IOException or System.Security.SecurityException or ConflictException) { changed.Add(title + ": " + ex.Message); }
+                }
+            }
+        }
+
+        // Свои строки hosts: прежний набор, если сейчас стоит поставленный загрузкой.
+        if (before["hosts"] is not null && after["hosts"] is not null)
+        {
+            var was = Strings(before["hosts"]);
+            var cur = shell.Hosts.File.Read().UserLines().Select(l => new HostsEntry(l.Host, l.Ip).ToString()).Distinct().ToList();
+            var title = SettingsSections.Title(SettingsSections.Hosts);
+            if (!Same(cur, was))
+            {
+                if (!Same(cur, Strings(after["hosts"]))) changed.Add(title);
+                else
+                {
+                    shell.Hosts.RestoreUser([.. was.Select(Entry).OfType<HostsEntry>()]);
+                    restored.Add(title);
+                }
+            }
+        }
 
         // Добавленные стратегии: выбранную сейчас и запасные не трогаем — на них ссылается работающая настройка.
         var ids = Strings(after["strategies"]);

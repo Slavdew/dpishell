@@ -187,10 +187,21 @@ public sealed class TransferWindowTests : IDisposable
 
         bool refreshed = false;
         t.AfterImport = () => { refreshed = true; return Task.CompletedTask; };
+        f.Backend.ImportJournalId = "abcdefabcdef";
+        Assert.False(t.ShowUndoImport);
         await t.ImportAsync();
         Assert.Contains(f.Backend.Calls, c => c.StartsWith("settings_import"));
         Assert.True(refreshed);
-        Assert.NotEqual("", t.ImportResultText);
+        Assert.Contains(L.T("settings.transfer.undo_hint"), t.ImportResultText);
+
+        // С-19: «Отменить загрузку» — только эта запись (с её пунктами), не «Отменить всё».
+        Assert.True(t.ShowUndoImport);
+        vm.Confirm = _ => true;
+        await t.UndoImportAsync();
+        Assert.Contains("changes_undo_group abcdefabcdef", f.Backend.Calls);
+        Assert.DoesNotContain("changes_undo_all", f.Backend.Calls);
+        Assert.False(t.ShowUndoImport);
+        Assert.Equal(L.T("settings.transfer.undone"), t.ImportResultText);
     }
 
     [Fact]

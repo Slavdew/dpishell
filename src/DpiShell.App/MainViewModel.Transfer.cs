@@ -91,6 +91,8 @@ public sealed partial class MainViewModel
             OpenFolder = p => OpenFolderAction(p),
             DefaultFolder = () => TransferFolder(),
             AfterImport = AfterImportAsync,
+            CanUndoImport = () => Changes.CanUndoImport,
+            UndoImport = id => Changes.UndoImportAsync(id),
             Say = s => Message = s,
             Confirm = s => Confirm(s),
         };

@@ -411,6 +411,7 @@ public sealed class HelperServer : IAsyncDisposable
             case "changes_list": return await Task.Run(b.ChangesList, ct);
             case "changes_undo_all": return await Task.Run(() => b.ChangesUndoAllAsync(ct), ct);
             case "changes_undo": return await Task.Run(() => b.ChangesUndoAsync(c.Str("id")!, ct), ct);
+            case "changes_undo_group": return await Task.Run(() => b.ChangesUndoGroupAsync(c.Str("id")!, ct), ct);
             case "proxy_status": return await Task.Run(() => b.ProxyStatus(c.ClientSid), ct);
             case "proxy_user_set":
                 return await Task.Run(() => b.ProxyUserSet(c.ClientSid, c.Bool("enabled"), c.Str("server"), c.Str("bypass"), c.Str("pac")), ct);

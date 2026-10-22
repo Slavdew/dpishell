@@ -26,7 +26,7 @@ public static class HelperProtocol
     /// Версия протокола «мажор.минор» (helper-protocol §6): минор — добавления без поломок (команды, поля), мажор — несовместимые
     /// изменения. В hello и status; помощник без поля — «1.0». Сравнение — <see cref="HelperCompat"/>.
     /// </summary>
-    public const string Api = "1.14";
+    public const string Api = "1.15";
 
     /// <summary>С этой версии протокола запрос может нести необязательное поле <c>lang</c> — язык окна для ответа (старый помощник отвергает лишние поля).</summary>
     public const string LangApi = "1.13";
