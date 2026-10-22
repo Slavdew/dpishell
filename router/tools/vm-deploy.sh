@@ -9,6 +9,7 @@ cp -r "$ROOT/router/dpishell/files/." "$STAGE/"
 mkdir -p "$STAGE/usr/share/dpishell/lists" "$STAGE/usr/share/dpishell/fake"
 cp "$ROOT/data/strategies.json" "$ROOT/data/targets.json" "$STAGE/usr/share/dpishell/"
 cp "$ROOT/data/lists/"*.txt "$STAGE/usr/share/dpishell/lists/"
+rm -f "$STAGE/usr/share/dpishell/lists/ipset-all.txt"   # как в сборке пакета (router.yml)
 cp "$ROOT/data/fake/"*.bin "$STAGE/usr/share/dpishell/fake/"
 # Свой config пользователя не затирать
 "$VM/ssh.sh" 'test -f /etc/config/dpishell' && rm -f "$STAGE/etc/config/dpishell"

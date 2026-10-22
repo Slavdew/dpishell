@@ -55,9 +55,15 @@ return view.extend({
 
 	tick: function() {
 		var self = this;
-		this.tickNo++;
-		if (!this.running() && (this.tickNo % 3) != 0)
+		// Скрытая вкладка — без опроса; в покое — раз в 10 с, пока идёт подбор — раз в 1 с.
+		if (document.hidden) {
+			this.wasHidden = true;
 			return Promise.resolve();
+		}
+		this.tickNo++;
+		if (!this.running() && !this.wasHidden && (this.tickNo % 10) != 0)
+			return Promise.resolve();
+		this.wasHidden = false;
 		return Promise.all([api.safe('status'), api.safe('select_progress')]).then(function(d) {
 			if (!d[0].__error)
 				self.status = d[0];

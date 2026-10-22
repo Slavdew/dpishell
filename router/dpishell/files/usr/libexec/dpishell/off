@@ -16,7 +16,15 @@ esac
 [ "$(uci -q get dpishell.main.enabled)" = 1 ] || pidof nfqws >/dev/null || exit 0
 # Сначала — в настройки: короткое нажатие reset тут же перезагружает роутер, после загрузки обход должен остаться выключен.
 uci set dpishell.main.enabled=0
-uci commit dpishell
+if ! uci commit dpishell; then
+	# Флеш полон: освободить своё лишнее (итоги подборов прежних версий, только файлы в своём каталоге) и повторить.
+	# Не вышло и так — выключение всё равно переживёт перезагрузку: ниже zapret disable убирает автозапуск (удаление ссылки
+	# места не требует), а старт пакета сверяет enabled с ним (init.d/dpishell, restore_choice).
+	for f in /etc/dpishell/results/[0-9]*.json; do
+		[ -f "$f" ] && [ ! -L "$f" ] && rm -f "$f"
+	done
+	uci commit dpishell || logger -t dpishell 'Флеш полон: выключение не записано в настройки, автозапуск zapret снят'
+fi
 sync
 # Подбор и проверка держат свой config zapret и метки TCP — остановить.
 # Только живой run DpiShell с тем же временем старта, что в замке «PID время_старта» (state.uc): PID мог достаться
@@ -42,7 +50,7 @@ fi
 TEXT="$TEXT ($(date +%H:%M))"
 mkdir -p /etc/dpishell
 printf '{"by":"%s","at":%s,"text":"%s","targets":%s}\n' "$BY" "$(date +%s)" "$TEXT" "$TARGETS" > /etc/dpishell/last-off.json.tmp &&
-	mv /etc/dpishell/last-off.json.tmp /etc/dpishell/last-off.json
+	mv /etc/dpishell/last-off.json.tmp /etc/dpishell/last-off.json || rm -f /etc/dpishell/last-off.json.tmp
 rm -f /etc/dpishell/pending-confirm.json
 logger -t dpishell "$TEXT"
 ucode -L '/usr/share/ucode/*.uc' -e 'import * as st from "dpishell.state"; st.write_status_json();' >/dev/null 2>&1

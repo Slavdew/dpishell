@@ -136,14 +136,20 @@ return view.extend({
 		return view;
 	},
 
-	// Опрос: раз в 3 с, во время подбора/проверки — раз в 1 с.
+	// Опрос: в покое раз в 10 с, во время подбора/проверки и ожидания подтверждения — раз в 1 с; скрытая вкладка —
+	// не опрашивается (status нагружает CPU роутера), после возврата — сразу.
 	tick: function() {
 		var self = this;
+		if (document.hidden) {
+			this.wasHidden = true;
+			return Promise.resolve();
+		}
 		this.tickNo++;
 		this.renderConfirm();
-		var fast = this.status.jobs && (this.status.jobs.select || this.status.jobs.check);
-		if (!fast && (this.tickNo % 3) != 0)
+		var fast = (this.status.jobs && (this.status.jobs.select || this.status.jobs.check)) || this.status.pending_confirm;
+		if (!fast && !this.wasHidden && (this.tickNo % 10) != 0)
 			return Promise.resolve();
+		this.wasHidden = false;
 		return api.safe('status').then(function(s) {
 			if (s.__error) {
 				self.el.err.textContent = api.text(s.__error);

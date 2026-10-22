@@ -27,14 +27,28 @@ function sh(cmd) {
 
 function apk() { return !!stat('/usr/bin/apk'); }
 
+// Версии пакетов: status зовёт это на каждый опрос страницы. База пакетов (сотни КБ) разбирается заново, только если
+// сменилась (размер, время); в rpcd модуль живёт между вызовами.
+let ver_memo = { key: null, v: {} };
+
 function installed_version(name) {
+	let db_path = apk() ? '/lib/apk/db/installed' : '/usr/lib/opkg/status';
+	let s = stat(db_path), key = s ? `${s.size}:${s.mtime}` : null;
+	if (key != ver_memo.key)
+		ver_memo = { key, v: {} };
+	if (key && exists(ver_memo.v, name))
+		return ver_memo.v[name];
+	let v = null;
 	if (apk()) {
-		let db = readfile('/lib/apk/db/installed') ?? '';
+		let db = readfile(db_path) ?? '';
 		let m = match(db, regexp(`(^|\n)P:${name}\nV:([^\n]+)`));
-		return m ? m[2] : null;
+		v = m ? m[2] : null;
+	} else {
+		let m = match(sh(`opkg status ${name}`).out, /Version: ([^\n]+)/);
+		v = m ? m[1] : null;
 	}
-	let m = match(sh(`opkg status ${name}`).out, /Version: ([^\n]+)/);
-	return m ? m[1] : null;
+	ver_memo.v[name] = v;
+	return v;
 }
 
 // Версия в индексе витрины (после apk update).
@@ -49,13 +63,20 @@ function feed_version(name) {
 	return m ? m[1] : null;
 }
 
-// a < b по правилам пакетного менеджера.
+// a < b по правилам пакетного менеджера. Ответ для пары не меняется — запоминаем (status зовёт на каждый опрос).
+let older_memo = {};
+
 function older(a, b) {
 	if (!a || !b || !match(a, VERSION_RX) || !match(b, VERSION_RX))
 		return false;
-	if (apk())
-		return trim(sh(`apk version -t '${a}' '${b}'`).out) == '<';
-	return sh(`opkg compare-versions '${a}' '<<' '${b}'`).rc == 0;
+	let k = `${a} ${b}`;
+	if (exists(older_memo, k))
+		return older_memo[k];
+	let r = apk() ? trim(sh(`apk version -t '${a}' '${b}'`).out) == '<' : sh(`opkg compare-versions '${a}' '<<' '${b}'`).rc == 0;
+	if (length(older_memo) > 50)
+		older_memo = {};
+	older_memo[k] = r;
+	return r;
 }
 
 // Подпись release.json ключом выпуска (base64 сырых 64 байт ed25519, как release.json.sig в CI) через usign: подпись и ключ
@@ -75,32 +96,53 @@ function sig_ok(path, sig_b64) {
 	return ok;
 }
 
-function notes(version) {
+// release.json витрины (≈2 КБ, подписан ключом выпуска): версия пакета — из имени файла dpishell-<версия>.apk в assets,
+// заметки — changes. null — не скачался, подпись не сошлась или формат не тот.
+function feed_release() {
 	if (!st.own_dir('/tmp/dpishell', 0o700))
-		return [];
+		return null;
 	let f = '/tmp/dpishell/release.json';
 	let r = sh(`curl -sS --fail --max-time 10 --max-filesize 65536 -o ${f} '${RELEASE_URL}'`);
 	let sig = sh(`curl -sS --fail --max-time 10 --max-filesize 1024 '${RELEASE_URL}.sig'`);
-	// Подписи нет или не сошлась — заметок нет; проверить нечем (нет usign) — заметки всё равно только текстом на странице.
+	// Подписи нет или не сошлась — не верим; проверить нечем (нет usign) — версия только для плашки «Доступно обновление»,
+	// сами пакеты ставит apk по подписи витрины.
 	let ok = r.rc == 0 ? sig_ok(f, sig.rc == 0 ? sig.out : '') : false;
 	let j = null;
 	if (ok !== false)
 		try { j = json(readfile(f) ?? ''); } catch (e) {}
 	unlink(f);
-	// Заметки — к той версии, что в витрине (release.json без суффикса сборки -rN).
-	if (type(j?.version) != 'string' || index(version ?? '', j.version) != 0 || type(j.changes) != 'array')
-		return [];
-	return map(filter(slice(j.changes, 0, 15), x => type(x) == 'string'), x => substr(x, 0, 300));
+	if (type(j?.version) != 'string')
+		return null;
+	let v = null;
+	for (let a in (type(j.assets) == 'array' ? j.assets : [])) {
+		let m = match(a?.name ?? '', /^dpishell-([0-9][A-Za-z0-9._~+-]*)[.]apk$/);
+		if (m && match(m[1], VERSION_RX))
+			v = m[1];
+	}
+	let changes = type(j.changes) == 'array' ? map(filter(slice(j.changes, 0, 15), x => type(x) == 'string'), x => substr(x, 0, 300)) : [];
+	return { base: j.version, version: v, changes };
+}
+
+// Заметки — к той версии, что в витрине (release.json — версия без суффикса сборки -rN).
+function notes(version, rel) {
+	rel ??= feed_release();
+	return rel && index(version ?? '', rel.base) == 0 ? rel.changes : [];
 }
 
 // Проверка: есть ли в витрине версия новее установленной. Сеть недоступна — прежний результат остаётся.
+// Хватает release.json витрины (2 КБ): индексы всех фидов (apk update — мегабайты, у opkg ещё и в ОЗУ до перезагрузки)
+// качаются, только если его нет или в нём нет пакета для apk; перед установкой install() обновляет индексы сам.
 function check() {
-	if (apk()) sh('apk update'); else sh('opkg update');
 	let inst = installed_version('dpishell');
-	let av = feed_version('dpishell');
+	let rel = apk() ? feed_release() : null;
+	let av = rel?.version;
+	if (!av) {
+		if (apk()) sh('apk update'); else sh('opkg update');
+		av = feed_version('dpishell');
+	}
 	if (!av)
 		return st.read_json(FILE, null);
-	let res = { checked_at: time(), installed: inst, version: av, available: older(inst, av), notes: older(inst, av) ? notes(av) : [] };
+	let res = { checked_at: time(), installed: inst, version: av, available: older(inst, av), notes: older(inst, av) ? notes(av, rel) : [] };
 	st.write_atomic(FILE, sprintf('%J\n', res));
 	return res;
 }
@@ -267,6 +309,23 @@ function install(from, job) {
 	return null;
 }
 
+// Папка обновления окна ПК (/tmp/dpishell-update, ~200 КБ в ОЗУ) после установки — успешной или нет — не нужна: окно
+// перед следующей загрузкой кладёт её заново. Только своя папка root (не ссылка: rm -rf по ссылке удалил бы саму ссылку,
+// но чужой каталог не трогаем). min_age — не моложе, с (tick: окно могло только что положить пакеты и ещё не позвать установку); in_job — зовёт само задание обновления.
+function local_cleanup(min_age, in_job) {
+	let s = lstat(LOCAL_DIR);
+	if (!s || (!in_job && st.job_running('update')))
+		return;
+	if (s.type == 'directory' && s.uid != 0)
+		return;
+	// Обновление из этой папки уже закончилось (его вела прежняя версия, она папку не убирала) — убрать и без выдержки.
+	let j = st.read_json(JOB, null);
+	let done = j && !j.running && j.from == 'local' && j.started_at >= s.mtime;
+	if (min_age && !done && time() - s.mtime < min_age)
+		return;
+	sh(`rm -rf ${q(LOCAL_DIR)}`);
+}
+
 // Задание обновления, чей процесс умер (убит вместе с rpcd при переходе со старой версии, перезагрузка): итог по факту —
 // установленная версия против целевой. Зовут status (чтение), run tick и старт пакета. true — запись исправлена.
 function recover() {
@@ -284,4 +343,4 @@ function recover() {
 	return true;
 }
 
-export { check, check_daily, status, install, installed_version, recover, job_put, local_dir_problem, local_files, sig_ok, LOCAL_DIR, JOB };
+export { feed_release, check, check_daily, status, install, installed_version, recover, job_put, local_dir_problem, local_files, local_cleanup, sig_ok, LOCAL_DIR, JOB };

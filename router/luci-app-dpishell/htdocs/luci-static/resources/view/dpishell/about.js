@@ -49,14 +49,25 @@ return view.extend({
 			this.langCard()
 		]);
 		this.render2();
-		poll.add(L.bind(this.tick, this), 3);
+		this.tickNo = 0;
+		poll.add(L.bind(this.tick, this), 1);
 		return view;
 	},
 
+	// В покое — раз в 10 с, пока ставится ядро или обновление — раз в 1 с; скрытая вкладка — без опроса.
 	tick: function() {
 		var self = this;
 		if (this.updating)
 			return Promise.resolve();
+		if (document.hidden) {
+			this.wasHidden = true;
+			return Promise.resolve();
+		}
+		var j = (this.status && this.status.jobs) || {};
+		this.tickNo++;
+		if (!j.core_install && !j.update && !this.wasHidden && (this.tickNo % 10) != 0)
+			return Promise.resolve();
+		this.wasHidden = false;
 		return api.safe('status').then(function(s) {
 			if (s.__error)
 				return;

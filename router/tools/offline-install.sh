@@ -6,6 +6,13 @@
 set -e
 D=$(cd "$(dirname "$0")" && pwd)
 cd "$D"
+# Набор (~10 МБ, из них архив ядра 8 МБ) лежит в ОЗУ: после установки — успешной или нет — убрать. Только папку
+# по инструкции (/tmp/dpishell-offline), не ссылку и не то, откуда запустили иначе.
+cleanup() {
+	cd /
+	[ "$D" = /tmp/dpishell-offline ] && [ ! -L /tmp/dpishell-offline ] && rm -rf /tmp/dpishell-offline
+}
+trap cleanup EXIT
 
 echo 'Проверка файлов набора…'
 sha256sum -c SHA256SUMS >/dev/null 2>&1 || { sha256sum -c SHA256SUMS | grep -v ': OK$'; echo 'Файлы повреждены — скопируйте набор заново.'; exit 1; }
@@ -65,12 +72,12 @@ while ! out=$(apk add --simulate --no-network --allow-untrusted "$@" 2>&1); do
 done
 echo "Установка пакетов: $#"
 # Пакеты из набора проверены при сборке по подписанным индексам (прошивки и DpiShell) и здесь — по SHA256SUMS.
-cp /etc/apk/world /tmp/world.before
+cp /etc/apk/world "$D/world.before"
 apk add --no-network --allow-untrusted "$@"
 # Из файла apk пишет в world «имя><хеш» — пакет пришпилен к файлу и потом не обновляется из витрины. Снимаем пришпиливание с добавленного.
-awk 'NR==FNR { old[$0]; next } !($0 in old) { sub(/><.*/, "") } 1' /tmp/world.before /etc/apk/world > /tmp/world.new &&
-	cat /tmp/world.new > /etc/apk/world
-rm -f /tmp/world.before /tmp/world.new
+awk 'NR==FNR { old[$0]; next } !($0 in old) { sub(/><.*/, "") } 1' "$D/world.before" /etc/apk/world > "$D/world.new" &&
+	cat "$D/world.new" > /etc/apk/world
+rm -f "$D/world.before" "$D/world.new"
 
 # Ключ и адрес витрины — для будущих обновлений через apk, когда GitHub доступен.
 cp dpishell.pem /etc/apk/keys/dpishell.pem

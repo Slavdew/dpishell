@@ -52,6 +52,12 @@ let ab = c('498 0 0 0.2 ', 'HTTP/1.1 498\r\n', '', { url: 'https://example.com/'
 check('антибот 498 без min_bytes — ок, текст', ab.ok && index(ab.detail, 'сервер отвечает') == 0, ab);
 check('рукопожатие: сброс', !c('000 0 56 0.2 ', '', '', { url: 'https://gateway.discord.gg/', handshake_only: true }).ok);
 check('1 МБ и таймаут = ок', c('200 1048576 28 9.0 ', 'HTTP/2 200\r\ncontent-length: 9000000\r\n').ok);
+// r14: тело обрывается после 256 КБ (head -c) — curl 23 при size_download ≥ предела — «полностью».
+check('обрыв после предела (23) = ок', c('200 262144 23 1.0 ', 'HTTP/2 200\r\ncontent-length: 9000000\r\n').ok);
+check('23 до предела — ошибка', !c('200 1000 23 1.0 ', 'HTTP/2 200\r\n').ok);
+let cc = pr.curl_cmd({ url: 'https://example.com/' }, '1.3', null, '/tmp/x', {});
+check('тело — в head -c 262144', index(cc, 'head -c 262144') > 0 && index(cc, '-o /dev/fd/3') > 0, cc);
+check('рукопожатие — HEAD без тела', index(pr.curl_cmd({ url: 'https://example.com/', handshake_only: true }, '1.3', null, '/tmp/x', {}), ' -I ') > 0);
 
 // Живой запрос (эмулятор с интернетом): DoH и проверка обычного сайта.
 if (ARGV[0] == 'live') {
@@ -67,6 +73,12 @@ if (ARGV[0] == 'live') {
 	check('example.com TLS1.2', r[1].ok, r[1]);
 	check('несуществующий — не ок', !r[2].ok, r[2]);
 	check('google.com → www: по конечной', r[3].ok && index(r[3].final_url ?? '', 'www.google.') >= 0 && r[3].bytes >= 2048, r[3]);
+	// Большое тело — читается до 256 КБ и обрывается (r14), исход «ок»; рукопожатие — HEAD без тела.
+	let big = pr.check_batch([{ target: { url: 'https://speed.cloudflare.com/__down?bytes=3000000', min_bytes: 20480 }, tls: '1.3' },
+		{ target: { url: 'https://example.com/', handshake_only: true }, tls: '1.3' }], { parallel: 2 });
+	check('большое тело: ок, оборвано после 256 КБ', big[0].ok && big[0].bytes >= 262144 && big[0].bytes < 3000000, big[0]);
+	check('рукопожатие: ок, тела нет', big[1].ok && big[1].bytes == 0, big[1]);
+	r = [...r, ...big];
 	print(sprintf('%.3J\n', r));
 }
 

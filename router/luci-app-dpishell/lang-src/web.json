@@ -588,6 +588,10 @@
     "Подбор остановлен",
     "Strategy search stopped"
   ],
+  "web.msg.select_time_limit": [
+    "Подбор ограничен 20 минутами",
+    "Selection is limited to 20 minutes"
+  ],
   "web.msg.time_limit": [
     "Поиск ограничен 15 минутами",
     "The search is limited to 15 minutes"
@@ -740,18 +744,6 @@
     "Строка example.com закрывает и все поддомены (video.example.com). Только сам домен, без поддоменов — строка «example.com (только сам сайт)». Сюда же попадают сайты, добавленные в «Сайт не открывается».",
     "The line example.com also covers all subdomains (video.example.com). For the domain itself only, without subdomains, write “example.com (this site only)”. Sites added via “Site does not open” also land here."
   ],
-  "web.sites.only_self": [
-    "только сам сайт",
-    "this site only"
-  ],
-  "web.sites.others_lists": [
-    "Только из списков (рекомендуется)",
-    "Lists only (recommended)"
-  ],
-  "web.sites.mode_locked": [
-    "Включены «Свои настройки для сайтов» — для остальных сайтов действует выбор «Остальные сайты» в той карточке.",
-    "“Per-site settings” is on — the “Other sites” choice in that card applies to all other sites."
-  ],
   "web.sites.general_descr": [
     "Сайты, для которых нужна оптимизация, кроме YouTube и Discord. Домен на строку. Действует в режиме «Только из списков».",
     "Sites that need optimization besides YouTube and Discord. One domain per line. Applies in “Lists only” mode."
@@ -767,6 +759,18 @@
   "web.sites.mode_lists_done": [
     "Оптимизация только для сайтов из списков. Сайты будут перепроверены автоматически.",
     "Optimization only for sites from the lists. Sites will be rechecked automatically."
+  ],
+  "web.sites.mode_locked": [
+    "Включены «Свои настройки для сайтов» — для остальных сайтов действует выбор «Остальные сайты» в той карточке.",
+    "“Per-site settings” is on — the “Other sites” choice in that card applies to all other sites."
+  ],
+  "web.sites.only_self": [
+    "только сам сайт",
+    "this site only"
+  ],
+  "web.sites.others_lists": [
+    "Только из списков (рекомендуется)",
+    "Lists only (recommended)"
   ],
   "web.sites.show_list": [
     {
@@ -879,6 +883,10 @@
   "web.warn.dns_spoofed": [
     "Провайдер подменяет адреса сайтов — приложения вне браузера могут не работать",
     "The ISP is spoofing site addresses — apps outside the browser may not work"
+  ],
+  "web.warn.flash_full": [
+    "Во флеше роутера почти нет места ({kb} КБ) — настройки могут не сохраниться",
+    "The router’s flash is almost full ({kb} KB) — settings may not be saved"
   ],
   "web.warn.select_failed": [
     "Подбор прервался: {error}",
