@@ -153,6 +153,12 @@ public sealed class LangRouterWindowTests : IDisposable
                 Show(hk);
                 Shot(hk, "hostkey");
                 hk.Close();
+
+                var (cd, _) = HostKeyDialog.Create(RouterViewModel.CertText, null, L.T("router.cert.title"));
+                Show(cd);
+                if (cd.Title != L.T("router.cert.title")) throw new Exception("Заголовок диалога сертификата");
+                Shot(cd, "cert");
+                cd.Close();
             }
         });
         Assert.Empty(errors);

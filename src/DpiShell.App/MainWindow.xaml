@@ -197,9 +197,9 @@
                                                         ToolTipService.ShowOnDisabled="True" Visibility="{Binding ShowRouterToggle, Converter={StaticResource Vis}}" />
                                                 <Button Content="{Binding Router.ReEnableText}" Command="{Binding Router.ReEnableCmd}" Style="{StaticResource Small}"
                                                         Visibility="{Binding ShowRouterReEnable, Converter={StaticResource Vis}}" />
-                                                <Button Content="{l:T router.check}" Command="{Binding Router.CheckCmd}" Style="{StaticResource Small}" ToolTip="{Binding Router.MethodsTip}"
+                                                <Button Content="{l:T home.check_router}" Command="{Binding Router.CheckCmd}" Style="{StaticResource Small}" ToolTip="{Binding Router.MethodsTip}"
                                                         ToolTipService.ShowOnDisabled="True" Visibility="{Binding ShowRouterCheck, Converter={StaticResource Vis}}" />
-                                                <Button Content="{l:T router.select}" Command="{Binding Router.GoSelectCmd}" Style="{StaticResource Small}" ToolTip="{Binding Router.MethodsTip}"
+                                                <Button Content="{l:T home.find_on_router}" Command="{Binding Router.GoSelectCmd}" Style="{StaticResource Small}" ToolTip="{Binding Router.MethodsTip}"
                                                         ToolTipService.ShowOnDisabled="True" Visibility="{Binding ShowRouterSelect, Converter={StaticResource Vis}}" />
                                                 <Button Content="{l:T router.login}" Command="{Binding Router.LoginCmd}" Style="{StaticResource Small}"
                                                         Visibility="{Binding ShowRouterLogin, Converter={StaticResource Vis}}" />
@@ -2214,7 +2214,7 @@
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="{DynamicResource Ok}" />
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding SecurityHasWarn}" Value="True"><Setter Property="Foreground" Value="{DynamicResource Danger}" /></DataTrigger>
+                                                    <DataTrigger Binding="{Binding SecurityHasWarn}" Value="True"><Setter Property="Foreground" Value="{DynamicResource WarnText}" /></DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </TextBlock.Style>
@@ -2237,7 +2237,7 @@
                                                     </StackPanel>
                                                 </Grid>
                                                 <DataTemplate.Triggers>
-                                                    <DataTrigger Binding="{Binding State}" Value="Warn"><Setter TargetName="M" Property="Foreground" Value="{DynamicResource Danger}" /></DataTrigger>
+                                                    <DataTrigger Binding="{Binding State}" Value="Warn"><Setter TargetName="M" Property="Foreground" Value="{DynamicResource WarnText}" /></DataTrigger>
                                                     <DataTrigger Binding="{Binding State}" Value="Unknown"><Setter TargetName="M" Property="Foreground" Value="{DynamicResource Muted}" /></DataTrigger>
                                                 </DataTemplate.Triggers>
                                             </DataTemplate>

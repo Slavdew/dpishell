@@ -8,7 +8,7 @@ namespace DpiShell.Tests;
 /// Роутер с DpiShell в памяти — по docs/dev/router-api.md (API 1). Ответы — примеры из §3–5 дословно;
 /// поведение для случаев §7 включается полями. HttpListener на localhost работает без прав администратора.
 /// </summary>
-public sealed class FakeRouter : IDisposable
+public sealed partial class FakeRouter : IDisposable
 {
     readonly HttpListener _l = new();
     readonly CancellationTokenSource _cts = new();
@@ -317,6 +317,7 @@ public sealed class FakeRouter : IDisposable
         var port = ((IPEndPoint)probe.LocalEndpoint).Port;
         probe.Stop();
         Address = $"localhost:{port}";
+        HttpPort = port;
         _l.Prefixes.Add($"http://localhost:{port}/");
         _l.Start();
         _loop = Task.Run(LoopAsync);
@@ -328,7 +329,8 @@ public sealed class FakeRouter : IDisposable
         {
             HttpListenerContext ctx;
             try { ctx = await _l.GetContextAsync(); } catch { return; }
-            try { await HandleAsync(ctx); }
+            if (PlainRefused(ctx)) continue;
+            try { if (!PlainRedirected(ctx)) await HandleAsync(ctx); }
             catch { ctx.Response.StatusCode = 500; }
             finally { ctx.Response.Close(); }
         }
@@ -736,6 +738,7 @@ public sealed class FakeRouter : IDisposable
     public void Dispose()
     {
         _cts.Cancel();
+        StopTls();
         _l.Stop();
         _l.Close();
     }

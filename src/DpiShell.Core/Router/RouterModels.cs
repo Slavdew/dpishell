@@ -246,6 +246,8 @@ public enum RouterFailure
     App,
     /// <summary>Ответ не по договору.</summary>
     Protocol,
+    /// <summary>Сертификат HTTPS роутера не совпал с закреплённым — см. <see cref="RouterException.Certificate"/>.</summary>
+    CertificateChanged,
 }
 
 public sealed class RouterException(RouterFailure failure, string message, RouterAppError? appError = null, int? ubusCode = null)
@@ -254,4 +256,6 @@ public sealed class RouterException(RouterFailure failure, string message, Route
     public RouterFailure Failure { get; } = failure;
     public RouterAppError? AppError { get; } = appError;
     public int? UbusCode { get; } = ubusCode;
+    /// <summary>Для <see cref="RouterFailure.CertificateChanged"/>: отпечаток нового сертификата и под каким именем закреплён прежний.</summary>
+    public RouterCertChange? Certificate { get; init; }
 }

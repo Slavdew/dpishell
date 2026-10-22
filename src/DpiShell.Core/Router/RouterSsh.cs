@@ -126,6 +126,31 @@ public sealed partial class RouterSsh(ISshSession ssh)
     [GeneratedRegex(@"https?://([A-Za-z0-9.-]+)(?::\d+)?(?:/|\s|$)")]
     private static partial Regex FeedUrl();
 
+    // ---------- сертификат панели (HTTPS) ----------
+
+    /// <summary>
+    /// Сертификат uhttpd (uhttpd.main.cert, по умолчанию /etc/uhttpd.crt): DER — «der &lt;sha256&gt;», PEM — «pem» и сам текст (он открытый).
+    /// Ключ (uhttpd.key) не читается.
+    /// </summary>
+    public const string WebCertCommand =
+        "f=$(uci -q get uhttpd.main.cert); [ -n \"$f\" ] || f=/etc/uhttpd.crt; [ -r \"$f\" ] || exit 3; " +
+        "if head -c 64 \"$f\" | grep -q 'BEGIN CERTIFICATE'; then echo pem; cat \"$f\"; else echo \"der $(sha256sum \"$f\" | cut -d' ' -f1)\"; fi";
+
+    /// <summary>Отпечаток сертификата панели на роутере (как <see cref="RouterCert.Fingerprint(byte[])"/>); не прочитался — null.</summary>
+    public async Task<string?> WebCertificateAsync(CancellationToken ct = default)
+    {
+        var r = await ssh.RunAsync(WebCertCommand, null, null, ct);
+        return r.ExitCode == 0 ? ParseWebCertificate(r.Stdout) : null;
+    }
+
+    public static string? ParseWebCertificate(string stdout)
+    {
+        var t = stdout.Replace("\r", "");
+        if (t.StartsWith("der ", StringComparison.Ordinal)) return RouterCert.FromSha256Hex(t[4..].Split('\n')[0]);
+        if (t.StartsWith("pem\n", StringComparison.Ordinal)) return RouterCert.FromPem(t[4..]);
+        return null;
+    }
+
     // ---------- загрузка файлов ----------
 
     /// <summary>sha256 файла на роутере (sha256sum); null — файла нет.</summary>

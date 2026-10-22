@@ -491,7 +491,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         _client?.Dispose();
         _client = null;
         Connected = false;
-        try { _client = new RouterClient(address); }
+        try { _client = new RouterClient(address, pins: _settings.HostKeys); }
         catch (ArgumentException e) { SetConnection(e.Message); }
         return _client;
     }
@@ -518,7 +518,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         {
             _settings.RouterAddress = AddressAuto ? null : CustomAddress.Trim();
             try { _settings.Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Failed(Texts.Friendly(e)); }
-            if (!await DetectAsync()) return false;
+            if (!await DetectAsync(interactive: true)) return false;
             var typed = noPassword ? "" : string.IsNullOrEmpty(password) ? null : password;
             if (typed is null && !HasSavedPassword)
             {
@@ -537,8 +537,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     /// <summary>Есть сохранённый пароль (и пустой — «пароль не задан»): пустое поле в окне входа значит «взять его».</summary>
     public bool HasSavedPassword => RouterSecrets.Unprotect(_settings.RouterPassword) is not null;
 
-    /// <summary>status.json без входа. false — роутера нет (блок на главной пропадает).</summary>
-    async Task<bool> DetectAsync()
+    /// <summary>
+    /// status.json без входа. false — роутера нет (блок на главной пропадает) или сменился сертификат HTTPS и новый не принят.
+    /// <paramref name="interactive"/> — пользователь сам нажал «Войти»: можно спросить про сертификат; иначе (фоновая проверка) — только сверка по SSH.
+    /// </summary>
+    async Task<bool> DetectAsync(bool interactive = false)
     {
         Searched = true;
         if (!Enabled)
@@ -556,7 +559,14 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             return false;
         }
         if (ClientFor(address) is null) { SetDetection(null); return false; }
-        var d = await Call(c => c.DetectAsync());
+        RouterDetection d;
+        try { d = await Call(c => c.DetectAsync()); }
+        catch (RouterException e) when (e is { Failure: RouterFailure.CertificateChanged, Certificate: { } cert })
+        {
+            Connected = false;
+            if (!await AcceptCertificateAsync(cert, interactive)) return false;
+            d = await Call(c => c.DetectAsync());
+        }
         SetDetection(d);
         if (d.Found == RouterFound.NotFound)
         {

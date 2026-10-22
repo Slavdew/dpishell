@@ -3,6 +3,7 @@
   "home.retry_select": "Не помогло? → Подобрать",
   "home.retry_select.tip": "Вкладка «Подбор»: проверит стратегии по очереди и выберет подходящую",
   "home.find_on_router": "Подобрать на роутере",
+  "home.check_router": "Проверить роутер",
   "home.site_fix": "Сайт не открывается?",
   "home.direct.site.tip": "Адрес сайта, например bank.example",
   "home.direct.site.aria": "Адрес сайта для проверки",

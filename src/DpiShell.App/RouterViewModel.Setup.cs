@@ -28,6 +28,50 @@ public sealed partial class RouterViewModel
 
     public static string HostKeyText => L.T("router.hostkey.text");
 
+    // ---------- сертификат HTTPS роутера ----------
+
+    /// <summary>Сертификат HTTPS роутера сменился — спросить. true — доверять новому. По умолчанию — тот же диалог, что для ключа SSH.</summary>
+    public Func<string, bool> TrustNewCert { get; set; } = text =>
+        System.Windows.Application.Current?.Dispatcher is { } d ? d.Invoke(() => HostKeyDialog.Ask(text, L.T("router.cert.title"))) : false;
+
+    public static string CertText => L.T("router.cert.text");
+
+    /// <summary>
+    /// Новый сертификат HTTPS: совпал с сертификатом панели на роутере (по SSH, ключ SSH уже закреплён, пароль сохранён) — принять молча;
+    /// иначе при <paramref name="interactive"/> — вопрос, без него — «сертификат изменился» в состоянии подключения. Проверку не отключаем.
+    /// </summary>
+    internal async Task<bool> AcceptCertificateAsync(RouterCertChange cert, bool interactive)
+    {
+        if (await CertMatchesBySshAsync(cert))
+        {
+            _settings.HostKeys.Set(cert.PinId, cert.Fingerprint);
+            Say(L.T("router.cert.accepted_ssh"));
+            return true;
+        }
+        if (!interactive) { SetConnection(() => L.T("router.cert.changed")); return false; }
+        if (!TrustNewCert(CertText)) { SetConnection(() => L.T("router.cert.cancelled")); return false; }
+        _settings.HostKeys.Set(cert.PinId, cert.Fingerprint);
+        Say(L.T("router.cert.accepted"));
+        return true;
+    }
+
+    /// <summary>
+    /// Сверка по SSH: только если ключ SSH роутера уже закреплён (иначе пароль ушёл бы неизвестно кому) и пароль сохранён.
+    /// Любой сбой — «не сверили», решает пользователь.
+    /// </summary>
+    async Task<bool> CertMatchesBySshAsync(RouterCertChange cert)
+    {
+        if (_client is null || RouterSecrets.Unprotect(_settings.RouterPassword) is not { } pw) return false;
+        var target = new RouterSshTarget(_client.Address);
+        if (_settings.HostKeys.Get(target.HostKeyId) is null) return false;
+        try
+        {
+            await using var s = await SshConnector.ConnectAsync(target, () => pw);
+            return await new RouterSsh(s).WebCertificateAsync() == cert.Fingerprint;
+        }
+        catch (Exception e) when (e is RouterSshException or IOException or InvalidOperationException or System.Net.Sockets.SocketException or TimeoutException) { return false; }
+    }
+
     /// <summary>
     /// SSH с вопросом о сменившемся ключе. Пароль подошёл — он и есть пароль root (тот же, что для входа в окне и в LuCI):
     /// сохраняется, как после входа, — установка, проверка, удаление и обновление по SSH больше его не спросят.

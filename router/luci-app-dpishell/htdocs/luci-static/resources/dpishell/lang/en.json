@@ -128,7 +128,7 @@
  "router.security.dns_wan.warn": "ready to answer queries from the internet if the firewall lets them through",
  "router.security.flow_ref": "interferes with optimization — see “What interferes”",
  "router.security.http_login": "HTTP sign-in",
- "router.security.http_login.fix": "Options: HTTPS for the panel with a redirect from HTTP (the browser will warn about a self-signed certificate); SSH key sign-in instead of a password; a guest network for other people’s devices. The DpiShell window on the PC signs in over HTTP only for now: with HTTPS only, it will not connect.",
+ "router.security.http_login.fix": "Options: HTTPS for the panel with a redirect from HTTP (the browser will warn about a self-signed certificate); SSH key sign-in instead of a password; a guest network for other people’s devices. The DpiShell window on the PC switches to HTTPS by itself and remembers the certificate at the first sign-in.",
  "router.security.http_login.https_optional": "the panel has HTTPS, but HTTP sign-in is open: the DpiShell window on the PC and http:// links send the password in plain text",
  "router.security.http_login.ok": "off, the panel is HTTPS only",
  "router.security.http_login.redirect": "redirected to HTTPS",

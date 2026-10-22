@@ -1021,6 +1021,10 @@ public sealed partial class WindowSmokeTests
                         if (Find<Button>(tabs, b => b.Content as string == L.T("home.router.label") && b.IsVisible) is null) throw new Exception("У строки роутера нет ссылки на вкладку");
                         if (Find<Button>(tabs, b => b.Content as string == L.T("router.toggle.off") && b.IsVisible) is null) throw new Exception("Под строкой роутера нет «Выключить на роутере»");
                         if (Find<TextBlock>(tabs, t => t.Text == vm.RouterStrategyText && t.IsVisible) is null) throw new Exception("Нет выбора стратегии роутера");
+                        // С-12: кнопки строки роутера подписаны «роутер» — не путать с «Проверить сейчас» / «Подобрать» ПК ниже.
+                        if (vm.ShowRouterCheck && Find<Button>(tabs, b => b.Content as string == L.T("home.check_router") && b.IsVisible) is null) throw new Exception("Нет «Проверить роутер»");
+                        if (vm.ShowRouterSelect && Find<Button>(tabs, b => b.Content as string == L.T("home.find_on_router") && b.IsVisible) is null) throw new Exception("Нет «Подобрать на роутере»");
+                        if (!vm.ShowRouterCheck && !vm.ShowRouterSelect) throw new Exception("В строке роутера нет ни «Проверить роутер», ни «Подобрать на роутере»");
                         // Значок роутера: панель «Роутер: …» на месте плиток.
                         vm.ToggleRouterPanelCmd.Execute(null);
                         Pump();
@@ -1232,7 +1236,7 @@ public sealed partial class WindowSmokeTests
                     var tabs = Find<TabControl>(w)!;
                     if (!VisibleText(tabs, t => t.Text.StartsWith("Сторож выключил оптимизацию") && t.Text.Contains("с ней пропал интернет"))) throw new Exception("На главной нет фразы о стороже");
                     if (Find<Button>(tabs, b => b.Content as string == L.T("router.trial.reenable") && b.IsVisible && b.IsEnabled) is null) throw new Exception("На главной нет «Попробовать снова»");
-                    if (Find<Button>(tabs, b => b.Content as string == L.T("router.select") && b.IsVisible && b.IsEnabled) is null) throw new Exception("Под строкой роутера нет «Подобрать»");
+                    if (Find<Button>(tabs, b => b.Content as string == L.T("home.find_on_router") && b.IsVisible && b.IsEnabled) is null) throw new Exception("Под строкой роутера нет «Подобрать на роутере»");
                     if (Find<Button>(tabs, b => b.Content as string == "Включить снова") is not null) throw new Exception("Осталась «Включить снова»");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-home.png"));
                     vm.GoTo(Pages.Router);

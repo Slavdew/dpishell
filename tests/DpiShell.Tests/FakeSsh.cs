@@ -29,7 +29,11 @@ public sealed class FakeSsh : ISshSession
         lock (Runs) Runs.Add((command, input));
         string stdout = "";
         int code = 0;
-        if (command.Contains("sh -s"))
+        if (command == RouterSsh.WebCertCommand)
+        {
+            if (WebCertOutput is { } w) stdout = w; else code = 3;
+        }
+        else if (command.Contains("sh -s"))
             stdout = OnScript(command, input ?? "");
         else if (command.StartsWith("sha256sum "))
         {
@@ -51,6 +55,8 @@ public sealed class FakeSsh : ISshSession
     }
 
     public string FeedFilesText { get; set; } = "";
+    /// <summary>Ответ на чтение сертификата панели (<see cref="RouterSsh.WebCertCommand"/>); null — файла нет.</summary>
+    public string? WebCertOutput { get; set; }
 
     static string Unquote(string s) => s.Trim().Trim('\'');
 
