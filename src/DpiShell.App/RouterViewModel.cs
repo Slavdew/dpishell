@@ -491,7 +491,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         _client?.Dispose();
         _client = null;
         Connected = false;
-        try { _client = new RouterClient(address, pins: _settings.HostKeys); }
+        try { _client = new RouterClient(address, pins: _settings.HostKeys, httpsPort: RouterHttpsPort); }
         catch (ArgumentException e) { SetConnection(e.Message); }
         return _client;
     }
@@ -576,6 +576,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         }
         // Другая версия договора: войти всё равно можно — доступны состояние, обновление и удаление (§5.4).
         if (d.Found != RouterFound.Ok && !Connected) SetFound(d.Found, d.Status?.Version);
+        if (_client?.HttpsLost is { } lost && !AcceptPlainHttp(lost, interactive)) return false;
         return true;
     }
 

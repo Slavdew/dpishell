@@ -159,6 +159,12 @@ public sealed class LangRouterWindowTests : IDisposable
                 if (cd.Title != L.T("router.cert.title")) throw new Exception("Заголовок диалога сертификата");
                 Shot(cd, "cert");
                 cd.Close();
+
+                var (pd, _) = HostKeyDialog.Create(RouterViewModel.PlainHttpText, null, L.T("router.https.title"), L.T("router.https.continue"));
+                Show(pd);
+                if (Find<Button>(pd, b => b.Content as string == L.T("router.https.continue") && b.IsVisible) is null) throw new Exception("Нет «Продолжить по HTTP»");
+                Shot(pd, "plain-http");
+                pd.Close();
             }
         });
         Assert.Empty(errors);

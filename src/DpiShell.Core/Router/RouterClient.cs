@@ -29,7 +29,7 @@ public sealed class RouterClient : IDisposable
     readonly bool _ownsHttp;
     readonly IRouterHostKeyStore? _pins;
     Uri _base;
-    string? _pinId, _seenCert;
+    string? _pinId, _seenCert, _lostPin;
     RouterCertChange? _certChanged;
     string? _session;
     Func<string>? _password;
@@ -117,9 +117,12 @@ public sealed class RouterClient : IDisposable
     /// По HTTPS не отвечает (HTTPS на роутере выключили) — снова HTTP. Сертификат не совпал с закреплённым —
     /// <see cref="RouterFailure.CertificateChanged"/>; остальные сбои — как раньше (HttpRequestException).
     /// Со своим HttpClient (тесты) — как он настроен, без переходов.
+    /// <paramref name="secret"/> — запрос с паролем или сессией (/ubus): если HTTPS роутера закреплён, а отвечает только HTTP, он не уходит —
+    /// <see cref="RouterFailure.HttpsLost"/>, пока закрепление не снято (решение пользователя).
     /// </summary>
-    async Task<HttpResponseMessage> SendAsync(Func<Uri, HttpRequestMessage> make, string path, CancellationToken ct)
+    async Task<HttpResponseMessage> SendAsync(Func<Uri, HttpRequestMessage> make, string path, CancellationToken ct, bool secret = false)
     {
+        if (secret && HttpsLost is { } lost) throw HttpsLostError(lost);
         HttpResponseMessage resp;
         try { resp = await SendToAsync(_base, make, path, ct); }
         catch (HttpRequestException first) when (_ownsHttp && !ct.IsCancellationRequested)
@@ -127,7 +130,13 @@ public sealed class RouterClient : IDisposable
             var (prevBase, prevPin) = (_base, _pinId);
             try
             {
-                if (Https) { _base = HttpUri(); _pinId = null; return await SendToAsync(_base, make, path, ct); }
+                if (Https)
+                {
+                    _base = HttpUri(); _pinId = null;
+                    if (prevPin is not null && _pins?.Get(prevPin) is not null) _lostPin = prevPin;
+                    if (secret && HttpsLost is { } l) { await ProbeHttpAsync(ct); throw HttpsLostError(l); }
+                    return await SendToAsync(_base, make, path, ct);
+                }
                 return await SwitchAsync(HttpsUri(HttpsPort), make, path, ct);
             }
             catch (HttpRequestException)
@@ -143,6 +152,19 @@ public sealed class RouterClient : IDisposable
             return await SwitchAsync(target, make, path, ct);
         }
         return resp;
+    }
+
+    /// <summary>
+    /// HTTPS закреплён, а роутер отвечает только по HTTP (пароль по HTTP не уходит без согласия). Закрепление сняли (<see cref="IRouterHostKeyStore.Remove"/>) — null.
+    /// </summary>
+    public string? HttpsLost => !Https && _lostPin is { } p && _pins?.Get(p) is not null ? p : null;
+
+    static RouterException HttpsLostError(string pin) => new(RouterFailure.HttpsLost, L.T("core.rt.err.https_lost")) { LostHttpsPin = pin };
+
+    /// <summary>HTTPS молчит — отвечает ли HTTP вообще (без пароля: GET status.json). Не отвечает — обычный «недоступен».</summary>
+    async Task ProbeHttpAsync(CancellationToken ct)
+    {
+        using var r = await SendToAsync(_base, u => new HttpRequestMessage(HttpMethod.Get, u), "dpishell/status.json", ct);
     }
 
     async Task<HttpResponseMessage> SwitchAsync(Uri https, Func<Uri, HttpRequestMessage> make, string path, CancellationToken ct)
@@ -306,7 +328,7 @@ public sealed class RouterClient : IDisposable
             cts.CancelAfter(CallTimeout);
             var json = req.ToJsonString();
             using var resp = await SendAsync(u => new HttpRequestMessage(HttpMethod.Post, u) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") },
-                "ubus", cts.Token);
+                "ubus", cts.Token, secret: true);
             if (!resp.IsSuccessStatusCode) throw new RouterException(RouterFailure.Unreachable, L.T("core.rt.err.http", new { code = (int)resp.StatusCode }));
             var root = JsonNode.Parse(await resp.Content.ReadAsStringAsync(cts.Token)) as JsonObject
                        ?? throw new RouterException(RouterFailure.Protocol, L.T("core.rt.err.not_json"));

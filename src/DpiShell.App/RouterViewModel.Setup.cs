@@ -36,6 +36,30 @@ public sealed partial class RouterViewModel
 
     public static string CertText => L.T("router.cert.text");
 
+    /// <summary>Порт HTTPS роутера, если HTTP не отвечает (у uhttpd — 443; в тестах — порт подделки).</summary>
+    public int RouterHttpsPort { get; set; } = 443;
+
+    /// <summary>Роутер отвечает только по HTTP, хотя HTTPS был закреплён: true — продолжить по HTTP. По умолчанию — диалог, «Отмена» в нём главная.</summary>
+    public Func<string, bool> AllowPlainHttp { get; set; } = text =>
+        System.Windows.Application.Current?.Dispatcher is { } d
+            ? d.Invoke(() => HostKeyDialog.Ask(text, L.T("router.https.title"), L.T("router.https.continue"))) : false;
+
+    public static string PlainHttpText => L.T("router.https.ask");
+
+    /// <summary>
+    /// HTTPS закреплён, а роутер отвечает только по HTTP: пароль молча не уходит. Фоновая проверка — только текст; «Войти» — вопрос,
+    /// согласие снимает закрепление HTTPS для этого адреса (больше не спрашивать).
+    /// </summary>
+    bool AcceptPlainHttp(string pin, bool interactive)
+    {
+        Connected = false;
+        if (!interactive) { SetConnection(() => L.T("router.https.lost")); return false; }
+        if (!AllowPlainHttp(PlainHttpText)) { SetConnection(() => L.T("router.https.cancelled")); return false; }
+        _settings.HostKeys.Remove(pin);
+        Say(L.T("router.https.dropped"));
+        return true;
+    }
+
     /// <summary>
     /// Новый сертификат HTTPS: совпал с сертификатом панели на роутере (по SSH, ключ SSH уже закреплён, пароль сохранён) — принять молча;
     /// иначе при <paramref name="interactive"/> — вопрос, без него — «сертификат изменился» в состоянии подключения. Проверку не отключаем.

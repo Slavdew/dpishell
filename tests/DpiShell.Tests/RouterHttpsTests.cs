@@ -96,6 +96,45 @@ public sealed class RouterHttpsTests : IDisposable
     }
 
     [Fact]
+    public async Task PinnedHttps_OnlyHttpAnswers_PasswordNotSent_UntilPinRemoved()
+    {
+        using var r = new FakeRouter().WithHttps(redirect: false);
+        var pins = new MemoryPins();
+        var pin = RouterCert.PinId("localhost", r.TlsPort);
+        pins.Set(pin, r.CertificateFingerprint);
+        r.HttpsClosed = true;   // HTTPS на роутере выключили
+        using var c = new RouterClient(r.Address, pins: pins, httpsPort: r.TlsPort);
+        Assert.True(c.Https);   // закреплён — начинаем с HTTPS
+        // Без пароля — можно: статус читается по HTTP.
+        Assert.Equal(RouterFound.Ok, (await c.DetectAsync()).Found);
+        Assert.Equal(pin, c.HttpsLost);
+        var e = await Assert.ThrowsAsync<RouterException>(() => c.LoginAsync(() => r.Password));
+        Assert.Equal(RouterFailure.HttpsLost, e.Failure);
+        Assert.Equal(pin, e.LostHttpsPin);
+        Assert.Equal(0, r.Logins);
+        lock (r.RawBodies) Assert.Empty(r.RawBodies);   // в /ubus ничего не ушло
+        // Пользователь согласился: закрепление снято — вход по HTTP.
+        pins.Remove(pin);
+        Assert.Null(c.HttpsLost);
+        await c.LoginAsync(() => r.Password);
+        Assert.Equal(1, r.Logins);
+    }
+
+    [Fact]
+    public async Task PinnedHttps_LoginFirst_HttpsDown_NotSent()
+    {
+        // Вход без предварительного поиска: при падении HTTPS пароль тоже не уходит по HTTP.
+        using var r = new FakeRouter().WithHttps(redirect: false);
+        var pins = new MemoryPins();
+        pins.Set(RouterCert.PinId("localhost", r.TlsPort), r.CertificateFingerprint);
+        r.HttpsClosed = true;
+        using var c = new RouterClient(r.Address, pins: pins, httpsPort: r.TlsPort);
+        var e = await Assert.ThrowsAsync<RouterException>(() => c.LoginAsync(() => r.Password));
+        Assert.Equal(RouterFailure.HttpsLost, e.Failure);
+        lock (r.RawBodies) Assert.Empty(r.RawBodies);
+    }
+
+    [Fact]
     public void WebCertificate_DerAndPem()
     {
         using var cert = FakeRouter.NewCertificate();
@@ -193,6 +232,49 @@ public sealed class RouterHttpsTests : IDisposable
             Assert.False(vm.Connected);
             Assert.Equal(old, Pin(r));
             Assert.Equal(L.T("router.cert.cancelled"), vm.ConnectionText);
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Window_HttpsGone_BackgroundSilent_SignInAsks(bool allow)
+    {
+        using var r = new FakeRouter().WithHttps();
+        var vm = Make(r);
+        vm.RouterHttpsPort = r.TlsPort;
+        Assert.True(await vm.ConnectAsync("secret"));
+        var pin = RouterCert.PinId("localhost", r.TlsPort);
+        Assert.NotNull(Settings.HostKeys.Get(pin));
+        // HTTPS на роутере выключили, HTTP без перенаправления.
+        r.RedirectToHttps = false;
+        r.HttpsClosed = true;
+        vm.AllowPlainHttp = _ => throw new InvalidOperationException("фоновая проверка не спрашивает");
+
+        await vm.RefreshAsync();
+        Assert.False(vm.Connected);
+        Assert.Equal(L.T("router.https.lost"), vm.ConnectionText);
+        Assert.Equal(1, r.Logins);   // сохранённый пароль по HTTP не ушёл
+
+        var asked = new List<string>();
+        vm.AllowPlainHttp = t => { asked.Add(t); return allow; };
+        Assert.Equal(allow, await vm.ConnectAsync(null));
+        Assert.Equal([RouterViewModel.PlainHttpText], asked);
+        if (allow)
+        {
+            Assert.True(vm.Connected);
+            Assert.Null(Settings.HostKeys.Get(pin));
+            Assert.Equal(2, r.Logins);
+            // Больше не спрашивает.
+            Assert.True(await vm.ConnectAsync(null));
+            Assert.Single(asked);
+        }
+        else
+        {
+            Assert.False(vm.Connected);
+            Assert.NotNull(Settings.HostKeys.Get(pin));
+            Assert.Equal(L.T("router.https.cancelled"), vm.ConnectionText);
+            Assert.Equal(1, r.Logins);
         }
     }
 

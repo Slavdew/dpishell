@@ -23,6 +23,8 @@ public sealed partial class FakeRouter
     public bool RedirectToHttps { get; set; }
     /// <summary>HTTP не отвечает (обрыв соединения), работает только HTTPS.</summary>
     public bool HttpClosed { get; set; }
+    /// <summary>HTTPS выключили: соединение на порт HTTPS сразу закрывается.</summary>
+    public bool HttpsClosed { get; set; }
     /// <summary>Схема каждого принятого запроса: http или https.</summary>
     public List<string> Schemes { get; } = [];
 
@@ -105,6 +107,7 @@ public sealed partial class FakeRouter
     async Task ServeTlsAsync(TcpClient client)
     {
         using var _c = client;
+        if (HttpsClosed) return;   // как выключенный HTTPS: соединение сразу закрыто
         try
         {
             await using var ssl = new SslStream(client.GetStream());

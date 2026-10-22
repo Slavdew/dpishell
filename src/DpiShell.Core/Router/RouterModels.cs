@@ -248,6 +248,8 @@ public enum RouterFailure
     Protocol,
     /// <summary>Сертификат HTTPS роутера не совпал с закреплённым — см. <see cref="RouterException.Certificate"/>.</summary>
     CertificateChanged,
+    /// <summary>HTTPS роутера закреплён, а отвечает только HTTP: пароль и сессия по HTTP не отправлены — см. <see cref="RouterException.LostHttpsPin"/>.</summary>
+    HttpsLost,
 }
 
 public sealed class RouterException(RouterFailure failure, string message, RouterAppError? appError = null, int? ubusCode = null)
@@ -258,4 +260,6 @@ public sealed class RouterException(RouterFailure failure, string message, Route
     public int? UbusCode { get; } = ubusCode;
     /// <summary>Для <see cref="RouterFailure.CertificateChanged"/>: отпечаток нового сертификата и под каким именем закреплён прежний.</summary>
     public RouterCertChange? Certificate { get; init; }
+    /// <summary>Для <see cref="RouterFailure.HttpsLost"/>: запись закреплённого HTTPS (снять — согласиться на HTTP).</summary>
+    public string? LostHttpsPin { get; init; }
 }

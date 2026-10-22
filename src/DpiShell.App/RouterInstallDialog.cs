@@ -310,23 +310,23 @@ public static class RouterUninstallDialog
 /// <summary>«Ключ роутера изменился»: «Доверять новому» — только осознанно, по умолчанию (Enter, Esc) — «Отмена».</summary>
 public static class HostKeyDialog
 {
-    public static bool Ask(string text, string? title = null)
+    public static bool Ask(string text, string? title = null, string? trustText = null)
     {
         var owner = Application.Current?.MainWindow is { IsVisible: true } m ? m : null;
-        var (w, result) = Create(text, owner, title);
+        var (w, result) = Create(text, owner, title, trustText);
         w.ShowDialog();
         return result();
     }
 
     /// <param name="title">Заголовок: по умолчанию «Ключ роутера изменился» (SSH); для сертификата HTTPS — свой.</param>
-    public static (Window Window, Func<bool> Trusted) Create(string text, Window? owner, string? title = null)
+    public static (Window Window, Func<bool> Trusted) Create(string text, Window? owner, string? title = null, string? trustText = null)
     {
         bool trusted = false;
         var w = DialogKit.Window(title ?? L.T("router.hostkey.title"), text, owner);
         var panel = new StackPanel { Margin = new Thickness(24, 20, 24, 18), Width = 440 };
         panel.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 16) });
         var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
-        var trust = DialogKit.Button(L.T("router.hostkey.trust"));
+        var trust = DialogKit.Button(trustText ?? L.T("router.hostkey.trust"));
         var cancel = DialogKit.Button(L.T("common.cancel"), primary: true, cancel: true);
         cancel.IsDefault = true;
         trust.Click += (_, _) => { trusted = true; w.Close(); };

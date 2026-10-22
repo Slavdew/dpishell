@@ -434,6 +434,7 @@
   "core.rt.err.no_result": "Ответ роутера без result",
   "core.rt.err.unreachable": "Роутер недоступен",
   "core.rt.err.cert_changed": "Сертификат HTTPS роутера изменился",
+  "core.rt.err.https_lost": "Роутер больше не отвечает по HTTPS — пароль по HTTP не отправлен",
   "core.rt.err.contract": "Ответ роутера не по договору",
   "core.rt.compat.too_old": "DpiShell на роутере слишком старый — обновите его на роутере",
   "core.rt.compat.router_newer_blocked": "DpiShell на роутере новее программы — обновите программу. Пока работают только состояние, обновление и удаление",
