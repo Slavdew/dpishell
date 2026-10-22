@@ -34,14 +34,17 @@
 2. Распакуйте в любую папку и запустите `DpiShell.exe`. Программа не подписана — Windows SmartScreen может предупредить: «Подробнее» → «Выполнить в любом случае». Если такой кнопки нет — запуск, возможно, ограничивает Smart App Control или политика организации.
 3. Нажмите «Включить». Подробно — [docs/windows/README.md](docs/windows/README.md).
 
-Это бета: если что-то не работает, [напишите](https://github.com/Slavdew/dpishell/issues), что видели (лучше со снимком экрана).
+Это бета: если что-то не работает, [напишите](https://github.com/Slavdew/dpishell/issues), что видели (лучше со снимком экрана). Частые вопросы и «Как вернуть как было» (откат каждой функции, в том числе без окна и без интернета) — [docs/FAQ.md](docs/FAQ.md); [English](docs/FAQ.en.md).
+
+**Совместимость.** Гарантируется работа версий одного выпуска: окно на ПК, помощник и пакеты на роутере. Если долго не обновлять одно (например, окно на ПК), а обновлять другое (роутер), полная работа не гарантируется — обновляйте оба. По возможности совместимость сохраняется.
+
 ## Разработчикам
 
 - [Устройство обоих продуктов](docs/dev/architecture.md) — данные, подбор, безопасность, что планируется.
 - [Сборка, тесты, публикация](docs/dev/building.md).
 - [Договор с роутером](docs/dev/router-api.md), [протокол окно ↔ помощник](docs/dev/helper-protocol.md).
 - [Проверка заимствованного](docs/vetting.md) — источники, хеши, лицензии.
-- Исследования: [какие бывают движки оптимизации соединения (обход DPI) под Windows и почему zapret v1](docs/research/bypass-engines.md), [DpiShell на роутере](docs/research/router-openwrt.md) и [заметки по nfqws на OpenWrt](docs/research/router-nfqws.md), [функции Flowseal: игровой режим, IP-списки, hosts](docs/research/flowseal-features.md), [DNS и подмена ответов](docs/research/dns.md).
+- Исследования: [какие бывают движки оптимизации соединения под Windows и почему zapret v1](docs/research/bypass-engines.md), [DpiShell на роутере](docs/research/router-openwrt.md) и [заметки по nfqws на OpenWrt](docs/research/router-nfqws.md), [функции Flowseal: игровой режим, IP-списки, hosts](docs/research/flowseal-features.md), [DNS и подмена ответов](docs/research/dns.md).
 - [Тексты кнопок «(i)»](docs/info-texts.md) — часть продукта, их читает тест.
 
 Папки: `src/` (C#/.NET 10, WPF), `tests/`, `data/` (общие каталог стратегий, цели, списки, манифесты), `packaging/`, `router/`, `vendor/` (резервная копия архива ядра).
@@ -49,3 +52,19 @@
 ## Лицензия
 
 DpiShell — [MIT](LICENSE). Сторонние компоненты и их лицензии (zapret — MIT, Flowseal — MIT, WinDivert — LGPLv3/GPLv2, cygwin — LGPLv3, .NET — MIT) — `packaging/THIRD-PARTY-NOTICES.txt`.
+
+## English
+
+DpiShell is a simple shell over [zapret](https://github.com/bol-van/zapret) (bol-van) that optimizes the connection to YouTube, Discord and other sites. Press "Turn on"; on most networks that is enough. If sites still do not open, press "Find strategy": the app tests strategies itself and turns on the best one. No VPN, no telemetry. It is a beta; results depend on the ISP and the network. There are two independent products: a Windows app (this README) and a package for OpenWrt routers ([docs/router/README.md](docs/router/README.md), in Russian). The window and the router page are available in Russian and English.
+
+**Download.** Take `DpiShell-<version>-portable.zip` from the [latest release](https://github.com/Slavdew/dpishell/releases/latest) (Windows 10/11 x64). Unpack it to any folder (not into Temp or OneDrive) and run `DpiShell.exe`. Do not delete or edit the `data` folder next to it.
+
+**SmartScreen.** The app is not signed, so Windows SmartScreen may warn: "More info" > "Run anyway". If there is no such button, launch may be restricted by Smart App Control or an organization policy.
+
+**First run.** On the first "Turn on" Windows asks for administrator rights once: this installs the DpiShell helper (a Windows service). Later the window works without them; when the helper is updated or removed, Windows asks again. The window language switches with the flag icon at the bottom of the left menu.
+
+**Compatibility.** Versions of one release are guaranteed to work together: the PC app, the helper and the router packages. If you leave one of them without updates for long (for example the PC app) while updating the other (the router), full operation is not guaranteed: update both. Compatibility is kept where possible.
+
+**Uninstall.** Easiest: "Settings" > "DpiShell changes" > "Undo all", then "Settings" > "Cleanup and removal": "Remove optimization service" and "Remove helper"; close the program (tray icon > "Exit") and delete the program folder, `%LocalAppData%\DpiShell` and `%ProgramData%\DpiShell` (the last one needs administrator rights). Steps without the window: [docs/FAQ.en.md](docs/FAQ.en.md#how-to-restore-the-previous-state).
+
+**If something does not work.** "Diagnostics" > "Save report" writes one text file you can read before sending; addresses and names of your PC and network, passwords and tokens are hidden in it. Attach it to an [issue](https://github.com/Slavdew/dpishell/issues) and describe what you did and saw. FAQ, including how to restore the previous state for every feature, with or without the window: [docs/FAQ.en.md](docs/FAQ.en.md).
