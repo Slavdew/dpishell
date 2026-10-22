@@ -9,6 +9,7 @@ import * as core from 'dpishell.core';
 import * as dg from 'dpishell.diag';
 import * as dns from 'dpishell.dns';
 import * as upd from 'dpishell.update';
+import * as sec from 'dpishell.security';
 
 // Ошибка: text — готовый русский (старые окна), key/params — ключ общего словаря и сырые параметры (router-api.md §9,
 // 2026-10-20): окно и страница собирают фразу на своём языке, если знают ключ.
@@ -767,6 +768,9 @@ methods.core_install = {
 methods.diag = { call: function() { let d = dg.diag(); d.dns.checked_at = st.iso(d.dns.checked_at); return d; } };
 
 methods.report = { call: function() { return { text: dg.report() }; } };
+
+// «Безопасность роутера» — справочно, только чтение (с 0.2.0-r13; старое окно метод не зовёт, новое без него блок не показывает).
+methods.security_check = { call: function() { let r = sec.check(); r.checked_at = st.iso(r.checked_at); return r; } };
 
 methods.conflict_stop = {
 	args: { name: 'name' },

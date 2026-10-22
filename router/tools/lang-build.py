@@ -106,7 +106,8 @@ def main():
         for k in shared:
             if k in pc and pc[k] != out[lang][k]:
                 errors.append(f'{lang}: {k} не совпадает с текстом ПК')
-    unused = sorted(k for k in out['ru'] if not k.startswith('_') and k not in keys and not k.startswith(('web.dns.preset.', 'web.dns.note.')))
+    # router.security.<id>[.<detail>] — ключи по ответу security_check (id и detail от роутера), в коде страницы не буквами.
+    unused = sorted(k for k in out['ru'] if not k.startswith('_') and k not in keys and not k.startswith(('web.dns.preset.', 'web.dns.note.', 'router.security.')))
     if unused:
         print('не используются в коде (можно убрать):', ', '.join(unused))
     if check:

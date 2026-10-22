@@ -13,7 +13,8 @@
       "«Адреса сайтов для проверок»: через защищённый DNS или как у системы",
       "«Сохранить отчёт» на «Диагностике»: один текстовый файл для обращения за помощью, личное скрыто",
       "Страница роутера на русском и английском, «Что мешает» с оценкой, проверка одной стратегии, выгрузка и загрузка настроек и на роутере",
-      "Бета: QUIC, IPv6 и совместная работа на реальном роутере пока не проверены на живом железе"
+      "Бета: QUIC, IPv6 и совместная работа на реальном роутере пока не проверены на живом железе",
+      "Вкладка «Роутер»: «Безопасность роутера» — что уже защищено и что можно улучшить, с вариантами решения текстом; настройки сети не меняются"
     ],
     "en": [
       "Exporting and importing your settings as a folder or a .zip of text files: sites, exclusions, strategies, per-site settings, game profiles, subnets, DNS and (with care) hosts lines — to share them, for example, with subscribers of the same ISP",
@@ -26,7 +27,8 @@
       "“Site addresses for checks”: through secure DNS or as the system resolves them",
       "“Save report” on “Diagnostics”: one text file for asking for help, personal data hidden",
       "The router page in Russian and English, “What interferes” with a rating, checking a single strategy, exporting and importing settings on the router as well",
-      "Beta: QUIC, IPv6 and joint work on a real router have not been tested on live hardware yet"
+      "Beta: QUIC, IPv6 and joint work on a real router have not been tested on live hardware yet",
+      "Router tab: “Router security” — what is already protected and what can be improved, with options as text; network settings are not changed"
     ]
   },
   "0.9.6": {

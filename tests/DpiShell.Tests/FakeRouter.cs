@@ -74,6 +74,8 @@ public sealed class FakeRouter : IDisposable
     /// <summary>§9: enable/select_start при чужом обходе — error: conflict.</summary>
     public bool ConflictOnEnable { get; set; }
     public string ConflictsJson { get; set; } = """[ { "kind": "service", "name": "zapret2", "running": true } ]""";
+    /// <summary>Ответ security_check (§5.1, с 0.2.0-r13): незнакомый id и состояние — для проверки, что окно их переживает.</summary>
+    public string SecurityJson { get; set; } = """{ "checks": [ { "id": "root_password", "state": "ok" }, { "id": "http_login", "state": "warn", "detail": "https_optional" }, { "id": "port_forwards", "state": "warn", "params": { "n": 2 } }, { "id": "dns_rebind", "state": "unknown" }, { "id": "future_check", "state": "warn" }, { "id": "upnp", "state": "strange" } ], "checked_at": "2026-10-22T20:00:00Z" }""";
     public bool FlowOffloadFixed { get; private set; }
     public bool? Ipv6Enabled { get; private set; }
 
@@ -473,6 +475,7 @@ public sealed class FakeRouter : IDisposable
             "pc_link_get" => PcLinkGet(),
             "diag" => $$"""{ "conflicts": {{ConflictsJson}}, "flow_offload": {{(FlowOffloadFixed ? "false" : "true")}}, "flowoffload": "{{(FlowOffloadFixed ? "software" : "none")}}","ipv6_wan": true, "dns": { "spoofed": true, "checked_at": "2026-10-16T21:00:00Z" }, "overlay_free_kb": 18000 }""",
             "report" => """{ "text": "отчёт роутера" }""",
+            "security_check" => SecurityJson,
             "core_install" => """{ "started": true }""",
             // Ядро договора §5.4.
             "uninstall" => Do(() => { UninstallKeepSettings = args["keep_settings"]?.GetValue<bool>(); Uninstalled = true; OnUninstall?.Invoke(); }, """{ "started": true }"""),

@@ -150,7 +150,8 @@ var PARAMS = {
 	advanced_get: [],
 	advanced_set: ['enabled', 'others', 'rows', 'confirm_s'],
 	advanced_revert: [],
-	dns_compare: []
+	dns_compare: [],
+	security_check: []
 };
 
 var declared = {};

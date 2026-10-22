@@ -17,19 +17,31 @@ return view.extend({
 	handleReset: null,
 
 	load: function() {
+		var self = this;
 		return api.lang().then(function() {
 			return Promise.all([api.safe('diag'), api.safe('status')]);
+		}).then(function(d) {
+			return self.loadSecurity(d[1]).then(function(sec) { return d.concat([sec]); });
 		});
+	},
+
+	// «Безопасность роутера» (router-api §5.1 security_check, с 0.2.0-r13): старый пакет без метода — блока нет.
+	loadSecurity: function(status) {
+		if (!status || status.__error || (status.methods || []).indexOf('security_check') < 0)
+			return Promise.resolve(null);
+		return api.safe('security_check');
 	},
 
 	render: function(data) {
 		var self = this;
 		this.diag = data[0];
 		this.status = data[1].__error ? null : data[1];
+		this.security = data[2];
 		this.coreTicks = 0;
 
 		this.el = {
 			findings: E('div'),
+			security: E('div'),
 			core: E('div'),
 			err: E('div', { 'class': 'dps-error' })
 		};
@@ -41,6 +53,10 @@ return view.extend({
 				this.el.findings,
 				this.el.err
 			]),
+			this.security ? api.card(api.t('router.security.title'), [
+				api.line([api.t('router.security.intro'), api.info(api.t('router.security.intro_info'))], 'dps-muted'),
+				this.el.security
+			]) : '',
 			api.card(api.t('web.core.title'), [this.el.core]),
 			api.card(api.t('web.diag.report'), [
 				api.line(api.t('web.diag.report_descr'), 'dps-muted'),
@@ -59,6 +75,7 @@ return view.extend({
 		]);
 
 		this.renderFindings();
+		this.renderSecurity();
 		this.renderCore();
 		poll.add(L.bind(this.tick, this), 1);
 		return view;
@@ -87,6 +104,10 @@ return view.extend({
 				self.status = d[1];
 			self.renderFindings();
 			self.renderCore();
+			return self.security ? self.loadSecurity(self.status).then(function(sec) {
+				self.security = sec || self.security;
+				self.renderSecurity();
+			}) : null;
 		});
 	},
 
@@ -148,6 +169,46 @@ return view.extend({
 			kids.push(api.line(api.t('router.diag.space') + ': ' + (d.overlay_free_kb >= 1024 ? api.t('router.diag.space_value', { value: Math.round(d.overlay_free_kb / 1024) })
 				: api.t('web.diag.space_kb', { value: d.overlay_free_kb })), 'dps-muted'));
 		api.content(this.el.findings, kids);
+	},
+
+	// Справочно: ✓ защищено, ⚠ можно улучшить (с вариантами текстом, без кнопок — решение владельца 22.10), • не удалось
+	// проверить. Тексты — общие с окном ПК (router.security.*); незнакомый id (роутер новее страницы) пропускается.
+	renderSecurity: function() {
+		var sec = this.security, kids = [], bad = [], unknown = 0, rows = [];
+		if (!sec)
+			return;
+		if (sec.__error) {
+			api.content(this.el.security, api.errorLine(sec.__error));
+			return;
+		}
+		(sec.checks || []).forEach(function(c) {
+			var base = 'router.security.' + c.id;
+			if (!api.has(base))
+				return;
+			var state = c.state == 'ok' || c.state == 'warn' ? c.state : 'unknown';
+			var key = base + '.' + (c.detail || state);
+			var text = state == 'unknown' ? api.t('router.security.unknown')
+				: api.has(key) ? api.t(key, c.params || {}) : api.t(base + '.' + state, c.params || {});
+			var fix = state == 'warn' && api.has(base + '.fix') ? E('div', { 'class': 'dps-muted' }, api.t(base + '.fix')) : '';
+			if (state == 'warn')
+				bad.push(api.t(base));
+			else if (state == 'unknown')
+				unknown++;
+			rows.push(E('div', { 'class': 'dps-check-row dps-cr-' + (state == 'warn' ? 'bad' : state) }, [
+				E('span', { 'class': 'dps-cr-mark' }, state == 'ok' ? '✓' : state == 'warn' ? '⚠' : '•'),
+				E('span', { 'class': 'dps-cr-text' }, [E('b', {}, api.t(base)), ': ' + text, fix])
+			]));
+		});
+		// Ускорение сети — не про безопасность, но мешает оптимизации: оно в «Что мешает», здесь только ссылка.
+		if (this.diag && !this.diag.__error && this.diag.flow_offload)
+			rows.push(E('div', { 'class': 'dps-check-row dps-cr-unknown' }, [
+				E('span', { 'class': 'dps-cr-mark' }, '•'),
+				E('span', { 'class': 'dps-cr-text' }, [E('b', {}, api.t('router.diag.flow')), ': ' + api.t('router.security.flow_ref')])
+			]));
+		kids.push(bad.length
+			? E('div', { 'class': 'dps-cr-sum dps-cr-sum-bad' }, '⚠ ' + api.t('router.security.bad', { list: bad.join(', ') }))
+			: E('div', { 'class': 'dps-cr-sum dps-cr-sum-ok' }, '✓ ' + api.t(unknown ? 'router.security.ok_partial' : 'router.security.ok_all')));
+		api.content(this.el.security, kids.concat(rows));
 	},
 
 	renderCore: function() {

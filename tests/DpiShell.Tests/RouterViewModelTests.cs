@@ -496,6 +496,64 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.Equal("передано оптимизации — не мешает", vm.FlowOffloadText);
     }
 
+    // «Безопасность роутера» (security_check, с 0.2.0-r13): справочно, только текст; незнакомое от новее роутера не ломает окно.
+    [Fact]
+    public async Task Security_NewRouter_RowsWithFixTextAndSummary()
+    {
+        using var r = new FakeRouter().As020();
+        r.MethodsJson = FakeRouter.Methods020.Replace("\"status\"", "\"security_check\",\"status\"");
+        var (vm, _) = Make(r);
+        await vm.ConnectAsync("secret");
+        await vm.RefreshDiagAsync();
+        Assert.True(vm.SecurityShown);
+        var rows = vm.SecurityRows;
+        // future_check (роутер новее окна) пропущен; «strange» — «не удалось проверить», не ✓.
+        Assert.Equal(["Пароль роутера", "Вход по HTTP", "Перенаправление портов", "Защита от DNS rebind", "UPnP"], rows.Select(x => x.Label));
+        Assert.Equal(SecurityState.Ok, rows[0].State);
+        Assert.Equal("", rows[0].Fix);
+        Assert.Equal(L.T("router.security.http_login.https_optional"), rows[1].Text);
+        Assert.StartsWith("Варианты: HTTPS", rows[1].Fix);
+        Assert.StartsWith("правил: 2", rows[2].Text);
+        Assert.Equal("не удалось проверить", rows[3].Text);
+        Assert.Equal(SecurityState.Unknown, rows[4].State);
+        Assert.Equal("⚠ Можно улучшить: Вход по HTTP, Перенаправление портов", vm.SecuritySummary);
+        Assert.True(vm.SecurityHasWarn);
+        Assert.True(vm.SecurityFlowRef);   // ускорение сети включено — ссылка на «Что мешает», не отдельная строка
+    }
+
+    [Fact]
+    public async Task Security_OldRouter_NoCallNoBlock()
+    {
+        using var r = new FakeRouter().As020();   // 0.2.0 до r13: метода нет в status.methods
+        var (vm, _) = Make(r);
+        await vm.ConnectAsync("secret");
+        await vm.RefreshDiagAsync();
+        Assert.True(vm.DiagLoaded);
+        Assert.False(vm.SecurityShown);
+        Assert.DoesNotContain(r.Calls, c => Method(c) == "security_check");
+
+        using var r0 = new FakeRouter();          // 0.1.0: status.methods нет вовсе — тоже не звать
+        var (vm0, _) = Make(r0);
+        await vm0.ConnectAsync("secret");
+        await vm0.RefreshDiagAsync();
+        Assert.False(vm0.SecurityShown);
+        Assert.DoesNotContain(r0.Calls, c => Method(c) == "security_check");
+    }
+
+    [Fact]
+    public async Task Security_MethodFails_DiagStillShown()
+    {
+        using var r = new FakeRouter().As020();
+        r.MethodsJson = FakeRouter.Methods020.Replace("\"status\"", "\"security_check\",\"status\"");
+        r.MissingMethods.Add("security_check");
+        var (vm, _) = Make(r);
+        await vm.ConnectAsync("secret");
+        await vm.RefreshDiagAsync();
+        Assert.True(vm.DiagLoaded);
+        Assert.False(vm.SecurityShown);
+        Assert.Equal("zapret2", Assert.Single(vm.Conflicts).Name);
+    }
+
     [Fact]
     public async Task PcEnable_WhenRouterBypasses_AsksAboutDoubleProcessing()
     {

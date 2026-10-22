@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=dpishell
 PKG_VERSION:=0.2.0
-PKG_RELEASE:=12
+PKG_RELEASE:=13
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=DpiShell
 

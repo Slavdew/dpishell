@@ -261,6 +261,8 @@ public sealed class RouterClient : IDisposable
     public Task<RouterDnsStatus> DnsStatusAsync(CancellationToken ct = default) => CallAsync<RouterDnsStatus>("dns_status", null, ct);
     public Task<RouterDiag> DiagAsync(CancellationToken ct = default) => CallAsync<RouterDiag>("diag", null, ct);
     public Task<RouterReport> ReportAsync(CancellationToken ct = default) => CallAsync<RouterReport>("report", null, ct);
+    /// <summary>«Безопасность роутера» — справочно, только чтение (с 0.2.0-r13). Звать, только если метод есть в status.methods.</summary>
+    public Task<RouterSecurityReport> SecurityCheckAsync(CancellationToken ct = default) => CallAsync<RouterSecurityReport>("security_check", null, ct);
 
     // ---------- §5.2 действия ----------
 

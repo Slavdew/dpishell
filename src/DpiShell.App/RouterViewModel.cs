@@ -448,7 +448,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             if (!Set(ref _connected, value)) return;
             Raise(nameof(NeedLogin)); Raise(nameof(CanAct)); Raise(nameof(ScheduleEditable)); RaiseCompat(); Raise(nameof(SelectOnRouterVisible)); Raise(nameof(SelectOnPcVisible));
             Raise(nameof(TargetsOnRouterVisible)); Raise(nameof(TargetsOnPcVisible)); Raise(nameof(JointAvailable)); Raise(nameof(JointCardVisible));
-            if (!value) { Selecting = false; DiagLoaded = false; DnsPresetsAvailable = false; }
+            if (!value) { Selecting = false; DiagLoaded = false; DnsPresetsAvailable = false; _security = null; RaiseSecurity(); }
             Raise(nameof(DiagHint));
             Requery();
         }
@@ -2144,8 +2144,36 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 FillConflicts();
                 Raise(nameof(FlowOffloadText)); Raise(nameof(Ipv6Text)); Raise(nameof(DnsText)); Raise(nameof(SpaceText)); Raise(nameof(DiagUpdated));
                 DiagLoaded = true;
+                await LoadSecurityAsync();
             }, changes: false))
             Say("");
+    }
+
+    // ---------- безопасность роутера (справочно, router-api §5.1 security_check, с 0.2.0-r13) ----------
+    // Решение владельца (22.10): только текст — что защищено и что можно улучшить, без кнопок; настройки сети окно не меняет.
+
+    RouterSecurityReport? _security;
+    /// <summary>Строки собираются при показе — на языке окна (смена языка поднимает все свойства заново).</summary>
+    public IReadOnlyList<RouterSecurityRow> SecurityRows => RouterSecurity.Rows(_security);
+    public string SecuritySummary => RouterSecurity.Summary(SecurityRows);
+    public bool SecurityHasWarn => SecurityRows.Any(r => r.IsWarn);
+    /// <summary>Роутер без метода (до r13) или ответ не пришёл — блока нет.</summary>
+    public bool SecurityShown => DiagLoaded && _security is not null;
+    /// <summary>Ускорение сети включено: в «Безопасности» — только ссылка на «Что мешает», без повтора.</summary>
+    public bool SecurityFlowRef => _diag?.FlowOffload == true;
+    bool HasSecurityMethod => _status?.Methods?.Contains(RouterSecurity.Method) == true && !Blocked;
+
+    void RaiseSecurity()
+    {
+        Raise(nameof(SecurityRows)); Raise(nameof(SecuritySummary)); Raise(nameof(SecurityHasWarn)); Raise(nameof(SecurityShown)); Raise(nameof(SecurityFlowRef));
+    }
+
+    async Task LoadSecurityAsync()
+    {
+        // Отказ этого справочного метода диагностику не роняет: блок просто не показывается.
+        try { _security = HasSecurityMethod ? await Call(c => c.SecurityCheckAsync()) : null; }
+        catch (RouterException) { _security = null; }
+        RaiseSecurity();
     }
 
     public async Task StopConflictAsync(string name)

@@ -216,6 +216,10 @@ public sealed record RouterDns(bool Spoofed, DateTime? CheckedAt);
 public sealed record RouterDiag(List<RouterConflict>? Conflicts, bool FlowOffload, bool Ipv6Wan, RouterDns? Dns, long OverlayFreeKb, string? Flowoffload = null);
 
 public sealed record RouterReport(string Text);
+
+/// <summary>Пункт security_check: id (router.security.<id>), state ok | warn | unknown, detail — вариант текста, params — сырые числа и строки (без секретов).</summary>
+public sealed record RouterSecurityCheck(string Id, string State, string? Detail = null, Dictionary<string, System.Text.Json.JsonElement>? Params = null);
+public sealed record RouterSecurityReport(List<RouterSecurityCheck>? Checks, DateTime? CheckedAt);
 public sealed record RouterStarted(bool Started);
 
 /// <summary>Стратегия для `strategies_user_set`: только id, название и роли — пути и командную строку роутер не принимает.</summary>

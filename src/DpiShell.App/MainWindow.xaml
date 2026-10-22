@@ -2203,6 +2203,60 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- «Безопасность роутера» (security_check, роутер с 0.2.0-r13; старый — карточки нет): справочно, как на странице роутера.
+                                 Только текст — что защищено и варианты решения, без кнопок (решение владельца 22.10). -->
+                            <Border Style="{StaticResource Card}" Visibility="{Binding SecurityShown, Converter={StaticResource Vis}}">
+                                <StackPanel>
+                                    <TextBlock Text="{l:T router.security.title}" Style="{StaticResource H2}" />
+                                    <TextBlock Text="{l:T router.security.intro}" Style="{StaticResource Hint}" TextWrapping="Wrap" ToolTip="{l:T router.security.intro_info}" Margin="0,0,0,6" />
+                                    <TextBlock Text="{Binding SecuritySummary}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,4">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource Ok}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SecurityHasWarn}" Value="True"><Setter Property="Foreground" Value="{DynamicResource Danger}" /></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <ItemsControl ItemsSource="{Binding SecurityRows}" Focusable="False">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,3">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="22" />
+                                                        <ColumnDefinition Width="190" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock x:Name="M" Text="{Binding Mark}" FontWeight="Bold" Foreground="{DynamicResource Ok}" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Label}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,8,0" />
+                                                    <StackPanel Grid.Column="2">
+                                                        <TextBox Text="{Binding Text, Mode=OneWay}" Style="{StaticResource SelectableText}" />
+                                                        <TextBox Text="{Binding Fix, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,2,0,0"
+                                                                 Visibility="{Binding HasFix, Converter={StaticResource Vis}}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="Warn"><Setter TargetName="M" Property="Foreground" Value="{DynamicResource Danger}" /></DataTrigger>
+                                                    <DataTrigger Binding="{Binding State}" Value="Unknown"><Setter TargetName="M" Property="Foreground" Value="{DynamicResource Muted}" /></DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <!-- Ускорение сети — в «Что мешает» выше; здесь только ссылка, без повтора. -->
+                                    <Grid Margin="0,3" Visibility="{Binding SecurityFlowRef, Converter={StaticResource Vis}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="22" />
+                                            <ColumnDefinition Width="190" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="•" FontWeight="Bold" Foreground="{DynamicResource Muted}" />
+                                        <TextBlock Grid.Column="1" Text="{l:T router.diag.flow}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,8,0" />
+                                        <TextBlock Grid.Column="2" Text="{l:T router.security.flow_ref}" TextWrapping="Wrap" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
                             <StackPanel Visibility="{Binding Connected, Converter={StaticResource Vis}}">
                                 <!-- DNS для всей сети: dns_status, «Проверить», «Включить защищённый DNS», «Вернуть как было» (фоновые задания). -->
                                 <Border Style="{StaticResource Card}">

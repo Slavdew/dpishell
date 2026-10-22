@@ -5,6 +5,7 @@ import { readfile, stat, popen, lsdir, readlink } from 'fs';
 import * as st from 'dpishell.state';
 import * as pr from 'dpishell.probe';
 import * as core from 'dpishell.core';
+import * as sec from 'dpishell.security';
 
 // Чужие обходы, которые мешают нашему (architecture.md «Диагностика роутера»). Имя — init-скрипт в /etc/init.d.
 const CONFLICTS = ['zapret2', 'youtubeUnblock', 'b4', 'zapret-manager', 'zapret-manager-beam', 'byedpi', 'podkop'];
@@ -117,6 +118,8 @@ function report() {
 	add('Настройки', sprintf('%.2J', st.settings()));
 	add('Ядро', readfile(`${st.P.etc}/core-installed.json`));
 	add('Диагностика', sprintf('%.2J', diag()));
+	// Безопасность — только id и состояния (секретов в ответе нет: security.uc).
+	add('Безопасность роутера', join('\n', map(sec.check().checks, c => `${c.id}: ${c.state}${c.detail ? ' (' + c.detail + ')' : ''}`)));
 	add('config zapret', readfile(st.P.zapret_config));
 	add('nft inet zapret', sh('nft list table inet zapret').out);
 	add('Последняя проверка', readfile(`${st.P.etc}/last-check.json`));

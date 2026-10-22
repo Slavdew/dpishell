@@ -36,6 +36,8 @@ public sealed class LangRouterWindowTests : IDisposable
                   { "code": "brand_new_code", "text": "Что-то новое от роутера" } ]
                 """,
             ConflictsJson = """[ { "kind": "service", "name": "zapret2", "running": true }, { "kind": "package", "name": "zapret-manager-beam", "running": true } ]""",
+            // «Безопасность роутера» (security_check, r13): карточка видна, тексты на языке окна.
+            MethodsJson = FakeRouter.Methods020.Replace("\"status\"", "\"security_check\",\"status\""),
             SelectRowsJson = """
                 [ { "id": "alt", "group_share": 1.0, "target_share": 0.88, "avg_s": 0.74, "error": null },
                   { "id": "alt9", "group_share": 1.0, "target_share": 0.80, "avg_s": 0.61, "error": null },
@@ -115,10 +117,17 @@ public sealed class LangRouterWindowTests : IDisposable
                     if (page == Pages.Router)
                     {
                         if (Find<TextBlock>(tabs, t => t.Text == L.T("router.diag.title") && t.IsVisible) is null) throw new Exception("Нет «Роутер: что мешает»");
+                        if (Find<TextBlock>(tabs, t => t.Text == L.T("router.security.title") && t.IsVisible) is null) throw new Exception("Нет «Безопасность роутера»");
                         if (Find<TextBlock>(tabs, t => t.Text == L.T("router.schedule.title") && t.IsVisible) is null) throw new Exception("Нет расписания");
                         if (Find<TextBlock>(tabs, t => t.Text == L.T("router.dns.title") && t.IsVisible) is null) throw new Exception("Нет DNS для всей сети");
                     }
                     Shot(w, name);
+                    if (page == Pages.Router && Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == L.T("router.security.title")) is { } sec)
+                    {
+                        // Карточка ниже первого экрана: прокрутить к ней для снимка.
+                        sec.BringIntoView(new Rect(0, 0, 1, 700));
+                        Shot(w, "tab-security");
+                    }
                 }
                 vm.GoTo(Pages.Select);
                 Pump();
