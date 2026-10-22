@@ -66,6 +66,8 @@ jobs:
           mkdir -p $D/lists $D/fake
           cp data/strategies.json data/targets.json $D/
           cp data/lists/*.txt $D/lists/
+          # ipset-all.txt (540 КБ) роутеру не нужен: профили берут заглушку ipset-none.txt (state.uc STD_LISTS).
+          rm -f $D/lists/ipset-all.txt
           cp data/fake/*.bin $D/fake/
 
       - name: Ключ подписи индекса

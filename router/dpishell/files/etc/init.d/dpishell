@@ -23,11 +23,18 @@ cron_set() {
 	fi
 }
 
+# Включено в настройках, а автозапуск zapret снят (zapret disable) — выключатель (off) сработал на полном флеше, где
+# uci commit не прошёл: оставить выключенным. Всякое включение (enable, подбор, откат, ядро) ставит автозапуск.
 restore_choice() {
 	ucode -e '
 		import * as st from "dpishell.state";
 		st.ensure_dirs();
 		let s = st.settings();
+		if (s.enabled && st.core_installed() && system("/etc/init.d/zapret enabled") != 0) {
+			system("logger -t dpishell \"Автозапуск zapret снят выключателем — оптимизация остаётся выключенной\"");
+			try { st.uci_set({ enabled: 0 }); } catch (e) {}
+			s.enabled = false;
+		}
 		if (s.enabled && s.strategy && !st.write_zapret_config(s.strategy, s))
 			system("/etc/init.d/zapret restart >/dev/null 2>&1");
 		else if (!s.enabled)

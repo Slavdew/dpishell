@@ -219,8 +219,8 @@ dpishell (PKGARCH:=all)
   /etc/init.d/dpishell         procd: status.json, cron, восстановление после перезагрузки
   /etc/config/dpishell         uci: стратегия, запасные, режим, расписание, ipv6, dns
   /etc/dpishell/               свои данные (только root): user-targets.json, lists/user-*.txt, user-strategies.json,
-                               found-strategies.json, stats.json, results/, dns-backup.json — сохраняются при sysupgrade
-  /www/dpi/index.html          короткий адрес → страница LuCI; /www/dpishell/status.json — для приложения ПК
+                               found-strategies.json, stats.json, dns-backup.json — сохраняются при sysupgrade (итоги подборов — только в /tmp, с r14)
+  /www/dpi/index.html          короткий адрес → страница LuCI; /www/dpishell/status.json — для приложения ПК (ссылка на /tmp/dpishell-pub/status.json, с r14)
 luci-app-dpishell (PKGARCH:=all)
   /www/luci-static/resources/view/dpishell/{main,select,lists,dns,diag}.js, api.js; меню «Службы → DpiShell»
 ```

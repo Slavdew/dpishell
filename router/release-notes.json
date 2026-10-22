@@ -1,6 +1,7 @@
 {
   "_comment": "Что нового — для плашки «Доступно обновление» и страницы релиза. Ключ — версия X.Y.Z; коротко, словами пользователя. Нет записи — release-json.py возьмёт заголовки коммитов. Русские строки — в записи версии (список, как раньше). Английский перевод — в разделе \"en\" под тем же ключом версии: строки один к одному с русскими, до 15 штук. Пока release-json.py и роутер раздел \"en\" не читают (нужна правка кода), он только хранит перевод.",
   "0.2.0": [
+    "Бережнее к роутеру: меньше записей во флеш, трафика и нагрузки на процессор; временные файлы после обновления и установки убираются, выключение кнопкой сохраняется и при полном флеше",
     "«Безопасность роутера» на «Диагностике»: что уже защищено и что можно улучшить, с вариантами решения — справочно, настройки сети не меняются",
     "Безопасность: названия и адреса на странице роутера — только текстом, обновление из папки и удаление проверяют, что файлы не подменены",
     "Исправлено: после установки без интернета обновление предлагалось снова и снова, а «Обновить» ничего не меняло",
@@ -25,6 +26,7 @@
   ],
   "en": {
     "0.2.0": [
+      "Easier on the router: fewer flash writes, less traffic and CPU load; temporary files are removed after updates and installs, and switching off with the button holds even when the flash is full",
       "Fixed: after an install without internet the update was offered again and again, and “Update” changed nothing",
       "Install, update and removal from the DpiShell app on the PC, with the router password, even if the router has no access to GitHub",
       "Deep strategy search on the router itself, when the ready-made ones did not help",

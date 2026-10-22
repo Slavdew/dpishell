@@ -1,12 +1,14 @@
 // Проверка целей с роутера через curl — те же правила, что Probe.cs Windows-версии (architecture.md «Проверка одной цели»):
-// адрес через DoH (DNS провайдера подменяет ответы), тело читается целиком, редирект только на тот же сайт.
+// адрес через DoH (DNS провайдера подменяет ответы), тело читается до MAX_BYTES, редирект только на тот же сайт.
 'use strict';
 
 import { readfile, writefile, popen, mkdir, stat, unlink, lsdir } from 'fs';
 import * as st from 'dpishell.state';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36';
-const CONNECT_S = 3, READ_S = 6, MAX_BYTES = 1048576, MAX_REDIRECTS = 5;
+// MAX_BYTES — сколько тела читать: DPI обрывает поток на 16–20 КБ, min_bytes целей — 20 КБ, так что 256 КБ хватает с запасом;
+// дальше загрузка обрывается (трафик и расшифровка TLS на CPU роутера). На ПК — 1 МБ (там это ничего не стоит).
+const CONNECT_S = 3, READ_S = 6, MAX_BYTES = 262144, MAX_REDIRECTS = 5;
 let batch_seq = 0;
 
 const DOH_IPS = ['8.8.8.8', '1.1.1.1'];
@@ -106,6 +108,8 @@ function header_value(headers, name) {
 	return v;
 }
 
+// Тело — в head -c MAX_BYTES через fd 3 (вывод -w остаётся в .w): прочитав MAX_BYTES, head закрывает трубу, curl выходит
+// с кодом 23 — для разбора это «полностью» (size_download ≥ MAX_BYTES). Только рукопожатие (сторож) — HEAD, без тела.
 function curl_cmd(t, tls, ip, out_prefix, tm) {
 	let cs = tm?.connect_s ?? CONNECT_S, rs = tm?.read_s ?? READ_S;
 	let host = host_of(t.url);
@@ -114,17 +118,19 @@ function curl_cmd(t, tls, ip, out_prefix, tm) {
 	if (pm)
 		port = +pm[1];
 	let args = [
-		'curl', '-sS', '-o', '/dev/null', '-D', q(`${out_prefix}.h`),
-		'--connect-timeout', cs, '--max-time', cs + rs, '--max-filesize', MAX_BYTES * 64,
+		'curl', '-sS', '-D', q(`${out_prefix}.h`),
+		'--connect-timeout', cs, '--max-time', cs + rs,
 		'-A', q(UA), '-H', q('Accept: */*'),
 		'-w', q('%{http_code} %{size_download} %{exitcode} %{time_total} %{redirect_url}'),
 	];
+	push(args, t.handshake_only ? '-I -o /dev/null' : '-o /dev/fd/3');
 	if (match(t.url, /^https:/))
 		push(args, tls == '1.3' ? '--tlsv1.3 --tls-max 1.3' : '--tlsv1.2 --tls-max 1.2');
 	if (ip)
 		push(args, '--resolve', q(`${host}:${port}:${ip}`));
 	push(args, q(t.url));
-	return `${join(' ', args)} > ${q(out_prefix + '.w')} 2> ${q(out_prefix + '.e')}`;
+	let c = `${join(' ', args)} > ${q(out_prefix + '.w')} 2> ${q(out_prefix + '.e')}`;
+	return t.handshake_only ? c : `{ ${c}; } 3>&1 | head -c ${MAX_BYTES} >/dev/null`;
 }
 
 // Разбор результата одного запроса по правилам Probe.cs.
@@ -173,6 +179,9 @@ function classify(t, out_prefix) {
 		return full ? res('ok', `HTTP ${code}, ${int(bytes / 1024)} КБ`) : res(bytes > 0 ? 'truncated' : 'timeout', bytes > 0 ? `поток оборвался на ${bytes} байтах` : 'таймаут');
 	if (exitcode == 18 || exitcode == 56)
 		return res('truncated', `поток оборвался на ${bytes} байтах`);
+	// 23 — загрузку оборвали мы сами (head -c MAX_BYTES): прочитано достаточно.
+	if (exitcode == 23 && full)
+		exitcode = 0;
 	if (exitcode != 0)
 		return res('error', errtext || `curl ${exitcode}`);
 	if (!full && expected != null && bytes < +expected)
@@ -198,7 +207,7 @@ function fake_dpi(items) {
 	try { rules = json(readfile(FAKE_DPI)).rules ?? []; }
 	catch (e) { die(`${FAKE_DPI}: не JSON`); }
 	let running = length(trim(run('pidof nfqws').out)) > 0;
-	let m = match(readfile('/opt/zapret/config') ?? '', /NFQWS_OPT="([^"]*)"/);
+	let m = match(readfile(st.active_config()) ?? '', /NFQWS_OPT="([^"]*)"/);
 	let profiles = m ? split(m[1], ' --new ') : [];
 	let res = [];
 	for (let it in items) {

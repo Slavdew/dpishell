@@ -153,4 +153,4 @@ function site_check(url) {
 	};
 }
 
-export { conflicts, conflict_stop, diag, report, site_check, flow_offload, ipv6_wan };
+export { conflicts, conflict_stop, diag, report, site_check, flow_offload, ipv6_wan, overlay_free_kb };

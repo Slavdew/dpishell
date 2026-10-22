@@ -1,7 +1,7 @@
 // Состояние пакета: пути, настройки uci, свои данные, запись config zapret и status.json.
 'use strict';
 
-import { readfile, writefile, rename, mkdir, stat, lstat, lsdir, symlink, unlink, access, chmod, readlink, open } from 'fs';
+import { readfile, writefile, rename, mkdir, rmdir, stat, lstat, lsdir, symlink, unlink, access, chmod, readlink, open } from 'fs';
 import { cursor } from 'uci';
 import * as cat from 'dpishell.catalog';
 
@@ -14,6 +14,11 @@ const P = {
 	zapret: '/opt/zapret',
 	zapret_config: '/opt/zapret/config',
 	status_json: '/www/dpishell/status.json',
+	// status.json пишется в ОЗУ (меняется при каждой проверке), в /www — ссылка на него: флеш не изнашивается.
+	pub: '/tmp/dpishell-pub',
+	pub_status: '/tmp/dpishell-pub/status.json',
+	// config zapret на время подбора (ZAPRET_CONFIG): кандидаты не пишутся во флеш, /opt/zapret/config — только итог и откат.
+	trial_config: '/tmp/dpishell/zapret.config',
 };
 
 const VERSION = '0.2.0';
@@ -24,13 +29,14 @@ const MIN_APP = '0.9.0';
 const MODES = ['all', 'lists'];
 const HOURS = [0.5, 1, 3, 6, 12, 24];
 const USER_LISTS = ['user-general', 'user-exclude', 'user-ipset', 'user-ipset-exclude'];
-const STD_LISTS = ['general.txt', 'google.txt', 'discord.txt', 'exclude.txt', 'ipset-exclude.txt', 'ipset-all.txt'];
+// ipset-all.txt (540 КБ) в пакет роутера не входит с r14: профили роутера берут заглушку ipset-none.txt.
+const STD_LISTS = ['general.txt', 'google.txt', 'discord.txt', 'exclude.txt', 'ipset-exclude.txt'];
 const DOMAIN_RX = /^\^?(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+(xn--[a-z0-9-]{2,59}|[a-z]{2,63})$/;
 const SUBNET_RX = /^([0-9]{1,3}\.){3}[0-9]{1,3}(\/[0-9]{1,2})?$/;
 
 // nfqws работает от пользователя daemon (WS_USER zapret): списки и фейки должны быть ему читаемы.
 // Свои настройки и результаты — только root; status.json — публичный для uhttpd (router-api §2).
-const DIRS = { '/etc/dpishell': 0o711, '/etc/dpishell/lists': 0o755, '/etc/dpishell/results': 0o700, '/tmp/dpishell': 0o700, '/www/dpishell': 0o755 };
+const DIRS = { '/etc/dpishell': 0o711, '/etc/dpishell/lists': 0o755, '/tmp/dpishell': 0o700, '/tmp/dpishell-pub': 0o755, '/www/dpishell': 0o755 };
 
 // Каталог только root (security-audit-router №4): /tmp общий, и /tmp/dpishell мог заранее создать другой пользователь
 // (nfqws работает от daemon) или подложить ссылку. Чужой, ссылка или не каталог — в сторону, создаётся свой. true — каталог наш.
@@ -55,9 +61,27 @@ function root_file(path) {
 	return !!(s && s.type == 'file' && s.uid == 0);
 }
 
+// Своё прежних версий, которое больше не нужно (r14): results/ — итоги подборов, их не читал никто, а росли без предела;
+// ссылка на ipset-all.txt. Удаляется только своё: файлы «<число>.json» и их .tmp в своём каталоге, без перехода по ссылкам.
+function cleanup_legacy() {
+	let r = `${P.etc}/results`, s = lstat(r);
+	if (s?.type == 'link')
+		unlink(r);
+	else if (s?.type == 'directory' && s.uid == 0) {
+		for (let f in lsdir(r) ?? [])
+			if (match(f, /^[0-9]+[.]json([.]tmp)?$/) && index(['file', 'link'], lstat(`${r}/${f}`)?.type) >= 0)
+				unlink(`${r}/${f}`);
+		rmdir(r);
+	}
+	let ia = `${P.lists}/ipset-all.txt`;
+	if (readlink(ia) == `${P.share}/lists/ipset-all.txt`)
+		unlink(ia);
+}
+
 function ensure_dirs() {
 	for (let d in DIRS)
 		own_dir(d, DIRS[d]);
+	cleanup_legacy();
 	// Заглушка IP-списка, как на Windows (IpLists.Placeholder): тестовая сеть, профили ipset ничего не ловят.
 	if (!stat(`${P.lists}/ipset-none.txt`))
 		writefile(`${P.lists}/ipset-none.txt`, '203.0.113.113/32\n');
@@ -77,10 +101,18 @@ function ensure_dirs() {
 
 function write_atomic(path, text) {
 	let tmp = `${path}.tmp`;
-	// writefile возвращает число записанных байт: 0 у пустого файла — не ошибка.
-	if (writefile(tmp, text) == null)
+	// writefile возвращает число записанных байт: 0 у пустого файла — не ошибка. Не записалось (кончилось место) —
+	// недописанный .tmp убрать: на полном флеше он занимал бы последнее.
+	if (writefile(tmp, text) == null || !rename(tmp, path)) {
+		unlink(tmp);
 		return false;
-	return rename(tmp, path);
+	}
+	return true;
+}
+
+// Записать, только если содержимое другое (одинаковое во флеш не переписываем). true — файл такой, как надо.
+function write_if_changed(path, text) {
+	return readfile(path) == text || write_atomic(path, text);
 }
 
 // Повреждённый файл не «обнуляется» молча: копия .bad рядом и строка в журнале (следующая запись затёрла бы исходник).
@@ -98,8 +130,8 @@ function read_json(path, dflt) {
 	}
 }
 
-function uci_get(opt, dflt) {
-	let c = cursor();
+function uci_get(opt, dflt, c) {
+	c ??= cursor();
 	let v = c.get('dpishell', 'main', opt);
 	return v == null ? dflt : v;
 }
@@ -116,20 +148,23 @@ function uci_set(values) {
 	c.commit('dpishell');
 }
 
+// Один курсор uci на все параметры: /etc/config/dpishell разбирается один раз.
 function settings() {
-	let backups = uci_get('backups', []);
+	let c = cursor();
+	let g = (k, d) => uci_get(k, d, c);
+	let backups = g('backups', []);
 	return {
-		enabled: uci_get('enabled', '0') == '1',
-		strategy: uci_get('strategy', '') || null,
+		enabled: g('enabled', '0') == '1',
+		strategy: g('strategy', '') || null,
 		backups: type(backups) == 'array' ? backups : [backups],
-		mode: uci_get('mode', 'all'),
-		ipv6: uci_get('ipv6', '0') == '1',
-		flowoffload: uci_get('flowoffload', 'none'),
+		mode: g('mode', 'all'),
+		ipv6: g('ipv6', '0') == '1',
+		flowoffload: g('flowoffload', 'none'),
 		schedule: {
-			enabled: uci_get('schedule_enabled', '1') == '1',
-			hours: +uci_get('schedule_hours', '1'),
-			auto_select: uci_get('auto_select', '0') == '1',
-			watchdog: uci_get('watchdog', '1') == '1',
+			enabled: g('schedule_enabled', '1') == '1',
+			hours: +g('schedule_hours', '1'),
+			auto_select: g('auto_select', '0') == '1',
+			watchdog: g('watchdog', '1') == '1',
 		},
 	};
 }
@@ -158,9 +193,15 @@ const PC_LINKS = '/etc/dpishell/pc-links.json';
 const PC_MAX = 4, PC_TTL = 24 * 3600;
 const CUSTOM_SRC = '/usr/share/dpishell/zapret-custom.sh';
 
+// Продление связки (pc_link_set раз в 30 мин) меняет только seen_at/expires_at — они живут в ОЗУ, во флеш пишутся лишь
+// новые MAC и сайты. После перезагрузки — сроки из файла (окно продлит связку при следующем обращении).
+const PC_EXPIRY = '/tmp/dpishell/pc-expiry.json';
+
 function pc_links() {
 	let l = read_json(PC_LINKS, null);
-	return type(l?.items) == 'array' ? l.items : [];
+	let items = type(l?.items) == 'array' ? l.items : [];
+	let ex = read_json(PC_EXPIRY, {});
+	return map(items, x => (ex[x.id]?.expires_at > x.expires_at) ? { ...x, seen_at: ex[x.id].seen_at, expires_at: ex[x.id].expires_at } : x);
 }
 
 function pc_active(s) {
@@ -201,7 +242,7 @@ function build_opts(s, strat, selecting) {
 		o.pcs = [];
 		for (let i = 0; i < length(pcs); i++) {
 			let file = `${P.lists}/pc-${i + 1}.txt`, kept = pc_split(pcs[i].domains).kept;
-			write_atomic(file, length(kept) ? join('\n', kept) + '\n' : '');
+			write_if_changed(file, length(kept) ? join('\n', kept) + '\n' : '');
 			chmod(file, 0o644);   // nfqws читает списки от daemon
 			push(o.pcs, { id: pcs[i].id, macs: pcs[i].macs, exclude: file });
 		}
@@ -226,6 +267,7 @@ function build_opts(s, strat, selecting) {
 }
 
 // Записать /opt/zapret/config для стратегии-объекта (в т.ч. кандидата поиска). null — успех, иначе текст ошибки.
+// selecting — кандидат подбора: config в ОЗУ (P.trial_config), zapret перезапускается с ZAPRET_CONFIG (zapret_env).
 function write_zapret_config_for(st, s, selecting) {
 	let r = roles();
 	let err = cat.validate(st, r);
@@ -238,7 +280,21 @@ function write_zapret_config_for(st, s, selecting) {
 	if (stat(cd) && readfile(`${cd}/50-dpishell`) != readfile(CUSTOM_SRC))
 		write_atomic(`${cd}/50-dpishell`, readfile(CUSTOM_SRC) ?? '');
 	write_atomic(`${P.run}/pc-rendered.json`, sprintf('%J\n', map(o.pcs ?? [], x => x.id)));
-	return write_atomic(P.zapret_config, cat.render_config(st, r, o)) ? null : 'Не удалось записать config zapret';
+	let text = cat.render_config(st, r, o);
+	if (selecting)
+		return write_atomic(P.trial_config, text) ? null : 'Не удалось записать config zapret';
+	unlink(P.trial_config);
+	return write_if_changed(P.zapret_config, text) ? null : 'Не удалось записать config zapret';
+}
+
+// Окружение для init.d zapret: во время подбора — config кандидата из ОЗУ (zapret v72: ZAPRET_CONFIG в init.d/openwrt/functions).
+function zapret_env() {
+	return root_file(P.trial_config) ? `ZAPRET_CONFIG=${P.trial_config} ` : '';
+}
+
+// Config, с которым сейчас работает zapret (имитация DPI в эмуляторе читает профили nfqws).
+function active_config() {
+	return root_file(P.trial_config) ? P.trial_config : P.zapret_config;
 }
 
 // То же по id из каталогов.
@@ -280,6 +336,7 @@ function last_off() {
 	return o ? { ...o, at: iso(o.at) } : null;
 }
 
+// status.json: файл в ОЗУ (P.pub_status), в /www/dpishell — ссылка на него (создаётся один раз; uhttpd отдаёт ссылки).
 function write_status_json() {
 	let s = settings(), lc = last_check();
 	let pub = {
@@ -288,8 +345,17 @@ function write_status_json() {
 		checked_at: iso(lc?.at), last_check_ok: lc?.ok,
 		pending_confirm: pending_confirm(), last_off: s.enabled ? null : last_off(),
 	};
-	write_atomic(P.status_json, sprintf('%J\n', pub));
-	chmod(P.status_json, 0o644);
+	if (!own_dir(P.pub, 0o755))
+		return;
+	write_if_changed(P.pub_status, sprintf('%J\n', pub));
+	chmod(P.pub_status, 0o644);
+	if (readlink(P.status_json) != P.pub_status) {
+		own_dir('/www/dpishell', 0o755);
+		let tl = `${P.status_json}.lnk`;
+		unlink(tl);
+		if (!symlink(P.pub_status, tl) || !rename(tl, P.status_json))
+			unlink(tl);
+	}
 }
 
 // Замки фоновых заданий /tmp/dpishell/<имя>.lock (security-audit-router №4, №7, 2.1):
@@ -383,8 +449,8 @@ function valid_subnet_line(l) {
 
 export {
 	P, VERSION, API, MIN_APP, MODES, HOURS, USER_LISTS,
-	ensure_dirs, own_dir, root_file, write_atomic, read_json, job_reserve, job_lock, uci_set, settings, roles, catalog, user_catalog, found_catalog, catalogs,
+	ensure_dirs, own_dir, root_file, write_atomic, write_if_changed, read_json, zapret_env, active_config, job_reserve, job_lock, uci_set, settings, roles, catalog, user_catalog, found_catalog, catalogs,
 	write_zapret_config, write_zapret_config_for, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running, iso,
 	PENDING, LAST_OFF, WATCHDOG_SELECT, pending_confirm, last_off, ADVANCED, ADV_OTHERS, advanced,
-	PC_LINKS, PC_MAX, PC_TTL, pc_links, pc_active, pc_split
+	PC_LINKS, PC_EXPIRY, PC_MAX, PC_TTL, pc_links, pc_active, pc_split
 };

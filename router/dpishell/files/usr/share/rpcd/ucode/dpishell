@@ -132,20 +132,40 @@ function guard_status(s) {
 		select: ws ? { at: st.iso(ws.at), ok: !!ws.ok, best: ws.best ?? null } : null };
 }
 
+// Медленные факты для status.warnings (обход /proc, процессы uci, sh network.sh + ip, df): страница зовёт status раз
+// в 1–10 с — считаем не чаще раза в 60 с; во время подбора не пересчитываем (мешало бы замерам). Сбрасывают conflict_stop
+// и flow_offload_fix. Модуль rpcd живёт между вызовами — кеш в памяти, без записи в файлы.
+const FACTS_TTL = 60;
+let facts_memo = null;
+
+function slow_facts() {
+	let now = time();
+	if (facts_memo && (now - facts_memo.at < FACTS_TTL || st.job_running('select')))
+		return facts_memo;
+	facts_memo = { at: now, conflicts: filter(dg.conflicts(), c => c.running), flow_offload: dg.flow_offload(),
+		ipv6_wan: dg.ipv6_wan(), overlay_free_kb: dg.overlay_free_kb() };
+	return facts_memo;
+}
+
 function warnings(s) {
 	let w = [];
+	let f = slow_facts();
 	// key/params — ключ общего словаря и сырые параметры (router-api.md §9, 2026-10-20); text — для старых окон.
 	if (!st.core_installed())
 		push(w, { code: 'core_missing', text: 'Ядро zapret не установлено', key: 'web.core.missing', params: {} });
-	let running = filter(dg.conflicts(), c => c.running);
+	let running = f.conflicts;
 	if (length(running)) {
 		let names = join(', ', map(running, c => c.name));
 		push(w, { code: 'conflict', text: `Мешает похожая программа: ${names}`, key: 'web.warn.conflict', params: { names } });
 	}
-	if (dg.flow_offload())
+	if (f.flow_offload)
 		push(w, { code: 'flow_offload', text: 'Ускорение сети мешает оптимизации', key: 'router.warn.flow_offload', params: {} });
-	if (!s.ipv6 && dg.ipv6_wan())
+	if (!s.ipv6 && f.ipv6_wan)
 		push(w, { code: 'ipv6', text: 'Сайты по IPv6 идут мимо оптимизации', key: 'router.warn.ipv6', params: {} });
+	// Флеш почти полон (с r14): настройки, в т.ч. выключение, могут не сохраниться.
+	if (f.overlay_free_kb != null && f.overlay_free_kb < 1024)
+		push(w, { code: 'flash_full', text: `Во флеше роутера почти нет места (${f.overlay_free_kb} КБ) — настройки могут не сохраниться`,
+			key: 'web.warn.flash_full', params: { kb: f.overlay_free_kb } });
 	for (let x in st.read_json(`${st.P.run}/warnings.json`, []))
 		push(w, x);
 	let off = s.enabled ? null : st.last_off();
@@ -336,6 +356,7 @@ const methods = {
 				return { changed: false, flowoffload: s.flowoffload };
 			let mode = hw ? 'hardware' : 'software';
 			let r = sh('uci set firewall.@defaults[0].flow_offloading=0 && uci set firewall.@defaults[0].flow_offloading_hw=0 && uci commit firewall');
+			facts_memo = null;
 			if (r.rc != 0)
 				return err('failed', `firewall: ${trim(r.out)}`);
 			st.uci_set({ flowoffload: mode, fw_offload_prev: mode });
@@ -626,7 +647,8 @@ methods.advanced_set = {
 			push(out, { domains: clean, strategy: sid, ...(sid == 'auto' && old?.resolved ? { resolved: old.resolved } : {}) });
 		}
 		let s = st.settings(), before = { enabled: s.enabled, strategy: s.strategy };
-		let prev_file = st.read_json(st.ADVANCED, null) ?? { enabled: false, others: 'lists', rows: [] };
+		// Файла не было — откат (advanced_revert) его уберёт, а не оставит пустые настройки (absent).
+		let prev_file = st.read_json(st.ADVANCED, null) ?? { enabled: false, others: 'lists', rows: [], absent: true };
 		st.ensure_dirs();
 		if (!st.write_atomic(st.ADVANCED, sprintf('%J\n', { enabled: a.enabled, others: a.others, rows: out })))
 			return err('failed', 'Не удалось сохранить');
@@ -651,7 +673,7 @@ methods.advanced_revert = {
 		let prev = st.read_json(`${st.ADVANCED}.prev`, null);
 		if (!prev)
 			return { nothing: true };
-		if (!st.write_atomic(st.ADVANCED, sprintf('%J\n', prev)))
+		if (prev.absent ? (!unlink(st.ADVANCED) && stat(st.ADVANCED)) : !st.write_atomic(st.ADVANCED, sprintf('%J\n', prev)))
 			return err('failed', 'Не удалось сохранить');
 		unlink(`${st.ADVANCED}.prev`);
 		let s = st.settings();
@@ -680,7 +702,18 @@ function pc_save(items) {
 	// Истёкшие больше 7 дней назад — удаляются.
 	items = filter(items, x => x.expires_at > time() - 7 * 86400);
 	st.ensure_dirs();
-	return st.write_atomic(st.PC_LINKS, sprintf('%J\n', { items }));
+	let ok = st.write_atomic(st.PC_LINKS, sprintf('%J\n', { items }));
+	// Сроки во флеше теперь свежие — копия в ОЗУ не нужна (pc_renew).
+	if (ok) unlink(st.PC_EXPIRY);
+	return ok;
+}
+
+// Продление без перемен (pc_link_set раз в 30 мин): срок — только в ОЗУ, флеш не трогаем.
+function pc_renew(it) {
+	st.ensure_dirs();
+	let ex = st.read_json(st.PC_EXPIRY, {});
+	ex[it.id] = { seen_at: it.seen_at, expires_at: it.expires_at };
+	return st.write_atomic(st.PC_EXPIRY, sprintf('%J\n', ex));
 }
 
 methods.pc_link_set = {
@@ -714,7 +747,7 @@ methods.pc_link_set = {
 		let now = time(), it = { id, macs: m2, domains: d2, seen_at: now, expires_at: now + st.PC_TTL };
 		let was_active = old && old.expires_at > now;
 		let changed = !was_active || join(',', old.macs) != join(',', m2) || join(',', old.domains) != join(',', d2);
-		if (!pc_save([...filter(items, x => x.id != id), it]))
+		if (!(changed ? pc_save([...filter(items, x => x.id != id), it]) : pc_renew(it)))
 			return err('failed', 'Не удалось сохранить');
 		let e = pc_apply(changed);
 		if (e) return e;
@@ -776,6 +809,7 @@ methods.conflict_stop = {
 	args: { name: 'name' },
 	call: function(req) {
 		let e = dg.conflict_stop(req.args.name);
+		facts_memo = null;
 		return e ? err('invalid', e, 'name') : {};
 	}
 };

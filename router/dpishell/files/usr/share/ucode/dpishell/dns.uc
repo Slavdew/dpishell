@@ -3,7 +3,7 @@
 // dnsmasq (проверено в эмуляторе). Вариант только с обычным DNS — серверы dnsmasq, прокси выключен.
 'use strict';
 
-import { readfile, stat, popen } from 'fs';
+import { readfile, stat, popen, unlink } from 'fs';
 import { cursor } from 'uci';
 import * as st from 'dpishell.state';
 import * as pr from 'dpishell.probe';
@@ -15,6 +15,7 @@ const NEUTRAL = ['example.com', 'wikipedia.org'];
 // Запрос A example.com в формате RFC 8484 (GET ?dns=): понимают все DoH-серверы, в отличие от JSON.
 const PROBE_QUERY = 'AAABAAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE';
 const FIRST_PORT = 5053;
+const PROXY_CONF = '/etc/config/https-dns-proxy';
 
 function sh(cmd) {
 	let p = popen(`${cmd} 2>&1`);
@@ -275,13 +276,24 @@ function restore() {
 	// Пакет и его настройки убираем, только если ставили сами. Копия до r12 (без proxy) — как раньше: прокси наш.
 	// Копии нет — DNS не меняли; прокси убираем, лишь если включён наш вариант.
 	let ours = b ? !b.proxy?.installed : (cursor().get('dpishell', 'main', 'dns_preset') ?? 'provider') != 'provider';
-	if (b?.proxy?.installed && stat('/etc/init.d/https-dns-proxy'))
-		proxy_put_back(b.proxy);
-	else if (ours) {
+	let theirs = b?.proxy?.installed && stat('/etc/init.d/https-dns-proxy');
+	if (!theirs && ours) {
 		if (stat('/etc/init.d/https-dns-proxy'))
 			sh('/etc/init.d/https-dns-proxy stop; /etc/init.d/https-dns-proxy disable');
 		pkg('remove', 'https-dns-proxy');
+		// Настройки прокси — как до нас: apk при удалении оставляет изменённый файл настроек.
+		if (b?.proxy && exists(b.proxy, 'config')) {
+			if (b.proxy.config != null)
+				st.write_atomic(PROXY_CONF, b.proxy.config);
+			else
+				unlink(PROXY_CONF);
+			unlink(`${PROXY_CONF}.apk-new`);
+		}
 	}
+	// Чужой прокси останавливаем до возврата dnsmasq (stop сам возвращает свои правки dnsmasq), а запускаем — после:
+	// при запуске он снова пропишет себя в dnsmasq, как было до нас.
+	if (theirs)
+		sh('/etc/init.d/https-dns-proxy stop');
 	if (b) {
 		let c = cursor();
 		let sec = b.section ?? c.get_first('dhcp', 'dnsmasq');
@@ -290,14 +302,17 @@ function restore() {
 		if (b.noresolv != null) c.set('dhcp', sec, 'noresolv', b.noresolv);
 		if (b.server != null) c.set('dhcp', sec, 'server', b.server);
 		c.commit('dhcp');
-		if (b.peerdns != null) { c.set('network', 'wan', 'peerdns', b.peerdns); c.commit('network'); }
+		if (b.peerdns != null && c.get('network', 'wan', 'peerdns') != b.peerdns) { c.set('network', 'wan', 'peerdns', b.peerdns); c.commit('network'); }
 	}
+	if (theirs)
+		proxy_put_back(b.proxy);
 	// После удаления пакета dnsmasq сам не перезапускается — DNS роутера пропадает (проверено в эмуляторе).
 	let ok = dnsmasq_restart_checked();
 	sh('rm -f /tmp/dpishell/dns-fallback');
 	if (ok) {
 		sh(`rm -f ${q(BACKUP)}`);
-		st.uci_set({ dns_preset: 'provider' });
+		// «Как было» — без своей записи (по умолчанию и так провайдер): настройки — как до первого изменения DNS.
+		st.uci_set({ dns_preset: null });
 		return null;
 	}
 	return 'DNS роутера не отвечает после возврата — перезагрузите роутер';
@@ -310,9 +325,11 @@ function backup() {
 	let c = cursor();
 	let sec = c.get_first('dhcp', 'dnsmasq');
 	// Прокси, поставленный до нас: его секции и включён ли — restore вернёт их, а пакет не удалит.
+	// Прокси нет, а его настройки остались (пакет удаляли, apk оставил изменённый файл): файл как есть — restore вернёт
+	// его (config: null — файла не было, restore уберёт созданный нами). С r14.
 	let px = stat('/etc/init.d/https-dns-proxy')
 		? { installed: true, enabled: sh('/etc/init.d/https-dns-proxy enabled').rc == 0, sections: proxy_sections() }
-		: { installed: false };
+		: { installed: false, config: readfile(PROXY_CONF) };
 	st.write_atomic(BACKUP, sprintf('%J\n', {
 		at: time(), section: sec,
 		noresolv: c.get('dhcp', sec, 'noresolv'), server: c.get('dhcp', sec, 'server'),

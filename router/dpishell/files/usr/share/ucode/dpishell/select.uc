@@ -21,9 +21,10 @@ function nfqws_pid() { return trim(sh('pidof nfqws').out); }
 
 // init.d zapret возвращается раньше, чем procd поднимет nfqws (в эмуляторе — 1–2 с): ждём новый процесс,
 // иначе проверка идёт без обхода и даёт ложный провал. busybox sleep дробных секунд не понимает — sleep() ucode, мс.
+// Во время подбора config кандидата — в ОЗУ (st.zapret_env: ZAPRET_CONFIG), во флеш пишется только итог.
 function zapret_restart() {
 	let old = nfqws_pid();
-	let r = sh('/etc/init.d/zapret restart');
+	let r = sh(`${st.zapret_env()}/etc/init.d/zapret restart`);
 	if (r.rc != 0)
 		return trim(r.out);
 	for (let i = 0; i < 80; i++) {
@@ -180,6 +181,19 @@ function ts_set(v) { writefile('/proc/sys/net/ipv4/tcp_timestamps', `${v}\n`); }
 
 function progress(p) { st.write_atomic(PROGRESS, sprintf('%J\n', p)); }
 
+// stats.json — только стратегии, что есть в каталогах (удалённые свои и найденные не копятся); во флеш — только если изменился.
+function stats_save(stats) {
+	let known = {};
+	for (let c in st.catalogs())
+		for (let x in c.strategies)
+			known[x.id] = true;
+	let out = {};
+	for (let id in stats)
+		if (known[id])
+			out[id] = stats[id];
+	st.write_if_changed(`${st.P.etc}/stats.json`, sprintf('%J\n', out));
+}
+
 function cancel_requested() {
 	if (!stat(CANCEL))
 		return false;
@@ -276,7 +290,7 @@ function finish(p, rows, groups, s, ts_was, restore) {
 		if (r.perfect) x.passed++;
 		x.last = last_of(!!r.perfect, map(filter(r.verdicts ?? [], v => !v.ok), v => v.group));
 	}
-	st.write_atomic(`${st.P.etc}/stats.json`, sprintf('%J\n', stats));
+	stats_save(stats);
 	ts_set(ts_was);
 	if (length(ranked)) {
 		let best = ranked[0], backups = map(slice(ranked, 1, 4), r => r.id);
@@ -300,7 +314,7 @@ function finish(p, rows, groups, s, ts_was, restore) {
 	p.running = false;
 	p.finished_at = time();
 	progress(p);
-	st.write_atomic(`${st.P.etc}/results/${p.finished_at}.json`, sprintf('%J\n', { ...p, groups: map(groups, g => g.id) }));
+	// Итог — только в /tmp/dpishell/select.json: архив подборов во флеше (results/) не читал никто, а рос без предела.
 	st.write_status_json();
 	return p;
 }
@@ -314,7 +328,7 @@ function finish_ids(p, rows, groups, ts_was, restore) {
 		if (r.perfect) x.passed++;
 		x.last = last_of(!!r.perfect, map(filter(r.verdicts ?? [], v => !v.ok), v => v.group));
 	}
-	st.write_atomic(`${st.P.etc}/stats.json`, sprintf('%J\n', stats));
+	stats_save(stats);
 	restore();
 	let ok = filter(rows, r => r.perfect);
 	p.best = length(ok) ? ok[0].id : null;
@@ -334,6 +348,8 @@ const SEARCH_REFINE = 30, SEARCH_CONTROL_EVERY = 10;
 // Предел глубокого поиска — «до 15 мин», как на ПК (матрица ПК×роутер п. 25): перебор приёмов — до 13 мин, остальное —
 // полная проверка собранных. Живой замер у владельца — 10,4 мин (2026-10-20).
 const SEARCH_MAX_S = 13 * 60;
+// Предел обычного подбора: в худшем случае 20 стратегий × 2,5 мин — почти час нестабильной сети у всех в доме.
+const SELECT_MAX_S = 20 * 60;
 const SEARCH_LIMITED = 'Провайдер, похоже, временно ограничил соединения — продолжите поиск позже';
 
 function same_roles(a, b) {
@@ -653,9 +669,12 @@ function select_run(args) {
 		ts_set(ts_was);
 		if (prev.enabled && prev.strategy)
 			zapret_apply(prev.strategy, s);
-		else
+		else {
 			zapret_stop();
+			unlink(st.P.trial_config);
+		}
 	};
+	let t_start = time();
 	let cancelled = () => {
 		restore();
 		p = { ...p, running: false, cancelled: true, applied: false, finished_at: time() };
@@ -709,6 +728,11 @@ function select_run(args) {
 	for (let i = 0; i < length(list); i++) {
 		if (cancel_requested())
 			return cancelled();
+		// Общий предел обычного подбора (у глубокого — свой, SEARCH_MAX_S): итог — из уже проверенных.
+		if (!deep && !ids && i > 0 && time() - t_start > SELECT_MAX_S) {
+			note = 'Подбор ограничен 20 минутами', note_key = 'web.msg.select_time_limit';
+			break;
+		}
 		let strat = list[i];
 		p.index = start + i + 1;
 		say(p, 'web.msg.checking', `${strat.title ?? strat.id}`, { name: strat.title ?? strat.id });
@@ -784,13 +808,23 @@ function check_run(source, light) {
 	let sc = score(groups, verdicts);
 	let lc = { at: time(), source, ok: sc.perfect, groups: map(filter(groups, g => !g.control), g => ({
 		id: g.id, ok: length(filter(verdicts, v => v.group == g.id && v.required && !v.ok)) == 0 })) , error: sc.error };
-	st.write_atomic(`${st.P.etc}/last-check.json`, sprintf('%J\n', lc));
+	// Флеш — только при перемене (проверка по таймеру раз в час иначе переписывала бы 4 файла): свежая запись — в /tmp
+	// (st.last_check читает её первой), во флеш — если сменился итог или группы, нет файла или проверку запустил человек.
+	st.write_atomic(`${st.P.run}/last-check.json`, sprintf('%J\n', lc));
+	let flash = st.read_json(`${st.P.etc}/last-check.json`, null);
+	if (source != 'timer' || flash?.ok != lc.ok || sprintf('%J', flash?.groups) != sprintf('%J', lc.groups) || flash?.error != lc.error)
+		st.write_atomic(`${st.P.etc}/last-check.json`, sprintf('%J\n', lc));
 	let stats = st.read_json(`${st.P.etc}/stats.json`, {});
-	(stats[s.strategy] ??= { runs: 0, passed: 0 }).last = last_of(!!sc.perfect,
-		map(filter(verdicts, v => v.required && !v.ok), v => v.group));
-	st.write_atomic(`${st.P.etc}/stats.json`, sprintf('%J\n', stats));
-	let streak = lc.ok ? 0 : st.read_json(`${st.P.etc}/fail-streak.json`, 0) + 1;
-	st.write_atomic(`${st.P.etc}/fail-streak.json`, `${streak}\n`);
+	let x = stats[s.strategy] ??= { runs: 0, passed: 0 };
+	let last = last_of(!!sc.perfect, map(filter(verdicts, v => v.required && !v.ok), v => v.group));
+	if (source != 'timer' || x.last?.ok != last.ok || sprintf('%J', x.last?.failed) != sprintf('%J', last.failed)) {
+		x.last = last;
+		stats_save(stats);
+	}
+	let was = st.read_json(`${st.P.etc}/fail-streak.json`, 0);
+	let streak = lc.ok ? 0 : was + 1;
+	if (streak != was)
+		st.write_atomic(`${st.P.etc}/fail-streak.json`, `${streak}\n`);
 	st.write_status_json();
 	return { last_check: lc, fail_streak: streak };
 }

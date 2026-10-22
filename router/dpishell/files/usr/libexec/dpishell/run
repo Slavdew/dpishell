@@ -8,7 +8,7 @@
 //   run revert [now]           — откат включения, не подтверждённого вовремя (confirm_s)
 'use strict';
 
-import { writefile, readfile, stat, unlink } from 'fs';
+import { writefile, readfile, stat, lstat, lsdir, unlink, rmdir } from 'fs';
 import * as st from 'dpishell.state';
 import * as sel from 'dpishell.select';
 import * as core from 'dpishell.core';
@@ -97,17 +97,21 @@ function guard() {
 	let ctl = filter(sel.load_groups(null, s.mode), g => g.control)[0];
 	let targets = slice(filter(ctl?.targets ?? [], t => t.required !== false && !excluded(t.url)), 0, 3);
 	if (!length(targets)) { unlink(l); return; }
+	// Адреса целей (DoH) — на час в guard.json: не лишний запрос к 8.8.8.8 каждые 5 мин. При неудаче — узнать заново.
+	let dns = (time() - (gs.dns_at ?? 0) < 3600 && type(gs.dns) == 'object') ? gs.dns : {};
+	let dns_at = length(dns) ? gs.dns_at : time();
 	// По одной цели и до первой открывшейся: при живом интернете — одно рукопожатие.
 	let probe = () => {
 		let res = [];
 		for (let t in targets) {
-			let r = pr.check_batch([{ target: { ...t, handshake_only: true }, tls: '1.3' }], { parallel: 1, connect_s: 3, read_s: 2 })[0];
+			let r = pr.check_batch([{ target: { ...t, handshake_only: true }, tls: '1.3' }], { parallel: 1, connect_s: 3, read_s: 2, dns_cache: dns })[0];
 			push(res, r);
 			if (r.ok) break;
 		}
 		return res;
 	};
-	let save = (ok, extra) => st.write_atomic(G, sprintf('%J\n', { fails: 0, interval: 5, next_at: 0, ...(extra ?? {}), checked_at: time(), ok }));
+	let save = (ok, extra) => st.write_atomic(G, sprintf('%J\n', { fails: 0, interval: 5, next_at: 0, ...(extra ?? {}), checked_at: time(), ok,
+		...(ok ? { dns, dns_at } : {}) }));
 	let r = probe();
 	if (length(filter(r, x => x.ok))) {
 		save(true);
@@ -155,12 +159,33 @@ function pc_refresh() {
 		system('/etc/init.d/zapret restart >/dev/null 2>&1');
 }
 
+// Остатки в ОЗУ после прерванных заданий (tick, старт пакета). Только свои пути в своём /tmp/dpishell (0700, root),
+// без перехода по ссылкам: каталоги проб probe-<время>-<n> старше часа (задание убито — свои файлы не убрало), config
+// кандидата, когда подбор не идёт, zip и распаковка ядра после неудачи, папка обновления окна ПК старше часа.
+function cleanup_tmp() {
+	for (let f in lsdir(st.P.run) ?? []) {
+		if (!match(f, /^probe-[0-9]+-[0-9]+$/))
+			continue;
+		let d = `${st.P.run}/${f}`, s = lstat(d);
+		if (s?.type != 'directory' || time() - s.mtime < 3600)
+			continue;
+		for (let x in lsdir(d) ?? [])
+			unlink(`${d}/${x}`);
+		rmdir(d);
+	}
+	if (!st.job_running('select'))
+		unlink(st.P.trial_config);
+	try { core.cleanup_tmp(); } catch (x) {}
+	try { upd.local_cleanup(3600); } catch (x) {}
+}
+
 // Задания, чей процесс умер (убит, перезагрузка), остаются «идёт» навсегда — закрыть по факту (tick, старт пакета).
 function recover_jobs() {
 	try { upd.recover(); } catch (x) {}
 	let dj = st.read_json('/tmp/dpishell/dns_job.json', null);
 	if (dj?.running && !st.job_running('dns'))
 		st.write_atomic('/tmp/dpishell/dns_job.json', sprintf('%J\n', { ...dj, running: false, ok: false, message: 'Задание прервалось', at: time() }));
+	cleanup_tmp();
 }
 
 // Проверка по таймеру, DNS и обновления (бывший cron run watch раз в 30 мин).
@@ -174,8 +199,8 @@ function watch() {
 	else if (dw == 'dns_back') warn('dns_fallback', null);
 	let s = st.settings();
 	if (!s.schedule.enabled || !s.enabled || st.job_running('select')) return;
-	// Интервал выдерживаем сами: cron зовёт каждые 30 мин.
-	let last = st.read_json(`${st.P.etc}/last-check.json`, null);
+	// Интервал выдерживаем сами: cron зовёт каждые 30 мин. Свежая запись — в /tmp (во флеш — только перемены, select.uc).
+	let last = st.last_check();
 	if (last && time() - last.at < s.schedule.hours * 3600 - 120) return;
 	let l = lock('check');
 	if (!l) return;
@@ -256,7 +281,9 @@ else if (cmd == 'revert') {
 			if (cur?.token != p.token) exit(0);
 		}
 	// Прежние настройки продвинутого режима (advanced_set с confirm_s) — до записи config.
-	if (p.advanced != null)
+	if (p.advanced?.absent)
+		unlink(st.ADVANCED);
+	else if (p.advanced != null)
 		st.write_atomic(st.ADVANCED, sprintf('%J\n', p.advanced));
 	if (p.revert_to == 'off')
 		system('/usr/libexec/dpishell/off revert');
@@ -328,6 +355,9 @@ else if (cmd == 'update' || cmd == 'update_check') {
 	} catch (x) { e = `${x}`; }
 	upd.job_put(job, { running: false, step: 'done', ok: !e,
 		message: e ?? (cmd == 'update' ? `Обновлено до ${upd.installed_version('dpishell')}` : 'Проверено') });
+	// Пакеты из окна ПК после установки (успешной или нет) — не нужны: при повторе окно кладёт их заново.
+	if (cmd == 'update' && from == 'local')
+		try { upd.local_cleanup(0, true); } catch (x) {}
 	unlink(l);
 }
 else {
