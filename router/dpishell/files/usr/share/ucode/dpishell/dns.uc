@@ -238,11 +238,50 @@ function clean_backup(b) {
 	return b;
 }
 
+// Секции https-dns-proxy как есть (для копии до первого изменения): прокси мог стоять и быть настроен до DpiShell.
+function proxy_sections() {
+	let c = cursor(), out = [];
+	c.load('https-dns-proxy');
+	c.foreach('https-dns-proxy', 'https-dns-proxy', s => {
+		let o = {};
+		for (let k in s)
+			if (substr(k, 0, 1) != '.')
+				o[k] = s[k];
+		push(out, o);
+	});
+	return out;
+}
+
+// Вернуть прокси, поставленный не нами (security-audit-router №6): его секции и включён/выключен — как в копии.
+function proxy_put_back(px) {
+	let c = cursor();
+	c.load('https-dns-proxy');
+	let old = [];
+	c.foreach('https-dns-proxy', 'https-dns-proxy', s => { push(old, s['.name']); });
+	for (let n in old)
+		c.delete('https-dns-proxy', n);
+	for (let o in px.sections ?? []) {
+		let n = c.add('https-dns-proxy', 'https-dns-proxy');
+		for (let k in o)
+			c.set('https-dns-proxy', n, k, o[k]);
+	}
+	c.commit('https-dns-proxy');
+	sh(px.enabled ? '/etc/init.d/https-dns-proxy enable; /etc/init.d/https-dns-proxy restart'
+		: '/etc/init.d/https-dns-proxy stop; /etc/init.d/https-dns-proxy disable');
+}
+
 function restore() {
 	let b = clean_backup(st.read_json(BACKUP, null));
-	if (stat('/etc/init.d/https-dns-proxy'))
-		sh('/etc/init.d/https-dns-proxy stop; /etc/init.d/https-dns-proxy disable');
-	pkg('remove', 'https-dns-proxy');
+	// Пакет и его настройки убираем, только если ставили сами. Копия до r12 (без proxy) — как раньше: прокси наш.
+	// Копии нет — DNS не меняли; прокси убираем, лишь если включён наш вариант.
+	let ours = b ? !b.proxy?.installed : (cursor().get('dpishell', 'main', 'dns_preset') ?? 'provider') != 'provider';
+	if (b?.proxy?.installed && stat('/etc/init.d/https-dns-proxy'))
+		proxy_put_back(b.proxy);
+	else if (ours) {
+		if (stat('/etc/init.d/https-dns-proxy'))
+			sh('/etc/init.d/https-dns-proxy stop; /etc/init.d/https-dns-proxy disable');
+		pkg('remove', 'https-dns-proxy');
+	}
 	if (b) {
 		let c = cursor();
 		let sec = b.section ?? c.get_first('dhcp', 'dnsmasq');
@@ -270,10 +309,14 @@ function backup() {
 		return;
 	let c = cursor();
 	let sec = c.get_first('dhcp', 'dnsmasq');
+	// Прокси, поставленный до нас: его секции и включён ли — restore вернёт их, а пакет не удалит.
+	let px = stat('/etc/init.d/https-dns-proxy')
+		? { installed: true, enabled: sh('/etc/init.d/https-dns-proxy enabled').rc == 0, sections: proxy_sections() }
+		: { installed: false };
 	st.write_atomic(BACKUP, sprintf('%J\n', {
 		at: time(), section: sec,
 		noresolv: c.get('dhcp', sec, 'noresolv'), server: c.get('dhcp', sec, 'server'),
-		peerdns: c.get('network', 'wan', 'peerdns'),
+		peerdns: c.get('network', 'wan', 'peerdns'), proxy: px,
 	}));
 }
 

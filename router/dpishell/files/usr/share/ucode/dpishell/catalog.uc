@@ -13,7 +13,9 @@ function load_json(path) {
 	let text = readfile(path);
 	if (text == null)
 		die(`нет файла ${path}`);
-	return json(text);
+	// Повреждённый файл пакета — с именем файла, а не «неизвестной ошибкой» каждого вызова.
+	try { return json(text); }
+	catch (e) { die(`файл ${path} повреждён: ${e}`); }
 }
 
 function index_of(arr, v) {

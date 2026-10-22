@@ -46,12 +46,14 @@ function manifest() {
 
 // Скачать zip: основной адрес, затем зеркала; принимается только файл с хешем из манифеста.
 function download(m, progress) {
-	mkdir('/tmp/dpishell', 0o700);
+	st.own_dir('/tmp/dpishell', 0o700);
 	mkdir(TMP, 0o700);
 	if (stat(ZIP) && sha256(ZIP) == m.zip_sha256)
 		return null;
 	// Архив, загруженный через веб-вход (cgi-upload пишет только в путь из ACL пакета, router-api.md §5.5).
-	if (stat(UPLOADED) && sha256(UPLOADED) == m.zip_sha256 && sh(`mv -f ${q(UPLOADED)} ${q(ZIP)}`).rc == 0)
+	// Только обычный файл root (его пишет cgi-upload LuCI): ссылка или файл другого пользователя мог бы смениться после сверки.
+	if (st.root_file(UPLOADED) && sha256(UPLOADED) == m.zip_sha256 && sh(`mv -f ${q(UPLOADED)} ${q(ZIP)}`).rc == 0 &&
+	    sha256(ZIP) == m.zip_sha256)
 		return null;
 	let tried = [];
 	for (let url in [m.zip_url, ...(m.mirror_urls ?? [])]) {

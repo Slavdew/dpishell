@@ -2,8 +2,10 @@
 'require view';
 'require ui';
 'require poll';
-'require dom';
 'require dpishell.api as api';
+
+// Строки — только текстом: свой E вместо LuCI (api.js, tools/xss-check.py).
+var E = api.E;
 
 // Вкладка «Подбор» (architecture.md «Подбор на роутере»): запуск, ход, итог. Названия — как в окне ПК (матрица ПК×роутер).
 
@@ -87,8 +89,8 @@ return view.extend({
 
 		if (p.__error) {
 			this.el.head.textContent = api.t('web.select.not_started');
-			dom.content(this.el.actions, [this.startBtn()]);
-			dom.content(this.el.body, api.errorLine(p.__error));
+			api.content(this.el.actions, [this.startBtn()]);
+			api.content(this.el.body, api.errorLine(p.__error));
 			return;
 		}
 
@@ -98,9 +100,9 @@ return view.extend({
 			if (p.total)
 				head += ' ' + api.t('router.select.progress', { index: Math.min(p.index || 1, p.total), total: p.total });
 			this.el.head.textContent = head + eta;
-			dom.content(this.el.actions, [api.btn(api.t('select.stop'), function() { return self.cancel(); }, 'cbi-button-remove')]);
+			api.content(this.el.actions, [api.btn(api.t('select.stop'), function() { return self.cancel(); }, 'cbi-button-remove')]);
 			var m = api.msg(p.message_msg || p.message);
-			dom.content(this.el.body, [
+			api.content(this.el.body, [
 				m ? api.line(m, 'dps-muted') : '',
 				this.table(p, false)
 			]);
@@ -109,8 +111,8 @@ return view.extend({
 
 		if (!p.finished_at && !(p.rows && p.rows.length)) {
 			this.el.head.textContent = api.t('diag.results.none');
-			dom.content(this.el.actions, [this.startBtn()]);
-			dom.content(this.el.body, []);
+			api.content(this.el.actions, [this.startBtn()]);
+			api.content(this.el.body, []);
 			return;
 		}
 
@@ -133,12 +135,12 @@ return view.extend({
 		var actions = [this.startBtn()];
 		if (!p.cancelled && p.depth != 'deep' && !(p.ids && p.ids.length) && (p.rows || []).length && !this.allOpened(p))
 			actions.push(this.deepBtn(p));
-		dom.content(this.el.actions, actions);
+		api.content(this.el.actions, actions);
 
 		// Стратегии не проверялись (блокировок нет, подбор прервался) — без пустой таблицы: «завершён» и «пока ни одна
 		// не проверена» противоречили друг другу (ux-audit-web п.12).
 		if (!(p.rows && p.rows.length) && !p.best) {
-			dom.content(this.el.body, sub ? api.line(sub, 'dps-muted') : []);
+			api.content(this.el.body, sub ? api.line(sub, 'dps-muted') : []);
 			return;
 		}
 
@@ -150,7 +152,7 @@ return view.extend({
 		if (p.backups && p.backups.length)
 			kids.push(api.line(api.t('router.apply.backups', { list: p.backups.map(function(id) { return self.title(p, id); }).join(', ') }), 'dps-muted'));
 		kids.push(this.table(p, !p.cancelled));
-		dom.content(this.el.body, kids);
+		api.content(this.el.body, kids);
 	},
 
 	// Лучшая открыла все группы — глубже искать незачем.

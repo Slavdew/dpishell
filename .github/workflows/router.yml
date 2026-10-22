@@ -48,6 +48,12 @@ jobs:
       - name: Язык страниц — ключи, подстановки, общие тексты с окном ПК
         run: python3 router/tools/lang-build.py --check
 
+      - name: Страницы — строки только текстом (не HTML)
+        run: python3 router/tools/xss-check.py
+
+      - name: Ключ выпуска в пакете совпадает с packaging/keys
+        run: python3 router/tools/release-key-check.py
+
       - name: Пакеты в дерево SDK, данные из data/
         run: |
           SDK=/builder
@@ -131,10 +137,14 @@ jobs:
           openssl pkey -pubin -in packaging/keys/release-ed25519.pem -pubout | cmp -s - secret.pub \
             || { rm -f key.pem; echo 'ключ в секрете не соответствует packaging/keys/release-ed25519.pem'; exit 1; }
           openssl pkeyutl -sign -inkey key.pem -rawin -in site/data/data.json | base64 -w0 > site/data/data.json.sig
+          # release.json витрины — тоже с подписью: роутер показывает заметки к обновлению только с верной (update.uc, usign).
+          openssl pkeyutl -sign -inkey key.pem -rawin -in site/feed/release.json | base64 -w0 > site/feed/release.json.sig
           rm -f key.pem secret.pub
-          base64 -d site/data/data.json.sig > sig.bin
-          openssl pkeyutl -verify -pubin -inkey packaging/keys/release-ed25519.pem -rawin -in site/data/data.json -sigfile sig.bin \
-            || { echo 'подпись data.json не прошла проверку'; exit 1; }
+          for f in site/data/data.json site/feed/release.json; do
+            base64 -d $f.sig > sig.bin
+            openssl pkeyutl -verify -pubin -inkey packaging/keys/release-ed25519.pem -rawin -in $f -sigfile sig.bin \
+              || { echo "подпись $f не прошла проверку"; exit 1; }
+          done
           rm -f sig.bin
 
       - uses: actions/upload-pages-artifact@v3

@@ -21,14 +21,28 @@ OUT=/tmp/dpishell-uninstall.json
 
 say() {
 	[ -n "$PKGS" ] || return 0
-	printf '{"running":%s,"ok":%s,"keep_settings":%s,"message":"%s","at":%s}\n' "$1" "$2" "$([ -n "$KEEP" ] && echo true || echo false)" "$3" "$(date +%s)" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
+	# Временный файл — mktemp: по постоянному имени в общем /tmp чужая ссылка увела бы запись root в другой файл.
+	t=$(mktemp /tmp/dpishell-uninstall.XXXXXX) || return 0
+	printf '{"running":%s,"ok":%s,"keep_settings":%s,"message":"%s","at":%s}\n' "$1" "$2" "$([ -n "$KEEP" ] && echo true || echo false)" "$3" "$(date +%s)" > "$t" &&
+		chmod 644 "$t" && mv -f "$t" "$OUT"
+}
+
+# Остановить задание по замку «PID время_старта» (state.uc): только живой run DpiShell с тем же временем старта —
+# PID мог достаться другому процессу, а замок прежнего формата — содержать что угодно.
+kill_lock() {
+	set -- $(cat "$1" 2>/dev/null)
+	case "$1" in ''|*[!0-9]*) return 0 ;; esac
+	[ "$1" -gt 1 ] || return 0
+	tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null | grep -q 'dpishell/run' || return 0
+	[ -z "$2" ] || [ "$(sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f20)" = "$2" ] || return 0
+	kill "$1" 2>/dev/null
 }
 
 say true null 'Выключаю оптимизацию'
 
 # 1. Фоновые задания (подбор, проверка, DNS) — остановить: подбор держит свой config zapret и метки TCP.
 for l in /tmp/dpishell/*.lock; do
-	[ -f "$l" ] && kill "$(cat "$l")" 2>/dev/null
+	[ -f "$l" ] && kill_lock "$l"
 done
 /etc/init.d/dpishell stop >/dev/null 2>&1
 /etc/init.d/dpishell disable >/dev/null 2>&1
@@ -105,4 +119,6 @@ if [ -n "$PKGS" ]; then
 	fi
 	say false true "$([ -n "$KEEP" ] && echo 'DpiShell удалён, настройки сохранены' || echo 'DpiShell удалён полностью')"
 fi
+# Своя папка, из которой запустил метод uninstall (mktemp в rpcd), — убрать.
+case "$0" in /tmp/dpishell-uninst.*/uninstall.sh) rm -rf "${0%/uninstall.sh}" ;; esac
 exit 0

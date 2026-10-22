@@ -2,8 +2,10 @@
 'require view';
 'require ui';
 'require poll';
-'require dom';
 'require dpishell.api as api';
+
+// Строки — только текстом: свой E вместо LuCI (api.js, tools/xss-check.py).
+var E = api.E;
 
 // Вкладка «Главная» (architecture.md «Страница роутера»; названия — как в окне ПК, матрица ПК×роутер).
 
@@ -207,7 +209,7 @@ return view.extend({
 		var sel = this.el.strategy, items = (this.strategies.items || []).slice();
 		if (this.order == 'name')
 			items.sort(byName);
-		dom.content(sel, []);
+		api.content(sel, []);
 		if (!this.status.strategy)
 			sel.appendChild(E('option', { value: '' }, api.t('web.main.not_selected')));
 		items.forEach(function(it) {
@@ -224,7 +226,7 @@ return view.extend({
 		var it = (this.strategies.items || []).filter(function(x) { return x.id == id; })[0];
 		var roles = it && it.roles ? Object.keys(it.roles) : [];
 		if (!roles.length) {
-			dom.content(this.el.params, []);
+			api.content(this.el.params, []);
 			return;
 		}
 		var text = roles.map(function(r) { return r + ': ' + it.roles[r]; }).join('\n');
@@ -239,7 +241,7 @@ return view.extend({
 				msg.textContent = api.t('router.strategy.copied', { name: api.stratTitle(it.title) });
 			}), msg])
 		]);
-		dom.content(this.el.params, det);
+		api.content(this.el.params, det);
 	},
 
 	setOrder: function(v) {
@@ -280,7 +282,7 @@ return view.extend({
 			var okN = groups.filter(function(g) { return g.ok; }).length;
 			var src = { manual: 'web.src.manual', timer: 'web.src.timer', app: 'web.src.app' }[lc.source];
 			// Итог проверки значками (ux-audit-web п.3) и строкой «Открывается N из M», как на ПК (матрица п. 4).
-			dom.content(this.el.lastCheck, [
+			api.content(this.el.lastCheck, [
 				E('div', { 'class': 'dps-verdicts' }, groups.map(function(g) {
 					return E('span', { 'class': g.ok ? 'dps-v-ok' : 'dps-v-bad' }, (g.ok ? '✓ ' : '✗ ') +
 						(GROUP_KEYS[g.id] ? api.t(GROUP_KEYS[g.id]) : ({ youtube: 'YouTube', discord: 'Discord' }[g.id] || g.id)));
@@ -289,7 +291,7 @@ return view.extend({
 					api.t('web.main.checked', { time: api.time(lc.at) }) + (src ? ' ' + api.t(src) : ''))
 			]);
 		} else
-			dom.content(this.el.lastCheck, []);
+			api.content(this.el.lastCheck, []);
 
 		this.renderUpdate(s.update);
 		// Отсчёт — от left_s, не от until: часы роутера и браузера могут расходиться.
@@ -311,7 +313,7 @@ return view.extend({
 			return;
 		}
 		if (!this.el.confirm.firstChild)
-			dom.content(this.el.confirm, [this.el.confirmText, ' ',
+			api.content(this.el.confirm, [this.el.confirmText, ' ',
 				api.btn(api.t('router.trial.keep'), function() { return self.act('confirm'); }, 'cbi-button-positive')]);
 		this.el.confirmText.textContent = api.t('web.main.trial_ask', { time: '%d:%02d'.format(Math.floor(left / 60), left % 60) });
 		this.el.confirm.style.display = '';
@@ -323,7 +325,7 @@ return view.extend({
 		if (key == this.lastUpdateKey)
 			return;
 		this.lastUpdateKey = key;
-		dom.content(this.el.update, !u || !u.available ? [] : E('div', { 'class': 'alert-message notice' }, [
+		api.content(this.el.update, !u || !u.available ? [] : E('div', { 'class': 'alert-message notice' }, [
 			E('div', { 'class': 'dps-warn' }, [
 				E('b', {}, api.t('router.update.available', { version: (u.version || '').replace(/-r\d+$/, '') })),
 				api.btn(api.t('router.details'), function() { api.go('about'); }, 'cbi-button-apply')
@@ -333,7 +335,7 @@ return view.extend({
 
 	renderWarnings: function(list) {
 		var self = this;
-		dom.content(this.el.warnings, list.map(function(w) {
+		api.content(this.el.warnings, list.map(function(w) {
 			var action = null;
 			switch (w.code) {
 			case 'dns_spoofed':

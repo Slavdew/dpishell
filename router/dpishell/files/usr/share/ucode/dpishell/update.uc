@@ -1,8 +1,9 @@
 // Обновление DpiShell (router-api.md §5): автопроверка раз в сутки, установка из витрины или из папки, которую положило окно ПК.
-// Пакеты подписаны (индекс витрины — нашим ключом); из папки — только наши два пакета и только по SHA256SUMS.
+// Пакеты подписаны (индекс витрины — нашим ключом); из папки — только наши два пакета, файлы root, по SHA256SUMS и, если окно
+// положило release.json с подписью, — по подписи ключом выпуска (security-audit-router №3).
 'use strict';
 
-import { readfile, stat, popen, lsdir } from 'fs';
+import { readfile, writefile, stat, lstat, popen, lsdir, unlink } from 'fs';
 import * as st from 'dpishell.state';
 
 const FILE = '/etc/dpishell/update.json';
@@ -11,6 +12,12 @@ const LOCAL_DIR = '/tmp/dpishell-update';
 const PACKAGES = ['dpishell', 'luci-app-dpishell'];
 const DAY = 86400;
 const JOB = '/tmp/dpishell/update_job.json';
+// Открытый ключ выпуска (тот же ed25519, что packaging/keys/release-ed25519.pem: им CI подписывает release.json) в формате usign;
+// совпадение ключей проверяет tools/release-key-check.py в CI.
+const RELEASE_KEY = '/usr/share/dpishell/release-key.pub';
+const VERSION_RX = /^[A-Za-z0-9._~+-]{1,64}$/;
+
+function q(s) { return `'${replace(`${s}`, "'", "'\\''")}'`; }
 
 function sh(cmd) {
 	let p = popen(`${cmd} 2>&1`);
@@ -44,19 +51,46 @@ function feed_version(name) {
 
 // a < b по правилам пакетного менеджера.
 function older(a, b) {
-	if (!a || !b)
+	if (!a || !b || !match(a, VERSION_RX) || !match(b, VERSION_RX))
 		return false;
 	if (apk())
 		return trim(sh(`apk version -t '${a}' '${b}'`).out) == '<';
 	return sh(`opkg compare-versions '${a}' '<<' '${b}'`).rc == 0;
 }
 
+// Подпись release.json ключом выпуска (base64 сырых 64 байт ed25519, как release.json.sig в CI) через usign: подпись и ключ
+// usign — тот же ed25519 с заголовком «Ed» и отпечатком. true — сошлась, false — нет, null — проверить нечем (нет usign).
+function sig_ok(path, sig_b64) {
+	if (!stat('/usr/bin/usign') || !stat(RELEASE_KEY))
+		return null;
+	let key = b64dec(trim(split(readfile(RELEASE_KEY) ?? '', '\n')[1] ?? ''));
+	let sig = b64dec(trim(sig_b64 ?? ''));
+	if (key == null || length(key) != 42 || sig == null || length(sig) != 64)
+		return false;
+	st.own_dir('/tmp/dpishell', 0o700);
+	let f = '/tmp/dpishell/release.usig';
+	writefile(f, `untrusted comment: dpishell release\n${b64enc('Ed' + substr(key, 2, 8) + sig)}\n`);
+	let ok = sh(`usign -V -q -p ${RELEASE_KEY} -m ${q(path)} -x ${f}`).rc == 0;
+	unlink(f);
+	return ok;
+}
+
 function notes(version) {
-	let r = sh(`curl -sS --max-time 10 '${RELEASE_URL}'`);
-	let j;
-	try { j = json(r.out); } catch (e) { return []; }
+	if (!st.own_dir('/tmp/dpishell', 0o700))
+		return [];
+	let f = '/tmp/dpishell/release.json';
+	let r = sh(`curl -sS --fail --max-time 10 --max-filesize 65536 -o ${f} '${RELEASE_URL}'`);
+	let sig = sh(`curl -sS --fail --max-time 10 --max-filesize 1024 '${RELEASE_URL}.sig'`);
+	// Подписи нет или не сошлась — заметок нет; проверить нечем (нет usign) — заметки всё равно только текстом на странице.
+	let ok = r.rc == 0 ? sig_ok(f, sig.rc == 0 ? sig.out : '') : false;
+	let j = null;
+	if (ok !== false)
+		try { j = json(readfile(f) ?? ''); } catch (e) {}
+	unlink(f);
 	// Заметки — к той версии, что в витрине (release.json без суффикса сборки -rN).
-	return (j?.version && index(version ?? '', j.version) == 0) ? slice(j.changes ?? [], 0, 15) : [];
+	if (type(j?.version) != 'string' || index(version ?? '', j.version) != 0 || type(j.changes) != 'array')
+		return [];
+	return map(filter(slice(j.changes, 0, 15), x => type(x) == 'string'), x => substr(x, 0, 300));
 }
 
 // Проверка: есть ли в витрине версия новее установленной. Сеть недоступна — прежний результат остаётся.
@@ -83,9 +117,9 @@ function check_daily() {
 function status() {
 	let u = st.read_json(FILE, null);
 	if (!u)
-		return { available: false, version: null, notes: [], checked_at: null };
+		return { available: false, version: null, notes: [], checked_at: null, local_signed: true };
 	let avail = older(installed_version('dpishell'), u.version);
-	return { available: avail, version: u.version, notes: avail ? (u.notes ?? []) : [], checked_at: st.iso(u.checked_at) };
+	return { available: avail, version: u.version, notes: avail ? (u.notes ?? []) : [], checked_at: st.iso(u.checked_at), local_signed: true };
 }
 
 // apk add из файла пишет в /etc/apk/world «имя><хеш» — пакет пришпилен к файлу, и apk upgrade его больше не трогает
@@ -103,13 +137,37 @@ function unpin() {
 		st.write_atomic('/etc/apk/world', fixed);
 }
 
-// Пакеты из папки окна: только наши имена, суммы совпали. Возвращает список путей или текст ошибки.
+// Папка обновления: каталог root (кладёт окно ПК по SSH), не ссылка, писать в неё может только root. null — годится.
+// /tmp общий: папку с пакетом и SHA256SUMS мог бы положить любой процесс (nfqws работает от daemon) — пакет ставится от root.
+function local_dir_problem() {
+	let s = lstat(LOCAL_DIR);
+	if (!s)
+		return `Нет ${LOCAL_DIR}`;
+	if (s.type != 'directory' || s.uid != 0 || s.perm?.group_write || s.perm?.other_write)
+		return `${LOCAL_DIR} — не папка root или открыта на запись другим; положите пакеты заново`;
+	return null;
+}
+
+const REL = 'release.json', REL_SIG = 'release.json.sig';
+
+// Пакеты из папки окна: только наши имена, файлы root, набор файлов — ровно как в SHA256SUMS, суммы совпали; release.json
+// с подписью (если окно его положило) — подпись ключом выпуска и те же sha256. Возвращает список путей или текст ошибки.
 function local_files() {
-	if (!stat(`${LOCAL_DIR}/SHA256SUMS`))
+	let bad = local_dir_problem();
+	if (bad)
+		return bad;
+	if (!st.root_file(`${LOCAL_DIR}/SHA256SUMS`))
 		return `Нет ${LOCAL_DIR}/SHA256SUMS`;
-	let files = [];
+	let sums = {};
+	for (let l in split(trim(readfile(`${LOCAL_DIR}/SHA256SUMS`) ?? ''), '\n')) {
+		let m = match(trim(l), /^([0-9a-fA-F]{64}) [ *]([A-Za-z0-9._~+-]+)$/);
+		if (!m)
+			return `SHA256SUMS: строка не по формату`;
+		sums[m[2]] = lc(m[1]);
+	}
+	let files = [], names = [];
 	for (let f in lsdir(LOCAL_DIR) ?? []) {
-		if (f == 'SHA256SUMS')
+		if (f == 'SHA256SUMS' || f == REL || f == REL_SIG)
 			continue;
 		let ok = false;
 		for (let n in PACKAGES)
@@ -117,13 +175,37 @@ function local_files() {
 				ok = true;
 		if (!ok)
 			return `Лишний файл в ${LOCAL_DIR}: ${f}`;
+		if (!st.root_file(`${LOCAL_DIR}/${f}`))
+			return `${f} — не обычный файл root`;
+		if (!sums[f])
+			return `${f} нет в SHA256SUMS`;
 		push(files, `${LOCAL_DIR}/${f}`);
+		push(names, f);
 	}
 	if (!length(files))
 		return `В ${LOCAL_DIR} нет пакетов DpiShell`;
+	for (let n in keys(sums))
+		if (index(names, n) < 0)
+			return `Нет файла ${n} из SHA256SUMS`;
 	let r = sh(`cd ${LOCAL_DIR} && sha256sum -c SHA256SUMS`);
 	if (r.rc != 0)
 		return `Файлы не совпали с SHA256SUMS: ${trim(r.out)}`;
+	if (stat(`${LOCAL_DIR}/${REL}`) || stat(`${LOCAL_DIR}/${REL_SIG}`)) {
+		if (!st.root_file(`${LOCAL_DIR}/${REL}`) || !st.root_file(`${LOCAL_DIR}/${REL_SIG}`))
+			return `${REL} без подписи ${REL_SIG}`;
+		let ok = sig_ok(`${LOCAL_DIR}/${REL}`, readfile(`${LOCAL_DIR}/${REL_SIG}`));
+		if (ok === false)
+			return `Подпись ${REL} не сошлась — пакеты не из выпуска DpiShell`;
+		// ok === null: на роутере нет usign — остаётся сверка по SHA256SUMS.
+		if (ok) {
+			let rel = null;
+			try { rel = json(readfile(`${LOCAL_DIR}/${REL}`)); } catch (e) {}
+			let assets = type(rel?.assets) == 'array' ? rel.assets : [];
+			for (let n in names)
+				if (!length(filter(assets, a => a?.name == n && lc(a?.sha256 ?? '') == sums[n])))
+					return `${n} нет в подписанном ${REL}`;
+		}
+	}
 	return files;
 }
 
@@ -202,4 +284,4 @@ function recover() {
 	return true;
 }
 
-export { check, check_daily, status, install, installed_version, recover, job_put, LOCAL_DIR, JOB };
+export { check, check_daily, status, install, installed_version, recover, job_put, local_dir_problem, local_files, sig_ok, LOCAL_DIR, JOB };

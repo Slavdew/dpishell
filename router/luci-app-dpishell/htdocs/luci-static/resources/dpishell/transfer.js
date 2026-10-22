@@ -3,6 +3,9 @@
 'require ui';
 'require dpishell.api as api';
 
+// Строки — только текстом: свой E вместо LuCI (api.js, tools/xss-check.py).
+var E = api.E;
+
 // Выгрузка и загрузка своих настроек (docs/settings-export.md, формат 1 — общий с окном ПК). Всё в браузере: данные берутся
 // и записываются обычными методами ubus (targets_set, lists_set, strategies_user_set, advanced_set, dns_set, mode_set) —
 // роутер проверяет их сам, как при правке со страницы. Выгрузка — архив .zip с папкой; загрузка — папка или такой архив.
@@ -183,7 +186,8 @@ function cleanTitle(t) {
 		var c = ch.charCodeAt(0);
 		if (c < 32 || (c >= 127 && c < 160) || c == 0x2028 || c == 0x2029)
 			out += ' ';
-		else if (!((c >= 0x200b && c <= 0x200f) || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069) || c == 0xfeff))
+		// <>&"' роутер в названии не принимает (strategies_user_set) — убрать, а не отказать во всём файле.
+		else if (!((c >= 0x200b && c <= 0x200f) || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069) || c == 0xfeff) && '<>&"\''.indexOf(ch) < 0)
 			out += ch;
 	});
 	return out.trim().slice(0, 60);
@@ -669,7 +673,13 @@ return baseclass.extend({
 				plan.strategies = { added: add.length, had: had, over: S.strategies.items.length - add.length - had, removed: 0, bad: S.strategies.bad,
 					apply: function() {
 						if (!add.length) return Promise.resolve();
-						var keep = mine.map(function(s) { return { id: s.id, title: s.title, roles: s.roles }; });
+						// Названия, сохранённые до r12, могли содержать <>&"' — роутер их больше не примет; parts — не терять.
+						var keep = mine.map(function(s) {
+							var k = { id: s.id, title: String(s.title || s.id).replace(/[<>&"']/g, '').slice(0, 80) || s.id, roles: s.roles };
+							if (s.parts)
+								k.parts = s.parts;
+							return k;
+						});
 						return api.call('strategies_user_set', { items: keep.concat(add) });
 					} };
 			}

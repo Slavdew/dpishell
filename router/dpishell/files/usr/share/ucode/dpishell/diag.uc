@@ -90,6 +90,17 @@ function redactor() {
 			if (length(line) && substr(line, 0, 1) != '#')
 				add(line, `свой адрес №${++n}`);
 		}
+	// Сайты продвинутого режима (в config zapret — --hostlist-domains, в подборе — названия строк) и связок с ПК, MAC-адреса ПК.
+	for (let r in st.advanced().rows)
+		for (let d in r.domains ?? [])
+			add(d, `свой адрес №${++n}`);
+	let m = 0;
+	for (let pc in st.pc_links()) {
+		for (let d in pc.domains ?? [])
+			add(d, `сайт ПК №${++n}`);
+		for (let mac in pc.macs ?? [])
+			add(mac, `MAC ПК №${++m}`);
+	}
 	// Длинные — первыми: URL раньше своего хоста, поддомен раньше домена.
 	subs = sort(subs, (a, b) => length(b[0]) - length(a[0]));
 	return text => {
