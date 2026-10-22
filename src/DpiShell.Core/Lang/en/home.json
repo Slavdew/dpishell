@@ -3,6 +3,7 @@
   "home.retry_select": "Didn't help? → Find strategy",
   "home.retry_select.tip": "“Search” tab: tries strategies one by one and picks a suitable one",
   "home.find_on_router": "Find strategy on router",
+  "home.check_router": "Check router",
   "home.site_fix": "Site won't open?",
   "home.direct.site.tip": "Site address, e.g. bank.example",
   "home.direct.site.aria": "Site address to check",

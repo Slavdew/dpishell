@@ -431,6 +431,7 @@
   "core.rt.err.rpc_default": "JSON-RPC error",
   "core.rt.err.no_result": "The router's reply has no result",
   "core.rt.err.unreachable": "The router is unreachable",
+  "core.rt.err.cert_changed": "The router's HTTPS certificate has changed",
   "core.rt.err.contract": "The router's reply violates the contract",
   "core.rt.compat.too_old": "DpiShell on the router is too old — update it on the router",
   "core.rt.compat.router_newer_blocked": "DpiShell on the router is newer than the app — update the app. Only status, update and removal work for now",

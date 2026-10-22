@@ -27,24 +27,147 @@ public sealed class RouterClient : IDisposable
 
     readonly HttpClient _http;
     readonly bool _ownsHttp;
-    readonly Uri _base;
+    readonly IRouterHostKeyStore? _pins;
+    Uri _base;
+    string? _pinId, _seenCert;
+    RouterCertChange? _certChanged;
     string? _session;
     Func<string>? _password;
     int _id;
 
     /// <param name="address">IP или имя роутера без схемы и пути (договор §2.1); для тестов — «127.0.0.1:порт».</param>
-    public RouterClient(string address, HttpClient? http = null)
+    /// <param name="pins">
+    /// Отпечатки сертификатов HTTPS (тот же router-hostkeys.json, что у SSH). Без него самоподписанный сертификат роутера не принимается —
+    /// окно работает только по HTTP, как раньше.
+    /// </param>
+    /// <param name="httpsPort">Куда идти по HTTPS, если HTTP не отвечает (у uhttpd — 443).</param>
+    public RouterClient(string address, HttpClient? http = null, IRouterHostKeyStore? pins = null, int httpsPort = 443)
     {
         Address = address.Trim().TrimEnd('/');
         if (Address.Contains("://") || Address.Contains('/')) throw new ArgumentException(L.T("core.rt.arg.address"));
+        _pins = pins;
+        HttpsPort = httpsPort;
         _base = new Uri($"http://{Address}/");
         _ownsHttp = http is null;
-        _http = http ?? new HttpClient(new SocketsHttpHandler { UseProxy = false, ConnectTimeout = TimeSpan.FromSeconds(3) });
+        if (http is null)
+        {
+            // Перенаправления — сами: POST /ubus при 301 стал бы GET, а переход на HTTPS — только на тот же роутер.
+            var h = new SocketsHttpHandler { UseProxy = false, ConnectTimeout = TimeSpan.FromSeconds(3), AllowAutoRedirect = false };
+            h.SslOptions.RemoteCertificateValidationCallback = CheckCertificate;
+            http = new HttpClient(h);
+            // Роутер уже входили по HTTPS (отпечаток закреплён) — сразу туда: без лишнего перенаправления и без пароля по HTTP.
+            if (pins?.Get(RouterCert.PinId(_base.Host, httpsPort)) is not null) UseHttps(HttpsUri(httpsPort));
+        }
+        _http = http;
     }
 
     public string Address { get; }
     public TimeSpan CallTimeout { get; init; } = TimeSpan.FromSeconds(10);   // §4: таймаут HTTP 10 с
     public TimeSpan DetectTimeout { get; init; } = TimeSpan.FromSeconds(1);  // §2.2: 1 с
+
+    // ---------- HTTP или HTTPS ----------
+
+    public int HttpsPort { get; }
+
+    /// <summary>Окно говорит с роутером по HTTPS (перенаправление с HTTP или HTTP закрыт).</summary>
+    public bool Https => _base.Scheme == Uri.UriSchemeHttps;
+
+    /// <summary>Отпечаток сертификата HTTPS, с которым идёт работа (null — HTTP или ещё не подключались).</summary>
+    public string? CertificateFingerprint => Https ? _seenCert : null;
+
+    Uri HttpsUri(int port) => new UriBuilder(Uri.UriSchemeHttps, _base.Host, port, "/").Uri;
+    Uri HttpUri() => new($"http://{Address}/");
+
+    void UseHttps(Uri https)
+    {
+        _base = https;
+        _pinId = RouterCert.PinId(https.Host, https.Port);
+    }
+
+    /// <summary>Рукопожатие TLS: закреплённый отпечаток — только он; первого входа ещё не было — любой (запомнится после входа).</summary>
+    bool CheckCertificate(object sender, System.Security.Cryptography.X509Certificates.X509Certificate? cert,
+        System.Security.Cryptography.X509Certificates.X509Chain? chain, System.Net.Security.SslPolicyErrors errors)
+    {
+        if (cert is null || _pinId is not { } id) return false;
+        var fp = RouterCert.Fingerprint(cert);
+        _seenCert = fp;
+        var stored = _pins?.Get(id);
+        if (RouterCert.Accept(stored, fp, errors, _pins is not null)) return true;
+        if (stored is not null) _certChanged = new(id, _base.Host, fp);
+        return false;
+    }
+
+    /// <summary>Первый вход по HTTPS прошёл — закрепить сертификат (как ключ SSH: это роутер, к которому пользователь знает пароль).</summary>
+    void PinIfFirst()
+    {
+        if (Https && _pins is not null && _pinId is { } id && _seenCert is { } fp && _pins.Get(id) is null) _pins.Set(id, fp);
+    }
+
+    static bool IsRedirect(HttpResponseMessage r) => (int)r.StatusCode is 301 or 302 or 303 or 307 or 308;
+
+    /// <summary>Перенаправление на https:// того же роутера (порт — из адреса перенаправления), иначе null.</summary>
+    Uri? HttpsRedirect(HttpResponseMessage r)
+    {
+        if (!IsRedirect(r) || r.Headers.Location is not { IsAbsoluteUri: true } loc) return null;
+        return loc.Scheme == Uri.UriSchemeHttps && string.Equals(loc.Host, _base.Host, StringComparison.OrdinalIgnoreCase) ? HttpsUri(loc.Port) : null;
+    }
+
+    /// <summary>
+    /// Запрос к роутеру. По HTTP: перенаправление на HTTPS того же роутера или молчание HTTP при отвечающем HTTPS — дальше по HTTPS.
+    /// По HTTPS не отвечает (HTTPS на роутере выключили) — снова HTTP. Сертификат не совпал с закреплённым —
+    /// <see cref="RouterFailure.CertificateChanged"/>; остальные сбои — как раньше (HttpRequestException).
+    /// Со своим HttpClient (тесты) — как он настроен, без переходов.
+    /// </summary>
+    async Task<HttpResponseMessage> SendAsync(Func<Uri, HttpRequestMessage> make, string path, CancellationToken ct)
+    {
+        HttpResponseMessage resp;
+        try { resp = await SendToAsync(_base, make, path, ct); }
+        catch (HttpRequestException first) when (_ownsHttp && !ct.IsCancellationRequested)
+        {
+            var (prevBase, prevPin) = (_base, _pinId);
+            try
+            {
+                if (Https) { _base = HttpUri(); _pinId = null; return await SendToAsync(_base, make, path, ct); }
+                return await SwitchAsync(HttpsUri(HttpsPort), make, path, ct);
+            }
+            catch (HttpRequestException)
+            {
+                (_base, _pinId) = (prevBase, prevPin);
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(first);
+                throw;
+            }
+        }
+        if (!Https && _ownsHttp && HttpsRedirect(resp) is { } target)
+        {
+            resp.Dispose();
+            return await SwitchAsync(target, make, path, ct);
+        }
+        return resp;
+    }
+
+    async Task<HttpResponseMessage> SwitchAsync(Uri https, Func<Uri, HttpRequestMessage> make, string path, CancellationToken ct)
+    {
+        var (prevBase, prevPin) = (_base, _pinId);
+        UseHttps(https);
+        try { return await SendToAsync(https, make, path, ct); }
+        catch (HttpRequestException)
+        {
+            (_base, _pinId) = (prevBase, prevPin);
+            throw;
+        }
+    }
+
+    async Task<HttpResponseMessage> SendToAsync(Uri baseUri, Func<Uri, HttpRequestMessage> make, string path, CancellationToken ct)
+    {
+        _certChanged = null;
+        using var req = make(new Uri(baseUri, path));
+        try { return await _http.SendAsync(req, ct); }
+        catch (HttpRequestException) when (_certChanged is { } changed)
+        {
+            // Не HttpRequestException: перебирать HTTP/HTTPS дальше нельзя — пользователь должен решить.
+            throw new RouterException(RouterFailure.CertificateChanged, L.T("core.rt.err.cert_changed")) { Certificate = changed };
+        }
+    }
 
     // ---------- §2 поиск ----------
 
@@ -78,7 +201,7 @@ public sealed class RouterClient : IDisposable
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(DetectTimeout);
-            using var resp = await _http.GetAsync(new Uri(_base, "dpishell/status.json"), cts.Token);
+            using var resp = await SendAsync(u => new HttpRequestMessage(HttpMethod.Get, u), "dpishell/status.json", cts.Token);
             if (!resp.IsSuccessStatusCode) return new(Address, RouterFound.NotFound, null);
             var st = await resp.Content.ReadFromJsonAsync<RouterPublicStatus>(Json, cts.Token);
             if (st?.Product != "dpishell-router") return new(Address, RouterFound.NotFound, null);
@@ -107,6 +230,7 @@ public sealed class RouterClient : IDisposable
         EnsureOk(res, "login");
         _session = res.Body?["ubus_rpc_session"]?.GetValue<string>()
                    ?? throw new RouterException(RouterFailure.Protocol, L.T("core.rt.err.no_session"));
+        PinIfFirst();
     }
 
     public bool LoggedIn => _session is not null;
@@ -180,8 +304,9 @@ public sealed class RouterClient : IDisposable
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(CallTimeout);
-            using var content = new StringContent(req.ToJsonString(), System.Text.Encoding.UTF8, "application/json");
-            using var resp = await _http.PostAsync(new Uri(_base, "ubus"), content, cts.Token);
+            var json = req.ToJsonString();
+            using var resp = await SendAsync(u => new HttpRequestMessage(HttpMethod.Post, u) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") },
+                "ubus", cts.Token);
             if (!resp.IsSuccessStatusCode) throw new RouterException(RouterFailure.Unreachable, L.T("core.rt.err.http", new { code = (int)resp.StatusCode }));
             var root = JsonNode.Parse(await resp.Content.ReadAsStringAsync(cts.Token)) as JsonObject
                        ?? throw new RouterException(RouterFailure.Protocol, L.T("core.rt.err.not_json"));
