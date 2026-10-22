@@ -603,6 +603,27 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.False(vm.UpdateAvailable);
     }
 
+    [Fact]
+    public async Task Update_Local_RouterLocalSigned_ReleaseJsonAndSigUploaded_SumsLast()
+    {
+        using var r = new FakeRouter().As020();
+        r.FeedUnreachable = true;
+        r.LocalUpdateReady = true;
+        r.LocalSigned = true;
+        var signer = new TestSigner();
+        var ssh = new FakeSsh();
+        var vm = Make(r, new FakeSshConnector(ssh));
+        vm.Http = new HttpClient(ServeRelease(signer));
+        vm.ReleaseKey = signer.PublicKey;
+        Assert.True(await vm.ConnectAsync("secret"));
+
+        Assert.True(await vm.UpdateRouterAsync());
+        Assert.Equal(["/tmp/dpishell-update/dpishell-0.2.1-r1.apk", "/tmp/dpishell-update/luci-app-dpishell-0.2.1-r1.apk",
+            "/tmp/dpishell-update/release.json", "/tmp/dpishell-update/release.json.sig", "/tmp/dpishell-update/SHA256SUMS"], ssh.Uploads);
+        var json = ssh.Files["/tmp/dpishell-update/release.json"];
+        Assert.True(ReleaseSignature.Verify(json, System.Text.Encoding.ASCII.GetString(ssh.Files["/tmp/dpishell-update/release.json.sig"]), signer.PublicKey));
+    }
+
     [Theory]
     [InlineData("sign", "Подпись выпуска для роутера не сошлась")]
     [InlineData("hash", "не совпал по sha256")]

@@ -417,7 +417,7 @@ public sealed partial class RouterViewModel
         var address = SetupAddress() ?? throw new RouterSshException(RouterSshFailure.Unreachable, L.T("router.err.no_address"));
         var pw = SshPassword(null, false) ?? throw new RouterSshException(RouterSshFailure.AuthFailed, L.T("router.err.no_saved_password"));
         await using (var ssh = await Ssh.ConnectAsync(new RouterSshTarget(address), () => pw))
-            await new RouterSsh(ssh).UploadUpdateAsync(files);
+            await new RouterSsh(ssh).UploadUpdateAsync(files, _status?.Update?.LocalSigned == true ? RouterUpdatePackages.ReleaseFilesIn(dir) : null);
         return await UpdateFromAsync(RouterUpdateSource.Local, version);
     }
 

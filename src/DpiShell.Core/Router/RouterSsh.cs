@@ -173,7 +173,7 @@ public sealed partial class RouterSsh(ISshSession ssh)
     /// Пакеты для <c>update_install { from: "local" }</c>: папка /tmp/dpishell-update очищается, файлы проверяются по sha256 здесь,
     /// кладутся по SSH и сверяются ещё раз на роутере; SHA256SUMS пишется последним.
     /// </summary>
-    public async Task UploadUpdateAsync(IReadOnlyList<RouterUpdateFile> files, CancellationToken ct = default)
+    public async Task UploadUpdateAsync(IReadOnlyList<RouterUpdateFile> files, RouterReleaseFiles? release = null, CancellationToken ct = default)
     {
         if (files.Count == 0) throw new ArgumentException(L.T("core.rt.ssh.no_packages"));
         foreach (var f in files)
@@ -190,6 +190,11 @@ public sealed partial class RouterSsh(ISshSession ssh)
             await UploadVerifiedAsync(s, $"{UpdateDir}/{f.Name}", f.Sha256, ct);
             sums.Append(f.Sha256.ToLowerInvariant()).Append("  ").Append(f.Name).Append('\n');
         }
+        if (release is not null)   // только если роутер сам проверяет подпись (local_signed): старый на лишние файлы отвечает «Лишний файл»
+        {
+            await using (var j = File.OpenRead(release.JsonPath)) await ssh.UploadAsync(j, $"{UpdateDir}/release.json", ct);
+            await using (var g = File.OpenRead(release.SigPath)) await ssh.UploadAsync(g, $"{UpdateDir}/release.json.sig", ct);
+        }
         using var sumsStream = new MemoryStream(Encoding.UTF8.GetBytes(sums.ToString()));
         await ssh.UploadAsync(sumsStream, $"{UpdateDir}/SHA256SUMS", ct);
     }
@@ -203,3 +208,6 @@ public sealed partial class RouterSsh(ISshSession ssh)
 
 /// <summary>Пакет обновления на ПК: имя как в релизе, путь, sha256 из release.json.</summary>
 public sealed record RouterUpdateFile(string Name, string LocalPath, string Sha256);
+
+/// <summary>Проверенные окном release.json и release.json.sig выпуска (для роутера с status.update.local_signed).</summary>
+public sealed record RouterReleaseFiles(string JsonPath, string SigPath);

@@ -93,6 +93,8 @@ public sealed class FakeRouter : IDisposable
     public bool FeedUnreachable { get; set; }
     /// <summary>Пакеты уже положены в /tmp/dpishell-update (иначе update_install local — invalid).</summary>
     public bool LocalUpdateReady { get; set; }
+    /// <summary>status.update.local_signed (r12): роутер сам проверяет release.json(.sig) из папки обновления.</summary>
+    public bool LocalSigned { get; set; }
     public int UpdateCheckCalls { get; private set; }
     /// <summary>Шаги обновления по опросам (job.step и хвост журнала log), затем итог с step: done; null — старый роутер: без шагов, один опрос «идёт».</summary>
     public string[]? UpdateStepsOnRouter { get; set; }
@@ -296,7 +298,7 @@ public sealed class FakeRouter : IDisposable
     {
         if (!UpdateFieldOn) return "";
         var notes = UpdateAvailable ? """["Глубокий поиск стратегий на самом роутере"]""" : "[]";
-        return $$""", "update": { "available": {{(UpdateAvailable ? "true" : "false")}}, "version": "{{UpdateVersion}}", "notes": {{notes}}, "checked_at": "{{UpdateCheckedAt}}", "job": {{_updateJob ?? "null"}} }""";
+        return $$""", "update": { "available": {{(UpdateAvailable ? "true" : "false")}}, "version": "{{UpdateVersion}}", "notes": {{notes}}, "checked_at": "{{UpdateCheckedAt}}", "job": {{_updateJob ?? "null"}}{{(LocalSigned ? ", \"local_signed\": true" : "")}} }""";
     }
 
     public List<JsonObject> Calls { get; } = [];

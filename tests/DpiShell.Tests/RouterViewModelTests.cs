@@ -340,6 +340,30 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.Contains(_said, s => s.StartsWith("Стратегия «Найденная: fake + split2» включена на роутере. Роутер проверил: всё открывается."));
     }
 
+    [Fact]
+    public async Task SendStrategy_TitleWithForbiddenChars_CleanedBeforeSend()
+    {
+        using var r = new FakeRouter();
+        var (vm, shell) = Make(r);
+        var found = shell.Catalog.Strategies[0] with { Id = "found-261016-2213-3", Title = "Моя <b>\"split\"</b> & 'fake'", Source = "search" };
+        UserStrategies.Add(shell.Paths, [found]);
+        await vm.ConnectAsync("secret");
+        r.Calls.Clear();
+
+        await vm.SendStrategyAsync(found.Id);
+
+        var title = r.Calls.Single(c => Method(c) == "strategies_user_set")["params"]![3]!["items"]![0]!["title"]!.GetValue<string>();
+        Assert.Equal("Моя bsplit/b  fake", title);
+    }
+
+    [Fact]
+    public void CleanTitle_StripsForbiddenChars_TrimsAndFallsBack()
+    {
+        Assert.Equal("ab", RouterClient.CleanTitle("a<>&\"'b", "x"));
+        Assert.Equal("u-x", RouterClient.CleanTitle("<>&\"'", "u-x"));
+        Assert.Equal(80, RouterClient.CleanTitle(new string('я', 100), "x").Length);
+    }
+
     static Strategy Mix(Shell shell) => new("mix-alt-alt10", "Смешанная · YouTube — ALT · Discord — ALT10", "mix",
         new(shell.Catalog.Strategies[0].Roles) { ["discord_tcp"] = shell.Catalog.Strategies[1].Roles["general"] },
         new() { ["youtube"] = "alt", ["discord"] = "alt10", ["user"] = "alt10" });
