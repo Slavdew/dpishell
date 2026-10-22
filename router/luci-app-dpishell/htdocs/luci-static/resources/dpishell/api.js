@@ -151,7 +151,9 @@ var PARAMS = {
 	advanced_set: ['enabled', 'others', 'rows', 'confirm_s'],
 	advanced_revert: [],
 	dns_compare: [],
-	security_check: []
+	security_check: [],
+	changes_list: [], changes_undo: ['id'], changes_undo_all: [],
+	update_rollback: ['from']
 };
 
 var declared = {};

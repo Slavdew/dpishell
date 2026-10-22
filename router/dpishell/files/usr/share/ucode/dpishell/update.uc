@@ -3,7 +3,7 @@
 // положило release.json с подписью, — по подписи ключом выпуска (security-audit-router №3).
 'use strict';
 
-import { readfile, writefile, stat, lstat, popen, lsdir, unlink } from 'fs';
+import { readfile, writefile, stat, lstat, popen, lsdir, unlink, rename, mkdir } from 'fs';
 import * as st from 'dpishell.state';
 
 const FILE = '/etc/dpishell/update.json';
@@ -129,6 +129,171 @@ function notes(version, rel, en) {
 	return rel && index(version ?? '', rel.base) == 0 ? (en ? rel.changes_en : rel.changes) : [];
 }
 
+// ---------- Откат версии (router-api.md §5.2 update_rollback, с 0.2.0-r16) ----------
+// Во флеше, в /etc/dpishell/pkg (только root): cur — пакеты установленной версии (при следующем обновлении станут прежними),
+// prev — ровно одна прежняя пара. Пишутся, только если после записи во флеше остаётся MARGIN_KB; не хватает — пакеты не
+// храним, и откат с роутера честно «недоступен» (остаётся через окно ПК — папка обновления, как update_install local).
+// prev.json — какая версия была прежней, когда её пакетов нет (не сохранены прежней версией пакета или не хватило места).
+const PKG = '/etc/dpishell/pkg';
+const PREV_NOTE = '/etc/dpishell/pkg/prev.json';
+const MARGIN_KB = 4096;
+const PKG_RX = /^(dpishell|luci-app-dpishell)-([0-9][A-Za-z0-9._~+-]*)\.(apk|ipk)$/;
+
+function sha256(path) {
+	let r = sh(`sha256sum ${q(path)}`);
+	return r.rc == 0 ? substr(r.out, 0, 64) : null;
+}
+
+function free_kb() {
+	let m = match(sh('df -k /overlay 2>/dev/null || df -k /').out, /\n[^ ]+ +[0-9]+ +[0-9]+ +([0-9]+)/);
+	return m ? +m[1] : null;
+}
+
+// Слот cur/prev: meta.json { version, files: { имя: sha256 }, saved_at }. null — слота нет или он испорчен.
+function slot_meta(slot) {
+	let m = st.read_json(`${PKG}/${slot}/meta.json`, null);
+	return type(m?.version) == 'string' && match(m.version, VERSION_RX) && type(m?.files) == 'object' && length(m.files) ? m : null;
+}
+
+// Свои точные пути: каталог слота в своём /etc/dpishell/pkg (lstat — ссылку не проходим, rm -rf удалит саму ссылку).
+function rm_slot(slot) {
+	if (index(['cur', 'prev', 'cur.new'], slot) >= 0 && lstat(`${PKG}/${slot}`))
+		sh(`rm -rf ${q(PKG + '/' + slot)}`);
+}
+
+// Файлы слота с проверкой: обычные файлы root, имена наши, sha256 как в meta. Список путей или текст ошибки.
+function slot_files(slot) {
+	let m = slot_meta(slot);
+	if (!m)
+		return 'Прежние пакеты не сохранены';
+	let out = [];
+	for (let n in m.files) {
+		let p = `${PKG}/${slot}/${n}`;
+		if (!match(n, PKG_RX) || !st.root_file(p) || sha256(p) != m.files[n])
+			return `Сохранённый пакет ${n} повреждён — откат с роутера недоступен`;
+		push(out, p);
+	}
+	return out;
+}
+
+function note_prev(version, reason) {
+	if (!version)
+		return;
+	let cur = st.read_json(PREV_NOTE, null);
+	if (cur?.version == version && cur?.reason == reason)
+		return;
+	st.own_dir(PKG, 0o700);
+	st.write_atomic(PREV_NOTE, sprintf('%J\n', { version, reason }));
+}
+
+// Сохранить пакеты (пути) в слот cur. null — сохранено, 'space' — не хватает места с запасом, иначе — текст ошибки.
+function save_cur(files, version) {
+	let kb = 0, names = {};
+	for (let f in files) {
+		let n = split(f, '/')[-1];
+		if (!match(n, PKG_RX) || !st.root_file(f))
+			return `не наш пакет: ${n}`;
+		let sz = (lstat(f)?.size ?? 0) + 1023;
+		kb += int(sz / 1024);
+	}
+	rm_slot('cur');
+	let free = free_kb();
+	if (free == null || free - kb < MARGIN_KB)
+		return 'space';
+	if (!st.own_dir(PKG, 0o700))
+		return 'нет каталога';
+	let tmp = `${PKG}/cur.new`;
+	rm_slot('cur.new');
+	mkdir(tmp, 0o700);
+	for (let f in files) {
+		let n = split(f, '/')[-1];
+		if (sh(`cp ${q(f)} ${q(tmp + '/' + n)}`).rc != 0) {
+			rm_slot('cur.new');
+			return 'не удалось записать';
+		}
+		names[n] = sha256(`${tmp}/${n}`);
+	}
+	if (!st.write_atomic(`${tmp}/meta.json`, sprintf('%J\n', { version, files: names, saved_at: time() })) || !rename(tmp, `${PKG}/cur`)) {
+		rm_slot('cur.new');
+		return 'не удалось записать';
+	}
+	return null;
+}
+
+// Пакеты установленной версии из витрины (apk fetch, по подписанному индексу) — в cur. Только apk; версия в витрине должна
+// совпадать с установленной (иначе это уже не «наши» пакеты).
+function save_cur_from_feed(version) {
+	if (!apk())
+		return 'not_saved';
+	let d = '/tmp/dpishell/fetch';
+	st.own_dir('/tmp/dpishell', 0o700);
+	sh(`rm -rf ${q(d)}`);
+	mkdir(d, 0o700);
+	let names = filter(PACKAGES, n => installed_version(n) != null);
+	let r = sh(`apk fetch --output ${q(d)} ${join(' ', names)}`);
+	let files = map(filter(lsdir(d) ?? [], f => match(f, PKG_RX)), f => `${d}/${f}`);
+	let e = (r.rc != 0 || !length(files) || !length(filter(files, f => index(f, `/dpishell-${version}.`) >= 0)))
+		? 'not_saved' : save_cur(files, version);
+	sh(`rm -rf ${q(d)}`);
+	return e;
+}
+
+// После обновления from → установленная: cur (пакеты from, сохранены при её установке) становится prev; нет — запомнить
+// версию без пакетов. Затем новые пакеты — в cur. files — пути пакетов из папки окна (null — из витрины).
+function after_update(from, files) {
+	let inst = installed_version('dpishell');
+	if (!from || from == inst)
+		return;
+	let cur = slot_meta('cur');
+	rm_slot('prev');
+	if (cur?.version == from && rename(`${PKG}/cur`, `${PKG}/prev`))
+		unlink(PREV_NOTE);
+	else {
+		rm_slot('cur');
+		note_prev(from, 'not_saved');
+	}
+	let e = files ? save_cur(files, inst) : save_cur_from_feed(inst);
+	if (e == 'space' && !slot_meta('prev'))
+		note_prev(from, 'not_saved');
+}
+
+// После отката: prev — это теперь установленная (cur), новее неё пакеты не храним (они в витрине). files — из папки окна.
+function after_rollback(files) {
+	let inst = installed_version('dpishell');
+	unlink(PREV_NOTE);
+	if (!files) {
+		rm_slot('cur');
+		rename(`${PKG}/prev`, `${PKG}/cur`);
+	} else {
+		rm_slot('prev');
+		save_cur(files, inst);
+	}
+}
+
+// Обновление, сделанное прежней версией пакета (она пакеты не хранила): итог её задания — from_version — запомнить как
+// прежнюю без пакетов (откат через окно ПК). Пишется один раз; зовёт status.
+function learn_prev() {
+	let j = st.read_json(JOB, null);
+	if (!j || j.running || !j.ok || j.action != 'update' || type(j.from_version) != 'string')
+		return;
+	if (slot_meta('prev') || st.read_json(PREV_NOTE, null)?.version == j.from_version)
+		return;
+	if (older(j.from_version, installed_version('dpishell')))
+		note_prev(j.from_version, 'not_saved');
+}
+
+// status.rollback: { version, saved, reason } — прежняя версия старше установленной; null — отката нет.
+function rollback_status() {
+	let inst = installed_version('dpishell');
+	let p = slot_meta('prev');
+	if (p && older(p.version, inst))
+		return { version: p.version, saved: true, reason: null };
+	let n = st.read_json(PREV_NOTE, null);
+	if (type(n?.version) == 'string' && older(n.version, inst))
+		return { version: n.version, saved: false, reason: n.reason == 'space' ? 'space' : 'not_saved' };
+	return null;
+}
+
 // Проверка: есть ли в витрине версия новее установленной. Сеть недоступна — прежний результат остаётся.
 // Хватает release.json витрины (2 КБ): индексы всех фидов (apk update — мегабайты, у opkg ещё и в ОЗУ до перезагрузки)
 // качаются, только если его нет или в нём нет пакета для apk; перед установкой install() обновляет индексы сам.
@@ -147,6 +312,12 @@ function check() {
 		rel ??= feed_release();
 	let res = { checked_at: time(), installed: inst, version: av, available: newer, notes: newer ? notes(av, rel) : [], notes_en: newer ? notes(av, rel, true) : [] };
 	st.write_atomic(FILE, sprintf('%J\n', res));
+	// Пакетов установленной версии нет (её ставила прежняя версия или офлайн-набор), а витрина отдаёт ровно её — взять оттуда:
+	// при следующем обновлении они станут прежней парой для отката. Один раз на версию (дальше cur уже она).
+	// Не вышло (места нет, витрина не отдала) — до перезагрузки не повторять: не качать пакеты каждые сутки зря.
+	let skip = '/tmp/dpishell/fetch-skip';
+	if (apk() && inst && av == inst && slot_meta('cur')?.version != inst && trim(readfile(skip) ?? '') != inst && save_cur_from_feed(inst))
+		writefile(skip, inst);
 	return res;
 }
 
@@ -272,19 +443,25 @@ function job_put(job, extra) {
 }
 
 // Установка обновления. from: feed | local. job — запись хода (job_put). null — успех, иначе текст ошибки.
-function install(from, job) {
+// rollback — откат (update_rollback): from saved (prev во флеше) | local (папка окна ПК); ставится только версия старше установленной.
+function install(from, job, rollback) {
 	let names = filter(PACKAGES, n => installed_version(n) != null);
 	if (!length(names))
 		names = ['dpishell'];
-	let r;
-	if (from == 'local') {
+	let r, files = null;
+	if (from == 'local' || from == 'saved') {
 		job_put(job, { step: 'download' });
-		let files = local_files();
+		files = from == 'saved' ? slot_files('prev') : local_files();
 		if (type(files) == 'string')
 			return files;
-		let m = match(join(' ', files), /dpishell-([0-9][A-Za-z0-9._~+-]*)\.(apk|ipk)/);
-		job_put(job, { step: 'install', target: m ? m[1] : null });
-		r = apk() ? sh(`apk add --allow-untrusted ${join(' ', files)}`) : sh(`opkg install --force-reinstall ${join(' ', files)}`);
+		let m = match(join(' ', files), /\/dpishell-([0-9][A-Za-z0-9._~+-]*)\.(apk|ipk)/);
+		let target = m ? m[1] : null;
+		if (rollback && !older(target, installed_version('dpishell')))
+			return `Пакеты ${target ?? '—'} не старше установленной версии — это не откат`;
+		job_put(job, { step: 'install', target });
+		// Откат: старшую версию apk меняет на младшую по явному файлу; opkg — только с --force-downgrade.
+		r = apk() ? sh(`apk add --allow-untrusted ${join(' ', files)}`)
+			: sh(`opkg install --force-reinstall${rollback ? ' --force-downgrade' : ''} ${join(' ', files)}`);
 		if (r.rc == 0)
 			unpin();
 	} else {
@@ -306,11 +483,20 @@ function install(from, job) {
 		if (i >= 2 && sh('ubus -t 2 list dpishell').rc == 0)
 			break;
 	}
-	check();
 	// apk/opkg могут закончить без ошибки, ничего не обновив: успех — только если встала целевая версия.
 	let inst = installed_version('dpishell');
-	if (job.target && inst != job.target)
-		return `Обновление не установилось: стоит ${inst ?? 'неизвестная версия'}, ожидалась ${job.target}`;
+	if (job.target && inst != job.target) {
+		check();
+		return `${rollback ? 'Откат не удался' : 'Обновление не установилось'}: стоит ${inst ?? 'неизвестная версия'}, ожидалась ${job.target}`;
+	}
+	// Пакеты для отката — до check(): он сам берёт из витрины пакеты установленной версии, если их нет.
+	try {
+		if (rollback)
+			after_rollback(from == 'saved' ? null : files);
+		else
+			after_update(job.from_version, from == 'feed' ? null : files);
+	} catch (x) {}
+	check();
 	return null;
 }
 
@@ -344,8 +530,10 @@ function recover() {
 		: job.from_version != null ? inst != job.from_version
 		: (inst != null && feed != null && !older(inst, feed));
 	job_put(job, { running: false, step: 'done', ok,
-		message: ok ? `Обновлено до ${inst}` : `Обновление прервалось, установлена ${inst ?? 'неизвестная версия'}` });
+		message: ok ? (job.action == 'rollback' ? `Возвращена версия ${inst}` : `Обновлено до ${inst}`)
+			: `${job.action == 'rollback' ? 'Откат прервался' : 'Обновление прервалось'}, установлена ${inst ?? 'неизвестная версия'}` });
 	return true;
 }
 
-export { feed_release, check, check_daily, status, install, installed_version, recover, job_put, local_dir_problem, local_files, local_cleanup, sig_ok, LOCAL_DIR, JOB };
+export { feed_release, check, check_daily, status, install, installed_version, recover, job_put, local_dir_problem, local_files, local_cleanup, sig_ok, LOCAL_DIR, JOB,
+	rollback_status, learn_prev, slot_files };

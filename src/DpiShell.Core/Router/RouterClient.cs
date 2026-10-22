@@ -574,6 +574,20 @@ public sealed class RouterClient : IDisposable
     /// <summary>Проверить новую версию сейчас (итог — status.update).</summary>
     public Task<RouterStarted> UpdateCheckAsync(CancellationToken ct = default) => CallAsync<RouterStarted>("update_check", null, ct);
 
+    /// <summary>Откат версии пакета (router-api §5.2, роутер с 0.2.0-r16): saved — пакеты из флеша роутера, иначе — из /tmp/dpishell-update (кладёт окно по SSH).</summary>
+    public Task<RouterStarted> UpdateRollbackAsync(bool saved, CancellationToken ct = default) =>
+        CallAsync<RouterStarted>("update_rollback", new JsonObject { ["from"] = saved ? "saved" : "local" }, ct);
+
+    /// <summary>«Изменения DpiShell на роутере» (router-api §5.2, роутер с 0.2.0-r16): пункты и итог последней отмены.</summary>
+    public Task<RouterChangesList> ChangesListAsync(CancellationToken ct = default) => CallAsync<RouterChangesList>("changes_list", null, ct);
+
+    /// <summary>Отменить пункт (фоновое задание; итог — changes_list.job).</summary>
+    public Task<RouterStarted> ChangesUndoAsync(string id, CancellationToken ct = default) =>
+        CallAsync<RouterStarted>("changes_undo", new JsonObject { ["id"] = id }, ct);
+
+    /// <summary>«Отменить всё» на роутере (фоновое задание; итог — changes_list.job).</summary>
+    public Task<RouterStarted> ChangesUndoAllAsync(CancellationToken ct = default) => CallAsync<RouterStarted>("changes_undo_all", null, ct);
+
     static string CheckListName(string name) =>
         name is "user-general" or "user-exclude" ? name : throw new ArgumentException(L.T("core.rt.arg.list_name"));
 

@@ -479,14 +479,107 @@ public sealed partial class RouterViewModel
 
     async Task<RouterUpdateJob?> UpdateLocalAsync(string version)
     {
+        await UploadReleaseAsync(version);
+        return await UpdateFromAsync(RouterUpdateSource.Local, version);
+    }
+
+    // ---------- «Вернуть версию» (router-api §5.2 update_rollback, роутер с 0.2.0-r16) ----------
+    // Только по кнопке, с вопросом. Пакеты прежней версии во флеше роутера (status.rollback.saved) — роутер ставит их сам;
+    // нет — их скачивает этот ПК из выпуска (подпись и sha256, как при обновлении через ПК) и кладёт по SSH (from: local).
+    // Старый роутер (без status.rollback и метода) — кнопки нет. Настройки роутер сохраняет.
+
+    public bool RollbackShown => Connected && !Updating && _status?.Rollback?.Version is { Length: > 0 } && Compat?.CanCall("update_rollback") == true;
+    public string RollbackText => L.T("router.rollback.button", new { version = _status?.Rollback?.Version });
+    public ICommand RollbackCmd => _rollbackCmd ??= RelayCommand.Async(() => RollbackAsync(), () => RollbackShown && !Busy);
+    ICommand? _rollbackCmd;
+
+    void RaiseRollback() { Raise(nameof(RollbackShown)); Raise(nameof(RollbackText)); }
+
+    /// <summary>«0.2.0-r15» старше «0.2.0-r16» (основа — как версия, затем номер сборки). Непонятный вид — false.</summary>
+    public static bool OlderPackage(string? a, string? b)
+    {
+        static (Version V, int R)? Parse(string? s)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(s ?? "", @"^(\d+(?:\.\d+){1,3})(?:-r(\d+))?$");
+            return m.Success ? (Version.Parse(m.Groups[1].Value), m.Groups[2].Success ? int.Parse(m.Groups[2].Value) : 0) : null;
+        }
+        if (Parse(a) is not { } x || Parse(b) is not { } y) return false;
+        return x.V != y.V ? x.V < y.V : x.R < y.R;
+    }
+
+    /// <summary>«Вернуть версию»: вопрос, откат (из флеша роутера или через ПК), ожидание итога как у обновления; true — возвращена.</summary>
+    public async Task<bool> RollbackAsync()
+    {
+        if (_status?.Rollback is not { Version: { Length: > 0 } version } rb) return false;
+        if (Busy) { Say(L.T("router.guard.busy")); return false; }
+        if (!Connected) { Say(L.T("router.guard.not_connected")); return false; }
+        if (!Confirm(L.T("router.rollback.confirm", new { version }) + (rb.Saved ? "" : "\n\n" + L.T("router.rollback.via_pc", new { version })))) return false;
+        Busy = true;
+        _updateStep = null;
+        _updateFailed = false;
+        UpdateLog = "";
+        _updateStarted = DateTime.UtcNow;
+        _rollbackTo = version;
+        Updating = true;
+        RaiseRollback();
+        Say(L.T("router.rollback.busy", new { version }));
+        try
+        {
+            RouterUpdateJob? job;
+            if (rb.Saved)
+                job = await UpdateFromAsync(RouterUpdateSource.Local, version, c => c.UpdateRollbackAsync(true));
+            else
+            {
+                var installed = _status?.Packages?.Dpishell;
+                var target = await UploadReleaseAsync(version, files =>
+                {
+                    // В выпуске прежней основы может лежать другая сборка: годится только версия старше установленной.
+                    var v = files.Select(f => System.Text.RegularExpressions.Regex.Match(f.Name, @"^dpishell-(.+)\.(apk|ipk)$"))
+                        .FirstOrDefault(m => m.Success)?.Groups[1].Value;
+                    return v is not null && (installed is null || OlderPackage(v, installed)) ? v : null;
+                });
+                if (target is null) { Failed(L.T("router.rollback.no_release", new { version })); return false; }
+                job = await UpdateFromAsync(RouterUpdateSource.Local, target, c => c.UpdateRollbackAsync(false));
+            }
+            if (job?.Ok == true)
+            {
+                await UpdatedAsync(job);
+                Say(L.T("router.rollback.done", new { version = _status?.Packages?.Dpishell ?? version }));
+                return true;
+            }
+            _updateFailed = true;
+            Failed(L.T("router.rollback.failed", new { message = job?.Message is { Length: > 0 } m ? m : L.T("router.update.not_finished") }));
+            return false;
+        }
+        catch (RouterException e) { Failed(RouterTexts.Friendly(e)); return false; }
+        catch (HttpRequestException) { Failed(L.T("router.rollback.no_release", new { version })); return false; }
+        catch (Exception e) when (e is RouterSshException or DpiShell.Core.SecurityException or IOException or UnauthorizedAccessException)
+        {
+            Failed(L.T("router.update.pc_failed", new { reason = SshText(e) }));
+            return false;
+        }
+        finally { Busy = false; _rollbackTo = null; Updating = false; _updateFailed = false; RaiseUpdate(); RaiseRollback(); }
+    }
+
+    /// <summary>Идёт откат на эту версию: заголовок хода — «Возврат версии…», а не «Обновление…».</summary>
+    string? _rollbackTo;
+
+    /// <summary>
+    /// Пакеты выпуска <paramref name="version"/> — скачать с проверкой подписи и sha256 и положить на роутер по SSH (/tmp/dpishell-update).
+    /// <paramref name="accept"/> — проверить скачанное до отправки: версия пакета или null (не годится, не отправлять).
+    /// </summary>
+    async Task<string?> UploadReleaseAsync(string version, Func<IReadOnlyList<RouterUpdateFile>, string?>? accept = null)
+    {
         var dir = Path.Combine(Path.GetDirectoryName(_settings.File)!, "router-update");
         if (Directory.Exists(dir)) Directory.Delete(dir, true);
         var files = await RouterUpdatePackages.DownloadAsync(Http, LoadReleases(), version, dir, ReleaseKey);
+        var target = accept is null ? version : accept(files);
+        if (target is null) return null;
         var address = SetupAddress() ?? throw new RouterSshException(RouterSshFailure.Unreachable, L.T("router.err.no_address"));
         var pw = SshPassword(null, false) ?? throw new RouterSshException(RouterSshFailure.AuthFailed, L.T("router.err.no_saved_password"));
         await using (var ssh = await Ssh.ConnectAsync(new RouterSshTarget(address), () => pw))
             await new RouterSsh(ssh).UploadUpdateAsync(files, _status?.Update?.LocalSigned == true ? RouterUpdatePackages.ReleaseFilesIn(dir) : null);
-        return await UpdateFromAsync(RouterUpdateSource.Local, version);
+        return target;
     }
 
     // ---------- «Доступно обновление» и «Проверить обновления» ----------
@@ -495,7 +588,9 @@ public sealed partial class RouterViewModel
     public bool UpdateAvailable => _status?.Update is { Available: true } && !Updating;
     public bool ShowUpdate => UpdateAvailable || Updating;
     /// <summary>Идёт — «Обновляю DpiShell на роутере… 1:23» (прошедшее время: видно, что не зависло); не завершилось — так и сказано.</summary>
-    public string UpdateTitle => Updating ? L.T("router.update.title_running", new { time = (DateTime.UtcNow - _updateStarted).ToString("m\\:ss") })
+    public string UpdateTitle => Updating ? (_rollbackTo is { } rv
+            ? L.T("router.rollback.busy", new { version = rv }) + " " + (DateTime.UtcNow - _updateStarted).ToString("m\\:ss")
+            : L.T("router.update.title_running", new { time = (DateTime.UtcNow - _updateStarted).ToString("m\\:ss") }))
         : _updateFailed ? (_status?.Version is { Length: > 0 } cur
             ? L.T("router.update.title_failed_cur", new { version = _status?.Update?.Version, current = cur })
             : L.T("router.update.title_failed", new { version = _status?.Update?.Version }))
@@ -571,11 +666,11 @@ public sealed partial class RouterViewModel
     /// running держится дольше <see cref="UpdateStuckAfter"/>, а роутер отвечает: версия уже <paramref name="target"/> — успех
     /// («роутер не дописал итог»), прежняя — задание с Running = true (не завершилось).
     /// </summary>
-    async Task<RouterUpdateJob?> UpdateFromAsync(RouterUpdateSource from, string? target)
+    async Task<RouterUpdateJob?> UpdateFromAsync(RouterUpdateSource from, string? target, Func<RouterClient, Task<RouterStarted>>? start = null)
     {
         var before = _status?.Update?.Job;
         var versionBefore = _status?.Version;
-        await Call(c => c.UpdateInstallAsync(from));
+        await Call(start ?? (c => c.UpdateInstallAsync(from)));
         var started = DateTime.UtcNow;
         bool sawRunning = false;
         while (DateTime.UtcNow - started < UpdateTimeout)

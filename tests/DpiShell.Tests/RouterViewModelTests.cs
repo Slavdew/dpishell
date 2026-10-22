@@ -540,6 +540,150 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.DoesNotContain(r0.Calls, c => Method(c) == "security_check");
     }
 
+    // «Изменения DpiShell на роутере» (changes_list, роутер с 0.2.0-r16): тот же список, что на странице роутера.
+    [Fact]
+    public async Task Changes_NewRouter_RowsWithUndoOrReason_UndoOneReports()
+    {
+        using var r = new FakeRouter().As020();
+        r.MethodsJson = FakeRouter.MethodsR16;
+        var (vm, _) = Make(r);
+        string? asked = null;
+        vm.Confirm = q => { asked = q; return true; };
+        await vm.ConnectAsync("secret");
+        await vm.RefreshDiagAsync();
+        Assert.True(vm.RouterChangesShown);
+        var rows = vm.RouterChanges;
+        Assert.Equal(["Оптимизация включена: nfqws, правила nft, автозапуск", "Свои сайты, строк: 2", "DNS для всей сети", "Что-то из версии новее окна", "Ядро zapret v72.13"],
+            rows.Select(x => x.Title));
+        Assert.Equal("Отменить", rows[0].Action);
+        Assert.Equal(L.T("router.changes.row.link"), rows[2].Note);   // DNS: связь может прерваться
+        Assert.False(rows[4].HasAction);                               // ядро — только с удалением, с подписью почему
+        Assert.Equal("Убирается при удалении DpiShell.", rows[4].Note);
+        Assert.True(vm.RouterCanUndoAll);
+
+        Assert.False(await vm.UndoRouterChangeAsync("core"));   // отдельно нельзя — не зовётся
+        Assert.Null(asked);
+        Assert.True(await vm.UndoRouterChangeAsync("list:user-general"));
+        Assert.StartsWith("Отменить «Свои сайты, строк: 2»?", asked);
+        Assert.DoesNotContain(L.T("router.changes.link_warn"), asked);
+        Assert.Equal(["list:user-general"], r.ChangesUndone);
+        Assert.DoesNotContain(vm.RouterChanges, x => x.Id == "list:user-general");
+        var rep = Assert.Single(vm.RouterChangesReport);
+        Assert.Equal(("Возвращено", "ok"), (rep.Status, rep.Mark));
+        Assert.Equal("Возвращено: 1 · уже было как раньше: 0 · пропущено: 0 · не удалось: 0", vm.RouterChangesSummary);
+    }
+
+    [Fact]
+    public async Task Changes_UndoAll_WarnsAboutLink_WaitsRestart_ReportsFailed()
+    {
+        using var r = new FakeRouter().As020();
+        r.MethodsJson = FakeRouter.MethodsR16;
+        r.ChangeFailId = "dns";
+        r.ChangesUnreachablePolls = 2;   // DNS и межсетевой экран перезапускаются — роутер ненадолго не отвечает
+        var (vm, _) = Make(r);
+        string? asked = null;
+        vm.Confirm = q => { asked = q; return true; };
+        await vm.ConnectAsync("secret");
+        await vm.RefreshDiagAsync();
+        Assert.True(await vm.UndoRouterChangesAsync(null));
+        Assert.StartsWith(L.T("router.changes.confirm_all"), asked);
+        Assert.EndsWith(L.T("router.changes.link_warn"), asked);
+        Assert.Equal(["enable", "list:user-general", "future"], r.ChangesUndone);
+        Assert.Equal(4, vm.RouterChangesReport.Count);
+        Assert.Equal("fail", vm.RouterChangesReport.Single(x => x.Title == "DNS для всей сети").Mark);
+        Assert.Contains("перезагрузите роутер", vm.RouterChangesReport.Single(x => x.Mark == "fail").Note);
+        Assert.Equal(["DNS для всей сети", "Ядро zapret v72.13"], vm.RouterChanges.Select(x => x.Title));
+        Assert.Equal("Возвращено: 3 · уже было как раньше: 0 · пропущено: 0 · не удалось: 1", vm.RouterChangesSummary);
+    }
+
+    [Fact]
+    public async Task Changes_Declined_NothingCalled()
+    {
+        using var r = new FakeRouter().As020();
+        r.MethodsJson = FakeRouter.MethodsR16;
+        var (vm, _) = Make(r);
+        vm.Confirm = _ => false;
+        await vm.ConnectAsync("secret");
+        await vm.RefreshDiagAsync();
+        Assert.False(await vm.UndoRouterChangesAsync(null));
+        Assert.DoesNotContain(r.Calls, c => Method(c) is "changes_undo" or "changes_undo_all");
+    }
+
+    [Fact]
+    public async Task Changes_OldRouter_NoCallNoCard()
+    {
+        using var r = new FakeRouter().As020();   // 0.2.0 до r16: метода нет в status.methods
+        var (vm, _) = Make(r);
+        await vm.ConnectAsync("secret");
+        await vm.RefreshDiagAsync();
+        Assert.True(vm.DiagLoaded);
+        Assert.False(vm.RouterChangesShown);
+        Assert.False(vm.RouterChangesEmpty);
+        Assert.DoesNotContain(r.Calls, c => Method(c) == "changes_list");
+    }
+
+    // «Вернуть версию» (update_rollback, роутер с 0.2.0-r16): только по кнопке, с вопросом; старый роутер — кнопки нет.
+    [Fact]
+    public async Task Rollback_Saved_AsksThenRouterInstallsFromFlash()
+    {
+        using var r = new FakeRouter().As020().AsR8("0.2.0-r16", "0.2.0-r12");
+        r.MethodsJson = FakeRouter.MethodsR16;
+        r.Rollback = ("0.2.0-r15", true);
+        r.UpdateAvailable = false;
+        var (vm, _) = Make(r);
+        string? asked = null;
+        vm.Confirm = q => { asked = q; return true; };
+        await vm.ConnectAsync("secret");
+        Assert.True(vm.RollbackShown);
+        Assert.Equal("Вернуть версию 0.2.0-r15", vm.RollbackText);
+        Assert.True(await vm.RollbackAsync());
+        Assert.StartsWith("Вернуть на роутере версию 0.2.0-r15?", asked);
+        Assert.DoesNotContain(L.T("router.rollback.via_pc", new { version = "0.2.0-r15" }), asked);
+        Assert.Equal("saved", r.RollbackFrom);
+        Assert.Equal("0.2.0-r15", vm.Status?.Packages?.Dpishell);
+        Assert.False(vm.RollbackShown);   // новее установленной роутер пакеты не хранит — второго отката нет
+        lock (_said) Assert.Contains("На роутере возвращена версия 0.2.0-r15", _said);
+    }
+
+    [Fact]
+    public async Task Rollback_Declined_NothingCalled()
+    {
+        using var r = new FakeRouter().As020().AsR8("0.2.0-r16", "0.2.0-r12");
+        r.MethodsJson = FakeRouter.MethodsR16;
+        r.Rollback = ("0.2.0-r15", true);
+        var (vm, _) = Make(r);
+        vm.Confirm = _ => false;
+        await vm.ConnectAsync("secret");
+        Assert.False(await vm.RollbackAsync());
+        Assert.DoesNotContain(r.Calls, c => Method(c) == "update_rollback");
+    }
+
+    [Fact]
+    public async Task Rollback_OldRouter_NoButton()
+    {
+        using var r = new FakeRouter().As020().AsR8();   // до r16: ни status.rollback, ни метода
+        var (vm, _) = Make(r);
+        await vm.ConnectAsync("secret");
+        Assert.False(vm.RollbackShown);
+        Assert.False(await vm.RollbackAsync());
+        Assert.DoesNotContain(r.Calls, c => Method(c) == "update_rollback");
+
+        using var r2 = new FakeRouter().As020().AsR8("0.2.0-r16");   // поле есть, а метода нет в status.methods (несовпадение версий) — тоже нет
+        r2.Rollback = ("0.2.0-r15", true);
+        var (vm2, _) = Make(r2);
+        await vm2.ConnectAsync("secret");
+        Assert.False(vm2.RollbackShown);
+    }
+
+    [Theory]
+    [InlineData("0.2.0-r15", "0.2.0-r16", true)]
+    [InlineData("0.2.0-r16", "0.2.0-r16", false)]
+    [InlineData("0.2.0-r9", "0.2.0-r10", true)]
+    [InlineData("0.1.0", "0.2.0-r1", true)]
+    [InlineData("0.2.1-r1", "0.2.0-r16", false)]
+    [InlineData("x", "0.2.0-r16", false)]
+    public void Rollback_OlderPackage(string a, string b, bool older) => Assert.Equal(older, RouterViewModel.OlderPackage(a, b));
+
     [Fact]
     public async Task Security_MethodFails_DiagStillShown()
     {

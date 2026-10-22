@@ -17,7 +17,7 @@ RES = os.path.join(APP, 'htdocs', 'luci-static', 'resources')
 OUT = os.path.join(RES, 'dpishell', 'lang')
 LANGS = {'ru': {'language': 'Русский', 'code': 'ru', 'flag': 'ru'},
          'en': {'language': 'English', 'code': 'en', 'flag': 'gb'}}
-PREFIXES = ('web', 'router', 'home', 'select', 'sites', 'dns', 'diag', 'about', 'common')
+PREFIXES = ('web', 'router', 'home', 'select', 'sites', 'dns', 'diag', 'about', 'common', 'settings')
 # Ключи, собираемые в коде из частей: 'router.schedule.opt.' + h[1] и т. п.
 DYNAMIC = (['router.schedule.opt.' + x for x in ('30m', '1h', '3h', '6h', '12h', '24h')] +
            ['web.err.ubus'] + ['web.err.ubus_%d' % i for i in (2, 4, 5, 6, 7)] + ['web.dns.cons%d' % i for i in range(1, 7)] +

@@ -28,6 +28,7 @@ return view.extend({
 		this.el = {
 			versions: E('div'),
 			update: E('div'),
+			rollback: E('div'),
 			err: E('div', { 'class': 'dps-error' }),
 			check: api.btn(api.t('router.update.check'), function() { return self.checkUpdate(); }, 'cbi-button-neutral')
 		};
@@ -38,6 +39,7 @@ return view.extend({
 				this.el.versions,
 				this.el.update,
 				E('div', { 'class': 'dps-actions' }, [this.el.check]),
+				this.el.rollback,
 				this.el.err
 			]),
 			api.card(api.t('web.about.info'), [
@@ -101,6 +103,33 @@ return view.extend({
 		var running = !!(j.update || ck);
 		this.el.check.disabled = running;
 		this.renderUpdate(s.update, running);
+		this.renderRollback(s.rollback, running);
+	},
+
+	// Откат версии (status.rollback, с 0.2.0-r16; у старого пакета поля нет — блока нет): только по кнопке, с вопросом.
+	// Пакеты прежней версии не сохранены на роутере — честно сказано, вернуть можно из окна ПК (оно положит пакеты само).
+	renderRollback: function(r, running) {
+		var self = this;
+		if (!r || !r.version || this.updating) {
+			api.content(this.el.rollback, '');
+			return;
+		}
+		// Полная версия со сборкой (0.2.0-r15): откат обычно внутри одной базовой версии — без -rN не различить.
+		var v = String(r.version);
+		if (!r.saved) {
+			api.content(this.el.rollback, api.line(api.t('web.rollback.unavailable', { version: v,
+				reason: api.t(r.reason == 'space' ? 'web.rollback.reason.space' : 'web.rollback.reason.not_saved') }), 'dps-muted'));
+			return;
+		}
+		var b = api.btn(api.t('router.rollback.button', { version: v }), function() { return self.rollback(v); }, 'cbi-button-neutral');
+		b.disabled = running;
+		api.content(this.el.rollback, E('div', { 'class': 'dps-actions' }, [b]));
+	},
+
+	rollback: function(version) {
+		if (!window.confirm(api.t('router.rollback.confirm', { version: version })))
+			return Promise.resolve();
+		return this.runUpdate('update_rollback', { from: 'saved' }, api.t('router.rollback.busy', { version: version }));
 	},
 
 	renderUpdate: function(u, running) {
@@ -108,7 +137,7 @@ return view.extend({
 		if (this.updating) {
 			this.el.updateStep = this.el.updateStep || E('div', { 'class': 'dps-muted' });
 			api.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
-				E('span', { 'class': 'spinning' }, api.t('web.about.updating')), this.el.updateStep]));
+				E('span', { 'class': 'spinning' }, this.updateTitle || api.t('web.about.updating')), this.el.updateStep]));
 			return;
 		}
 		if (running) {
@@ -153,11 +182,18 @@ return view.extend({
 	},
 
 	updateInstall: function() {
+		return this.runUpdate('update_install', { from: 'feed' });
+	},
+
+	// Обновление или откат версии: задание update, ход — status.update.job; title — заголовок вместо «Обновление…».
+	runUpdate: function(method, args, title) {
 		var self = this;
 		api.fail(this.el.err, null);
-		return api.call('update_install', { from: 'feed' }).then(function() {
+		return api.call(method, args).then(function() {
 			self.updating = true;
+			self.updateTitle = title || null;
 			self.renderUpdate();
+			api.content(self.el.rollback, '');
 			poll.stop();
 			// Пакет меняет сам себя и перезапускает rpcd: ошибки ответа во время обновления — пережидаем.
 			var started = Date.now();
@@ -179,7 +215,7 @@ return view.extend({
 					if (job && job.ok === false) {
 						self.updating = false;
 						self.status = s;
-						api.fail(self.el.err, api.error(api.msg(job.message_msg || job.message), 'update_install'));
+						api.fail(self.el.err, api.error(api.msg(job.message_msg || job.message), method));
 						self.render2();
 						poll.start();
 						return;

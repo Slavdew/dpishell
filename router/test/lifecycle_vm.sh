@@ -7,7 +7,7 @@
 #   sh lifecycle_vm.sh enable <id>           — выбрать стратегию и включить
 #   sh lifecycle_vm.sh update_local <набор>  — обновление из папки окна ПК (/tmp/dpishell-update) и ожидание итога
 #   sh lifecycle_vm.sh uninstall <keep|full> — метод ubus uninstall и ожидание итога
-#   sh lifecycle_vm.sh wait_dns              — дождаться конца задания DNS
+#   sh lifecycle_vm.sh dns_set <вариант>     — dns_set и ожидание итога именно этого задания
 #   sh lifecycle_vm.sh purge                 — убрать DpiShell полностью (новым uninstall.sh), если стоит
 # Вывод проверок — строки «ok <что>» / «FAIL <что>»; итоги собирает vm-lifecycle.sh.
 D=/tmp/dpslc
@@ -107,10 +107,104 @@ uninstall)
 	jsonfilter -i /tmp/dpishell-uninstall.json -e '@.message'
 	sleep 4
 	;;
-wait_dns)
-	sleep 2
-	wait_file_json /tmp/dpishell/dns_job.json '@.running' false 180
+dns_set)
+	# Задание DNS начинается не сразу (rpcd запускает его в фоне), а прежний итог dns_job.json остаётся от прошлого задания:
+	# ждать итог именно этого — dns_set, законченный не раньше вызова (at ≥ t0), а не «running=false» вообще.
+	t0=$(date +%s)
+	ubus call dpishell dns_set "{\"preset\":\"$1\"}" >/dev/null || { fail "dns_set $1: вызов"; exit 0; }
+	i=0
+	while [ $i -lt 180 ]; do
+		f=/tmp/dpishell/dns_job.json
+		if [ "$(jsonfilter -i $f -e '@.action' 2>/dev/null)" = dns_set ] && [ "$(jsonfilter -i $f -e '@.running' 2>/dev/null)" = false ] &&
+			[ "$(jsonfilter -i $f -e '@.at' 2>/dev/null || echo 0)" -ge "$t0" ] 2>/dev/null; then
+			break
+		fi
+		sleep 1; i=$((i + 1))
+	done
+	check "DNS $1: задание закончено" [ $i -lt 180 ]
+	check "DNS $1: задание ок" [ "$(jsonfilter -i /tmp/dpishell/dns_job.json -e '@.ok' 2>/dev/null)" = true ]
 	jsonfilter -i /tmp/dpishell/dns_job.json -e '@.message'
+	;;
+changes)
+	# «Изменено DpiShell» (changes_list / changes_undo / changes_undo_all, с r16): пункты по тому, что поменяли, отмена одного
+	# пункта и всех. DNS — при выключенной оптимизации (в эмуляторе она рвёт собственные соединения роутера, DoH не проверить).
+	strat=$1
+	undo_wait() {   # undo_wait <id|all>: вызов и ожидание итога именно этого задания (started_at ≥ t0)
+		t0=$(date +%s)
+		if [ "$1" = all ]; then r=$(ubus call dpishell changes_undo_all); else r=$(ubus call dpishell changes_undo "{\"id\":\"$1\"}"); fi
+		echo "$r" | grep -q '"started": true' || { fail "отмена $1: вызов ($r)"; return 1; }
+		f=/tmp/dpishell/changes_job.json; i=0
+		while [ $i -lt 120 ]; do
+			[ "$(jsonfilter -i $f -e '@.id' 2>/dev/null)" = "$1" ] && [ "$(jsonfilter -i $f -e '@.running' 2>/dev/null)" = false ] &&
+				[ "$(jsonfilter -i $f -e '@.started_at' 2>/dev/null || echo 0)" -ge "$t0" ] 2>/dev/null && return 0
+			sleep 1; i=$((i + 1))
+		done
+		fail "отмена $1: задание не закончилось"; return 1
+	}
+	has() { ubus call dpishell changes_list | jsonfilter -e '@.items[*].id' | grep -qx "$1"; }
+	ubus call dpishell disable >/dev/null; sleep 1
+	sh $D/lifecycle_vm.sh dns_set google | grep -v '^ok'
+	uci set firewall.@defaults[0].flow_offloading=1; uci commit firewall; /etc/init.d/firewall reload >/dev/null 2>&1
+	ubus call dpishell flow_offload_fix >/dev/null
+	ubus call dpishell strategy_set "{\"id\":\"$strat\"}" >/dev/null; ubus call dpishell enable '{}' >/dev/null; sleep 2
+	ubus call dpishell lists_set '{"name":"user-general","lines":["example.org","example.info"]}' >/dev/null
+	ubus call dpishell ipv6_set '{"enabled":true}' >/dev/null
+	ubus call dpishell advanced_set '{"enabled":true,"others":"lists","rows":[{"domains":["example.net"],"strategy":"auto"}]}' >/dev/null
+	ubus call dpishell pc_link_set '{"id":"test-pc-0002","macs":["02:00:00:00:00:02"],"domains":["example.com"]}' >/dev/null; sleep 2
+	cl=$(ubus call dpishell changes_list)
+	for x in enable list:user-general ipv6 advanced pc:test-pc-0002 flow_offload dns core; do
+		echo "$cl" | jsonfilter -e '@.items[*].id' | grep -qx "$x" && ok "журнал: $x" || fail "журнал: $x"
+	done
+	check "журнал: время у включения и ускорения сети" [ -n "$(j "$cl" '@.items[@.id="enable"].at')" -a -n "$(j "$cl" '@.items[@.id="flow_offload"].at')" ]
+	check "журнал: DNS и ускорение сети — с предупреждением о связи" [ "$(j "$cl" '@.items[@.id="dns"].risk')$(j "$cl" '@.items[@.id="flow_offload"].risk')" = linklink ]
+	check "журнал: ядро — отдельно нельзя" [ "$(j "$cl" '@.items[@.id="core"].undo')" = no ]
+	ubus call dpishell changes_undo '{"id":"core"}' | grep -q '"invalid"' && ok 'ядро: changes_undo отказывает' || fail 'ядро: changes_undo отказывает'
+	check "журнал во флеше — не больше 4 ключей" [ "$(jsonfilter -i /etc/dpishell/changes.json -e '@.*' | wc -l)" -le 4 ]
+	# Один пункт: остальные остаются.
+	md5a=$(md5sum < /opt/zapret/config)
+	undo_wait list:user-general && check "отмена пункта: список пуст" sh -c '! test -s /etc/dpishell/lists/user-general.txt'
+	check "отмена пункта: статус «возвращено»" [ "$(jsonfilter -i /tmp/dpishell/changes_job.json -e '@.items[0].status')" = restored ]
+	check "отмена пункта: пункта больше нет" sh -c '! ubus call dpishell changes_list | jsonfilter -e "@.items[*].id" | grep -qx list:user-general'
+	check "отмена пункта: остальное на месте" sh -c 'ubus call dpishell changes_list | jsonfilter -e "@.items[*].id" | grep -qx advanced && pidof nfqws >/dev/null'
+	undo_wait advanced && check "отмена: продвинутый режим убран из config" sh -c '! grep -q example.net /opt/zapret/config && ! test -e /etc/dpishell/advanced.json'
+	ubus call dpishell changes_undo '{"id":"advanced"}' | grep -q '"invalid"' && ok 'повторная отмена: «нет такого пункта»' || fail 'повторная отмена: «нет такого пункта»'
+	# Всё: выключено, ускорение сети и DNS — как было, связка снята, ядро осталось.
+	undo_wait all
+	jsonfilter -i /tmp/dpishell/changes_job.json -e '@.items[*].id' | tr '\n' ' '; echo
+	check "«Отменить всё»: всё «возвращено»" sh -c '! jsonfilter -i /tmp/dpishell/changes_job.json -e "@.items[*].status" | grep -vqx restored'
+	check "«Отменить всё»: оптимизация выключена" sh -c '[ "$(uci get dpishell.main.enabled)" = 0 ] && ! pidof nfqws >/dev/null && ! /etc/init.d/zapret enabled'
+	check "«Отменить всё»: ускорение сети вернулось" sh -c '[ "$(uci -q get firewall.@defaults[0].flow_offloading)" = 1 ] && [ -z "$(uci -q get dpishell.main.fw_offload_prev)" ]'
+	check "«Отменить всё»: DNS провайдера" sh -c '! test -e /etc/dpishell/dns-backup.json && [ -z "$(uci -q get dpishell.main.dns_preset)" ] && ! grep -qx "P:https-dns-proxy" /lib/apk/db/installed'
+	check "«Отменить всё»: связки и IPv6 нет" sh -c '! jsonfilter -i /etc/dpishell/pc-links.json -e "@.items[0]" >/dev/null && [ "$(uci get dpishell.main.ipv6)" = 0 ]'
+	check "«Отменить всё»: в списке только ядро" [ "$(ubus call dpishell changes_list | jsonfilter -e '@.items[*].id' | tr '\n' ' ')" = 'core ' ]
+	check "«Отменить всё»: DNS роутера отвечает" sh -c 'nslookup example.com 127.0.0.1 | grep -q "Address:.*[0-9]\.[0-9]"'
+	# Пусто — «Отменить всё» отвечает и ничего не делает.
+	undo_wait all && check "«Отменить всё» без пунктов — пустой итог" [ -z "$(jsonfilter -i /tmp/dpishell/changes_job.json -e '@.items[*].id')" ]
+	;;
+rollback)
+	# Откат версии: rollback saved — из флеша (status.rollback.saved), rollback local <набор> — из папки окна ПК.
+	if [ "$1" = local ]; then
+		rm -rf /tmp/dpishell-update; mkdir -m 700 /tmp/dpishell-update
+		cp $D/$2/*.apk /tmp/dpishell-update/
+		(cd /tmp/dpishell-update && sha256sum *.apk > SHA256SUMS)
+		want=$(ls $D/$2/ | sed -n 's/^dpishell-\(.*\)\.apk$/\1/p')
+	else
+		want=$(ubus call dpishell status | jsonfilter -e '@.rollback.version')
+	fi
+	t0=$(date +%s)
+	r=$(ubus call dpishell update_rollback "{\"from\":\"$1\"}")
+	echo "$r" | grep -q '"started": true' || fail "откат ($1): вызов — $r"
+	i=0
+	while [ $i -lt 180 ]; do
+		[ "$(jsonfilter -i /tmp/dpishell/update_job.json -e '@.action' 2>/dev/null)" = rollback ] && [ "$(jsonfilter -i /tmp/dpishell/update_job.json -e '@.running' 2>/dev/null)" = false ] &&
+			[ "$(jsonfilter -i /tmp/dpishell/update_job.json -e '@.started_at' 2>/dev/null || echo 0)" -ge "$t0" ] 2>/dev/null && break
+		sleep 1; i=$((i + 1))
+	done
+	sleep 3
+	i=0; while [ $i -lt 20 ] && ! ubus -t 2 list dpishell >/dev/null 2>&1; do sleep 1; i=$((i + 1)); done
+	check "откат ($1): задание ок" [ "$(jsonfilter -i /tmp/dpishell/update_job.json -e '@.ok')" = true ]
+	check "откат ($1): стоит $want" grep -qx "V:$want" /lib/apk/db/installed
+	jsonfilter -i /tmp/dpishell/update_job.json -e '@.message'
 	;;
 purge)
 	if grep -qx 'P:dpishell' /lib/apk/db/installed || [ -d /etc/dpishell ] || [ -d /opt/zapret ]; then

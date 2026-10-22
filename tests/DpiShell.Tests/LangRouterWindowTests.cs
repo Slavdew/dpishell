@@ -36,8 +36,9 @@ public sealed class LangRouterWindowTests : IDisposable
                   { "code": "brand_new_code", "text": "Что-то новое от роутера" } ]
                 """,
             ConflictsJson = """[ { "kind": "service", "name": "zapret2", "running": true }, { "kind": "package", "name": "zapret-manager-beam", "running": true } ]""",
-            // «Безопасность роутера» (security_check, r13): карточка видна, тексты на языке окна.
-            MethodsJson = FakeRouter.Methods020.Replace("\"status\"", "\"security_check\",\"status\""),
+            // «Безопасность роутера» (security_check, r13), «Изменения DpiShell на роутере» и «Вернуть версию» (r16): карточки видны, тексты на языке окна.
+            MethodsJson = FakeRouter.MethodsR16.Replace("\"status\"", "\"security_check\",\"status\""),
+            Rollback = ("0.2.0-r15", true),
             SelectRowsJson = """
                 [ { "id": "alt", "group_share": 1.0, "target_share": 0.88, "avg_s": 0.74, "error": null },
                   { "id": "alt9", "group_share": 1.0, "target_share": 0.80, "avg_s": 0.61, "error": null },
@@ -45,6 +46,8 @@ public sealed class LangRouterWindowTests : IDisposable
                   { "id": "alt2", "group_share": 0.0, "target_share": 0.0, "avg_s": 0, "error": "ломает обычные сайты: vk.com" } ]
                 """,
         };
+        // Пункт от роутера новее окна (ключа нет) показывается русским текстом роутера — в проверке языка окна он не нужен.
+        fake.ChangeItems.RemoveAll(x => x["id"]!.GetValue<string>() == "future");
         var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
         void Shot(FrameworkElement w, string name)
         {
@@ -120,6 +123,11 @@ public sealed class LangRouterWindowTests : IDisposable
                         if (Find<TextBlock>(tabs, t => t.Text == L.T("router.security.title") && t.IsVisible) is null) throw new Exception("Нет «Безопасность роутера»");
                         if (Find<TextBlock>(tabs, t => t.Text == L.T("router.schedule.title") && t.IsVisible) is null) throw new Exception("Нет расписания");
                         if (Find<TextBlock>(tabs, t => t.Text == L.T("router.dns.title") && t.IsVisible) is null) throw new Exception("Нет DNS для всей сети");
+                        if (Find<TextBlock>(tabs, t => t.Text == L.T("router.changes.title") && t.IsVisible) is null) throw new Exception("Нет «Изменения DpiShell на роутере»");
+                        if (Find<TextBlock>(tabs, t => t.Text == L.T("router.changes.item.enable") && t.IsVisible) is null) throw new Exception("Нет пункта «Оптимизация включена»");
+                        if (Find<TextBlock>(tabs, t => t.Text == L.T("router.changes.row.core") && t.IsVisible) is null) throw new Exception("Нет подписи, почему ядро отдельно не отменить");
+                        if (Find<Button>(tabs, b => b.Content as string == L.T("settings.changes.undo_all") && b.IsVisible) is null) throw new Exception("Нет «Отменить всё» на роутере");
+                        if (Find<Button>(tabs, b => b.Content as string == L.T("router.rollback.button", new { version = "0.2.0-r15" }) && b.IsVisible) is null) throw new Exception("Нет «Вернуть версию»");
                     }
                     Shot(w, name);
                     if (page == Pages.Router && Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == L.T("router.security.title")) is { } sec)
@@ -127,6 +135,11 @@ public sealed class LangRouterWindowTests : IDisposable
                         // Карточка ниже первого экрана: прокрутить к ней для снимка.
                         sec.BringIntoView(new Rect(0, 0, 1, 700));
                         Shot(w, "tab-security");
+                    }
+                    if (page == Pages.Router && Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == L.T("router.changes.title")) is { } chg)
+                    {
+                        chg.BringIntoView(new Rect(0, 0, 1, 500));
+                        Shot(w, "tab-changes");
                     }
                 }
                 vm.GoTo(Pages.Select);

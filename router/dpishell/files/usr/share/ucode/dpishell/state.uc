@@ -136,16 +136,45 @@ function uci_get(opt, dflt, c) {
 	return v == null ? dflt : v;
 }
 
+// «Изменено DpiShell» (changes.uc): время появления пунктов, которого не видно по файлам — включение, IPv6, ускорение сети,
+// DNS. Пишется во флеш только при появлении пункта (переход «как до DpiShell» → «изменено»); ключей не больше MARKS.
+const CHANGES = '/etc/dpishell/changes.json';
+const MARKS = { enabled: ['enable', '1'], ipv6: ['ipv6', '1'], fw_offload_prev: ['flow_offload', null], dns_preset: ['dns', null] };
+
+function changes_mark(ids) {
+	if (!length(ids))
+		return;
+	let m = read_json(CHANGES, {});
+	if (type(m) != 'object')
+		m = {};
+	for (let id in ids)
+		m[id] = time();
+	// Только известные ключи: чужое или старое в файле не копится.
+	let out = {};
+	for (let k in MARKS)
+		if (m[MARKS[k][0]] != null)
+			out[MARKS[k][0]] = m[MARKS[k][0]];
+	write_if_changed(CHANGES, sprintf('%J\n', out));
+}
+
 function uci_set(values) {
 	let c = cursor();
+	let marks = [];
 	for (let k in values) {
-		let v = values[k];
+		let v = values[k], mk = MARKS[k];
+		// Переход в «изменено»: enabled/ipv6 → 1, fw_offload_prev — появился, dns_preset — не провайдер (а был провайдер или пусто).
+		if (mk && v != null) {
+			let old = c.get('dpishell', 'main', k);
+			if (mk[1] ? (`${v}` == mk[1] && old != mk[1]) : (k == 'dns_preset' ? (v != 'provider' && (old == null || old == 'provider')) : old == null))
+				push(marks, mk[0]);
+		}
 		if (v == null)
 			c.delete('dpishell', 'main', k);
 		else
 			c.set('dpishell', 'main', k, type(v) == 'array' ? v : `${v}`);
 	}
 	c.commit('dpishell');
+	changes_mark(marks);
 }
 
 // Один курсор uci на все параметры: /etc/config/dpishell разбирается один раз.
@@ -452,5 +481,5 @@ export {
 	ensure_dirs, own_dir, root_file, write_atomic, write_if_changed, read_json, zapret_env, active_config, job_reserve, job_lock, uci_set, settings, roles, catalog, user_catalog, found_catalog, catalogs,
 	write_zapret_config, write_zapret_config_for, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running, iso,
 	PENDING, LAST_OFF, WATCHDOG_SELECT, pending_confirm, last_off, ADVANCED, ADV_OTHERS, advanced,
-	PC_LINKS, PC_EXPIRY, PC_MAX, PC_TTL, pc_links, pc_active, pc_split
+	PC_LINKS, PC_EXPIRY, PC_MAX, PC_TTL, pc_links, pc_active, pc_split, CHANGES
 };

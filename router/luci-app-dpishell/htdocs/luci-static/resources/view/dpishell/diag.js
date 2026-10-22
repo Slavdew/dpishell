@@ -21,8 +21,15 @@ return view.extend({
 		return api.lang().then(function() {
 			return Promise.all([api.safe('diag'), api.safe('status')]);
 		}).then(function(d) {
-			return self.loadSecurity(d[1]).then(function(sec) { return d.concat([sec]); });
+			return Promise.all([self.loadSecurity(d[1]), self.loadChanges(d[1])]).then(function(x) { return d.concat(x); });
 		});
+	},
+
+	// «Изменения DpiShell» (router-api §5.2 changes_list, с 0.2.0-r16): старый пакет без метода — карточки нет.
+	loadChanges: function(status) {
+		if (!status || status.__error || (status.methods || []).indexOf('changes_list') < 0)
+			return Promise.resolve(null);
+		return api.safe('changes_list');
 	},
 
 	// «Безопасность роутера» (router-api §5.1 security_check, с 0.2.0-r13): старый пакет без метода — блока нет.
@@ -37,11 +44,13 @@ return view.extend({
 		this.diag = data[0];
 		this.status = data[1].__error ? null : data[1];
 		this.security = data[2];
+		this.changes = data[3];
 		this.coreTicks = 0;
 
 		this.el = {
 			findings: E('div'),
 			security: E('div'),
+			changes: E('div'),
 			core: E('div'),
 			err: E('div', { 'class': 'dps-error' })
 		};
@@ -56,6 +65,10 @@ return view.extend({
 			this.security ? api.card(api.t('router.security.title'), [
 				api.line([api.t('router.security.intro'), api.info(api.t('router.security.intro_info'))], 'dps-muted'),
 				this.el.security
+			]) : '',
+			this.changes ? api.card(api.t('settings.changes.title'), [
+				api.line(api.t('router.changes.intro'), 'dps-muted'),
+				this.el.changes
 			]) : '',
 			api.card(api.t('web.core.title'), [this.el.core]),
 			api.card(api.t('web.diag.report'), [
@@ -77,13 +90,119 @@ return view.extend({
 
 		this.renderFindings();
 		this.renderSecurity();
+		this.renderChanges();
 		this.renderCore();
 		poll.add(L.bind(this.tick, this), 1);
 		return view;
 	},
 
+	// Список «Изменения DpiShell»: пункт — название, когда, «Отменить» или почему нельзя; ⚠ — может на секунды оборвать связь.
+	// Тексты — общие с окном ПК (settings.changes.*, router.changes.*). Итог последней отмены — по пунктам, как на ПК.
+	renderChanges: function() {
+		var self = this, c = this.changes, kids = [];
+		if (!c)
+			return;
+		if (c.__error) {
+			api.content(this.el.changes, api.errorLine(c.__error));
+			return;
+		}
+		var running = !!(c.job && c.job.running) || this.undoing;
+		var items = c.items || [];
+		if (!items.length)
+			kids.push(api.line(api.t('settings.changes.empty'), 'dps-muted'));
+		items.forEach(function(it) {
+			var title = api.msg({ key: it.key, params: it.params, text: it.text });
+			var when = it.at ? api.time(it.at) : '';
+			var note = it.undo == 'yes' ? (it.risk == 'link' ? api.t('router.changes.row.link') : '')
+				: api.msg({ key: it.note_key, params: {}, text: it.note || '' });
+			var btn = '';
+			if (it.undo == 'yes') {
+				btn = api.btn(api.t('settings.changes.row.undo'), function() { return self.undoChange(it, title); }, 'cbi-button-neutral');
+				btn.disabled = running;
+			}
+			kids.push(E('div', { 'class': 'dps-check-row dps-cr-unknown' }, [
+				E('span', { 'class': 'dps-cr-mark' }, it.risk == 'link' && it.undo == 'yes' ? '⚠' : '•'),
+				E('span', { 'class': 'dps-cr-text' }, [E('b', {}, title), when ? E('span', { 'class': 'dps-muted' }, ' · ' + when) : '',
+					note ? E('div', { 'class': 'dps-muted' }, note) : '']),
+				btn
+			]));
+		});
+		if (running)
+			kids.push(E('div', { 'class': 'spinning' }, api.t('router.changes.busy')));
+		else if (items.some(function(it) { return it.undo == 'yes'; })) {
+			var all = api.btn(api.t('settings.changes.undo_all'), function() { return self.undoChange(null); }, 'cbi-button-negative');
+			kids.push(E('div', { 'class': 'dps-actions' }, [all]));
+		}
+		var j = c.job;
+		if (j && !j.running && this.showReport && (j.items || []).length + (j.error ? 1 : 0)) {
+			var n = { restored: 0, same: 0, skipped: 0, failed: 0 };
+			var rep = (j.items || []).map(function(r) {
+				n[r.status] = (n[r.status] || 0) + 1;
+				var st = { restored: 'settings.changes.status_restored', same: 'settings.changes.status_same', skipped: 'settings.changes.status_skipped' }[r.status] || 'settings.changes.status_failed';
+				var why = r.note ? ' — ' + api.msg({ key: r.note_key, params: {}, text: r.note }) : '';
+				return E('li', {}, api.msg({ key: r.key, params: r.params, text: r.text }) + ': ' + api.t(st) + why);
+			});
+			if (j.error)
+				rep.push(E('li', {}, api.t('web.changes.failed', { message: j.error })));
+			kids.push(E('div', { 'class': 'alert-message ' + (n.failed || j.error ? 'warning' : 'notice') }, [
+				E('div', {}, rep.length ? api.t('settings.changes.summary', n) : api.t('settings.changes.summary_none')),
+				E('ul', { 'class': 'dps-list' }, rep)
+			]));
+		}
+		api.content(this.el.changes, kids);
+	},
+
+	// Отмена пункта (it) или всего (null): вопрос (с предупреждением о связи, где она может прерваться), задание в фоне, опрос итога.
+	undoChange: function(it, title) {
+		var self = this, items = (this.changes && this.changes.items) || [];
+		var risky = it ? it.risk == 'link' : items.some(function(x) { return x.undo == 'yes' && x.risk == 'link'; });
+		var q = (it ? api.t('router.changes.confirm_one', { title: title }) : api.t('router.changes.confirm_all')) +
+			(risky ? '\n\n' + api.t('router.changes.link_warn') : '');
+		if (!window.confirm(q))
+			return Promise.resolve();
+		this.el.err.textContent = '';
+		this.undoing = true;
+		this.showReport = true;
+		this.renderChanges();
+		var started = Date.now();
+		return api.call(it ? 'changes_undo' : 'changes_undo_all', it ? { id: it.id } : {}).then(function() {
+			return new Promise(function(resolve) {
+				// Отмена DNS перезапускает dnsmasq, ускорения сети — межсетевой экран: ответ может на секунды пропасть — ждём дальше.
+				var timer = window.setInterval(function() {
+					api.safe('changes_list').then(function(c) {
+						if (c.__error && Date.now() - started < 120000)
+							return;
+						if (!c.__error && c.job && c.job.running && Date.now() - started < 300000)
+							return;
+						window.clearInterval(timer);
+						self.undoing = false;
+						self.changes = c.__error ? self.changes : c;
+						if (c.__error)
+							api.fail(self.el.err, c.__error);
+						self.renderChanges();
+						self.reload();
+						resolve();
+					});
+				}, 1500);
+			});
+		}, function(e) {
+			self.undoing = false;
+			api.fail(self.el.err, e);
+			return self.reload();
+		});
+	},
+
 	tick: function() {
 		var self = this;
+		// Отмену начали не отсюда (окно ПК, другая вкладка) — следить за ней, пока идёт.
+		if (this.changes && this.changes.job && this.changes.job.running && !this.undoing && !document.hidden)
+			return api.safe('changes_list').then(function(c) {
+				if (c.__error)
+					return;
+				self.changes = c;
+				self.showReport = !c.job || !c.job.running;
+				self.renderChanges();
+			});
 		if (this.coreTicks <= 0)
 			return Promise.resolve();
 		this.coreTicks--;
@@ -105,10 +224,17 @@ return view.extend({
 				self.status = d[1];
 			self.renderFindings();
 			self.renderCore();
-			return self.security ? self.loadSecurity(self.status).then(function(sec) {
-				self.security = sec || self.security;
-				self.renderSecurity();
-			}) : null;
+			return Promise.all([
+				self.security ? self.loadSecurity(self.status).then(function(sec) {
+					self.security = sec || self.security;
+					self.renderSecurity();
+				}) : null,
+				// Пока идёт отмена, список ведёт её опрос (undoChange).
+				self.changes && !self.undoing ? self.loadChanges(self.status).then(function(c) {
+					self.changes = c || self.changes;
+					self.renderChanges();
+				}) : null
+			]);
 		});
 	},
 
