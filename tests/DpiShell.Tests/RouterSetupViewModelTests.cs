@@ -599,7 +599,7 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.Equal(["/tmp/dpishell-update/dpishell-0.2.1-r1.apk", "/tmp/dpishell-update/luci-app-dpishell-0.2.1-r1.apk", "/tmp/dpishell-update/SHA256SUMS"], ssh.Uploads);
         var froms = r.Calls.Where(c => Method(c) == "update_install").Select(c => c["params"]![3]!["from"]!.GetValue<string>()).ToList();
         Assert.Equal(["feed", "local"], froms);
-        Assert.Contains(_said, s => s.StartsWith("Роутер не достал витрину пакетов"));
+        Assert.Contains(_said, s => s.StartsWith("Роутер не может загрузить пакеты"));
         Assert.False(vm.UpdateAvailable);
     }
 

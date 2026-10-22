@@ -417,7 +417,7 @@
  "router.update.busy": "Обновление DpiShell на роутере…",
  "router.update.same_version_v": "Обновление не завершилось: версия DpiShell прежняя ({version}). Можно повторить.",
  "router.update.same_version": "Обновление не завершилось: версия DpiShell прежняя. Можно повторить.",
- "router.update.via_pc": "Роутер не достал витрину пакетов — загрузка обновления через этот компьютер…",
+ "router.update.via_pc": "Роутер не может загрузить пакеты — загрузка обновления через этот компьютер…",
  "router.update.not_finished": "Обновление не завершилось",
  "router.update.failed": "Обновить DpiShell на роутере не удалось",
  "router.update.failed_msg": "Обновить DpiShell на роутере не удалось: {message}",

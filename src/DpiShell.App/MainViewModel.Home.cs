@@ -349,6 +349,8 @@ public sealed partial class MainViewModel
         }
     }
     public string StrategiesLinkText => L.T(ShowStrategies ? "home.strategies.hide" : "home.strategies.show");
+    /// <summary>«Подобрать» — пока оптимизация выключена; «Не помогло? → Подобрать» — когда включена и сайты не открылись.</summary>
+    public string RetrySelectText => L.T(IsRunning ? "home.retry_select" : "home.select_link");
     public ICommand ToggleStrategiesCmd => _toggleStrategiesCmd ??= new RelayCommand(() => ShowStrategies = !ShowStrategies);
     ICommand? _toggleStrategiesCmd;
 
@@ -427,7 +429,7 @@ public sealed partial class MainViewModel
                      (nameof(PcStrategyText), () => PcStrategyText), (nameof(ShowRouterRow), () => ShowRouterRow), (nameof(RouterStateText), () => RouterStateText),
                      (nameof(RouterStrategyText), () => RouterStrategyText), (nameof(ShowRouterStrategy), () => ShowRouterStrategy), (nameof(ShowRouterToggle), () => ShowRouterToggle),
                      (nameof(ShowRouterReEnable), () => ShowRouterReEnable), (nameof(ShowRouterCheck), () => ShowRouterCheck), (nameof(ShowRouterSelect), () => ShowRouterSelect),
-                     (nameof(ShowRouterLogin), () => ShowRouterLogin), (nameof(PcAccent), () => PcAccent), (nameof(PcPlain), () => PcPlain), (nameof(ShowSiteFix), () => ShowSiteFix),
+                     (nameof(ShowRouterLogin), () => ShowRouterLogin), (nameof(RetrySelectText), () => RetrySelectText), (nameof(PcAccent), () => PcAccent), (nameof(PcPlain), () => PcPlain), (nameof(ShowSiteFix), () => ShowSiteFix),
                  })
         {
             var v = value();

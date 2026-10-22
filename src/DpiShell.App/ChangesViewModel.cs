@@ -251,9 +251,11 @@ public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window)
                 restored = Count(UndoStatus.Restored), same = Count(UndoStatus.AlreadyBack),
                 skipped = Count(UndoStatus.ChangedByOthers), failed = Count(UndoStatus.Failed),
             });
-        Question = Count(UndoStatus.ChangedByOthers) > 0
-            ? L.T("settings.changes.question")
-            : "";
+        Question = string.Join(" ", new[]
+        {
+            Count(UndoStatus.ChangedByOthers) > 0 ? L.T("settings.changes.question") : "",
+            Count(UndoStatus.Failed) > 0 ? L.T("settings.changes.question_failed") : "",
+        }.Where(s => s.Length > 0));
         RaiseShape();
     }
 

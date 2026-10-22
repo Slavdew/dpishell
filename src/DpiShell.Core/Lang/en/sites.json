@@ -98,7 +98,7 @@
  "sites.exclude.busy.save": "Saving exclusions…",
  "sites.exclude.saved": "Saved sites without optimization: {n}.",
  "sites.exclude.saved_rejected": "Saved sites without optimization: {n}. Not recognized and removed: {rejected}.",
- "sites.toast.saved": "My sites saved.",
+ "sites.toast.saved": "Changes on the “Sites” tab saved.",
  "sites.toast.not_saved": "My sites are not saved; strategy search and optimization will ignore them.",
  "sites.targets.busy.save": "Saving addresses…",
  "sites.targets.saved": "Saved sites: {n}.",

@@ -2223,7 +2223,7 @@ public sealed partial class WindowSmokeTests
                 Pump();
                 if (!Has(L.T("settings.changes.status_skipped")) || !Has(L.T("settings.changes.status_failed")) || !Has(L.T("settings.changes.status_same")) || !Has(L.T("settings.changes.status_restored")))
                     throw new Exception("В отчёте нет всех четырёх исходов");
-                if (Find<TextBlock>(Card(), t => t.Text == L.T("settings.changes.question") && t.IsVisible) is null) throw new Exception("Нет вопроса про изменённое после нас");
+                if (Find<TextBlock>(Card(), t => t.Text == L.T("settings.changes.question") + " " + L.T("settings.changes.question_failed") && t.IsVisible) is null) throw new Exception("Нет вопроса про изменённое после нас");
                 if (FindAll<TextBlock>(Card()).Any(t => System.Text.RegularExpressions.Regex.IsMatch(t.Text, @"\bобход", System.Text.RegularExpressions.RegexOptions.IgnoreCase))) throw new Exception("В карточке осталось слово «обход»");
                 ScrollToCard();
                 Shot("report");

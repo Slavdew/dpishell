@@ -415,7 +415,7 @@
  "router.update.busy": "Updating DpiShell on the router…",
  "router.update.same_version_v": "Update did not finish: DpiShell version is unchanged ({version}). You can retry.",
  "router.update.same_version": "Update did not finish: DpiShell version is unchanged. You can retry.",
- "router.update.via_pc": "The router cannot reach the package feed — downloading the update through this PC…",
+ "router.update.via_pc": "The router cannot download packages — downloading the update through this PC…",
  "router.update.not_finished": "Update did not finish",
  "router.update.failed": "Could not update DpiShell on the router",
  "router.update.failed_msg": "Could not update DpiShell on the router: {message}",

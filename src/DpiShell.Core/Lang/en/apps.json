@@ -9,7 +9,7 @@
  "apps.check.yes": "Yes, it works",
  "apps.check.no": "No",
  "apps.check.worse": "Worse",
- "apps.more": "Details →",
+ "apps.more": "Connection debugging →",
  "apps.profiles.title": "App profiles",
  "apps.profile.other_variant": "Other settings",
  "apps.profile.revert": "Revert",
@@ -90,7 +90,7 @@
   "one": "Not found within {n} attempt. Everything restored.",
   "other": "Not found within {n} attempts. Everything restored."
  },
- "apps.giveup_detail": "“Details” opens the recorded connections so you can select the needed ones manually.",
+ "apps.giveup_detail": "“Connection debugging” opens the recorded connections so you can select the needed ones manually.",
  "apps.rec.progress": "{time} · connections: {n}",
  "apps.rec.interrupted": "Recording interrupted: the helper restarted. Start again.",
  "apps.rec.expired": "Recording stopped at the time limit (5 minutes). Click “Done”; what was recorded is kept.",

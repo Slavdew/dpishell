@@ -38,6 +38,7 @@
   "about.app.rollback_tip": "Run the previous version; it is stored alongside",
   "about.app.hint_only": "Version {version} is out. Click “Check for updates”: the file is verified by its signature and the “Update to {version}” button appears right away.",
   "about.app.os_too_old": "Version {version} needs a newer Windows — it cannot be installed on this PC.",
+  "about.app.manual_link": "Does not help — download from the releases page ↗",
   "about.app.signature_failed": "The release description failed the signature check — no update is offered. You can download it from the releases page.",
   "about.app.stale": "Could not check for app updates: the release description is older than {days} days, the source may be spoofed. You can download it from the releases page.",
   "about.app.found_new": "Version {version} is out — you can update it in “About & updates”.",
@@ -74,6 +75,7 @@
   "about.info.repo": "Repository:",
   "about.info.issues": "Found a bug?",
   "about.info.issues_link": "Report a problem ↗",
+  "about.info.faq_link": "FAQ and how to restore everything ↗",
   "about.info.license": "License: MIT.",
   "about.info.third_party": "Third-party licenses are in THIRD-PARTY-NOTICES.txt next to the app.",
   "about.info.open_licenses": "Open licenses"

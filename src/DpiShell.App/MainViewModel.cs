@@ -1845,7 +1845,11 @@ public sealed partial class MainViewModel : Observable
     /// <summary>«Сообщить о проблеме» — страница обращений на GitHub.</summary>
     public ICommand OpenIssuesCmd => _openIssuesCmd ??= new RelayCommand(() => OpenLink(IssuesUrl));
     ICommand? _openIssuesCmd;
-    public ICommand OpenZapretCmd => _openZapretCmd ??= new RelayCommand(() => OpenLink(ZapretUrl));
+    /// <summary>Частые вопросы и «как вернуть как было»: docs/FAQ.md (ru) или docs/FAQ.en.md (остальные языки) в репозитории.</summary>
+    public static string FaqUrl => RepoUrl + "/blob/master/docs/" + (string.Equals(L.Current, "ru", StringComparison.OrdinalIgnoreCase) ? "FAQ.md" : "FAQ.en.md");
+    public ICommand OpenFaqCmd => _openFaqCmd ??= new RelayCommand(() => OpenLink(FaqUrl));
+    ICommand? _openFaqCmd;
+    public ICommand OpenZapretCmd =>_openZapretCmd ??= new RelayCommand(() => OpenLink(ZapretUrl));
     ICommand? _openZapretCmd;
     public ICommand OpenNoticesCmd => _openNoticesCmd ??= new RelayCommand(() => OpenLink(NoticesPath));
     ICommand? _openNoticesCmd;

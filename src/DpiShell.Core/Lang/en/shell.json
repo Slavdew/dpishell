@@ -43,7 +43,7 @@
   "shell.app.open_failed": "Could not open the DpiShell window. Details are in {log}.\n\n{error}",
   "shell.single.not_responding": "DpiShell is already running but not responding. End the old copy?",
   "shell.single.kill_failed": "Could not end the old DpiShell copy. End DpiShell.exe in Task Manager and open the app again.",
-  "shell.err.download_core": "Could not download the core. Check the internet connection and retry (GitHub can be blocked too — a retry often helps).",
+  "shell.err.download_core": "Could not download the core. Check the internet connection and retry (GitHub can be blocked too — a retry sometimes helps).",
   "shell.err.conflict": "Similar programs interfere: {names}. Close them and retry.",
   "shell.err.access": "No access to the app files. An antivirus may be holding them. {error}",
   "shell.err.start_core": "Could not start the zapret core (antivirus?): {error}",
