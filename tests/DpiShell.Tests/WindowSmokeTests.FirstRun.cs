@@ -47,16 +47,16 @@ public sealed partial class WindowSmokeTests
 
                 // Выключено: «Открывается 1 из 2», главная кнопка одна, ссылка про сломавшийся сайт спрятана (чинить пока нечего).
                 if (!Visible(t => t.Text.StartsWith("Открывается 1 из 2 · в "))) throw new Exception("До включения нет итога проверки");
-                if (Link("Не помогло? → Подобрать") is null) throw new Exception("Нет ссылки «Не помогло? → Подобрать»");
+                if (Link("Подобрать") is null) throw new Exception("Нет ссылки «Подобрать»");
                 if (Link("Сайт не открывается?") is not null) throw new Exception("«Сайт не открывается?» видна, пока оптимизация выключена");
                 if (Link(L.T("home.find_on_router")) is not null) throw new Exception("«Подобрать на роутере» видна без роутера");
                 int primary = FindAll<Button>(tabs, b => b.IsVisible && b.Style == (Style)w.FindResource("Primary")).Count();
                 if (primary != 1) throw new Exception($"На Главной главных (синих) кнопок {primary}, ждали 1");
 
-                // «Не помогло? → Подобрать» ведёт на «Подбор».
-                Link("Не помогло? → Подобрать")!.Command.Execute(null);
+                // «Подобрать» ведёт на «Подбор».
+                Link("Подобрать")!.Command.Execute(null);
                 Pump();
-                if (vm.Page != Pages.Select) throw new Exception("«Не помогло? → Подобрать» не открыла «Подбор»");
+                if (vm.Page != Pages.Select) throw new Exception("«Подобрать» не открыла «Подбор»");
                 vm.GoTo(Pages.Home);
 
                 // Включили: проверка сама, строка «было 1 из 2».
@@ -64,6 +64,7 @@ public sealed partial class WindowSmokeTests
                 WaitUi(vm.EnableAsync());
                 Pump();
                 if (!Visible(t => t.Text.StartsWith("Открывается 2 из 2 · в ") && t.Text.EndsWith(" · было 1 из 2"))) throw new Exception("После включения нет «Открывается 2 из 2 · в … · было 1 из 2»");
+                if (Link("Не помогло? → Подобрать") is null) throw new Exception("Включено, а ссылки «Не помогло? → Подобрать» нет");
                 if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-home-working-was.png")); }
 
                 // «Сайт не открывается?» → «Проверить сайт: с оптимизацией и без неё» → итог строкой → «Добавить в исключения» (п. 15, решение владельца).

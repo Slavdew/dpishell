@@ -98,7 +98,7 @@
  "sites.exclude.busy.save": "Сохранение исключений…",
  "sites.exclude.saved": "Сохранено сайтов без оптимизации: {n}.",
  "sites.exclude.saved_rejected": "Сохранено сайтов без оптимизации: {n}. Не распознаны и убраны: {rejected}.",
- "sites.toast.saved": "Свои сайты сохранены.",
+ "sites.toast.saved": "Правки на вкладке «Сайты» сохранены.",
  "sites.toast.not_saved": "Свои сайты не сохранены — подбор и оптимизация их не учтут.",
  "sites.targets.busy.save": "Сохранение адресов…",
  "sites.targets.saved": "Сохранено сайтов: {n}.",

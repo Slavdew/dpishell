@@ -218,7 +218,7 @@
                                                     </StackPanel>
                                                 </Button>
                                                 <!-- Не открылось — путь на экран «Подбор» прямо здесь (UX-аудит 7, п. 3). -->
-                                                <Button Content="{l:T home.retry_select}" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="0,0,10,0" VerticalAlignment="Center"
+                                                <Button Content="{Binding RetrySelectText}" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="0,0,10,0" VerticalAlignment="Center"
                                                         ToolTip="{l:T home.retry_select.tip}" />
                                                 <Button Content="{Binding StrategiesLinkText}" Style="{StaticResource LinkButton}" Command="{Binding ToggleStrategiesCmd}" Margin="0,0,10,0" VerticalAlignment="Center" />
                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -2752,7 +2752,10 @@
                                             <Expander Header="{l:T common.more}" Visibility="{Binding HasAppErrorMore, Converter={StaticResource Vis}}">
                                                 <TextBox Text="{Binding AppErrorMore, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Muted}" Margin="0,2,0,0" FontSize="12" />
                                             </Expander>
-                                            <Button Content="{l:T common.retry}" Command="{Binding RetryCmd}" HorizontalAlignment="Left" Margin="0,6,0,0" />
+                                            <WrapPanel Margin="0,6,0,0">
+                                                <Button Content="{l:T common.retry}" Command="{Binding RetryCmd}" />
+                                                <Button Content="{l:T about.app.manual_link}" Style="{StaticResource LinkButton}" Command="{Binding OpenReleaseCmd}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                            </WrapPanel>
                                         </StackPanel>
                                         <!-- Ручное скачивание — не рядом с главной кнопкой, а под «Подробнее». -->
                                         <Expander Header="{l:T common.more}" Visibility="{Binding AppHintOnly, Converter={StaticResource Vis}}">
@@ -2784,6 +2787,9 @@
                                     <WrapPanel Margin="0,6,0,0">
                                         <TextBlock Text="{l:T about.info.issues}" VerticalAlignment="Center" Margin="0,0,4,0" />
                                         <Button Content="{l:T about.info.issues_link}" Style="{StaticResource LinkButton}" Command="{Binding OpenIssuesCmd}" VerticalAlignment="Center" Margin="0" />
+                                    </WrapPanel>
+                                    <WrapPanel Margin="0,6,0,0">
+                                        <Button Content="{l:T about.info.faq_link}" Style="{StaticResource LinkButton}" Command="{Binding OpenFaqCmd}" VerticalAlignment="Center" Margin="-4,0,0,0" />
                                     </WrapPanel>
                                     <TextBlock Text="{l:T about.info.license}" Margin="0,6,0,0" />
                                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,6,0,0"

@@ -294,7 +294,7 @@ public sealed class TransferViewModel : Observable
         {
             if (_pkg is not { Manifest: { } m }) return L.T("settings.transfer.import_intro");
             var name = Path.GetFileNameWithoutExtension(_source.TrimEnd('\\', '/'));
-            var app = m.AppVersion.StartsWith("router", StringComparison.OrdinalIgnoreCase) ? m.AppVersion : ("DpiShell " + m.AppVersion).Trim();
+            var app = m.AppVersion.StartsWith("router", StringComparison.OrdinalIgnoreCase) ? m.AppVersion : ("DpiShell " + System.Text.RegularExpressions.Regex.Replace(m.AppVersion, @"^(\d+\.\d+\.\d+)\.0$", "$1")).Trim();
             if (!DateTime.TryParse(m.Created, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var when))
                 return L.T("settings.transfer.from_short", new { name }) + " · " + app;
             return L.T("settings.transfer.from", new { name, date = L.Date(when.ToLocalTime()), app });

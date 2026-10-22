@@ -264,7 +264,6 @@ public sealed partial class MainViewModel
         }
         DirectSite = "";
         DirectMessage = L.T(pc && router ? "home.direct.done_both" : pc ? "home.direct.done_pc" : "home.direct.done_router", new { site = host });
-        Message = DirectMessage;
     }
 
     async Task<bool> AddPcExcludeAsync(string host)

@@ -64,7 +64,7 @@ DpiShell does not change the router's security settings itself; below is what is
 - **Administrator (root) password:** set, not default, not empty.
 - **Access to the admin page and SSH:** from the home network only; closed from the internet (WAN).
 - **SSH key login** instead of a password.
-- **HTTPS for the admin page.** The PC app signs in to the router over HTTP, so the password crosses the home network unencrypted. That is a risk where there are foreign devices (guest Wi-Fi, a dormitory).
+- **HTTPS for the admin page.** If the page has HTTPS (a redirect from HTTP or port 443), the PC app switches to it by itself and remembers the certificate at the first sign-in. If the certificate changes, the app checks it over SSH or asks "Trust new". If a router that used to answer over HTTPS now answers only over HTTP, the app asks before sending the password in clear text. Without HTTPS the sign-in goes over HTTP and the password crosses the home network unencrypted: a risk where there are foreign devices (guest Wi-Fi, a dormitory).
 - **Wi-Fi:** WPA2/WPA3 with your own password; turn WPS off if unused; keep guests on a separate network.
 - **UPnP** lets programs open ports by themselves; turn it off if not needed.
 - **Updates:** keep the firmware and packages up to date.
@@ -74,7 +74,13 @@ DpiShell does not change the router's security settings itself; below is what is
 
 First the way from the app. If there is no app, no internet, or the program does not open, use the second way: it needs neither the app nor internet access.
 
-**Simplest.** "Settings" > "DpiShell changes" > "Undo all": restores from the journal what DpiShell changed on the PC (service, DNS, system proxy, hosts, TCP timestamps, program profiles, autostart, DNS and optimization on the router). Values from before DpiShell come back; your later edits are left alone. The report shows what was restored, what was already as before, what was skipped and what failed.
+**Simplest.** "Settings" > "DpiShell changes" > "Undo all": restores from the journal what DpiShell changed on the PC (service, DNS, system proxy, hosts, TCP timestamps, program profiles, autostart, DNS and optimization on the router). Values from before DpiShell come back; your later edits are left alone. The report shows what was restored, what was already as before, what was skipped and what failed. A failed item stays in the list: remove the cause (for example, close the app that locked hosts) and click "Undo all" again.
+
+**One item.** In the same list an item has "Undo": only it is restored, the rest stays. No button means a reason is written next to the item (for example, a later item of the same kind exists, or the optimization service needs the item; then use "Undo all").
+
+**Settings from a friend.** "Undo import" is in the import window right after the import and on the import item in "DpiShell changes". Sites, strategies, profiles, hosts and DNS return to what they were before the import; the service and other changes stay. A helper of this version is required (an old one can be updated in "About & updates"); otherwise an import can only be undone together with everything else, with "Undo all".
+
+**Remove everything with one button.** "Settings" > "Cleanup and removal" > "Remove DpiShell from this PC…": step by step it undoes the changes, removes the service and the helper with the program data, then shows which folders are left to delete by hand. If a step fails the app stops there; repeat with the same button.
 
 Commands below run as administrator (on the PC: Command Prompt or PowerShell "Run as administrator"; on the router: `ssh root@192.168.1.1`, your address may differ). If Windows will not start normally or the network does not work at all, boot into Safe Mode with Networking: DpiShell services usually do not start there.
 
@@ -90,10 +96,10 @@ Commands below run as administrator (on the PC: Command Prompt or PowerShell "Ru
 | **Game mode, IP lists, "All addresses"** | "Games & apps" > "IP lists" > "Off" (also turns off game mode); "All addresses for 10 minutes": "Revert now", they also end by themselves after 10 minutes | Turn optimization off (first row): there is no separate command for the modes |
 | **Game profile** | "Games & apps" > the profile's "Revert" | Turn optimization off (first row); delete the profile later in the app |
 | **Per-site settings** | "Sites" > "Per-site settings" > "Revert" | Turn optimization off (first row) |
-| **Imported settings** | "Settings" > "DpiShell changes" > "Undo all" (restores everything at once, including the service and DNS), or remove what was imported by hand: sites, exclusions, strategies on their tabs, "My lines" in hosts, DNS | For hosts and DNS see the rows above; sites, exclusions and strategies cannot be edited without the app |
+| **Imported settings** | "Undo import" (in the import window or on the item in "DpiShell changes"; a helper of this version is required), otherwise "Settings" > "DpiShell changes" > "Undo all" (restores everything at once, including the service and DNS), or remove what was imported by hand: sites, exclusions, strategies on their tabs, "My lines" in hosts, DNS | For hosts and DNS see the rows above; sites, exclusions and strategies cannot be edited without the app |
 | **TCP timestamps** (DpiShell turns them on if they were off) | restored by "Undo all" and "Remove optimization service" | `netsh int tcp set global timestamps=disabled`, only if they were off before DpiShell |
 | **Service, driver, helper** | "Settings" > "Cleanup and removal": "Remove optimization service", "Remove helper" | `sc stop DpiShell`, `sc delete DpiShell`, `sc stop WinDivert`, `sc delete WinDivert`; helper: `sc stop DpiShellHelper`, `sc delete DpiShellHelper` |
-| **Full removal** | "Settings" > "DpiShell changes" > "Undo all"; then "Cleanup and removal" and close the program (tray icon > "Exit") | the `sc` commands above, then delete the folders: the program's, `%LocalAppData%\DpiShell`, `%ProgramData%\DpiShell`. Autostart: Task Manager > "Startup". The app does not delete folders. Details: [docs/windows/README.md](windows/README.md#удаление-полностью) (Russian) |
+| **Full removal** | "Settings" > "Cleanup and removal" > "Remove DpiShell from this PC…" (step by step: "Undo all", the service, the helper with program data). Or by hand: "Settings" > "DpiShell changes" > "Undo all"; then "Cleanup and removal". The program folder and `%LocalAppData%\DpiShell` remain: close the program (tray icon > "Exit") | the `sc` commands above, then delete the folders: the program's, `%LocalAppData%\DpiShell`, `%ProgramData%\DpiShell`. Autostart: Task Manager > "Startup". The app does not delete the program folder or `%LocalAppData%DpiShell`. Details: [docs/windows/README.md](windows/README.md#удаление-полностью) (Russian) |
 
 ### Router
 

@@ -130,7 +130,7 @@ public sealed class HomeViewModelTests : IDisposable
         vm.GoTo(Pages.Home);
         for (int i = 0; i < 300 && !vm.HasToast; i++) await Task.Delay(10);
         Assert.Contains("user_targets_set example.com", f.Backend.Calls);
-        Assert.Equal("Свои сайты сохранены.", vm.Toast);
+        Assert.Equal("Правки на вкладке «Сайты» сохранены.", vm.Toast);
 
         // Дописали ещё и сразу в подбор: сначала сохранить, потом подбирать — иначе новый сайт молча не учтётся.
         f.Backend.StatusValue = Status(active: false) with { UserTargets = ["example.com"] };
