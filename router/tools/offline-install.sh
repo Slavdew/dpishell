@@ -65,7 +65,12 @@ while ! out=$(apk add --simulate --no-network --allow-untrusted "$@" 2>&1); do
 done
 echo "Установка пакетов: $#"
 # Пакеты из набора проверены при сборке по подписанным индексам (прошивки и DpiShell) и здесь — по SHA256SUMS.
+cp /etc/apk/world /tmp/world.before
 apk add --no-network --allow-untrusted "$@"
+# Из файла apk пишет в world «имя><хеш» — пакет пришпилен к файлу и потом не обновляется из витрины. Снимаем пришпиливание с добавленного.
+awk 'NR==FNR { old[$0]; next } !($0 in old) { sub(/><.*/, "") } 1' /tmp/world.before /etc/apk/world > /tmp/world.new &&
+	cat /tmp/world.new > /etc/apk/world
+rm -f /tmp/world.before /tmp/world.new
 
 # Ключ и адрес витрины — для будущих обновлений через apk, когда GitHub доступен.
 cp dpishell.pem /etc/apk/keys/dpishell.pem

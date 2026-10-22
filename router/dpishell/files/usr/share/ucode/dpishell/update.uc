@@ -88,6 +88,21 @@ function status() {
 	return { available: avail, version: u.version, notes: avail ? (u.notes ?? []) : [], checked_at: st.iso(u.checked_at) };
 }
 
+// apk add из файла пишет в /etc/apk/world «имя><хеш» — пакет пришпилен к файлу, и apk upgrade его больше не трогает
+// (r8, поставленный офлайн, снова и снова «обновлялся» до r10). Возвращаем наши пакеты к обычному «имя».
+function unpin() {
+	if (!apk())
+		return;
+	let w = readfile('/etc/apk/world');
+	if (w == null)
+		return;
+	let fixed = w;
+	for (let n in PACKAGES)
+		fixed = replace(fixed, regexp(`(^|[ \n])${replace(n, '-', '\\-')}><[^ \n]*`, 'g'), `$1${n}`);
+	if (fixed != w)
+		st.write_atomic('/etc/apk/world', fixed);
+}
+
 // Пакеты из папки окна: только наши имена, суммы совпали. Возвращает список путей или текст ошибки.
 function local_files() {
 	if (!stat(`${LOCAL_DIR}/SHA256SUMS`))
@@ -141,12 +156,15 @@ function install(from, job) {
 		let m = match(join(' ', files), /dpishell-([0-9][A-Za-z0-9._~+-]*)\.(apk|ipk)/);
 		job_put(job, { step: 'install', target: m ? m[1] : null });
 		r = apk() ? sh(`apk add --allow-untrusted ${join(' ', files)}`) : sh(`opkg install --force-reinstall ${join(' ', files)}`);
+		if (r.rc == 0)
+			unpin();
 	} else {
 		job_put(job, { step: 'download' });
 		// Сбой постороннего фида не должен мешать: apk без --force-missing-repositories отказывает в upgrade, если недоступен
 		// хоть один репозиторий («Not continuing due to stale/unavailable repositories»), а мы ставим только свои пакеты.
 		sh(apk() ? 'apk update' : 'opkg update');
 		job_put(job, { step: 'install', target: feed_version('dpishell') });
+		unpin();
 		r = sh(apk() ? `apk upgrade --force-missing-repositories ${join(' ', names)}` : `opkg upgrade ${join(' ', names)}`);
 	}
 	job.log = tail(r.out, 6);
@@ -160,6 +178,10 @@ function install(from, job) {
 			break;
 	}
 	check();
+	// apk/opkg могут закончить без ошибки, ничего не обновив: успех — только если встала целевая версия.
+	let inst = installed_version('dpishell');
+	if (job.target && inst != job.target)
+		return `Обновление не установилось: стоит ${inst ?? 'неизвестная версия'}, ожидалась ${job.target}`;
 	return null;
 }
 
