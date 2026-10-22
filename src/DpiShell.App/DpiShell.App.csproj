@@ -26,6 +26,9 @@
     <DebugType Condition="'$(Configuration)' == 'Release'">embedded</DebugType>
     <!-- WPF+WinForms без сжатия — ~150 МБ; сжатый single-file примерно вдвое меньше. -->
     <EnableCompressionInSingleFile Condition="'$(SelfContained)' == 'true'">true</EnableCompressionInSingleFile>
+    <!-- Помощник доверяет окну той же сборки (helper-protocol §5): переменная DOTNET_STARTUP_HOOKS не должна подгружать чужой код в настоящий exe.
+         В Debug остаётся (горячая перезагрузка студии). -->
+    <StartupHookSupport Condition="'$(Configuration)' == 'Release'">false</StartupHookSupport>
   </PropertyGroup>
 
   <!-- Строки интерфейса (docs/localization.md): L и языковые файлы — в DpiShell.Core. -->

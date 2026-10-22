@@ -16,14 +16,15 @@ public sealed record AppReleaseAsset(string Name, string Sha256);
 
 /// <summary>
 /// Описание выпуска программы для Windows (<c>release.json</c> релиза <c>windows-vX.Y.Z</c>):
-/// <c>{ schema: 1, product, version, tag, min_os, changes: [..], changes_en: [..], assets: [{ name, sha256 }] }</c>. Собирает CI
+/// <c>{ schema: 1, product, version, tag, issued, min_os, changes: [..], changes_en: [..], assets: [{ name, sha256 }] }</c>. Собирает CI
 /// (<c>packaging/release-json.py</c>), подписывает ключом выпусков. Принимается только с верной подписью.
 /// </summary>
 /// <param name="MinOs">Минимальная Windows (<c>10.0.17763</c>); null — без ограничения.</param>
 /// <param name="Changes">Что нового по-русски — словами пользователя (packaging/release-notes.json).</param>
 /// <param name="ChangesEn">То же по-английски (<c>changes_en</c>); null — перевода нет, окно показывает русский.</param>
+/// <param name="Issued">Когда описание подписано (<c>issued</c>, UTC; <see cref="ReleaseFreshness"/>); null — описание до этого поля.</param>
 public sealed partial record AppRelease(int Schema, string Version, string Tag, string? MinOs, IReadOnlyList<string> Changes, IReadOnlyList<AppReleaseAsset> Assets,
-    IReadOnlyList<string>? ChangesEn = null)
+    IReadOnlyList<string>? ChangesEn = null, DateTimeOffset? Issued = null)
 {
     public const string FileName = "release.json";
     public const string SignatureName = FileName + ReleaseSignature.Extension;
@@ -53,7 +54,7 @@ public sealed partial record AppRelease(int Schema, string Version, string Tag, 
 
     sealed record FileForm(
         int Schema, string? Product, string? Version, string? Tag, string? MinOs,
-        List<string>? Changes, List<AssetForm>? Assets, List<string>? ChangesEn);
+        List<string>? Changes, List<AssetForm>? Assets, List<string>? ChangesEn, string? Issued = null);
     sealed record AssetForm(string? Name, string? Sha256);
 
     /// <summary>Разобрать и проверить поля. Не то — <see cref="InvalidDataException"/>.</summary>
@@ -67,6 +68,9 @@ public sealed partial record AppRelease(int Schema, string Version, string Tag, 
         if (f.Version is not { } v || !SemVerRx().IsMatch(v)) throw new InvalidDataException(L.T("core.app.rel.version"));
         if (f.Tag != TagPrefix + v) throw new InvalidDataException(L.T("core.app.rel.tag", new { tag = f.Tag, version = v }));
         if (f.MinOs is { } os && !System.Version.TryParse(os, out _)) throw new InvalidDataException(L.T("core.app.rel.min_os"));
+        DateTimeOffset? issued = null;
+        if (f.Issued is not null)
+            issued = ReleaseFreshness.TryParse(f.Issued, out var at) ? at : throw new InvalidDataException(L.T("core.app.rel.issued"));
         static List<string> Lines(List<string>? list) => (list ?? []).Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Length > 300 ? c[..300] : c).Take(30).ToList();
         var changes = Lines(f.Changes);
         var changesEn = Lines(f.ChangesEn);
@@ -77,7 +81,7 @@ public sealed partial record AppRelease(int Schema, string Version, string Tag, 
                 throw new InvalidDataException(L.T("core.app.rel.bad_asset"));
             assets.Add(new(n, h.ToLowerInvariant()));
         }
-        return new(1, v, f.Tag, f.MinOs, changes, assets, changesEn.Count > 0 ? changesEn : null);
+        return new(1, v, f.Tag, f.MinOs, changes, assets, changesEn.Count > 0 ? changesEn : null, issued);
     }
 
     /// <summary>a &lt; b для «X.Y.Z» (и «X.Y.Z.W» — четвёртая часть отбрасывается). Не версия — false.</summary>
@@ -102,7 +106,10 @@ public sealed record FetchedRelease(AppRelease Release, string Source, byte[] By
 /// <param name="Newer">Выпуск новее этой программы.</param>
 /// <param name="OsTooOld">Выпуск новее, но требует более новую Windows (<c>min_os</c>) — не предлагать.</param>
 /// <param name="SignatureFailed">Хотя бы у одного источника подпись описания выпуска не сошлась (признак для окна, не текст ошибки).</param>
-public sealed record AppUpdateCheck(FetchedRelease? Found, bool Newer, bool OsTooOld, string Current, IReadOnlyList<string> Errors, bool SignatureFailed = false)
+/// <param name="Stale">Хотя бы у одного источника описание с верной подписью, но старше <see cref="ReleaseFreshness.MaxAge"/> — отброшено
+/// (окно: «не удалось проверить обновления», а не «обновлений нет»).</param>
+public sealed record AppUpdateCheck(FetchedRelease? Found, bool Newer, bool OsTooOld, string Current, IReadOnlyList<string> Errors, bool SignatureFailed = false,
+    bool Stale = false)
 {
     /// <summary>Предложить обновление: есть новее, Windows подходит и архив для неё в выпуске есть.</summary>
     public bool Available => Newer && !OsTooOld && Found?.Release.Portable is not null;
@@ -123,6 +130,8 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
     public byte[] SigningKey { get; init; } = ReleaseSignature.ReleaseKey;
     /// <summary>Версия Windows этого компьютера — для min_os; в тестах — подмена.</summary>
     public Version OsVersion { get; init; } = Environment.OSVersion.Version;
+    /// <summary>Текущее время — для свежести описания (<see cref="ReleaseFreshness"/>); в тестах — подмена.</summary>
+    public Func<DateTimeOffset> Now { get; init; } = () => DateTimeOffset.UtcNow;
 
     public const long MaxArchiveBytes = 400L * 1024 * 1024;
 
@@ -132,7 +141,7 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
     public async Task<AppUpdateCheck> CheckAsync(string current, CancellationToken ct = default)
     {
         var errors = new List<string>();
-        bool badSignature = false;
+        bool badSignature = false, stale = false;
         if (sources.Count == 0) return new(null, false, false, current, [L.T("core.upd.no_sources")]);
         foreach (var src in sources)
         {
@@ -160,11 +169,18 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
                 errors.Add($"{Host(src)}: {e.Message}");
                 continue;
             }
+            // Подписано, но давно: подменённый источник может отдавать старое описание вечно — не верить, что «новее нет».
+            if (ReleaseFreshness.IsStale(r.Issued, Now()))
+            {
+                errors.Add(L.T("core.upd.stale_release", new { host = Host(src), days = ReleaseFreshness.MaxAgeDays }));
+                stale = true;
+                continue;
+            }
             bool newer = AppRelease.IsOlder(current, r.Version);
             bool osOld = r.MinOs is { } min && Version.TryParse(min, out var mv) && OsVersion < mv;
-            return new(new(r, src, bytes, sig), newer, newer && osOld, current, errors, badSignature);
+            return new(new(r, src, bytes, sig), newer, newer && osOld, current, errors, badSignature, stale);
         }
-        return new(null, false, false, current, errors, badSignature);
+        return new(null, false, false, current, errors, badSignature, stale);
     }
 
     /// <summary>
@@ -456,6 +472,8 @@ public sealed class AppUpdater(AppUpdateClient client, AppVersionStore store)
         if (check.Found is not { } found || !check.Available || found.Release.Portable is not { } asset)
             return new(false, L.T(check.OsTooOld ? "core.upd.os_too_old" : "core.upd.none_for_pc"));
         var version = found.Release.Version;
+        // Ниже установленной (и ту же) не ставим никогда — даже если проверку собрали в обход CheckAsync.
+        if (!AppRelease.IsOlder(CurrentVersion, version)) return new(false, L.T("core.upd.not_newer", new { version, current = CurrentVersion }));
         try
         {
             if (!store.IsInstalled(version))

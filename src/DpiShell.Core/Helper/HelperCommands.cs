@@ -233,6 +233,26 @@ public static partial class HelperCommands
     /// <summary>Имена команд белого списка по алфавиту — поле <c>commands</c> в ответе status (helper-protocol §6).</summary>
     public static IReadOnlyList<string> Names { get; } = [.. All.Select(c => c.Name).Order(StringComparer.Ordinal)];
 
+    /// <summary>
+    /// Действия на весь компьютер (API 1.14, helper-protocol §5): правка и дополнение hosts, смена DNS, прокси машины. Принимаются только от окна
+    /// той же сборки, что помощник (<see cref="HelperClientImage"/>). Возврат как было (hosts_revert, hosts_restore, hosts_uncomment, dns_restore,
+    /// changes_undo*) сюда не входит: он только снимает наше.
+    /// </summary>
+    public static IReadOnlySet<string> MachineCommands { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "hosts_apply", "hosts_user_set", "hosts_comment", "dns_set", "proxy_machine_set", "proxy_machine_restore",
+    };
+
+    /// <summary>Запрос меняет настройки всего компьютера: команда из <see cref="MachineCommands"/> или загрузка настроек с разделом hosts или DNS.</summary>
+    public static bool IsMachine(HelperCall c)
+    {
+        if (MachineCommands.Contains(c.Cmd)) return true;
+        if (c.Cmd != "settings_import") return false;
+        // План уже прошёл строгую проверку; не читается — считаем машинным (осторожнее).
+        var plan = Export.ImportRequest.TryParse(c.Str("plan"), out _);
+        return plan is null || plan.Sections.Any(s => s is Export.SettingsSections.Hosts or Export.SettingsSections.Dns);
+    }
+
     static readonly HashSet<string> TopLevel = ["id", "cmd", "args", "target", "lang"];
 
     [GeneratedRegex("^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8}){0,3}$")]

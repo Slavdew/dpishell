@@ -144,6 +144,7 @@
   "settings.transfer.import_failed": "Не удалось загрузить: {error}",
   "settings.transfer.section_failed": "{title}: {reason}",
   "settings.transfer.undo_hint": "Вернуть как было: «Настройки» → «Изменения DpiShell» → «Отменить всё».",
+  "settings.transfer.confirm_machine": "Изменится для всего компьютера: {list}. Вернуть как было: «Настройки» → «Изменения DpiShell» → «Отменить всё». Загрузить?",
   "settings.checkdns.title": "Адреса сайтов для проверок",
   "settings.checkdns.secure": "Через защищённый DNS (рекомендуется)",
   "settings.checkdns.secure_hint": "Результат не зависит от DNS провайдера. Если защищённый DNS не отвечает, адреса берутся у системы — это отмечается в итоге.",

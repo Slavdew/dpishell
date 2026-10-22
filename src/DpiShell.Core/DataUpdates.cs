@@ -67,7 +67,9 @@ public sealed record UpdateSources(IReadOnlyList<string> Sources, string? Releas
 public sealed record FetchedManifest(DataManifest Manifest, string Source, byte[] Bytes, bool Signed = false, byte[]? Signature = null);
 
 /// <summary>Итог проверки: манифест (null — ни один источник не дал годного) и что не так с остальными.</summary>
-public sealed record ManifestFetch(FetchedManifest? Result, IReadOnlyList<string> Errors);
+/// <param name="Stale">Хотя бы у одного источника подписанный манифест старше <see cref="ReleaseFreshness.MaxAge"/> — отброшен
+/// (окно: «не удалось проверить обновления», а не «обновлений нет»).</param>
+public sealed record ManifestFetch(FetchedManifest? Result, IReadOnlyList<string> Errors, bool Stale = false);
 
 /// <summary>
 /// Скачивание по списку источников: по очереди, на каждый — 5 с до ответа сервера (заблокированный адрес
@@ -87,6 +89,8 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
     public byte[] SigningKey { get; init; } = ReleaseSignature.ReleaseKey;
     /// <summary>Манифест без подписи не принимать (по умолчанию — да; false оставлен для тестов переходного режима).</summary>
     public bool RequireSignature { get; init; } = true;
+    /// <summary>Текущее время — для свежести манифеста (<see cref="ReleaseFreshness"/>); в тестах — подмена.</summary>
+    public Func<DateTimeOffset> Now { get; init; } = () => DateTimeOffset.UtcNow;
 
     public const int MaxManifestBytes = 256 * 1024;
     public const int MaxFileBytes = 8 * 1024 * 1024;
@@ -100,6 +104,7 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
     public async Task<ManifestFetch> FetchManifestAsync(IProgress<string>? log = null, CancellationToken ct = default)
     {
         var errors = new List<string>();
+        bool stale = false;
         if (sources.Sources.Count == 0) return new(null, [L.T("core.data.no_sources")]);
         foreach (var src in sources.Sources)
         {
@@ -142,9 +147,16 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
                 errors.Add(L.T("core.data.invalid", new { host = Host(src), problem = p[0] }));
                 continue;
             }
-            return new(new(m, src, bytes, sig is not null, sig), errors);
+            // Подписан, но давно: подменённый источник может отдавать старый манифест вечно — «новее нет» тогда неправда.
+            if (ReleaseFreshness.IsStale(m.IssuedAt, Now()))
+            {
+                errors.Add(L.T("core.data.stale", new { host = Host(src), days = ReleaseFreshness.MaxAgeDays }));
+                stale = true;
+                continue;
+            }
+            return new(new(m, src, bytes, sig is not null, sig), errors, stale);
         }
-        return new(null, errors);
+        return new(null, errors, stale);
     }
 
     /// <summary>
@@ -256,7 +268,7 @@ public sealed class DataUpdater(AppPaths paths, DataUpdateClient client)
     {
         var fetch = await client.FetchManifestAsync(log, ct);
         if (fetch.Result is not { } got)
-            return new(false, false, false, L.T("core.data.sources_silent", new { errors = string.Join("; ", fetch.Errors) }));
+            return new(false, false, false, L.T(fetch.Stale ? "core.data.sources_stale" : "core.data.sources_silent", new { errors = string.Join("; ", fetch.Errors) }));
         var m = got.Manifest;
         var current = paths.SeedManifest;
         if (current is not null && DataManifest.CompareVersions(m.Version, current.Version) <= 0)

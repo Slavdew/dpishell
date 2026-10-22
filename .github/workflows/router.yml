@@ -14,6 +14,9 @@ on:
     tags: [ 'router-v*' ]
     # Для тегов фильтр путей GitHub не применяет — релиз собирается всегда.
     paths: [ 'router/**', 'data/**', 'packaging/keys/**', 'src/DpiShell.Core/Lang/**', '.github/workflows/router.yml' ]
+  # Раз в неделю — свежая дата issued в data.json на сайте (job site): иначе программа сочтёт манифест устаревшим через 120 дней без правок данных.
+  schedule:
+    - cron: '41 4 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -124,6 +127,9 @@ jobs:
           cp -r data/. site/data/
           rm -f site/data/data.json.sig
           if [ -z "$RELEASE_SIGNING_KEY" ]; then echo '::warning::нет секрета RELEASE_SIGNING_KEY — данные без data.json.sig'; exit 0; fi
+          # issued — дата выкладки (UTC): программа не верит манифесту старше 120 дней (ReleaseFreshness, защита от «заморозки» подменённым
+          # источником), поэтому сайт пересобирается и по расписанию (раз в неделю). Меняется только копия на сайте, файл в master — нет.
+          python3 -c "import json,datetime,sys;p='site/data/data.json';d=json.load(open(p,encoding='utf-8'));d['issued']=datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ');open(p,'w',encoding='utf-8',newline='\n').write(json.dumps(d,ensure_ascii=False,indent=2)+'\n')"
           printf '%s\n' "$RELEASE_SIGNING_KEY" > key.pem
           chmod 600 key.pem
           # Секрет должен соответствовать проверочному ключу, зашитому в программу (packaging/keys/release-ed25519.pem).

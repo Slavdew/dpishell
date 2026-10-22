@@ -32,6 +32,7 @@
   "shell.helper.uninstall_declined": "Permission was not granted — the helper stays.",
   "shell.helper.uninstall_failed": "Could not remove the helper: {error}",
   "shell.helper.connect_outdated": "The helper is outdated — it needs an update (one permission prompt).",
+  "shell.helper.connect_other_build": "The helper was installed from a different DpiShell build — it needs an update (one permission prompt).",
   "shell.helper.not_responding": "The helper is not responding: {reason}",
   "shell.helper.stopped": "The helper stopped responding.",
   "shell.helper.installed_silent": "The helper is installed but not responding.",

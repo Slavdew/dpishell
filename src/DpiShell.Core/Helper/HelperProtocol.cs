@@ -26,10 +26,16 @@ public static class HelperProtocol
     /// Версия протокола «мажор.минор» (helper-protocol §6): минор — добавления без поломок (команды, поля), мажор — несовместимые
     /// изменения. В hello и status; помощник без поля — «1.0». Сравнение — <see cref="HelperCompat"/>.
     /// </summary>
-    public const string Api = "1.13";
+    public const string Api = "1.14";
 
     /// <summary>С этой версии протокола запрос может нести необязательное поле <c>lang</c> — язык окна для ответа (старый помощник отвергает лишние поля).</summary>
     public const string LangApi = "1.13";
+
+    /// <summary>
+    /// С этой версии hello несёт <c>machine</c>: принимает ли помощник от этого подключения действия на весь компьютер (hosts, DNS, прокси машины).
+    /// false — клиент не та же сборка DpiShell, что помощник (helper-protocol §5, «Действия на весь компьютер»). Нет поля — проверки нет (помощник до 1.14).
+    /// </summary>
+    public const string MachineApi = "1.14";
 
     /// <summary>Предел строки: IP-список (до 4 МБ) с запасом на экранирование JSON. Длиннее — соединение рвётся.</summary>
     public const int MaxLineBytes = 12 * 1024 * 1024;
@@ -46,9 +52,10 @@ public static class HelperProtocol
     public static string AppVersion =>
         typeof(HelperProtocol).Assembly.GetName().Version?.ToString() ?? "0";
 
-    public static string Hello() => Line(new JsonObject
+    /// <param name="machine">Действия на весь компьютер от этого подключения принимаются (<see cref="MachineApi"/>).</param>
+    public static string Hello(bool machine = true) => Line(new JsonObject
     {
-        ["hello"] = new JsonObject { ["protocol"] = Version, ["api"] = Api, ["version"] = AppVersion },
+        ["hello"] = new JsonObject { ["protocol"] = Version, ["api"] = Api, ["version"] = AppVersion, ["machine"] = machine },
     });
 
     public static string Ok(long id, object? result) => Line(new JsonObject

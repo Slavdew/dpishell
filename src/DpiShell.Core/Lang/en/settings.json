@@ -141,6 +141,7 @@
   "settings.transfer.import_failed": "Import failed: {error}",
   "settings.transfer.section_failed": "{title}: {reason}",
   "settings.transfer.undo_hint": "To revert: “Settings” → “DpiShell changes” → “Undo all”.",
+  "settings.transfer.confirm_machine": "Computer-wide changes: {list}. To revert: “Settings” → “DpiShell changes” → “Undo all”. Import?",
   "settings.checkdns.title": "Site addresses for checks",
   "settings.checkdns.secure": "Via secure DNS (recommended)",
   "settings.checkdns.secure_hint": "The result does not depend on the ISP’s DNS. If secure DNS does not answer, addresses come from the system — this is noted in the result.",

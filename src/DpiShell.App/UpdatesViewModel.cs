@@ -245,6 +245,9 @@ public sealed class UpdatesViewModel : Observable
             // Подпись не сошлась — не молчать: человек должен знать, почему обновления нет.
             if (c.SignatureFailed)
                 SetAppError(L.T("about.app.signature_failed"), string.Join("; ", c.Errors));
+            // Описание с верной подписью, но старое: «обновлений нет» было бы неправдой (заморозка подменённым источником).
+            else if (c.Stale)
+                SetAppError(L.T("about.app.stale", new { days = ReleaseFreshness.MaxAgeDays }), string.Join("; ", c.Errors));
             return null;
         }
         if (!_appBusy) { _appError = ""; _appErrorDetails = ""; }
@@ -276,7 +279,7 @@ public sealed class UpdatesViewModel : Observable
                     : c.AppNewer ? L.T("about.check.app_newer", new { version = c.AppVersion })
                     : L.T("about.check.no_updates");
             }
-            else say = L.T("about.check.sources_failed", new { errors = string.Join("; ", r.Errors) });
+            else say = L.T(r.Stale ? "about.check.stale" : "about.check.sources_failed", new { errors = string.Join("; ", r.Errors) });
             // Программа — отдельно от данных: у неё свой подписанный release.json (подсказка манифеста остаётся запасной).
             var app = await CheckAppAsync(http);
             if (!quiet) Say(app is null ? say : DataAvailable ? say + " " + app : app);

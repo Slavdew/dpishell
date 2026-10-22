@@ -81,6 +81,8 @@ public sealed class TransferViewModel : Observable
     /// <summary>После записи: окно перечитывает данные помощника.</summary>
     public Func<Task> AfterImport { get; set; } = () => Task.CompletedTask;
     public Action<string> Say { get; set; } = _ => { };
+    /// <summary>Вопрос «Да/Нет» перед загрузкой разделов на весь компьютер (hosts, DNS); в тестах подменяется, по умолчанию — «нет».</summary>
+    public Func<string, bool> Confirm { get; set; } = _ => false;
     public Action? Close { get; set; }
 
     /// <summary>Для значка щита (шаблон Shield смотрит DataContext окна): помощника нет — действие спросит права.</summary>
@@ -413,6 +415,9 @@ public sealed class TransferViewModel : Observable
         if (chosen.Count == 0) { ImportResultText = L.T("settings.transfer.nothing_chosen"); return; }
         var plan = SettingsImport.Plan(pkg, _state, chosen, ReplaceMode ? ImportMode.Replace : ImportMode.Add);
         if (!plan.HasChanges) { ImportResultText = L.T("settings.transfer.import_nochange"); return; }
+        // hosts и DNS меняют настройки всего компьютера, а пакет может прийти от другого человека — один вопрос: что изменится и как вернуть.
+        var machine = plan.Sections.Where(sp => sp.Changes && sp.Id is SettingsSections.Hosts or SettingsSections.Dns).Select(sp => SettingsSections.Title(sp.Id)).ToList();
+        if (machine.Count > 0 && !Confirm(L.T("settings.transfer.confirm_machine", new { list = string.Join(", ", machine) }))) return;
         Busy = true; BusyText = L.T("settings.transfer.import_busy");
         ImportResultText = "";
         try

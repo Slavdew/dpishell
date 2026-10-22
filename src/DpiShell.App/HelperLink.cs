@@ -136,6 +136,13 @@ public sealed class HelperLink : IAsyncDisposable
                 State = HelperState.Outdated;
                 Problem = L.T("shell.helper.connect_outdated");
             }
+            else if (c.MachineAllowed == false && !IsOlder(WindowVersion, c.HelperVersion))
+            {
+                // Та же версия, но другая сборка (API 1.14): действия на весь компьютер помощник не примет — переустановить из этого окна.
+                // Окно старее помощника сюда не попадает: ему помощник сам скажет «обновите программу» на такие действия, остальное работает.
+                State = HelperState.Outdated;
+                Problem = L.T("shell.helper.connect_other_build");
+            }
             else { State = HelperState.Connected; Problem = ""; }
         }
         catch (HelperUnavailableException e)

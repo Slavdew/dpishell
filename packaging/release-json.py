@@ -3,12 +3,17 @@
 Запуск в CI:
   python packaging/release-json.py check [<тег>]           — сверка версии и заметок до сборки (быстрый отказ)
   python packaging/release-json.py write <папка> [<тег>]   — после make-portable.ps1: пишет <папка>/release.json
+  python packaging/release-json.py reissue <файл>          — переподписка по расписанию: в готовом release.json меняется только issued
+
+issued — момент сборки описания (UTC, ISO 8601 с Z). Программа не верит описанию старше 120 дней (ReleaseFreshness):
+подменённый источник мог бы вечно отдавать старый подписанный файл. Поэтому CI раз в неделю обновляет issued у последнего
+выпуска и подписывает заново (windows.yml, job refresh); остальное в файле не меняется.
 
 Версия — <Version> в Directory.Build.props (единый источник). Тег (windows-vX.Y.Z) должен совпадать с ней,
 для версии должна быть запись в packaging/release-notes.json (словами пользователя; у версии {ru, en}) — иначе выход с ошибкой.
 В папке должен лежать DpiShell-<версия>-portable.zip (имя пишет make-portable.ps1 по версии exe — вторая сверка).
 """
-import hashlib, json, pathlib, re, sys
+import datetime, hashlib, json, pathlib, re, sys
 
 # Консоль Windows-раннера — не UTF-8: без этого print кириллицы падает с UnicodeEncodeError.
 for stream in (sys.stdout, sys.stderr):
@@ -16,9 +21,33 @@ for stream in (sys.stdout, sys.stderr):
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 mode = sys.argv[1] if len(sys.argv) > 1 else ''
-if mode not in ('check', 'write'):
+if mode not in ('check', 'write', 'reissue'):
     sys.exit(__doc__)
 args = sys.argv[2:]
+
+
+def now_issued():
+    return datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def dump(doc):
+    return (json.dumps(doc, ensure_ascii=False, indent=2) + '\n').encode('utf-8')
+
+
+if mode == 'reissue':
+    path = pathlib.Path(args[0]) if args else None
+    if path is None or not path.is_file():
+        sys.exit('reissue: нужен путь к release.json')
+    doc = json.loads(path.read_text(encoding='utf-8'))
+    # Только описание программы для Windows и только поле issued — версия, тег и хеши остаются как были подписаны.
+    if doc.get('schema') != 1 or doc.get('product') != 'dpishell-windows' or not re.fullmatch(r'\d+\.\d+\.\d+', str(doc.get('version'))) \
+            or doc.get('tag') != f"windows-v{doc.get('version')}" or not doc.get('assets'):
+        sys.exit('reissue: это не release.json программы для Windows')
+    was = doc.get('issued')
+    doc['issued'] = now_issued()
+    path.write_bytes(dump(doc))
+    print(f"release.json {doc['version']}: issued {was or '-'} -> {doc['issued']}")
+    sys.exit(0)
 out = pathlib.Path(args.pop(0)) if mode == 'write' else None
 tag = args[0] if args and args[0] else None
 
@@ -63,9 +92,9 @@ if not (out / zip_name).is_file():
 assets = [{'name': zip_name, 'sha256': hashlib.sha256((out / zip_name).read_bytes()).hexdigest()}]
 doc = {
     'schema': 1, 'product': 'dpishell-windows', 'version': version, 'tag': f'windows-v{version}',
-    'min_os': min_os, 'changes': changes, 'assets': assets,
+    'issued': now_issued(), 'min_os': min_os, 'changes': changes, 'assets': assets,
 }
 if changes_en:
     doc['changes_en'] = changes_en
-(out / 'release.json').write_bytes((json.dumps(doc, ensure_ascii=False, indent=2) + '\n').encode('utf-8'))
+(out / 'release.json').write_bytes(dump(doc))
 print(f'release.json: {version}, файлов {len(assets)}, изменений {len(changes)}, sha256 {assets[0]["sha256"]}')

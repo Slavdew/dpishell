@@ -92,6 +92,7 @@ public sealed partial class MainViewModel
             DefaultFolder = () => TransferFolder(),
             AfterImport = AfterImportAsync,
             Say = s => Message = s,
+            Confirm = s => Confirm(s),
         };
         t.Start(import);
         return t;
