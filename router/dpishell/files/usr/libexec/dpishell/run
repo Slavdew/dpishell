@@ -20,15 +20,9 @@ import * as cat from 'dpishell.catalog';
 
 const cmd = ARGV[0];
 
-// Замок с PID: если хозяин умер (ошибка, kill), замок считается снятым — иначе задание не запустить до перезагрузки.
+// Замок задания — атомарно, с проверкой PID по времени старта (state.uc job_lock; rpcd занимает его заранее — DPS_LOCK).
 function lock(name) {
-	let f = `/tmp/dpishell/${name}.lock`;
-	let pid = +trim(readfile(f) ?? '');
-	if (pid && stat(`/proc/${pid}`))
-		return null;
-	st.ensure_dirs();
-	writefile(f, `${split(readfile('/proc/self/stat'), ' ')[0]}\n`);
-	return f;
+	return st.job_lock(name);
 }
 
 // Предупреждение: text — готовый русский (старые окна), key/params — ключ общего словаря и сырые параметры
@@ -53,6 +47,7 @@ function guard_select() {
 	st.write_atomic(st.WATCHDOG_SELECT, sprintf('%J\n', { at: time(), ok: false }));
 	let ls = lock('select');
 	if (!ls) return;
+	unlink(sel.CANCEL);   // «Остановить» от прошлого подбора не должна отменить этот
 	let p = null;
 	try { p = sel.select_run({ mode: 'quick', depth: 'main', started_by: 'watchdog' }); } catch (e) {}
 	unlink(ls);
@@ -209,6 +204,7 @@ function watch() {
 	st.write_atomic(`${st.P.etc}/auto-select.json`, sprintf('%J\n', { at: time() }));
 	let ls = lock('select');
 	if (!ls) return;
+	unlink(sel.CANCEL);
 	let p = sel.select_run({ mode: 'quick', depth: 'main', started_by: 'timer' });
 	unlink(ls);
 	if (p.applied)

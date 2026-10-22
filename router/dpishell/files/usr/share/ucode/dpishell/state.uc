@@ -1,7 +1,7 @@
 // Состояние пакета: пути, настройки uci, свои данные, запись config zapret и status.json.
 'use strict';
 
-import { readfile, writefile, rename, mkdir, stat, lsdir, symlink, unlink, access, chmod, readlink } from 'fs';
+import { readfile, writefile, rename, mkdir, stat, lstat, lsdir, symlink, unlink, access, chmod, readlink, open } from 'fs';
 import { cursor } from 'uci';
 import * as cat from 'dpishell.catalog';
 
@@ -32,12 +32,32 @@ const SUBNET_RX = /^([0-9]{1,3}\.){3}[0-9]{1,3}(\/[0-9]{1,2})?$/;
 // Свои настройки и результаты — только root; status.json — публичный для uhttpd (router-api §2).
 const DIRS = { '/etc/dpishell': 0o711, '/etc/dpishell/lists': 0o755, '/etc/dpishell/results': 0o700, '/tmp/dpishell': 0o700, '/www/dpishell': 0o755 };
 
-function ensure_dirs() {
-	for (let d in DIRS) {
-		if (!stat(d))
-			mkdir(d, DIRS[d]);
-		chmod(d, DIRS[d]);
+// Каталог только root (security-audit-router №4): /tmp общий, и /tmp/dpishell мог заранее создать другой пользователь
+// (nfqws работает от daemon) или подложить ссылку. Чужой, ссылка или не каталог — в сторону, создаётся свой. true — каталог наш.
+function own_dir(d, mode) {
+	let s = lstat(d);
+	if (s && (s.type != 'directory' || s.uid != 0)) {
+		let aside = `${d}.bad-${time()}`;
+		if (!rename(d, aside))
+			system(`rm -rf '${d}'`);
+		s = null;
 	}
+	if (!s)
+		mkdir(d, mode);
+	chmod(d, mode);
+	s = lstat(d);
+	return !!(s && s.type == 'directory' && s.uid == 0);
+}
+
+// Файл годится, только если он обычный и принадлежит root (не ссылка, не подложен другим пользователем).
+function root_file(path) {
+	let s = lstat(path);
+	return !!(s && s.type == 'file' && s.uid == 0);
+}
+
+function ensure_dirs() {
+	for (let d in DIRS)
+		own_dir(d, DIRS[d]);
 	// Заглушка IP-списка, как на Windows (IpLists.Placeholder): тестовая сеть, профили ipset ничего не ловят.
 	if (!stat(`${P.lists}/ipset-none.txt`))
 		writefile(`${P.lists}/ipset-none.txt`, '203.0.113.113/32\n');
@@ -63,11 +83,19 @@ function write_atomic(path, text) {
 	return rename(tmp, path);
 }
 
+// Повреждённый файл не «обнуляется» молча: копия .bad рядом и строка в журнале (следующая запись затёрла бы исходник).
 function read_json(path, dflt) {
 	let t = readfile(path);
 	if (t == null)
 		return dflt;
-	try { return json(t); } catch (e) { return dflt; }
+	try { return json(t); } catch (e) {
+		// Только свои настройки (/etc/dpishell): там потеря заметна, и каталог пишет лишь root.
+		if (index(path, `${P.etc}/`) == 0 && !stat(`${path}.bad`)) {
+			writefile(`${path}.bad`, t);
+			system(`logger -t dpishell 'Повреждён файл ${replace(path, "'", '')}, копия — .bad'`);
+		}
+		return dflt;
+	}
 }
 
 function uci_get(opt, dflt) {
@@ -264,10 +292,79 @@ function write_status_json() {
 	chmod(P.status_json, 0o644);
 }
 
+// Замки фоновых заданий /tmp/dpishell/<имя>.lock (security-audit-router №4, №7, 2.1):
+//   «PID время_старта» — задание идёт, пока жив процесс с этим PID и тем же временем старта (поле 22 /proc/<pid>/stat):
+//     PID, доставшийся другому процессу, замок не держит, и off/uninstall его не убьют;
+//   «start <метка> <время>» — rpcd занял замок до запуска задания (job_reserve): два вызова подряд не запустят два задания;
+//     задание с этой меткой (DPS_LOCK) забирает замок себе, без запуска замок сам истекает через RESERVE_S.
+const RESERVE_S = 20;
+
+function proc_start(pid) {
+	let t = readfile(`/proc/${pid}/stat`);
+	if (!t)
+		return null;
+	// Имя процесса в скобках может содержать пробелы — поля считаются от последней «)»: поле 3 — [0], поле 22 — [19].
+	let rest = split(substr(t, rindex(t, ')') + 2), ' ');
+	return rest[19];
+}
+
+function self_lock_id() {
+	let pid = +split(readfile('/proc/self/stat'), ' ')[0];
+	return `${pid} ${proc_start(pid)}`;
+}
+
+function lock_alive(text) {
+	let f = split(trim(text ?? ''), ' ');
+	if (f[0] == 'start')
+		return time() - +(f[2] ?? 0) < RESERVE_S;
+	let pid = +f[0];
+	if (type(pid) != 'int' || pid <= 1)
+		return false;
+	let start = proc_start(pid);
+	if (start == null)
+		return false;
+	if (length(f[1] ?? ''))
+		return start == f[1];
+	// Замок прежнего формата (только PID, до r12): живой процесс должен быть нашим run.
+	return index(readfile(`/proc/${pid}/cmdline`) ?? '', 'dpishell/run') >= 0;
+}
+
 // Фоновое задание идёт: замок есть и его процесс жив (мёртвый замок после ошибки не считается).
 function job_running(name) {
-	let pid = +trim(readfile(`${P.run}/${name}.lock`) ?? '');
-	return !!(pid && stat(`/proc/${pid}`));
+	return lock_alive(readfile(`${P.run}/${name}.lock`));
+}
+
+// Создать замок атомарно (O_EXCL); занятый мёртвым — убрать и попробовать ещё раз. true — замок наш.
+function lock_create(f, text) {
+	for (let i = 0; i < 2; i++) {
+		let h = open(f, 'wx', 0o600);
+		if (h) {
+			h.write(text);
+			h.close();
+			return true;
+		}
+		if (lock_alive(readfile(f)))
+			return false;
+		unlink(f);
+	}
+	return false;
+}
+
+// rpcd: занять замок до запуска задания. Возвращает метку для DPS_LOCK или null — задание уже идёт.
+function job_reserve(name) {
+	ensure_dirs();
+	let tok = replace(trim(readfile('/proc/sys/kernel/random/uuid') ?? `${time()}`), /[^0-9a-f-]/g, '');
+	return lock_create(`${P.run}/${name}.lock`, `start ${tok} ${time()}\n`) ? tok : null;
+}
+
+// Задание (run): взять замок — свой, занятый для него rpcd (метка DPS_LOCK) или свободный. Путь замка или null — занято.
+function job_lock(name) {
+	ensure_dirs();
+	let f = `${P.run}/${name}.lock`, me = `${self_lock_id()}\n`;
+	let tok = getenv('DPS_LOCK'), cur = split(trim(readfile(f) ?? ''), ' ');
+	if (tok && cur[0] == 'start' && cur[1] == tok)
+		return write_atomic(f, me) ? f : null;
+	return lock_create(f, me) ? f : null;
 }
 
 function valid_domain_line(l) {
@@ -286,7 +383,7 @@ function valid_subnet_line(l) {
 
 export {
 	P, VERSION, API, MIN_APP, MODES, HOURS, USER_LISTS,
-	ensure_dirs, write_atomic, read_json, uci_set, settings, roles, catalog, user_catalog, found_catalog, catalogs,
+	ensure_dirs, own_dir, root_file, write_atomic, read_json, job_reserve, job_lock, uci_set, settings, roles, catalog, user_catalog, found_catalog, catalogs,
 	write_zapret_config, write_zapret_config_for, core_installed, last_check, write_status_json, valid_domain_line, valid_subnet_line, job_running, iso,
 	PENDING, LAST_OFF, WATCHDOG_SELECT, pending_confirm, last_off, ADVANCED, ADV_OTHERS, advanced,
 	PC_LINKS, PC_MAX, PC_TTL, pc_links, pc_active, pc_split

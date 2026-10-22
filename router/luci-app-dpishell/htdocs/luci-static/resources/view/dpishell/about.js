@@ -1,8 +1,10 @@
 'use strict';
 'require view';
 'require poll';
-'require dom';
 'require dpishell.api as api';
+
+// Строки — только текстом: свой E вместо LuCI (api.js, tools/xss-check.py).
+var E = api.E;
 
 // Вкладка «Информация и обновления»: версии (пакет, страница, ядро, договор), вся работа с обновлением DpiShell; что внутри и где код.
 // Плашка «Доступно обновление» на других вкладках ведёт сюда. Тексты — как на такой же вкладке окна ПК.
@@ -74,7 +76,7 @@ return view.extend({
 				api.btn(api.t('web.core.download'), function() { return self.act('core_install'); }, 'cbi-button-apply')]);
 		else
 			core = (c.installed_version || c.version || '—') + (c.hash_ok === false ? ' — ' + api.t('web.core.broken_short') : '');
-		dom.content(this.el.versions, [
+		api.content(this.el.versions, [
 			api.row('DpiShell', E('span', {}, p.dpishell || s.version || '—')),
 			api.row(api.t('web.about.luci'), E('span', {}, p['luci-app-dpishell'] || '—')),
 			api.row(api.t('web.core.title'), core),
@@ -93,20 +95,20 @@ return view.extend({
 		var self = this;
 		if (this.updating) {
 			this.el.updateStep = this.el.updateStep || E('div', { 'class': 'dps-muted' });
-			dom.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
+			api.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
 				E('span', { 'class': 'spinning' }, api.t('web.about.updating')), this.el.updateStep]));
 			return;
 		}
 		if (running) {
-			dom.content(this.el.update, E('div', { 'class': 'dps-line' }, E('span', { 'class': 'spinning' }, api.t('web.about.checking'))));
+			api.content(this.el.update, E('div', { 'class': 'dps-line' }, E('span', { 'class': 'spinning' }, api.t('web.about.checking'))));
 			return;
 		}
 		if (!u || !u.available) {
-			dom.content(this.el.update, api.line(u && u.checked_at ? api.t('web.about.no_updates', { time: api.time(u.checked_at) }) : api.t('web.about.daily'), 'dps-muted'));
+			api.content(this.el.update, api.line(u && u.checked_at ? api.t('web.about.no_updates', { time: api.time(u.checked_at) }) : api.t('web.about.daily'), 'dps-muted'));
 			return;
 		}
 		var notes = u.notes || [];
-		dom.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
+		api.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
 			E('div', { 'class': 'dps-warn' }, [
 				E('span', {}, [E('b', {}, api.t('router.update.available', { version: (u.version || '').replace(/-r\d+$/, '') })),
 					notes.length ? E('ul', { 'style': 'margin:.3em 0 0 1.2em' }, notes.map(function(n) { return E('li', {}, n); })) : '']),

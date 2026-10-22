@@ -2,9 +2,11 @@
 'require view';
 'require ui';
 'require poll';
-'require dom';
 'require dpishell.api as api';
 'require dpishell.transfer as xfer';
+
+// Строки — только текстом: свой E вместо LuCI (api.js, tools/xss-check.py).
+var E = api.E;
 
 // Вкладка «Диагностика» (architecture.md «Диагностика роутера»): чужие обходы, flow offloading, IPv6, DNS, ядро, отчёт.
 // Названия — как в окне ПК («Что мешает» на вкладке «Роутер»), матрица ПК×роутер п. 46–51.
@@ -91,7 +93,7 @@ return view.extend({
 	renderFindings: function() {
 		var self = this, d = this.diag, kids = [];
 		if (d.__error) {
-			dom.content(this.el.findings, api.errorLine(d.__error));
+			api.content(this.el.findings, api.errorLine(d.__error));
 			return;
 		}
 		// Каждая проверка — строкой с оценкой ✓/⚠ и выводом словами («выключено — не мешает»), сверху итог (замечания
@@ -145,13 +147,13 @@ return view.extend({
 		if (d.overlay_free_kb != null)
 			kids.push(api.line(api.t('router.diag.space') + ': ' + (d.overlay_free_kb >= 1024 ? api.t('router.diag.space_value', { value: Math.round(d.overlay_free_kb / 1024) })
 				: api.t('web.diag.space_kb', { value: d.overlay_free_kb })), 'dps-muted'));
-		dom.content(this.el.findings, kids);
+		api.content(this.el.findings, kids);
 	},
 
 	renderCore: function() {
 		var self = this, s = this.status, kids = [];
 		if (!s) {
-			dom.content(this.el.core, api.line(api.t('web.diag.unknown'), 'dps-muted'));
+			api.content(this.el.core, api.line(api.t('web.diag.unknown'), 'dps-muted'));
 			return;
 		}
 		var c = s.core || {};
@@ -167,7 +169,7 @@ return view.extend({
 			kids.push(E('div', { 'class': 'dps-actions' }, [
 				api.btn(api.t(c.installed ? 'web.core.restore' : 'web.core.download'), function() { return self.coreInstall(); }, 'cbi-button-apply')
 			]));
-		dom.content(this.el.core, kids);
+		api.content(this.el.core, kids);
 	},
 
 	coreInstall: function() {
@@ -227,7 +229,7 @@ return view.extend({
 	uninstall: function(keepSettings) {
 		var self = this;
 		return api.call('uninstall', { keep_settings: keepSettings }).then(function() {
-			dom.content(self.el.uninstall, E('div', { 'class': 'spinning' }, api.t('web.uninst.busy')));
+			api.content(self.el.uninstall, E('div', { 'class': 'spinning' }, api.t('web.uninst.busy')));
 			poll.stop();
 			// Пакет и объект ubus исчезают по ходу удаления: пропали (или сброшена сессия) — значит, удалён.
 			var tries = 0;
@@ -236,7 +238,7 @@ return view.extend({
 				api.safe('status').then(function(s) {
 					if (s.__error || tries > 90) {
 						window.clearInterval(timer);
-						dom.content(self.el.uninstall, api.line(s.__error
+						api.content(self.el.uninstall, api.line(s.__error
 							? api.t(keepSettings ? 'web.uninst.done_kept' : 'web.uninst.done')
 							: api.t('web.uninst.too_long'), s.__error ? 'dps-ok' : 'dps-muted'));
 					}

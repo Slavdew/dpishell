@@ -2,8 +2,10 @@
 'require view';
 'require ui';
 'require poll';
-'require dom';
 'require dpishell.api as api';
+
+// Строки — только текстом: свой E вместо LuCI (api.js, tools/xss-check.py).
+var E = api.E;
 
 // Вкладка «DNS» (architecture.md «DNS для всей сети»): анализ подмены, выбор DNS для всей сети, возврат.
 // Названия — как в окне ПК (вкладка «DNS» и DNS роутера на вкладке «Роутер»), матрица ПК×роутер п. 41–45.
@@ -146,8 +148,8 @@ return view.extend({
 			actions.push(api.btn(api.t('router.dns.enable'), function() { api.dnsEnableDialog(function() { self.wait(); }); }, 'cbi-button-apply'));
 		actions.forEach(function(b) { b.disabled = analyzing; });
 
-		dom.content(this.el.body, kids);
-		dom.content(this.el.actions, actions);
+		api.content(this.el.body, kids);
+		api.content(this.el.actions, actions);
 		this.renderPresets(analyzing);
 	},
 
@@ -168,7 +170,7 @@ return view.extend({
 	renderPresets: function(busy) {
 		var self = this, p = this.presets;
 		if (!p || p.__error) {
-			dom.content(this.el.presets, p && p.__error ? api.errorLine(p.__error) : '');
+			api.content(this.el.presets, p && p.__error ? api.errorLine(p.__error) : '');
 			return;
 		}
 		var current = (this.dns && !this.dns.__error && this.dns.preset) || p.current || 'provider';
@@ -244,7 +246,7 @@ return view.extend({
 		compare.title = api.t('dns.picker.compare.tip');
 		compare.disabled = busy || !!this.comparing;
 		var hint = apply.disabled && !busy ? E('span', { 'class': 'dps-muted' }, api.t('web.dns.choose_other')) : '';
-		dom.content(this.el.presets, rows.concat(form ? [form] : [], [E('div', { 'class': 'dps-actions' }, [apply, compare, hint])]));
+		api.content(this.el.presets, rows.concat(form ? [form] : [], [E('div', { 'class': 'dps-actions' }, [apply, compare, hint])]));
 	},
 
 	compare: function() {

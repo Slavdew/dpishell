@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=dpishell
 PKG_VERSION:=0.2.0
-PKG_RELEASE:=11
+PKG_RELEASE:=12
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=DpiShell
 
@@ -58,7 +58,8 @@ define Package/dpishell/install
 	$(INSTALL_BIN) ./files/etc/init.d/dpishell $(1)/etc/init.d/
 	$(INSTALL_CONF) ./files/etc/config/dpishell $(1)/etc/config/
 	$(INSTALL_DIR) $(1)/usr/share/dpishell/lists $(1)/usr/share/dpishell/fake
-	$(INSTALL_DATA) ./files/usr/share/dpishell/*.json ./files/usr/share/dpishell/zapret-custom.sh $(1)/usr/share/dpishell/
+	$(INSTALL_DATA) ./files/usr/share/dpishell/*.json ./files/usr/share/dpishell/zapret-custom.sh \
+		./files/usr/share/dpishell/release-key.pub $(1)/usr/share/dpishell/
 	$(INSTALL_DATA) ./files/usr/share/dpishell/lists/*.txt $(1)/usr/share/dpishell/lists/
 	$(INSTALL_DATA) ./files/usr/share/dpishell/fake/*.bin $(1)/usr/share/dpishell/fake/
 	$(INSTALL_DIR) $(1)/www/dpishell

@@ -19,8 +19,18 @@ uci set dpishell.main.enabled=0
 uci commit dpishell
 sync
 # Подбор и проверка держат свой config zapret и метки TCP — остановить.
+# Только живой run DpiShell с тем же временем старта, что в замке «PID время_старта» (state.uc): PID мог достаться
+# другому процессу, а /tmp/dpishell до r12 мог принадлежать не root.
+kill_lock() {
+	set -- $(cat "$1" 2>/dev/null)
+	case "$1" in ''|*[!0-9]*) return 0 ;; esac
+	[ "$1" -gt 1 ] || return 0
+	tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null | grep -q 'dpishell/run' || return 0
+	[ -z "$2" ] || [ "$(sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f20)" = "$2" ] || return 0
+	kill "$1" 2>/dev/null
+}
 for l in /tmp/dpishell/select.lock /tmp/dpishell/check.lock; do
-	[ -f "$l" ] && kill "$(cat "$l")" 2>/dev/null
+	[ -f "$l" ] && kill_lock "$l"
 done
 if [ -x /etc/init.d/zapret ]; then
 	/etc/init.d/zapret stop >/dev/null 2>&1

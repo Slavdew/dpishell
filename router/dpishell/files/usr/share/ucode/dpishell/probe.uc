@@ -3,6 +3,7 @@
 'use strict';
 
 import { readfile, writefile, popen, mkdir, stat, unlink, lsdir } from 'fs';
+import * as st from 'dpishell.state';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36';
 const CONNECT_S = 3, READ_S = 6, MAX_BYTES = 1048576, MAX_REDIRECTS = 5;
@@ -131,7 +132,8 @@ function classify(t, out_prefix) {
 	let w = split(trim(readfile(`${out_prefix}.w`) ?? ''), ' ');
 	let code = +w[0], bytes = +w[1], exitcode = +w[2], secs = +w[3], redir = w[4] ?? '';
 	let headers = readfile(`${out_prefix}.h`);
-	let errtext = trim(readfile(`${out_prefix}.e`) ?? '');
+	// Вывод curl — в текст исхода, не длиннее 300 знаков.
+	let errtext = substr(trim(readfile(`${out_prefix}.e`) ?? ''), 0, 300);
 	let res = (outcome, detail) => ({ outcome, ok: outcome == 'ok', seconds: secs, bytes, detail });
 
 	if (code == 0) {
@@ -151,6 +153,9 @@ function classify(t, out_prefix) {
 	if (code >= 300 && code < 400) {
 		let loc = redir || (header_value(headers, 'location') ?? '');
 		let to = host_of(loc) ?? host_of(t.url);
+		// Имя из заголовка Location пишет сайт (или подмена провайдера) — в текст и дальше только чистым (security-audit-router №2).
+		if (!match(to ?? '', /^[a-z0-9.-]{1,253}$/))
+			return res('foreign_redirect', 'редирект на другой адрес');
 		if (!same_site(t.site ?? host_of(t.url), to))
 			return res('foreign_redirect', `редирект на ${to}`);
 		// Свой редирект: check_batch идёт по нему до конечной страницы (до MAX_REDIRECTS) и судит по ней.
@@ -186,10 +191,12 @@ function classify(t, out_prefix) {
 const FAKE_DPI = '/tmp/dpishell/fake-dpi.json';
 
 function fake_dpi(items) {
-	let t = readfile(FAKE_DPI);
-	if (t == null)
+	// Только файл root: иначе подложенный файл подменил бы исходы проверок (security-audit-router №4).
+	if (!st.root_file(FAKE_DPI))
 		return null;
-	let rules = json(t).rules ?? [];
+	let rules;
+	try { rules = json(readfile(FAKE_DPI)).rules ?? []; }
+	catch (e) { die(`${FAKE_DPI}: не JSON`); }
 	let running = length(trim(run('pidof nfqws').out)) > 0;
 	let m = match(readfile('/opt/zapret/config') ?? '', /NFQWS_OPT="([^"]*)"/);
 	let profiles = m ? split(m[1], ' --new ') : [];
@@ -214,7 +221,7 @@ function check_batch(items, opts) {
 	if (fake)
 		return fake;
 	let dir = `/tmp/dpishell/probe-${time()}-${++batch_seq}`;
-	mkdir('/tmp/dpishell', 0o700);
+	st.own_dir('/tmp/dpishell', 0o700);
 	mkdir(dir, 0o700);
 	let cache = opts.dns_cache ?? {};
 	let cmds = [];

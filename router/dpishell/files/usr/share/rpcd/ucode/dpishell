@@ -81,9 +81,11 @@ function zapret(action) {
 // («failed to remove busy cgroup of rpcd::instance1») или procd убивает задание вместе с rpcd — и rpcd не поднимается.
 const DETACH = `sh -c 'echo $$ > /sys/fs/cgroup/cgroup.procs 2>/dev/null; exec "$@"' detach`;
 
-function spawn(args) {
+// tok — метка замка, занятого заранее (st.job_reserve): задание заберёт его себе, второй вызов до его старта получит «занято».
+function spawn(args, tok) {
 	// Фоном, без ожидания: rpcd-вызов должен вернуться сразу (router-api §4).
-	sh(`( ${DETACH} /usr/libexec/dpishell/run ${args} >/dev/null 2>&1 & )`);
+	let env = tok ? `DPS_LOCK=${tok} ` : '';
+	sh(`( ${env}${DETACH} /usr/libexec/dpishell/run ${args} >/dev/null 2>&1 & )`);
 }
 
 // Подтверждение включения (architecture.md «Аварийный выключатель»): confirm_s — сколько ждать confirm, иначе откат
@@ -463,8 +465,9 @@ const methods = {
 				let it = items[i];
 				if (type(it?.id) != 'string' || !match(it.id, /^u-[a-z0-9-]{1,48}$/))
 					return err('invalid', 'id вида u-…', `items[${i}].id`);
-				if (it.title != null && (type(it.title) != 'string' || length(it.title) > 80))
-					return err('invalid', 'Название до 80 символов', `items[${i}].title`);
+				// <>&"' — не для названия: оно показывается на странице и в окне (security-audit-router №1); управляющие — тоже.
+				if (it.title != null && (type(it.title) != 'string' || length(it.title) > 80 || match(it.title, /[[:cntrl:]<>&"']/)))
+					return err('invalid', 'Название до 80 символов, без <>&"\'', `items[${i}].title`);
 				let e = cat.validate({ id: it.id, roles: it.roles }, r, `items[${i}]`);
 				if (e) {
 					let colon = index(e, ': ');
@@ -517,6 +520,10 @@ methods.select_start = {
 		if (type(ids) != 'array' || length(ids) > 5 || length(filter(ids, x => type(x) != 'string' || !cat.find(st.catalogs(), x))))
 			return err('invalid', 'ids: до 5 id стратегий из списка', 'ids');
 		let by = a.started_by == 'page' ? 'page' : 'app';
+		// Замок — до запуска: второй select_start (окно и страница, двойной щелчок) получит «Идёт подбор».
+		let tok = st.job_reserve('select');
+		if (!tok) return err('busy', 'Идёт подбор', null, 'web.err.busy_select');
+		unlink('/tmp/dpishell/select.cancel');   // «Остановить» от прошлого подбора не должна отменить этот
 		clear_off(true);
 		// Начальное состояние — сразу, до фонового задания: select_progress сразу после select_start видит «идёт, 0 из N»,
 		// а не прошлый итог или пустоту (окно ПК принимало это за ошибку и запускало подбор повторно).
@@ -525,7 +532,7 @@ methods.select_start = {
 			depth: length(ids) ? 'main' : (a.depth ?? 'main'), groups, ids: length(ids) ? ids : null, index: 0, total: length(ids),
 			eta_s: null, message: 'Запуск подбора…', message_msg: { key: 'router.select.starting', params: {}, text: 'Запуск подбора…' },
 			rows: [], finished_at: null, cancelled: false, best: null, applied: false, backups: [] }));
-		spawn(`select ${q(sprintf('%J', { groups, mode: a.mode ?? 'full', depth: a.depth ?? 'main', started_by: by, ...(length(ids) ? { ids } : {}) }))}`);
+		spawn(`select ${q(sprintf('%J', { groups, mode: a.mode ?? 'full', depth: a.depth ?? 'main', started_by: by, ...(length(ids) ? { ids } : {}) }))}`, tok);
 		return { started: true };
 	}
 };
@@ -620,10 +627,10 @@ methods.advanced_set = {
 		let s = st.settings(), before = { enabled: s.enabled, strategy: s.strategy };
 		let prev_file = st.read_json(st.ADVANCED, null) ?? { enabled: false, others: 'lists', rows: [] };
 		st.ensure_dirs();
-		// Для «Вернуть как было» (advanced_revert) — состояние до этого сохранения.
-		st.write_atomic(`${st.ADVANCED}.prev`, sprintf('%J\n', prev_file));
 		if (!st.write_atomic(st.ADVANCED, sprintf('%J\n', { enabled: a.enabled, others: a.others, rows: out })))
 			return err('failed', 'Не удалось сохранить');
+		// Для «Вернуть как было» (advanced_revert) — состояние до этого сохранения; после записи: неудача не затирает прежнее.
+		st.write_atomic(`${st.ADVANCED}.prev`, sprintf('%J\n', prev_file));
 		if (s.enabled && s.strategy) {
 			let e = st.write_zapret_config(s.strategy, s);
 			if (e) return err('failed', e);
@@ -741,8 +748,8 @@ methods.check_now = {
 		let b = busy(); if (b) return b;
 		let s = st.settings();
 		if (!s.enabled) return err('failed', 'Оптимизация выключена — проверять нечего');
-		if (st.job_running('check')) return { started: true };
-		spawn('check app');
+		let tok = st.job_reserve('check');
+		if (tok) spawn('check app', tok);
 		return { started: true };
 	}
 };
@@ -751,8 +758,8 @@ methods.core_install = {
 	call: function() {
 		let b = busy(); if (b) return b;
 		if (!core.arch()) return err('failed', 'Архитектура роутера не поддерживается');
-		if (!st.job_running('core_install'))
-			spawn('core_install');
+		let tok = st.job_reserve('core_install');
+		if (tok) spawn('core_install', tok);
 		return { started: true };
 	}
 };
@@ -777,8 +784,8 @@ methods.site_check = {
 			u = `https://${u}/`;
 		if (type(u) != 'string' || length(u) > 300 || !match(u, /^https?:\/\/[a-z0-9.-]+(:[0-9]{1,5})?(\/[A-Za-z0-9._~%!$&'()*+,;=:@\/?-]*)?$/))
 			return err('invalid', 'Адрес вида example.com', 'url');
-		if (!st.job_running('site_check'))
-			spawn(`site_check ${q(u)}`);
+		let tok = st.job_reserve('site_check');
+		if (tok) spawn(`site_check ${q(u)}`, tok);
 		return { started: true };
 	}
 };
@@ -807,10 +814,13 @@ methods.uninstall = {
 		let keep = req.args.keep_settings;
 		if (keep != null && type(keep) != 'bool')
 			return err('invalid', 'keep_settings: true/false', 'keep_settings');
-		let r = sh(`cp /usr/libexec/dpishell/uninstall.sh /tmp/dpishell-uninstall.sh && chmod 700 /tmp/dpishell-uninstall.sh`);
-		if (r.rc != 0)
-			return err('failed', `Не удалось запустить удаление: ${trim(r.out)}`);
-		sh(`( setsid ${DETACH} sh /tmp/dpishell-uninstall.sh ${keep === false ? '--full' : '--keep'} >/dev/null 2>&1 & )`);
+		// Своя папка mktemp (0700, root): по постоянному имени в общем /tmp другой пользователь подложил бы ссылку или свой
+		// файл и подменил сценарий между копированием и запуском (security-audit-router №5).
+		let r = sh(`d=$(mktemp -d /tmp/dpishell-uninst.XXXXXX) && cp /usr/libexec/dpishell/uninstall.sh "$d/uninstall.sh" && echo "$d"`);
+		let dir = trim(r.out);
+		if (r.rc != 0 || !match(dir, /^\/tmp\/dpishell-uninst\.[A-Za-z0-9]+$/))
+			return err('failed', `Не удалось запустить удаление: ${dir}`);
+		sh(`( setsid ${DETACH} sh ${dir}/uninstall.sh ${keep === false ? '--full' : '--keep'} >/dev/null 2>&1 & )`);
 		return { started: true };
 	}
 };
@@ -828,15 +838,22 @@ methods.update_install = {
 			return err('busy', 'Обновление уже идёт');
 		if (from == 'local' && !stat(`${upd.LOCAL_DIR}/SHA256SUMS`))
 			return err('invalid', `Нет пакетов в ${upd.LOCAL_DIR}`, 'from');
-		spawn(`update ${from}`);
+		// Папку обновления кладёт окно ПК по SSH (root): чужая или ссылка — не берём (security-audit-router №3).
+		let bad = from == 'local' ? upd.local_dir_problem() : null;
+		if (bad)
+			return err('invalid', bad, 'from');
+		let tok = st.job_reserve('update');
+		if (!tok)
+			return err('busy', 'Обновление уже идёт');
+		spawn(`update ${from}`, tok);
 		return { started: true };
 	}
 };
 
 methods.update_check = {
 	call: function() {
-		if (!st.job_running('update'))
-			spawn('update_check');
+		let tok = st.job_reserve('update');
+		if (tok) spawn('update_check', tok);
 		return { started: true };
 	}
 };
@@ -877,7 +894,7 @@ function custom_of(c) {
 	if (type(c) != 'object')
 		return err('invalid', 'custom: объект', 'custom');
 	// Управляющие символы — классом [[:cntrl:]]: \x00 в регулярном выражении ucode ломает разбор.
-	if (type(c.title) != 'string' || !length(c.title) || length(c.title) > 120 || match(c.title, /[[:cntrl:]"'`\\$<>]/))
+	if (type(c.title) != 'string' || !length(c.title) || length(c.title) > 40 || match(c.title, /[[:cntrl:]"'`\\$<>]/))
 		return err('invalid', 'Название до 40 символов', 'custom.title');
 	let doh = c.doh;
 	if (doh != null && (type(doh) != 'string' || length(doh) > 200 || !match(doh, /^https:\/\/[A-Za-z0-9.-]+(:[0-9]{1,5})?(\/[A-Za-z0-9._~\/-]*)?$/)))
@@ -914,8 +931,11 @@ methods.dns_set = {
 			else if (type(id) != 'string' || !length(filter(dns.presets(), p => p.id == id)))
 				return err('invalid', `Вариант: ${join(', ', map(dns.presets(), p => p.id))}`, 'preset');
 		}
+		let tok = st.job_reserve('dns');
+		if (!tok)
+			return err('busy', 'Идёт настройка DNS');
 		st.write_atomic('/tmp/dpishell/dns_set.json', sprintf('%J\n', { preset: id }));
-		spawn('dns_set');
+		spawn('dns_set', tok);
 		return { started: true };
 	}
 };
@@ -924,8 +944,8 @@ for (let name in ['dns_analyze', 'dns_enable', 'dns_restore'])
 	methods[name] = ((n) => ({
 		call: function() {
 			let b = busy(); if (b) return b;
-			if (!st.job_running('dns'))
-				spawn(n);
+			let tok = st.job_reserve('dns');
+			if (tok) spawn(n, tok);
 			return { started: true };
 		}
 	}))(name);

@@ -3,6 +3,34 @@
 'require rpc';
 'require ui';
 'require uci';
+'require dom';
+
+// Строки на странице — только текстом (docs/security-audit-router: XSS №1–2). E() и dom.content() LuCI кладут строку,
+// переданную детьми, как HTML (innerHTML), а в строках бывают названия стратегий, адреса из редиректов, вывод команд.
+// Свой E: строка или число детьми — текстовый узел. Во всех файлах страниц — «var E = api.E;» и api.content вместо
+// dom.content (проверяет router/tools/xss-check.py в CI).
+var rawE = window.E;
+
+function isNode(x) {
+	return x != null && typeof x == 'object' && 'nodeType' in x;
+}
+
+function textKids(kids) {
+	if (kids == null || Array.isArray(kids) || isNode(kids))
+		return kids;
+	if (typeof kids == 'function')
+		return function(node) { return textKids(kids(node)); };
+	return [String(kids)];
+}
+
+function E(tag, attrs, kids) {
+	// Как в LuCI: второй аргумент не объект атрибутов — это дети.
+	if (!(attrs instanceof Object) || Array.isArray(attrs) || isNode(attrs)) {
+		kids = attrs;
+		attrs = null;
+	}
+	return rawE(tag, attrs, textKids(kids));
+}
 
 // Общее для страниц DpiShell: вызовы ubus-объекта dpishell (docs/dev/router-api.md §4–5),
 // тексты ошибок, язык страниц, мелкие элементы вёрстки, общие диалоги (подбор, защищённый DNS), «Сайт не открывается».
@@ -220,6 +248,13 @@ function injectStyle() {
 return baseclass.extend({
 	__init__: function() {
 		injectStyle();
+	},
+
+	// Элемент с детьми-текстом (см. E выше) и замена содержимого узла: строка — текстом, не HTML.
+	E: E,
+
+	content: function(node, kids) {
+		return dom.content(node, textKids(kids));
 	},
 
 	// Загрузить язык страниц; вызывать в load() каждой страницы до первого t(). Один раз на страницу.
