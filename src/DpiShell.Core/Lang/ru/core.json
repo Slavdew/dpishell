@@ -210,6 +210,8 @@
   "core.shell.journal_core": "Установлено ядро оптимизации, версия {version}",
   "core.shell.core_missing": "Файлы ядра не найдены. Возможно, их удалил антивирус.",
   "core.shell.core_changed": "Файлы ядра изменены: {files}. Возможно, их тронул антивирус — восстановите ядро.",
+  "core.shell.unsafe_removed": "Убрано из папки программы (ссылка или чужая запись): {item}",
+  "core.shell.service_stopped_core": "Служба оптимизации остановлена: {problem}",
   "core.shell.core_foreign": "В папке ядра посторонние файлы: {files}. Восстановите ядро.",
   "core.shell.stopped_service": "{owner} (служба {name})",
   "core.shell.journal_timestamps": "Включены временные метки TCP (настройка Windows)",

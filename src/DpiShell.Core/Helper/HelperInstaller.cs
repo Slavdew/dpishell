@@ -71,7 +71,7 @@ public sealed class HelperInstaller(AppPaths paths)
 
         // Сначала закрыть папку, потом класть в неё исполняемый файл.
         log?.Report(L.T("core.helper.inst.harden"));
-        paths.Harden();
+        foreach (var r in paths.Harden()) log?.Report(L.T("core.shell.unsafe_removed", new { item = r }));
 
         bool exists = ServiceManager.Query(HelperProtocol.ServiceName) != SvcState.NotInstalled;
         if (exists)
@@ -92,7 +92,7 @@ public sealed class HelperInstaller(AppPaths paths)
         }
         File.WriteAllText(OwnerPath(paths), user.Value);
         // Права наследуются от закрытого корня; явные права у скопированного сбрасываем.
-        paths.Harden();
+        foreach (var r in paths.Harden()) log?.Report(L.T("core.shell.unsafe_removed", new { item = r }));
         if (!paths.IsHardened()) throw new InvalidOperationException(L.T("core.helper.lock_failed"));
 
         var helperExe = Path.Combine(dir, Path.GetFileName(exe));

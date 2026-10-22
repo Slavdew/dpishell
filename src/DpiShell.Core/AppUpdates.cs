@@ -348,10 +348,9 @@ public sealed class AppVersionStore(string? root = null)
                     if (!dest.StartsWith(stagedFull, StringComparison.OrdinalIgnoreCase) || rel.Split('/').Contains(".."))
                         throw new InvalidDataException(L.T("core.app.zip.outside", new { name = e.FullName }));
                     if (name.EndsWith('/')) { Directory.CreateDirectory(dest); continue; }
-                    total += e.Length;
-                    if (total > MaxUnpackedBytes) throw new InvalidDataException(L.T("core.app.zip.too_big"));
+                    // Заявленный размер записи (e.Length) может врать — считаем фактически распакованное.
                     Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-                    e.ExtractToFile(dest, overwrite: false);
+                    total = ExtractLimited(e, dest, total);
                 }
             }
             if (!File.Exists(Path.Combine(staged, ExeName))) throw new InvalidDataException(L.T("core.app.zip.no_exe", new { name = ExeName }));
@@ -363,6 +362,25 @@ public sealed class AppVersionStore(string? root = null)
         {
             try { if (Directory.Exists(staged)) Directory.Delete(staged, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
+    }
+
+    /// <summary>Распаковать запись, считая байты по мере чтения; общий итог больше <see cref="MaxUnpackedBytes"/> — отказ. Возвращает новый итог.</summary>
+    public static long ExtractLimited(ZipArchiveEntry e, string dest, long total, long max = MaxUnpackedBytes)
+    {
+        using (var src = e.Open())
+        using (var dst = new FileStream(dest, FileMode.CreateNew, FileAccess.Write))
+        {
+            var buf = new byte[81920];
+            int n;
+            while ((n = src.Read(buf)) > 0)
+            {
+                total += n;
+                if (total > max) throw new InvalidDataException(L.T("core.app.zip.too_big"));
+                dst.Write(buf, 0, n);
+            }
+        }
+        File.SetLastWriteTime(dest, e.LastWriteTime.DateTime);
+        return total;
     }
 
     /// <summary>Запомнить переключение: прежняя версия (и где её exe) — для отката, новая — текущая.</summary>
