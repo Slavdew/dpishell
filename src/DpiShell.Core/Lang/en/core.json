@@ -228,6 +228,7 @@
   "core.shell.iplist_missing": "The IP list is not loaded — update it.",
   "core.shell.game_needs_lists": "Game mode is unavailable while “All addresses” is on.",
   "core.shell.game_uses_list": "The IP list is on: game mode works through it.",
+  "core.shell.game_list_off": "The IP list is off again, as before game mode.",
   "core.shell.no_variant": "There is no such parameter variant.",
   "core.shell.no_profile": "There is no such profile.",
   "core.shell.too_many_profiles": "There are already {max} profiles — delete one you do not need.",

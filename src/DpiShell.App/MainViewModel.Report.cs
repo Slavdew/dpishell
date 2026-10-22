@@ -107,12 +107,8 @@ public sealed partial class MainViewModel
             net.Add(T("diag.report.net.proxy_user", Kind(p.User, p.UserAutoDetect)));
             net.Add(T("diag.report.net.proxy_machine", Kind(p.Machine, p.MachineAutoDetect)));
             net.Add(T("diag.report.net.proxy_winhttp", L.T(p.WinHttp.IsDirect ? "diag.report.net.winhttp_direct" : "diag.report.net.winhttp_proxy")));
-            foreach (var s in new[] { p.User, p.Machine })
-                foreach (var v in new[] { s.Server, s.Pac, s.Bypass }) hide.AddRange(SupportReport.Variants(v));
-            hide.AddRange(SupportReport.Variants(p.WinHttp.Proxy));
         }
         else net.Add(T("diag.report.net.proxy_user", L.T("diag.report.net.proxy_unknown")));
-        foreach (var row in Proxy.Items) { hide.AddRange(SupportReport.Variants(row.Entry.Server)); hide.AddRange(SupportReport.Variants(row.Entry.Pac)); }
         sections.Add(new(L.T("diag.report.sec.net"), net));
 
         // Роутер: найден ли, версия, состояние. Адрес роутера — только в список скрытого.
@@ -122,15 +118,13 @@ public sealed partial class MainViewModel
         {
             router.Add(T("diag.report.router.version", One(rt.PackageVersionText)));
             router.Add(T("diag.report.router.state", L.T(!rt.Connected ? "diag.report.router.state_nologin" : rt.RouterEnabled ? "diag.report.router.state_on" : "diag.report.router.state_off")));
-            hide.AddRange(SupportReport.Variants(rt.Detection?.Address));
         }
         sections.Add(new(L.T("diag.report.sec.router"), router));
 
         // Свои сайты и исключения — только число; сами адреса идут в список скрытого (они попадают в чужие тексты: подбор, журнал).
         var own = Lines(TargetsText);
         var excluded = Lines(ExcludeText);
-        hide.AddRange(own); hide.AddRange(excluded);
-        if (st is not null) { hide.AddRange(st.UserTargets); hide.AddRange(st.UserExclude ?? []); }
+        hide.AddRange(PrivateNames());
         sections.Add(new(L.T("diag.report.sec.sites"),
         [
             L.T("diag.report.sites.own", new { n = own.Count }),
@@ -151,6 +145,26 @@ public sealed partial class MainViewModel
         sections.Add(new(L.T("diag.report.sec.window_log"), windowLog.Count == 0 ? [L.T("diag.report.log.empty")] : windowLog));
 
         return SupportReport.Build(DateTime.Now, sections, hide);
+    }
+
+    /// <summary>
+    /// Что окно знает как личное и чего не должно быть в отчёте и в описании ошибки: адреса прокси (текущие и из списка), адрес роутера,
+    /// свои сайты и исключения (они попадают в чужие тексты: подбор, журнал). Одно место для «Сохранить отчёт» и «Скопировать» у ошибки.
+    /// </summary>
+    List<string> PrivateNames()
+    {
+        var hide = new List<string>();
+        if (Proxy.Current is { } p)
+        {
+            foreach (var s in new[] { p.User, p.Machine })
+                foreach (var v in new[] { s.Server, s.Pac, s.Bypass }) hide.AddRange(SupportReport.Variants(v));
+            hide.AddRange(SupportReport.Variants(p.WinHttp.Proxy));
+        }
+        foreach (var row in Proxy.Items) { hide.AddRange(SupportReport.Variants(row.Entry.Server)); hide.AddRange(SupportReport.Variants(row.Entry.Pac)); }
+        if (Router.Found) hide.AddRange(SupportReport.Variants(Router.Detection?.Address));
+        hide.AddRange(Lines(TargetsText)); hide.AddRange(Lines(ExcludeText));
+        if (Live is { } st) { hide.AddRange(st.UserTargets); hide.AddRange(st.UserExclude ?? []); }
+        return hide;
     }
 
     static List<string> Lines(string text) =>

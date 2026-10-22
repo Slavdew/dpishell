@@ -49,8 +49,9 @@ public enum ChangeState
 }
 
 /// <param name="Completed">Действие дописано до конца; false — запись есть, а подтверждения нет (оборвалось на середине): откат проверит, что стоит сейчас.</param>
+/// <param name="Group">Запись сделана внутри другого действия (загрузка настроек): id его записи. Такие записи откатываются вместе с ним (<see cref="ChangeUndoEngine.UndoGroupAsync"/>).</param>
 public sealed record ChangeEntry(string Id, DateTime At, string Kind, string Title, JsonNode? Before, JsonNode? After, ChangeState State, bool Completed,
-    string? Result = null, string? Note = null, int Order = 0);
+    string? Result = null, string? Note = null, int Order = 0, string? Group = null);
 
 /// <summary>
 /// Куда программа пишет, что она меняет в системе. Запись делается ДО действия (<see cref="Begin"/>), затем подтверждается
@@ -97,6 +98,16 @@ public sealed class ChangeJournal(string file) : IChangeRecorder
     public string File { get; } = file;
     /// <summary>Часы (UTC); тесты подставляют свои.</summary>
     public Func<DateTime> Now { get; init; } = () => DateTime.UtcNow;
+
+    // Открытая группа — на поток выполнения (async): записи других действий, идущих в это время, в неё не попадают.
+    readonly AsyncLocal<string?> _group = new();
+
+    /// <summary>
+    /// Записи, начатые дальше в этом потоке выполнения, — часть действия <paramref name="id"/> (загрузка настроек: hosts, DNS, профили, продвинутый режим).
+    /// Закрывается <see cref="EndGroup"/>; async-метод, открывший группу, при выходе возвращает прежнее значение сам.
+    /// </summary>
+    public void BeginGroup(string? id) => _group.Value = string.IsNullOrEmpty(id) ? null : id;
+    public void EndGroup() => _group.Value = null;
     /// <summary>Последняя ошибка записи (null — всё писалось).</summary>
     public string? Failed { get; private set; }
 
@@ -108,11 +119,13 @@ public sealed class ChangeJournal(string file) : IChangeRecorder
     public string Begin(string kind, string title, JsonNode? before, JsonNode? after)
     {
         var id = Guid.NewGuid().ToString("N")[..12];
-        Append(new JsonObject
+        var line = new JsonObject
         {
             ["op"] = "do", ["id"] = id, ["at"] = Now().ToString("O"), ["kind"] = kind, ["title"] = title,
             ["before"] = before?.DeepClone(), ["after"] = after?.DeepClone(),
-        });
+        };
+        if (_group.Value is { } g) line["group"] = g;
+        Append(line);
         return id;
     }
 
@@ -190,7 +203,7 @@ public sealed class ChangeJournal(string file) : IChangeRecorder
                 case "do":
                     if (map.ContainsKey(id) || !DateTime.TryParse(S(o, "at"), null, System.Globalization.DateTimeStyles.RoundtripKind, out var at)) break;
                     map[id] = new ChangeEntry(id, at.ToUniversalTime(), S(o, "kind") ?? "", S(o, "title") ?? "", o["before"]?.DeepClone(), o["after"]?.DeepClone(),
-                        ChangeState.Active, false, Order: order.Count);
+                        ChangeState.Active, false, Order: order.Count, Group: S(o, "group"));
                     order.Add(id);
                     break;
                 case "done" when map.TryGetValue(id, out var d):

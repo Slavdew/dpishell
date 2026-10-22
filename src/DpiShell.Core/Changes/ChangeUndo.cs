@@ -32,8 +32,8 @@ public interface IChangeUndoer
     Task<UndoOutcome> UndoAsync(ChangeEntry entry, CancellationToken ct);
 }
 
-/// <summary>Строка списка «Что сделала DpiShell».</summary>
-public sealed record ChangeInfo(string Id, DateTime At, string Kind, string Title, bool Undoable);
+/// <summary>Строка списка «Что сделала DpiShell». <paramref name="Group"/> — запись сделана внутри другого действия (загрузка настроек, API 1.15): id его записи.</summary>
+public sealed record ChangeInfo(string Id, DateTime At, string Kind, string Title, bool Undoable, string? Group = null);
 
 public sealed record ChangesList(IReadOnlyList<ChangeInfo> Items);
 
@@ -60,7 +60,7 @@ public sealed class ChangeUndoEngine(ChangeJournal journal)
     public bool Knows(string kind) => _byKind.ContainsKey(kind);
 
     public ChangesList List() =>
-        new([.. journal.Active().Select(e => new ChangeInfo(e.Id, e.At, e.Kind, e.Title, Knows(e.Kind)))]);
+        new([.. journal.Active().Select(e => new ChangeInfo(e.Id, e.At, e.Kind, e.Title, Knows(e.Kind), e.Group))]);
 
     public async Task<UndoReport> UndoAllAsync(CancellationToken ct = default)
     {
@@ -68,7 +68,7 @@ public sealed class ChangeUndoEngine(ChangeJournal journal)
         foreach (var e in journal.Active().Reverse())
         {
             ct.ThrowIfCancellationRequested();
-            items.Add(await UndoOneAsync(e, ct));
+            items.Add(await UndoFreshAsync(e, ct));
         }
         return new(items);
     }
@@ -77,6 +77,34 @@ public sealed class ChangeUndoEngine(ChangeJournal journal)
     {
         var e = journal.Active().FirstOrDefault(x => x.Id == id) ?? throw new InvalidOperationException(L.T("core.undo.no_entry"));
         return new([await UndoOneAsync(e, ct)]);
+    }
+
+    /// <summary>
+    /// Откатить действие вместе с записями, сделанными внутри него (<see cref="ChangeEntry.Group"/>): сначала они — в порядке, обратном записи, затем оно само.
+    /// Остальной журнал не трогается.
+    /// </summary>
+    public async Task<UndoReport> UndoGroupAsync(string id, CancellationToken ct = default)
+    {
+        var active = journal.Active();
+        var head = active.FirstOrDefault(x => x.Id == id) ?? throw new InvalidOperationException(L.T("core.undo.no_entry"));
+        var items = new List<UndoItem>();
+        foreach (var e in active.Where(x => x.Group == id).Reverse())
+        {
+            ct.ThrowIfCancellationRequested();
+            items.Add(await UndoFreshAsync(e, ct));
+        }
+        items.Add(await UndoFreshAsync(head, ct));
+        return new(items);
+    }
+
+    /// <summary>
+    /// Откат по списку, снятому до начала: запись перечитывается перед своим шагом — откат более поздней мог уже поправить её «что поставили»
+    /// (загрузка настроек возвращает продвинутый режим через ту же открытую запись) или закрыть её (вернулись к её началу) — тогда «уже как было».
+    /// </summary>
+    async Task<UndoItem> UndoFreshAsync(ChangeEntry e, CancellationToken ct)
+    {
+        var now = journal.Active().FirstOrDefault(x => x.Id == e.Id);
+        return now is null ? new(e.Id, e.Title, e.At, UndoStatus.AlreadyBack, "") : await UndoOneAsync(now, ct);
     }
 
     async Task<UndoItem> UndoOneAsync(ChangeEntry e, CancellationToken ct)

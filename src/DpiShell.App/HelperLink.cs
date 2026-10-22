@@ -221,13 +221,16 @@ public sealed class HelperLink : IAsyncDisposable
         finally { _quiet = false; }
     }
 
-    /// <summary>«Удалить помощника» (тоже один запрос прав).</summary>
-    public async Task<SetupOutcome> UninstallAsync()
+    /// <summary>Ключ к --uninstall-helper: стереть и данные программы (%ProgramData%\DpiShell) — «Удалить DpiShell с этого ПК».</summary>
+    public const string PurgeArg = "--purge";
+
+    /// <summary>«Удалить помощника» (тоже один запрос прав). <paramref name="purge"/> — и данные программы.</summary>
+    public async Task<SetupOutcome> UninstallAsync(bool purge = false)
     {
         _quiet = true;
         try
         {
-            var r = await Setup.RunElevatedAsync("--uninstall-helper");
+            var r = await Setup.RunElevatedAsync(purge ? "--uninstall-helper " + PurgeArg : "--uninstall-helper");
             if (r.Result != SetupResult.Done) return r;
             Drop();
             State = HelperState.NotInstalled;

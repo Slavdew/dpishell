@@ -80,6 +80,10 @@ public sealed class TransferViewModel : Observable
     public Func<string> DefaultFolder { get; set; } = () => Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     /// <summary>После записи: окно перечитывает данные помощника.</summary>
     public Func<Task> AfterImport { get; set; } = () => Task.CompletedTask;
+    /// <summary>Помощник умеет отменять загрузку отдельно (API 1.15).</summary>
+    public Func<bool> CanUndoImport { get; set; } = () => false;
+    /// <summary>«Отменить загрузку»: откат записи загрузки вместе с её пунктами (вопрос и отчёт — у «Изменений DpiShell»). true — отменили.</summary>
+    public Func<string, Task<bool>> UndoImport { get; set; } = _ => Task.FromResult(false);
     public Action<string> Say { get; set; } = _ => { };
     /// <summary>Вопрос «Да/Нет» перед загрузкой разделов на весь компьютер (hosts, DNS); в тестах подменяется, по умолчанию — «нет».</summary>
     public Func<string, bool> Confirm { get; set; } = _ => false;
@@ -408,6 +412,28 @@ public sealed class TransferViewModel : Observable
     public ICommand ImportCmd => _importCmd ??= RelayCommand.Async(ImportAsync, () => CanImport);
     ICommand? _importCmd;
 
+    string? _journalId;
+    /// <summary>Последняя загрузка записана в журнал и помощник умеет отменить её отдельно.</summary>
+    public bool ShowUndoImport => _journalId is not null && CanUndoImport();
+
+    public ICommand UndoImportCmd => _undoImportCmd ??= RelayCommand.Async(UndoImportAsync, () => !Busy && ShowUndoImport);
+    ICommand? _undoImportCmd;
+
+    /// <summary>«Отменить загрузку» под итогом загрузки.</summary>
+    public async Task UndoImportAsync()
+    {
+        if (_journalId is not { } id) return;
+        if (!await UndoImport(id)) return;
+        _journalId = null;
+        Raise(nameof(ShowUndoImport));
+        ImportResultText = L.T("settings.transfer.undone");
+        if (await Need() is { } c)
+        {
+            try { _state = await c.SettingsExportReadAsync(); RebuildImport(); }
+            catch (Exception e) when (e is HelperException or HelperUnavailableException or IOException) { }
+        }
+    }
+
     public async Task ImportAsync()
     {
         if (_pkg is not { Ok: true } pkg || _state is null) return;
@@ -430,7 +456,9 @@ public sealed class TransferViewModel : Observable
             if (done.Count > 0) lines.Add(L.T("settings.transfer.import_done", new { list = string.Join(", ", done) }));
             foreach (var f in r.Sections.Where(s => !s.Ok))
                 lines.Add(L.T("settings.transfer.section_failed", new { title = SettingsSections.Title(f.Id), reason = f.Message ?? "" }));
-            if (r.JournalId is not null) lines.Add(L.T("settings.transfer.undo_hint"));
+            _journalId = r.JournalId;
+            if (r.JournalId is not null) lines.Add(L.T(CanUndoImport() ? "settings.transfer.undo_hint" : "settings.transfer.undo_hint_old"));
+            Raise(nameof(ShowUndoImport));
             if (lines.Count == 0) lines.Add(L.T("settings.transfer.import_nochange"));
             ImportResultText = string.Join(Environment.NewLine, lines);
             Say(done.Count > 0 ? L.T("settings.transfer.import_done", new { list = string.Join(", ", done) }) : "");

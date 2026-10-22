@@ -228,6 +228,7 @@
   "core.shell.iplist_missing": "IP-список не загружен — обновите его.",
   "core.shell.game_needs_lists": "Игровой режим недоступен, пока включены «Все адреса».",
   "core.shell.game_uses_list": "Включён IP-список: игровой режим работает по нему.",
+  "core.shell.game_list_off": "IP-список выключен, как было до игрового режима.",
   "core.shell.no_variant": "Такого варианта параметров нет.",
   "core.shell.no_profile": "Такого профиля нет.",
   "core.shell.too_many_profiles": "Профилей уже {max} — удалите ненужный.",

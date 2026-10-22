@@ -51,5 +51,17 @@
   "shell.helper.install_exit": "code {code}; details are in the helper log (logs\\helper.log)",
   "shell.undo.no_record": "There is no change record — nothing to revert.",
   "shell.about_text": "DpiShell {version} · helper: {helper}",
-  "shell.open_failed": "Could not open: {error}"
+  "shell.open_failed": "Could not open: {error}",
+  "shell.error.details": "Details",
+  "shell.error.hide": "Hide",
+  "shell.error.copy": "Copy",
+  "shell.error.copied": "Error details copied.",
+  "shell.error.title": "DpiShell — error",
+  "shell.error.time": "Time: {v}",
+  "shell.error.action": "Action: {v}",
+  "shell.error.text": "Error: {v}",
+  "shell.error.detail": "Details: {v}",
+  "shell.error.router": "Router: {v}",
+  "shell.error.none": "none",
+  "shell.error.private": "Private data hidden: PC and network addresses and names, own sites, proxy and router addresses."
 }

@@ -232,7 +232,7 @@ public partial class MainWindow : Window
             if (_vm.Helper.Client is { } c)
             {
                 try { await c.StopAllAddressesAsync(); }
-                catch (Exception ex) { _vm.Fail(Texts.Friendly(ex)); }
+                catch (Exception ex) { _vm.Fail(Texts.Friendly(ex), ex); }
             }
         }
         // Подбор держит временный winws и остановленную службу — дать ему вернуть всё на место.

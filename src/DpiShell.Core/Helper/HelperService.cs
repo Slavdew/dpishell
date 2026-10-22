@@ -154,11 +154,12 @@ public static class HelperEntry
         }
     }
 
-    public static int Uninstall(IProgress<string>? log = null)
+    /// <param name="purge">--uninstall-helper --purge: стереть и данные программы (%ProgramData%\DpiShell).</param>
+    public static int Uninstall(IProgress<string>? log = null, bool purge = false)
     {
         try
         {
-            new HelperInstaller(new AppPaths()).Uninstall(log);
+            new HelperInstaller(new AppPaths()).Uninstall(log, purge);
             return 0;
         }
         catch (Exception e)

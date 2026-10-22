@@ -265,6 +265,14 @@ public sealed class FakeHelperBackend : IHelperBackend
         return Task.FromResult(new UndoReport([new UndoItem(c.Id, c.Title, c.At, UndoAnswer, "")]));
     }
 
+    public Task<UndoReport> ChangesUndoGroupAsync(string id, CancellationToken ct)
+    {
+        Call("changes_undo_group " + id);
+        var group = ChangesValue.Where(x => x.Id == id || x.Group == id).Reverse().ToList();
+        foreach (var c in group) ChangesValue.Remove(c);
+        return Task.FromResult(new UndoReport([.. group.Select(c => new UndoItem(c.Id, c.Title, c.At, UndoAnswer, ""))]));
+    }
+
     public void RemoveAll() => Call("remove_all");
     public int ClearHistory() { Call("clear_history"); return 3; }
 
@@ -452,10 +460,13 @@ public sealed class FakeHelperBackend : IHelperBackend
         return SettingsStateValue;
     }
 
+    /// <summary>Номер записи журнала, который отвечает settings_import (null — загрузка ничего не записала).</summary>
+    public string? ImportJournalId { get; set; }
+
     public Task<DpiShell.Core.Export.ImportResult> SettingsImportAsync(string request, CancellationToken ct)
     {
         Call("settings_import " + request.Length);
-        return Task.FromResult(new DpiShell.Core.Export.ImportResult([], null));
+        return Task.FromResult(new DpiShell.Core.Export.ImportResult([], ImportJournalId));
     }
 
     public ProxyChangeResult ProxyMachineRestore()
@@ -497,9 +508,12 @@ public sealed class HelperFixture : IAsyncDisposable
     public Task<HelperClient> ConnectAsync() => HelperClient.ConnectAsync(ClientOptions);
 
     /// <summary>Связь окна с этим помощником (без UAC: установка — подмена), уже подключённая и с данными.</summary>
-    public async Task<HelperLink> LinkAsync()
+    public async Task<HelperLink> LinkAsync() => await LinkAsync(new NoSetup());
+
+    /// <summary>То же со своей подменой установки/удаления (например, <see cref="OkSetup"/>).</summary>
+    public async Task<HelperLink> LinkAsync(IHelperSetup setup)
     {
-        var link = new HelperLink { Connector = ct => HelperClient.ConnectAsync(ClientOptions, ct), Setup = new NoSetup(), WindowVersion = "0.0" };
+        var link = new HelperLink { Connector = ct => HelperClient.ConnectAsync(ClientOptions, ct), Setup = setup, WindowVersion = "0.0" };
         if (!await link.ConnectAsync()) throw new InvalidOperationException("Не подключились к помощнику фикстуры: " + link.Problem);
         await link.FetchAsync(full: true);
         return link;
@@ -546,6 +560,14 @@ public sealed class RawPipe(NamedPipeClientStream pipe) : IDisposable
 }
 
 /// <summary>Установка помощника в тестах: прав не просим, «пользователь отказал».</summary>
+/// <summary>Установка/удаление «прошли» (без UAC): аргументы запоминаются, ответ — <see cref="Answer"/>.</summary>
+public sealed class OkSetup : IHelperSetup
+{
+    public List<string> Calls { get; } = [];
+    public SetupResult Answer { get; set; } = SetupResult.Done;
+    public Task<SetupOutcome> RunElevatedAsync(string arguments) { Calls.Add(arguments); return Task.FromResult(new SetupOutcome(Answer)); }
+}
+
 public sealed class NoSetup : IHelperSetup
 {
     public List<string> Calls { get; } = [];

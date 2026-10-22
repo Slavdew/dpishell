@@ -154,7 +154,7 @@ public sealed partial class MainViewModel
             {
                 await JointBeforeEnableAsync();
                 try { await jc.EnableAsync(deferred); }
-                catch (Exception e) when (e is HelperException or HelperUnavailableException) { Fail(Texts.Friendly(e)); }
+                catch (Exception e) when (e is HelperException or HelperUnavailableException) { Fail(Texts.Friendly(e), e); }
                 await RefreshStatusAsync();
             }
             return;
@@ -174,7 +174,7 @@ public sealed partial class MainViewModel
         if (deferred is not null && Helper.Client is { } c)
         {
             try { await c.EnableAsync(deferred); }
-            catch (Exception e) when (e is HelperException or HelperUnavailableException) { Fail(Texts.Friendly(e)); }
+            catch (Exception e) when (e is HelperException or HelperUnavailableException) { Fail(Texts.Friendly(e), e); }
             await RefreshStatusAsync();
         }
     }

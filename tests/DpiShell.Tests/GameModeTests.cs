@@ -258,9 +258,25 @@ public class ShellNetFeaturesTests
         Assert.Equal("all", again.GameMode);
 
         Assert.False((await s.SetGameModeAsync(GameMode.TcpUdp)).IpsetSwitched);   // повтор — ничего
-        await s.SetGameModeAsync(GameMode.Off);
-        Assert.Equal(IpsetMode.List, s.Features.Ipset);   // список остаётся
+        var off = await s.SetGameModeAsync(GameMode.Off);
+        // Включить → выключить = как было (правило владельца об откате): список включил сам игровой режим — он и выключается.
+        Assert.Equal(IpsetMode.Off, s.Features.Ipset);
+        Assert.Equal(L.T("core.shell.game_list_off"), off.Note);
         Assert.False(s.Features.GameActive);
+        Assert.False(s.State.IpsetByGame);
+    }
+
+    [Fact]
+    public async Task GameOff_keeps_the_list_the_person_chose()
+    {
+        var (t, s) = NewShell();
+        using var _ = t;
+        // Список включён рукой до игрового режима — остаётся.
+        s.SetIpsetMode(IpsetMode.List);
+        await s.SetGameModeAsync(GameMode.TcpUdp);
+        await s.SetGameModeAsync(GameMode.Off);
+        Assert.Equal(IpsetMode.List, s.Features.Ipset);
+        Assert.False(s.State.IpsetByGame);
     }
 
     [Fact]

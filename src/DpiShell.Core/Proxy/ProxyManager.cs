@@ -58,7 +58,21 @@ public static class ProxySnapshot
     public static WinHttpInfo? WinHttp(JsonNode? n) =>
         n?["winhttp"] is JsonObject w ? new(S(w["proxy"]), S(w["bypass"])) : null;
 
-    public static bool Same(JsonNode? a, JsonNode? b) => (a?.ToJsonString() ?? "") == (b?.ToJsonString() ?? "");
+    /// <summary>Пометка в «было»: значения ProxyEnable до DpiShell не было — откат удаляет его, а не пишет 0 (без остатков своего).</summary>
+    public const string EnableAbsent = "enableAbsent";
+
+    public static bool NoEnableBefore(JsonNode? before) => before?[EnableAbsent] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
+
+    /// <summary>Сравнение снимков значений; пометка <see cref="EnableAbsent"/> — не значение и не сравнивается.</summary>
+    public static bool Same(JsonNode? a, JsonNode? b) => Text(a) == Text(b);
+
+    static string Text(JsonNode? n)
+    {
+        if (n is not JsonObject o || !o.ContainsKey(EnableAbsent)) return n?.ToJsonString() ?? "";
+        var c = (JsonObject)o.DeepClone();
+        c.Remove(EnableAbsent);
+        return c.ToJsonString();
+    }
 }
 
 /// <summary>
@@ -86,7 +100,7 @@ public sealed class ProxyManager(IProxyRegistry reg, IWinHttpProxy winHttp)
         if (sid is not null && !reg.UserHiveLoaded(sid)) return new(false, L.T("proxy.out.hive"));
         var before = ProxyRegistryIo.Read(reg, ProxyKey.UserSettings, sid);
         if (before == next) return new(true, L.T("proxy.out.already"));
-        var error = Journal(kind, Title(kind, next), sid, ProxySnapshot.ToJson(before, sid), ProxySnapshot.ToJson(next, sid),
+        var error = Journal(kind, Title(kind, next), sid, ProxySnapshot.ToJson(before, sid), ProxySnapshot.ToJson(next, sid), EnableAbsent(ProxyKey.UserSettings, sid),
             () => ProxySnapshot.ToJson(ProxyRegistryIo.Read(reg, ProxyKey.UserSettings, sid), sid),
             () => ProxyRegistryIo.Write(reg, ProxyKey.UserSettings, sid, next));
         Notifier.Changed();
@@ -118,6 +132,7 @@ public sealed class ProxyManager(IProxyRegistry reg, IWinHttpProxy winHttp)
         bool trackW = winhttp is not null;
         JsonObject Snap(ProxySettings s, int? per, WinHttpInfo? w) => ProxySnapshot.ToJson(s, null, true, per, trackW ? w : null);
         var error = Journal(ChangeKinds.ProxyMachine, Title(ChangeKinds.ProxyMachine, next), null, Snap(before, beforePer, beforeW), Snap(next, nextPer, winhttp),
+            EnableAbsent(ProxyKey.MachineSettings, null),
             () => Snap(ProxyRegistryIo.Read(reg, ProxyKey.MachineSettings), ProxyRegistryIo.PerUserPolicy(reg), winHttp.Get()),
             () =>
             {
@@ -148,11 +163,22 @@ public sealed class ProxyManager(IProxyRegistry reg, IWinHttpProxy winHttp)
 
     // ---------- журнал ----------
 
-    /// <summary>Запись ДО действия; итог — по факту (read-back). Тот же объект правки повторно — одна запись (первое «до» сохраняется).</summary>
-    string? Journal(string kind, string title, string? sid, JsonObject before, JsonObject planned, Func<JsonObject> snapshot, Action act)
+    bool EnableAbsent(ProxyKey key, string? sid)
+    {
+        try { return reg.Get(key, sid, ProxyNames.Enable) is null; }
+        catch (Exception e) when (IsIo(e)) { return false; }
+    }
+
+    /// <summary>
+    /// Запись ДО действия; итог — по факту (read-back). Тот же объект правки повторно — одна запись (первое «до» сохраняется).
+    /// <paramref name="enableAbsent"/> — значения ProxyEnable ещё нет: в записи помечается, откат его удалит.
+    /// </summary>
+    string? Journal(string kind, string title, string? sid, JsonObject before, JsonObject planned, bool enableAbsent, Func<JsonObject> snapshot, Action act)
     {
         var open = Recorder.Active(kind).LastOrDefault(e => ProxySnapshot.Sid(e.After) == sid && ProxySnapshot.Same(e.After, before));
-        string id = open?.Id ?? Recorder.Begin(kind, title, before, planned);
+        var stored = before;
+        if (open is null && enableAbsent) { stored = (JsonObject)before.DeepClone(); stored[ProxySnapshot.EnableAbsent] = true; }
+        string id = open?.Id ?? Recorder.Begin(kind, title, stored, planned);
         string? error = null;
         try { act(); }
         catch (Exception e) when (IsIo(e)) { error = string.IsNullOrWhiteSpace(e.Message) ? L.T("core.proxy.write_error") : e.Message; }
@@ -186,7 +212,12 @@ public sealed class ProxyUndoer(IProxyRegistry reg, IWinHttpProxy winHttp, IProx
             if (sid is not null && !reg.UserHiveLoaded(sid)) return Task.FromResult(UndoOutcome.Fail(L.T("core.proxy.undo.hive")));
 
             Part(L.T("core.proxy.undo.part_settings"), ProxyRegistryIo.Read(reg, key, sid), ProxySnapshot.Settings(e.After), ProxySnapshot.Settings(e.Before),
-                v => ProxyRegistryIo.Write(reg, key, sid, v));
+                v =>
+                {
+                    ProxyRegistryIo.Write(reg, key, sid, v);
+                    // ProxyEnable до DpiShell не было — не оставлять своё «0».
+                    if (!v.Enabled && ProxySnapshot.NoEnableBefore(e.Before)) reg.Delete(key, sid, ProxyNames.Enable);
+                });
             if (machine && ProxySnapshot.HasPerUser(e.After))
                 Part(L.T("core.proxy.undo.part_policy"), ProxyRegistryIo.PerUserPolicy(reg), ProxySnapshot.PerUser(e.After), ProxySnapshot.PerUser(e.Before),
                     v => ProxyRegistryIo.SetPerUserPolicy(reg, v));

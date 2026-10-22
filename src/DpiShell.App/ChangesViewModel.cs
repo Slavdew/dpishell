@@ -13,7 +13,24 @@ public sealed class DelegateUndoer(IReadOnlyCollection<string> kinds, Func<Chang
     public Task<UndoOutcome> UndoAsync(ChangeEntry entry, CancellationToken ct) => undo(entry);
 }
 
-public sealed record ChangeRow(string Title, string When);
+/// <summary>
+/// Пункт списка «Изменения DpiShell». <see cref="Action"/> — подпись кнопки отмены этого пункта («Отменить», «Отменить загрузку»); пусто — отдельно
+/// отменить нельзя, причина — в <see cref="Note"/> (решение — <see cref="ChangeUndoPolicy"/>).
+/// </summary>
+public sealed class ChangeRow(string id, string title, string when, string kind, bool fromHelper)
+{
+    public string Id { get; } = id;
+    public string Title { get; } = title;
+    public string When { get; } = when;
+    public string Kind { get; } = kind;
+    /// <summary>Запись журнала помощника (иначе — окна).</summary>
+    public bool FromHelper { get; } = fromHelper;
+    public string Action { get; init; } = "";
+    public string Note { get; init; } = "";
+    public bool HasAction => Action.Length > 0;
+    public bool HasNote => Note.Length > 0;
+    public ICommand? UndoCmd { get; set; }
+}
 
 /// <param name="Mark">ok — возвращено, same — уже было, skip — изменено после нас, fail — не удалось.</param>
 public sealed record ChangeReportRow(string Title, string Status, string Note, string Mark)
@@ -70,10 +87,13 @@ public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window)
 
     static string When(DateTime utc) => L.LongDate(utc.ToLocalTime()) + ", " + L.Time(utc.ToLocalTime());
 
+    /// <summary>После отмены (всего или пункта): окно перечитывает то, что показывает из данных помощника.</summary>
+    public Func<Task> AfterUndo { get; set; } = () => Task.CompletedTask;
+
     /// <summary>Перечитать оба журнала.</summary>
     public async Task RefreshAsync()
     {
-        var rows = new List<(DateTime At, string Title)>();
+        var rows = new List<(ChangeInfo Info, bool Helper)>();
         HelperNote = "";
         if (helper.Reader is null)
             HelperNote = helper.State == HelperState.NotInstalled
@@ -83,24 +103,90 @@ public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window)
             HelperNote = L.T("settings.changes.helper_old");
         else
         {
-            try { rows.AddRange((await helper.Reader.ChangesListAsync()).Items.Select(i => (i.At, i.Title))); }
+            try { rows.AddRange((await helper.Reader.ChangesListAsync()).Items.Select(i => (i, true))); }
             catch (HelperUnavailableException e) { helper.MarkLost(e); HelperNote = L.T("settings.changes.helper_lost"); }
             catch (HelperException e) { HelperNote = e.Message; }
         }
-        rows.AddRange(window.List().Items.Select(i => (i.At, i.Title)));
-        _rows = [.. rows.OrderByDescending(r => r.At)];
+        rows.AddRange(window.List().Items.Select(i => (i, false)));
+        _rows = [.. rows.OrderByDescending(r => r.Info.At)];
         FillItems();
         RaiseShape();
     }
 
     // Записи журнала хранятся текстом на языке записи (помощник — по-русски): на языке окна их показывает L.Relocalize.
-    List<(DateTime At, string Title)> _rows = [];
+    List<(ChangeInfo Info, bool Helper)> _rows = [];
     IReadOnlyList<UndoItem>? _lastReport;
 
     void FillItems()
     {
         Items.Clear();
-        foreach (var (at, title) in _rows) Items.Add(new(L.Relocalize(title), When(at)));
+        // Решение по каждому журналу отдельно: «более поздний того же вида» и «внутри загрузки» — в пределах одного журнала.
+        var policy = ChangeUndoPolicy.Decide([.. _rows.Where(r => r.Helper).Select(r => r.Info)])
+            .Concat(ChangeUndoPolicy.Decide([.. _rows.Where(r => !r.Helper).Select(r => r.Info)]))
+            .ToDictionary(x => x.Key, x => x.Value);
+        foreach (var (info, fromHelper) in _rows)
+        {
+            var (action, note) = Describe(policy.GetValueOrDefault(info.Id, SingleUndo.Unknown), fromHelper);
+            var row = new ChangeRow(info.Id, L.Relocalize(info.Title), When(info.At), info.Kind, fromHelper) { Action = action, Note = note };
+            row.UndoCmd = RelayCommand.Async(() => UndoOneAsync(row), () => row.HasAction);
+            Items.Add(row);
+        }
+    }
+
+    /// <summary>Подпись кнопки и причина, если отдельно отменить нельзя.</summary>
+    (string Action, string Note) Describe(SingleUndo p, bool fromHelper)
+    {
+        if (fromHelper && p is SingleUndo.Yes && !CanHelper("changes_undo")) return ("", L.T("settings.changes.row.old_helper"));
+        return p switch
+        {
+            SingleUndo.Yes => (L.T("settings.changes.row.undo"), ""),
+            SingleUndo.Group when CanHelper("changes_undo_group") => (L.T("settings.changes.row.undo_import"), ""),
+            SingleUndo.Group => ("", L.T("settings.changes.row.import_old_helper")),
+            SingleUndo.InGroup => ("", L.T("settings.changes.row.in_import")),
+            SingleUndo.NewerFirst => ("", L.T("settings.changes.row.newer_first")),
+            SingleUndo.OnlyAll => ("", L.T("settings.changes.row.only_all")),
+            _ => ("", L.T("settings.changes.row.unknown")),
+        };
+    }
+
+    /// <summary>Помощник умеет отменять загрузку настроек отдельно (API 1.15).</summary>
+    public bool CanUndoImport => CanHelper("changes_undo_group");
+
+    /// <summary>
+    /// «Отменить» у пункта: вопрос, откат одной записи (загрузка настроек — вместе со своими пунктами), отчёт. Остальные пункты не трогаются.
+    /// </summary>
+    public async Task<bool> UndoOneAsync(ChangeRow row)
+    {
+        if (!row.HasAction) return false;
+        bool import = row.Kind == ChangeKinds.SettingsImport;
+        if (!Confirm(L.T(import ? "settings.changes.confirm_import" : "settings.changes.confirm_one", new { title = row.Title }))) return false;
+        return await RunOneAsync(row.FromHelper, row.Id, import);
+    }
+
+    /// <summary>«Отменить загрузку» из окна загрузки настроек: та же отмена по номеру записи помощника (без списка).</summary>
+    public async Task<bool> UndoImportAsync(string journalId)
+    {
+        if (!CanUndoImport) return false;
+        if (!Confirm(L.T("settings.changes.confirm_import", new { title = L.T("settings.changes.import_title") }))) return false;
+        return await RunOneAsync(true, journalId, true);
+    }
+
+    async Task<bool> RunOneAsync(bool fromHelper, string id, bool group)
+    {
+        var all = new List<UndoItem>();
+        bool ran = await Guard(L.T("settings.changes.busy"), async () =>
+        {
+            if (!fromHelper) { all.AddRange((await window.UndoAsync(id)).Items); return; }
+            try { all.AddRange((group ? await helper.Reader!.ChangesUndoGroupAsync(id) : await helper.Reader!.ChangesUndoAsync(id)).Items); }
+            catch (HelperUnavailableException e) { helper.MarkLost(e); all.Add(new("", L.T("settings.changes.helper_entries"), DateTime.UtcNow, UndoStatus.Failed, L.T("settings.changes.helper_entries_lost"))); }
+            catch (HelperException e) { all.Add(new("", L.T("settings.changes.helper_entries"), DateTime.UtcNow, UndoStatus.Failed, e.Message)); }
+        });
+        if (!ran) return false;
+        Show(all);
+        await RefreshAsync();
+        await AfterUndo();
+        Say(Summary);
+        return true;
     }
 
     /// <summary>Смена языка: список пунктов и отчёт собираются заново из данных.</summary>
@@ -135,10 +221,16 @@ public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window)
         });
         if (!ran) return false;
         Show(all);
+        _lastAllReport = all;
         await RefreshAsync();
+        await AfterUndo();
         Say(Summary);
         return true;
     }
+
+    List<UndoItem>? _lastAllReport;
+    /// <summary>Итог последнего «Отменить всё» (для удаления с ПК: всё ли отменилось).</summary>
+    public IReadOnlyList<UndoItem> LastUndoAll => _lastAllReport ?? [];
 
     public void Show(IReadOnlyList<UndoItem> items)
     {

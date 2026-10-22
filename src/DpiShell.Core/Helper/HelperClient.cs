@@ -441,6 +441,8 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public Task<ChangesList> ChangesListAsync(CancellationToken ct = default) => CallAsync<ChangesList>("changes_list", null, null, ct);
     public Task<UndoReport> ChangesUndoAllAsync(CancellationToken ct = default) => CallAsync<UndoReport>("changes_undo_all", null, null, ct);
     public Task<UndoReport> ChangesUndoAsync(string id, CancellationToken ct = default) => CallAsync<UndoReport>("changes_undo", new { id }, null, ct);
+    /// <summary>Загрузка настроек вместе с её пунктами (API 1.15; старый помощник команды не знает — кнопка скрыта).</summary>
+    public Task<UndoReport> ChangesUndoGroupAsync(string id, CancellationToken ct = default) => CallAsync<UndoReport>("changes_undo_group", new { id }, null, ct);
 
     // Системный прокси (API 1.7). Значения проходят белый список помощника; пути реестра окно не передаёт.
     public Task<ProxyStatusInfo> ProxyStatusAsync(CancellationToken ct = default) => CallAsync<ProxyStatusInfo>("proxy_status", null, null, ct);

@@ -82,16 +82,32 @@ public sealed partial class ShellHelperBackend
             if (ops.RemoveApps.Count > 0)
                 before["apps"] = new JsonArray([.. Sh.State.AppProfiles.Where(p => ops.RemoveApps.Contains(p.Id)).Select(p => JsonSerializer.SerializeToNode(p, Snap))]);
             if (ops.NewStrategies.Count > 0) { before["strategies"] = new JsonArray(); after["strategies"] = new JsonArray(); }
-            return Sh.Journal.Begin(ChangeKinds.SettingsImport, SettingsApplier.JournalTitle(plan), before, after);
+            // Свои строки hosts и продвинутый режим ведут одну открытую запись на всё время: если она была до загрузки, загрузка лишь правит её.
+            // Прежнее — здесь, чтобы «Отменить загрузку» вернула ровно то, что было до неё.
+            if (ops.Hosts is not null) before["hosts"] = Arr(UserHosts());
+            if (ops.Advanced is not null) before["advanced"] = Sh.State.Advanced.ToJson();
+            var id = Sh.Journal.Begin(ChangeKinds.SettingsImport, SettingsApplier.JournalTitle(plan), before, after);
+            // Записи hosts, DNS, профилей и продвинутого режима, сделанные дальше в этой загрузке, — её часть (changes_undo_group).
+            Sh.Journal.BeginGroup(id);
+            return id;
+        }
+
+        IEnumerable<string> UserHosts()
+        {
+            try { return [.. Sh.Hosts.File.Read().UserLines().Select(l => new HostsEntry(l.Host, l.Ip).ToString()).Distinct()]; }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return []; }
         }
 
         public void EndImport(string? record, ImportResult result)
         {
+            Sh.Journal.EndGroup();
             if (string.IsNullOrEmpty(record)) return;
             if (!result.Sections.Any(s => s.Ok && (s.Added > 0 || s.Removed > 0))) { Sh.Journal.Abort(record); return; }
             var entry = Sh.Journal.Active(ChangeKinds.SettingsImport).FirstOrDefault(e => e.Id == record);
             var after = entry?.After?.DeepClone() as JsonObject ?? [];
             if (_addedStrategies.Count > 0) after["strategies"] = Arr(_addedStrategies);
+            if (entry?.Before?["hosts"] is not null) after["hosts"] = Arr(UserHosts());
+            if (entry?.Before?["advanced"] is not null) after["advanced"] = Sh.State.Advanced.ToJson();
             Sh.Journal.Done(record, after);
         }
 
