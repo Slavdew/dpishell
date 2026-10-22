@@ -24,6 +24,9 @@ public sealed partial class ServiceManager(AppPaths paths) : IServiceOps
 
     public string? ImagePath => QueryBinPath(Name);
 
+    /// <summary>Проверка перед созданием/запуском службы (у Shell — хеши ядра по манифесту); исключение — служба не трогается.</summary>
+    public Action? BeforeStart { get; set; }
+
     /// <summary>Чужие службы обхода, которые держат WinDivert и мешают нашей.</summary>
     public static readonly string[] ForeignServices = ["zapret", "winws1", "winws2", "GoodbyeDPI", "discordfix_zapret", "WinDivert14"];
 
@@ -74,6 +77,7 @@ public sealed partial class ServiceManager(AppPaths paths) : IServiceOps
     /// <summary>Поставить (или перенастроить) службу на стратегию и запустить.</summary>
     public void Apply(IReadOnlyList<string> args)
     {
+        BeforeStart?.Invoke();
         var bin = $"\"{paths.Winws}\" {WinwsArgs.Join(args)}";
         if (State == SvcState.NotInstalled)
         {

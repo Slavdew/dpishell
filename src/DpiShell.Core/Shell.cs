@@ -35,7 +35,7 @@ public sealed class Shell
         Journal = new ChangeJournal(Paths.ChangesFile);
         Data = new DataStore(Paths);
         Installer = new CoreInstaller(Paths, CoreManifest.Load(Path.Combine(Paths.Seed, "core.json")));
-        Service = new ServiceManager(Paths) { Recorder = Journal };
+        Service = new ServiceManager(Paths) { Recorder = Journal, BeforeStart = EnsureCoreIntact };
         Catalog = StrategyCatalog.Load(Path.Combine(Paths.Seed, "strategies.json"));
         DefaultTargets = TargetSet.Load(Path.Combine(Paths.Seed, "targets.json"));
         State = AppState.Load(Paths);
@@ -54,7 +54,8 @@ public sealed class Shell
     public async Task<CoreCheck> PrepareAsync(IProgress<string>? log = null, CancellationToken ct = default)
     {
         Data.Seed();
-        if (IsAdmin()) Paths.Harden();   // свои сайты и ядро — только системе и администраторам
+        if (IsAdmin())   // свои сайты и ядро — только системе и администраторам
+            foreach (var r in Paths.Harden()) log?.Report(L.T("core.shell.unsafe_removed", new { item = r }));
         var check = Installer.Check();
         if (check.State == CoreState.Missing)
         {
@@ -62,6 +63,8 @@ public sealed class Shell
             await InstallRecordedAsync(http, log, ct);
             check = Installer.Check();
         }
+        // Служба стартует с Windows раньше помощника и без его проверки: ядро не сходится с манифестом — остановить.
+        if (IsAdmin()) StopServiceIfCoreBroken(log);
         if (check.State == CoreState.Ok && IsAdmin())
         {
             // Программу закрыли во время «Все адреса» — срок вышел, вернуть; служба после обновления программы — на новые аргументы.
@@ -149,17 +152,38 @@ public sealed class Shell
     public static IReadOnlyList<TargetGroup> WithControl(IReadOnlyList<TargetGroup> groups, TargetSet all) =>
         [.. groups.Where(g => !g.Control), .. all.Groups.Where(g => g.Control)];
 
-    void EnsureCoreIntact()
+    /// <summary>Что не так с ядром для запуска winws (хеши winws.exe, WinDivert и остальных файлов по манифесту, чужие dll/exe рядом); всё в порядке — null.</summary>
+    public string? CoreProblem()
     {
         var c = Installer.Check();
         if (c.State != CoreState.Ok)
-            throw new SecurityException(c.State == CoreState.Missing
+            return c.State == CoreState.Missing
                 ? L.T("core.shell.core_missing")
-                : L.T("core.shell.core_changed", new { files = string.Join(", ", c.BadFiles) }));
+                : L.T("core.shell.core_changed", new { files = string.Join(", ", c.BadFiles) });
         // Чужая dll или exe рядом с winws может быть подхвачена при запуске.
         var foreign = c.ExtraFiles.Where(f => f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)).ToList();
-        if (foreign.Count > 0)
-            throw new SecurityException(L.T("core.shell.core_foreign", new { files = string.Join(", ", foreign) }));
+        return foreign.Count > 0 ? L.T("core.shell.core_foreign", new { files = string.Join(", ", foreign) }) : null;
+    }
+
+    /// <summary>Перед каждым запуском winws (процесс или служба): ядро должно сходиться с манифестом, иначе — отказ.</summary>
+    void EnsureCoreIntact()
+    {
+        if (CoreProblem() is { } problem) throw new SecurityException(problem);
+    }
+
+    /// <summary>
+    /// Служба с нашим winws работает, а ядро не сходится с манифестом (служба стартует с Windows сама, без проверки) —
+    /// остановить её и сообщить. True — остановили.
+    /// </summary>
+    public bool StopServiceIfCoreBroken(IProgress<string>? log = null)
+    {
+        if (CoreProblem() is not { } problem) return false;
+        if (Service.State is not (SvcState.Running or SvcState.StartPending)) return false;
+        var (exe, _) = ZapretDetector.SplitCommandLine(ServiceManager.QueryBinPath(ServiceManager.Name));
+        if (exe is null || !exe.Equals(Paths.Winws, StringComparison.OrdinalIgnoreCase)) return false;
+        Service.Stop();
+        log?.Report(L.T("core.shell.service_stopped_core", new { problem }));
+        return true;
     }
 
     void ThrowIfConflicts()
@@ -196,6 +220,7 @@ public sealed class Shell
     public (IReadOnlyList<string> Stopped, IReadOnlyList<string> ComeBackOnReboot) StopForeign()
     {
         var stopped = new List<string>(); var comeBack = new List<string>();
+        var snapshotAt = DateTime.Now;   // процесс из снимка запущен не позже этого момента
         var found = ZapretDetector.Find(Paths, AllStrategies).Where(z => z.Owner != ZapretOwner.DpiShell).ToList();
         foreach (var z in found.Where(z => z.Kind == "service"))
         {
@@ -210,6 +235,8 @@ public sealed class Shell
             try
             {
                 using var p = System.Diagnostics.Process.GetProcessById(pid);
+                // Между снимком и Kill номер мог достаться другому процессу (в т. ч. чужого пользователя) — тогда не трогаем.
+                if (!IsSameProcess(p, z.ExePath, snapshotAt)) continue;
                 p.Kill(entireProcessTree: true);
                 p.WaitForExit(5000);
                 stopped.Add(z.OwnerTitle);
@@ -218,6 +245,27 @@ public sealed class Shell
             catch (InvalidOperationException) { }
         }
         return (stopped, comeBack);
+    }
+
+    /// <summary>
+    /// Тот ли это процесс, что был в снимке: запущен не позже снимка, то же имя и (если система его отдаёт) тот же путь образа.
+    /// Не удалось узнать время старта — нет.
+    /// </summary>
+    public static bool IsSameProcess(System.Diagnostics.Process p, string? exe, DateTime snapshotAt)
+    {
+        try
+        {
+            if (p.HasExited || p.StartTime > snapshotAt) return false;
+            var name = exe is null ? null : Path.GetFileNameWithoutExtension(exe);
+            if (name is not null ? !p.ProcessName.Equals(name, StringComparison.OrdinalIgnoreCase)
+                                 : p.ProcessName is not ("winws" or "goodbyedpi")) return false;
+            if (exe is null) return true;
+            string? image;
+            try { image = p.MainModule?.FileName; }
+            catch (System.ComponentModel.Win32Exception) { image = null; }   // защищённый процесс: хватит имени и времени
+            return image is null || image.Equals(exe, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException) { return false; }
     }
 
     // ---------- режимы работы: служба Windows или процесс программы ----------
@@ -428,7 +476,8 @@ public sealed class Shell
         {
             if (State.Enabled && State.StrategyId is { } id)
             {
-                if (serviceWasRunning) ServiceManager.Sc("start", ServiceManager.Name);
+                // За время подбора ядро могли подменить: не сходится с манифестом — служба не стартует (окно увидит ядро в status).
+                if (serviceWasRunning && CoreProblem() is null) ServiceManager.Sc("start", ServiceManager.Name);
                 if (processWasRunning && FindStrategy(id) is { } s)
                     try { StartProcess(WinwsArgs.Build(s, Paths, CurrentOptions)); } catch (InvalidOperationException) { }
             }

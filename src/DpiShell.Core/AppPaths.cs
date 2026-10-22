@@ -80,39 +80,45 @@ public sealed class AppPaths
     /// <summary>
     /// Доступ к папке программы — только системе и администраторам (по SID, на любом языке Windows).
     /// По умолчанию в %ProgramData% пользователи могут читать и писать: это раскрывало свои сайты и позволяло
-    /// подменить winws.exe, который служба запускает от имени системы после перезагрузки (без нашей проверки хешей).
-    /// Наследование от %ProgramData% отключается; вложенные папки и файлы получают те же права.
+    /// подменить winws.exe, который служба запускает от имени системы после перезагрузки.
+    /// Наследование от %ProgramData% отключается; вложенные папки и файлы получают те же права и владельца «Администраторы».
+    /// До установки помощника любой пользователь мог создать папку сам или положить в неё ссылки (junction, symlink, жёсткие):
+    /// корень-ссылка удаляется, корень с чужим владельцем откладывается в сторону (<c>DpiShell.untrusted-…</c>) и создаётся заново,
+    /// ссылки внутри удаляются (сами ссылки, не то, на что они указывают); папка была открыта — скачанные данные (<c>data\</c>)
+    /// удаляются: их мог положить кто угодно, в работе останется поставка. Возвращает, что убрано (для журнала).
     /// </summary>
-    public void Harden()
+    public IReadOnlyList<string> Harden()
     {
-        EnsureDirectories();
-        var system = new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.LocalSystemSid, null);
-        var admins = new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid, null);
-        var acl = new System.Security.AccessControl.DirectorySecurity();
-        acl.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-        foreach (var sid in new[] { system, admins })
-            acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(sid,
-                System.Security.AccessControl.FileSystemRights.FullControl,
-                System.Security.AccessControl.InheritanceFlags.ContainerInherit | System.Security.AccessControl.InheritanceFlags.ObjectInherit,
-                System.Security.AccessControl.PropagationFlags.None, System.Security.AccessControl.AccessControlType.Allow));
-        if (IsElevated()) acl.SetOwner(admins);
-        new DirectoryInfo(Root).SetAccessControl(acl);
-        // Файлы и папки, созданные до этого, могли получить явные права — сбрасываем на наследуемые.
-        foreach (var f in Directory.EnumerateFileSystemEntries(Root, "*", SearchOption.AllDirectories))
+        var removed = new List<string>();
+        var rootAttr = SafeFolder.Attributes(Root);
+        if (rootAttr is { } ra && (ra & FileAttributes.ReparsePoint) != 0)
         {
-            if (Directory.Exists(f))
-            {
-                var ds = new System.Security.AccessControl.DirectorySecurity();
-                ds.SetAccessRuleProtection(false, false);
-                new DirectoryInfo(f).SetAccessControl(ds);
-            }
-            else
-            {
-                var fs = new System.Security.AccessControl.FileSecurity();
-                fs.SetAccessRuleProtection(false, false);
-                new FileInfo(f).SetAccessControl(fs);
-            }
+            SafeFolder.DeleteLink(Root, ra);
+            removed.Add(Root);
         }
+        else if (rootAttr is not null && !SafeFolder.TrustedOwner(Root))
+        {
+            var aside = $"{Root}.untrusted-{DateTime.Now:yyyyMMdd-HHmmss}";
+            Directory.Move(Root, aside);
+            removed.Add(Root + " → " + aside);
+        }
+        bool wasOpen = Directory.Exists(Root) && !SafeFolder.AclClosed(Root);
+
+        if (Directory.Exists(Root)) SafeFolder.RemoveLinks(Root, removed);
+        var acl = SafeFolder.ClosedAcl(setOwner: IsElevated());
+        if (Directory.Exists(Root)) new DirectoryInfo(Root).SetAccessControl(acl);
+        else new DirectoryInfo(Root).Create(acl);
+
+        // Записи, созданные до этого: ссылки — удалить, остальным — владелец «Администраторы» и наследуемые права.
+        SafeFolder.Sanitize(Root, setOwner: IsElevated(), removed);
+        if (wasOpen && Directory.Exists(Updates))
+        {
+            Directory.Delete(Updates, recursive: true);
+            removed.Add(Updates);
+            ResetSeed();
+        }
+        EnsureDirectories();
+        return removed;
     }
 
     static bool IsElevated()
@@ -121,18 +127,18 @@ public sealed class AppPaths
         return new System.Security.Principal.WindowsPrincipal(id).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
     }
 
-    /// <summary>Закрыта ли папка от обычных пользователей (для «Диагностики» и тестов).</summary>
+    /// <summary>
+    /// Закрыта ли папка: корень — не ссылка, владелец — система, администраторы или этот же процесс, обычным пользователям
+    /// доступа нет; внутри нет ссылок и записей чужих владельцев (для старта помощника, установки и тестов).
+    /// </summary>
     public bool IsHardened()
     {
-        if (!Directory.Exists(Root)) return false;
-        var users = new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.BuiltinUsersSid, null);
-        var auth = new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.AuthenticatedUserSid, null);
-        var everyone = new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.WorldSid, null);
-        var rules = new DirectoryInfo(Root).GetAccessControl().GetAccessRules(true, true, typeof(System.Security.Principal.SecurityIdentifier));
-        foreach (System.Security.AccessControl.FileSystemAccessRule r in rules)
-            if (r.IdentityReference is System.Security.Principal.SecurityIdentifier sid && (sid == users || sid == auth || sid == everyone)
-                && r.AccessControlType == System.Security.AccessControl.AccessControlType.Allow)
-                return false;
-        return true;
+        try
+        {
+            if (SafeFolder.Attributes(Root) is not { } a || (a & FileAttributes.ReparsePoint) != 0 || (a & FileAttributes.Directory) == 0) return false;
+            if (!SafeFolder.TrustedOwner(Root) || !SafeFolder.AclClosed(Root)) return false;
+            return SafeFolder.TreeIsClean(Root);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException) { return false; }
     }
 }

@@ -210,6 +210,8 @@
   "core.shell.journal_core": "Optimization core installed, version {version}",
   "core.shell.core_missing": "Core files not found. An antivirus may have removed them.",
   "core.shell.core_changed": "Core files changed: {files}. An antivirus may have touched them — restore the core.",
+  "core.shell.unsafe_removed": "Removed from the program folder (link or foreign entry): {item}",
+  "core.shell.service_stopped_core": "Optimization service stopped: {problem}",
   "core.shell.core_foreign": "Foreign files in the core folder: {files}. Restore the core.",
   "core.shell.stopped_service": "{owner} (service {name})",
   "core.shell.journal_timestamps": "TCP timestamps turned on (a Windows setting)",

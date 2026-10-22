@@ -33,7 +33,7 @@ public sealed class HelperService : ServiceBase
         if (!_paths.IsHardened())
         {
             _log.Write("папка программы оказалась открыта пользователям — закрываю заново");
-            _paths.Harden();
+            foreach (var r in _paths.Harden()) _log.Write("убрано из папки программы: " + r);
         }
 
         var owner = HelperInstaller.ReadOwner(_paths);
