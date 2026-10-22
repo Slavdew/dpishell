@@ -28,9 +28,22 @@ public static partial class TcpTimestamps
     {
         var (code, output) = Netsh("interface", "tcp", "show", "global");
         if (code != 0) return null;
-        // Подпись netsh переводит («Метки времени RFC 1323» на русской Windows), а номер RFC и enabled/disabled — нет.
-        var m = StateRx().Match(output);
-        return m.Success ? m.Groups[1].Value.Equals("enabled", StringComparison.OrdinalIgnoreCase) : null;
+        return Parse(output);
+    }
+
+    /// <summary>
+    /// Разбор вывода <c>netsh interface tcp show global</c>. Подпись переводится («Метки времени RFC 1323» на русской Windows), а номер RFC и значение — нет.
+    /// Значения: enabled / disabled; на новых Windows и Windows Server ещё allowed («отвечать меткой, только если её прислал собеседник») — сами метки не отправляются,
+    /// как выключенные. Регистр не важен; значение не узнали — null.
+    /// </summary>
+    public static bool? Parse(string output)
+    {
+        var m = StateRx().Match(output ?? "");
+        if (!m.Success) return null;
+        var v = m.Groups[1].Value;
+        if (v.Equals("enabled", StringComparison.OrdinalIgnoreCase)) return true;
+        if (v.Equals("disabled", StringComparison.OrdinalIgnoreCase) || v.Equals("allowed", StringComparison.OrdinalIgnoreCase)) return false;
+        return null;
     }
 
     public static bool Set(bool enabled) =>
@@ -50,6 +63,6 @@ public static partial class TcpTimestamps
         catch (System.ComponentModel.Win32Exception) { return (-1, ""); }
     }
 
-    [GeneratedRegex(@"RFC 1323[^:\r\n]*:\s*(enabled|disabled)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"RFC\s*1323[^:\r\n]*:\s*([A-Za-z]+)", RegexOptions.IgnoreCase)]
     private static partial Regex StateRx();
 }

@@ -16,7 +16,8 @@ public sealed partial class WindowSmokeTests
     [Fact]
     public void Router_JointWork_Card_Binds_AndSnap()
     {
-        // На сервере CI (GitHub) откат «роутер пропал» не наступает за отведённое время — стабильно, локально проходит; разбор после беты (HANDOFF).
+        // Причина сбоя найдена: RefreshAsync после fake.Remove() мог быть пустым вызовом (идёт другое обновление) — теперь повторяется. Локально под нагрузкой проверено;
+        // на сервере CI (GitHub) пока не проверялось — пропуск оставлен до первого зелёного прогона там (HANDOFF).
         if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true") return;
         var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
         using var tmp = new TempDir();
@@ -103,7 +104,15 @@ public sealed partial class WindowSmokeTests
                 Pump();
                 tabs = Find<TabControl>(w)!;
                 fake.Remove();
-                WaitUi(vm.Router.RefreshAsync());
+                // RefreshAsync молча ничего не делает, пока идёт другое обновление (таймер окна, Busy): одного вызова мало — повторяем, пока роутер не признан пропавшим.
+                // Проверку связки запускает перемена роутера в фоне — после каждого обновления дожидаемся её, а не времени.
+                for (var until = DateTime.UtcNow.AddSeconds(60); vm.Router.JointStatus != "Роутер не найден — этот ПК работает сам" && DateTime.UtcNow < until;)
+                {
+                    WaitUi(vm.Router.RefreshAsync());
+                    WaitUi(vm.Router.JointWhenIdleAsync());
+                    Pump();
+                    Thread.Sleep(50);
+                }
                 PumpUntil(() => vm.Router.JointStatus == "Роутер не найден — этот ПК работает сам", "откат к полной настройке: " + vm.Router.JointStatus);
                 Pump();
                 if (!vm.IsRunning) throw new Exception("ПК выключился вместе с пропавшим роутером");

@@ -46,7 +46,7 @@ public sealed class RouterWindowFeaturesTests : IDisposable
 
     static async Task Until(Func<bool> cond)
     {
-        for (int i = 0; i < 500 && !cond(); i++) await Task.Delay(10);
+        for (int i = 0; i < 500 * 10 && !cond(); i++) await Task.Delay(10);
         Assert.True(cond());
     }
 

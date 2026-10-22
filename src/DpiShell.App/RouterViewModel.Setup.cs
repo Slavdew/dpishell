@@ -225,7 +225,8 @@ public sealed partial class RouterViewModel
     /// После установки или обновления DpiShell rpcd на роутере перезапускается (~2 с после конца задания): объект dpishell пропадает
     /// и появляется снова. Столько окно ждёт его (повторяя status), прежде чем показать ошибку. По умолчанию — 8 опросов.
     /// </summary>
-    public TimeSpan RpcdSettle => PollInterval * 8;
+    public TimeSpan RpcdSettle { get => _rpcdSettle ?? PollInterval * 8; set => _rpcdSettle = value; }
+    TimeSpan? _rpcdSettle;
 
     static bool Restarting(RouterException e) => e.Failure is RouterFailure.Unreachable or RouterFailure.NoResponse or RouterFailure.NotSupported;
 

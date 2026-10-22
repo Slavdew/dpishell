@@ -56,7 +56,7 @@ public sealed class AppUpdateWindowTests
 
         public async Task Wait(Func<bool> done)
         {
-            for (int i = 0; i < 200 && !done(); i++) await Task.Delay(25);
+            for (int i = 0; i < 200 * 10 && !done(); i++) await Task.Delay(25);
             Assert.True(done(), "не дождались: " + Vm.AppProgressText + " | " + Vm.AppError);
         }
 

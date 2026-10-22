@@ -128,7 +128,7 @@ public sealed class HomeViewModelTests : IDisposable
 
         // Ушли с вкладки — помощник на связи, сохраняем сами и говорим об этом.
         vm.GoTo(Pages.Home);
-        for (int i = 0; i < 300 && !vm.HasToast; i++) await Task.Delay(10);
+        for (int i = 0; i < 300 * 10 && !vm.HasToast; i++) await Task.Delay(10);
         Assert.Contains("user_targets_set example.com", f.Backend.Calls);
         Assert.Equal("Правки на вкладке «Сайты» сохранены.", vm.Toast);
 
@@ -159,11 +159,11 @@ public sealed class HomeViewModelTests : IDisposable
             Setup = new NoSetup(),
         };
         var vm = TestWindow.Model(NewShell(), link);
-        vm.LoadSlowAfter = TimeSpan.FromMilliseconds(30);
+        vm.LoadSlowAfter = TimeSpan.FromMilliseconds(200);   // запас: под нагрузкой поток между Init и проверкой «ещё не медленно» может встать
         var init = vm.InitializeAsync();
         Assert.True(vm.IsLoading);
         Assert.False(vm.ShowLoadActions);
-        for (int i = 0; i < 300 && !vm.LoadSlow; i++) await Task.Delay(10);
+        for (int i = 0; i < 300 * 10 && !vm.LoadSlow; i++) await Task.Delay(10);
         Assert.True(vm.ShowLoadActions);
         Assert.Equal(L.T("shell.loading.slow"), vm.LoadingText);
         Assert.True(vm.RetryCmd.CanExecute(null));
@@ -174,7 +174,7 @@ public sealed class HomeViewModelTests : IDisposable
         Assert.True(vm.IsLoading);
         Assert.False(vm.LoadSlow);
         Assert.False(vm.LoadFailed);
-        for (int i = 0; i < 300 && !vm.LoadSlow; i++) await Task.Delay(10);
+        for (int i = 0; i < 300 * 10 && !vm.LoadSlow; i++) await Task.Delay(10);
         Assert.True(vm.LoadSlow);
         GC.KeepAlive(again);
     }

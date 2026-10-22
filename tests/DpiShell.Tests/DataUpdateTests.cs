@@ -531,9 +531,9 @@ public sealed partial class DataUpdateTests
         var vm = new UpdatesViewModel(link, shell, settings) { Need = () => Task.FromResult(link.Client), Say = s => { lock (said) said.Add(s); } };
         Assert.True(vm.DataAvailable);
         vm.InstallCmd.Execute(null);
-        for (int i = 0; i < 100 && !f.Backend.Calls.Contains("data_update False"); i++) await Task.Delay(50);
+        for (int i = 0; i < 100 * 10 && !f.Backend.Calls.Contains("data_update False"); i++) await Task.Delay(50);
         bool Done() { lock (said) return said.Any(s => s.Contains("обновлены")); }
-        for (int i = 0; i < 100 && !Done(); i++) await Task.Delay(50);
+        for (int i = 0; i < 100 * 10 && !Done(); i++) await Task.Delay(50);
         Assert.Contains("data_update False", f.Backend.Calls);
         Assert.False(vm.DataAvailable);
         Assert.True(Done());

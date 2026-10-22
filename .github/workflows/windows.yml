@@ -48,12 +48,7 @@ jobs:
           dotnet build DpiShell.sln -c Release -warnaserror -nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet test tests/DpiShell.Tests -c Release --no-build -nologo
-          if ($LASTEXITCODE -ne 0) {
-            # Несколько тестов окна под нагрузкой изредка не укладываются во время (список — docs HANDOFF). Один повтор целиком; второй сбой — настоящий.
-            Write-Host "Тесты упали — повтор целиком"
-            dotnet test tests/DpiShell.Tests -c Release --no-build -nologo
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Portable-архив
         shell: pwsh

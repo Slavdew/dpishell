@@ -1785,7 +1785,7 @@ public sealed partial class WindowSmokeTests
 
     static void PumpUntil(Func<bool> cond, string what)
     {
-        for (int i = 0; i < 400 && !cond(); i++) { Pump(); Thread.Sleep(15); }
+        for (int i = 0; i < 400 * 10 && !cond(); i++) { Pump(); Thread.Sleep(15); }
         if (!cond()) throw new Exception("Не дождались: " + what);
     }
 
@@ -2051,7 +2051,7 @@ public sealed partial class WindowSmokeTests
                 }
                 void Until(Func<bool> done, string what)
                 {
-                    for (int i = 0; i < 500 && !done(); i++) { Pump(); Thread.Sleep(10); }
+                    for (int i = 0; i < 500 * 10 && !done(); i++) { Pump(); Thread.Sleep(10); }
                     if (!done()) throw new Exception("Не дождались: " + what + " | " + last?.Updates.AppProgressText + " | " + last?.Updates.AppError + " | " + last?.Updates.AppErrorDetails);
                     Pump();
                 }
