@@ -1,4 +1,7 @@
+using System.IO;
+using System.Net.Http;
 using System.Windows.Input;
+using DpiShell.Core;
 using DpiShell.Core.Router;
 
 namespace DpiShell.App;
@@ -61,6 +64,59 @@ public sealed partial class RouterViewModel
         }, changes: false);
         Say("");
         return res;
+    }
+
+    /// <summary>
+    /// Оптимизирует ли роутер этот сайт: режим «Все сайты» — да; «Только из списков» — если сайт (или его родитель) есть в одном из списков
+    /// роутера (general, google, discord, свой user-general, строки продвинутого режима). null — не узнать (нет входа, роутер до r9 без встроенных списков).
+    /// Режим — как в build_opts роутера: включённый продвинутый режим со своими «остальными» главнее <c>mode</c>.
+    /// </summary>
+    public async Task<bool?> CoversHostAsync(string host)
+    {
+        if (!Connected || _status is not { } st) return null;
+        try
+        {
+            var mode = st.Mode ?? "all";
+            var rows = new List<string>();
+            if (st.Advanced is { Enabled: true } && Can("advanced_get"))
+            {
+                var a = await Call(c => c.AdvancedGetAsync());
+                if (a.Enabled)
+                {
+                    if (a.Others is "all" or "lists") mode = a.Others;
+                    else if (a.Others == "direct") mode = "direct";
+                    rows.AddRange(a.Rows.Where(r => r.Strategy != "direct").SelectMany(r => r.Domains));
+                }
+            }
+            if (mode == "all") return true;
+            if (Hostlist.Covers(host, rows)) return true;
+            if (mode == "direct") return false;   // роли каталога выключены: только строки
+            if (!Can("lists_get")) return null;
+            var lines = new List<string> { "discord.media" };   // роль discord_media: --hostlist-domains=discord.media
+            foreach (var name in new[] { "user-general", "general", "google", "discord" })
+                lines.AddRange((await Call(c => c.ListsGetAsync(name))).Lines);
+            return Hostlist.Covers(host, lines);
+        }
+        catch (Exception e) when (e is RouterException or IOException or HttpRequestException or TaskCanceledException) { return null; }
+    }
+
+    /// <summary>«Добавить в список оптимизации» с главной: сайт — в свой список роутера «Оптимизировать» (user-general), как поле на «Сайтах».</summary>
+    public async Task<bool> AddHostToGeneralAsync(string host)
+    {
+        if (!Can("lists_set")) return false;
+        var wasDirty = SitesDirty;
+        if (!await Guard(L.T("router.general.busy"), async () =>
+            {
+                var lines = _listsLoaded
+                    ? ListGeneralText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList()
+                    : (await Call(c => c.ListsGetAsync("user-general"))).Lines.ToList();
+                if (!lines.Contains(host, StringComparer.OrdinalIgnoreCase)) lines.Add(host);
+                await Call(c => c.ListsSetAsync("user-general", lines));
+                if (_listsLoaded) ListGeneralText = string.Join(Environment.NewLine, lines);
+            }))
+            return false;
+        if (!wasDirty) MarkSitesSaved();
+        return true;
     }
 
     /// <summary>Строка «Роутер» на главной — только состояние; подробности — в <see cref="HomeStateTip"/>.</summary>

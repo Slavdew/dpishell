@@ -32,12 +32,13 @@ return view.extend({
 		var status = data[0].__error ? {} : data[0];
 		var listsMode = status.mode == 'lists';
 		this.excludeArea = null;
+		this.generalArea = null;
 		this.advOn = !data[5].__error && !!data[5].enabled;
 
 		return E('div', {}, [
 			E('h2', {}, api.t('common.nav.sites')),
 			this.modeCard(status),
-			api.siteCheckCard('sites', function(host) { self.addToExcludeArea(host); }),
+			api.siteCheckCard('sites', function(host) { self.addToExcludeArea(host); }, function(host) { self.addToArea(self.generalArea, host); }),
 			this.advancedEditor(data[5], data[6].__error ? { items: [] } : data[6]),
 			this.listEditor('user-exclude', api.t('sites.router.lists.exclude_name'), data[1],
 				[api.t('web.sites.exclude_descr'), api.info(api.t('web.sites.exclude_info'))]),
@@ -114,7 +115,11 @@ return view.extend({
 
 	// Сайт добавлен в исключения из «Сайт не открывается» — дописать в поле ниже, если там нет несохранённых правок.
 	addToExcludeArea: function(host) {
-		var ta = this.excludeArea;
+		this.addToArea(this.excludeArea, host);
+	},
+
+	// Сайт добавлен с карточки проверки — дописать его в поле списка (если там нет несохранённых правок).
+	addToArea: function(ta, host) {
 		if (!ta || ta.dataset.dirty)
 			return;
 		var lines = ta.value.split('\n').filter(function(x) { return x.trim(); });
@@ -132,6 +137,8 @@ return view.extend({
 			input: function() { ta.dataset.dirty = '1'; } }, (got.lines || []).map(function(x) { return self.showLine(x); }).join('\n'));
 		if (name == 'user-exclude')
 			this.excludeArea = ta;
+		if (name == 'user-general')
+			this.generalArea = ta;
 		var msg = E('div', { 'class': 'dps-line' });
 		var save = api.btn(api.t('web.save'), function() {
 			msg.className = 'dps-line';

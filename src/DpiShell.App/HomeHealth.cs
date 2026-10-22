@@ -57,5 +57,5 @@ public sealed record AutoRow(string Key, string Value);
 public enum HomePanel { None, Pc, Router }
 
 /// <summary>Итог «Проверить сайт» на главной.</summary>
-/// <remarks>FailsWith — на ПК с оптимизацией не открылось; без неё проверится после добавления в исключения.</remarks>
-public enum SiteCheckOutcome { None, Checking, Opens, OnlyWithout, FailsWith, Closed, Message }
+/// <remarks>FailsWith — на ПК с оптимизацией не открылось; без неё проверится после добавления в исключения. NotInList — режим «Только из списков», сайта нет в списках и он не открылся.</remarks>
+public enum SiteCheckOutcome { None, Checking, Opens, OnlyWithout, FailsWith, Closed, NotInList, Message }

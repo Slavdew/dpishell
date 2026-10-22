@@ -556,8 +556,10 @@ return baseclass.extend({
 	},
 
 	// Карточка «Сайт не открывается» (site_check): на «Сайтах» и копией на главной (матрица п. 11). Опрос итога — свой.
-	// where — 'sites' | 'main'; onExcluded(host) — после добавления в исключения.
-	siteCheckCard: function(where, onExcluded) {
+	// where — 'sites' | 'main'; onExcluded(host) — после добавления в исключения, onListed(host) — в список оптимизации.
+	// Как в окне ПК: режим «Только из списков» и сайта нет в списках роутера — «не в списке оптимизации» и «Добавить в список оптимизации»
+	// (свой список user-general), затем проверка заново; сайт под оптимизацией и только без неё открывается — «Добавить в исключения».
+	siteCheckCard: function(where, onExcluded, onListed) {
 		var self = this;
 		var result = E('div', { 'class': 'dps-line' });
 		var url = E('input', { type: 'text', 'class': 'cbi-input-text', placeholder: 'example.com', style: 'width:100%;max-width:28em',
@@ -577,6 +579,62 @@ return baseclass.extend({
 			return d ? self.t('router.site.side_fail_detail', { detail: d }) : self.t('router.site.side_fail');
 		}
 
+		// Сайт или его родитель в списке — как --hostlist у zapret; «^домен» — только сам домен.
+		function inList(host, lines) {
+			var set = {};
+			lines.forEach(function(l) {
+				l = String(l || '').trim().toLowerCase().replace(/\.$/, '');
+				if (l && l.charAt(0) != '#')
+					set[l] = true;
+			});
+			host = host.toLowerCase();
+			if (set['^' + host])
+				return true;
+			for (var s = host; s; s = s.indexOf('.') >= 0 ? s.slice(s.indexOf('.') + 1) : '')
+				if (set[s])
+					return true;
+			return false;
+		}
+
+		// Оптимизирует ли роутер сайт: режим — как build_opts (включённый продвинутый режим со своими «остальными» главнее mode);
+		// «Только из списков» — списки general, google, discord, свой user-general и строки продвинутого режима.
+		// true / false; null — не узнать (тогда итог как раньше).
+		function covers(host) {
+			return self.safe('status').then(function(st) {
+				if (st.__error)
+					return null;
+				var mode = st.mode || 'all';
+				var adv = st.advanced && st.advanced.enabled ? self.safe('advanced_get') : Promise.resolve(null);
+				return adv.then(function(a) {
+					var rows = [];
+					if (a && !a.__error && a.enabled) {
+						if (['all', 'lists', 'direct'].indexOf(a.others) >= 0)
+							mode = a.others;
+						(a.rows || []).forEach(function(r) {
+							if (r.strategy != 'direct')
+								rows = rows.concat(r.domains || []);
+						});
+					}
+					if (mode == 'all' || inList(host, rows))
+						return true;
+					if (mode == 'direct')
+						return false;
+					return Promise.all(['user-general', 'general', 'google', 'discord'].map(function(n) {
+						return self.safe('lists_get', { name: n });
+					})).then(function(ls) {
+						var lines = ['discord.media'], unknown = false;   // роль discord_media: --hostlist-domains=discord.media
+						ls.forEach(function(l) {
+							if (l.__error)
+								unknown = true;
+							else
+								lines = lines.concat(l.lines || []);
+						});
+						return inList(host, lines) ? true : unknown ? null : false;
+					});
+				});
+			});
+		}
+
 		function verdict(title, hint, cls, extra) {
 			return E('div', {}, [E('div', { 'class': cls }, title), E('div', { 'class': 'dps-muted' }, hint)].concat(extra || []));
 		}
@@ -587,8 +645,10 @@ return baseclass.extend({
 			[].concat(kids).forEach(function(k) { result.appendChild(k); });
 		}
 
-		function render(r) {
+		function render(r, cov, note) {
 			var kids = [E('div', {}, [E('b', {}, r.url || '')])];
+			if (note)
+				kids.unshift(E('div', { 'class': 'dps-ok' }, note));
 			if (r.error) {
 				kids.push(E('div', { 'class': 'dps-error' }, self.msg(r.error_msg || r.error)));
 				show(kids);
@@ -596,7 +656,12 @@ return baseclass.extend({
 			}
 			kids.push(E('div', { 'class': 'dps-muted' }, self.t('router.site.detail', { 'with': sideText(r.with_bypass), without: sideText(r.without_bypass) })));
 			var host = hostOf(r.url || '');
-			if (r.suggest_exclude)
+			var opens = r.with_bypass && r.with_bypass.ok;
+			if (cov === false && !opens)
+				kids.push(verdict(self.t('home.sitecheck.not_in_list', { site: host }), self.t('web.site.not_in_list_hint'), 'dps-error', [
+					E('div', { 'class': 'dps-actions' }, [self.btn(self.t('home.sitecheck.add_list'), function() { return addList(host); }, 'cbi-button-apply')])
+				]));
+			else if (r.suggest_exclude)
 				kids.push(verdict(self.t('router.site.only_without'), self.t('router.site.only_without_hint'), 'dps-error', [
 					E('div', { 'class': 'dps-actions' }, [self.btn(self.t('sites.check.add_exclude'), function() { return addExclude(host); }, 'cbi-button-apply')])
 				]));
@@ -623,6 +688,22 @@ return baseclass.extend({
 			});
 		}
 
+		// Сайт — в свой список «Оптимизировать» (user-general), затем проверка заново: строка показывает новый итог.
+		function addList(host) {
+			return self.call('lists_get', { name: 'user-general' }).then(function(l) {
+				var lines = l.lines || [];
+				if (lines.indexOf(host) < 0)
+					lines.push(host);
+				return self.call('lists_set', { name: 'user-general', lines: lines });
+			}).then(function() {
+				if (onListed)
+					onListed(host);
+				return run('https://' + host + '/', self.t('web.site.listed', { host: host }));
+			}, function(e) {
+				result.appendChild(self.errorLine(e));
+			});
+		}
+
 		function check() {
 			var u = (url.value || '').trim();
 			if (!u) {
@@ -631,6 +712,11 @@ return baseclass.extend({
 			}
 			if (!/^https?:\/\//i.test(u))
 				u = 'https://' + u;
+			return run(u);
+		}
+
+		// note — строка над итогом (после «Добавить в список оптимизации»).
+		function run(u, note) {
 			show(E('span', { 'class': 'spinning' }, self.t('router.site.checking', { host: hostOf(u) })));
 			if (timer)
 				window.clearInterval(timer);
@@ -644,7 +730,10 @@ return baseclass.extend({
 							show(self.errorLine(r.__error));
 						} else if (!r.running) {
 							window.clearInterval(timer);
-							render(r);
+							if (r.error || (r.with_bypass && r.with_bypass.ok))
+								render(r, null, note);
+							else
+								covers(hostOf(r.url || u)).then(function(c) { render(r, c, note); });
 						} else if (ticks <= 0) {
 							window.clearInterval(timer);
 							show(E('div', {}, self.t('router.site.pending')));

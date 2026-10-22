@@ -23,21 +23,13 @@ public sealed record AdvancedSaveResult(AdvancedState? State, string? Error);
 public sealed class BuiltinLists(string listsDir)
 {
     readonly Lazy<(string Name, HashSet<string> Domains)[]> _lists = new(() =>
-        [("YouTube", Read(Path.Combine(listsDir, RoleLists.Google))), ("Discord", Read(Path.Combine(listsDir, RoleLists.Discord)))]);
-
-    static HashSet<string> Read(string file)
-    {
-        try { return File.Exists(file) ? File.ReadLines(file).Select(l => l.Trim().ToLowerInvariant()).Where(l => l.Length > 0 && !l.StartsWith('#')).ToHashSet() : []; }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return []; }
-    }
+        [("YouTube", Hostlist.Read(Path.Combine(listsDir, RoleLists.Google))), ("Discord", Hostlist.Read(Path.Combine(listsDir, RoleLists.Discord)))]);
 
     /// <summary>«YouTube» / «Discord», если домен или его родитель есть в списке; иначе null.</summary>
     public string? Covering(string domain)
     {
-        var d = domain.Trim().ToLowerInvariant();
         foreach (var (name, set) in _lists.Value)
-            for (var s = d; s.Length > 0; s = s.Contains('.') ? s[(s.IndexOf('.') + 1)..] : "")
-                if (set.Contains(s)) return name;
+            if (Hostlist.Covers(domain, set)) return name;
         return null;
     }
 }

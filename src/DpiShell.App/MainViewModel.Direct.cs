@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Input;
 using DpiShell.Core;
 using DpiShell.Core.Helper;
@@ -47,7 +48,7 @@ public sealed partial class MainViewModel
     public SiteCheckOutcome SiteOutcome
     {
         get => _siteOutcome;
-        private set { if (Set(ref _siteOutcome, value)) { Raise(nameof(SiteCheckLine)); Raise(nameof(SiteCheckHealth)); Raise(nameof(HasSiteCheckLine)); Raise(nameof(ShowAddExclude)); CommandManager.InvalidateRequerySuggested(); } }
+        private set { if (Set(ref _siteOutcome, value)) { Raise(nameof(SiteCheckLine)); Raise(nameof(SiteCheckHealth)); Raise(nameof(HasSiteCheckLine)); Raise(nameof(ShowAddExclude)); Raise(nameof(ShowAddToList)); CommandManager.InvalidateRequerySuggested(); } }
     }
     public bool HasSiteCheckLine => _siteOutcome is not (SiteCheckOutcome.None or SiteCheckOutcome.Message);
     public string SiteCheckLine => _siteOutcome switch
@@ -57,21 +58,33 @@ public sealed partial class MainViewModel
         SiteCheckOutcome.OnlyWithout => L.T("home.sitecheck.only_without"),
         SiteCheckOutcome.FailsWith => L.T("home.sitecheck.fails_with"),
         SiteCheckOutcome.Closed => L.T("home.sitecheck.closed"),
+        SiteCheckOutcome.NotInList => L.T("home.sitecheck.not_in_list", new { site = _siteHost }),
         _ => "",
     };
     public Health SiteCheckHealth => _siteOutcome switch
     {
         SiteCheckOutcome.Opens => Health.Ok,
-        SiteCheckOutcome.OnlyWithout or SiteCheckOutcome.FailsWith => Health.Warn,
+        SiteCheckOutcome.OnlyWithout or SiteCheckOutcome.FailsWith or SiteCheckOutcome.NotInList => Health.Warn,
         SiteCheckOutcome.Closed => Health.Error,
         _ => Health.None,
     };
     public bool ShowAddExclude => _siteOutcome is SiteCheckOutcome.OnlyWithout or SiteCheckOutcome.FailsWith;
+    /// <summary>«Добавить в список оптимизации»: режим «Только из списков», сайта нет ни в одном списке и он не открывается.</summary>
+    public bool ShowAddToList => _siteOutcome == SiteCheckOutcome.NotInList;
+
+    public ICommand AddToListCmd => _addToListCmd ??= RelayCommand.Async(AddCheckedToListAsync, () => !Busy && !IsLoading);
+    ICommand? _addToListCmd;
+
+    /// <summary>Где сайта нет в списке при режиме «Только из списков» — туда «Добавить в список оптимизации».</summary>
+    bool _listPc, _listRouter;
 
     /// <summary>
     /// «Проверить сайт: с оптимизацией и без неё». Через роутер — его же «Сайт не открывается» (site_check: с обходом и без).
     /// На этом ПК — та же проверка, что «Проверить сейчас» (HTTPS с DoH): с оптимизацией — сейчас; без неё — после добавления в исключения
     /// (сайт там оптимизация не трогает), поэтому «не открылось» на ПК честно говорит «с оптимизацией не открывается» и предлагает исключение.
+    /// Режим «Только из списков» и сайта нет ни в одном списке там, где работает оптимизация, — не открылся он не из-за неё:
+    /// итог «не в списке» и «Добавить в список оптимизации» (решение владельца). Открылся — просто «Открывается».
+    /// Где работает оптимизация (ПК, роутер, оба) — как и для исключений.
     /// </summary>
     public async Task SiteCheckAsync()
     {
@@ -86,17 +99,23 @@ public sealed partial class MainViewModel
         SiteOutcome = SiteCheckOutcome.Checking;
         try
         {
+            // Под оптимизацией ли сайт там, где она работает: null — она там не работает или не узнать (тогда — как раньше).
+            bool? pc = await PcCoversAsync(host);
+            bool? router = Router.Found && Router.RouterEnabled ? await Router.CoversHostAsync(host) : null;
+            _listPc = pc == false; _listRouter = router == false;
+            bool notInList = (_listPc || _listRouter) && pc != true && router != true;
             if (Router.Found && Router.RouterEnabled && Router.Connected && Router.CanSiteCheck)
             {
                 var r = await Router.CheckSiteQuietAsync(host);
                 if (r is null) { SiteOutcome = SiteCheckOutcome.Message; DirectMessage = L.T("router.site.pending"); return; }
                 bool with = r.WithBypass?.Ok == true, without = r.WithoutBypass?.Ok == true;
-                SiteOutcome = with ? SiteCheckOutcome.Opens : without || r.SuggestExclude ? SiteCheckOutcome.OnlyWithout : SiteCheckOutcome.Closed;
+                SiteOutcome = with ? SiteCheckOutcome.Opens : notInList ? SiteCheckOutcome.NotInList
+                    : without || r.SuggestExclude ? SiteCheckOutcome.OnlyWithout : SiteCheckOutcome.Closed;
                 return;
             }
             bool ok = await ProbeSiteAsync(host);
             // Без оптимизации (ничего не ведёт) — проверка и есть «без неё»: не открылось — дело не в ней.
-            SiteOutcome = ok ? SiteCheckOutcome.Opens : _active ? SiteCheckOutcome.FailsWith : SiteCheckOutcome.Closed;
+            SiteOutcome = ok ? SiteCheckOutcome.Opens : notInList ? SiteCheckOutcome.NotInList : _active ? SiteCheckOutcome.FailsWith : SiteCheckOutcome.Closed;
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
@@ -111,6 +130,85 @@ public sealed partial class MainViewModel
         var group = TargetSet.UserGroup([host]);
         var verdicts = ProbeGroups is { } probe ? await probe([group]) : await Task.Run(() => _shell.CheckGroupsAsync([group]));
         return verdicts.Count > 0 && verdicts.All(v => v.Ok);
+    }
+
+    /// <summary>
+    /// Оптимизирует ли ПК этот сайт — как собирает командную строку <see cref="Strategies.Build"/>: «для всех сайтов» (продвинутый режим) — да;
+    /// иначе — сайт или его родитель в списках YouTube, Discord, общем, своих сайтах или строках продвинутого режима. При совместной работе
+    /// на ПК остаются только свои сайты и строки. null — оптимизация на ПК не работает. IP-списки (адреса) сюда не входят.
+    /// </summary>
+    async Task<bool?> PcCoversAsync(string host)
+    {
+        if (!_active) return null;
+        AdvancedInfo? adv = null;
+        if (Helper.Reader is { } c && c.Compat.Supports("advanced_get"))
+        {
+            try { adv = await c.AdvancedGetAsync(); }
+            catch (Exception e) when (e is not OperationCanceledException) { }
+        }
+        bool joint = Router.JointOn && !Router.JointIsFallback;
+        var others = adv is { Enabled: true } ? adv.Others : AdvancedSites.OthersLists;
+        if (!joint && others == AdvancedSites.OthersAll) return true;
+        var rows = adv is { Enabled: true } ? adv.Rows.Where(r => r.Strategy != AdvancedSites.Direct).SelectMany(r => r.Domains) : [];
+        if (Hostlist.Covers(host, rows)) return true;
+        if (!joint && others == AdvancedSites.OthersDirect) return false;   // роли каталога выключены: только строки
+        var lines = new List<string>(UserTargets);
+        if (!joint)
+        {
+            lines.Add("discord.media");   // роль discord_media: --hostlist-domains=discord.media
+            foreach (var f in new[] { "general.txt", RoleLists.Google, RoleLists.Discord }) lines.AddRange(ListFile(f));
+        }
+        return Hostlist.Covers(host, lines);
+    }
+
+    /// <summary>Встроенный список: рабочий (обновляется) или, если его не прочитать, из поставки.</summary>
+    HashSet<string> ListFile(string name)
+    {
+        var set = Hostlist.Read(Path.Combine(_shell.Paths.Lists, name));
+        return set.Count > 0 ? set : Hostlist.Read(Path.Combine(_shell.Paths.Seed, "lists", name));
+    }
+
+    /// <summary>
+    /// «Добавить в список оптимизации» после проверки: на ПК — в «Свои сайты» (то же сохранение, что на «Сайтах»), на роутере — в его список
+    /// «Оптимизировать»; туда, где сайта в списке не было. Затем сайт проверяется заново — строка показывает новый итог.
+    /// </summary>
+    public async Task AddCheckedToListAsync()
+    {
+        var host = _siteHost;
+        if (_siteOutcome != SiteCheckOutcome.NotInList || host.Length == 0) return;
+        bool pc = false, router = false;
+        if (_listPc)
+        {
+            if (!await AddPcTargetAsync(host)) return;
+            pc = true;
+        }
+        if (_listRouter)
+        {
+            if (!await Router.AddHostToGeneralAsync(host))
+            {
+                DirectMessage = L.T(pc ? "home.sitecheck.list_router_failed_pc" : "home.direct.router_failed", new { site = host });
+                SiteOutcome = SiteCheckOutcome.Message;
+                return;
+            }
+            router = true;
+        }
+        var added = L.T(pc && router ? "home.sitecheck.listed_both" : pc ? "home.sitecheck.listed_pc" : "home.sitecheck.listed_router", new { site = host });
+        Message = added;
+        DirectSite = host;
+        await SiteCheckAsync();
+        DirectSite = "";
+        DirectMessage = HasDirectMessage ? added + " " + DirectMessage : added;
+    }
+
+    /// <summary>Сайт — в «Свои сайты» ПК: дописать в поле вкладки «Сайты» и сохранить тем же путём, что её «Сохранить».</summary>
+    async Task<bool> AddPcTargetAsync(string host)
+    {
+        if (!DraftTargets().Contains(host, StringComparer.OrdinalIgnoreCase))
+        {
+            var text = TargetsText.TrimEnd();
+            TargetsText = text.Length == 0 ? host : text + Environment.NewLine + host;
+        }
+        return await SaveTargetsAsync();
     }
 
     /// <summary>

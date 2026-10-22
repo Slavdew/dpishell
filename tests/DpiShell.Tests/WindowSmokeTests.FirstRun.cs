@@ -11,7 +11,8 @@ public sealed partial class WindowSmokeTests
     /// <summary>
     /// Главная первого запуска (UX-аудит 7, п. 1–3, 5) в обеих темах: на карточке одна главная кнопка, «Не помогло? → Подобрать» всегда, «Подобрать на роутере» — только с роутером,
     /// «Сайт не открывается?» — пока оптимизация работает; после «Включить» в строке «Открывается 2 из 2 · было 1 из 2»; панель «адрес → Открыть без оптимизации»
-    /// кладёт сайт в простой список исключений ПК (помощник), ответ — строкой под ссылками. Снимки: &lt;тема&gt;-home-working-was, -home-site-fix.
+    /// кладёт сайт в простой список исключений ПК (помощник), ответ — строкой под ссылками; сайт вне списков — «Добавить в список оптимизации».
+    /// Снимки: &lt;тема&gt;-home-working-was, -home-sitecheck-not-in-list, -home-site-fix.
     /// </summary>
     [Fact]
     public void Home_FirstRun_SiteFix_AndBefore_Binds_AndSnap()
@@ -77,6 +78,15 @@ public sealed partial class WindowSmokeTests
                 box.Text = "https://Bank.Example/login";
                 Pump();
                 on = false;   // с оптимизацией сайт не открывается
+                // «Только из списков», сайта в них нет — «не в списке оптимизации» и «Добавить в список оптимизации», исключений не предлагают.
+                WaitUi(vm.SiteCheckAsync());
+                Pump();
+                if (!Visible(t => t.Text == L.T("home.sitecheck.not_in_list", new { site = "bank.example" }))) throw new Exception("Нет итога «не в списке оптимизации»");
+                if (Find<Button>(tabs, b => b.IsVisible && b.Content as string == L.T("home.sitecheck.add_list")) is null) throw new Exception("Нет «Добавить в список оптимизации»");
+                if (Find<Button>(tabs, b => b.IsVisible && b.Content as string == L.T("home.sitecheck.add")) is not null) throw new Exception("«Добавить в исключения» при сайте вне списков");
+                if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-home-sitecheck-not-in-list.png"));
+                // «Для всех сайтов» — сайт под оптимизацией: дальше как раньше, «Добавить в исключения».
+                f.Backend.AdvancedValue = new(true, AdvancedSites.OthersAll, []);
                 WaitUi(vm.SiteCheckAsync());
                 Pump();
                 if (!Visible(t => t.Text == L.T("home.sitecheck.fails_with"))) throw new Exception("Нет итога «С оптимизацией не открывается»");

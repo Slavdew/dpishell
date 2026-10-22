@@ -242,6 +242,9 @@
                                                 <DockPanel Margin="0,4,0,0" Visibility="{Binding HasSiteCheckLine, Converter={StaticResource Vis}}">
                                                     <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="{l:T home.sitecheck.add}" Command="{Binding OpenDirectCmd}" Style="{StaticResource Small}"
                                                             Margin="12,0,0,0" VerticalAlignment="Center" Visibility="{Binding ShowAddExclude, Converter={StaticResource Vis}}" />
+                                                    <!-- Режим «Только из списков», сайта в них нет — «Добавить в список оптимизации» (свои сайты ПК / список роутера), затем перепроверка. -->
+                                                    <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="{l:T home.sitecheck.add_list}" Command="{Binding AddToListCmd}" Style="{StaticResource Small}"
+                                                            Margin="12,0,0,0" VerticalAlignment="Center" Visibility="{Binding ShowAddToList, Converter={StaticResource Vis}}" />
                                                     <ContentControl Content="{Binding SiteCheckHealth}" ContentTemplate="{StaticResource HealthIcon}" VerticalAlignment="Center" Margin="0,0,8,0" Focusable="False" />
                                                     <TextBlock Text="{Binding SiteCheckLine}" VerticalAlignment="Center" TextWrapping="Wrap" />
                                                 </DockPanel>

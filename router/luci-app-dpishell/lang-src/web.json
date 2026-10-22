@@ -701,8 +701,16 @@
     "The list is on the “Sites” tab. The router no longer applies optimization to the site."
   ],
   "web.site.hint": [
-    "Адрес проверяется с оптимизацией и без. Если сайт открывается только без неё — его можно добавить в исключения.",
-    "The address is checked with and without optimization. If the site opens only without it, it can be added to exclusions."
+    "Адрес проверяется с оптимизацией и без. Открывается только без неё — сайт можно добавить в исключения; нет в списках оптимизации — в список.",
+    "The address is checked with and without optimization. Opens only without it — the site can be added to exclusions; not in the optimization lists — to the list."
+  ],
+  "web.site.listed": [
+    "{host} в списке оптимизации роутера («Сайты» → «Оптимизировать»).",
+    "{host} is in the router’s optimization list (“Sites” → “Optimize”)."
+  ],
+  "web.site.not_in_list_hint": [
+    "Включено «Только из списков»: сайты вне списков роутер не трогает.",
+    "“Only from lists” is on: the router leaves sites outside the lists alone."
   ],
   "web.sites.add_target": [
     "Добавить сайт",

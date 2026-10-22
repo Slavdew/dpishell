@@ -35,6 +35,8 @@ home.status.running
 home.status.select
 home.strategy
 home.strategy.none
+home.sitecheck.add_list
+home.sitecheck.not_in_list
 router.apply.backups
 router.core.not_installed
 router.details

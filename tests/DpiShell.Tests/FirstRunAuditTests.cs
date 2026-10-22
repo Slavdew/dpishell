@@ -196,7 +196,8 @@ public sealed class FirstRunAuditTests : IDisposable
     public async Task SiteCheck_FailsWithOptimization_AddToExclusions_ThenChecksWithout()
     {
         await using var f = new HelperFixture();
-        f.Backend.StatusValue = Status(active: true);
+        // «Только из списков», сайт в своих сайтах — под оптимизацией: не открылся — «Добавить в исключения».
+        f.Backend.StatusValue = Status(active: true) with { UserTargets = ["bank.example"] };
         var vm = Model(await f.LinkAsync());
         await vm.RefreshStatusAsync();
         vm.ProbeGroups = Probe(() => false);
@@ -205,6 +206,7 @@ public sealed class FirstRunAuditTests : IDisposable
         // На ПК «без неё» до исключения не проверить — так и сказано, кнопка «Добавить в исключения» есть.
         Assert.Equal(SiteCheckOutcome.FailsWith, vm.SiteOutcome);
         Assert.True(vm.ShowAddExclude);
+        Assert.False(vm.ShowAddToList);
         await vm.AddCheckedToExcludeAsync();
         Assert.Contains(f.Backend.Calls, c => c == "user_exclude_set bank.example");
         // И без оптимизации не открылось — дело не в ней; сайт остался в исключениях, об этом сказано.
@@ -228,6 +230,185 @@ public sealed class FirstRunAuditTests : IDisposable
         vm.DirectSite = "не адрес";
         await vm.SiteCheckAsync();
         Assert.StartsWith("Впишите адрес сайта", vm.DirectMessage);
+    }
+
+    // ---------- режим оптимизации (решение владельца): «Только из списков» — сайт вне списков; «Для всех сайтов» — исключения ----------
+
+    [Fact]
+    public async Task SiteCheck_ListsMode_SiteNotInLists_OffersAddToList_ThenRechecks()
+    {
+        await using var f = new HelperFixture();
+        f.Backend.StatusValue = Status(active: true) with { UserTargets = ["mysite.example"] };
+        var vm = Model(await f.LinkAsync());
+        await vm.RefreshStatusAsync();
+        vm.ApplyHelperData();
+        bool on = false;
+        vm.ProbeGroups = Probe(() => on);
+        vm.DirectSite = "https://Bank.Example/login";
+        await vm.SiteCheckAsync();
+        Assert.Equal(SiteCheckOutcome.NotInList, vm.SiteOutcome);
+        Assert.Equal(L.T("home.sitecheck.not_in_list", new { site = "bank.example" }), vm.SiteCheckLine);
+        Assert.Equal(Health.Warn, vm.SiteCheckHealth);
+        Assert.True(vm.ShowAddToList);
+        Assert.False(vm.ShowAddExclude);
+        Assert.DoesNotContain("обход", vm.SiteCheckLine, StringComparison.OrdinalIgnoreCase);
+
+        on = true;   // в списке — открывается
+        await vm.AddCheckedToListAsync();
+        // Тот же путь, что «Сохранить» на «Сайтах»: свои сайты целиком, прежние на месте.
+        Assert.Contains("user_targets_set mysite.example,bank.example", f.Backend.Calls);
+        Assert.DoesNotContain(f.Backend.Calls, c => c.StartsWith("user_exclude_set"));
+        Assert.Equal(SiteCheckOutcome.Opens, vm.SiteOutcome);
+        Assert.False(vm.ShowAddToList);
+        Assert.Equal(L.T("home.sitecheck.listed_pc", new { site = "bank.example" }), vm.DirectMessage);
+        Assert.Equal("mysite.example" + Environment.NewLine + "bank.example", vm.TargetsText);
+        Assert.Equal("", vm.DirectSite);
+    }
+
+    [Fact]
+    public async Task SiteCheck_ListsMode_SiteNotInLists_ButOpens_JustOpens()
+    {
+        await using var f = new HelperFixture();
+        f.Backend.StatusValue = Status(active: true);
+        var vm = Model(await f.LinkAsync());
+        await vm.RefreshStatusAsync();
+        vm.ProbeGroups = Probe(() => true);
+        vm.DirectSite = "bank.example";
+        await vm.SiteCheckAsync();
+        Assert.Equal(SiteCheckOutcome.Opens, vm.SiteOutcome);
+        Assert.False(vm.ShowAddToList);
+    }
+
+    [Theory]
+    [InlineData("www.youtube.com")]       // встроенный список YouTube: родитель youtube.com
+    [InlineData("cdn.discord.com")]       // Discord
+    [InlineData("a.adv.example")]         // строка продвинутого режима
+    public async Task SiteCheck_ListsMode_SiteInLists_FailsWith_OffersExclusions(string site)
+    {
+        await using var f = new HelperFixture();
+        f.Backend.StatusValue = Status(active: true);
+        f.Backend.AdvancedValue = new(true, AdvancedSites.OthersLists, [new AdvancedRowInfo(["adv.example"], AdvancedSites.Auto, "alt9")]);
+        var vm = Model(await f.LinkAsync());
+        await vm.RefreshStatusAsync();
+        vm.ProbeGroups = Probe(() => false);
+        vm.DirectSite = site;
+        await vm.SiteCheckAsync();
+        Assert.Equal(SiteCheckOutcome.FailsWith, vm.SiteOutcome);
+        Assert.True(vm.ShowAddExclude);
+        Assert.False(vm.ShowAddToList);
+    }
+
+    [Fact]
+    public async Task SiteCheck_AllSitesMode_FailsWith_OffersExclusions_NotList()
+    {
+        await using var f = new HelperFixture();
+        f.Backend.StatusValue = Status(active: true);
+        f.Backend.AdvancedValue = new(true, AdvancedSites.OthersAll, []);
+        var vm = Model(await f.LinkAsync());
+        await vm.RefreshStatusAsync();
+        vm.ProbeGroups = Probe(() => false);
+        vm.DirectSite = "bank.example";
+        await vm.SiteCheckAsync();
+        Assert.Equal(SiteCheckOutcome.FailsWith, vm.SiteOutcome);
+        Assert.True(vm.ShowAddExclude);
+        Assert.False(vm.ShowAddToList);
+        await vm.AddCheckedToExcludeAsync();
+        Assert.Contains(f.Backend.Calls, c => c == "user_exclude_set bank.example");
+        Assert.DoesNotContain(f.Backend.Calls, c => c.StartsWith("user_targets_set"));
+    }
+
+    /// <summary>Только роутер: оптимизация на ПК выключена, роутер подключён.</summary>
+    async Task<(MainViewModel Vm, HelperFixture F)> WithRouterAsync(FakeRouter router)
+    {
+        var f = new HelperFixture();
+        f.Backend.StatusValue = Status(active: false);
+        var vm = Model(await f.LinkAsync());
+        vm.Confirm = _ => true;
+        await vm.RefreshStatusAsync();
+        vm.Router.Fail = _ => { };
+        vm.Router.AddressAuto = false;
+        vm.Router.CustomAddress = router.Address;
+        vm.Router.PollInterval = TimeSpan.FromMilliseconds(10);
+        await vm.Router.ConnectAsync("secret");
+        Assert.True(vm.Router.Found && vm.Router.RouterEnabled && vm.Router.Connected, "роутер не подключился");
+        return (vm, f);
+    }
+
+    static FakeRouter ListsRouter(string mode)
+    {
+        var r = new FakeRouter { WarningsJson = "[]", Mode = mode, SiteWithBypassOk = false, SiteWithoutBypassOk = false }.As020();
+        r.UpdateFieldOn = false;
+        return r;
+    }
+
+    [Fact]
+    public async Task SiteCheck_Router_ListsMode_NotInLists_AddsToRouterList_ThenRechecks()
+    {
+        using var router = ListsRouter("lists");
+        var (vm, f) = await WithRouterAsync(router);
+        await using var _ = f;
+        vm.DirectSite = "bank.example";
+        await vm.SiteCheckAsync();
+        Assert.Equal(SiteCheckOutcome.NotInList, vm.SiteOutcome);
+        Assert.True(vm.ShowAddToList);
+        Assert.False(vm.ShowAddExclude);
+
+        router.SiteWithBypassOk = true;   // в списке — открывается
+        await vm.AddCheckedToListAsync();
+        Assert.Contains("bank.example", router.Lists["user-general"]);
+        Assert.Contains("bank.example", router.SiteCheckUrl);
+        Assert.Equal(SiteCheckOutcome.Opens, vm.SiteOutcome);
+        Assert.Equal(L.T("home.sitecheck.listed_router", new { site = "bank.example" }), vm.DirectMessage);
+        Assert.False(router.Lists.ContainsKey("user-exclude"));
+        Assert.DoesNotContain(f.Backend.Calls, c => c.StartsWith("user_targets_set"));
+    }
+
+    [Fact]
+    public async Task SiteCheck_Router_ListsMode_InBuiltinList_OnlyWithout_OffersExclusions()
+    {
+        using var router = ListsRouter("lists");
+        router.SiteWithoutBypassOk = true;
+        var (vm, f) = await WithRouterAsync(router);
+        await using var _ = f;
+        vm.DirectSite = "rutracker.org";   // встроенный general роутера
+        await vm.SiteCheckAsync();
+        Assert.Equal(SiteCheckOutcome.OnlyWithout, vm.SiteOutcome);
+        Assert.True(vm.ShowAddExclude);
+        Assert.False(vm.ShowAddToList);
+    }
+
+    [Fact]
+    public async Task SiteCheck_Router_AllSites_OnlyWithout_OffersExclusions()
+    {
+        using var router = ListsRouter("all");
+        router.SiteWithoutBypassOk = true;
+        var (vm, f) = await WithRouterAsync(router);
+        await using var _ = f;
+        vm.DirectSite = "bank.example";
+        await vm.SiteCheckAsync();
+        Assert.Equal(SiteCheckOutcome.OnlyWithout, vm.SiteOutcome);
+        Assert.True(vm.ShowAddExclude);
+        Assert.False(vm.ShowAddToList);
+        await vm.AddCheckedToExcludeAsync();
+        Assert.Contains("bank.example", router.Lists["user-exclude"]);
+    }
+
+    [Theory]
+    [InlineData("example.com", true)]
+    [InlineData("www.example.com", true)]
+    [InlineData("a.b.example.com", true)]
+    [InlineData("EXAMPLE.com.", true)]
+    [InlineData("badexample.com", false)]
+    [InlineData("com", false)]
+    [InlineData("example.org", false)]
+    public void Hostlist_CoversDomainAndSubdomains_LikeZapret(string host, bool expected) =>
+        Assert.Equal(expected, Hostlist.Covers(host, ["# комментарий", " Example.com ", ""]));
+
+    [Fact]
+    public void Hostlist_CaretMeansOnlyTheDomainItself()
+    {
+        Assert.True(Hostlist.Covers("bank.example", ["^bank.example"]));
+        Assert.False(Hostlist.Covers("www.bank.example", ["^bank.example"]));
     }
 
     [Fact]

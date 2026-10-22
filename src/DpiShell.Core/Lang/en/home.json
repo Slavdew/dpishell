@@ -214,6 +214,12 @@
   "home.sitecheck.fails_with": "Does not open with optimization. To check without it, add the site to exclusions (to undo — “Sites” → “Exclusions”).",
   "home.sitecheck.closed": "Does not open even without optimization — the cause is elsewhere.",
   "home.sitecheck.excluded_closed": "{site} is in “Exclusions” but does not open without optimization either — the cause is elsewhere. To remove — “Sites” → “Exclusions”.",
+  "home.sitecheck.add_list": "Add to optimization list",
+  "home.sitecheck.not_in_list": "{site} is not in the optimization list.",
+  "home.sitecheck.listed_pc": "{site} is in the optimization list on the PC (“Sites” → “My sites”).",
+  "home.sitecheck.listed_router": "{site} is in the optimization list on the router (“Sites” → “On router” → “Optimize”).",
+  "home.sitecheck.listed_both": "{site} is in the optimization list on the PC and on the router (“Sites”).",
+  "home.sitecheck.list_router_failed_pc": "{site}: in the optimization list on the PC, failed on the router — sign in to the router and retry.",
   "home.pc.state.on_status": "on · {status}",
   "home.r.update.label": "Update",
   "home.r.update.go": "Go to update"

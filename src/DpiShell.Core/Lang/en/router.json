@@ -255,6 +255,7 @@
  "router.site.excluded": "{host} added to “Exclusions”",
  "router.site.excluded_hint": "The list is below, on this tab. The router no longer applies optimization to the site.",
  "router.exclude.busy": "Adding to the router’s exclusions…",
+ "router.general.busy": "Adding to the router’s optimization list…",
  "router.dns.unavailable": "Secure DNS is unavailable",
  "router.dns.on": "Secure DNS is on",
  "router.dns.fallback_hint": "The ISP’s DNS is temporarily in use — secure DNS will return automatically.",
