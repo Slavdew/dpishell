@@ -32,6 +32,16 @@ public static class RouterUpdatePackages
     public const string TagPrefix = "router-v";
     public const string DownloadBase = "https://github.com/Slavdew/dpishell/releases/download/";
 
+    public const string ReleaseJsonName = "release.json";
+
+    /// <summary>release.json и release.json.sig, скачанные <see cref="DownloadAsync"/> в <paramref name="dir"/>; null — их там нет.</summary>
+    public static RouterReleaseFiles? ReleaseFilesIn(string dir)
+    {
+        var json = Path.Combine(dir, ReleaseJsonName);
+        var sig = json + ReleaseSignature.Extension;
+        return File.Exists(json) && File.Exists(sig) ? new(json, sig) : null;
+    }
+
     /// <summary>«0.2.1-r1» → «0.2.1» (номер сборки в тег не входит).</summary>
     public static string BaseVersion(string version) => version.Split('-')[0].Trim();
 
@@ -64,6 +74,9 @@ public static class RouterUpdatePackages
         if (assets.Count == 0) throw new SecurityException(L.T("core.rt.upd.no_packages", new { version = info.Version }));
 
         Directory.CreateDirectory(dir);
+        // Проверенные release.json и подпись — рядом с пакетами: роутер с local_signed проверяет их сам (ReleaseFilesIn).
+        await File.WriteAllBytesAsync(Path.Combine(dir, ReleaseJsonName), json, ct);
+        await File.WriteAllBytesAsync(Path.Combine(dir, ReleaseJsonName + ReleaseSignature.Extension), System.Text.Encoding.ASCII.GetBytes(sig), ct);
         var baseUrl = url[..(url.LastIndexOf('/') + 1)];
         var files = new List<RouterUpdateFile>();
         foreach (var a in assets)

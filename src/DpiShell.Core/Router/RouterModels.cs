@@ -91,7 +91,8 @@ public sealed record RouterUpdateJob(string? Action, string? From, bool Running,
 /// status.update (ядро договора §5.4): available — в витрине версия новее установленной, notes — что нового (до 15 строк),
 /// job — последнее задание обновления (null — не было).
 /// </summary>
-public sealed record RouterUpdate(bool Available, string? Version, List<string>? Notes, DateTime? CheckedAt, RouterUpdateJob? Job = null);
+public sealed record RouterUpdate(bool Available, string? Version, List<string>? Notes, DateTime? CheckedAt, RouterUpdateJob? Job = null,
+    [property: System.Text.Json.Serialization.JsonPropertyName("local_signed")] bool LocalSigned = false);
 
 /// <summary>Откуда обновлять: feed — витрина; local — /tmp/dpishell-update (кладёт окно по SSH, <see cref="RouterSsh.UploadUpdateAsync"/>).</summary>
 public enum RouterUpdateSource { Feed, Local }

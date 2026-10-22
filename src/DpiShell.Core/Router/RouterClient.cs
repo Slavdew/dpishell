@@ -387,8 +387,20 @@ public sealed class RouterClient : IDisposable
         return CallAsync("lists_set", new JsonObject { ["name"] = CheckListName(name), ["lines"] = new JsonArray(lines.Select(l => (JsonNode)l).ToArray()) }, ct);
     }
 
+    /// <summary>Названия чистятся здесь же: роутер r12 на &lt; &gt; &amp; " ' отвечает invalid (field items[N].title).</summary>
     public Task StrategiesUserSetAsync(IReadOnlyList<RouterUserStrategy> items, CancellationToken ct = default) =>
-        CallAsync("strategies_user_set", new JsonObject { ["items"] = JsonSerializer.SerializeToNode(items, Json) }, ct);
+        CallAsync("strategies_user_set", new JsonObject
+        {
+            ["items"] = JsonSerializer.SerializeToNode(items.Select(i => i with { Title = CleanTitle(i.Title, i.Id) }).ToList(), Json)
+        }, ct);
+
+    /// <summary>Название для роутера: без &lt; &gt; &amp; " ', до 80 символов; пустое после очистки — <paramref name="fallback"/>.</summary>
+    public static string CleanTitle(string? title, string fallback)
+    {
+        var t = new string((title ?? "").Where(c => c is not ('<' or '>' or '&' or '"' or '\'')).ToArray()).Trim();
+        if (t.Length > 80) t = t[..80].TrimEnd();
+        return t.Length == 0 ? fallback : t;
+    }
 
     public Task ConflictStopAsync(string name, CancellationToken ct = default) => CallAsync("conflict_stop", new JsonObject { ["name"] = name }, ct);
     /// <summary>Разгрузку (flow offloading) из межсетевого экрана передать zapret: та же скорость, пакеты обхода — мимо разгрузки (§9).</summary>
@@ -427,7 +439,7 @@ public sealed class RouterClient : IDisposable
         body = body.Trim('-');
         if (body.Length == 0) body = "x";
         if (body.Length > 48) body = body[..48].TrimEnd('-');
-        var title = s.Title.Length > 80 ? s.Title[..80] : s.Title;
+        var title = CleanTitle(s.Title, "u-" + body);
         var roles = new Dictionary<string, string>(s.Roles);
         // Роутер с catalog_version < 3 роли discord_tcp не знает (invalid), и частей (parts) тоже: шлём вариант без них (§5.3).
         if (!withDiscordTcp) roles.Remove("discord_tcp");
