@@ -12,8 +12,9 @@ public sealed record DataFile(string Sha256, string? Url = null, int? Lines = nu
 /// </summary>
 /// <param name="AppVersion">Последняя версия программы — окно покажет ссылку на релиз, если у него старее.</param>
 /// <param name="MinAppVersion">С какой версии программы эти данные можно ставить (новый формат, новые параметры winws).</param>
+/// <param name="Issued">Когда манифест подписан (<c>issued</c>, UTC, ставит CI при выкладке; <see cref="ReleaseFreshness"/>); null — манифест до этого поля.</param>
 public sealed record DataManifest(string Version, Dictionary<string, DataFile> Files, string? Source = null,
-    string? AppVersion = null, string? MinAppVersion = null)
+    string? AppVersion = null, string? MinAppVersion = null, string? Issued = null)
 {
     public const string FileName = "data.json";
     public const string IpsetKey = "lists/" + IpLists.AllFile;
@@ -24,6 +25,9 @@ public sealed record DataManifest(string Version, Dictionary<string, DataFile> F
     public static DataManifest Load(string path) =>
         JsonSerializer.Deserialize<DataManifest>(File.ReadAllText(path), Json)
         ?? throw new InvalidDataException(Loc.T("core.data.manifest_empty_path", new { path }));
+
+    /// <summary>Дата подписи манифеста; нет или не читается — null.</summary>
+    public DateTimeOffset? IssuedAt => ReleaseFreshness.TryParse(Issued, out var at) ? at : null;
 
     public static DataManifest Parse(byte[] utf8) =>
         JsonSerializer.Deserialize<DataManifest>(utf8, Json) ?? throw new InvalidDataException(Loc.T("core.data.manifest_empty"));
@@ -43,6 +47,7 @@ public sealed record DataManifest(string Version, Dictionary<string, DataFile> F
         }
         foreach (var v in new[] { AppVersion, MinAppVersion })
             if (v is not null && !System.Version.TryParse(v, out _)) p.Add(Loc.T("core.data.v.bad_app_version"));
+        if (Issued is not null && !ReleaseFreshness.TryParse(Issued, out _)) p.Add(Loc.T("core.data.v.bad_issued"));
         return p;
     }
 

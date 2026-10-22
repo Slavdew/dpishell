@@ -123,6 +123,38 @@ public sealed class TransferWindowTests : IDisposable
         var d = _t.Sub("friend"); SettingsExport.Write(d, state, all, new ExportMeta("Ростелеком", "от соседа")); return d;
     }
 
+    /// <summary>hosts и DNS из чужого пакета меняют весь компьютер — один вопрос перед загрузкой («что изменится, как вернуть»); «нет» — помощнику ничего.</summary>
+    [Fact]
+    public async Task Import_with_hosts_or_dns_asks_once_and_no_means_nothing_sent()
+    {
+        await using var f = new HelperFixture();
+        f.Backend.SettingsStateValue = Mine();
+        var vm = TestWindow.Model(NewShell(), await f.LinkAsync());
+        var asked = new List<string>();
+        vm.Confirm = q => { asked.Add(q); return false; };
+        var t = Open(f, vm, import: true);
+        await t.LoadPackageAsync(MakeFriendPackage(false));
+        foreach (var s in t.ImportSections) s.IsChecked = s.Id is "hosts" or "dns";
+
+        await t.ImportAsync();
+        var q = Assert.Single(asked);
+        Assert.Contains(SettingsSections.Title("hosts"), q);
+        Assert.Contains(SettingsSections.Title("dns"), q);
+        Assert.Contains("Отменить всё", q);
+        Assert.DoesNotContain(f.Backend.Calls, c => c.StartsWith("settings_import"));
+
+        vm.Confirm = q2 => { asked.Add(q2); return true; };
+        await t.ImportAsync();
+        Assert.Equal(2, asked.Count);
+        Assert.Contains(f.Backend.Calls, c => c.StartsWith("settings_import"));
+
+        // Только свои сайты — на весь компьютер не влияют, вопроса нет.
+        foreach (var s in t.ImportSections) s.IsChecked = s.Id == "sites";
+        t.ReplaceMode = true;
+        await t.ImportAsync();
+        Assert.Equal(2, asked.Count);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

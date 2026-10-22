@@ -496,7 +496,7 @@ public sealed class FirstRunAuditTests : IDisposable
         Assert.Throws<HelperRequestException>(() => HelperCommands.Parse("""{"id":3,"cmd":"user_exclude_set","args":{"lines":["\"C:\\x.exe\" --run"]}}""", catalog));
         var many = string.Join(",", Enumerable.Range(0, AdvancedSites.MaxExclude + 1).Select(i => $"\"s{i}.example\""));
         Assert.Throws<HelperRequestException>(() => HelperCommands.Parse("{\"id\":4,\"cmd\":\"user_exclude_set\",\"args\":{\"lines\":[" + many + "]}}", catalog));
-        Assert.Equal("1.13", HelperProtocol.Api);
+        Assert.True(HelperCompat.AtLeast(HelperProtocol.Api, "1.13"));
     }
 
     sealed class TestCatalog : IHelperCatalog

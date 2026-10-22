@@ -912,6 +912,7 @@ public sealed class ProxyViewModelTests : IDisposable
         var link = await f.LinkAsync();
         var (vm, reg, note, _, settings) = Make(link);
         vm.Need = () => Task.FromResult(link.Client);
+        vm.Confirm = _ => true;   // прокси на всю машину — с вопросом (HelperMachineTests)
         Add(vm, "Clash Verge", "127.0.0.1:7897", "<local>");
 
         vm.Target = ProxyTarget.UserAdmin;

@@ -178,6 +178,7 @@ public sealed partial class MainViewModel : Observable
             Guard = Guard,
             IsBusy = () => Busy,
             Say = s => Message = s,
+            Confirm = s => Confirm(s),
         };
         Proxy.LoadList();
         windowChanges.Register(new DelegateUndoer([ChangeKinds.ProxyUser], Proxy.UndoAsync));

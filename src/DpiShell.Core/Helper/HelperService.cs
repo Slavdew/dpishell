@@ -51,9 +51,14 @@ public sealed class HelperService : ServiceBase
             catch (Exception e) { _log.Write("подготовка: " + e.Message); }
         });
 
+        // Действия на весь компьютер — только от окна той же сборки, что эта копия (её положило окно, установившее помощника).
+        var image = Environment.ProcessPath is { } self ? new HelperClientImage(self) : null;
+        if (image is null) _log.Write("путь своего exe не известен — действия на весь компьютер не принимаются ни от кого");
+        else _ = Task.Run(image.Warm);
         _server = new HelperServer(new ShellHelperBackend(shell), new HelperServerOptions
         {
             AllowedUser = owner,
+            CheckClient = image is null ? _ => ClientBuild.Other : image.Check,
             Log = _log.Write,
         });
         _server.Start();

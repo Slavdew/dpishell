@@ -32,6 +32,7 @@
   "shell.helper.uninstall_declined": "Права не выданы — помощник остался.",
   "shell.helper.uninstall_failed": "Помощника удалить не удалось: {error}",
   "shell.helper.connect_outdated": "Помощник устарел — нужно обновить (один запрос прав).",
+  "shell.helper.connect_other_build": "Помощник установлен из другой сборки DpiShell — нужно обновить (один запрос прав).",
   "shell.helper.not_responding": "Помощник не отвечает: {reason}",
   "shell.helper.stopped": "Помощник перестал отвечать.",
   "shell.helper.installed_silent": "Помощник установлен, но не отвечает.",

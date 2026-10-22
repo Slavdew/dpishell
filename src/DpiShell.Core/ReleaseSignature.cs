@@ -69,3 +69,31 @@ public static class ReleaseSignature
     public static bool Verify(ReadOnlySpan<byte> data, ReadOnlySpan<byte> signatureFile, byte[]? publicKey = null) =>
         signatureFile.Length <= MaxSignatureFileBytes && Verify(data, System.Text.Encoding.ASCII.GetString(signatureFile), publicKey);
 }
+
+/// <summary>
+/// Свежесть подписанных описаний (release.json, data.json): поле <c>issued</c> — момент выпуска в UTC (<c>2026-10-22T09:15:00Z</c>); его ставит CI
+/// и обновляет по расписанию. Подпись защищает содержимое, но не возраст: подменённый источник может вечно отдавать старый подписанный файл
+/// («заморозка» — обновление безопасности не придёт). Описание старше <see cref="MaxAge"/> не принимается: окно говорит «не удалось проверить
+/// обновления», а не «обновлений нет». Нет поля — описание до этой защиты, принимается как раньше (совместимость).
+/// </summary>
+public static partial class ReleaseFreshness
+{
+    /// <summary>Сколько дней подписанное описание считается свежим. CI переподписывает описания чаще (раз в неделю).</summary>
+    public const int MaxAgeDays = 120;
+    public static readonly TimeSpan MaxAge = TimeSpan.FromDays(MaxAgeDays);
+
+    /// <summary>Разобрать <c>issued</c>: только ISO 8601 с датой, временем и часовым поясом (<c>Z</c> или смещение). Иное — false.</summary>
+    public static bool TryParse(string? s, out DateTimeOffset at)
+    {
+        at = default;
+        if (s is null || !IssuedRx().IsMatch(s)) return false;
+        return DateTimeOffset.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out at);
+    }
+
+    /// <summary>Описание устарело: дата есть и старше <paramref name="maxAge"/> от <paramref name="now"/>. Дата в будущем (часы ПК отстают) — свежее.</summary>
+    public static bool IsStale(DateTimeOffset? issued, DateTimeOffset now, TimeSpan? maxAge = null) =>
+        issued is { } i && now - i > (maxAge ?? MaxAge);
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?(Z|[+-]\d{2}:\d{2})$")]
+    private static partial System.Text.RegularExpressions.Regex IssuedRx();
+}

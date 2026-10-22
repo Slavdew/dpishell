@@ -111,6 +111,20 @@ public sealed class AppUpdateWindowTests
         Assert.False(r.Vm.UpdateAppCmd.CanExecute(null));
     }
 
+    /// <summary>Описание выпуска с верной подписью, но старое (заморозка подменённым источником): не «обновлений нет», а «не удалось проверить».</summary>
+    [Fact]
+    public async Task Check_StaleRelease_SaysCouldNotCheck()
+    {
+        var rel = System.Text.Json.Nodes.JsonNode.Parse(ReleaseJson("1.0.0", GoodZip("1.0.0")))!.AsObject();
+        rel["issued"] = "2020-01-01T00:00:00Z";
+        using var r = new Rig(Serve(new MapHandler(), A, "1.0.0", release: System.Text.Encoding.UTF8.GetBytes(rel.ToJsonString())));
+        await r.Vm.CheckAsync(quiet: false);
+        Assert.False(r.Vm.AppReleaseReady);
+        Assert.True(r.Vm.HasAppError);
+        Assert.Equal(L.T("about.app.stale", new { days = ReleaseFreshness.MaxAgeDays }), r.Vm.AppError);
+        Assert.Contains("старше 120 дней", r.Vm.AppErrorDetails);
+    }
+
     [Fact]
     public async Task Check_NoSourceAnswers_KeepsManifestHint_AsLink()
     {

@@ -27,6 +27,12 @@ public sealed class HelperServerOptions
     public TimeSpan HelloTimeout { get; init; } = TimeSpan.FromSeconds(5);
     /// <summary>Сколько ждать завершения отменённых операций отключившегося клиента перед остановкой winws.</summary>
     public TimeSpan CancelGrace { get; init; } = TimeSpan.FromSeconds(30);
+    /// <summary>
+    /// Проверка образа клиента для действий на весь компьютер (API 1.14, <see cref="HelperCommands.IsMachine"/>): путь exe клиента → та же ли это
+    /// сборка, что помощник (<see cref="HelperClientImage.Check"/>). null — не проверять (тесты, где клиент — testhost). SYSTEM и повышенный
+    /// администратор не проверяются: им эти действия доступны и без помощника.
+    /// </summary>
+    public Func<string?, ClientBuild>? CheckClient { get; init; }
     public Action<string>? Log { get; init; }
 }
 
@@ -40,6 +46,11 @@ public sealed class HelperServerOptions
 /// разрешило открыть канал, без гонки с повторным использованием PID (как у GetNamedPipeClientProcessId → OpenProcess)
 /// и без открытия чужих процессов. Клиент подключается с уровнем Identification — помощник может узнать, кто это,
 /// но не действовать от его имени.
+/// </para>
+/// <para>
+/// Третий слой — только для действий на весь компьютер (hosts, DNS, прокси машины; API 1.14): образ процесса клиента
+/// (<see cref="HelperServerOptions.CheckClient"/>) должен быть той же сборкой DpiShell, что помощник. Это отсекает чужую программу,
+/// пишущую в канал сама, но не процесс того же пользователя, внедрившийся в настоящий DpiShell.exe.
 /// </para>
 /// </summary>
 public sealed class HelperServer : IAsyncDisposable
@@ -162,7 +173,7 @@ public sealed class HelperServer : IAsyncDisposable
             }
             if (hello is null || !IsHello(hello)) { Log("клиент не прислал hello — отключён"); return; }
 
-            var (who, ok) = Identify(pipe);
+            var (who, ok, elevated) = Identify(pipe);
             if (!ok)
             {
                 Log($"отказ клиенту {who}");
@@ -170,10 +181,11 @@ public sealed class HelperServer : IAsyncDisposable
                 return;
             }
             conn.ClientSid = who;   // при успехе Identify возвращает SID токена клиента
+            conn.Build = (elevated && _o.AllowAdministrators) || _o.CheckClient is not { } check ? ClientBuild.Same : CheckBuild(check, pipe);
             Interlocked.Increment(ref _clients);
             counted = true;
             conn.StartWriter();
-            conn.Send(HelperProtocol.Hello());
+            conn.Send(HelperProtocol.Hello(machine: conn.Build == ClientBuild.Same));
 
             while (!conn.Closing.IsCancellationRequested)
             {
@@ -230,7 +242,25 @@ public sealed class HelperServer : IAsyncDisposable
         catch (Exception e) when (e is System.Text.Json.JsonException or ArgumentException or InvalidOperationException) { return false; }
     }
 
-    (string Who, bool Ok) Identify(NamedPipeServerStream pipe)
+    /// <summary>Сборка клиента по образу его процесса; сбой проверки — «другая» (действия на весь компьютер не пройдут, остальное работает).</summary>
+    ClientBuild CheckBuild(Func<string?, ClientBuild> check, NamedPipeServerStream pipe)
+    {
+        string? path = null;
+        try
+        {
+            path = HelperClientImage.ClientPath(pipe);
+            var b = check(path);
+            if (b != ClientBuild.Same) Log($"клиент {path ?? "(образ не прочитан)"}: {b} — действия на весь компьютер не принимаются");
+            return b;
+        }
+        catch (Exception e)
+        {
+            Log($"проверка клиента {path}: {e.Message}");
+            return ClientBuild.Other;
+        }
+    }
+
+    (string Who, bool Ok, bool Elevated) Identify(NamedPipeServerStream pipe)
     {
         SecurityIdentifier? sid = null;
         bool admin = false;
@@ -247,11 +277,11 @@ public sealed class HelperServer : IAsyncDisposable
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException)
         {
-            return ("(не удалось определить: " + e.Message + ")", false);
+            return ("(не удалось определить: " + e.Message + ")", false, false);
         }
-        if (sid is null) return ("(аноним)", false);
+        if (sid is null) return ("(аноним)", false, false);
         using var me = WindowsIdentity.GetCurrent();
-        return (sid.Value, IsAuthorized(sid, admin, _o, me.User));
+        return (sid.Value, IsAuthorized(sid, admin, _o, me.User), admin || sid.IsWellKnown(WellKnownSidType.LocalSystemSid));
     }
 
     async Task ExecuteAsync(HelperCall call, Connection conn, CancellationTokenSource cts)
@@ -261,6 +291,13 @@ public sealed class HelperServer : IAsyncDisposable
         bool held = false;
         try
         {
+            // Действия на весь компьютер — только от окна той же сборки (API 1.14); остальные команды этого клиента работают как прежде.
+            if (conn.Build != ClientBuild.Same && HelperCommands.IsMachine(call))
+            {
+                Log($"{call.Cmd}: отказ — клиент {conn.Build}");
+                conn.Send(HelperProtocol.Error(call.Id, HelperErrors.Denied, HelperClientImage.Refusal(conn.Build)));
+                return;
+            }
             if (call.Spec.Exclusive)
             {
                 if (!_exclusive.Wait(0))
@@ -414,6 +451,9 @@ public sealed class HelperServer : IAsyncDisposable
 
         /// <summary>SID пользователя клиента (по токену канала).</summary>
         public string? ClientSid { get; set; }
+
+        /// <summary>Сборка клиента по образу процесса (API 1.14): не <see cref="ClientBuild.Same"/> — действия на весь компьютер не принимаются.</summary>
+        public ClientBuild Build { get; set; } = ClientBuild.Same;
 
         public void StartWriter() => _ = Task.Run(WriterAsync);
 

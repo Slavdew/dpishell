@@ -41,6 +41,8 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
     public Func<string, Func<Task>, Task<bool>> Guard { get; set; } = async (_, work) => { await work(); return true; };
     public Func<bool> IsBusy { get; set; } = () => false;
     public Action<string> Say { get; set; } = _ => { };
+    /// <summary>Вопрос «Да/Нет» перед прокси на всю машину (в тестах подменяется; по умолчанию — «нет»).</summary>
+    public Func<string, bool> Confirm { get; set; } = _ => false;
     /// <summary>Проверка прокси; в тестах — подмена без сети.</summary>
     public Func<string, CancellationToken, Task<ProxyCheckResult>> CheckProxy { get; set; } = (s, ct) => ProxyChecker.CheckAsync(s, ct: ct);
 
@@ -177,6 +179,9 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
         var e = row.Entry;
         if (ProxyValues.Problem(e.Server, e.Bypass, e.Pac) is { } bad) { Say(bad); return; }
         var next = ProxyValues.Build(e.Server, e.Bypass, e.Pac);
+        // Прокси на всю машину направляет трафик всех пользователей (и служб) — один вопрос с тем, что изменится и как вернуть.
+        if (Target == ProxyTarget.Machine && !IsBusy()
+            && !Confirm(L.T("proxy.confirm.machine", new { line = Line(next, false), services = AlsoWinHttp ? L.T("proxy.confirm.machine_services") : "" }))) return;
         await Run(L.T("proxy.busy.enable"), async () =>
         {
             var r = await ApplyAsync(next, enable: true, e);
@@ -193,7 +198,14 @@ public sealed class ProxyViewModel(HelperLink helper, WindowSettings settings) :
         Say(r.Message);
     });
 
-    public async Task RestoreAsync() => await Run(L.T("proxy.busy.restore"), async () =>
+    public async Task RestoreAsync()
+    {
+        if (Target == ProxyTarget.Machine && !IsBusy() && _machinePrevious?.Machine is { } back
+            && !Confirm(L.T("proxy.confirm.machine_restore", new { line = Line(back, false) }))) return;
+        await RestoreNowAsync();
+    }
+
+    async Task RestoreNowAsync() => await Run(L.T("proxy.busy.restore"), async () =>
     {
         if (Target == ProxyTarget.Machine)
         {

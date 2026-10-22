@@ -3,19 +3,29 @@
 # сборка и тесты на windows-latest, portable-архив packaging/make-portable.ps1, release.json (packaging/release-json.py),
 # release.json.sig — ed25519 над байтами release.json ключом из секрета RELEASE_SIGNING_KEY, релиз GitHub (latest).
 # Программы берут обновление с releases/latest/download/ — поэтому релизы роутера публикуются с --latest=false.
-# workflow_dispatch — только сборка и артефакт, без релиза.
+# workflow_dispatch — только сборка и артефакт, без релиза (с refresh: true — только переподписка, см. ниже).
+# release.json несёт issued (дату описания, UTC): программа не верит описанию старше 120 дней (ReleaseFreshness — защита от «заморозки»
+# подменённым источником). Поэтому раз в неделю job refresh ставит у последнего выпуска новую issued и подписывает заново; больше ничего не меняет.
 name: windows-release
 
 on:
   push:
     tags: [ 'windows-v*' ]
+  schedule:
+    - cron: '23 4 * * 1'
   workflow_dispatch:
+    inputs:
+      refresh:
+        description: 'Только переподписать release.json последнего выпуска (новая issued)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: github.event_name != 'schedule' && !inputs.refresh
     runs-on: windows-latest
     env:
       TAG: ${{ startsWith(github.ref, 'refs/tags/windows-v') && github.ref_name || '' }}
@@ -106,3 +116,52 @@ jobs:
           python3 -c "import json;d=json.load(open('out/release.json',encoding='utf-8'));print(chr(10).join('- '+c for c in d['changes']))" > notes.md
           gh release create "$GITHUB_REF_NAME" out/DpiShell-*-portable.zip out/release.json out/release.json.sig \
             --repo "$GITHUB_REPOSITORY" --latest --title "DpiShell для Windows ${GITHUB_REF_NAME#windows-v}" --notes-file notes.md
+
+  # Свежесть описания выпуска (ReleaseFreshness, 120 дней): у последнего выпуска — новая issued и новая подпись, раз в неделю.
+  # Версия, тег, заметки и хеши остаются как были; переподписывается только то, что подписали мы (старая подпись должна сходиться).
+  refresh:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.refresh)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONUTF8: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: packaging
+
+      - name: release.json последнего выпуска
+        run: |
+          TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          case "$TAG" in windows-v*) ;; *) echo "последний выпуск $TAG — не windows-v*"; exit 1;; esac
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          mkdir -p out
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p release.json -p release.json.sig -D out
+          base64 -d out/release.json.sig > sig.bin
+          openssl pkeyutl -verify -pubin -inkey packaging/keys/release-ed25519.pem -rawin -in out/release.json -sigfile sig.bin \
+            || { echo 'подпись выложенного release.json не сходится — не переподписываю'; exit 1; }
+          rm -f sig.bin
+          python3 packaging/release-json.py reissue out/release.json
+
+      - name: Подпись release.json
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then echo 'нет секрета RELEASE_SIGNING_KEY'; exit 1; fi
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > key.pem
+          chmod 600 key.pem
+          openssl pkey -in key.pem -pubout > secret.pub
+          openssl pkey -pubin -in packaging/keys/release-ed25519.pem -pubout | cmp -s - secret.pub \
+            || { rm -f key.pem; echo 'ключ в секрете не соответствует packaging/keys/release-ed25519.pem'; exit 1; }
+          openssl pkeyutl -sign -inkey key.pem -rawin -in out/release.json | base64 -w0 > out/release.json.sig
+          rm -f key.pem secret.pub
+          base64 -d out/release.json.sig > sig.bin
+          openssl pkeyutl -verify -pubin -inkey packaging/keys/release-ed25519.pem -rawin -in out/release.json -sigfile sig.bin \
+            || { echo 'подпись release.json не прошла проверку'; exit 1; }
+          rm -f sig.bin
+
+      - name: Замена описания в выпуске
+        # Между заменой двух файлов программа может на секунды увидеть пару «новый файл — старая подпись» и отложить проверку до следующего раза.
+        run: gh release upload "$TAG" out/release.json out/release.json.sig --clobber --repo "$GITHUB_REPOSITORY"

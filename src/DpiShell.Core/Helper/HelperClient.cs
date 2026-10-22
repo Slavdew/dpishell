@@ -43,6 +43,11 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public int Protocol { get; private set; }
     /// <summary>Версия протокола помощника «мажор.минор» (из hello; помощник до 1.1 её не шлёт — «1.0»).</summary>
     public string HelperApi { get; private set; } = HelperCompat.LegacyApi;
+    /// <summary>
+    /// Принимает ли помощник от этого окна действия на весь компьютер (hosts, DNS, прокси машины; API 1.14, поле hello <c>machine</c>).
+    /// false — окно не той же сборки, что помощник; null — помощник до 1.14, проверки нет.
+    /// </summary>
+    public bool? MachineAllowed { get; private set; }
     /// <summary>Язык ответов помощника на каждый запрос (API 1.13); null — язык окна.</summary>
     public Func<string?>? Language { get; init; }
     /// <summary>
@@ -132,6 +137,7 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
             Protocol = hello.TryGetProperty("protocol", out var p) && p.TryGetInt32(out var pv) ? pv : 0;
             HelperVersion = hello.TryGetProperty("version", out var v) ? v.GetString() ?? "" : "";
             HelperApi = hello.TryGetProperty("api", out var a) && a.ValueKind == JsonValueKind.String ? a.GetString()! : HelperCompat.LegacyApi;
+            MachineAllowed = hello.TryGetProperty("machine", out var mc) && mc.ValueKind is JsonValueKind.True or JsonValueKind.False ? mc.GetBoolean() : null;
             Compat = HelperCompat.Evaluate(HelperApi, null, HelperVersion);
             return;
         }

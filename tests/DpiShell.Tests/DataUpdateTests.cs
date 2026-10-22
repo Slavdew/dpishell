@@ -61,7 +61,8 @@ public sealed partial class DataUpdateTests
     static string Sha(byte[] b) => Convert.ToHexStringLower(SHA256.HashData(b));
 
     /// <summary>Манифест «как у нас»: версия, хеши текущей поставки и подмены для отдельных файлов.</summary>
-    static (string Json, Dictionary<string, byte[]> Files) Remote(string data, string version, Dictionary<string, byte[]>? changed = null, string? minApp = null, string? app = null)
+    static (string Json, Dictionary<string, byte[]> Files) Remote(string data, string version, Dictionary<string, byte[]>? changed = null, string? minApp = null, string? app = null,
+        string? issued = null)
     {
         var pkg = DataManifest.Load(Path.Combine(data, DataManifest.FileName));
         var files = new JsonObject();
@@ -86,6 +87,7 @@ public sealed partial class DataUpdateTests
         var o = new JsonObject { ["version"] = version, ["files"] = files };
         if (minApp is not null) o["min_app_version"] = minApp;
         if (app is not null) o["app_version"] = app;
+        if (issued is not null) o["issued"] = issued;
         return (o.ToJsonString(), bodies);
     }
 
