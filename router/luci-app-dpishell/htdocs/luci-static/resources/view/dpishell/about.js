@@ -43,7 +43,8 @@ return view.extend({
 			api.card(api.t('web.about.info'), [
 				api.line([api.t('web.about.based_on') + ' ', link('https://github.com/bol-van/zapret', 'zapret'), ' (bol-van).']),
 				api.line([link('https://github.com/Slavdew/dpishell', 'github.com/Slavdew/dpishell'), ' · ',
-					link('https://github.com/Slavdew/dpishell/blob/master/docs/router/README.md', api.t('web.about.guide'))]),
+					link('https://github.com/Slavdew/dpishell/blob/master/docs/router/README.md', api.t('web.about.guide')), ' · ',
+					link('https://github.com/Slavdew/dpishell/blob/master/docs/' + (api.langCode() == 'ru' ? 'FAQ.md' : 'FAQ.en.md'), api.t('web.about.faq'))]),
 				api.line(api.t('web.about.license'), 'dps-muted')
 			]),
 			this.langCard()
@@ -118,7 +119,7 @@ return view.extend({
 			api.content(this.el.update, api.line(u && u.checked_at ? api.t('web.about.no_updates', { time: api.time(u.checked_at) }) : api.t('web.about.daily'), 'dps-muted'));
 			return;
 		}
-		var notes = u.notes || [];
+		var notes = api.updateNotes(u);
 		api.content(this.el.update, E('div', { 'class': 'alert-message notice' }, [
 			E('div', { 'class': 'dps-warn' }, [
 				E('span', {}, [E('b', {}, api.t('router.update.available', { version: (u.version || '').replace(/-r\d+$/, '') })),
@@ -141,8 +142,8 @@ return view.extend({
 
 	act: function(method) {
 		var self = this;
-		this.el.err.textContent = '';
-		return api.call(method).then(function() { return self.tick(); }, function(e) { self.el.err.textContent = api.text(e); });
+		api.fail(this.el.err, null);
+		return api.call(method).then(function() { return self.tick(); }, function(e) { api.fail(self.el.err, e); });
 	},
 
 	checkUpdate: function() {
@@ -153,7 +154,7 @@ return view.extend({
 
 	updateInstall: function() {
 		var self = this;
-		this.el.err.textContent = '';
+		api.fail(this.el.err, null);
 		return api.call('update_install', { from: 'feed' }).then(function() {
 			self.updating = true;
 			self.renderUpdate();
@@ -178,7 +179,7 @@ return view.extend({
 					if (job && job.ok === false) {
 						self.updating = false;
 						self.status = s;
-						self.el.err.textContent = api.msg(job.message_msg || job.message);
+						api.fail(self.el.err, api.error(api.msg(job.message_msg || job.message), 'update_install'));
 						self.render2();
 						poll.start();
 						return;
@@ -187,7 +188,7 @@ return view.extend({
 				});
 			}, 2000);
 		}, function(e) {
-			self.el.err.textContent = api.text(e);
+			api.fail(self.el.err, e);
 		});
 	}
 });

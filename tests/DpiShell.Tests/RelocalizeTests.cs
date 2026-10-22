@@ -67,9 +67,40 @@ public sealed class RelocalizeTests : IDisposable
         // Старый роутер: ключа нет — имя берётся из фразы по коду.
         Assert.Equal("The strategy stopped working — backup alt9 is on", App.RouterTexts.WarningText(new("switched_backup", "Стратегия перестала работать — включена запасная alt9")));
         Assert.Equal("The ISP is spoofing site addresses — apps outside the browser may not work", App.RouterTexts.WarningText(new("dns_spoofed", "Провайдер подменяет адреса сайтов — приложения вне браузера могут не работать")));
-        Assert.Equal("Automatic search applied general (ALT)", App.RouterTexts.WarningText(new("auto_selected", "Автоподбор включил general (ALT)")));
+        Assert.Equal("Auto-search switched to general (ALT)", App.RouterTexts.WarningText(new("auto_selected", "Автоподбор включил general (ALT)")));
         Assert.Equal("Strategy search was interrupted: boom", App.RouterTexts.WarningText(new("select_failed", "Подбор прервался: boom")));
         // Неизвестный код — текст роутера как есть.
         Assert.Equal("Что-то новое", App.RouterTexts.WarningText(new("brand_new", "Что-то новое")));
+    }
+
+    [Fact]
+    public void Router_probe_detail_and_update_notes_follow_window_language()
+    {
+        // detail_msg (роутер 0.2.0-r15): «редирект на <хост>» с обёртками TLS и пары; части без ключа — текстом.
+        using var doc = System.Text.Json.JsonDocument.Parse("""
+            { "key": "router.probe.pair", "text": "TLS 1.3: редирект на warning.rt.ru; TLS 1.2: таймаут", "params": {
+                "a": { "key": "router.probe.tls", "params": { "tls": "1.3", "detail": { "key": "router.probe.redirect", "params": { "host": "warning.rt.ru" }, "text": "редирект на warning.rt.ru" } } },
+                "b": { "key": "router.probe.tls", "params": { "tls": "1.2", "detail": { "text": "таймаут" } } } } }
+            """);
+        var v = new DpiShell.Core.Router.RouterUrlVerdict("google", "https://www.youtube.com/", false, "TLS 1.3: редирект на warning.rt.ru; TLS 1.2: таймаут", null, doc.RootElement.Clone());
+        L.Set("en");
+        Assert.Equal("TLS 1.3: redirect to warning.rt.ru; TLS 1.2: таймаут", v.Shown);
+        L.Set("ru");
+        Assert.Equal("TLS 1.3: редирект на warning.rt.ru; TLS 1.2: таймаут", v.Shown);
+        // Старый роутер: detail_msg нет — текст как есть.
+        Assert.Equal("редирект на x.ru", (v with { Detail = "редирект на x.ru", DetailMsg = null }).Shown);
+
+        // Заметки обновления: английские — если роутер прислал notes_en; старый роутер — русские.
+        var u = new DpiShell.Core.Router.RouterUpdate(true, "0.2.1-r1", ["Строка"], null, NotesEn: ["Line"]);
+        Assert.Equal(["Line"], u.NotesFor(L.En));
+        Assert.Equal(["Строка"], u.NotesFor("ru"));
+        Assert.Equal(["Строка"], (u with { NotesEn = null }).NotesFor(L.En));
+        // release.json выпуска: changes_en — по-английски, нет — русские.
+        var rel = DpiShell.Core.Router.RouterReleaseInfo.Parse(System.Text.Encoding.UTF8.GetBytes("""
+            { "schema": 1, "version": "0.2.1", "tag": "router-v0.2.1", "changes": ["Строка"], "changes_en": ["Line"], "assets": [] }
+            """));
+        Assert.Equal(["Line"], rel.ChangesFor(L.En));
+        Assert.Equal(["Строка"], rel.ChangesFor("ru"));
+        Assert.Equal(["Строка"], (rel with { ChangesEn = null }).ChangesFor(L.En));
     }
 }

@@ -85,7 +85,7 @@ return view.extend({
 					window.setTimeout(function() { window.location.reload(); }, 1500);
 				}, function(e) {
 					msg.className = 'dps-line dps-error';
-					msg.textContent = api.text(e);
+					api.fail(msg, e);
 				});
 			}, 'cbi-button-apply'),
 			E('span', { 'class': 'dps-muted' }, api.t('web.main.restart_note'))
@@ -158,7 +158,7 @@ return view.extend({
 					msg.textContent = api.t('web.line_err', { n: i + 1, error: api.text(e) });
 					self.selectLine(ta, i);
 				} else
-					msg.textContent = api.text(e);
+					api.fail(msg, e);
 			});
 		}, 'cbi-button-save');
 		return api.card(title, [
@@ -283,7 +283,7 @@ return view.extend({
 					r.querySelector('input').focus();
 					msg.textContent = api.t('web.line_err', { n: map[parseInt(m[1], 10)] + 1, error: api.text(e) });
 				} else
-					msg.textContent = api.text(e);
+					api.fail(msg, e);
 			});
 		}, 'cbi-button-save');
 		var discard = api.btn(api.t('sites.adv.discard'), function() { fill(got); msg.textContent = ''; }, 'cbi-button-neutral');
@@ -294,7 +294,7 @@ return view.extend({
 				return reload(r && r.nothing ? api.t('sites.adv.nothing_to_revert') : api.t('web.sites.adv_reverted'), r && r.nothing ? 'dps-muted' : 'dps-ok');
 			}, function(e) {
 				msg.className = 'dps-line dps-error';
-				msg.textContent = api.text(e);
+				api.fail(msg, e);
 			});
 		}, 'cbi-button-neutral');
 
@@ -361,7 +361,7 @@ return view.extend({
 					r.querySelector('input[type=text]').focus();
 					msg.textContent = api.t('web.sites.addr_err', { n: map[parseInt(m[1], 10)] + 1, error: api.text(e) });
 				} else
-					msg.textContent = api.text(e);
+					api.fail(msg, e);
 			});
 		}, 'cbi-button-save');
 

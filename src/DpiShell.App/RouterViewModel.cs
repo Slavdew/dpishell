@@ -66,7 +66,7 @@ public sealed class RouterScoreRow(RouterSelectRow row, string title, GroupNames
     {
         var n = names ?? GroupNames.Empty;
         bool control = n.Control(v.Group);
-        return new CheckRow(v.Ok, n.Title(v.Group), v.Url, v.Detail ?? "", v.Seconds is { } sec ? Seconds(sec, "0.0") : "",
+        return new CheckRow(v.Ok, n.Title(v.Group), v.Url, v.Shown ?? "", v.Seconds is { } sec ? Seconds(sec, "0.0") : "",
             !v.Ok && control ? L.T("router.row.breaks_site") : "", !v.Ok && control);
     }).OrderByDescending(r => r.Alert).ToList();
     public bool HasDetails => Row.Verdicts is { Count: > 0 };
@@ -1872,7 +1872,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             _ => (L.T("router.site.closed"), L.T("router.site.closed_hint")),
         };
         SiteSuggestExclude = r.SuggestExclude || (!with && without);
-        static string Side(RouterSiteCheckSide? s) => s is null ? L.T("router.site.side_none") : s.Ok ? L.T("router.site.side_ok") : s.Detail is { Length: > 0 } d ? L.T("router.site.side_fail_detail", new { detail = d }) : L.T("router.site.side_fail");
+        static string Side(RouterSiteCheckSide? s) => s is null ? L.T("router.site.side_none") : s.Ok ? L.T("router.site.side_ok") : s.Shown is { Length: > 0 } d ? L.T("router.site.side_fail_detail", new { detail = d }) : L.T("router.site.side_fail");
         SiteDetail = L.T("router.site.detail", new { @with = Side(r.WithBypass), without = Side(r.WithoutBypass) });
     }
 

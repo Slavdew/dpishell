@@ -119,14 +119,14 @@ function feed_release() {
 		if (m && match(m[1], VERSION_RX))
 			v = m[1];
 	}
-	let changes = type(j.changes) == 'array' ? map(filter(slice(j.changes, 0, 15), x => type(x) == 'string'), x => substr(x, 0, 300)) : [];
-	return { base: j.version, version: v, changes };
+	// changes — по-русски, changes_en — перевод (с 0.2.0-r15); у старых release.json его нет — заметки только русские.
+	let lines = a => type(a) == 'array' ? map(filter(slice(a, 0, 15), x => type(x) == 'string'), x => substr(x, 0, 300)) : [];
+	return { base: j.version, version: v, changes: lines(j.changes), changes_en: lines(j.changes_en) };
 }
 
-// Заметки — к той версии, что в витрине (release.json — версия без суффикса сборки -rN).
-function notes(version, rel) {
-	rel ??= feed_release();
-	return rel && index(version ?? '', rel.base) == 0 ? rel.changes : [];
+// Заметки — к той версии, что в витрине (release.json — версия без суффикса сборки -rN). en — английские (пусто — перевода нет).
+function notes(version, rel, en) {
+	return rel && index(version ?? '', rel.base) == 0 ? (en ? rel.changes_en : rel.changes) : [];
 }
 
 // Проверка: есть ли в витрине версия новее установленной. Сеть недоступна — прежний результат остаётся.
@@ -142,7 +142,10 @@ function check() {
 	}
 	if (!av)
 		return st.read_json(FILE, null);
-	let res = { checked_at: time(), installed: inst, version: av, available: older(inst, av), notes: older(inst, av) ? notes(av, rel) : [] };
+	let newer = older(inst, av);
+	if (newer)
+		rel ??= feed_release();
+	let res = { checked_at: time(), installed: inst, version: av, available: newer, notes: newer ? notes(av, rel) : [], notes_en: newer ? notes(av, rel, true) : [] };
 	st.write_atomic(FILE, sprintf('%J\n', res));
 	return res;
 }
@@ -159,9 +162,11 @@ function check_daily() {
 function status() {
 	let u = st.read_json(FILE, null);
 	if (!u)
-		return { available: false, version: null, notes: [], checked_at: null, local_signed: true };
+		return { available: false, version: null, notes: [], notes_en: [], checked_at: null, local_signed: true };
 	let avail = older(installed_version('dpishell'), u.version);
-	return { available: avail, version: u.version, notes: avail ? (u.notes ?? []) : [], checked_at: st.iso(u.checked_at), local_signed: true };
+	// notes — по-русски (для старых окон), notes_en — по-английски, пусто — перевода нет; язык выбирают окно и страница.
+	return { available: avail, version: u.version, notes: avail ? (u.notes ?? []) : [], notes_en: avail ? (u.notes_en ?? []) : [],
+		checked_at: st.iso(u.checked_at), local_signed: true };
 }
 
 // apk add из файла пишет в /etc/apk/world «имя><хеш» — пакет пришпилен к файлу, и apk upgrade его больше не трогает

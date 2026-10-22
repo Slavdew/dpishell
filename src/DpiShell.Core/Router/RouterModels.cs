@@ -91,8 +91,13 @@ public sealed record RouterUpdateJob(string? Action, string? From, bool Running,
 /// status.update (ядро договора §5.4): available — в витрине версия новее установленной, notes — что нового (до 15 строк),
 /// job — последнее задание обновления (null — не было).
 /// </summary>
+/// <param name="NotesEn">notes_en (роутер с 0.2.0-r15): то же по-английски; пусто или нет — перевода нет, показывается Notes.</param>
 public sealed record RouterUpdate(bool Available, string? Version, List<string>? Notes, DateTime? CheckedAt, RouterUpdateJob? Job = null,
-    [property: System.Text.Json.Serialization.JsonPropertyName("local_signed")] bool LocalSigned = false);
+    [property: System.Text.Json.Serialization.JsonPropertyName("local_signed")] bool LocalSigned = false, List<string>? NotesEn = null)
+{
+    /// <summary>Что нового на языке окна: английский — notes_en, если роутер его прислал; иначе notes (русские).</summary>
+    public IReadOnlyList<string> NotesFor(string language) => language == DpiShell.Core.Localization.L.En && NotesEn is { Count: > 0 } en ? en : Notes ?? [];
+}
 
 /// <summary>Откуда обновлять: feed — витрина; local — /tmp/dpishell-update (кладёт окно по SSH, <see cref="RouterSsh.UploadUpdateAsync"/>).</summary>
 public enum RouterUpdateSource { Feed, Local }
@@ -168,7 +173,13 @@ public sealed record RouterSelectRow(string Id, double GroupShare, double Target
     Dictionary<string, string>? Roles = null, int? GroupsOk = null, int? GroupsTotal = null);
 
 /// <summary>Итог по одному адресу в строке подбора роутера: группа целей, адрес, открылся ли, подробности (код, байты), время.</summary>
-public sealed record RouterUrlVerdict(string Group, string Url, bool Ok, string? Detail = null, double? Seconds = null);
+/// <param name="DetailMsg">detail_msg (router-api §9): Detail фразой { key, params, text } — для окна на другом языке; нет — Detail как есть.</param>
+public sealed record RouterUrlVerdict(string Group, string Url, bool Ok, string? Detail = null, double? Seconds = null,
+    System.Text.Json.JsonElement? DetailMsg = null)
+{
+    /// <summary>Подробности на языке окна: по ключу, если он известен, иначе текст роутера.</summary>
+    public string? Shown => RouterPhrase.FromObject(DetailMsg, Detail);
+}
 /// <summary>
 /// Ход подбора (§5.1, редакция §9 от 2026-10-16): по завершении роутер сам включает лучшую — `applied`, `backups`;
 /// остановленный — `cancelled`. `started_by`: page | app | auto. `eta_s` — оценка оставшегося, null — неизвестна.
@@ -186,7 +197,11 @@ public sealed record RouterTargets(List<RouterTarget> Items);
 /// <summary>editable: false у стандартного списка исключений `exclude` (только чтение).</summary>
 public sealed record RouterLines(List<string> Lines, bool Editable = true);
 
-public sealed record RouterSiteCheckSide(bool Ok, string? Detail);
+public sealed record RouterSiteCheckSide(bool Ok, string? Detail, System.Text.Json.JsonElement? DetailMsg = null)
+{
+    /// <summary>Подробности на языке окна (detail_msg по ключу), иначе текст роутера.</summary>
+    public string? Shown => RouterPhrase.FromObject(DetailMsg, Detail);
+}
 /// <summary>«Сайт не открывается с обходом» (§5.1): suggest_exclude — открывается только без обхода, предложить в исключения.</summary>
 public sealed record RouterSiteCheckResult(bool Running, string? Url, RouterSiteCheckSide? WithBypass, RouterSiteCheckSide? WithoutBypass, bool SuggestExclude);
 

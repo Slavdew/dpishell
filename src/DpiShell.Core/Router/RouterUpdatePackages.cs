@@ -5,9 +5,14 @@ using System.Text.Json;
 namespace DpiShell.Core.Router;
 
 /// <summary>Подписанный release.json выпуска для роутера (router-api §5.4): версия, тег, пакетный менеджер, что нового, файлы с sha256.</summary>
-public sealed record RouterReleaseInfo(int Schema, string Version, string Tag, string? Api, string? MinApp, string? Pkg, List<string>? Changes, List<AppReleaseAsset> Assets)
+/// <param name="ChangesEn">Что нового по-английски (<c>changes_en</c>, с выпусков 0.2.0-r15); null — перевода нет (старый release.json), показывается русский.</param>
+public sealed record RouterReleaseInfo(int Schema, string Version, string Tag, string? Api, string? MinApp, string? Pkg, List<string>? Changes, List<AppReleaseAsset> Assets,
+    List<string>? ChangesEn = null)
 {
     public const int MaxBytes = 64 * 1024;
+
+    /// <summary>Что нового на языке окна: английский — changes_en, если есть; иначе русский.</summary>
+    public IReadOnlyList<string> ChangesFor(string language) => language == L.En && ChangesEn is { Count: > 0 } en ? en : Changes ?? [];
 
     public static RouterReleaseInfo Parse(byte[] bytes)
     {

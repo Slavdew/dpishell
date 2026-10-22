@@ -117,9 +117,10 @@ public sealed class LocalizationTests : IDisposable
     static readonly Regex XamlKey = new(@"\{l:T\s+([^}\s,]+)", RegexOptions.Compiled);
 
     /// <summary>Ключи, которые код собирает из частей: заголовки (i) — тема + ".title" (InfoTexts.Title); «Безопасность роутера» —
-    /// router.security.&lt;id&gt;[.&lt;detail&gt;|.fix] по ответу security_check (RouterSecurity.Rows).</summary>
+    /// router.security.&lt;id&gt;[.&lt;detail&gt;|.fix] по ответу security_check (RouterSecurity.Rows); подробности проб роутера —
+    /// router.probe.* ключом из detail_msg (router-api §9, RouterPhrase).</summary>
     static bool Composed(string key) => key.StartsWith("info.") && key.EndsWith(".title") && Ru.Strings.ContainsKey(key[..^".title".Length])
-        || key.StartsWith("router.security.");
+        || key.StartsWith("router.security.") || key.StartsWith("router.probe.");
 
     /// <summary>Ключи из кода и разметки. mentions — любой литерал-ключ (для поиска неиспользуемых: ключ мог уйти в переменную).</summary>
     static HashSet<string> UsedKeys(bool mentions = false)

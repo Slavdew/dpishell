@@ -2,6 +2,7 @@
 // (параллельные экземпляры путают язык и мешают друг другу).
 //   node router/tools/luci-shot.mjs <папка-вывода> <метка> <путь1> [<путь2> …]
 // Путь — после /cgi-bin/luci/, без ведущего слеша (admin/status/overview). Вход root/test (LUCI_USER, LUCI_PASS, LUCI_URL).
+// SHOT_JS — выражение JS, выполняемое на каждой странице перед снимком (например, вызвать ошибку и раскрыть «Подробнее»).
 // Вывод: PNG <метка>-<путь>.png и строка JSON на страницу { path, ok, http, errors: [...] }; код выхода 1 — есть ошибки.
 import { spawn } from 'node:child_process';
 import { writeFileSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs';
@@ -55,6 +56,11 @@ for (const p of paths) {
 	await cmd('Page.navigate', { url: BASE + p });
 	await sleep(5000);
 	// Страница LuCI отрисовалась: есть основной блок и нет сообщения об ошибке загрузки вида.
+	// SHOT_JS — выражение JS перед снимком (раскрыть «Подробнее», вызвать ошибку и т. п.); может вернуть Promise.
+	if (process.env.SHOT_JS) {
+		await ev(process.env.SHOT_JS);
+		await sleep(1500);
+	}
 	const view = await ev(`(function(){var m=document.querySelector('#view, #maincontent');var t=document.body?document.body.innerText:'';return {main:!!m,login:!!document.querySelector('input[name=luci_password]'),fail:/Failed to execute|Unable to load|RPC call .* failed|TypeError/.test(t),len:t.length};})()`);
 	const h = await ev('document.documentElement.scrollHeight');
 	await cmd('Emulation.setDeviceMetricsOverride', { width: WIDTH, height: Math.min(h || 1000, 6000), deviceScaleFactor: 1, mobile: false });
