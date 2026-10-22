@@ -1,12 +1,12 @@
 {
-  "_comment": "Что нового — для плашки «Доступно обновление» и страницы релиза. Ключ — версия X.Y.Z; коротко, словами пользователя. Нет записи — release-json.py возьмёт заголовки коммитов.",
+  "_comment": "Что нового — для плашки «Доступно обновление» и страницы релиза. Ключ — версия X.Y.Z; коротко, словами пользователя. Нет записи — release-json.py возьмёт заголовки коммитов. Русские строки — в записи версии (список, как раньше). Английский перевод — в разделе \"en\" под тем же ключом версии: строки один к одному с русскими, до 15 штук. Пока release-json.py и роутер раздел \"en\" не читают (нужна правка кода), он только хранит перевод.",
   "0.2.0": [
     "Исправлено: после установки без интернета обновление предлагалось снова и снова, а «Обновить» ничего не меняло",
     "Установка, обновление и удаление из приложения DpiShell на ПК — по паролю роутера, даже если у роутера нет доступа к GitHub",
     "Глубокий поиск стратегий на самом роутере — когда готовые не помогли",
     "DNS для всей сети на выбор: от провайдера, Google, Cloudflare, Quad9, Яндекс или свой",
     "Ускорение сети больше не мешает оптимизации — кнопка «Исправить»",
-    "Удаление DpiShell со страницы роутера: всё, что он менял, возвращается",
+    "Удаление DpiShell со страницы роутера: всё, что он менял, обычно возвращается",
     "Новая версия проверяется раз в сутки, обновление — одной кнопкой",
     "Подбор точнее: частичный успех больше не считается провалом, проверка ждёт запуска оптимизации",
     "В отчёте вместо ваших адресов — «свой адрес №N»",
@@ -20,5 +20,28 @@
     "Проверка одной стратегии кнопкой «Проверить только её»; «Искать глубже» появляется после результата подбора",
     "Выгрузка и загрузка своих настроек (сайты, исключения, стратегии, DNS) — формат общий с приложением на ПК",
     "Совместная работа с приложением на ПК: роутер ведёт YouTube и Discord, компьютер — свои сайты"
-  ]
+  ],
+  "en": {
+    "0.2.0": [
+      "Fixed: after an install without internet the update was offered again and again, and “Update” changed nothing",
+      "Install, update and removal from the DpiShell app on the PC, with the router password, even if the router has no access to GitHub",
+      "Deep strategy search on the router itself, when the ready-made ones did not help",
+      "Whole-network DNS to choose from: ISP, Google, Cloudflare, Quad9, Yandex or your own",
+      "Network acceleration no longer interferes with optimization: the “Fix” button",
+      "Removing DpiShell from the router page: what it changed is usually restored",
+      "A new version is checked once a day, updating takes one button",
+      "More accurate search: a partial success is no longer counted as a failure, the check waits for optimization to start",
+      "The report shows “own address #N” instead of your addresses",
+      "Emergency switch: on most routers the button on the case (WPS, or reset for 2 seconds) turns optimization off, without signing in to the panel",
+      "Watchdog: if ordinary check sites stop opening with optimization but open without it, the router turns it off, shows the reason and searches for a strategy once by itself",
+      "After turning on, the router waits 3 minutes for “Yes, keep”, otherwise it restores the previous state",
+      "Fixed: the router panel could stop opening after DpiShell was updated or removed",
+      "Site checks work as on the PC: redirects inside a site are followed to the final page, a 451 answer means blocking; in the search, “Details” for each site",
+      "The page is available in Russian and English (the LuCI language)",
+      "“What interferes” on “Diagnostics”: checks with a mark, output and an overall rating",
+      "A single strategy can be checked with “Check only this one”; “Search deeper” appears after the search result",
+      "Export and import of your settings (sites, exclusions, strategies, DNS), in a format shared with the PC app",
+      "Joint mode with the PC app: the router handles YouTube and Discord, the computer handles its own sites"
+    ]
+  }
 }
