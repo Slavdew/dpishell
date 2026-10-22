@@ -443,4 +443,4 @@ function watch() {
 	return null;
 }
 
-export { analyze, status, enable, restore, watch, apply, presets, current_id, compare, CUSTOM };
+export { analyze, status, enable, restore, watch, apply, presets, current_id, compare, CUSTOM, BACKUP };

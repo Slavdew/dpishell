@@ -6,6 +6,8 @@
 //   run guard                  — сторож: с обходом пропал интернет, без него есть — выключить и один раз подобрать
 //   run tick                   — cron раз в 5 мин: сторож и раз в 30 мин watch
 //   run revert [now]           — откат включения, не подтверждённого вовремя (confirm_s)
+//   run rollback saved|local   — откат версии пакета (update_rollback)
+//   run changes_undo <id|all>  — «Изменено DpiShell»: отменить пункт или всё
 'use strict';
 
 import { writefile, readfile, stat, lstat, lsdir, unlink, rmdir } from 'fs';
@@ -17,6 +19,7 @@ import * as dns from 'dpishell.dns';
 import * as upd from 'dpishell.update';
 import * as pr from 'dpishell.probe';
 import * as cat from 'dpishell.catalog';
+import * as chg from 'dpishell.changes';
 
 const cmd = ARGV[0];
 
@@ -73,7 +76,7 @@ function guard() {
 	// Ждёт подтверждения включения — откатит сам по сроку, сторожу не вмешиваться (иначе качели «откат → сторож»).
 	if (st.read_json(st.PENDING, null))
 		return;
-	for (let j in ['select', 'check', 'update', 'core_install', 'dns', 'site_check'])
+	for (let j in ['select', 'check', 'update', 'core_install', 'dns', 'site_check', 'changes'])
 		if (st.job_running(j))
 			return;
 	let G = '/tmp/dpishell/guard.json';
@@ -148,7 +151,7 @@ function pc_refresh() {
 	let s = st.settings();
 	if (!s.enabled || !s.strategy)
 		return;
-	for (let j in ['select', 'check', 'update', 'core_install'])
+	for (let j in ['select', 'check', 'update', 'core_install', 'changes'])
 		if (st.job_running(j))
 			return;
 	let want = join(',', map(slice(st.pc_active(s), 0, st.PC_MAX), x => x.id));
@@ -340,24 +343,34 @@ else if (cmd == 'site_check') {
 	st.write_atomic('/tmp/dpishell/site_check.json', sprintf('%J\n', r));
 	unlink(l);
 }
-else if (cmd == 'update' || cmd == 'update_check') {
-	// Обновление: пакет заменяет сам себя (и этот файл) — сценарий уже в памяти, итог — в /tmp (router-api.md §5, update_install).
+else if (cmd == 'update' || cmd == 'update_check' || cmd == 'rollback') {
+	// Обновление и откат: пакет заменяет сам себя (и этот файл) — сценарий уже в памяти, итог — в /tmp (router-api.md §5,
+	// update_install, update_rollback). Откат: rollback saved — пакеты из флеша, rollback local — из папки окна ПК.
 	let l = lock('update');
 	if (!l) exit(1);
-	let from = ARGV[1] == 'local' ? 'local' : 'feed';
-	let job = { action: cmd, from, running: true, step: cmd == 'update' ? 'download' : null, started_at: time(),
+	let from = cmd == 'rollback' ? (ARGV[1] == 'local' ? 'local' : 'saved') : (ARGV[1] == 'local' ? 'local' : 'feed');
+	let job = { action: cmd, from, running: true, step: cmd != 'update_check' ? 'download' : null, started_at: time(),
 		from_version: upd.installed_version('dpishell'), target: null, log: [] };
 	upd.job_put(job, {});
 	let e = null;
 	try {
 		if (cmd == 'update_check') upd.check();
-		else e = upd.install(from, job);
+		else e = upd.install(from, job, cmd == 'rollback');
 	} catch (x) { e = `${x}`; }
+	let v = upd.installed_version('dpishell');
 	upd.job_put(job, { running: false, step: 'done', ok: !e,
-		message: e ?? (cmd == 'update' ? `Обновлено до ${upd.installed_version('dpishell')}` : 'Проверено') });
+		message: e ?? (cmd == 'update' ? `Обновлено до ${v}` : cmd == 'rollback' ? `Возвращена версия ${v}` : 'Проверено') });
 	// Пакеты из окна ПК после установки (успешной или нет) — не нужны: при повторе окно кладёт их заново.
-	if (cmd == 'update' && from == 'local')
+	if (cmd != 'update_check' && from == 'local')
 		try { upd.local_cleanup(0, true); } catch (x) {}
+	unlink(l);
+}
+// «Изменено DpiShell»: отмена пункта или всех (changes_undo / changes_undo_all); итог по пунктам — changes_job.json.
+else if (cmd == 'changes_undo') {
+	let l = lock('changes');
+	if (!l) exit(1);
+	try { chg.undo(ARGV[1] ?? ''); }
+	catch (x) { st.write_atomic(chg.JOB, sprintf('%J\n', { id: ARGV[1], running: false, ok: false, error: `${x}`, items: [], at: time() })); }
 	unlink(l);
 }
 else {

@@ -76,6 +76,10 @@
     "Применить",
     "Apply"
   ],
+  "web.changes.failed": [
+    "Отменить не удалось: {message}",
+    "Could not undo: {message}"
+  ],
   "web.copied": [
     "Скопировано",
     "Copied"
@@ -655,6 +659,18 @@
   "web.msg.with_note": [
     "{message}. {note}",
     "{message}. {note}"
+  ],
+  "web.rollback.reason.not_saved": [
+    "их ставила прежняя версия DpiShell",
+    "it was installed by an older DpiShell"
+  ],
+  "web.rollback.reason.space": [
+    "во флеше не хватило места",
+    "not enough flash space"
+  ],
+  "web.rollback.unavailable": [
+    "Прежняя версия {version}: пакеты на роутере не сохранены ({reason}) — вернуть её можно из окна DpiShell на ПК.",
+    "Previous version {version}: packages are not stored on the router ({reason}) — it can be restored from the DpiShell app on the PC."
   ],
   "web.save": [
     "Сохранить",

@@ -5,6 +5,7 @@
     python -I router/tools/vm-mkapk.py <папка-вывода> [<git-ref>]
 
 Без ref — из рабочей папки, с ref (тег, коммит) — из git: так собирается «прежняя версия» для проверки обновления.
+RELEASE_ADD=N — номер сборки больше на N (следующая версия из той же папки: проверка отката версии).
 Состав — как в Makefile: файлы пакета, данные из data/ (без ipset-all.txt, если его не кладёт сборка этой версии),
 keep.d; сценарии postinst/prerm/postrm — из Makefile (postinst идёт и как post-upgrade, как у SDK).
 """
@@ -33,7 +34,8 @@ def ls(prefix):
 
 def makefile(path):
     t = read(path).decode('utf-8')
-    rel = re.search(r'^PKG_RELEASE:=(\d+)', t, re.M).group(1)
+    # RELEASE_ADD — к номеру сборки прибавить N: «следующая версия» из той же рабочей папки (проверка отката версии).
+    rel = int(re.search(r'^PKG_RELEASE:=(\d+)', t, re.M).group(1)) + int(os.environ.get('RELEASE_ADD', '0') or 0)
     ver = re.search(r'^PKG_VERSION:=(\S+)', t, re.M).group(1)
     dep = re.search(r'^\s*DEPENDS:=(.*)$', t, re.M).group(1).replace('+', '').split()
     scripts = {}

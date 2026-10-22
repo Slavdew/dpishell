@@ -289,6 +289,7 @@ public sealed partial class FakeRouter : IDisposable
             _updateJob = $$"""{ "action": "update", "from": "feed", "running": false, "ok": false, "message": "Витрина недоступна", "at": "2026-10-17T14:05:00Z" }""";
             return;
         }
+        if (_rollbackTarget is { } rt) { RollbackDone(rt, from); return; }
         RouterVersion = UpdateVersion; UpdateAvailable = false;
         RpcdRestartCalls = RpcdRestartAfterUpdate;   // после обновления rpcd перезапускается — dpishell ненадолго пропадает
         _updateJob = $$"""{ "action": "update", "from": "{{from}}", "running": false, "ok": true, "message": "Обновлено до {{UpdateVersion}}", "at": "2026-10-17T14:05:00Z"{{(UpdateStepsOnRouter is null ? "" : ", \"step\": \"done\"")}} }""";
@@ -419,7 +420,7 @@ public sealed partial class FakeRouter : IDisposable
                   "fail_streak": 0,
                   "schedule": { "enabled": {{(ScheduleEnabled ? "true" : "false")}}, "hours": {{ScheduleHours.ToString(System.Globalization.CultureInfo.InvariantCulture)}}, "auto_select": {{(AutoSelect ? "true" : "false")}}{{(KillSwitch ? $", \"watchdog\": {(WatchdogEnabled ? "true" : "false")}" : "")}} },
                   "jobs": { "select": {{(SelectRunningJob ? "true" : "false")}}, "check": false, "core_install": false, "dns_analyze": false, "site_check": false, "dns": false, "update": {{(_updateRunning ? "true" : "false")}} },
-                  "warnings": {{Warnings()}}{{UpdateField()}}{{KillSwitchFields()}}{{AdvancedField()}}{{PcLinksField()}} }
+                  "warnings": {{Warnings()}}{{UpdateField()}}{{KillSwitchFields()}}{{AdvancedField()}}{{PcLinksField()}}{{RollbackField()}} }
                 """,
             "strategies" => StrategiesJson,
             "advanced_get" => AdvancedGet(),
@@ -483,6 +484,10 @@ public sealed partial class FakeRouter : IDisposable
             "diag" => $$"""{ "conflicts": {{ConflictsJson}}, "flow_offload": {{(FlowOffloadFixed ? "false" : "true")}}, "flowoffload": "{{(FlowOffloadFixed ? "software" : "none")}}","ipv6_wan": true, "dns": { "spoofed": true, "checked_at": "2026-10-16T21:00:00Z" }, "overlay_free_kb": 18000 }""",
             "report" => """{ "text": "отчёт роутера" }""",
             "security_check" => SecurityJson,
+            "changes_list" => ChangesList(),
+            "changes_undo" => ChangesUndo(args),
+            "changes_undo_all" => ChangesUndo(null),
+            "update_rollback" => RollbackCall(args),
             "core_install" => """{ "started": true }""",
             // Ядро договора §5.4.
             "uninstall" => Do(() => { UninstallKeepSettings = args["keep_settings"]?.GetValue<bool>(); Uninstalled = true; OnUninstall?.Invoke(); }, """{ "started": true }"""),

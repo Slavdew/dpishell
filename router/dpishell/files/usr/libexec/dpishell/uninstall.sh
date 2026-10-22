@@ -146,6 +146,8 @@ if [ -n "$PKGS" ]; then
 	rm -f /etc/init.d/dpishell /etc/rc.d/S95dpishell /etc/hotplug.d/button/50-dpishell /lib/upgrade/keep.d/dpishell \
 		/usr/share/rpcd/ucode/dpishell /usr/share/rpcd/acl.d/dpishell.json /usr/share/luci/menu.d/luci-app-dpishell.json
 fi
+# Пакеты для отката версии (update.uc, /etc/dpishell/pkg) — не настройки: без DpiShell откатывать нечего, флеш освободить.
+[ -d /etc/dpishell/pkg ] && [ ! -L /etc/dpishell/pkg ] && rm -rf /etc/dpishell/pkg
 if [ -z "$KEEP" ]; then
 	rm -rf /etc/dpishell
 	rm -f /etc/config/dpishell /etc/config/dpishell-opkg /etc/config/dpishell.apk-new /etc/apk/keys/dpishell.pem

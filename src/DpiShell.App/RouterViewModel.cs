@@ -699,6 +699,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             RaiseWatchdog();
             Raise(nameof(ModeAll)); Raise(nameof(ModeLists)); Raise(nameof(ModeHint));
             RaiseCompat();
+            RaiseRollback();
             UpdateHome();
         }
     }
@@ -2156,6 +2157,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                 Raise(nameof(FlowOffloadText)); Raise(nameof(Ipv6Text)); Raise(nameof(DnsText)); Raise(nameof(SpaceText)); Raise(nameof(DiagUpdated));
                 DiagLoaded = true;
                 await LoadSecurityAsync();
+                await LoadRouterChangesAsync();
             }, changes: false))
             Say("");
     }
@@ -2224,6 +2226,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         FillConflicts();
         DnsPick.RefreshForLanguage();
         if (_dnsStatus is { } d) ShowDns(d);
+        if (_routerChanges is not null) FillRouterChanges();
+        if (_routerChangesJob is { } cj) ShowRouterChangesReport(cj);
     }
 
     public void Dispose()

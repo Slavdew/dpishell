@@ -69,8 +69,8 @@ public sealed record RouterWatchdog(bool Enabled, DateTime? CheckedAt, bool? Ok,
 
 /// <summary>Подбор после сторожа (status.watchdog.select): at — когда, ok — включил ли стратегию (пока идёт — false), best — какую (null при неудаче).</summary>
 public sealed record RouterWatchdogSelect(DateTime? At, bool Ok, string? Best);
-/// <summary>Фоновые задания роутера; dns — любое DNS-задание (§9, 2026-10-17), dns_analyze оставлен с тем же значением.</summary>
-public sealed record RouterJobs(bool Select, bool Check, bool CoreInstall, bool DnsAnalyze = false, bool SiteCheck = false, bool Dns = false, bool Update = false);
+/// <summary>Фоновые задания роутера; dns — любое DNS-задание (§9, 2026-10-17), dns_analyze оставлен с тем же значением; changes — отмена «Изменений DpiShell» (с 0.2.0-r16).</summary>
+public sealed record RouterJobs(bool Select, bool Check, bool CoreInstall, bool DnsAnalyze = false, bool SiteCheck = false, bool Dns = false, bool Update = false, bool Changes = false);
 
 /// <summary>
 /// Последнее задание обновления (status.update.job): action update | update_check, from feed | local; at — когда закончилось.
@@ -124,7 +124,31 @@ public sealed record RouterStatus(
     // С 0.2.0-r9: продвинутый режим (§5.1 advanced_get): включён ли и сколько строк. Старый роутер — null.
     RouterAdvancedSummary? Advanced = null,
     // С 0.2.0-r9: сколько ПК ведут свои сайты вместе с роутером (pc_link_*). Старый роутер — null.
-    int? PcLinks = null);
+    int? PcLinks = null,
+    // С 0.2.0-r16: прежняя версия пакета для отката (update_rollback). Старый роутер или отката нет — null.
+    RouterRollback? Rollback = null);
+
+/// <summary>
+/// status.rollback (роутер с 0.2.0-r16): прежняя версия пакета. saved — её пакеты во флеше роутера (откат с роутера, from: saved);
+/// иначе — только через окно ПК (пакеты выпуска по SSH, from: local); reason — почему не сохранены: not_saved | space.
+/// </summary>
+public sealed record RouterRollback(string? Version, bool Saved, string? Reason = null);
+
+/// <summary>
+/// Пункт changes_list (роутер с 0.2.0-r16, «Изменения DpiShell на роутере»): key/params/text — название (ключ общего словаря и русский текст),
+/// undo — yes | no (note_key/note — почему отдельно нельзя), risk — link: отмена может на секунды оборвать связь.
+/// </summary>
+public sealed record RouterChangeItem(string Id, string? Kind, DateTime? At, string? Key, Dictionary<string, System.Text.Json.JsonElement>? Params, string? Text,
+    string? Undo, string? Risk = null, string? NoteKey = null, string? Note = null);
+
+/// <summary>Итог отмены пункта: status — restored | same | skipped | failed, note/note_key — причина.</summary>
+public sealed record RouterChangeResult(string? Id, string? Kind, string? Key, Dictionary<string, System.Text.Json.JsonElement>? Params, string? Text, string? Status,
+    string? Note = null, string? NoteKey = null);
+
+/// <summary>Задание отмены (changes_undo, changes_undo_all): id — пункт или all; items — итог по пунктам; error — задание упало.</summary>
+public sealed record RouterChangesJob(string? Id, bool Running, bool? Ok, List<RouterChangeResult>? Items, DateTime? StartedAt = null, DateTime? At = null, string? Error = null);
+
+public sealed record RouterChangesList(List<RouterChangeItem>? Items, RouterChangesJob? Job);
 
 /// <summary>Ответ pc_link_set: до когда связка действует и какие из присланных сайтов роутер оставил себе (<c>ignored</c> — адреса YouTube, Discord, строк продвинутого режима).</summary>
 public sealed record RouterPcLinkSet(DateTime? ExpiresAt, List<string>? Ignored = null);

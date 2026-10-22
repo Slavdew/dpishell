@@ -9,7 +9,8 @@
 # Что делает (decisions-owner-2026-10-20.md, «Ресурсы роутера»): снимок исходного состояния (uci dhcp/firewall/network/
 # https-dns-proxy, пакеты, /etc/apk/world, crontab, nft без таблицы zapret, файлы, следы dpishell/zapret, здоровье служб) →
 # установка старой версии → обновление из папки окна ПК → включение, DNS сети, свои списки, продвинутый режим, сторож,
-# совместная работа с ПК → откат каждой функции со сверкой → удаление с сохранением настроек и повторная установка →
+# совместная работа с ПК → откат каждой функции со сверкой → «Изменения DpiShell» (отмена пункта и всех) → откат версии
+# (через папку окна ПК на прежнюю версию без новых методов, из флеша) и обратно → удаление с сохранением настроек и повторная установка →
 # полное удаление → сверка с исходным снимком (допустимая разница перечислена ниже) → LuCI открывается, страницы без
 # ошибок JS (Edge headless, router/tools/luci-shot.mjs). Итог — PASS/FAIL по пунктам; код выхода 1 — есть FAIL.
 VM=${VM:-/c/Dev/owrt-vm}
@@ -52,6 +53,8 @@ PAGES_DPI="admin/services/dpishell/main admin/services/dpishell/select admin/ser
 
 say 'Пакеты'
 python -I "$ROOT/router/tools/vm-mkapk.py" "$WORK/pk/new" > /dev/null || exit 1
+# Следующая сборка той же рабочей папки (номер сборки +1): откат версии с роутера и обратно.
+RELEASE_ADD=1 python -I "$ROOT/router/tools/vm-mkapk.py" "$WORK/pk/new2" > /dev/null || exit 1
 python -I "$ROOT/router/tools/vm-mkapk.py" "$WORK/pk/old" "$OLD_REF" > /dev/null || exit 1
 [ -n "$OLD2_REF" ] && { python -I "$ROOT/router/tools/vm-mkapk.py" "$WORK/pk/old2" "$OLD2_REF" > /dev/null || exit 1; }
 ls "$WORK"/pk/*/
@@ -101,9 +104,9 @@ step snap s1; pull_snap s1
 # DNS сети: Google (DoH, ставит https-dns-proxy) → «как было у провайдера». В эмуляторе оптимизация в режиме «все сайты»
 # рвёт собственные соединения роутера (сеть QEMU user пересобирает TCP) — проверка DoH не прошла бы; DNS — при выключенной.
 vm "ubus call dpishell disable >/dev/null; sleep 1"
-vm "ubus call dpishell dns_set '{\"preset\":\"google\"}' >/dev/null"; step wait_dns
+step dns_set google
 vm 'uci -q get dhcp.@dnsmasq[0].noresolv; uci -q get dhcp.@dnsmasq[0].server' | grep -q . && pass 'DNS Google: dnsmasq перенастроен' || failx 'DNS Google: dnsmasq перенастроен'
-vm "ubus call dpishell dns_set '{\"preset\":\"provider\"}' >/dev/null"; step wait_dns
+step dns_set provider
 step snap s1-dns; pull_snap s1-dns
 same 'DNS «как было»: uci dhcp' s1 s1-dns uci-dhcp
 same 'DNS «как было»: https-dns-proxy' s1 s1-dns uci-https-dns-proxy
@@ -153,12 +156,57 @@ same 'после откатов: firewall' s1 s1-end uci-firewall
 same 'после откатов: настройки DpiShell' s1 s1-end uci-dpishell
 same 'после откатов: пакеты' s1 s1-end packages
 
+say '«Изменения DpiShell»: отмена по пунктам и «Отменить всё»'
+STRAT=$(cat "$WORK/strategy.before")
+step changes "$STRAT"
+step enable "$STRAT"
+shots changes admin/services/dpishell/diag
+
+say 'Откат версии и обратно'
+ver() { ls "$WORK/pk/$1/" | sed -n 's/^dpishell-\(.*\)\.apk$/\1/p'; }
+V_OLD=$(ver old); V_NEW=$(ver new); V_NEW2=$(ver new2)
+rb() { vm "ubus call dpishell status | jsonfilter -e '@.rollback.version' -e '@.rollback.saved'" | tr '\n' ' '; }
+# Настройки, которые откат и обновление должны сохранить: uci dpishell, свои файлы (кроме пакетов отката), работает ли обход.
+keep_state() { vm 'uci export dpishell; cd /etc/dpishell && for f in user-targets.json user-strategies.json found-strategies.json advanced.json pc-links.json dns-custom.json lists/user-*.txt; do
+	[ -f "$f" ] && md5sum "$f"; done; pidof nfqws >/dev/null && echo nfqws'; }
+keep_state > "$WORK/keep.before"
+# Прежнюю версию ставила прежняя версия пакета: её пакетов на роутере нет — откат только через окно ПК (папка обновления).
+[ "$(rb)" = "$V_OLD false " ] && pass "откат: прежняя $V_OLD, пакеты не сохранены" || failx "откат: прежняя $V_OLD, пакеты не сохранены ($(rb))"
+vm "ubus call dpishell update_rollback '{\"from\":\"saved\"}'" | grep -q '"invalid"' && pass 'откат из флеша без пакетов — отказ' || failx 'откат из флеша без пакетов — отказ'
+step rollback local old
+keep_state > "$WORK/keep.after"
+diff "$WORK/keep.before" "$WORK/keep.after" > /dev/null && pass "откат на $V_OLD: настройки и оптимизация как были" || { failx "откат на $V_OLD: настройки и оптимизация как были"; diff "$WORK/keep.before" "$WORK/keep.after" | head -10; }
+# Версия без новых методов: окно и страница их не зовут (status.methods), страницы открываются без ошибок.
+vm 'ubus call dpishell status | jsonfilter -e "@.methods[*]"' | grep -qx changes_list && failx "$V_OLD: changes_list в status.methods" || pass "$V_OLD: changes_list в status.methods нет"
+shots "rollback-$V_OLD" admin/services/dpishell/diag admin/services/dpishell/about
+step update_local new
+step update_local new2
+[ "$(rb)" = "$V_NEW false " ] && pass "после $V_NEW2: прежняя $V_NEW без пакетов (их ставила $V_OLD)" || failx "после $V_NEW2: прежняя $V_NEW без пакетов ($(rb))"
+step rollback local new
+step update_local new2
+[ "$(rb)" = "$V_NEW true " ] && pass "после $V_NEW2: прежняя $V_NEW сохранена во флеше" || failx "после $V_NEW2: прежняя $V_NEW сохранена во флеше ($(rb))"
+r=$(vm 'ls /etc/dpishell/pkg/cur /etc/dpishell/pkg/prev 2>/dev/null | grep -c "\.apk$"; du -sk /etc/dpishell/pkg | cut -f1; ls -ld /etc/dpishell/pkg | cut -c1-10')
+echo "$r" | head -1 | grep -qx 4 && pass 'флеш: ровно установленная и одна прежняя пара' || failx "флеш: ровно установленная и одна прежняя пара ($r)"
+echo "     пакеты отката во флеше: $(echo "$r" | sed -n 2p) КБ"
+echo "$r" | tail -1 | grep -qx "drwx------" && pass 'флеш: каталог пакетов только root (700)' || failx "флеш: каталог пакетов только root ($r)"
+shots "rollback-ready" admin/services/dpishell/about
+keep_state > "$WORK/keep.before"
+step rollback saved
+keep_state > "$WORK/keep.after"
+diff "$WORK/keep.before" "$WORK/keep.after" > /dev/null && pass "откат из флеша на $V_NEW: настройки как были" || { failx "откат из флеша на $V_NEW: настройки как были"; diff "$WORK/keep.before" "$WORK/keep.after" | head -10; }
+[ "$(rb)" = "" ] && pass 'после отката: прежней версии нет (новее не храним)' || failx "после отката: прежней версии нет ($(rb))"
+vm 'ls /etc/dpishell/pkg/prev 2>/dev/null; ls /etc/dpishell/pkg/cur' | grep -q "dpishell-$V_NEW.apk" && pass "после отката: во флеше только $V_NEW" || failx "после отката: во флеше только $V_NEW"
+step update_local new2
+keep_state > "$WORK/keep.after"
+diff "$WORK/keep.before" "$WORK/keep.after" > /dev/null && pass "и обратно на $V_NEW2: настройки как были" || failx "и обратно на $V_NEW2: настройки как были"
+
 say 'Удаление с сохранением настроек и повторная установка'
 step uninstall keep
 r=$(vm 'grep -qx "P:dpishell" /lib/apk/db/installed && echo pkg; test -d /opt/zapret && echo core; test -f /etc/dpishell/user-targets.json -o -f /etc/dpishell/stats.json && echo settings; uci -q get dpishell.main.strategy; uci -q get firewall.@defaults[0].flow_offloading')
 case "$r" in *pkg*) failx 'keep: пакет удалён' ;; *) pass 'keep: пакет удалён' ;; esac
 case "$r" in *core*) failx 'keep: ядро удалено' ;; *) pass 'keep: ядро удалено' ;; esac
 case "$r" in *settings*) pass 'keep: настройки сохранены' ;; *) failx 'keep: настройки сохранены' ;; esac
+vm 'test -e /etc/dpishell/pkg' && failx 'keep: пакеты отката убраны из флеша' || pass 'keep: пакеты отката убраны из флеша'
 # Прежние версии (r13 и раньше) выключали ускорение сети при установке ядра, не запоминая, — пользователь включает его
 # снова; новая установка ядра выключает и запоминает, полное удаление возвращает (сверка с исходным снимком ниже).
 vm 'uci set firewall.@defaults[0].flow_offloading=1; uci commit firewall; /etc/init.d/firewall reload >/dev/null 2>&1'

@@ -118,9 +118,12 @@ public sealed class LocalizationTests : IDisposable
 
     /// <summary>Ключи, которые код собирает из частей: заголовки (i) — тема + ".title" (InfoTexts.Title); «Безопасность роутера» —
     /// router.security.&lt;id&gt;[.&lt;detail&gt;|.fix] по ответу security_check (RouterSecurity.Rows); подробности проб роутера —
-    /// router.probe.* ключом из detail_msg (router-api §9, RouterPhrase).</summary>
+    /// router.probe.* ключом из detail_msg (router-api §9, RouterPhrase); «Изменения DpiShell на роутере» — названия и подписи пунктов
+    /// router.changes.item.*, .list.*, .row.core ключами из changes_list, ошибки роутера router.changes.busy/.gone, router.rollback.not_saved.</summary>
     static bool Composed(string key) => key.StartsWith("info.") && key.EndsWith(".title") && Ru.Strings.ContainsKey(key[..^".title".Length])
-        || key.StartsWith("router.security.") || key.StartsWith("router.probe.");
+        || key.StartsWith("router.security.") || key.StartsWith("router.probe.")
+        || key.StartsWith("router.changes.item.") || key.StartsWith("router.changes.list.")
+        || key is "router.changes.row.core" or "router.changes.busy" or "router.changes.gone" or "router.rollback.not_saved";
 
     /// <summary>Ключи из кода и разметки. mentions — любой литерал-ключ (для поиска неиспользуемых: ключ мог уйти в переменную).</summary>
     static HashSet<string> UsedKeys(bool mentions = false)
