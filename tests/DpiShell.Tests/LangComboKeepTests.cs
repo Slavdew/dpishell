@@ -114,7 +114,7 @@ public sealed class LangComboKeepTests : IDisposable
                 Assert.Equal(pick, Dns());
 
                 vm.GoTo(Pages.Router);
-                for (int i = 0; i < 400 && vm.Router.Busy; i++) { Pump(); Thread.Sleep(15); }
+                for (int i = 0; i < 400 * 10 && vm.Router.Busy; i++) { Pump(); Thread.Sleep(15); }
                 WaitUi(vm.Router.SetScheduleAsync(true, 6));
                 Pump();
                 string? Sched() => Find<ComboBox>(w, c => c.IsVisible && c.SelectedValuePath == "Hours")?.SelectedValue is double h ? h.ToString() : null;

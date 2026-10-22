@@ -10,7 +10,7 @@ namespace DpiShell.Tests;
 /// </summary>
 public sealed class FakeRouter : IDisposable
 {
-    readonly HttpListener _l = new();
+    HttpListener _l = new();
     readonly CancellationTokenSource _cts = new();
     readonly Task _loop;
 
@@ -299,7 +299,7 @@ public sealed class FakeRouter : IDisposable
         return $$""", "update": { "available": {{(UpdateAvailable ? "true" : "false")}}, "version": "{{UpdateVersion}}", "notes": {{notes}}, "checked_at": "{{UpdateCheckedAt}}", "job": {{_updateJob ?? "null"}} }""";
     }
 
-    public List<JsonObject> Calls { get; } = [];
+    public CallLog Calls { get; } = new();
     public List<string> RawBodies { get; } = [];
     readonly HashSet<string> _sessions = [];
     int _logins;
@@ -307,14 +307,19 @@ public sealed class FakeRouter : IDisposable
 
     public FakeRouter()
     {
-        // Свободный порт: занимаем и отпускаем.
-        var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
-        probe.Stop();
-        Address = $"localhost:{port}";
-        _l.Prefixes.Add($"http://localhost:{port}/");
-        _l.Start();
+        // Свободный порт: занимаем и отпускаем. Между «отпустили» и Start его может занять другой тест или другой прогон — берём другой.
+        for (int attempt = 0; ; attempt++)
+        {
+            var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+            probe.Start();
+            var port = ((IPEndPoint)probe.LocalEndpoint).Port;
+            probe.Stop();
+            Address = $"localhost:{port}";
+            if (attempt > 0) { _l.Close(); _l = new HttpListener(); }   // после неудачного Start слушатель закрыт — нужен новый
+            _l.Prefixes.Add($"http://localhost:{port}/");
+            try { _l.Start(); break; }
+            catch (HttpListenerException) when (attempt < 20) { }
+        }
         _loop = Task.Run(LoopAsync);
     }
 
@@ -734,4 +739,24 @@ public sealed class FakeRouter : IDisposable
         _l.Stop();
         _l.Close();
     }
+}
+
+/// <summary>Журнал вызовов фейка: пишет поток сервера, читает тест — перебор идёт по снимку под замком (иначе «Collection was modified» под нагрузкой).</summary>
+public sealed class CallLog : IList<JsonObject>
+{
+    readonly List<JsonObject> _l = [];
+    List<JsonObject> Snap() { lock (this) return [.. _l]; }
+    public IEnumerator<JsonObject> GetEnumerator() => Snap().GetEnumerator();
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    public void Add(JsonObject item) { lock (this) _l.Add(item); }
+    public void Clear() { lock (this) _l.Clear(); }
+    public bool Contains(JsonObject item) { lock (this) return _l.Contains(item); }
+    public void CopyTo(JsonObject[] array, int arrayIndex) { lock (this) _l.CopyTo(array, arrayIndex); }
+    public bool Remove(JsonObject item) { lock (this) return _l.Remove(item); }
+    public int Count { get { lock (this) return _l.Count; } }
+    public bool IsReadOnly => false;
+    public int IndexOf(JsonObject item) { lock (this) return _l.IndexOf(item); }
+    public void Insert(int index, JsonObject item) { lock (this) _l.Insert(index, item); }
+    public void RemoveAt(int index) { lock (this) _l.RemoveAt(index); }
+    public JsonObject this[int index] { get { lock (this) return _l[index]; } set { lock (this) _l[index] = value; } }
 }

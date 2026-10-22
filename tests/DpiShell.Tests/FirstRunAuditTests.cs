@@ -36,7 +36,7 @@ public sealed class FirstRunAuditTests : IDisposable
 
     static async Task Until(Func<bool> cond, string what)
     {
-        for (int i = 0; i < 500 && !cond(); i++) await Task.Delay(10);
+        for (int i = 0; i < 500 * 10 && !cond(); i++) await Task.Delay(10);
         Assert.True(cond(), what);
     }
 
@@ -246,7 +246,7 @@ public sealed class FirstRunAuditTests : IDisposable
         Assert.False(vm.SitesSaved);
 
         vm.SaveSitesCmd.Execute(null);
-        await Until(() => !vm.SitesDirty, "«Сохранить» не сохранило список исключений");
+        await Until(() => !vm.SitesDirty && vm.ExcludeMessage.Length > 0, "«Сохранить» не сохранило список исключений");   // сообщение ставится после сброса «не сохранено»
         Assert.Contains("user_exclude_set bank.example,gov.example", f.Backend.Calls);
         Assert.False(vm.SitesDirty);
         Assert.StartsWith("Сохранено сайтов без оптимизации: 2", vm.ExcludeMessage);

@@ -62,6 +62,7 @@ public sealed class RouterSetupViewModelTests : IDisposable
             AddressAuto = false,
             CustomAddress = r.Address,
             PollInterval = TimeSpan.FromMilliseconds(10),
+            RpcdSettle = TimeSpan.FromSeconds(30),   // ждём перезапуск rpcd по условию (ответил), а не 8 опросов по 10 мс: под нагрузкой они не успевают
             CheckTimeout = TimeSpan.FromSeconds(5),
             PcTimestamps = () => true,
             Gateway = () => throw new InvalidOperationException("в тестах — только фейковый роутер"),

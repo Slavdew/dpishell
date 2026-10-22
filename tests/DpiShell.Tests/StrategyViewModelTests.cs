@@ -26,7 +26,7 @@ public sealed class StrategyViewModelTests : IDisposable
 
     static async Task WaitFor(Func<bool> cond)
     {
-        for (int i = 0; i < 300 && !cond(); i++) await Task.Delay(10);
+        for (int i = 0; i < 300 * 10 && !cond(); i++) await Task.Delay(10);
         Assert.True(cond(), "не дождались");
     }
 

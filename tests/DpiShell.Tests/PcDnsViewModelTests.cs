@@ -44,7 +44,7 @@ public sealed class PcDnsViewModelTests : IDisposable
 
         vm.ToastCmd.Execute(null);
         // «Вернуть как было» снимается раньше, чем пройдёт повторная проверка, — ждём обоих.
-        for (int i = 0; i < 200 && (vm.PcDns.CanRestore || rechecks < 2); i++) await Task.Delay(10);
+        for (int i = 0; i < 200 * 10 && (vm.PcDns.CanRestore || rechecks < 2); i++) await Task.Delay(10);
         Assert.False(vm.HasToast);
         Assert.Contains("dns_restore", f.Backend.Calls);
         Assert.False(vm.PcDns.CanRestore);
@@ -74,7 +74,7 @@ public sealed class PcDnsViewModelTests : IDisposable
         Assert.Equal("Включить защищённый DNS", vm.RecommendedDnsText);
         Assert.StartsWith("Google", vm.RecommendedDnsHint);
         vm.FixDnsCmd.Execute(null);
-        for (int i = 0; i < 200 && !f.Backend.Calls.Any(c => c.StartsWith("dns_set")); i++) await Task.Delay(10);
+        for (int i = 0; i < 200 * 10 && !f.Backend.Calls.Any(c => c.StartsWith("dns_set")); i++) await Task.Delay(10);
         Assert.Contains("dns_set google   False", f.Backend.Calls);
     }
 

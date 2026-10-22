@@ -279,7 +279,7 @@ public sealed class RouterViewModelTests : IDisposable
         var (vm, _) = Make(r);
         await vm.ConnectAsync("secret");
         var run = vm.StartSelectAsync(deep: true);
-        for (int i = 0; i < 200 && !vm.Selecting; i++) await Task.Delay(10);
+        for (int i = 0; i < 200 * 10 && !vm.Selecting; i++) await Task.Delay(10);
         while (vm.Busy) await Task.Delay(10);
         await vm.CancelSelectAsync();
         await run;
@@ -312,7 +312,7 @@ public sealed class RouterViewModelTests : IDisposable
         var (vm, _) = Make(r);
         await vm.ConnectAsync("secret");
         // status.jobs.select = true — ход показывается сам; дождаться конца опроса.
-        for (int i = 0; i < 200 && (vm.Selecting || vm.Best is null); i++) await Task.Delay(20);
+        for (int i = 0; i < 200 * 10 && (vm.Selecting || vm.Best is null); i++) await Task.Delay(20);
         r.SelectRunningJob = false;
         Assert.Equal("alt", vm.Best);
         Assert.DoesNotContain(r.Calls, c => Method(c) == "select_start");

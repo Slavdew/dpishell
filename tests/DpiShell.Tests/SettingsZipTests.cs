@@ -165,6 +165,7 @@ public sealed class SettingsZipTests : IDisposable
             Assert.All(z.Entries, e => Assert.StartsWith("dpishell-settings-2026-10-21/", e.FullName));
             Assert.Contains(z.Entries, e => e.FullName == "dpishell-settings-2026-10-21/manifest.json");
         }
+        var tempBefore = Directory.GetDirectories(Path.GetTempPath(), "dpishell-import-*").ToHashSet();
         var p = SettingsImport.ReadPackage(zipPath);
         Assert.True(p.Ok, p.Fatal);
         Assert.Equal("Провайдер", p.Manifest!.Provider);
@@ -173,7 +174,11 @@ public sealed class SettingsZipTests : IDisposable
         Assert.Equal(state.Subnets, p.Data.Subnets);
         Assert.Equal("google", p.Data.Dns!.Choice);
         // Временные папки убраны.
-        Assert.DoesNotContain(Directory.GetDirectories(Path.GetTempPath(), "dpishell-import-*"), d => Directory.GetCreationTimeUtc(d) > DateTime.UtcNow.AddMinutes(-1));
+        // Другие тесты (и другие прогоны) тоже читают пакеты и держат такие папки миг: ждём, пока не останется новых, а не смотрим по времени создания.
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        List<string> leaked;
+        while ((leaked = Directory.GetDirectories(Path.GetTempPath(), "dpishell-import-*").Where(d => !tempBefore.Contains(d)).ToList()).Count > 0 && DateTime.UtcNow < deadline) Thread.Sleep(50);
+        Assert.Empty(leaked);
     }
 
     [Fact]

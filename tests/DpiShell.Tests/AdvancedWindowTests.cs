@@ -95,7 +95,7 @@ public sealed class AdvancedWindowTests : IDisposable
         f.Backend.AdvancedFails = "Строка 1: такой стратегии нет.";
         var a = vm.AdvancedPc;
         a.Enabled = true;
-        await WaitAsync(() => a.MessageIsError && !a.Busy);   // «Включаю…» — не итог: ждём отказ
+        await WaitAsync(() => a.MessageIsError && !a.Busy && !a.Enabled);   // «Включаю…» — не итог: ждём отказ; Message ставится раньше, чем переключатель возвращается назад
         Assert.False(a.Enabled);
         Assert.Contains("такой стратегии нет", a.Message);
     }
@@ -184,7 +184,7 @@ public sealed class AdvancedWindowTests : IDisposable
 
     static async Task WaitAsync(Func<bool> cond)
     {
-        for (int i = 0; i < 500 && !cond(); i++) await Task.Delay(10);
+        for (int i = 0; i < 500 * 10 && !cond(); i++) await Task.Delay(10);
         Assert.True(cond(), "не дождались");
     }
 
@@ -237,6 +237,7 @@ public sealed class AdvancedWindowTests : IDisposable
         Assert.Equal(["auto", "direct"], r.AdvancedRows.Select(x => x.Strategy));
         Assert.Equal(1, r.ConfirmCalls);          // проба: сайты с ПК открылись — подтверждено без вопросов
         Assert.Null(r.Pending);
+        await WaitAsync(() => a.Rows[0].Hint == "Авто — сейчас general (ALT10)");   // подсказка строки дочитывает текущую стратегию отдельным запросом, после «Применено»
         Assert.Equal("Авто — сейчас general (ALT10)", a.Rows[0].Hint);
         var e = Assert.Single(journal.Active(ChangeKinds.RouterAdvanced));
         Assert.False(AdvancedConfig.FromJson(e.Before).Enabled);

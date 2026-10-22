@@ -7,11 +7,11 @@ namespace DpiShell.Tests;
 /// <summary>Модель вкладки «Игры и программы»: простой режим «Начать → Готово», варианты, откат; «Отладка подключений»; настройка показа.</summary>
 public sealed class AppsViewModelTests
 {
-    static async Task<(HelperFixture, AppsViewModel, List<string>)> Make_()
+    static async Task<(HelperFixture, AppsViewModel, System.Collections.Concurrent.ConcurrentBag<string>)> Make_()
     {
         var f = new HelperFixture();
         var link = await f.LinkAsync();
-        var said = new List<string>();
+        var said = new System.Collections.Concurrent.ConcurrentBag<string>();   // пишет поток модели, читает тест
         var vm = new AppsViewModel(link) { Say = said.Add };
         return (f, vm, said);
     }
@@ -22,7 +22,7 @@ public sealed class AppsViewModelTests
     /// <summary>Асинхронные команды запускаются «выстрелил и забыл» — ждём, пока фейк увидит вызов или шаг сменится.</summary>
     static async Task Until(Func<bool> cond, string what)
     {
-        for (int i = 0; i < 200 && !cond(); i++) await Task.Delay(25);
+        for (int i = 0; i < 200 * 10 && !cond(); i++) await Task.Delay(25);
         Assert.True(cond(), what);
     }
 

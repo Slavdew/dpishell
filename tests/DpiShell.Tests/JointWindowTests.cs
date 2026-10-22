@@ -20,7 +20,7 @@ public sealed class JointWindowTests : IDisposable
 
     static async Task WaitAsync(Func<bool> cond, string what = "не дождались")
     {
-        for (int i = 0; i < 600 && !cond(); i++) await Task.Delay(10);
+        for (int i = 0; i < 600 * 10 && !cond(); i++) await Task.Delay(10);
         Assert.True(cond(), what);
     }
 

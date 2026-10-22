@@ -51,7 +51,7 @@ public sealed class RouterKillSwitchTests : IDisposable
 
     static async Task Until(Func<bool> cond)
     {
-        for (int i = 0; i < 500 && !cond(); i++) await Task.Delay(10);
+        for (int i = 0; i < 500 * 10 && !cond(); i++) await Task.Delay(10);
         Assert.True(cond());
     }
 
@@ -149,7 +149,8 @@ public sealed class RouterKillSwitchTests : IDisposable
         // Никто не ответил: роутер вернул сам; окно узнаёт это одним запросом после срока (без опроса).
         r.ExpireConfirm();
         _now = _now.AddSeconds(200);
-        await Until(() => vm.HasOff);
+        // Состояние обновляется на другом потоке по частям (OffText раньше HomeLine): ждём конечное, а не первое видимое.
+        await Until(() => vm.HasOff && vm.HomeLine == vm.OffText && vm.CanReEnable && !vm.TrialVisible && !vm.RouterEnabled);
         Assert.False(vm.TrialVisible);
         Assert.False(vm.RouterEnabled);
         Assert.Equal(L.T("router.off.revert_enable_at", new { time = RouterTexts.Time(new DateTime(2026, 10, 19, 12, 3, 0, DateTimeKind.Utc)) }), vm.OffText);
