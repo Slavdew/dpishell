@@ -16,9 +16,7 @@ public sealed partial class WindowSmokeTests
     [Fact]
     public void Router_JointWork_Card_Binds_AndSnap()
     {
-        // Причина сбоя найдена: RefreshAsync после fake.Remove() мог быть пустым вызовом (идёт другое обновление) — теперь повторяется. Локально под нагрузкой проверено;
-        // на сервере CI (GitHub) пока не проверялось — пропуск оставлен до первого зелёного прогона там (HANDOFF).
-        if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true") return;
+        // Сбой на CI: RefreshAsync после fake.Remove() мог быть пустым вызовом (идёт другое обновление) — теперь повторяется (6e31b6d).
         var snapDir = Environment.GetEnvironmentVariable("DPISHELL_SNAPSHOTS");
         using var tmp = new TempDir();
         var errors = WithBindingErrors(() =>
