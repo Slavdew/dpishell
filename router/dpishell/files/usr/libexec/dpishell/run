@@ -51,6 +51,23 @@ function title_of(id) {
 	return cat.find(st.catalogs(), id)?.title ?? id;
 }
 
+// «Стратегия не проходит проверку — нужен подбор» (strategy_failing, с 0.2.2-r2): без него таймер молча копил неудачи,
+// когда сменить не на что. on — показать для включённой стратегии, иначе снять. params.strategy — для какой: сменили
+// стратегию или выключили — rpcd status.warnings его не отдаёт. ts — стратегия с метками TCP: проверка шла «глазами Windows».
+function strategy_failing(on) {
+	if (!on) {
+		warn('strategy_failing', null);
+		return;
+	}
+	let s = st.settings();
+	let strat = cat.find(st.catalogs(), s.strategy);
+	let ts = !!(strat && cat.uses_ts(strat));
+	warn('auto_select_failed', null);   // тот же итог — одной строкой
+	warn('strategy_failing', ts ? 'Стратегия не проходит проверку — нужен подбор. Не работает для устройств без TCP timestamps (обычно Windows)'
+		: 'Стратегия не проходит проверку — нужен подбор', ts ? 'web.warn.strategy_failing_ts' : 'web.warn.strategy_failing',
+		{ strategy: s.strategy, ts });
+}
+
 // Подбор после сторожа: один раз, быстрый, все группы (cron tick уже под nice). Найденная стратегия прошла и обычные
 // сайты (группа control) — то, на чём сработал сторож; сломается и она — сторож выключит снова, но подбирать уже не будет,
 // пока человек не включит обход или не запустит подбор (WATCHDOG_SELECT снимают enable/select_start).
@@ -223,6 +240,7 @@ function watch() {
 	if (!l) return;
 	let r = sel.check_run('timer', true);
 	unlink(l);
+	if (r && r.fail_streak == 0) strategy_failing(false);
 	if (!r || r.fail_streak < 2) return;
 	// Две неудачи подряд: следующая запасная (architecture.md «Проверка по таймеру и запасные»).
 	let backups = s.backups;
@@ -233,26 +251,34 @@ function watch() {
 			st.uci_set({ strategy: next, backups: slice(backups, 1) });
 			st.write_atomic(`${st.P.etc}/fail-streak.json`, '0\n');
 			warn('switched_backup', `Стратегия перестала работать — включена запасная ${title_of(next)}`, 'web.warn.switched_backup', { name: title_of(next) });
+			strategy_failing(false);
 			st.write_status_json();
 		}
 		return;
 	}
+	// Сменить не на что: без автоподбора (и пока он не повторяется — раз в 6 ч) — сказать человеку, что нужен подбор.
 	if (!s.schedule.auto_select) {
 		warn('switched_backup', null);
+		strategy_failing(true);
 		return;
 	}
 	let lr = st.read_json(`${st.P.etc}/auto-select.json`, { at: 0 });
-	if (time() - lr.at < 6 * 3600) return;
+	if (time() - lr.at < 6 * 3600) {
+		strategy_failing(true);
+		return;
+	}
 	st.write_atomic(`${st.P.etc}/auto-select.json`, sprintf('%J\n', { at: time() }));
 	let ls = lock('select');
 	if (!ls) return;
 	unlink(sel.CANCEL);
 	let p = sel.select_run({ mode: 'quick', depth: 'main', started_by: 'timer' });
 	unlink(ls);
-	if (p.applied)
+	if (p.applied) {
 		warn('auto_selected', `Автоподбор включил ${title_of(p.best)}`, 'web.warn.auto_selected', { name: title_of(p.best) });
+		strategy_failing(false);
+	}
 	else
-		warn('auto_select_failed', 'Автоподбор не нашёл рабочую стратегию — оставлена прежняя', 'web.warn.auto_select_failed');
+		strategy_failing(true);   // вместо auto_select_failed (до 0.2.2-r2): прежняя оставлена и не проходит
 }
 
 if (cmd == 'select') {
@@ -267,7 +293,11 @@ else if (cmd == 'check') {
 	if (st.job_running('select')) exit(1);
 	let l = lock('check');
 	if (!l) exit(1);
-	try { sel.check_run(ARGV[1] == 'manual' ? 'manual' : 'app', false); } catch (e) {}
+	// Проверил человек: провал — тот же итог, что у таймера (запасные он не включает), прошла — снять.
+	let r = null;
+	try { r = sel.check_run(ARGV[1] == 'manual' ? 'manual' : 'app', false); } catch (e) {}
+	if (r?.last_check)
+		strategy_failing(!r.last_check.ok);
 	unlink(l);
 }
 else if (cmd == 'watch')

@@ -167,8 +167,10 @@ function warnings(s) {
 	if (f.overlay_free_kb != null && f.overlay_free_kb < 1024)
 		push(w, { code: 'flash_full', text: `Во флеше роутера почти нет места (${f.overlay_free_kb} КБ) — настройки могут не сохраниться`,
 			key: 'web.warn.flash_full', params: { kb: f.overlay_free_kb } });
+	// strategy_failing — про ту стратегию, что была включена при проверке: сменили (apply, подбор, запасная) или выключили — неактуально.
 	for (let x in st.read_json(`${st.P.run}/warnings.json`, []))
-		push(w, x);
+		if (x.code != 'strategy_failing' || (s.enabled && x.params?.strategy == s.strategy))
+			push(w, x);
 	let off = s.enabled ? null : st.last_off();
 	if (off) {
 		let key = { watchdog: 'router.off.watchdog_at', button: 'router.off.button_at' }[off.by] ?? 'router.off.revert_enable_at';
