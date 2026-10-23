@@ -452,7 +452,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     /// <summary>Инструкция «Как поставить DpiShell на роутер» (п. 9).</summary>
     public const string GuideUrl = "https://github.com/Slavdew/dpishell/blob/master/docs/router/README.md";
-    public Action<string> OpenUrl { get; set; } = url => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+    public Action<string> OpenUrl { get; set; } = url => { UiGuard.CheckOpen(url); System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); };
     public ICommand GuideCmd => _guideCmd ??= new RelayCommand(() =>
     {
         try { OpenUrl(GuideUrl); }

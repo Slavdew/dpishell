@@ -47,7 +47,7 @@ public sealed class UpdatesViewModel : Observable
     public Func<DateTime> Now { get; set; } = () => DateTime.Now;
     public string AppVersion { get; set; } = HelperProtocol.AppVersion;
     /// <summary>Открыть страницу релизов (в тестах — подмена).</summary>
-    public Action<string> OpenUrl { get; set; } = url => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+    public Action<string> OpenUrl { get; set; } = url => { UiGuard.CheckOpen(url); Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); };
     /// <summary>Запустить новую копию и выйти из этой (окно подключает свой выход; в тестах — подмена).</summary>
     public Func<RestartPlan, Task> Restart { get; set; } = _ => throw new InvalidOperationException("Перезапуск не подключён.");
     /// <summary>Идёт другая операция окна (подбор, включение) — обновляться сейчас нельзя: выход оборвал бы её.</summary>

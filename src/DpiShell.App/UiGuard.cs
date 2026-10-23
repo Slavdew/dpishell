@@ -10,4 +10,10 @@ public static class UiGuard
     {
         if (Forbidden) throw new InvalidOperationException("Настоящий диалог в тесте — подмените Confirm/Ask: " + text);
     }
+
+    /// <summary>Открытие ссылки, системной страницы или папки под тестом — ошибка: иначе у владельца открывается браузер или Проводник.</summary>
+    public static void CheckOpen(string target)
+    {
+        if (Forbidden) throw new InvalidOperationException("Настоящее открытие ссылки или папки в тесте — подмените LinkOpener/OpenUrl: " + target);
+    }
 }

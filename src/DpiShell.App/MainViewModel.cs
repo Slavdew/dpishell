@@ -1878,7 +1878,7 @@ public sealed partial class MainViewModel : Observable
     /// <summary>«Безопасность Windows» → параметры защиты от вирусов (там «Исключения»).</summary>
     public ICommand OpenDefenderCmd => _openDefenderCmd ??= new RelayCommand(() =>
     {
-        try { Process.Start(new ProcessStartInfo("windowsdefender://threatsettings") { UseShellExecute = true }); }
+        try { UiGuard.CheckOpen("windowsdefender://threatsettings"); Process.Start(new ProcessStartInfo("windowsdefender://threatsettings") { UseShellExecute = true }); }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Fail(L.T("diag.err.defender", new { error = e.Message })); }
     });
     ICommand? _openDefenderCmd;
@@ -1912,7 +1912,7 @@ public sealed partial class MainViewModel : Observable
 
     void OpenLink(string target)
     {
-        try { Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
+        try { UiGuard.CheckOpen(target); Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Fail(L.T("shell.open_failed", new { error = e.Message })); }
     }
 
@@ -2210,6 +2210,7 @@ public sealed partial class MainViewModel : Observable
         try
         {
             Directory.CreateDirectory(path);
+            UiGuard.CheckOpen(path);
             Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true });
         }
         catch (Exception e) { Fail(Texts.Friendly(e), e); }
