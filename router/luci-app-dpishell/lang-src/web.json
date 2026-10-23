@@ -1020,6 +1020,10 @@
     "Подбор прервался: {error}",
     "Strategy search was interrupted: {error}"
   ],
+  "web.warn.strategy_failing": [
+    "Стратегия не проходит проверку — нужен подбор",
+    "The strategy fails the check — a new search is needed"
+  ],
   "web.warn.switched_backup": [
     "Стратегия перестала работать — включена запасная {name}",
     "The strategy stopped working — backup {name} is on"

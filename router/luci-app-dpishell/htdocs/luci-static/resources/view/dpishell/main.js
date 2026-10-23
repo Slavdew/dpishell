@@ -356,6 +356,7 @@ return view.extend({
 				action = api.btn(api.t('web.core.download'), function() { return self.coreInstall(); }, 'cbi-button-apply');
 				break;
 			case 'auto_select_failed':
+			case 'strategy_failing':
 			case 'watchdog_select_failed':
 				action = api.btn(api.t('router.select'), function() { return self.openSelect(); }, 'cbi-button-apply');
 				break;

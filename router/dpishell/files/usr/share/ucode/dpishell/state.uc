@@ -178,6 +178,9 @@ function changes_mark(ids) {
 function uci_set(values) {
 	let c = cursor();
 	let marks = [];
+	// Другая стратегия (подбор, apply, strategy_set, запасная, откат) — счёт неудач проверки с нуля: он про прежнюю.
+	if (values.strategy != null && `${values.strategy}` != c.get('dpishell', 'main', 'strategy'))
+		write_atomic(`${P.etc}/fail-streak.json`, '0\n');
 	for (let k in values) {
 		let v = values[k], mk = MARKS[k];
 		// Переход в «изменено»: enabled/ipv6 → 1, fw_offload_prev — появился, dns_preset — не провайдер (а был провайдер или пусто).

@@ -695,6 +695,15 @@ public sealed class RouterWindowFeaturesTests : IDisposable
     }
 
     [Fact]
+    public void Warning_StrategyFailing_TextByCode_AndSelectAction()
+    {
+        static RouterWarning W(string json) => System.Text.Json.JsonSerializer.Deserialize<RouterWarning>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        var plain = RouterTexts.Warning(W("""{ "code": "strategy_failing", "text": "x", "params": { "strategy": "alt1" } }"""));   // без key — перевод по коду
+        Assert.Equal(L.T("web.warn.strategy_failing"), plain.Text);
+        Assert.Equal(L.T("router.select"), plain.Fix);
+    }
+
+    [Fact]
     public async Task Conflict_OnEnable_ClearText_PackageHasNoStop()
     {
         using var r = new FakeRouter

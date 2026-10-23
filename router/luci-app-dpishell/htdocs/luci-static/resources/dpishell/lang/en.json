@@ -564,6 +564,7 @@
  "web.warn.dns_spoofed": "The ISP is spoofing site addresses — apps outside the browser may not work",
  "web.warn.flash_full": "The router’s flash is almost full ({kb} KB) — settings may not be saved",
  "web.warn.select_failed": "Strategy search was interrupted: {error}",
+ "web.warn.strategy_failing": "The strategy fails the check — a new search is needed",
  "web.warn.switched_backup": "The strategy stopped working — backup {name} is on",
  "web.xfer.backup_note": "Copy before importing settings",
  "web.xfer.backup_saved": "A copy of the previous settings is in {file}. To revert, import it with “Replace mine”.",

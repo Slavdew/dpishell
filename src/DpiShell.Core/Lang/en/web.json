@@ -15,6 +15,7 @@
   "web.warn.dns_fallback": "Secure DNS is unavailable — the ISP’s DNS is temporarily in use",
   "web.warn.dns_spoofed": "The ISP is spoofing site addresses — apps outside the browser may not work",
   "web.warn.select_failed": "Strategy search was interrupted: {error}",
+  "web.warn.strategy_failing": "The strategy fails the check — a new search is needed",
   "web.warn.switched_backup": "The strategy stopped working — backup {name} is on",
   "web.core.missing": "zapret core is not installed",
   "web.diag.conflict_row": "{name} — interferes with optimization",

@@ -167,8 +167,10 @@ function warnings(s) {
 	if (f.overlay_free_kb != null && f.overlay_free_kb < 1024)
 		push(w, { code: 'flash_full', text: `Во флеше роутера почти нет места (${f.overlay_free_kb} КБ) — настройки могут не сохраниться`,
 			key: 'web.warn.flash_full', params: { kb: f.overlay_free_kb } });
+	// strategy_failing — про ту стратегию, что была включена при проверке: сменили (apply, подбор, запасная) или выключили — неактуально.
 	for (let x in st.read_json(`${st.P.run}/warnings.json`, []))
-		push(w, x);
+		if (x.code != 'strategy_failing' || (s.enabled && x.params?.strategy == s.strategy))
+			push(w, x);
 	let off = s.enabled ? null : st.last_off();
 	if (off) {
 		let key = { watchdog: 'router.off.watchdog_at', button: 'router.off.button_at' }[off.by] ?? 'router.off.revert_enable_at';
@@ -564,11 +566,13 @@ methods.select_start = {
 		// Начальное состояние — сразу, до фонового задания: select_progress сразу после select_start видит «идёт, 0 из N»,
 		// а не прошлый итог или пустоту (окно ПК принимало это за ошибку и запускало подбор повторно).
 		st.ensure_dirs();
-		st.write_atomic('/tmp/dpishell/select.json', sprintf('%J\n', { running: true, started_at: time(), started_by: by,
+		// started_at уходит и в задание: select_run держит его в select.json до конца (select_progress.run).
+		let started_at = time();
+		st.write_atomic('/tmp/dpishell/select.json', sprintf('%J\n', { running: true, started_at, started_by: by,
 			depth: length(ids) ? 'main' : (a.depth ?? 'main'), groups, ids: length(ids) ? ids : null, index: 0, total: length(ids),
 			eta_s: null, message: 'Запуск подбора…', message_msg: { key: 'router.select.starting', params: {}, text: 'Запуск подбора…' },
 			rows: [], finished_at: null, cancelled: false, best: null, applied: false, backups: [] }));
-		spawn(`select ${q(sprintf('%J', { groups, mode: a.mode ?? 'full', depth: a.depth ?? 'main', started_by: by, ...(length(ids) ? { ids } : {}) }))}`, tok);
+		spawn(`select ${q(sprintf('%J', { groups, mode: a.mode ?? 'full', depth: a.depth ?? 'main', started_by: by, started_at, ...(length(ids) ? { ids } : {}) }))}`, tok);
 		return { started: true };
 	}
 };

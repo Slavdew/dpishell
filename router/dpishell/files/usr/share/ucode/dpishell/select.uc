@@ -674,7 +674,10 @@ function select_run(args) {
 	let ts_was = ts_get();
 	let ids = type(args.ids) == 'array' && length(args.ids) ? args.ids : null;
 	let deep = args.depth == 'deep' && !ids;
-	let p = { running: true, started_by: args.started_by ?? 'app', depth: deep ? 'deep' : 'main', index: 0, total: 0, eta_s: null,
+	// started_at — метка подбора (select_progress.run): rpcd пишет её в начальный select.json и передаёт в args; без неё
+	// (таймер, сторож) — сейчас. Держится в p до конца: иначе первый же progress(p) стирал её и run был 0.
+	let started_at = type(args.started_at) == 'int' && args.started_at > 0 ? args.started_at : time();
+	let p = { running: true, started_at, started_by: args.started_by ?? 'app', depth: deep ? 'deep' : 'main', index: 0, total: 0, eta_s: null,
 		groups: map(groups, g => g.id), ids, rows: [], finished_at: null, cancelled: false, best: null, applied: false, backups: [] };
 	p.groups = filter(p.groups, g => g != 'control');
 	say(p, 'web.msg.baseline', 'Проверка без оптимизации');
@@ -817,12 +820,21 @@ function check_run(source, light) {
 	let groups = load_groups(null, s.mode);
 	let strat = cat.find(st.catalogs(), s.strategy);
 	let ts_was = ts_get();
-	if (strat && cat.uses_ts(strat)) ts_set(0);
-	let verdicts = run_checks(items_of(groups, light ? ['1.3'] : TLS, light), {});
+	// Мерка — как у подбора (eval_strategy): ts-стратегия сначала глазами Windows (без меток), не прошла — ещё раз с метками;
+	// прошла только так — годится с пометкой (needs_ts, status.needs_tcp_timestamps), а не провал: подбор такую включает сам.
+	let uses_ts = strat && cat.uses_ts(strat), items = items_of(groups, light ? ['1.3'] : TLS, light);
+	if (uses_ts) ts_set(0);
+	let verdicts = run_checks(items, {});
 	ts_set(ts_was);
-	let sc = score(groups, verdicts);
+	let sc = score(groups, verdicts), needs_ts = false;
+	if (uses_ts && !sc.perfect) {
+		let vs2 = run_checks(items, {});
+		let sc2 = score(groups, vs2);
+		if (sc2.perfect) { sc = sc2; verdicts = vs2; needs_ts = true; }
+	}
 	let lc = { at: time(), source, ok: sc.perfect, groups: map(filter(groups, g => !g.control), g => ({
-		id: g.id, ok: length(filter(verdicts, v => v.group == g.id && v.required && !v.ok)) == 0 })) , error: sc.error };
+		id: g.id, ok: length(filter(verdicts, v => v.group == g.id && v.required && !v.ok)) == 0 })) , error: sc.error,
+		...(needs_ts ? { needs_ts } : {}) };
 	// Флеш — только при перемене (проверка по таймеру раз в час иначе переписывала бы 4 файла): свежая запись — в /tmp
 	// (st.last_check читает её первой), во флеш — если сменился итог или группы, нет файла или проверку запустил человек.
 	st.write_atomic(`${st.P.run}/last-check.json`, sprintf('%J\n', lc));

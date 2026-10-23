@@ -149,6 +149,8 @@ public static class RouterTexts
     {
         "flow_offload" or "ipv6" => new(w.Code, WarningText(w, conflicts), L.T("router.warn.fix")),
         "conflict" => new(w.Code, WarningText(w, conflicts), L.T("common.more")),
+        // Стратегия не проходит проверку, сменить нечем (0.2.2-r2), прежний итог автоподбора — «Подобрать», как кнопка вкладки.
+        "strategy_failing" or "auto_select_failed" => new(w.Code, WarningText(w, conflicts), L.T("router.select")),
         _ => new(w.Code, WarningText(w, conflicts)),
     };
 
@@ -180,6 +182,7 @@ public static class RouterTexts
             "auto_selected" => w.Text?.StartsWith("Сторож", StringComparison.Ordinal) == true ? L.T("router.wd.select_found", new { name }) : L.T("web.warn.auto_selected", new { name }),
             "watchdog_select_failed" => L.T("router.wd.select_failed"),
             "auto_select_failed" => L.T("web.warn.auto_select_failed"),
+            "strategy_failing" => L.T("web.warn.strategy_failing"),
             "switched_backup" => L.T("web.warn.switched_backup", new { name }),
             "dns_fallback" => L.T("web.warn.dns_fallback"),
             "dns_spoofed" => L.T("web.warn.dns_spoofed"),
@@ -279,7 +282,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         DnsEnableCmd = RelayCommand.Async(DnsEnableAsync, () => Can("dns_enable") && !DnsProtected);
         DnsRestoreCmd = RelayCommand.Async(DnsRestoreAsync, () => Can("dns_restore") && DnsProtected);
         DnsPick = new DnsPicker(settings) { Apply = DnsApplyAsync, Restore = DnsRestoreAsync, Enabled = () => Can("dns_set") };
-        FixWarningCmd = new RelayCommand(p => { if (p is string code) _ = FixWarningAsync(code); }, p => Can(p as string == "ipv6" ? "ipv6_set" : "flow_offload_fix"));
+        FixWarningCmd = new RelayCommand(p => { if (p is string code) _ = FixWarningAsync(code); }, p => p as string is "strategy_failing" or "auto_select_failed" ? GoSelectCmd.CanExecute(null)
+            : Can(p as string == "ipv6" ? "ipv6_set" : "flow_offload_fix"));
         StopPcCmd = RelayCommand.Async(StopPcForRouterAsync, () => !Busy);
         StopRouterCmd = RelayCommand.Async(async () => { if (await DisableAsync()) Say(L.T("router.stop.done")); }, () => Can("disable"));
         EnableTimestampsCmd = RelayCommand.Async(() => CheckTimestampsAsync(ask: true), () => !Busy);
@@ -920,6 +924,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
                     }))
                     Say(L.T("router.fix.ipv6_done"));
                 break;
+            case "strategy_failing":
+            case "auto_select_failed":
+                GoSelectCmd.Execute(null);   // экран «Подбор» на роутере — тот же путь, что кнопка «Подобрать»
+                return;
             case "conflict":
                 Navigate(Pages.Router);   // сам обновит «Роутер: что мешает»; на вкладке уже — обновим здесь
                 await RefreshDiagAsync();
