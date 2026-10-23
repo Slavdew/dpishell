@@ -165,7 +165,7 @@ public static class ZapretDetector
         return parts.Count == 0 ? (null, []) : (parts[0], parts.Skip(1).ToList());
     }
 
-    static IEnumerable<(int Pid, string? Exe, string? Cmd)> Processes(params string[] names)
+    internal static IEnumerable<(int Pid, string? Exe, string? Cmd)> Processes(params string[] names)
     {
         var list = new List<(int, string?, string?)>();
         try

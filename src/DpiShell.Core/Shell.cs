@@ -213,39 +213,15 @@ public sealed class Shell
         return new(state, exe, strategy, ours);
     }
 
+    /// <summary>Службы и процессы для «Остановить» похожие программы; в тестах — подмена.</summary>
+    public IForeignSystem Foreign { get => _foreign ??= new SystemForeign(Paths, () => AllStrategies); set => _foreign = value; }
+    IForeignSystem? _foreign;
+
     /// <summary>
-    /// Остановить чужие обходы (Flowseal и т. п.), чтобы не мешали: процессы завершаются, службы останавливаются,
-    /// но не удаляются — чужие настройки не трогаем. Возвращает, что остановили, и службы, которые вернутся после перезагрузки.
+    /// Остановить чужие оптимизации (Flowseal и т. п.), чтобы не мешали: процессы завершаются, службы останавливаются,
+    /// но не удаляются — чужие настройки не трогаем. Итог честный: что остановлено, что нет и почему (<see cref="ForeignStop"/>).
     /// </summary>
-    public (IReadOnlyList<string> Stopped, IReadOnlyList<string> ComeBackOnReboot) StopForeign()
-    {
-        var stopped = new List<string>(); var comeBack = new List<string>();
-        var snapshotAt = DateTime.Now;   // процесс из снимка запущен не позже этого момента
-        var found = ZapretDetector.Find(Paths, AllStrategies).Where(z => z.Owner != ZapretOwner.DpiShell).ToList();
-        foreach (var z in found.Where(z => z.Kind == "service"))
-        {
-            ServiceManager.Sc("stop", z.Name);
-            ServiceManager.WaitFor(z.Name, SvcState.Stopped, TimeSpan.FromSeconds(10));
-            stopped.Add(L.T("core.shell.stopped_service", new { owner = z.OwnerTitle, name = z.Name }));
-            comeBack.Add(z.Name);
-        }
-        foreach (var z in found.Where(z => z.Kind == "process"))
-        {
-            if (!int.TryParse(z.Name.Replace("PID ", ""), out var pid)) continue;
-            try
-            {
-                using var p = System.Diagnostics.Process.GetProcessById(pid);
-                // Между снимком и Kill номер мог достаться другому процессу (в т. ч. чужого пользователя) — тогда не трогаем.
-                if (!IsSameProcess(p, z.ExePath, snapshotAt)) continue;
-                p.Kill(entireProcessTree: true);
-                p.WaitForExit(5000);
-                stopped.Add(z.OwnerTitle);
-            }
-            catch (ArgumentException) { }            // уже завершился
-            catch (InvalidOperationException) { }
-        }
-        return (stopped, comeBack);
-    }
+    public ForeignStopOutcome StopForeign() => ForeignStop.Run(Foreign, Paths.Winws);
 
     /// <summary>
     /// Тот ли это процесс, что был в снимке: запущен не позже снимка, то же имя и (если система его отдаёт) тот же путь образа.

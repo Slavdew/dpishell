@@ -1564,12 +1564,30 @@ public sealed partial class MainViewModel : Observable
     {
         if (!Confirm(L.T("home.conflict.confirm", new { names = ConflictNames }))) return;
         StopForeignResult r = new([], []);
+        StopConflictsResult = "";
         if (!await WithHelper(L.T("home.conflict.busy"), async c => r = await c.StopForeignAsync())) return;
         await RefreshStatusAsync();
+        StopConflictsResult = Message = StopForeignText(r);
+    }
+
+    /// <summary>Итог «Остановить» под кнопкой (выделяемый: причины и как остановить вручную); пусто — не нажимали.</summary>
+    public string StopConflictsResult { get => _stopConflictsResult; private set { _stopConflictsResult = value; Raise(); Raise(nameof(HasStopConflictsResult)); } }
+    string _stopConflictsResult = "";
+    public bool HasStopConflictsResult => _stopConflictsResult.Length > 0;
+
+    /// <summary>Правда об остановке: «Остановлено» — только остановленное; не вышло — что и почему, снова работает — что; и как остановить вручную.</summary>
+    public static string StopForeignText(StopForeignResult r)
+    {
+        var parts = new List<string>();
         var stopped = string.Join(", ", r.Stopped);
-        Message = r.Stopped.Count == 0 ? L.T("home.conflict.none")
-            : r.ComeBackOnReboot.Count > 0 ? L.T("home.conflict.stopped_service", new { names = stopped, services = string.Join(", ", r.ComeBackOnReboot) })
-            : L.T("home.conflict.stopped", new { names = stopped });
+        if (r.Stopped.Count > 0)
+            parts.Add(r.ComeBackOnReboot.Count > 0 ? L.T("home.conflict.stopped_service", new { names = stopped, services = string.Join(", ", r.ComeBackOnReboot) })
+                : L.T("home.conflict.stopped", new { names = stopped }));
+        if (r.Failed is { Count: > 0 } failed) parts.Add(L.T("home.conflict.failed", new { items = string.Join("; ", failed) }));
+        if (r.StillRunning is { Count: > 0 } still) parts.Add(L.T("home.conflict.still_running", new { names = string.Join(", ", still) }));
+        if (parts.Count == 0) return L.T("home.conflict.none");
+        if (r.Hints is { } hints) parts.AddRange(hints.Distinct());
+        return string.Join(" ", parts);
     }
 
     string? _autoApplyId;
