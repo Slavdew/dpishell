@@ -270,7 +270,7 @@ return view.extend({
 		});
 	},
 
-	// Роутер с dns_compare_start (0.2.1-r2): замер фоном, итог — опросом dns_compare_result раз в 1 с (до 20 с), rpcd не
+	// Роутер с dns_compare_start (0.2.2): замер фоном, итог — опросом dns_compare_result раз в 1 с (до 20 с), rpcd не
 	// ждёт curl и остальная LuCI не стоит. Старый роутер — прежний синхронный dns_compare.
 	compareCall: function() {
 		var m = this.status && this.status.methods;

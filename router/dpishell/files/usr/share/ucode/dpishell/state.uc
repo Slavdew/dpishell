@@ -21,7 +21,7 @@ const P = {
 	trial_config: '/tmp/dpishell/zapret.config',
 };
 
-const VERSION = '0.2.1';
+const VERSION = '0.2.2';
 // api — «мажор.минор» (router-api.md §5): минор растёт при добавлениях без поломок, мажор — при несовместимости.
 const API = '1.0';
 // Минимальная версия окна ПК, которую понимает этот роутер.

@@ -1,6 +1,26 @@
 {
   "_comment": "Что нового в программе для Windows — для окна «Доступно обновление» и страницы релиза. Ключ — версия X.Y.Z (= Version в Directory.Build.props); значение — {\"ru\": [...], \"en\": [...]}: коротко, словами пользователя, до 15 строк; строки en — перевод строк ru один к одному (нет en — окно показывает русский; прежний вид, просто список, читается как ru). Нет записи для версии — тег windows-vX.Y.Z не выпускается (packaging/release-json.py). min_os — минимальная Windows (10.0.17763 = Windows 10 1809); на более старой окно обновление не предлагает.",
   "min_os": "10.0.17763",
+  "0.11.1": {
+    "ru": [
+      "Итог «Проверить обновления» — рядом с кнопкой: «Последняя версия · проверено в …» или «Обновить до …»",
+      "Известная новая версия — сразу кнопка «Обновить до …», без лишней проверки",
+      "«Проверить сайт» говорит итог прямо и даёт «Проверить снова»; на роутере — «Добавить в список оптимизации»",
+      "Подбор при блокировке по адресу ведёт к IP-спискам кнопкой «Открыть IP-списки»",
+      "«Отменить всё»: у неудавшихся пунктов — «Повторить»",
+      "Имя и сообщения службы — на языке окна",
+      "Подбор на роутере грузит сеть и роутер меньше (с роутером 0.2.2)"
+    ],
+    "en": [
+      "“Check for updates” result is next to the button: “Latest version · checked at …” or “Update to …”",
+      "A known new version shows “Update to …” right away, without an extra check",
+      "“Check a site” states the result plainly and offers “Check again”; on the router — “Add to optimization list”",
+      "Selection blocked by address leads to IP lists with “Open IP lists”",
+      "“Undo all”: failed items get “Retry”",
+      "Service name and messages follow the window language",
+      "Strategy selection on the router puts less load on the network and the router (with router 0.2.2)"
+    ]
+  },
   "0.11.0": {
     "ru": [
       "«Проверить сайт» учитывает режим оптимизации; сайт вне списков добавляется кнопкой «Добавить в список оптимизации»",

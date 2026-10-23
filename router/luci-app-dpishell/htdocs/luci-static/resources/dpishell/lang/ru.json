@@ -52,7 +52,7 @@
  "home.params.show": "Параметры",
  "home.params.tip": "Параметры и командная строка winws",
  "home.sitecheck.add_list": "Добавить в список оптимизации",
- "home.sitecheck.not_in_list": "{site} не в списке оптимизации: она к нему не применяется. Не открывается — «Добавить в список оптимизации».",
+ "home.sitecheck.not_in_list_closed": "Не открывается. {site} нет в списке оптимизации — она к нему не применяется.",
  "home.status.deep": "Глубокий поиск…",
  "home.status.off": "Выключено",
  "home.status.partial": "Открывается не всё",

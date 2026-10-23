@@ -573,7 +573,7 @@ methods.select_start = {
 	}
 };
 
-// since/run (с 0.2.1-r2, router-api §9): строки rows с номера since — окно и страница досылают новые, а не тянут весь
+// since/run (с 0.2.2, router-api §9): строки rows с номера since — окно и страница досылают новые, а не тянут весь
 // select.json (~60 КБ) раз в секунду. run — started_at подбора, по которому считали since: другой подбор — строки с 0.
 // В ответе всегда (и без since) run, rows_from, rows_total — по ним клиент понимает, что роутер умеет since.
 methods.select_progress = {
@@ -999,7 +999,7 @@ methods.dns_compare = {
 
 const DNS_COMPARE = '/tmp/dpishell/dns_compare.json';
 
-// Фоном (с 0.2.1-r2): rpcd возвращается сразу, итог — dns_compare_result. Идёт — второй запуск не плодит процессы (замок).
+// Фоном (с 0.2.2): rpcd возвращается сразу, итог — dns_compare_result. Идёт — второй запуск не плодит процессы (замок).
 methods.dns_compare_start = {
 	call: function() {
 		let tok = st.job_reserve('dns_compare');

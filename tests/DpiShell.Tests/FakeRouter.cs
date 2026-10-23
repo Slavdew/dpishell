@@ -703,7 +703,7 @@ public sealed partial class FakeRouter : IDisposable
 
     /// <summary>Первые вызовы — running: true; последний — best, applied: true и backups (§5.1, редакция §9). После select_cancel — cancelled.</summary>
     /// <summary>
-    /// Роутер 0.2.1-r2: select_progress принимает since/run и отдаёт run, rows_from, rows_total (router-api §9). false — старый
+    /// Роутер 0.2.2: select_progress принимает since/run и отдаёт run, rows_from, rows_total (router-api §9). false — старый
     /// роутер: всегда весь список; присланный since копится в <see cref="SinceOnOldRouter"/> (окно не должно его слать).
     /// </summary>
     public bool ProgressSince { get; set; }

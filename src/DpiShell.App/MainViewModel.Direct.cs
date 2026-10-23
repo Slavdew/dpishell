@@ -59,7 +59,7 @@ public sealed partial class MainViewModel
         SiteCheckOutcome.OnlyWithout => L.T("home.sitecheck.only_without"),
         SiteCheckOutcome.FailsWith => L.T("home.sitecheck.fails_with"),
         SiteCheckOutcome.Closed => L.T("home.sitecheck.closed"),
-        // Окно говорит итог прямо («Не открывается. … нет в списке»); "home.sitecheck.not_in_list" остаётся странице роутера (lang-src/shared-keys.txt).
+        // Итог прямо («Не открывается. … нет в списке»), тем же ключом — страница роутера (lang-src/shared-keys.txt).
         SiteCheckOutcome.NotInList => L.T("home.sitecheck.not_in_list_closed", new { site = _siteHost }),
         _ => "",
     };

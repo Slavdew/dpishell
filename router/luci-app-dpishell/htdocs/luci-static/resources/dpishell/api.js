@@ -846,7 +846,7 @@ return baseclass.extend({
 			var host = hostOf(r.url || '');
 			var opens = r.with_bypass && r.with_bypass.ok;
 			if (cov === false && !opens)
-				kids.push(verdict(self.t('home.sitecheck.not_in_list', { site: host }), self.t('web.site.not_in_list_hint'), 'dps-error', [
+				kids.push(verdict(self.t('home.sitecheck.not_in_list_closed', { site: host }), self.t('web.site.not_in_list_hint'), 'dps-error', [
 					E('div', { 'class': 'dps-actions' }, [self.btn(self.t('home.sitecheck.add_list'), function() { return addList(host); }, 'cbi-button-apply')])
 				]));
 			else if (r.suggest_exclude)

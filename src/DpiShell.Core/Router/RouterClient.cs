@@ -388,7 +388,7 @@ public sealed class RouterClient : IDisposable
     public Task<RouterStrategies> StrategiesAsync(CancellationToken ct = default) => CallAsync<RouterStrategies>("strategies", null, ct);
     public Task<RouterSelectProgress> SelectProgressAsync(CancellationToken ct = default) => CallAsync<RouterSelectProgress>("select_progress", null, ct);
     /// <summary>
-    /// Ход подбора со строками rows с номера since (роутер 0.2.1-r2, §9): звать, только если прошлый ответ был с rows_total —
+    /// Ход подбора со строками rows с номера since (роутер 0.2.2, §9): звать, только если прошлый ответ был с rows_total —
     /// старый роутер параметров не объявлял. run — Run прошлого ответа: другой подбор — роутер отдаст строки с 0 (rows_from = 0).
     /// </summary>
     public Task<RouterSelectProgress> SelectProgressAsync(int since, long? run, CancellationToken ct = default) =>

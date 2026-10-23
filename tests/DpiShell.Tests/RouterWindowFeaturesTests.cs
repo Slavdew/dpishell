@@ -62,7 +62,8 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         // Как радиокнопки: отметили одну — снялась другая. Запрос — один.
         vm.ModeLists = true;
         vm.ModeAll = false;
-        await Until(() => !vm.Busy && Count(r, "mode_set") == 1);
+        // Итог — после того как Busy снят (на CI между ними успевал проверить и видел «Смена режима…»).
+        await Until(() => !vm.Busy && Count(r, "mode_set") == 1 && _said.Count > 0 && _said[^1] == L.T("router.mode.lists_done"));
         Assert.Equal("lists", Args(r, "mode_set")["mode"]!.GetValue<string>());
         Assert.Equal("lists", r.Mode);
         Assert.False(vm.ModeAll);

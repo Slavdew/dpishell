@@ -1511,7 +1511,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         Selecting = true;
         int failures = 0;
         var grace = justStarted ? DateTime.UtcNow + SelectStartGrace : DateTime.MinValue;
-        // Роутер с rows_total (0.2.1-r2) досылает только новые строки (since): ShowProgress сливает их по id с уже показанными.
+        // Роутер с rows_total (0.2.2) досылает только новые строки (since): ShowProgress сливает их по id с уже показанными.
         RouterSelectProgress? last = null;
         int rowsSeen = 0;
         try
