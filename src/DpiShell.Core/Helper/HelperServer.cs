@@ -427,6 +427,7 @@ public sealed class HelperServer : IAsyncDisposable
             case "joint_get": return await Task.Run(b.JointGet, ct);
             case "joint_set": return await Task.Run(() => b.JointSet(c.Bool("active"), c.List("owned") ?? []), ct);
             case "av_exclusion_status": return await Task.Run(b.AvExclusionStatus, ct);
+            case "time_sync": return await Task.Run(b.TimeSync, ct);
             case "av_exclusion_add": return await Task.Run(b.AvExclusionAdd, ct);
             case "av_exclusion_remove": return await Task.Run(b.AvExclusionRemove, ct);
         }

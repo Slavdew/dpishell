@@ -91,6 +91,13 @@ public partial class App : Application
         }) { IsBackground = true, Name = "DpiShell show signal" };
         listener.Start();
 
+        // Запуск прямо из архива (Проводник распаковал один exe в %TEMP%\Temp*_*.zip\): только сообщение, без кнопок и скачиваний.
+        if (ArchiveRun.DataMissing(AppContext.BaseDirectory))
+        {
+            MessageBox.Show(L.T("shell.app.from_archive"), "DpiShell", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Shutdown(1);
+            return;
+        }
         Shell shell;
         try { shell = new Shell(); }
         catch (Exception ex)
@@ -121,6 +128,22 @@ public partial class App : Application
         vm.LocalDns = new WindowsDnsSystem();   // только чтение DNS адаптеров без помощника; меняет помощник
         vm.Updates.Http = () => new System.Net.Http.HttpClient(new System.Net.Http.SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(5) })
             { Timeout = Timeout.InfiniteTimeSpan };
+        // «Окно ведёт»: разбор причин, стратегия по сетям, строка Telegram — настоящая сеть только здесь.
+        vm.GuidedEnabled = true;
+        vm.Networks = new NetworkStrategies(Path.Combine(WindowSettings.DefaultDir, "networks.json"));
+        vm.NetworkIdentity = new WindowsNetworkIdentity();
+        vm.TelegramTcp = TelegramCheck.ConnectAsync;
+        _ = Task.Run(() => vm.NetworkChangedAsync());   // запомнить сеть при старте
+        DateTime lastNetEvent = DateTime.MinValue;
+        System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) =>
+        {
+            // События сети идут пачками; ждём, пока адреса устоятся.
+            var stamp = lastNetEvent = DateTime.UtcNow;
+            _ = Task.Delay(TimeSpan.FromSeconds(5)).ContinueWith(_ =>
+            {
+                if (stamp == lastNetEvent) Dispatcher.BeginInvoke(() => vm.NetworkChangedAsync());
+            });
+        };
         RelayCommand.OnError = ex => { TryLog(ex); vm.Fail(Texts.Friendly(ex), ex); };
         try
         {

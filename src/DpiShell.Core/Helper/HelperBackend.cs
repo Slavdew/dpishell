@@ -139,7 +139,14 @@ public interface IHelperBackend : IHelperCatalog
     AvExclusionResult AvExclusionAdd();
     /// <summary>Снять исключение, если его добавил DpiShell (по журналу); чужое не трогаем.</summary>
     AvExclusionResult AvExclusionRemove();
+
+    // ---------- часы (API 1.20) ----------
+    /// <summary>Синхронизировать часы с сервером времени Windows (w32tm /resync). Аргументов нет.</summary>
+    TimeSyncResult TimeSync();
 }
+
+/// <summary>Итог time_sync: Ok — часы синхронизированы; иначе окно открывает «Параметры → Время».</summary>
+public sealed record TimeSyncResult(bool Ok, string Message);
 
 /// <summary>Ответ proxy_status. Previous — что вернёт «Вернуть прежний» для машины (null — нечего).</summary>
 public sealed record ProxyStatusInfo(ProxyOverview Now, ProxyBackup? Previous);

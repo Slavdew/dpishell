@@ -522,6 +522,8 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     /// <summary>Исключение Защитника для папки ядра (API 1.16): аргументов нет — путь помощник берёт свой.</summary>
     public Task<AvExclusionStatus> AvExclusionStatusAsync(CancellationToken ct = default) => CallAsync<AvExclusionStatus>("av_exclusion_status", null, null, ct);
     public Task<AvExclusionResult> AvExclusionAddAsync(CancellationToken ct = default) => CallAsync<AvExclusionResult>("av_exclusion_add", null, null, ct);
+    /// <summary>Синхронизировать часы (API 1.20); аргументов нет.</summary>
+    public Task<TimeSyncResult> TimeSyncAsync(CancellationToken ct = default) => CallAsync<TimeSyncResult>("time_sync", null, null, ct);
     public Task<AvExclusionResult> AvExclusionRemoveAsync(CancellationToken ct = default) => CallAsync<AvExclusionResult>("av_exclusion_remove", null, null, ct);
 
     public Task<Export.SettingsState> SettingsExportReadAsync(CancellationToken ct = default) =>

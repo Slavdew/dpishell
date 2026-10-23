@@ -170,5 +170,9 @@
   "diag.report.sites.groups": "Групп своих сайтов: {n}",
   "diag.report.sites.exclude": "Исключения: {n}",
   "diag.report.log.unavailable": "недоступен (помощник не отвечает или старой версии)",
-  "diag.report.log.empty": "пусто"
+  "diag.report.log.empty": "пусто",
+  "diag.find.telegram.title": "Telegram",
+  "diag.find.telegram.blocked": "адреса заблокированы целиком — оптимизация здесь не поможет, нужен прокси (MTProto или SOCKS5 в настройках Telegram).",
+  "diag.find.telegram.open": "соединение с серверами есть. Если Telegram не работает, проверьте подбор.",
+  "diag.find.telegram.unknown": "не проверено — нет доступа в интернет."
 }
