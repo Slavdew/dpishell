@@ -42,7 +42,11 @@ public sealed class LangTabsHostsDnsProxyDiagTests : IDisposable
             for (int i = 0; i < vm.Findings.Count; i++) vm.Findings[i] = vm.Findings[i].Refreshed();
             // Чужой обход: данные (службы Flowseal), строка собирается на языке окна.
             var conflict = new Conflict("service", "", "") { Source = new ZapretInstance("service", "zapret", ZapretOwner.Flowseal, null, null, shell.Catalog.Strategies.First(s => s.Title.Contains("ALT11")), null) };
-            typeof(MainViewModel).GetField("_conflictsShown", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(vm, new List<Conflict> { conflict });
+            typeof(MainViewModel).GetField("_conflictsShown", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(vm, (List<Conflict>)[conflict,
+                // Спящие: остановлены, запустятся после перезагрузки (Flowseal и чужая служба).
+                .. Conflicts.From([
+                    new ZapretInstance("service", "zapret", ZapretOwner.Flowseal, null, null, null, "Stopped") { AutoStart = true },
+                    new ZapretInstance("service", "winws1", ZapretOwner.OtherZapret, null, null, null, "Stopped") { AutoStart = true }])]);
             typeof(MainViewModel).GetMethod("RebuildConflictList", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, null);
             vm.Hosts.PasteText = "140.82.121.3 github.com";
 
