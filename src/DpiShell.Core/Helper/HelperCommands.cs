@@ -63,6 +63,8 @@ public enum ArgKind
     Domains,
     /// <summary>План загрузки настроек (JSON-строка <see cref="Export.ImportRequest"/>): разобран строго, каждая запись проверена теми же правилами, что и при чтении чужих файлов, без правок — подделка отклоняется целиком.</summary>
     SettingsPlan,
+    /// <summary>Часть архива ядра в base64 (API 1.19, core_offline_part): только байты, до <see cref="HelperCommands.MaxOfflineChunkBytes"/>; на выходе byte[].</summary>
+    Base64Chunk,
 }
 
 public sealed record ArgSpec(string Name, ArgKind Kind, bool Required = false, string[]? Choices = null, int MaxItems = 0);
@@ -85,6 +87,7 @@ public sealed record HelperCall(long Id, CommandSpec Spec, IReadOnlyDictionary<s
     public bool Bool(string name, bool fallback = false) => Args.TryGetValue(name, out var v) ? (bool)v : fallback;
     public int Int(string name) => Args.TryGetValue(name, out var v) ? (int)v : 0;
     public string? Str(string name) => Args.TryGetValue(name, out var v) ? (string)v : null;
+    public byte[]? Bytes(string name) => Args.TryGetValue(name, out var v) ? (byte[])v : null;
     public IReadOnlyList<string>? List(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyList<string>)v : null;
     public IReadOnlyDictionary<string, string>? Map(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyDictionary<string, string>)v : null;
     public IReadOnlyList<SiteGroup>? Groups(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyList<SiteGroup>)v : null;
@@ -109,6 +112,8 @@ public static partial class HelperCommands
     public const int MaxGroups = 32;
     /// <summary>Содержимое IP-списка в символах: предел валидатора (4 МБ) — больше и он не примет.</summary>
     public const int MaxContentChars = (int)IpsetValidator.MaxBytes;
+    /// <summary>Часть офлайн-архива ядра (core_offline_part) — до 1 МБ байтов: строка канала ограничена, архив идёт частями.</summary>
+    public const int MaxOfflineChunkBytes = 1024 * 1024;
 
     /// <summary>Откуда подбор берёт адреса сайтов (API 1.12, <see cref="CheckDns"/>); не указан — защищённый DNS.</summary>
     static readonly ArgSpec DnsArg = new("dns", ArgKind.Choice, Choices: [CheckDns.Secure, CheckDns.System]);
@@ -239,6 +244,10 @@ public static partial class HelperCommands
         new("av_exclusion_status", false, false),
         new("av_exclusion_add", true, false),
         new("av_exclusion_remove", true, false),
+        // Офлайн-архив ядра (API 1.19, «Указать архив ядра…»): окно без прав передаёт байты файла частями, путь не передаётся вовсе.
+        // Помощник собирает их в своей закрытой папке (core.offline) и ставит ядро, только если sha256 архива совпал с core.json — тем же путём, что скачанное.
+        new("core_offline_part", true, false, new ArgSpec("data", ArgKind.Base64Chunk, Required: true), new ArgSpec("first", ArgKind.Bool)),
+        new("core_offline_install", true, true),
     ];
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);
@@ -611,6 +620,16 @@ public static partial class HelperCommands
                     if (!list.Contains(d)) list.Add(d);
                 }
                 return list;
+            }
+
+            case ArgKind.Base64Chunk:
+            {
+                var str = String(id, Where(), v, (MaxOfflineChunkBytes + 2) / 3 * 4);
+                byte[] bytes;
+                try { bytes = Convert.FromBase64String(str); }
+                catch (FormatException) { throw new HelperRequestException(id, L.T("core.req.base64", new { where = Where() })); }
+                if (bytes.Length > MaxOfflineChunkBytes) throw new HelperRequestException(id, L.T("core.req.string_len", new { where = Where() }));
+                return bytes;
             }
 
             case ArgKind.SettingsPlan:

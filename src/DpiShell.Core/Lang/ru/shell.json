@@ -36,7 +36,7 @@
   "shell.helper.not_responding": "Помощник не отвечает: {reason}",
   "shell.helper.stopped": "Помощник перестал отвечать.",
   "shell.helper.installed_silent": "Помощник установлен, но не отвечает.",
-  "shell.helper.exe_missing": "Не найден файл программы.",
+  "shell.helper.exe_missing": "Помощник не отвечает: его файл удалён — возможно, антивирусом ({path}). Переустановите помощника.",
   "shell.helper.install_not_started": "Установка не запустилась.",
   "shell.app.already_admin": "DpiShell уже запущен с правами администратора. Закройте его (значок в трее → «Выход») и откройте снова.",
   "shell.app.no_data": "Не найдены файлы программы (папка data рядом с DpiShell). Распакуйте архив заново.\n\n{error}",

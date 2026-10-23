@@ -1,6 +1,7 @@
 # Выпуск программы для Windows (architecture.md «Обновление программы», docs/dev/building.md «Публикация»).
 # Тег windows-vX.Y.Z (X.Y.Z = <Version> в Directory.Build.props, заметки — packaging/release-notes.json) →
-# сборка и тесты на windows-latest, portable-архив packaging/make-portable.ps1, release.json (packaging/release-json.py),
+# сборка и тесты на windows-latest, portable-архив packaging/make-portable.ps1 (без архива ядра) и рядом zapret-core-offline.zip —
+# офлайн-копия ядра отдельным файлом выпуска (хеш в release.json и в data/core.json), release.json (packaging/release-json.py),
 # release.json.sig — ed25519 над байтами release.json ключом из секрета RELEASE_SIGNING_KEY, релиз GitHub (latest).
 # Программы берут обновление с releases/latest/download/ — поэтому релизы роутера публикуются с --latest=false.
 # workflow_dispatch — только сборка и артефакт, без релиза (с refresh: true — только переподписка, см. ниже).
@@ -65,6 +66,7 @@ jobs:
           name: windows-portable
           path: |
             publish/DpiShell-*-portable.zip
+            publish/zapret-core-offline.zip
             publish/release.json
 
   release:
@@ -109,7 +111,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 -c "import json;d=json.load(open('out/release.json',encoding='utf-8'));print(chr(10).join('- '+c for c in d['changes']))" > notes.md
-          gh release create "$GITHUB_REF_NAME" out/DpiShell-*-portable.zip out/release.json out/release.json.sig \
+          gh release create "$GITHUB_REF_NAME" out/DpiShell-*-portable.zip out/zapret-core-offline.zip out/release.json out/release.json.sig \
             --repo "$GITHUB_REPOSITORY" --latest --title "DpiShell для Windows ${GITHUB_REF_NAME#windows-v}" --notes-file notes.md
 
   # Свежесть описания выпуска (ReleaseFreshness, 120 дней): у последнего выпуска — новая issued и новая подпись, раз в неделю.

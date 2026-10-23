@@ -11,3 +11,6 @@ router/** text eol=lf
 data/**/*.json text eol=lf
 data/**/*.txt text eol=lf
 data/*.json text eol=lf
+
+# Архив исходного кода на странице выпуска (Source code) — без резервной копии ядра: на неё срабатывает Защитник у тех, кто скачал его вместо программы.
+vendor/** export-ignore

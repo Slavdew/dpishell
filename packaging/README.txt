@@ -15,6 +15,8 @@ DpiShell — оптимизация соединения с YouTube, Discord и 
 
 Папку data рядом с DpiShell.exe не удаляйте и не меняйте — без неё программа не запустится.
 Ядро zapret (winws, WinDivert от bol-van/zapret) программа скачивает сама и проверяет по хешам.
+Перед скачиванием спрашивает, добавить ли папку ядра в исключения Защитника. GitHub не открывается -
+«Указать архив ядра…» и файл zapret-core-offline.zip со страницы выпуска.
 Обновления списков — в окне (вкладка «Информация и обновления»); новая версия программы -
 кнопка «Обновить до …» там же (после «Проверить обновления»), «Вернуть версию …» откатывает.
 Если кнопки нет, архив новой версии - на странице https://github.com/Slavdew/dpishell/releases
@@ -70,6 +72,8 @@ The window language (Russian, English) is switched with the flag icon at the bot
 
 Do not delete or edit the "data" folder next to DpiShell.exe: the program will not start without it.
 The zapret core (winws, WinDivert from bol-van/zapret) is downloaded by the program and verified by hashes.
+Before the download it asks whether to add the core folder to Defender exclusions. If GitHub does not open,
+use "Choose core archive…" with zapret-core-offline.zip from the release page.
 Updates: "About & updates" tab > "Check for updates" > "Update to ...", "Restore version ..." rolls back.
 If there is no such button, download the new archive from https://github.com/Slavdew/dpishell/releases
 and unpack it over the old one, leaving the data folder alone.

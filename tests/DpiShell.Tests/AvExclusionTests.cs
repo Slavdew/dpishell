@@ -281,28 +281,36 @@ public class AvExclusionTests
         Assert.Equal([shell.Paths.Root], d.Paths);
     }
 
-    /// <summary>Установка с ключом --av-exclusion и удаление с --purge — через тот же журнал папки программы (сами sc и UAC тут не запускаются).</summary>
+    /// <summary>Удаление с --purge снимает только своё исключение — по тому же журналу, что пишет помощник (сами sc и UAC тут не запускаются).</summary>
     [Fact]
-    public void Installer_adds_before_service_and_purge_removes_only_ours()
+    public void Purge_removes_only_ours()
     {
         using var t = new TempDir();
         var paths = new AppPaths(t.Sub("root"), Repo.Data);
         Directory.CreateDirectory(paths.Root);
         var d = FakeDefender.Active();
-        var inst = new HelperInstaller(paths) { Defender = d };
-        inst.AddExclusion(null);
+        new AvExclusions(d, paths.Root, new ChangeJournal(paths.ChangesFile)).Add();
         Assert.Equal([paths.Root], d.Paths);
-        Assert.Single(new ChangeJournal(paths.ChangesFile).Active(ChangeKinds.AvExclusion));
-        inst.RemoveOwnExclusion(null);
+        new HelperInstaller(paths) { Defender = d }.RemoveOwnExclusion(null);
         Assert.Empty(d.Paths);
-        // Отказ Защитника установку не роняет.
-        new HelperInstaller(paths) { Defender = new FakeDefender { Refuse = true } }.AddExclusion(null);
+        // Чужое (было до нас) — остаётся.
+        d.Paths.Add(paths.Root);
+        new AvExclusions(d, paths.Root, new ChangeJournal(paths.ChangesFile)).Add();
+        new HelperInstaller(paths) { Defender = d }.RemoveOwnExclusion(null);
+        Assert.Equal([paths.Root], d.Paths);
     }
 
+    /// <summary>
+    /// Ключа --av-exclusion больше нет (API 1.19): исключение добавляет только служба по команде окна, установка (процесс с правами) Защитник не трогает.
+    /// Окно передаёт установке только SID и язык.
+    /// </summary>
     [Fact]
-    public void Install_argument_is_a_flag_without_value()
+    public void Installer_has_no_exclusion_switch()
     {
-        Assert.Equal("--av-exclusion", HelperInstaller.AvExclusionArg);
-        Assert.DoesNotContain("=", HelperInstaller.AvExclusionArg);
+        var app = File.ReadAllText(Path.Combine(Path.GetDirectoryName(Repo.Data)!, "src", "DpiShell.App", "App.xaml.cs"));
+        var link = File.ReadAllText(Path.Combine(Path.GetDirectoryName(Repo.Data)!, "src", "DpiShell.App", "HelperLink.cs"));
+        var inst = File.ReadAllText(Path.Combine(Path.GetDirectoryName(Repo.Data)!, "src", "DpiShell.Core", "Helper", "HelperInstaller.cs"));
+        Assert.DoesNotContain("\"--av-exclusion\"", app + link + inst);
+        Assert.DoesNotContain("AvExclusions(", inst.Replace("AvExclusionUndoer", ""));
     }
 }

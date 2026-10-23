@@ -59,9 +59,16 @@ public sealed class Shell
         var check = Installer.Check();
         if (check.State == CoreState.Missing)
         {
-            using var http = CreateDownloadClient();
-            await InstallRecordedAsync(http, log, ct);
-            check = Installer.Check();
+            // Помощник только что поставлен: ядро качается по команде окна, после вопроса об исключении Защитника (CoreWait).
+            if (CoreWait.Remaining(Paths, UtcNow()) is { } left)
+                log?.Report(L.T("core.shell.core_wait", new { minutes = (int)Math.Ceiling(left.TotalMinutes) }));
+            else
+            {
+                CoreWait.Clear(Paths);
+                using var http = DownloadClient();
+                await InstallRecordedAsync(http, log, ct);
+                check = Installer.Check();
+            }
         }
         // Служба стартует с Windows раньше помощника и без его проверки: ядро не сходится с манифестом — остановить.
         if (IsAdmin()) StopServiceIfCoreBroken(log);
@@ -74,22 +81,84 @@ public sealed class Shell
         return check;
     }
 
+    /// <summary>Скачать ядро по команде окна («Восстановить», первый запуск): метка ожидания окна больше не нужна.</summary>
     public async Task RepairCoreAsync(IProgress<string>? log = null, CancellationToken ct = default)
     {
-        using var http = CreateDownloadClient();
+        CoreWait.Clear(Paths);
+        using var http = DownloadClient();
         await InstallRecordedAsync(http, log, ct);
     }
 
-    /// <summary>Установка ядра. Ядра ещё не было — в журнал «было: нет ядра» до скачивания; замена уже стоящего (восстановление) отката не требует.</summary>
-    public async Task InstallRecordedAsync(HttpClient http, IProgress<string>? log, CancellationToken ct)
+    /// <summary>
+    /// Служба ждёт окна (<see cref="CoreWait"/>): по истечении — скачать ядро самой, если окно так и не скачало. Метку сняло окно — ничего не делать.
+    /// </summary>
+    public async Task InstallAfterWaitAsync(IProgress<string>? log = null, CancellationToken ct = default)
     {
-        string rec = "";
-        if (Installer.Check().State == CoreState.Missing && Journal.Active(ChangeKinds.Core).Count == 0)
-            rec = Journal.Begin(ChangeKinds.Core, L.T("core.shell.journal_core", new { version = Installer.Manifest.Version }),
-                new System.Text.Json.Nodes.JsonObject { ["installed"] = false }, new System.Text.Json.Nodes.JsonObject { ["version"] = Installer.Manifest.Version });
-        try { await Installer.InstallAsync(http, log, ct); }
-        catch { Journal.Abort(rec); throw; }
-        Journal.Done(rec);
+        while (CoreWait.Exists(Paths))
+        {
+            if (CoreWait.Remaining(Paths, UtcNow()) is { } left)
+            {
+                // Ждать частями: метку могло снять окно.
+                await Delay(left < TimeSpan.FromMinutes(1) ? left : TimeSpan.FromMinutes(1), ct);
+                continue;
+            }
+            CoreWait.Clear(Paths);
+            if (Installer.Check().State != CoreState.Missing) return;
+            log?.Report(L.T("core.shell.core_wait_over"));
+            using var http = DownloadClient();
+            await InstallRecordedAsync(http, log, ct);
+            return;
+        }
+    }
+
+    /// <summary>Поставить ядро из архива, который окно передало частями (<see cref="CoreInstaller.AppendOffline"/>): те же хеши, тот же журнал.</summary>
+    public Task InstallOfflineAsync(IProgress<string>? log = null, CancellationToken ct = default)
+    {
+        CoreWait.Clear(Paths);
+        return RecordedAsync(() => Task.Run(() => Installer.InstallOffline(log), ct), ct);
+    }
+
+    /// <summary>Скачивание ядра для служб и тестов: в тестах — подставной сервер с архивом.</summary>
+    public Func<HttpClient> DownloadClient { get; set; } = CreateDownloadClient;
+    /// <summary>Часы и ожидание для <see cref="CoreWait"/>; в тестах — подмена.</summary>
+    public Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
+    public Func<TimeSpan, CancellationToken, Task> Delay { get; set; } = Task.Delay;
+
+    /// <summary>Одна установка ядра за раз: служба по истечении ожидания и окно могут начать одновременно (общая папка core.download).</summary>
+    readonly SemaphoreSlim _coreLock = new(1, 1);
+
+    /// <summary>Установка ядра. Ядра ещё не было — в журнал «было: нет ядра» до скачивания; замена уже стоящего (восстановление) отката не требует.</summary>
+    public Task InstallRecordedAsync(HttpClient http, IProgress<string>? log, CancellationToken ct) =>
+        RecordedAsync(() => Installer.InstallAsync(http, log, ct), ct);
+
+    /// <summary>Защитник для подтверждения, что файл удалил именно он (журнал обнаружений). Null — не спрашивать («возможно, антивирус»). Ставит служба.</summary>
+    public IDefenderSystem? Defender { get; set; }
+
+    /// <summary>Антивирус оборвал действие — свериться с журналом Защитника за время действия.</summary>
+    AvBlockedException Confirmed(AvBlockedException e, DateTime since) => e.Confirm(Defender, since);
+
+    async Task RecordedAsync(Func<Task> install, CancellationToken ct)
+    {
+        var since = DateTime.UtcNow;
+        try { await RecordedCoreAsync(install, ct); }
+        // Ядро удалили во время установки: один раз и с понятной причиной, без повторных скачиваний по кругу.
+        catch (AvBlockedException e) { throw Confirmed(e, since); }
+    }
+
+    async Task RecordedCoreAsync(Func<Task> install, CancellationToken ct)
+    {
+        await _coreLock.WaitAsync(ct);
+        try
+        {
+            string rec = "";
+            if (Installer.Check().State == CoreState.Missing && Journal.Active(ChangeKinds.Core).Count == 0)
+                rec = Journal.Begin(ChangeKinds.Core, L.T("core.shell.journal_core", new { version = Installer.Manifest.Version }),
+                    new System.Text.Json.Nodes.JsonObject { ["installed"] = false }, new System.Text.Json.Nodes.JsonObject { ["version"] = Installer.Manifest.Version });
+            try { await install(); }
+            catch { Journal.Abort(rec); throw; }
+            Journal.Done(rec);
+        }
+        finally { _coreLock.Release(); }
     }
 
     /// <summary>Источники обновлений данных — только из поставки (architecture.md «Обновления данных»).</summary>
@@ -299,7 +368,13 @@ public sealed class Shell
         if (ServiceMode)
         {
             StopProcess();
-            Service.Apply(args);
+            var since = DateTime.UtcNow;
+            try { Service.Apply(args); }
+            // Служба не поднялась, а файлы ядра пропали после проверки — антивирус, а не «служба не запустилась».
+            catch (InvalidOperationException) when (Installer.Check() is { State: not CoreState.Ok, BadFiles: [var first, ..] })
+            {
+                throw Confirmed(new AvBlockedException(L.T("core.av.what.file", new { name = first }), Path.Combine(Paths.Core, first)), since);
+            }
         }
         else
         {
@@ -337,19 +412,38 @@ public sealed class Shell
         if (!ServiceMode && State.Enabled && State.StrategyId is { } id && !IsActive) Enable(id);
     }
 
+    /// <summary>Перед запуском winws (после проверки ядра) — в тестах здесь «антивирус» удаляет файл между проверкой и запуском.</summary>
+    public Action? BeforeWinwsStart { get; set; }
+
     void StartProcess(IReadOnlyList<string> args)
     {
         StopProcess();
-        var p = WinwsProcess.Start(Paths, args);
+        var since = DateTime.UtcNow;
+        BeforeWinwsStart?.Invoke();
+        WinwsProcess p;
+        try { p = WinwsProcess.Start(Paths, args); }
+        catch (AvBlockedException e) { throw Confirmed(e, since); }
         // winws с ошибкой в параметрах или без доступа к WinDivert завершается сразу.
         Thread.Sleep(1000);
         if (!p.Alive)
         {
             var output = p.Output;
             p.Dispose();
-            throw new InvalidOperationException(L.T("core.shell.winws_failed", new { output = (output.Length > 300 ? output[^300..] : output).Trim() }));
+            throw WinwsDied(output, since);
         }
         _proc = p;
+    }
+
+    /// <summary>
+    /// winws завершился сразу: файлы ядра пропали (антивирус убил и удалил) — так и сказать; драйвер WinDivert не загрузился — по коду ошибки
+    /// из вывода winws; иначе — хвост вывода, как раньше.
+    /// </summary>
+    Exception WinwsDied(string output, DateTime since)
+    {
+        if (Installer.Check() is { State: not CoreState.Ok, BadFiles: [var first, ..] })
+            return Confirmed(new AvBlockedException(L.T("core.av.what.file", new { name = first }), Path.Combine(Paths.Core, first)), since);
+        if (WinwsFailure.Explain(output) is { } driver) return new InvalidOperationException(driver);
+        return new InvalidOperationException(L.T("core.shell.winws_failed", new { output = (output.Length > 300 ? output[^300..] : output).Trim() }));
     }
 
     /// <summary>

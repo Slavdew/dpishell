@@ -276,6 +276,8 @@
                                                 Visibility="{Binding AvOffer, Converter={StaticResource Vis}}" />
                                         <Button ContentTemplate="{StaticResource Shield}" Content="{l:T diag.repair}" Command="{Binding RepairCoreCmd}" Margin="0,0,8,4" VerticalAlignment="Center"
                                                 Visibility="{Binding AvShowRestore, Converter={StaticResource Vis}}" />
+                                        <Button ContentTemplate="{StaticResource Shield}" Content="{l:T home.core.offline}" Style="{StaticResource LinkButton}" Command="{Binding CoreOfflineCmd}"
+                                                Margin="0,0,8,4" VerticalAlignment="Center" Visibility="{Binding AvShowOffline, Converter={StaticResource Vis}}" />
                                         <local:InfoButton Topic="{x:Static local:InfoTexts.AvExclusion}" Margin="0,0,0,4" VerticalAlignment="Center" />
                                     </WrapPanel>
                                     <StackPanel Margin="0,4,0,0" Visibility="{Binding AvManual, Converter={StaticResource Vis}}">
@@ -1888,7 +1890,11 @@
                             <Border Style="{StaticResource Warn}" Visibility="{Binding CoreBroken, Converter={StaticResource Vis}}">
                                 <StackPanel>
                                     <TextBlock Text="{l:T diag.core_broken}" FontWeight="SemiBold" Margin="0,0,0,8" />
-                                    <Button ContentTemplate="{StaticResource Shield}" Content="{l:T diag.repair}" Style="{StaticResource Primary}" Command="{Binding RepairCoreCmd}" HorizontalAlignment="Left" />
+                                    <WrapPanel>
+                                        <Button ContentTemplate="{StaticResource Shield}" Content="{l:T diag.repair}" Style="{StaticResource Primary}" Command="{Binding RepairCoreCmd}" Margin="0,0,10,0" />
+                                        <Button ContentTemplate="{StaticResource Shield}" Content="{l:T home.core.offline}" Style="{StaticResource LinkButton}" Command="{Binding CoreOfflineCmd}"
+                                                VerticalAlignment="Center" />
+                                    </WrapPanel>
                                     <!-- Путь не переписывать руками: «Скопировать путь» и сразу «Безопасность Windows» (п. 16). -->
                                     <TextBlock Text="{l:T diag.exclusion_hint}" Style="{StaticResource Hint}" Margin="0,6,0,0" TextWrapping="Wrap" />
                                     <TextBox Text="{Binding CoreFolder, Mode=OneWay}" Style="{StaticResource SelectableText}" local:Demo.Sensitive="True" FontSize="12" Margin="0,2,0,0" />

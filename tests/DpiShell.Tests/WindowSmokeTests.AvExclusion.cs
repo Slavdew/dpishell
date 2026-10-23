@@ -112,6 +112,80 @@ public sealed partial class WindowSmokeTests
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
     }
 
+    /// <summary>
+    /// «Указать архив ядра…» (ТЗ av-exclusion, п. 9): ядро не найдено — кнопка на Главной рядом с «Добавить в исключения и восстановить» и на «Диагностике».
+    /// Выбор файла подменён: окно читает файл само и отдаёт помощнику только байты (core_offline_part), затем core_offline_install;
+    /// чужой файл — отказ помощника с понятной причиной в строке состояния. Без настоящего диалога выбора файла.
+    /// </summary>
+    [Fact]
+    public void Core_Offline_Archive_Button_On_Home_And_Diag()
+    {
+        using var tmp = new TempDir();
+        var errors = WithBindingErrors(() =>
+        {
+            var shell = new Shell(new AppPaths(tmp.Sub("root"), Repo.Data));
+            var f = new HelperFixture();
+            f.Backend.Release.SetResult();
+            f.Backend.Defender = FakeDefender.Active();
+            f.Backend.StatusValue = f.Backend.StatusValue with { Enabled = false, Active = false, Service = SvcState.Stopped, Core = CoreState.Missing };
+            f.Backend.DetailsValue = f.Backend.DetailsValue with { Core = new CoreCheck(CoreState.Missing, ["winws.exe"], []) };
+            var good = new byte[3 * 1024 * 1024 + 5];
+            new Random(7).NextBytes(good);
+            f.Backend.OfflineSha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(good));
+            Directory.CreateDirectory(tmp.Sub("dl"));
+            var goodFile = Path.Combine(tmp.Sub("dl"), "zapret-core-offline.zip");
+            File.WriteAllBytes(goodFile, good);
+            var badFile = Path.Combine(tmp.Sub("dl"), "other.zip");
+            File.WriteAllBytes(badFile, new byte[100]);
+            var link = Task.Run(f.LinkAsync).GetAwaiter().GetResult();
+            var vm = TestWindow.Model(shell, link);
+            var picked = new List<string>();
+            string? next = badFile;
+            vm.ChooseCoreZip = (title, filter) => { picked.Add(title + "|" + filter); return next; };
+            var w = Open(vm);
+            SetProp(vm, "IsLoading", false);
+            vm.GoTo(Pages.Home);
+            WaitUi(vm.RefreshStatusAsync());
+            WaitUi(RefreshAv(vm));
+            Pump();
+            var tabs = Find<TabControl>(w)!;
+            Button? Btn(string content) => Find<Button>(tabs, b => b.IsVisible && b.Content as string == content);
+            if (Btn(L.T("home.core.offline")) is null) throw new Exception("На Главной нет «Указать архив ядра…» при ненайденном ядре");
+            if (Btn(L.T("home.av.add_restore")) is null) throw new Exception("Нет «Добавить в исключения и восстановить»");
+
+            Task Offline() => (Task)typeof(MainViewModel).GetMethod("CoreOfflineAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, [])!;
+            // Чужой файл: байты ушли, помощник отказал — причина в строке состояния, ядро не поставлено.
+            WaitUi(Offline());
+            Pump();
+            if (!vm.Message.Contains("sha256")) throw new Exception("Нет причины отказа: " + vm.Message);
+            if (picked.Count != 1 || !picked[0].Contains("*.zip")) throw new Exception("Выбор файла не с тем фильтром: " + string.Join(";", picked));
+            // Архив выпуска: частями по 1 МБ, затем установка; ядро на месте — кнопки нет.
+            next = goodFile;
+            WaitUi(Offline());
+            Pump();
+            if (f.Backend.OfflineParts != 4) throw new Exception("Частей не 4: " + f.Backend.OfflineParts);
+            if (!f.Backend.Calls.Contains("core_offline_install")) throw new Exception("Нет core_offline_install");
+            WaitUi(vm.RefreshStatusAsync());
+            Pump();
+            if (Btn(L.T("home.core.offline")) is not null) throw new Exception("Кнопка осталась после установки ядра");
+            // Отмена выбора файла — ничего не шлём.
+            next = null;
+            int calls = f.Backend.Calls.Count;
+            WaitUi(Offline());
+            if (f.Backend.Calls.Count != calls) throw new Exception("Без файла что-то ушло помощнику");
+
+            // «Диагностика»: ядро сломано — рядом с «Восстановить».
+            f.Backend.StatusValue = f.Backend.StatusValue with { Core = CoreState.Missing };
+            vm.GoTo(Pages.Diag);
+            WaitUi(vm.RefreshDiagAsync());
+            Pump();
+            if (Btn(L.T("diag.repair")) is null || Btn(L.T("home.core.offline")) is null) throw new Exception("На «Диагностике» нет «Восстановить» и «Указать архив ядра…»");
+            Close(w);
+            Stop(vm, f);
+        });
+        Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));
+    }
+
     static Task RefreshAv(MainViewModel vm) =>
         (Task)typeof(MainViewModel).GetMethod("RefreshAvAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(vm, [])!;
 

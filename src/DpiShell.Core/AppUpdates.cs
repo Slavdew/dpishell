@@ -342,6 +342,9 @@ public sealed class AppVersionStore(string? root = null)
     /// Распаковать проверенный архив в <c>versions\X.Y.Z\</c>: сначала в <c>X.Y.Z.new</c>, только записи под <c>DpiShell/</c>,
     /// без выхода за папку; нет DpiShell.exe — отказ. Готовая папка появляется одним переименованием.
     /// </summary>
+    /// <summary>Файл распакован — в тестах здесь «антивирус» удаляет его.</summary>
+    public Action<string>? Written { get; set; }
+
     public string Install(string zipPath, string version)
     {
         var target = PathFor(version);
@@ -352,6 +355,7 @@ public sealed class AppVersionStore(string? root = null)
         var stagedFull = Path.GetFullPath(staged) + Path.DirectorySeparatorChar;
         try
         {
+            bool hadExe = false;
             using (var zip = ZipFile.OpenRead(zipPath))
             {
                 long total = 0;
@@ -369,9 +373,14 @@ public sealed class AppVersionStore(string? root = null)
                     // Заявленный размер записи (e.Length) может врать — считаем фактически распакованное.
                     Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
                     total = ExtractLimited(e, dest, total);
+                    hadExe |= rel.Equals(ExeName, StringComparison.OrdinalIgnoreCase);
+                    Written?.Invoke(dest);
                 }
             }
-            if (!File.Exists(Path.Combine(staged, ExeName))) throw new InvalidDataException(L.T("core.app.zip.no_exe", new { name = ExeName }));
+            var exe = Path.Combine(staged, ExeName);
+            // exe был в архиве и распаковался, а теперь его нет — удалили (антивирус), а не «битый архив».
+            if (hadExe && !File.Exists(exe)) throw new FileNotFoundException(L.T("core.app.zip.no_exe", new { name = ExeName }), exe);
+            if (!File.Exists(exe)) throw new InvalidDataException(L.T("core.app.zip.no_exe", new { name = ExeName }));
             if (Directory.Exists(target)) Directory.Delete(target, true);
             Directory.Move(staged, target);
             return target;
@@ -521,6 +530,11 @@ public sealed class AppUpdater(AppUpdateClient client, AppVersionStore store)
         catch (HttpRequestException e)
         {
             return new(false, L.T("core.upd.offline"), Details: e.Message);
+        }
+        // Архив или распакованный файл пропал во время распаковки (дополнение 2 ТЗ av-exclusion) — антивирус, сказать прямо; повтор — кнопкой.
+        catch (Exception e) when (AvBlock.IsVirusError(e) || e is FileNotFoundException)
+        {
+            return new(false, L.T("core.upd.av_blocked", new { path = store.Root }), Details: e.Message);
         }
         catch (IOException e) when (IsDiskFull(e))
         {

@@ -245,6 +245,31 @@ public sealed class FakeHelperBackend : IHelperBackend
         ct.ThrowIfCancellationRequested();
     }
 
+    /// <summary>Офлайн-архив ядра (API 1.19): что окно прислало частями.</summary>
+    public MemoryStream OfflineReceived { get; } = new();
+    public int OfflineParts { get; private set; }
+    /// <summary>Ожидаемый sha256 архива; не совпал — отказ, как у настоящего помощника. Null — принять любой.</summary>
+    public string? OfflineSha256 { get; set; }
+
+    public long CoreOfflinePart(byte[] data, bool first)
+    {
+        Call("core_offline_part");
+        if (first) { OfflineReceived.SetLength(0); OfflineParts = 0; }
+        OfflineReceived.Write(data);
+        OfflineParts++;
+        return OfflineReceived.Length;
+    }
+
+    public Task CoreOfflineInstallAsync(IProgress<string> log, CancellationToken ct)
+    {
+        Call("core_offline_install");
+        var got = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(OfflineReceived.ToArray()));
+        if (OfflineSha256 is { } want && got != want) throw new InvalidOperationException("Это не архив ядра: sha256 не совпал.");
+        log.Report("Ядро установлено.");
+        StatusValue = StatusValue with { Core = CoreState.Ok };
+        return Task.CompletedTask;
+    }
+
     /// <summary>Что отвечает data_update.</summary>
     public DataUpdateResult DataUpdateValue { get; set; } = new(true, false, false, "Данные обновлены до 2026-11-01.", "2026-11-01");
 

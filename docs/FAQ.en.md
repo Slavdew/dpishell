@@ -16,14 +16,14 @@ Results depend on the ISP, the network and the device: "usually" and "on most" b
 
 ## Antivirus deletes files
 
-Windows Defender and other antivirus software may flag the zapret core: the `vendor\zapret-v72.13.zip` archive in the download or `%ProgramData%\DpiShell\core.download\core.zip` on the first "Turn on". The protection history shows it as `Trojan:Win32/Tecabans.STV!cl`, `Misleading:Win32/Malgent!AMTB` or `RiskTool…WinDivert`; in Defender, the `!cl` suffix means a cloud heuristic verdict, not a matched signature.
+Windows Defender and other antivirus software may flag the zapret core: `%ProgramData%\DpiShell\core.download\core.zip` on the first "Turn on", or the `vendor\zapret-v72.13.zip` archive inside the source code archive (Source code on the release page is not the program: the program archive `DpiShell-…-portable.zip` has no core). The protection history shows it as `Trojan:Win32/Tecabans.STV!cl`, `Misleading:Win32/Malgent!AMTB` or `RiskTool…WinDivert`; in Defender, the `!cl` suffix means a cloud heuristic verdict, not a matched signature.
 
 The reason is the WinDivert driver: it intercepts network traffic, and malware does that too. DpiShell does not build or modify the core: it is the [official zapret v72.13 archive](https://github.com/bol-van/zapret/releases/tag/v72.13) by bol-van, sha256 `c493e33a0dc4eba23a8686efdaba55f59755ad6ade3564aebd9d13f4c65e2e0c`. The app checks it and every core file before each start ([data/core.json](../data/core.json), [vetting](vetting.md)) and does not run modified files.
 
 **What to do**
 
 1. Add two folders to the exclusions: the one you unpacked the program to (for example `C:\Programs\DpiShell`) and `%ProgramData%\DpiShell`.
-   - Easiest for `%ProgramData%\DpiShell`: the "Add to exclusions" button on "Home" (Windows Defender). On the first "Turn on" the app asks about it itself, before the core is downloaded. The button does not exclude the program folder: any program without rights can write there, and an exclusion would turn it into a hiding place. If Defender refuses (tamper protection, organization policy), the card shows the path, "Copy path" and "Open Defender".
+   - Easiest for `%ProgramData%\DpiShell`: the "Add to exclusions" button on "Home" (Windows Defender). On the first "Turn on" the app asks about it itself: first the helper is installed (rights request), then the question, and only then the core is downloaded. If you decline, the core is downloaded right away. The button does not exclude the program folder: any program without rights can write there, and an exclusion would turn it into a hiding place. If Defender refuses (tamper protection, organization policy), the card shows the path, "Copy path" and "Open Defender".
    - Fastest: PowerShell as administrator; the folders do not have to exist yet:
      ```powershell
      Add-MpPreference -ExclusionPath "$env:ProgramData\DpiShell", "C:\Programs\DpiShell"
@@ -31,8 +31,10 @@ The reason is the WinDivert driver: it intercepts network traffic, and malware d
      Replace the second path with your program folder.
    - Manually: "Windows Security" > "Virus & threat protection" > "Manage settings" > "Exclusions" > "Add or remove exclusions" > "Add an exclusion" > "Folder". Names depend on the Windows version. The folder picker needs an existing folder: `%ProgramData%\DpiShell` appears after the first "Turn on". Do not create it yourself: the app moves such a folder aside and creates its own with closed permissions.
    - Other antivirus: use its exclusion settings. DpiShell adds an exclusion only on the button and only for the core folder (in Windows Defender); "Undo all" and removing DpiShell remove it, only if DpiShell added it.
-2. If files are already deleted: download and unpack the program again; for the core, "Add to exclusions and restore" on "Home" (or "Restore" if the exclusion is already there).
+2. If files are already deleted: for the core, "Add to exclusions and restore" on "Home" (or "Restore" if the exclusion is already there). If GitHub does not open, use "Choose core archive…" (there and in "Diagnostics") with `zapret-core-offline.zip` from the DpiShell release page or `zapret-v72.13.zip` from the [bol-van release](https://github.com/bol-van/zapret/releases/tag/v72.13): the app installs it only if the sha256 matches `core.json`. The antivirus may delete that file on download too; then add the exclusion first.
 3. Before the next "Turn on", the protection history should have no new DpiShell entries.
+
+If an antivirus breaks an action (core download, unpacking, winws start, the WinDivert driver, a program update, the helper file), the window says so: "The core archive was deleted or blocked by Defender: Trojan:Win32/… — <file>" when Defender's history shows it, otherwise "…possibly by an antivirus". Deleted files are not downloaded again in a loop: one button "Add to exclusions and restore" (or "Restore") on "Home"; if the helper file is gone, "Reinstall helper".
 
 An exclusion turns off scanning of these folders; that is your decision. If in doubt, do not install the program.
 

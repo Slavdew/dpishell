@@ -20,7 +20,7 @@
 - `winws.exe`, `WinDivert.dll`, `cygwin1.dll` без подписи — обычное дело для zapret; защищаемся закреплёнными хешами.
 - Defender помечает официальный архив WinDivert как `Misleading:Win32/Malgent!AMTB` — известное ложное срабатывание на перехватчик пакетов. Приложение переживает удаление файлов антивирусом (проверка хешей + понятное сообщение, восстановление из поставки).
 - Для роутера из того же архива берётся `binaries/linux-<arch>/nfqws`; `linux-arm64/nfqws` в zip побайтно тот же, что в `openwrt-embedded.tar.gz` (sha256 `75fc3d63…37a6`). Скрипты zapret (`common/`, `init.d/openwrt/`) исполняются как есть — часть того же архива; при смене версии — просмотр диффа.
-- Резервная копия архива — `vendor/zapret-v72.13.zip` и форк `Slavdew/zapret` с тем же хешем (запасной адрес `mirror_urls` в `core.json`).
+- Резервная копия архива — `vendor/zapret-v72.13.zip` (в выпуске — отдельный файл `zapret-core-offline.zip` с тем же хешем, в архив программы не входит) и форк `Slavdew/zapret` с тем же хешем (запасной адрес `mirror_urls` в `core.json`).
 
 ## Данные: Flowseal/zapret-discord-youtube @ `eb16c1419057e36b8a36fbe7c959483450e6ac8b` (MIT)
 

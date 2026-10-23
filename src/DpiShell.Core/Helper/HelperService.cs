@@ -40,14 +40,18 @@ public sealed class HelperService : ServiceBase
         var owner = HelperInstaller.ReadOwner(_paths);
         if (owner is null) _log.Write("нет SID пользователя — канал доступен только администраторам");
 
-        var shell = new Shell(_paths);
+        // Защитник — подтвердить по его журналу, что файл ядра удалил он (иначе «возможно, антивирус»).
+        var shell = new Shell(_paths) { Defender = new WmiDefender() };
         // Разложить данные, проверить ядро (хеши) и вернуть обход как было; сетевую часть — в фоне, чтобы не держать SCM.
         _ = Task.Run(async () =>
         {
             try
             {
-                var check = await shell.PrepareAsync(new Progress<string>(_log.Write));
+                var log = new Progress<string>(_log.Write);
+                var check = await shell.PrepareAsync(log);
                 _log.Write($"ядро: {check.State}");
+                // Только что установлен, ядра нет: ждём команды окна (после вопроса об исключении), не дольше CoreWait.Limit — потом качаем сами.
+                await shell.InstallAfterWaitAsync(log);
             }
             catch (Exception e) { _log.Write("подготовка: " + e.Message); }
         });
@@ -141,14 +145,13 @@ public static class HelperEntry
     /// установки работает от его имени, поэтому окно передаёт свой SID явно. null — SID текущего процесса.
     /// </summary>
     /// <param name="lang">Язык окна (--lang=): на нём журнал установки и имя службы; нет — по языку Windows.</param>
-    /// <param name="avExclusion">--av-exclusion: до запуска службы добавить папку программы в исключения Защитника (человек согласился в окне).</param>
-    public static int Install(string? userSid = null, IProgress<string>? log = null, string? lang = null, bool avExclusion = false)
+    public static int Install(string? userSid = null, IProgress<string>? log = null, string? lang = null)
     {
         using var scope = L.Scope(lang ?? L.DefaultFor(System.Globalization.CultureInfo.CurrentUICulture));
         try
         {
             var sid = userSid is null ? WindowsIdentity.GetCurrent().User! : new SecurityIdentifier(userSid);
-            new HelperInstaller(new AppPaths()).Install(sid, log, avExclusion);
+            new HelperInstaller(new AppPaths()).Install(sid, log);
             return 0;
         }
         catch (ServiceMarkedForDeleteException e)
