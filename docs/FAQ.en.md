@@ -34,6 +34,8 @@ The reason is the WinDivert driver: it intercepts network traffic, and malware d
 2. If files are already deleted: for the core, "Add to exclusions and restore" on "Home" (or "Restore" if the exclusion is already there). If GitHub does not open, use "Choose core archive…" (there and in "Diagnostics") with `zapret-core-offline.zip` from the DpiShell release page or `zapret-v72.13.zip` from the [bol-van release](https://github.com/bol-van/zapret/releases/tag/v72.13): the app installs it only if the sha256 matches `core.json`. The antivirus may delete that file on download too; then add the exclusion first.
 3. Before the next "Turn on", the protection history should have no new DpiShell entries.
 
+If an antivirus breaks an action (core download, unpacking, winws start, the WinDivert driver, a program update, the helper file), the window says so: "The core archive was deleted or blocked by Defender: Trojan:Win32/… — <file>" when Defender's history shows it, otherwise "…possibly by an antivirus". Deleted files are not downloaded again in a loop: one button "Add to exclusions and restore" (or "Restore") on "Home"; if the helper file is gone, "Reinstall helper".
+
 An exclusion turns off scanning of these folders; that is your decision. If in doubt, do not install the program.
 
 ## A site does not open

@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Security.Principal;
+using DpiShell.Core;
 using DpiShell.Core.Helper;
 
 namespace DpiShell.App;
@@ -149,7 +151,7 @@ public sealed class HelperLink : IAsyncDisposable
         catch (HelperUnavailableException e)
         {
             State = e.Reason == HelperUnavailableReason.NotInstalled ? HelperState.NotInstalled : HelperState.NotResponding;
-            Problem = State == HelperState.NotInstalled ? "" : e.Message;
+            Problem = State == HelperState.NotInstalled ? "" : ExeGone() ?? e.Message;
         }
         catch (HelperException e)
         {
@@ -160,11 +162,30 @@ public sealed class HelperLink : IAsyncDisposable
         {
             // Окно без помощника работает в режиме просмотра — что бы ни случилось при подключении.
             State = HelperState.NotResponding;
-            Problem = L.T("shell.helper.not_responding", new { reason = e.Message });
+            Problem = ExeGone() ?? L.T("shell.helper.not_responding", new { reason = e.Message });
         }
         Changed?.Invoke();
         return Ready;
     }
+
+    /// <summary>
+    /// Служба помощника есть, а её exe нет (дополнение 2 ТЗ av-exclusion: помощника удалил антивирус) — путь; иначе null.
+    /// Папка помощника закрыта для окна без прав, но «файла нет» отличается от «нет доступа» — ошибкой при чтении атрибутов. В тестах — подмена.
+    /// </summary>
+    public Func<string?> MissingHelperExe { get; set; } = () =>
+    {
+        string? exe = null;
+        try
+        {
+            exe = ZapretDetector.SplitCommandLine(ServiceManager.QueryBinPath(HelperProtocol.ServiceName)).Exe;
+            if (exe is not null) File.GetAttributes(exe);
+            return null;
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) { return exe; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or InvalidOperationException) { return null; }
+    };
+
+    string? ExeGone() => MissingHelperExe() is { } exe ? L.T("shell.helper.exe_missing", new { path = exe }) : null;
 
     public static bool IsOlder(string helper, string window) =>
         Version.TryParse(helper, out var h) && Version.TryParse(window, out var w) && h < w;

@@ -40,7 +40,8 @@ public sealed class HelperService : ServiceBase
         var owner = HelperInstaller.ReadOwner(_paths);
         if (owner is null) _log.Write("нет SID пользователя — канал доступен только администраторам");
 
-        var shell = new Shell(_paths);
+        // Защитник — подтвердить по его журналу, что файл ядра удалил он (иначе «возможно, антивирус»).
+        var shell = new Shell(_paths) { Defender = new WmiDefender() };
         // Разложить данные, проверить ядро (хеши) и вернуть обход как было; сетевую часть — в фоне, чтобы не держать SCM.
         _ = Task.Run(async () =>
         {

@@ -43,6 +43,12 @@ public sealed class FakeDefender : IDefenderSystem
         if (!SilentDrop && !Paths.Contains(path)) Paths.Add(path);
     }
 
+    /// <summary>Журнал обнаружений (MSFT_MpThreatDetection); ThreatsUnreadable — не прочитать (нет прав, WMI).</summary>
+    public List<DefenderThreat> ThreatsValue { get; } = [];
+    public bool ThreatsUnreadable { get; set; }
+    public IReadOnlyList<DefenderThreat> Threats() =>
+        ThreatsUnreadable ? throw new System.Management.ManagementException("Access denied") : [.. ThreatsValue];
+
     public void RemovePath(string path)
     {
         Calls.Add("remove " + path);

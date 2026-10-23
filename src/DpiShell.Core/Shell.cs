@@ -131,7 +131,21 @@ public sealed class Shell
     public Task InstallRecordedAsync(HttpClient http, IProgress<string>? log, CancellationToken ct) =>
         RecordedAsync(() => Installer.InstallAsync(http, log, ct), ct);
 
+    /// <summary>Защитник для подтверждения, что файл удалил именно он (журнал обнаружений). Null — не спрашивать («возможно, антивирус»). Ставит служба.</summary>
+    public IDefenderSystem? Defender { get; set; }
+
+    /// <summary>Антивирус оборвал действие — свериться с журналом Защитника за время действия.</summary>
+    AvBlockedException Confirmed(AvBlockedException e, DateTime since) => e.Confirm(Defender, since);
+
     async Task RecordedAsync(Func<Task> install, CancellationToken ct)
+    {
+        var since = DateTime.UtcNow;
+        try { await RecordedCoreAsync(install, ct); }
+        // Ядро удалили во время установки: один раз и с понятной причиной, без повторных скачиваний по кругу.
+        catch (AvBlockedException e) { throw Confirmed(e, since); }
+    }
+
+    async Task RecordedCoreAsync(Func<Task> install, CancellationToken ct)
     {
         await _coreLock.WaitAsync(ct);
         try
@@ -354,7 +368,13 @@ public sealed class Shell
         if (ServiceMode)
         {
             StopProcess();
-            Service.Apply(args);
+            var since = DateTime.UtcNow;
+            try { Service.Apply(args); }
+            // Служба не поднялась, а файлы ядра пропали после проверки — антивирус, а не «служба не запустилась».
+            catch (InvalidOperationException) when (Installer.Check() is { State: not CoreState.Ok, BadFiles: [var first, ..] })
+            {
+                throw Confirmed(new AvBlockedException(L.T("core.av.what.file", new { name = first }), Path.Combine(Paths.Core, first)), since);
+            }
         }
         else
         {
@@ -392,19 +412,38 @@ public sealed class Shell
         if (!ServiceMode && State.Enabled && State.StrategyId is { } id && !IsActive) Enable(id);
     }
 
+    /// <summary>Перед запуском winws (после проверки ядра) — в тестах здесь «антивирус» удаляет файл между проверкой и запуском.</summary>
+    public Action? BeforeWinwsStart { get; set; }
+
     void StartProcess(IReadOnlyList<string> args)
     {
         StopProcess();
-        var p = WinwsProcess.Start(Paths, args);
+        var since = DateTime.UtcNow;
+        BeforeWinwsStart?.Invoke();
+        WinwsProcess p;
+        try { p = WinwsProcess.Start(Paths, args); }
+        catch (AvBlockedException e) { throw Confirmed(e, since); }
         // winws с ошибкой в параметрах или без доступа к WinDivert завершается сразу.
         Thread.Sleep(1000);
         if (!p.Alive)
         {
             var output = p.Output;
             p.Dispose();
-            throw new InvalidOperationException(L.T("core.shell.winws_failed", new { output = (output.Length > 300 ? output[^300..] : output).Trim() }));
+            throw WinwsDied(output, since);
         }
         _proc = p;
+    }
+
+    /// <summary>
+    /// winws завершился сразу: файлы ядра пропали (антивирус убил и удалил) — так и сказать; драйвер WinDivert не загрузился — по коду ошибки
+    /// из вывода winws; иначе — хвост вывода, как раньше.
+    /// </summary>
+    Exception WinwsDied(string output, DateTime since)
+    {
+        if (Installer.Check() is { State: not CoreState.Ok, BadFiles: [var first, ..] })
+            return Confirmed(new AvBlockedException(L.T("core.av.what.file", new { name = first }), Path.Combine(Paths.Core, first)), since);
+        if (WinwsFailure.Explain(output) is { } driver) return new InvalidOperationException(driver);
+        return new InvalidOperationException(L.T("core.shell.winws_failed", new { output = (output.Length > 300 ? output[^300..] : output).Trim() }));
     }
 
     /// <summary>

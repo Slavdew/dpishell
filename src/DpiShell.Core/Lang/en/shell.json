@@ -36,7 +36,7 @@
   "shell.helper.not_responding": "The helper is not responding: {reason}",
   "shell.helper.stopped": "The helper stopped responding.",
   "shell.helper.installed_silent": "The helper is installed but not responding.",
-  "shell.helper.exe_missing": "The app file was not found.",
+  "shell.helper.exe_missing": "The helper is not responding: its file was deleted, possibly by an antivirus ({path}). Reinstall the helper.",
   "shell.helper.install_not_started": "The installation did not start.",
   "shell.app.already_admin": "DpiShell is already running with administrator rights. Close it (tray icon → “Exit”) and open it again.",
   "shell.app.no_data": "Program files were not found (the data folder next to DpiShell). Unpack the archive again.\n\n{error}",

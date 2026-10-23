@@ -4,6 +4,30 @@ using System.Text;
 
 namespace DpiShell.Core;
 
+/// <summary>
+/// Почему winws не открыл драйвер WinDivert — по коду ошибки Windows в его выводе (строка с «windivert» и номером). Код не нашёлся — null.
+/// Без утверждений за всех: «возможно» там, где причин несколько.
+/// </summary>
+public static partial class WinwsFailure
+{
+    [System.Text.RegularExpressions.GeneratedRegex(@"(?i)windivert[^\r\n]*?(?:error|code|err|ошибк)[^\d\r\n]*(\d{1,5})")]
+    private static partial System.Text.RegularExpressions.Regex DriverCodeRx();
+
+    public static int? DriverCode(string output) =>
+        DriverCodeRx().Match(output) is { Success: true } m && int.TryParse(m.Groups[1].Value, out var c) ? c : null;
+
+    public static string? Explain(string output) => DriverCode(output) switch
+    {
+        null => null,
+        2 or 3 => L.T("core.winws.driver.missing", new { code = DriverCode(output) }),
+        AvBlock.VirusInfected or AvBlock.VirusDeleted => L.T("core.winws.driver.virus", new { code = DriverCode(output) }),
+        5 => L.T("core.winws.driver.denied"),
+        577 => L.T("core.winws.driver.signature"),
+        1275 => L.T("core.winws.driver.blocked"),
+        var c => L.T("core.winws.driver.other", new { code = c }),
+    };
+}
+
 /// <summary>winws как временный процесс — для подбора и «Проверить сейчас». Постоянная работа — через <see cref="ServiceManager"/>.</summary>
 public sealed class WinwsProcess : IDisposable
 {
@@ -34,7 +58,10 @@ public sealed class WinwsProcess : IDisposable
             RedirectStandardError = true,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
-        var p = Process.Start(psi) ?? throw new InvalidOperationException(L.T("core.winws.not_started"));
+        Process p;
+        // Файл исчез между проверкой и запуском или его закрыл антивирус (225/226, «нет доступа») — понятная причина, а не «не запустился».
+        try { p = Process.Start(psi) ?? throw new InvalidOperationException(L.T("core.winws.not_started")); }
+        catch (System.ComponentModel.Win32Exception e) when (AvBlock.IsVanished(e)) { throw new AvBlockedException("winws.exe", paths.Winws, e); }
         // Любой наш winws (подбор, режим без службы) завершается вместе с программой — даже при её аварийном выходе.
         try { Job.Add(p); }
         catch (InvalidOperationException) { if (!p.HasExited) p.Kill(); p.Dispose(); throw; }

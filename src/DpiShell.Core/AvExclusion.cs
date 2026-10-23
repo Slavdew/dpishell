@@ -30,6 +30,11 @@ public interface IDefenderSystem
     void AddPath(string path);
     /// <summary>Снять папку из исключений. Отказ — исключение.</summary>
     void RemovePath(string path);
+    /// <summary>
+    /// Обнаружения Защитника (MSFT_MpThreatDetection, имя — из MSFT_MpThreat) — подтвердить, что файл удалил именно он (дополнение 2 ТЗ av-exclusion).
+    /// Только чтение; без прав или без Защитника — исключение WMI (вызывающий пишет «возможно, антивирус»).
+    /// </summary>
+    IReadOnlyList<DefenderThreat> Threats();
 }
 
 /// <summary>Состояние исключения папки ядра (поле <c>state</c> ответа <c>av_exclusion_status</c>).</summary>
@@ -310,6 +315,31 @@ public sealed class WmiDefender : IDefenderSystem
 
     public void AddPath(string path) => Invoke("Add", path);
     public void RemovePath(string path) => Invoke("Remove", path);
+
+    public IReadOnlyList<DefenderThreat> Threats()
+    {
+        Guard("threats");
+        var names = new Dictionary<long, string>();
+        using (var q = new ManagementObjectSearcher(DefenderNs, "SELECT ThreatID, ThreatName FROM MSFT_MpThreat"))
+        using (var found = q.Get())
+            foreach (var mo in found.Cast<ManagementObject>())
+                using (mo)
+                    if (mo["ThreatID"] is { } id && mo["ThreatName"] is string n)
+                        names[Convert.ToInt64(id, System.Globalization.CultureInfo.InvariantCulture)] = n;
+        var list = new List<DefenderThreat>();
+        using (var q = new ManagementObjectSearcher(DefenderNs, "SELECT ThreatID, Resources, InitialDetectionTime FROM MSFT_MpThreatDetection"))
+        using (var found = q.Get())
+            foreach (var mo in found.Cast<ManagementObject>())
+                using (mo)
+                {
+                    long id = mo["ThreatID"] is { } v ? Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : 0;
+                    DateTime? at = null;
+                    if (mo["InitialDetectionTime"] is string t)
+                        try { at = ManagementDateTimeConverter.ToDateTime(t).ToUniversalTime(); } catch (ArgumentException) { }
+                    list.Add(new(names.GetValueOrDefault(id, ""), mo["Resources"] as string[] ?? [], at));
+                }
+        return list;
+    }
 
     static void Invoke(string method, string path)
     {
