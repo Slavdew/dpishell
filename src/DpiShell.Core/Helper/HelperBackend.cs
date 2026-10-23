@@ -149,8 +149,11 @@ public sealed record HelperStatus(
     IReadOnlyList<string> SelectedGroups, IReadOnlyList<string> UserTargets, IReadOnlyList<string> Fallbacks,
     bool TimestampsEnabledByUs, bool HostsFix, IReadOnlyList<Conflict> Foreign,
     string HelperVersion, string? DataVersion = null,
-    string? Api = null, IReadOnlyList<string>? Commands = null, IReadOnlyList<string>? UserExclude = null)
+    string? Api = null, IReadOnlyList<string>? Commands = null, IReadOnlyList<string>? UserExclude = null,
+    IReadOnlyList<Conflict>? ForeignDormant = null)
 {
+    // Foreign — только мешающее сейчас (работает/запускается); ForeignDormant — остановленные службы с автозапуском
+    // (с 1.17, расширение ответа; от помощника старше — null, а остановленная служба приходит в Foreign).
     // Api — версия протокола «мажор.минор», Commands — белый список этого помощника (helper-protocol §6). Заполняет сервер;
     // помощник до 1.1 их не присылает (null = «1.0», список неизвестен).
 }
@@ -227,8 +230,8 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
     public Func<ServiceInfo> InspectService { get; init; } = shell.InspectService;
     /// <summary>Обход работает (в режиме службы — тоже sc).</summary>
     public Func<bool> IsActive { get; init; } = () => shell.IsActive;
-    /// <summary>Чужие обходы (процессы через WMI, службы).</summary>
-    public Func<IReadOnlyList<Conflict>> FindForeign { get; init; } = () => Conflicts.Find(shell.Paths, shell.AllStrategies);
+    /// <summary>Чужие обходы (процессы через WMI, службы): мешающие и спящие (<see cref="Conflict.Dormant"/>).</summary>
+    public Func<IReadOnlyList<Conflict>> FindForeign { get; init; } = () => Conflicts.Scan(shell.Paths, shell.AllStrategies);
 
     public HelperStatus Status()
     {
@@ -244,8 +247,8 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
             shell.AllStrategies.Select(s => new StrategyInfo(s.Id, s.Title, s.Source)).ToList(),
             [.. shell.DefaultTargets.Groups.Select(g => new GroupInfo(g.Id, g.Title, g.Targets.Count)), new GroupInfo("user", L.T("select.group.user"), st.UserTargets.Count)],
             st.Groups, st.UserTargets, st.Fallbacks,
-            st.TimestampsEnabledByUs, st.HostsFix, foreign,
-            HelperProtocol.AppVersion, shell.DataVersion, UserExclude: st.UserExclude);
+            st.TimestampsEnabledByUs, st.HostsFix, [.. foreign.Where(c => !c.Dormant)],
+            HelperProtocol.AppVersion, shell.DataVersion, UserExclude: st.UserExclude, ForeignDormant: [.. foreign.Where(c => c.Dormant)]);
     }
 
     /// <summary>Клиент HTTP для обновления данных; в тестах — подмена без сети.</summary>

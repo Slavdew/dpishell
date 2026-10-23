@@ -164,6 +164,7 @@ public sealed partial class MainViewModel
             list.Add(HasConflicts
                 ? new(Health.Error, L.T("router.diag.conflicts"), L.T("home.pc.conflicts", new { names = ConflictNames }), L.T("home.stop"), StopConflictsCmd, Shield: true,
                     Short: L.T("home.conflict.warn", new { names = ConflictNames }))
+                : _dormant.Count > 0 ? new(Health.Ok, L.T("router.diag.conflicts"), L.T("home.pc.dormant", new { names = DormantNames }))
                 : new(Health.Ok, L.T("router.diag.conflicts"), L.T("home.pc.none")));
             list.Add(HasVpn ? new(Health.Warn, L.T("home.pc.vpn.label"), (_vpnNames.Length > 0 ? L.T("home.pc.vpn.on", new { names = _vpnNames }) : VpnWarning), L.T("home.vpn.dismiss"), DismissVpnCmd)
                 : _vpnNames.Length > 0 ? new(Health.Ok, L.T("home.pc.vpn.label"), L.T("home.pc.vpn.known", new { names = _vpnNames }))

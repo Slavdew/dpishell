@@ -159,8 +159,73 @@ public sealed class ForeignStopTests
         var r = Run(s);
         Assert.Equal([(77, FlowsealExe)], s.Killed);
         Assert.Equal(["zapret от Flowseal: процесс winws.exe не завершён: Отказано в доступе"], r.Failed);
-        Assert.Single(r.Stopped);   // служба уже стояла
+        Assert.Empty(r.Stopped);   // служба уже стояла — не «остановлено»
         Assert.Empty(r.StillRunning);
+    }
+
+    [Fact]
+    public void AlreadyStoppedService_NotTouched_NotReported()
+    {
+        var s = new FakeSystem { State = SvcState.Stopped, Alive = false };
+        var r = Run(s);
+        Assert.Empty(r.Stopped);
+        Assert.Empty(r.ComeBackOnReboot);
+        Assert.Empty(r.Failed);
+        Assert.Empty(s.Killed);
+        Assert.Empty(s.ProcessQueries);
+        Assert.Equal("Нечего останавливать.", MainViewModel.StopForeignText(new(r.Stopped, r.ComeBackOnReboot, r.Failed, r.StillRunning, r.Hints)));
+    }
+
+    // ---------- что считать помехой (живая проверка 23.10: после «Остановить» карточка оставалась) ----------
+
+    static ZapretInstance Svc(string state, bool auto = false, ZapretOwner owner = ZapretOwner.Flowseal) =>
+        new("service", "zapret", owner, FlowsealExe, null, null, state) { AutoStart = auto };
+
+    [Fact]
+    public void Conflicts_RunningAndStarting_Interfere()
+    {
+        foreach (var st in new[] { SvcState.Running, SvcState.StartPending, SvcState.StopPending, SvcState.Unknown })
+        {
+            var c = Assert.Single(Conflicts.From([Svc(st.ToString())]));
+            Assert.False(c.Dormant);
+            Assert.Equal("Запустите service.bat из папки Flowseal от администратора → «Remove Services».", c.DetailNow);
+        }
+        var p = Assert.Single(Conflicts.From([new ZapretInstance("process", "PID 7", ZapretOwner.GoodbyeDpi, null, null, null, null)]));
+        Assert.False(p.Dormant);
+    }
+
+    [Fact]
+    public void Conflicts_StoppedWithAutostart_Dormant_WithoutAutostart_Hidden()
+    {
+        var c = Assert.Single(Conflicts.From([Svc("Stopped", auto: true)]));
+        Assert.True(c.Dormant);
+        Assert.Equal("zapret от Flowseal (служба zapret)", c.NameNow);
+        Assert.Empty(Conflicts.From([Svc("Stopped", auto: false)]));
+        var other = Assert.Single(Conflicts.From([Svc("Stopped", auto: true, owner: ZapretOwner.OtherZapret)]));
+        Assert.Equal("Убрать насовсем: удалить службу «zapret» программой, которая её поставила.", other.DetailNow);
+        // Наше — никогда
+        Assert.Empty(Conflicts.From([new ZapretInstance("service", ServiceManager.Name, ZapretOwner.DpiShell, Ours, null, null, "Running")]));
+    }
+
+    [Fact]
+    public void HelperStatus_SplitsDormant_AndRoundTrips()
+    {
+        using var tmp = new TempDir();
+        var shell = new Shell(new AppPaths(tmp.Sub("root"), Repo.Data));
+        var running = Conflicts.From([new ZapretInstance("process", "PID 7", ZapretOwner.GoodbyeDpi, null, null, null, null)]);
+        var dormant = Conflicts.From([Svc("Stopped", auto: true)]);
+        var backend = new ShellHelperBackend(shell)
+        {
+            InspectService = () => new ServiceInfo(SvcState.NotInstalled, null, null, false), IsActive = () => false,
+            FindForeign = () => [.. running, .. dormant],
+        };
+        var st = backend.Status();
+        Assert.Equal("GoodbyeDPI", Assert.Single(st.Foreign).Name);
+        var d = Assert.Single(st.ForeignDormant!);
+        Assert.True(d.Dormant);
+        var back = System.Text.Json.JsonSerializer.Deserialize<HelperStatus>(System.Text.Json.JsonSerializer.Serialize(st, HelperProtocol.Json), HelperProtocol.Json)!;
+        Assert.True(Assert.Single(back.ForeignDormant!).Dormant);
+        Assert.False(Assert.Single(back.Foreign).Dormant);
     }
 
     // ---------- окно: текст итога ----------

@@ -57,7 +57,8 @@ public static class ForeignStop
             if (!hints.Contains(z.HowToStop)) hints.Add(z.HowToStop);
         }
 
-        var found = sys.Find().Where(z => z.Owner != ZapretOwner.DpiShell && !Ours(z.ExePath)).ToList();
+        // Уже остановленная служба — не помеха и не «остановлено» (автозапуск окно показывает отдельной строкой).
+        var found = sys.Find().Where(z => z.Owner != ZapretOwner.DpiShell && !Ours(z.ExePath) && z.Running).ToList();
         foreach (var z in found.Where(z => z.Kind == "service"))
         {
             var what = L.T("core.shell.stopped_service", new { owner = z.OwnerTitle, name = z.Name });
@@ -150,15 +151,7 @@ public sealed class SystemForeign(AppPaths paths, Func<IReadOnlyList<Strategy>> 
         return 0;
     }
 
-    public bool AutoStart(string service)
-    {
-        try
-        {
-            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Services\{service}");
-            return key?.GetValue("Start") is int start && start == 2;
-        }
-        catch (Exception e) when (e is System.Security.SecurityException or UnauthorizedAccessException or IOException) { return true; }   // не узнали — предупредить
-    }
+    public bool AutoStart(string service) => ServiceManager.IsAutoStart(service);
 
     public IReadOnlyList<int> ProcessesOf(string exe) =>
         [.. ZapretDetector.Processes(Path.GetFileName(exe)).Where(p => exe.Equals(p.Exe, StringComparison.OrdinalIgnoreCase)).Select(p => p.Pid)];
