@@ -28,6 +28,16 @@ function lock(name) {
 	return st.job_lock(name);
 }
 
+// Итог задания: e — null, строка или сообщение { key, params, text, detail } (pkgs.uc msg). message — русский текст (старые окна),
+// message_msg — фраза словаря, detail — сырой вывод для «Подробнее».
+function job_result(e, done) {
+	if (!e)
+		return { ok: true, message: done };
+	if (type(e) != 'object')
+		return { ok: false, message: `${e}` };
+	return { ok: false, message: e.text, message_msg: { key: e.key, params: e.params ?? {}, text: e.text }, ...(e.detail ? { detail: e.detail } : {}) };
+}
+
 // Предупреждение: text — готовый русский (старые окна), key/params — ключ общего словаря и сырые параметры
 // (router-api.md §9, 2026-10-20). text null — снять предупреждение с этим кодом.
 function warn(code, text, key, params) {
@@ -328,7 +338,7 @@ else if (cmd == 'dns_analyze' || cmd == 'dns_enable' || cmd == 'dns_restore' || 
 		else if (cmd == 'dns_set') { e = dns.apply(st.read_json('/tmp/dpishell/dns_set.json', {}).preset); if (!e) dns.analyze(); }
 		else e = dns.restore();
 	} catch (x) { e = `${x}`; }
-	st.write_atomic(job, sprintf('%J\n', { action: cmd, running: false, ok: !e, message: e ?? 'Готово', at: time() }));
+	st.write_atomic(job, sprintf('%J\n', { action: cmd, running: false, ...job_result(e, 'Готово'), at: time() }));
 	let ds = st.read_json('/etc/dpishell/dns-status.json', {});
 	warn('dns_spoofed', ds.spoofed && dns.status().mode != 'doh' ? 'Провайдер подменяет адреса сайтов — приложения вне браузера могут не работать' : null,
 		'web.warn.dns_spoofed');
@@ -358,8 +368,8 @@ else if (cmd == 'update' || cmd == 'update_check' || cmd == 'rollback') {
 		else e = upd.install(from, job, cmd == 'rollback');
 	} catch (x) { e = `${x}`; }
 	let v = upd.installed_version('dpishell');
-	upd.job_put(job, { running: false, step: 'done', ok: !e,
-		message: e ?? (cmd == 'update' ? `Обновлено до ${v}` : cmd == 'rollback' ? `Возвращена версия ${v}` : 'Проверено') });
+	upd.job_put(job, { running: false, step: 'done',
+		...job_result(e, cmd == 'update' ? `Обновлено до ${v}` : cmd == 'rollback' ? `Возвращена версия ${v}` : 'Проверено') });
 	// Пакеты из окна ПК после установки (успешной или нет) — не нужны: при повторе окно кладёт их заново.
 	if (cmd != 'update_check' && from == 'local')
 		try { upd.local_cleanup(0, true); } catch (x) {}

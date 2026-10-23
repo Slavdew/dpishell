@@ -27,7 +27,9 @@ return view.extend({
 
 		this.el = {
 			versions: E('div'),
+			warn: E('div'),
 			update: E('div'),
+			last: E('div', { 'class': 'dps-error' }),
 			rollback: E('div'),
 			err: E('div', { 'class': 'dps-error' }),
 			check: api.btn(api.t('router.update.check'), function() { return self.checkUpdate(); }, 'cbi-button-neutral')
@@ -36,8 +38,10 @@ return view.extend({
 		var view = E('div', {}, [
 			E('h2', {}, api.t('about.title')),
 			api.card(api.t('web.about.version'), [
+				this.el.warn,
 				this.el.versions,
 				this.el.update,
+				this.el.last,
 				E('div', { 'class': 'dps-actions' }, [this.el.check]),
 				this.el.rollback,
 				this.el.err
@@ -104,6 +108,24 @@ return view.extend({
 		this.el.check.disabled = running;
 		this.renderUpdate(s.update, running);
 		this.renderRollback(s.rollback, running);
+		this.renderLast(s, running);
+	},
+
+	// Почти полный флеш (как на главной) и итог последнего неудачного обновления или отката — и запущенного не отсюда
+	// (окном ПК, ubus): status.update.job.
+	renderLast: function(s, running) {
+		var w = (s.warnings || []).filter(function(x) { return x.code == 'flash_full'; });
+		var wj = JSON.stringify(w);
+		if (wj != this.lastWarn) {
+			this.lastWarn = wj;
+			api.content(this.el.warn, w.map(function(x) { return E('div', { 'class': 'alert-message warning' }, api.msg(x) || x.code); }));
+		}
+		var job = s.update && s.update.job;
+		if (!this.updating && !running && job && job.ok === false && job.action != 'update_check')
+			api.fail(this.el.last, api.error(api.t('web.about.last_failed', { message: api.msg(job.message_msg || job.message) }),
+				job.action == 'rollback' ? 'update_rollback' : 'update_install', null, job.detail));
+		else
+			api.fail(this.el.last, null);
 	},
 
 	// Откат версии (status.rollback, с 0.2.0-r16; у старого пакета поля нет — блока нет): только по кнопке, с вопросом.
@@ -213,9 +235,9 @@ return view.extend({
 					window.clearInterval(timer);
 					var job = !s.__error && s.update && s.update.job;
 					if (job && job.ok === false) {
+						// Итог — строкой «Последнее обновление не удалось» (renderLast, с «Подробнее»).
 						self.updating = false;
 						self.status = s;
-						api.fail(self.el.err, api.error(api.msg(job.message_msg || job.message), method));
 						self.render2();
 						poll.start();
 						return;

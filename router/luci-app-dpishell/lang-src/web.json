@@ -36,6 +36,10 @@
     "Эти файлы или строки не взяты — вместо них английский текст:",
     "These files or lines were not used — English text is shown instead:"
   ],
+  "web.about.last_failed": [
+    "Последнее обновление не удалось: {message}",
+    "The last update failed: {message}"
+  ],
   "web.about.license": [
     "Лицензия MIT.",
     "MIT License."
@@ -340,6 +344,30 @@
     "готово",
     "done"
   ],
+  "web.err.apk_broken": [
+    "{name} установился с ошибкой и убран",
+    "{name} installed broken and was removed"
+  ],
+  "web.err.apk_deps": [
+    "Не удалось установить {name}: в источнике пакетов нет нужного пакета или его зависимостей",
+    "Could not install {name}: the package or its dependencies are missing from the package feed"
+  ],
+  "web.err.apk_failed": [
+    "Не удалось установить {name}",
+    "Could not install {name}"
+  ],
+  "web.err.apk_net": [
+    "Не удалось загрузить {name}: нет связи с источником пакетов",
+    "Could not download {name}: no connection to the package feed"
+  ],
+  "web.err.apk_sig": [
+    "{name}: подпись пакета не сошлась — установка отменена",
+    "{name}: package signature mismatch — installation cancelled"
+  ],
+  "web.err.apk_space": [
+    "Не хватило места во флеше при установке {name}",
+    "Ran out of flash space while installing {name}"
+  ],
   "web.err.arch": [
     "Архитектура роутера не поддерживается",
     "The router architecture is not supported"
@@ -368,6 +396,22 @@
     "Работает похожая программа: {names} — остановите её на вкладке «Диагностика»",
     "A similar program is running: {names} — stop it on the “Diagnostics” tab"
   ],
+  "web.err.dns_broken": [
+    "{error}. DNS роутера не отвечает. Как вернуть: освободите место во флеше и нажмите «Вернуть как было» на вкладке DNS; не помогло — по ssh до перезагрузки: {cmd}",
+    "{error}. The router’s DNS is not responding. To fix: free up flash space and press “Revert” on the DNS tab; if that doesn’t help, run over ssh before rebooting: {cmd}"
+  ],
+  "web.err.dns_failed": [
+    "DNS «{title}» не заработал",
+    "DNS “{title}” did not work"
+  ],
+  "web.err.dns_restore": [
+    "DNS провайдера вернуть не удалось",
+    "Could not switch back to the ISP DNS"
+  ],
+  "web.err.dns_reverted": [
+    "DNS «{title}» не заработал — возвращено как было",
+    "DNS “{title}” did not work — reverted"
+  ],
   "web.err.doh": [
     "Адрес защищённого DNS вида https://сервер/dns-query",
     "A secure DNS address like https://server/dns-query"
@@ -379,6 +423,10 @@
   "web.err.domain": [
     "Домен вида example.com",
     "A domain like example.com"
+  ],
+  "web.err.flash_space": [
+    "Мало места во флеше: нужно {need} МБ, свободно {free} МБ",
+    "Not enough flash space: {need} MB needed, {free} MB free"
   ],
   "web.err.generic": [
     "Ошибка",
@@ -475,6 +523,10 @@
   "web.fail.copy": [
     "Скопировать",
     "Copy"
+  ],
+  "web.fail.detail": [
+    "Подробности: {v}",
+    "Details: {v}"
   ],
   "web.fail.details": [
     "Подробнее",

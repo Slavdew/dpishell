@@ -1,7 +1,8 @@
 #!/bin/sh
 # Установка, обновление со старой версии, откат каждой функции и удаление — в эмуляторе, со сверкой со снимком роутера
 # до установки. Запуск из корня репозитория (как vm-test): sh router/test/vm-lifecycle.sh
-#   OLD_REF  — прежняя версия для обновления (git-ref; по умолчанию HEAD — рабочая папка считается новой версией)
+#   OLD_REF  — прежняя версия для обновления (git-ref; по умолчанию — прошлый выпуск: последний тег router-v*, без тегов — HEAD^;
+#              при OLD_REF=HEAD «прежняя» равна установленной, и откат версии честно отказывает — ложные FAIL)
 #   OLD2_REF — ещё одна прежняя (по умолчанию — r10, cdc77ac^); пусто — пропустить
 #   CORE_ZIP — архив ядра zapret-v72.13.zip (иначе роутер качает его с GitHub при каждой установке)
 #   SHOTS    — папка для снимков страниц (по умолчанию — временная); NO_SHOTS=1 — без снимков
@@ -15,7 +16,9 @@
 # ошибок JS (Edge headless, router/tools/luci-shot.mjs). Итог — PASS/FAIL по пунктам; код выхода 1 — есть FAIL.
 VM=${VM:-/c/Dev/owrt-vm}
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-OLD_REF=${OLD_REF:-HEAD}
+[ -n "$OLD_REF" ] || OLD_REF=$(git -C "$ROOT" tag -l 'router-v*' --sort=-v:refname | head -1)
+OLD_REF=${OLD_REF:-HEAD^}
+echo "Прежняя версия: $OLD_REF"
 OLD2_REF=${OLD2_REF-cdc77ac^}
 SSH="$VM/ssh.sh"
 WORK=$(mktemp -d)
