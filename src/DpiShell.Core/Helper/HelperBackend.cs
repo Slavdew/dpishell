@@ -185,7 +185,12 @@ public sealed record IpsetUpdateSummary(bool Applied, bool NeedsConfirm, string 
 /// <param name="Rejected">Не распознаны и убраны.</param>
 public sealed record UserTargetsResult(IReadOnlyList<string> Saved, IReadOnlyList<string> Rejected);
 
-public sealed record StopForeignResult(IReadOnlyList<string> Stopped, IReadOnlyList<string> ComeBackOnReboot);
+/// <summary>Итог stop_foreign. Failed, StillRunning, Hints — с API 1.16; от помощника старше — null.</summary>
+/// <param name="Failed">Не остановлено: «что: причина».</param>
+/// <param name="StillRunning">После остановки снова работает.</param>
+/// <param name="Hints">Как остановить вручную.</param>
+public sealed record StopForeignResult(IReadOnlyList<string> Stopped, IReadOnlyList<string> ComeBackOnReboot,
+    IReadOnlyList<string>? Failed = null, IReadOnlyList<string>? StillRunning = null, IReadOnlyList<string>? Hints = null);
 
 /// <param name="Stats">Статистика стратегий по результатам подборов.</param>
 /// <param name="Results">Последние результаты подборов (свои сайты в них уже скрыты — ResultStore).</param>
@@ -486,8 +491,8 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
 
     public StopForeignResult StopForeign()
     {
-        var (stopped, back) = shell.StopForeign();
-        return new(stopped, back);
+        var r = shell.StopForeign();
+        return new(r.Stopped, r.ComeBackOnReboot, r.Failed, r.StillRunning, r.Hints);
     }
 
     public Task CoreRepairAsync(IProgress<string> log, CancellationToken ct)

@@ -74,6 +74,8 @@
   "home.conflict.none": "Нечего останавливать.",
   "home.conflict.stopped": "Остановлено: {names}.",
   "home.conflict.stopped_service": "Остановлено: {names}. Служба {services} запустится снова после перезагрузки — удалите её в программе, которая её установила.",
+  "home.conflict.failed": "Не остановлено: {items}.",
+  "home.conflict.still_running": "Снова работает: {names}.",
   "home.toggle.off": "Выключить",
   "home.toggle.on_pc": "Включить и на ПК",
   "home.toggle.on": "Включить",

@@ -224,7 +224,9 @@ public sealed class FakeHelperBackend : IHelperBackend
     public HostsCommentResult HostsUncomment() { Call("hosts_uncomment"); return new(false, [], [], null); }
     public HostsRestoreResult HostsRestore() { Call("hosts_restore"); return new(false, 0, 0, 0, null); }
 
-    public StopForeignResult StopForeign() { Call("stop_foreign"); return new(["zapret от Flowseal"], []); }
+    /// <summary>Что отвечает stop_foreign.</summary>
+    public StopForeignResult StopForeignValue { get; set; } = new(["zapret от Flowseal"], []);
+    public StopForeignResult StopForeign() { Call("stop_foreign"); return StopForeignValue; }
 
     public async Task CoreRepairAsync(IProgress<string> log, CancellationToken ct)
     {

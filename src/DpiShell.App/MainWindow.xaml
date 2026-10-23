@@ -1876,6 +1876,8 @@
                                     <Button ContentTemplate="{StaticResource Shield}" Content="{l:T diag.conflicts.stop}" Command="{Binding StopConflictsCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
                                             ToolTip="{Binding StopConflictsTip}" ToolTipService.ShowOnDisabled="True"
                                             Visibility="{Binding ConflictList.Count, Converter={StaticResource NonZero}}" />
+                                    <TextBox Text="{Binding StopConflictsResult, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,6,0,0" local:Demo.Sensitive="True"
+                                             Visibility="{Binding HasStopConflictsResult, Converter={StaticResource Vis}}" />
                                 </StackPanel>
                             </Border>
 
