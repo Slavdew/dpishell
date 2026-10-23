@@ -107,6 +107,7 @@ public sealed partial class MainViewModel
         }
         _siteHost = host;
         DirectMessage = "";
+        ClearGuided();
         SiteOutcome = SiteCheckOutcome.Checking;
         try
         {
@@ -132,6 +133,8 @@ public sealed partial class MainViewModel
             _siteExcluded = _active && Hostlist.Covers(host, [.. SavedExclude, .. DraftExclude()]);
             // Без оптимизации (ничего не ведёт) — проверка и есть «без неё»: не открылось — дело не в ней.
             SiteOutcome = ok ? SiteCheckOutcome.Opens : notInList ? SiteCheckOutcome.NotInList : _active ? SiteCheckOutcome.FailsWith : SiteCheckOutcome.Closed;
+            // Не открылся: если виновата сеть (нет интернета, вход в сеть, время), сказать это на месте, а не «оптимизация мешает».
+            if (!ok && _guided is null && await DiagnoseNetworkAsync()) SiteOutcome = SiteCheckOutcome.Message;
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {

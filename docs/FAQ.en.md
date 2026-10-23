@@ -47,6 +47,17 @@ An exclusion turns off scanning of these folders; that is your decision. If in d
    Many own sites and it is unclear which service does not open: put them into groups ("Sites" > "My sites" > "New group"; lines can be moved between groups). The strategy search shows a result per group: "Telegram ✗ 0/12", "Other ✓ 7/8 — not opening: example.org". For a large group the search checks at most 10 addresses ("checked 10 of 120"), the same for every strategy. An address that does not even accept a connection (neither without optimization nor with any strategy) is marked "blocked by address — optimization will not help" and does not affect the choice of strategy: only "All addresses" with IP lists, a router or a VPN may help there.
 5. **An address does not open even with optimization** (GitHub downloads, Telegram Web, Discord start-up): "Network" > "Fix addresses". The ISP spoofs DNS answers: "Network" > DNS. Both can be undone, see [How to restore the previous state](#how-to-restore-the-previous-state).
 6. **A VPN or a similar program is on** (Flowseal, another zapret, GoodbyeDPI): two optimizations together break sites. "Diagnostics" shows what interferes.
+7. **"Why it did not work".** If "Turn on", "Select" or "Check a site" fail, a card with the cause and one button appears on "Home":
+   - "No internet access (or the network requires sign-in)": the selection does not start; "Retry" starts it again.
+   - The network requires sign-in (cafe Wi-Fi, hotel): "Open sign-in page".
+   - "The computer clock is off by N h N min": site certificates fail because of it; "Sync time" (needs the helper) or "Settings → Time".
+   - "Cannot turn on without the helper": the window asked for rights and you declined; "Retry".
+   - "The network changed and sites do not open": the strategy was selected for the previous network; "Select" for the new one. The program remembers the strategy per network (by gateway, no addresses stored) and applies it on returning to a known network. If the router does the bypass, the program does not change the PC strategy.
+   - Something from "Diagnostics" interferes (proxy, service, hosts): the same text and a button to the right place.
+   - Cause unknown: "Save report" and "Report a problem" (a GitHub issue opens with versions and the error text, personal data hidden).
+8. **Telegram.** "Diagnostics" has a Telegram row. If the connection to its servers cannot be established at all, the addresses are blocked entirely: optimization will not help, a proxy is needed (MTProto or SOCKS5 in Telegram settings).
+
+If the program says "The data folder was not found" at start, it was run straight from an archive: extract the archive (right-click → "Extract All") and run DpiShell.exe from the extracted folder.
 
 Still no luck: [what to send](#what-to-send-if-something-does-not-work).
 

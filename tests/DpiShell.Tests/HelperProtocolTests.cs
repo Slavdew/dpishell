@@ -185,7 +185,7 @@ public class HelperProtocolTests
             "changes_list", "changes_undo_all", "changes_undo", "changes_undo_group",
             "proxy_status", "proxy_user_set", "proxy_machine_set", "proxy_machine_restore",
             "advanced_get", "advanced_set", "joint_get", "joint_set", "settings_export_read", "settings_import", "log_tail",
-            "av_exclusion_status", "av_exclusion_add", "av_exclusion_remove", "core_offline_part", "core_offline_install",
+            "av_exclusion_status", "av_exclusion_add", "av_exclusion_remove", "core_offline_part", "core_offline_install", "time_sync",
         ];
         Assert.Equal(spec.Order(), HelperCommands.Specs.Keys.Order());
         // Команды DNS описаны в helper-protocol §3 (часть старых там записана сокращённо: hosts_check/preview/…).
@@ -204,6 +204,8 @@ public class HelperProtocolTests
         Assert.Contains("1.18 — группы своих сайтов", doc);
         Assert.All(["core_offline_part {data, first?}", "core_offline_install"], cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.Contains("1.19 — ядро ждёт окна после установки помощника", doc);
+        Assert.Contains("`time_sync`", doc);
+        Assert.Contains("1.20 — синхронизация часов", doc);
         Assert.All(["proxy_status", "proxy_user_set {enabled, server?, bypass?, pac?}", "proxy_machine_set {enabled, server?, bypass?, pac?, winhttp?}", "proxy_machine_restore"],
             cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.All(["joint_get", "joint_set {active, owned?}"], cmd => Assert.Contains("`" + cmd + "`", doc));
