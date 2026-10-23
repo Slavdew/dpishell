@@ -14,6 +14,14 @@ public static class UiGuard
     /// <summary>Открытие ссылки, системной страницы или папки под тестом — ошибка: иначе у владельца открывается браузер или Проводник.</summary>
     public static void CheckOpen(string target)
     {
-        if (Forbidden) throw new InvalidOperationException("Настоящее открытие ссылки или папки в тесте — подмените LinkOpener/OpenUrl: " + target);
+        if (!Forbidden) return;
+        Hits.Add(target);
+        throw new UiGuardException("Настоящее открытие ссылки или папки в тесте — подмените LinkOpener/OpenUrl: " + target);
     }
+
+    /// <summary>Попытки открытия под тестом: команды окна могут поймать исключение, а тестовый проект проверяет этот список в конце прогона.</summary>
+    public static System.Collections.Concurrent.ConcurrentBag<string> Hits { get; } = [];
 }
+
+/// <summary>Свой тип: обработчики ошибок открытия (Win32Exception/InvalidOperationException) его не глотают.</summary>
+public sealed class UiGuardException(string message) : Exception(message);
