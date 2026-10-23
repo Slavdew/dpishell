@@ -138,6 +138,17 @@ public sealed partial class WindowSmokeTests
 
     internal static void Pump() => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
 
+    /// <summary>Обновить роутер наверняка: RefreshAsync молча выходит, пока окно занято или идёт прежнее обновление (на медленном CI) — дождаться и обновить.</summary>
+    internal static void RefreshRouter(RouterViewModel router)
+    {
+        for (int i = 0; i < 600 && (router.Busy || router.IsRefreshing); i++)
+        {
+            Pump();
+            Thread.Sleep(50);
+        }
+        WaitUi(router.RefreshAsync());
+    }
+
     /// <summary>Окно за экраном, без активации и панели задач. Таймеры окна остановлены: они ходят в sc.exe.</summary>
     internal static MainWindow Open(MainViewModel vm)
     {
@@ -1182,7 +1193,7 @@ public sealed partial class WindowSmokeTests
                 {
                     fake.StatusApi = api;
                     fake.MinApp = minApp;
-                    WaitUi(router.RefreshAsync());   // на потоке окна: меняет списки, привязанные к окну
+                    RefreshRouter(router);   // на потоке окна: меняет списки, привязанные к окну
                     vm.GoTo(Pages.Router);
                     Pump();
                     var tabs = Find<TabControl>(w)!;
@@ -1202,7 +1213,7 @@ public sealed partial class WindowSmokeTests
                 fake.StatusApi = "\"1.0\"";
                 fake.MinApp = null;
                 fake.UpdateFieldOn = true;
-                WaitUi(router.RefreshAsync());
+                RefreshRouter(router);
                 Pump();
                 {
                     var tabs = Find<TabControl>(w)!;
@@ -1246,7 +1257,7 @@ public sealed partial class WindowSmokeTests
                 fake.KillSwitch = true;
                 fake.MethodsJson = FakeRouter.Methods020;
                 fake.WatchdogTrip();
-                WaitUi(router.RefreshAsync());
+                RefreshRouter(router);
                 vm.GoTo(Pages.Home);
                 Pump();
                 {
@@ -1291,21 +1302,25 @@ public sealed partial class WindowSmokeTests
                     var tabs = Find<TabControl>(w)!;
                     fake.SelectSteps = 100000;
                     fake.WatchdogSelectRunning();
-                    WaitUi(router.RefreshAsync());
-                    Pump();
+                    // RefreshAsync молча выходит, если уже идёт другое обновление (на медленном сервере CI) — повторять до фразы.
+                    for (int i = 0; i < 60 && !VisibleText(tabs, t => t.Text == L.T("router.wd.select_running")); i++)
+                    {
+                        RefreshRouter(router);
+                        Pump();
+                    }
                     if (!VisibleText(tabs, t => t.Text == L.T("router.wd.select_running"))) throw new Exception("Нет фразы о подборе после сторожа");
                     if (Find<Button>(tabs, b => (b.Content as string is "Подобрать" or "Не сейчас" || b.Content as string == L.T("router.trial.reenable")) && b.IsVisible) is not null) throw new Exception("Во время подбора после сторожа остались кнопки предложения");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-running.png"));
                     WaitUi(router.CancelSelectAsync());
                     fake.WatchdogSelectFound();
-                    WaitUi(router.RefreshAsync());
+                    RefreshRouter(router);
                     Pump();
                     if (!VisibleText(tabs, t => t.Text.StartsWith("Сторож выключил оптимизацию: пропал интернет. Роутер подобрал и включил "))) throw new Exception("Нет фразы «роутер подобрал и включил»");
                     if (Find<Button>(tabs, b => (b.Content as string == L.T("router.not_now") || b.Content as string == L.T("router.trial.reenable"))   /* «Подобрать» в ряду действий теперь называется так же, как в предложении */ && b.IsVisible) is { } extra) throw new Exception("После удачного подбора сторожа остались кнопки: " + extra.Content);
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-watchdog-select-found.png"));
                     fake.WatchdogTrip();
                     fake.WatchdogSelectFailed();
-                    WaitUi(router.RefreshAsync());
+                    RefreshRouter(router);
                     Pump();
                     if (!VisibleText(tabs, t => t.Text == L.T("router.wd.select_failed"))) throw new Exception("Нет фразы «не нашлось»");
                     if (Find<Button>(tabs, b => b.Content as string == L.T("router.select") && b.IsVisible && b.IsEnabled) is null) throw new Exception("Нет «Подобрать на роутере» после неудачи");
@@ -1319,7 +1334,7 @@ public sealed partial class WindowSmokeTests
                     fake.SelectSteps = 3;
                     fake.StartedBy = "app";
                     fake.WatchdogTrip();
-                    WaitUi(router.RefreshAsync());
+                    RefreshRouter(router);
                     Pump();
                 }
                 router.VerifyFromPc = () => Task.FromResult<bool?>(false);

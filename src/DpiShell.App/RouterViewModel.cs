@@ -645,6 +645,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     DateTime _refreshedAt;
 
     /// <summary>При запуске и после смены сети: поиск заново; есть сохранённый пароль — тихий вход; роутера нет — блок пропадает.</summary>
+    /// <summary>Идёт обновление состояния — новый RefreshAsync сейчас выйдет сразу (тесты ждут, пока false).</summary>
+    public bool IsRefreshing => _refreshing;
+
     public async Task RefreshAsync()
     {
         if (Busy || _refreshing) return;
