@@ -8,6 +8,16 @@
   },
   "releases": [
     {
+      "version": "0.2.2",
+      "tag": "router-v0.2.2",
+      "api": "1.0",
+      "min_app": "0.9.0",
+      "pkg": "apk",
+      "openwrt": { "min": "25.12", "snapshot": true },
+      "packages": ["dpishell", "luci-app-dpishell"],
+      "release_json": "https://github.com/Slavdew/dpishell/releases/download/router-v0.2.2/release.json"
+    },
+    {
       "version": "0.2.1",
       "tag": "router-v0.2.1",
       "api": "1.0",

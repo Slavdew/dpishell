@@ -20,8 +20,8 @@ public class RouterSuitabilityTests
         Assert.False(v.NeedsTunnel);
         Assert.False(v.KmodPending);
         Assert.False(v.AlreadyInstalled);
-        Assert.Equal("0.2.1", v.Release!.Version);
-        Assert.Equal("router-v0.2.1", v.Release.Tag);
+        Assert.Equal("0.2.2", v.Release!.Version);
+        Assert.Equal("router-v0.2.2", v.Release.Tag);
     }
 
     [Fact]
@@ -157,16 +157,16 @@ public class RouterSuitabilityTests
     public void CoreArch_AsCoreUc(string distribArch, string? expected) => Assert.Equal(expected, RouterSuitability.CoreArch(distribArch));
 
     [Theory]
-    [InlineData("apk", "25.12.0", "0.2.1")]
-    [InlineData("apk", "25.12.0-rc1", "0.2.1")]
-    [InlineData("apk", "26.06.1", "0.2.1")]
-    [InlineData("apk", "SNAPSHOT", "0.2.1")]
-    [InlineData("apk", "25.12-SNAPSHOT", "0.2.1")]
+    [InlineData("apk", "25.12.0", "0.2.2")]
+    [InlineData("apk", "25.12.0-rc1", "0.2.2")]
+    [InlineData("apk", "26.06.1", "0.2.2")]
+    [InlineData("apk", "SNAPSHOT", "0.2.2")]
+    [InlineData("apk", "25.12-SNAPSHOT", "0.2.2")]
     [InlineData("apk", "24.10.2", null)]
     [InlineData("opkg", "24.10.2", null)]
     // Сборка на основе OpenWrt со своей версией вместо версии OpenWrt — выбор по пакетному менеджеру (живой роутер 2026-10-17).
-    [InlineData("apk", "1.4.8", "0.2.1")]
-    [InlineData("apk", "непонятно", "0.2.1")]
+    [InlineData("apk", "1.4.8", "0.2.2")]
+    [InlineData("apk", "непонятно", "0.2.2")]
     [InlineData("opkg", "1.4.8", null)]
     [InlineData(null, "25.12.0", null)]
     public void ChooseRelease(string? pkg, string release, string? expected) => Assert.Equal(expected, Releases.Choose(pkg, release)?.Version);
@@ -178,8 +178,8 @@ public class RouterSuitabilityTests
         var newer = r.Releases[0] with { Version = "0.3.0", Tag = "router-v0.3.0", Openwrt = new("26.06", false) };
         var set = r with { Releases = [.. r.Releases, newer] };
         Assert.Equal("0.3.0", set.Choose("apk", "26.06.0")!.Version);
-        Assert.Equal("0.2.1", set.Choose("apk", "25.12.3")!.Version);
-        Assert.Equal("0.2.1", set.Choose("apk", "SNAPSHOT")!.Version);   // у 0.3.0 snapshot: false
+        Assert.Equal("0.2.2", set.Choose("apk", "25.12.3")!.Version);
+        Assert.Equal("0.2.2", set.Choose("apk", "SNAPSHOT")!.Version);   // у 0.3.0 snapshot: false
     }
 
     [Fact]

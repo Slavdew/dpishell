@@ -96,7 +96,7 @@ public sealed class RouterSetupViewModelTests : IDisposable
         Assert.Equal("secret", RouterSecrets.Unprotect(Settings.RouterPassword));
         Assert.True(vm.HasSavedPassword);
         Assert.True(i.VerdictOk);
-        Assert.Equal(L.T("router.install.verdict_ok", new { version = "0.2.1" }), i.VerdictTitle);
+        Assert.Equal(L.T("router.install.verdict_ok", new { version = "0.2.2" }), i.VerdictTitle);
         Assert.False(i.HasTunnelNote);
         Assert.True(i.CanInstall);
         Assert.Empty(ssh.Uploads);    // проверка ничего не кладёт
