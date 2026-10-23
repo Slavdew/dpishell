@@ -547,10 +547,10 @@ public sealed class AppUpdater(AppUpdateClient client, AppVersionStore store)
     }
 
     string NoSpace(long free) =>
-        L.T("core.upd.no_space", new { disk = Path.GetPathRoot(Path.GetFullPath(store.Root)), need = Mb(RequiredFreeBytes), free = Mb(free) });
+        L.T("core.upd.no_space", new { disk = DiskSpace.DiskOf(store.Root), need = Mb(RequiredFreeBytes), free = Mb(free) });
 
     // ERROR_DISK_FULL (112) и ERROR_HANDLE_DISK_FULL (39) — младшие 16 бит HResult.
-    public static bool IsDiskFull(IOException e) => (e.HResult & 0xFFFF) is 112 or 39;
+    public static bool IsDiskFull(IOException e) => DiskSpace.IsDiskFull(e);
 
     /// <summary>
     /// Команда перезапуска на распакованную версию; текущая запоминается как прежняя (откат). Окно запускает
