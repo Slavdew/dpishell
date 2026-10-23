@@ -60,6 +60,7 @@ public sealed partial class MainViewModel
             T("diag.report.v.core", Or(string.IsNullOrEmpty(_coreVersion) ? _shell.Installer.Manifest.Version : _coreVersion)),
             T("diag.report.v.data", Or(st?.DataVersion ?? _shell.DataVersion)),
             T("diag.report.v.windows", RuntimeInformation.OSDescription),
+            T("diag.report.v.tls", TlsText),
         ], Raw: true));
 
         // Служба, оптимизация, стратегия.

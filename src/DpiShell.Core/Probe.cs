@@ -57,8 +57,11 @@ public sealed record TargetSet(List<TargetGroup> Groups)
     }
 }
 
-/// <summary>Blocked — HTTP 451 «недоступно по требованию закона»: блокировка, а не сайт.</summary>
-public enum ProbeOutcome { Ok, Timeout, ConnectFailed, TlsFailed, Reset, Truncated, BadStatus, ForeignRedirect, Error, Blocked }
+/// <summary>
+/// Blocked — HTTP 451 «недоступно по требованию закона»: блокировка, а не сайт.
+/// Tls13Unsupported — Windows не умеет TLS 1.3 клиентом (<see cref="TlsSupport"/>): не провал стратегии, из <see cref="HttpProbe.CheckAsync"/> не выходит.
+/// </summary>
+public enum ProbeOutcome { Ok, Timeout, ConnectFailed, TlsFailed, Reset, Truncated, BadStatus, ForeignRedirect, Error, Blocked, Tls13Unsupported }
 
 /// <param name="NoTcp">TCP-соединение с адресом не установилось (таймаут или отказ при соединении; не ошибка имени): сайт не отвечает вовсе, а не режется потоком. Нужно, чтобы отличить блокировку по адресу (<see cref="AddressBlocks"/>).</param>
 public sealed record ProbeResult(Target Target, SslProtocols Tls, ProbeOutcome Outcome, double Seconds, long Bytes, string Detail, bool NoTcp = false)
@@ -70,7 +73,7 @@ public sealed record ProbeResult(Target Target, SslProtocols Tls, ProbeOutcome O
 /// Проверка «сайт реально открывается», а не «сервер что-то ответил»:
 /// ТСПУ обычно пропускает рукопожатие и обрывает поток после ~16 КБ, поэтому тело читается целиком.
 /// </summary>
-public sealed class HttpProbe
+public class HttpProbe
 {
     public TimeSpan ConnectTimeout { get; init; } = TimeSpan.FromSeconds(3);
     public TimeSpan ReadTimeout { get; init; } = TimeSpan.FromSeconds(6);
@@ -82,28 +85,45 @@ public sealed class HttpProbe
     /// <summary>Если задан — адреса целей берутся из DoH, а не из DNS системы (см. docs/research/dns.md). Не нашёл — системный DNS.</summary>
     public IAddressResolver? Resolver { get; init; }
 
-    public static readonly SslProtocols[] DefaultTls = [SslProtocols.Tls13, SslProtocols.Tls12];
+    /// <summary>[TLS 1.3, TLS 1.2]; Windows без клиентского TLS 1.3 (Windows 10) — только [TLS 1.2] (<see cref="TlsSupport"/>).</summary>
+    public static SslProtocols[] DefaultTls => TlsSupport.Versions;
 
-    /// <summary>Цель проверяется для каждой версии TLS; успех — только если прошли все версии.</summary>
+    /// <summary>
+    /// Цель проверяется для каждой версии TLS; успех — только если прошли все версии.
+    /// TLS 1.3, которого нет в этой Windows, не проверяется; несовпадение алгоритмов на 1.3 — не провал: такая версия выпадает из итога, вместо неё — 1.2.
+    /// </summary>
     public async Task<IReadOnlyList<ProbeResult>> CheckAsync(Target t, IEnumerable<SslProtocols>? tls = null, CancellationToken ct = default)
     {
         var list = new List<ProbeResult>();
-        foreach (var v in tls ?? DefaultTls)
+        var queue = new List<SslProtocols>(TlsSupport.Effective(tls ?? DefaultTls));
+        bool mismatch = false;
+        for (int k = 0; k < queue.Count; k++)
         {
+            var v = queue[k];
             ProbeResult? best = null;
             for (int i = 0; i < Attempts; i++)
             {
                 var r = await OnceAsync(t, v, ct);
                 if (r.Ok) { best = best is { Ok: true } && best.Seconds <= r.Seconds ? best : r; break; }
                 best ??= r;
+                if (r.Outcome == ProbeOutcome.Tls13Unsupported) break;
                 if (i + 1 < Attempts) await Task.Delay(500, ct);
             }
-            list.Add(best!);
+            if (best!.Outcome == ProbeOutcome.Tls13Unsupported)
+            {
+                mismatch = true;
+                if (!queue.Contains(SslProtocols.Tls12)) queue.Add(SslProtocols.Tls12);
+                continue;
+            }
+            list.Add(best);
         }
+        if (mismatch && list.Any(p => p.Tls == SslProtocols.Tls12 && p.Ok) && Uri.TryCreate(t.Url, UriKind.Absolute, out var u))
+            TlsSupport.NoteMismatch(u.Host);
         return list;
     }
 
-    public async Task<ProbeResult> OnceAsync(Target t, SslProtocols tls, CancellationToken ct = default)
+    /// <summary>Одна попытка одной версией TLS. Виртуальная — для подставных проверок в тестах.</summary>
+    public virtual async Task<ProbeResult> OnceAsync(Target t, SslProtocols tls, CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
         // Новый обработчик на каждую попытку: никаких переиспользованных соединений между стратегиями.
@@ -192,6 +212,10 @@ public sealed class HttpProbe
         {
             return new(t, tls, bytes > 0 ? ProbeOutcome.Truncated : ProbeOutcome.Timeout, sw.Elapsed.TotalSeconds, bytes,
                 bytes > 0 ? L.T("core.probe.stream_cut", new { bytes }) : L.T("core.probe.timeout"), NoTcp: !connected);
+        }
+        catch (HttpRequestException e) when (tls == SslProtocols.Tls13 && TlsSupport.IsAlgorithmMismatch(e))
+        {
+            return new(t, tls, ProbeOutcome.Tls13Unsupported, sw.Elapsed.TotalSeconds, bytes, Flatten(e));
         }
         catch (HttpRequestException e)
         {

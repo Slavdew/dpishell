@@ -76,6 +76,8 @@
   "select.note.cancelled": "search stopped, not all strategies were checked",
   "select.note.mix": "no single strategy for everything — a mixed one was built",
   "select.note.blocked": "did not open without optimization: {groups}",
+  "select.note.tls12": "TLS 1.3 is checked on Windows 11 only — TLS 1.2 here",
+  "select.note.tls_off": "TLS 1.3 is disabled in this Windows — checked over TLS 1.2",
   "select.unavailable": "Strategy unavailable — connect the helper and retry.",
   "select.copied": "Strategy copied — it can be pasted into DpiShell",
   "select.clipboard_busy": "Could not copy — the clipboard is in use by another program.",

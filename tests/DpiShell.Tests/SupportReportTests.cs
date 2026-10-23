@@ -64,6 +64,9 @@ public sealed class SupportReportTests : IDisposable
         Assert.Contains("Ядро zapret: ", text);
         Assert.Contains("Данные: ", text);
         Assert.Contains("Windows: ", text);
+        // Сборка Windows видна (Windows 10 — без клиентского TLS 1.3), и какими версиями TLS идут проверки.
+        Assert.Matches(@"Windows: [^\r\n]*\d+\.\d+\.\d{4,}", text);
+        Assert.Contains("Проверка TLS: " + vm.TlsText, text);
         Assert.Contains("Режим: ", text);
         Assert.Contains("Оптимизация: ", text);
         Assert.Contains("Прокси пользователя: включён (прокси-сервер)", text);

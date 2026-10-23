@@ -94,17 +94,21 @@ public static class WatchdogPolicy
         : WatchOutcome.Failed;
 }
 
-/// <summary>Лёгкая проверка для автопереключения: обязательные цели, одна попытка, только TLS 1.3, адреса через DoH.</summary>
+/// <summary>Лёгкая проверка для автопереключения: обязательные цели, одна попытка, только TLS 1.3 (без него в этой Windows — TLS 1.2, <see cref="TlsSupport"/>), адреса через DoH.</summary>
 public static class WatchdogProbe
 {
-    public static async Task<WatchOutcome> CheckAsync(IReadOnlyList<TargetGroup> groups, AppPaths paths, CancellationToken ct = default)
+    public static Task<WatchOutcome> CheckAsync(IReadOnlyList<TargetGroup> groups, AppPaths paths, CancellationToken ct = default) =>
+        CheckAsync(groups, paths, doh => new HttpProbe { Resolver = doh, Attempts = 1 }, ct);
+
+    /// <param name="newProbe">Проверка по резолверу; в тестах — подставная.</param>
+    public static async Task<WatchOutcome> CheckAsync(IReadOnlyList<TargetGroup> groups, AppPaths paths, Func<IAddressResolver, HttpProbe> newProbe, CancellationToken ct = default)
     {
         var required = groups.Select(g => g with { Targets = g.Targets.Where(t => t.Required).ToList() })
             .Where(g => g.Targets.Count > 0).ToList();
         if (required.Count == 0) return WatchOutcome.Ok;
 
         using var doh = new DohResolver();
-        var selector = new Selector(paths, new HttpProbe { Resolver = doh, Attempts = 1 }) { Tls = [SslProtocols.Tls13] };
+        var selector = new Selector(paths, newProbe(doh)) { Tls = TlsSupport.Watch };
         var verdicts = await selector.CheckGroupsAsync(required, ct);
         bool dohAlive = verdicts.Any(v => v.Ok) || (await doh.ResolveAsync("example.com", ct)).Length > 0;
         return WatchdogPolicy.Classify(verdicts, dohAlive);
