@@ -30,6 +30,14 @@
 
 ## Скачать (бета)
 
+> [!WARNING]
+> ### Антивирусы
+> Защитник Windows и другие антивирусы могут счесть угрозой ядро zapret и удалить его — архив `vendor\zapret-v72.13.zip` внутри скачанного zip или `core.zip` при первом «Включить». Названия бывают разные: `Trojan:Win32/Tecabans.STV!cl`, `Misleading:Win32/Malgent!AMTB`, `RiskTool…WinDivert`.
+>
+> Причина — драйвер WinDivert: он перехватывает сетевой трафик, а этим пользуются и вредоносные программы. Сам он не вирус. DpiShell ядро не собирает и не меняет: это [официальный архив zapret v72.13](https://github.com/bol-van/zapret/releases/tag/v72.13) от bol-van, программа сверяет его хеш и хеш каждого файла ([data/core.json](data/core.json), [проверка](docs/vetting.md)).
+>
+> **Что сделать:** добавить в исключения папку программы и `%ProgramData%\DpiShell`, затем скачать архив заново или нажать «Диагностика» → «Восстановить». Как именно — [FAQ](docs/FAQ.md#антивирус-удаляет-файлы). Исключение отключает проверку этих папок; сомневаетесь — не ставьте программу.
+
 1. Откройте [страницу последнего выпуска](https://github.com/Slavdew/dpishell/releases/latest) и скачайте `DpiShell-<версия>-portable.zip`.
 2. Распакуйте в любую папку и запустите `DpiShell.exe`. Программа не подписана — Windows SmartScreen может предупредить: «Подробнее» → «Выполнить в любом случае». Если такой кнопки нет — запуск, возможно, ограничивает Smart App Control или политика организации.
 3. Нажмите «Включить». Подробно — [docs/windows/README.md](docs/windows/README.md).
@@ -60,6 +68,8 @@ DpiShell is a simple shell over [zapret](https://github.com/bol-van/zapret) (bol
 **Download.** Take `DpiShell-<version>-portable.zip` from the [latest release](https://github.com/Slavdew/dpishell/releases/latest) (Windows 10/11 x64). Unpack it to any folder (not into Temp or OneDrive) and run `DpiShell.exe`. Do not delete or edit the `data` folder next to it.
 
 **SmartScreen.** The app is not signed, so Windows SmartScreen may warn: "More info" > "Run anyway". If there is no such button, launch may be restricted by Smart App Control or an organization policy.
+
+**Antivirus.** Windows Defender and other antivirus software may flag the zapret core and delete it (for example `Trojan:Win32/Tecabans.STV!cl`): the `vendor\zapret-v72.13.zip` archive inside the download or `core.zip` on the first "Turn on". The reason is the WinDivert driver, which intercepts network traffic. DpiShell does not build or modify the core: it is the [official zapret v72.13 archive](https://github.com/bol-van/zapret/releases/tag/v72.13) by bol-van, checked by hash ([data/core.json](data/core.json)). Add the program folder and `%ProgramData%\DpiShell` to the exclusions, then download again or press "Diagnostics" > "Restore". Steps: [FAQ](docs/FAQ.en.md#antivirus-deletes-files). An exclusion turns off scanning of these folders; if in doubt, do not install the program.
 
 **First run.** On the first "Turn on" Windows asks for administrator rights once: this installs the DpiShell helper (a Windows service). Later the window works without them; when the helper is updated or removed, Windows asks again. The window language switches with the flag icon at the bottom of the left menu.
 
