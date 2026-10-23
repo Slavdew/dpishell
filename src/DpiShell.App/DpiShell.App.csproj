@@ -14,6 +14,8 @@
     <UseWindowsForms>true</UseWindowsForms>
     <!-- WinDivert и sc требуют администратора. -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Значок exe и ярлыка: пересобирается tools\make-icon.ps1 тем же кодом, что рисует трей (Icons.cs). -->
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <RootNamespace>DpiShell.App</RootNamespace>
     <AssemblyName>DpiShell</AssemblyName>
     <Product>DpiShell</Product>
