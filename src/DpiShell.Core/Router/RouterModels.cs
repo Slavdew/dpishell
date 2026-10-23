@@ -214,7 +214,10 @@ public sealed record RouterSelectProgress(
     string? StartedBy = null, string? Depth = null, int? EtaS = null,
     bool Cancelled = false, bool Applied = false, List<string>? Backups = null,
     // message_msg (router-api §9): то же, что Message, фразой { key, params, text } — для окна на другом языке.
-    System.Text.Json.JsonElement? MessageMsg = null);
+    System.Text.Json.JsonElement? MessageMsg = null,
+    // С 0.2.1-r2 (§9): run — метка подбора (started_at), rows_from — с какого номера строки в rows, rows_total — сколько всего.
+    // Есть rows_total — роутер принимает since/run; старый роутер — null, rows всегда целиком.
+    long? Run = null, int? RowsFrom = null, int? RowsTotal = null);
 
 public sealed record RouterTarget(string Url, bool Important);
 public sealed record RouterTargets(List<RouterTarget> Items);

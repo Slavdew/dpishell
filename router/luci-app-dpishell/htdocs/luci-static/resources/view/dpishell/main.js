@@ -158,7 +158,8 @@ return view.extend({
 			var wasSelecting = self.status.jobs && self.status.jobs.select;
 			self.status = s;
 			if (s.jobs.select)
-				return api.safe('select_progress').then(function(p) {
+				// Здесь нужны только index/total/depth: роутер, умеющий since (rows_total в ответе), строк не шлёт.
+				return api.safe('select_progress', self.progress && self.progress.rows_total != null ? { since: 1000000 } : null).then(function(p) {
 					self.progress = p.__error ? null : p;
 					self.update();
 				});

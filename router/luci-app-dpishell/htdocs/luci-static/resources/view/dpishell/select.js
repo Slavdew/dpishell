@@ -20,6 +20,19 @@ return view.extend({
 		});
 	},
 
+	// Ход подбора: роутер с rows_total в ответе (0.2.1-r2) отдаёт строки с номера since — к полученным досылаются новые,
+	// а не весь select.json раз в секунду; старый роутер (без rows_total) — весь список, как раньше.
+	fetchProgress: function() {
+		var prev = this.progress, args = null;
+		if (prev && !prev.__error && prev.rows_total != null && Array.isArray(prev.rows))
+			args = { since: prev.rows.length, run: prev.run };
+		return api.safe('select_progress', args).then(function(p) {
+			if (args && !p.__error && p.rows_from > 0)
+				p.rows = prev.rows.slice(0, p.rows_from).concat(p.rows || []);
+			return p;
+		});
+	},
+
 	render: function(data) {
 		this.status = data[0].__error ? null : data[0];
 		this.progress = data[1];
@@ -64,7 +77,7 @@ return view.extend({
 		if (!this.running() && !this.wasHidden && (this.tickNo % 10) != 0)
 			return Promise.resolve();
 		this.wasHidden = false;
-		return Promise.all([api.safe('status'), api.safe('select_progress')]).then(function(d) {
+		return Promise.all([api.safe('status'), this.fetchProgress()]).then(function(d) {
 			if (!d[0].__error)
 				self.status = d[0];
 			self.progress = d[1];

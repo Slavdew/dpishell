@@ -573,8 +573,12 @@ methods.select_start = {
 	}
 };
 
+// since/run (с 0.2.1-r2, router-api §9): строки rows с номера since — окно и страница досылают новые, а не тянут весь
+// select.json (~60 КБ) раз в секунду. run — started_at подбора, по которому считали since: другой подбор — строки с 0.
+// В ответе всегда (и без since) run, rows_from, rows_total — по ним клиент понимает, что роутер умеет since.
 methods.select_progress = {
-	call: function() {
+	args: { since: 0, run: 0 },
+	call: function(req) {
 		let p = st.read_json('/tmp/dpishell/select.json', { running: false, index: 0, total: 0, rows: [], best: null, applied: false, backups: [] });
 		// Запись и живой процесс расходятся: задание умерло (убито, перезагрузка) — итог «прервался»; запись ещё не
 		// обновилась, а задание идёт — «идёт».
@@ -585,6 +589,15 @@ methods.select_progress = {
 			p = { ...p, running: true, index: 0, total: 0, rows: [], message: 'Запуск подбора…',
 				message_msg: { key: 'router.select.starting', params: {}, text: 'Запуск подбора…' }, finished_at: null };
 		p.finished_at = st.iso(p.finished_at);
+		let rows = type(p.rows) == 'array' ? p.rows : [], n = length(rows), a = req.args ?? {};
+		let since = type(a.since) == 'int' && a.since > 0 ? a.since : 0;
+		if (type(a.run) == 'int' && a.run > 0 && a.run != (p.started_at ?? 0))
+			since = 0;
+		let from = since < n ? since : n;
+		p.rows = from ? slice(rows, from) : rows;
+		p.run = p.started_at ?? 0;
+		p.rows_from = from;
+		p.rows_total = n;
 		return p;
 	}
 };

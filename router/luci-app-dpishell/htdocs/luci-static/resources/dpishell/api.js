@@ -126,7 +126,7 @@ function translateTabs() {
 }
 
 var PARAMS = {
-	status: [], strategies: [], select_progress: [], targets_get: [], diag: [], report: [],
+	status: [], strategies: [], select_progress: ['since', 'run'], targets_get: [], diag: [], report: [],
 	dns_status: [], site_check_result: [],
 	lists_get: ['name'],
 	enable: ['confirm_s'], confirm: [], disable: [], check_now: [], select_cancel: [], dns_analyze: [], dns_enable: [],
