@@ -749,12 +749,26 @@ public sealed partial class MainViewModel : Observable
     ICommand? _dismissVpnCmd;
 
     IReadOnlyList<Conflict> _conflicts = [];
-    /// <summary>Мешающие программы (данные): имена собираются на языке окна при показе.</summary>
+    IReadOnlyList<Conflict> _dormant = [];
+    /// <summary>
+    /// Похожие программы (данные): мешающие и спящие (<see cref="Conflict.Dormant"/> — остановлены, запустятся с Windows).
+    /// Главная и «Диагностика» — из одного списка: после «Остановить» обе показывают то, что есть сейчас.
+    /// </summary>
     void SetConflicts(IReadOnlyList<Conflict> list)
     {
-        _conflicts = list;
+        _conflicts = [.. list.Where(c => !c.Dormant)];
+        _dormant = [.. list.Where(c => c.Dormant)];
+        _conflictsShown = list;
+        RebuildConflictList();
         Raise(nameof(ConflictNames)); Raise(nameof(ConflictWarning)); Raise(nameof(HasConflicts)); RaiseIssues();
     }
+
+    /// <summary>Похожие программы: от помощника (status) или сами, без прав. Помощник до foreignDormant присылает всё в Foreign.</summary>
+    IReadOnlyList<Conflict> ForeignOf(HelperStatus? st) =>
+        st is null ? Conflicts.Scan(_shell.Paths, _shell.Catalog.Strategies) : [.. st.Foreign, .. st.ForeignDormant ?? []];
+
+    /// <summary>Имена спящих (остановлены, запустятся после перезагрузки).</summary>
+    string DormantNames => string.Join(", ", _dormant.Select(c => c.NameNow).Distinct());
     /// <summary>Имена мешающих программ (для плашки и текста подтверждения «Остановить»).</summary>
     string ConflictNames => string.Join(", ", _conflicts.Select(c => c.NameNow).Distinct());
     public string ConflictWarning => _conflicts.Count == 0 ? "" : L.T("home.conflict.warn", new { names = ConflictNames });
@@ -993,7 +1007,7 @@ public sealed partial class MainViewModel : Observable
                 var s = ServiceManager.Query(ServiceManager.Name);
                 return (s,
                     st is null && s != SvcState.NotInstalled ? LocalServiceStrategy() : null,
-                    st?.Foreign ?? Conflicts.Find(_shell.Paths, _shell.Catalog.Strategies),
+                    ForeignOf(st),
                     Conflicts.ActiveVpnAdapters());
             });
             if (st is not null)
@@ -1786,14 +1800,23 @@ public sealed partial class MainViewModel : Observable
     bool _coreBroken;
     public bool CoreBroken { get => _coreBroken; private set => Set(ref _coreBroken, value); }
 
+    /// <summary>Мешающие сейчас: «Остановить» — для них.</summary>
     public ObservableCollection<string> ConflictList { get; } = [];
+    /// <summary>Остановлены, но запустятся после перезагрузки — спокойная строка, без «Остановить».</summary>
+    public ObservableCollection<string> DormantList { get; } = [];
+    /// <summary>«Не найдены.» — ни мешающих, ни спящих.</summary>
+    public bool NoConflicts => ConflictList.Count == 0 && DormantList.Count == 0;
     IReadOnlyList<Conflict>? _conflictsShown;
 
     void RebuildConflictList()
     {
         if (_conflictsShown is not { } list) return;
         ConflictList.Clear();
-        foreach (var c in list) ConflictList.Add(L.T("diag.conflict.line", new { name = c.NameNow, detail = c.DetailNow }));
+        DormantList.Clear();
+        foreach (var c in list)
+            if (c.Dormant) DormantList.Add(L.T("diag.conflict.dormant_line", new { name = c.NameNow, detail = c.DetailNow }));
+            else ConflictList.Add(L.T("diag.conflict.line", new { name = c.NameNow, detail = c.DetailNow }));
+        Raise(nameof(NoConflicts));
     }
 
     /// <summary>Смена языка: всё, что окно держит готовой строкой, собирается заново из данных (сообщения последних действий остаются).</summary>
@@ -1903,7 +1926,7 @@ public sealed partial class MainViewModel : Observable
             {
                 var s = ServiceManager.Query(ServiceManager.Name);
                 return (s, st is null && s != SvcState.NotInstalled ? LocalServiceStrategy() : null, ServiceManager.Query("WinDivert"),
-                    st?.Foreign ?? Conflicts.Find(_shell.Paths, _shell.Catalog.Strategies), Conflicts.ActiveVpnAdapters());
+                    ForeignOf(st), Conflicts.ActiveVpnAdapters());
             });
             if (st is not null)
             {
@@ -1952,8 +1975,7 @@ public sealed partial class MainViewModel : Observable
                 var noHelper = Helper.State == HelperState.NotInstalled;
                 CoreTextIs(() => noHelper ? L.T("diag.core.no_helper") : L.T("diag.core.helper_down"));
             }
-            _conflictsShown = conflicts;
-            RebuildConflictList();
+            SetConflicts(conflicts);
             VpnList.Clear();
             foreach (var v in vpn) VpnList.Add(v);
             UpdateStatus();

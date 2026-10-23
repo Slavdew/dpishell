@@ -1906,11 +1906,18 @@
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <TextBlock Text="{l:T diag.conflicts.title}" Style="{StaticResource H2}" />
-                                    <TextBlock Text="{l:T diag.conflicts.none}" Style="{StaticResource Hint}" Visibility="{Binding ConflictList.Count, Converter={StaticResource Zero}}" />
+                                    <TextBlock Text="{l:T diag.conflicts.none}" Style="{StaticResource Hint}" Visibility="{Binding NoConflicts, Converter={StaticResource Vis}}" />
                                     <ItemsControl ItemsSource="{Binding ConflictList}" local:Demo.Sensitive="True">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <TextBox Text="{Binding Mode=OneWay}" Style="{StaticResource SelectableText}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <ItemsControl ItemsSource="{Binding DormantList}" local:Demo.Sensitive="True">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBox Text="{Binding Mode=OneWay}" Style="{StaticResource SelectableHint}" />
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>

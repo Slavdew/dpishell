@@ -74,6 +74,17 @@ public sealed partial class ServiceManager(AppPaths paths) : IServiceOps
         catch (Exception e) when (e is System.Security.SecurityException or UnauthorizedAccessException or IOException) { return null; }
     }
 
+    /// <summary>Тип запуска службы — «автоматически» (Start = 2 в реестре). Не узнали — true: лучше предупредить.</summary>
+    public static bool IsAutoStart(string name)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Services\{name}");
+            return key?.GetValue("Start") is int start && start == 2;
+        }
+        catch (Exception e) when (e is System.Security.SecurityException or UnauthorizedAccessException or IOException) { return true; }
+    }
+
     /// <summary>Поставить (или перенастроить) службу на стратегию и запустить.</summary>
     public void Apply(IReadOnlyList<string> args)
     {
@@ -150,7 +161,9 @@ public sealed record Conflict(string Kind, string Name, string Detail)
     [System.Text.Json.Serialization.JsonIgnore] public ZapretInstance? Source { get; init; }
     /// <summary>Имя на языке окна: из источника, а у присланного помощником (по-русски) — переводом готовой фразы.</summary>
     [System.Text.Json.Serialization.JsonIgnore] public string NameNow => Source is { } z ? Conflicts.ConflictName(z) : L.Relocalize(Name);
-    [System.Text.Json.Serialization.JsonIgnore] public string DetailNow => Source?.HowToStop ?? L.Relocalize(Detail);
+    [System.Text.Json.Serialization.JsonIgnore] public string DetailNow => Source is { } z ? Dormant ? z.HowToRemove : z.HowToStop : L.Relocalize(Detail);
+    /// <summary>Служба остановлена, но с автозапуском: сейчас не мешает, запустится после перезагрузки. Detail — как убрать насовсем.</summary>
+    public bool Dormant { get; init; }
 }
 
 public static class Conflicts
@@ -160,14 +173,21 @@ public static class Conflicts
     /// Чужие обходы (всё, кроме нашей службы с нашим ядром): кто это и какая стратегия — <see cref="ZapretDetector"/>.
     /// Name — для человека («zapret от Flowseal, стратегия general (ALT11)»), Detail — как выключить.
     /// </summary>
-    public static IReadOnlyList<Conflict> Find(AppPaths paths, IReadOnlyList<Strategy>? catalog = null)
-    {
-        catalog ??= LoadCatalog(paths);
-        return ZapretDetector.Find(paths, catalog)
-            .Where(z => z.Owner != ZapretOwner.DpiShell)
-            .Select(z => new Conflict(z.Kind, ConflictName(z), z.HowToStop) { Source = z })
-            .ToList();
-    }
+    /// <remarks>Мешает только работающее: процесс или служба не в состоянии «остановлена». Остановленная служба — не помеха.</remarks>
+    public static IReadOnlyList<Conflict> Find(AppPaths paths, IReadOnlyList<Strategy>? catalog = null) =>
+        [.. Scan(paths, catalog).Where(c => !c.Dormant)];
+
+    /// <summary>Мешающие и спящие (<see cref="Conflict.Dormant"/>: остановлены, запустятся с Windows) — одним обходом.</summary>
+    public static IReadOnlyList<Conflict> Scan(AppPaths paths, IReadOnlyList<Strategy>? catalog = null) =>
+        From(ZapretDetector.Find(paths, catalog ?? LoadCatalog(paths)));
+
+    /// <summary>Находки → конфликты: наше отсеяно, остановленная служба без автозапуска не показывается.</summary>
+    public static IReadOnlyList<Conflict> From(IEnumerable<ZapretInstance> found) =>
+        [.. found
+            .Where(z => z.Owner != ZapretOwner.DpiShell && (z.Running || z.AutoStart))
+            .Select(z => z.Running
+                ? new Conflict(z.Kind, ConflictName(z), z.HowToStop) { Source = z }
+                : new Conflict(z.Kind, ConflictName(z), z.HowToRemove) { Source = z, Dormant = true })];
 
     internal static string ConflictName(ZapretInstance z)
     {

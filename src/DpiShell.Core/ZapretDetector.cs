@@ -27,6 +27,17 @@ public sealed record ZapretInstance(
         (_, "service") => L.T("diag.conflict.stop_service", new { name = Name }),
         _ => L.T("diag.conflict.stop_process"),
     };
+
+    /// <summary>Служба запускается вместе с Windows (тип запуска «автоматически»); у процесса — false.</summary>
+    public bool AutoStart { get; init; }
+
+    /// <summary>Работает или запускается: процесс — всегда, служба — в любом состоянии, кроме «остановлена».</summary>
+    public bool Running => Kind != "service" || State != nameof(SvcState.Stopped);
+
+    /// <summary>Как убрать остановленную службу насовсем, чтобы не запускалась с Windows.</summary>
+    public string HowToRemove => Owner == ZapretOwner.Flowseal
+        ? L.T("diag.conflict.stop_flowseal_service")
+        : L.T("diag.conflict.remove_service", new { name = Name });
 }
 
 /// <summary>
@@ -47,8 +58,12 @@ public static class ZapretDetector
             if (state == SvcState.NotInstalled) continue;
             var bin = ServiceManager.QueryBinPath(name);
             var (exe, args) = SplitCommandLine(bin);
-            if (exe is not null) serviceExes.Add(exe);
-            r.Add(new("service", name, OwnerOf(paths, exe, name), exe, bin, Match(args, catalog), state.ToString()));
+            // Остановленная служба процесс не держит: winws с тем же путём — отдельная находка.
+            if (exe is not null && state != SvcState.Stopped) serviceExes.Add(exe);
+            r.Add(new("service", name, OwnerOf(paths, exe, name), exe, bin, Match(args, catalog), state.ToString())
+            {
+                AutoStart = state == SvcState.Stopped && ServiceManager.IsAutoStart(name),
+            });
         }
 
         foreach (var (pid, exe, cmd) in Processes("winws.exe", "goodbyedpi.exe"))

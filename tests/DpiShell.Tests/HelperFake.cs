@@ -234,7 +234,9 @@ public sealed class FakeHelperBackend : IHelperBackend
 
     /// <summary>Что отвечает stop_foreign.</summary>
     public StopForeignResult StopForeignValue { get; set; } = new(["zapret от Flowseal"], []);
-    public StopForeignResult StopForeign() { Call("stop_foreign"); return StopForeignValue; }
+    /// <summary>Что меняется в системе после stop_foreign (например, StatusValue без остановленного).</summary>
+    public Action? OnStopForeign { get; set; }
+    public StopForeignResult StopForeign() { Call("stop_foreign"); OnStopForeign?.Invoke(); return StopForeignValue; }
 
     public async Task CoreRepairAsync(IProgress<string> log, CancellationToken ct)
     {

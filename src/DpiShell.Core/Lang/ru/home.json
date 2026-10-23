@@ -161,6 +161,7 @@
   "home.pc.hosts.browser": "ведёт на неработающий адрес — в браузере не откроется: {groups}",
   "home.pc.open_hosts": "Подробнее",
   "home.pc.conflicts": "{names} — мешают оптимизации",
+  "home.pc.dormant": "{names} — не работает, запустится после перезагрузки",
   "home.pc.none": "нет",
   "home.pc.vpn.label": "VPN",
   "home.pc.vpn.on": "включён ({names}) — с ним оптимизация обычно не нужна",

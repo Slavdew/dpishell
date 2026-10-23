@@ -159,6 +159,7 @@
   "home.pc.hosts.browser": "points to a dead address — will not open in the browser: {groups}",
   "home.pc.open_hosts": "Details",
   "home.pc.conflicts": "{names} — interfere with optimization",
+  "home.pc.dormant": "{names} — not running, starts after reboot",
   "home.pc.none": "none",
   "home.pc.vpn.label": "VPN",
   "home.pc.vpn.on": "on ({names}) — optimization is usually not needed with it",
