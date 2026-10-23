@@ -1827,6 +1827,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public bool HasSiteDetail => SiteDetail.Length > 0;
     /// <summary>Открывается только без обхода — кнопка «Добавить в исключения».</summary>
     public bool SiteSuggestExclude { get => _siteSuggest; private set { if (Set(ref _siteSuggest, value)) Requery(); } }
+    bool _siteSuggestList;
+    /// <summary>Режим «Только из списков», сайта нет в списках роутера и он не открывается — «Добавить в список оптимизации» (как на странице роутера).</summary>
+    public bool SiteSuggestList { get => _siteSuggestList; private set { if (Set(ref _siteSuggestList, value)) Requery(); } }
+    public ICommand AddListCmd => _addListCmd ??= RelayCommand.Async(AddSiteToListAsync, () => Can("lists_set") && SiteSuggestList);
+    ICommand? _addListCmd;
     public bool SiteChecking { get => _siteChecking; private set => Set(ref _siteChecking, value); }
     public ICommand SiteCheckCmd { get; }
     public ICommand AddExcludeCmd { get; }
@@ -1835,10 +1840,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public async Task SiteCheckAsync()
     {
         var url = SiteUrl.Trim();
-        if (RouterTexts.Host(url) is not { } host) { SiteResult = L.T("router.site.enter"); SiteHint = ""; SiteDetail = ""; SiteSuggestExclude = false; return; }
+        if (RouterTexts.Host(url) is not { } host) { SiteResult = L.T("router.site.enter"); SiteHint = ""; SiteDetail = ""; SiteSuggestExclude = false; SiteSuggestList = false; return; }
         RouterSiteCheckResult? res = null;
         bool progressShown = false;
         SiteSuggestExclude = false;
+        SiteSuggestList = false;
         if (!await Guard(L.T("router.site.busy"), async () =>
             {
                 SiteChecking = true;
@@ -1861,21 +1867,28 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             return;
         }
         Say("");
-        ShowSiteResult(host, res);
+        // Под оптимизацией ли сайт (режим «Только из списков»): тот же расчёт, что у «Проверить сайт» на Главной и на странице роутера.
+        bool? covered = res is null ? null : await CoversHostAsync(host);
+        ShowSiteResult(host, res, covered);
     }
 
-    void ShowSiteResult(string host, RouterSiteCheckResult? r)
+    void ShowSiteResult(string host, RouterSiteCheckResult? r, bool? covered = null)
     {
         _siteHost = host;
         if (r is null) { SiteResult = L.T("router.site.pending"); SiteHint = ""; SiteDetail = ""; return; }
         bool with = r.WithBypass?.Ok == true, without = r.WithoutBypass?.Ok == true;
+        bool notInList = covered == false;
         (SiteResult, SiteHint) = (with, without) switch
         {
+            (true, _) when notInList => (L.T("router.site.opens_plain"), L.T("router.site.opens_hint")),
             (true, _) => (L.T("router.site.opens"), L.T("router.site.opens_hint")),
+            _ when notInList => (L.T("router.site.not_in_list", new { host }), L.T("web.site.not_in_list_hint")),
             (false, true) => (L.T("router.site.only_without"), L.T("router.site.only_without_hint")),
             _ => (L.T("router.site.closed"), L.T("router.site.closed_hint")),
         };
-        SiteSuggestExclude = r.SuggestExclude || (!with && without);
+        // Вне списков и не открылся — не из-за оптимизации: добавить в список, а не в исключения (как страница роутера, api.js).
+        SiteSuggestList = notInList && !with;
+        SiteSuggestExclude = !SiteSuggestList && (r.SuggestExclude || (!with && without));
         static string Side(RouterSiteCheckSide? s) => s is null ? L.T("router.site.side_none") : s.Ok ? L.T("router.site.side_ok") : s.Shown is { Length: > 0 } d ? L.T("router.site.side_fail_detail", new { detail = d }) : L.T("router.site.side_fail");
         SiteDetail = L.T("router.site.detail", new { @with = Side(r.WithBypass), without = Side(r.WithoutBypass) });
     }
@@ -1891,6 +1904,19 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             SiteHint = L.T("router.site.excluded_hint");
             Say(SiteResult);
         }
+    }
+
+    /// <summary>«Добавить в список оптимизации»: хост — в свой список роутера user-general (lists_set, как страница роутера), затем проверка заново.</summary>
+    public async Task AddSiteToListAsync()
+    {
+        if (_siteHost is not { } host || !SiteSuggestList) return;
+        if (!await AddHostToGeneralAsync(host)) return;
+        SiteSuggestList = false;
+        var listed = L.T("web.site.listed", new { host });
+        Say(listed);
+        if (RouterTexts.Host(SiteUrl) != host) SiteUrl = host;
+        await SiteCheckAsync();
+        SiteHint = SiteHint.Length > 0 ? listed + " " + SiteHint : listed;
     }
 
     /// <summary>«Открыть без оптимизации» с Главной (UX-аудит 7, п. 5): сайт — в «Исключения» роутера. false — не вышло (нет входа, роутер без lists_set).</summary>

@@ -111,6 +111,46 @@ public sealed class RouterWindowFeaturesTests : IDisposable
         Assert.False(vm.SiteSuggestExclude);
     }
 
+    /// <summary>
+    /// «Только из списков», сайта нет в списках роутера и он не открывается — «Добавить в список оптимизации» (не исключения), как на странице роутера:
+    /// lists_set user-general, затем проверка заново; итог — уже с оптимизацией.
+    /// </summary>
+    [Fact]
+    public async Task SiteCheck_ListsMode_NotInList_AddsToGeneral_ThenRechecks()
+    {
+        using var r = new FakeRouter { Mode = "lists", SiteWithBypassOk = false, SiteWithoutBypassOk = true };
+        var vm = await Connected(r);
+        vm.SiteUrl = "bank.example";
+        await vm.SiteCheckAsync();
+        Assert.Equal("Сайт не открывается: bank.example нет в списке оптимизации", vm.SiteResult);
+        Assert.Equal(L.T("web.site.not_in_list_hint"), vm.SiteHint);
+        Assert.True(vm.SiteSuggestList);
+        Assert.False(vm.SiteSuggestExclude);   // не из-за оптимизации — исключения не предлагаются
+        Assert.True(vm.AddListCmd.CanExecute(null));
+
+        r.SiteWithBypassOk = true;   // в списке — открывается
+        int checks = Count(r, "site_check");
+        await vm.AddSiteToListAsync();
+        Assert.Contains("bank.example", r.Lists["user-general"]);
+        Assert.Equal(checks + 1, Count(r, "site_check"));
+        Assert.Equal(L.T("router.site.opens"), vm.SiteResult);
+        Assert.StartsWith(L.T("web.site.listed", new { host = "bank.example" }), vm.SiteHint);
+        Assert.False(vm.SiteSuggestList);
+    }
+
+    /// <summary>Вне списков, но открывается — так и сказано: оптимизация к нему не применяется (не «с оптимизацией открывается»).</summary>
+    [Fact]
+    public async Task SiteCheck_ListsMode_NotInList_Opens_SaysPlain()
+    {
+        using var r = new FakeRouter { Mode = "lists", SiteWithBypassOk = true };
+        var vm = await Connected(r);
+        vm.SiteUrl = "bank.example";
+        await vm.SiteCheckAsync();
+        Assert.Equal(L.T("router.site.opens_plain"), vm.SiteResult);
+        Assert.False(vm.SiteSuggestList);
+        Assert.False(vm.SiteSuggestExclude);
+    }
+
     // ---------- 3. DNS для всей сети ----------
 
     [Fact]

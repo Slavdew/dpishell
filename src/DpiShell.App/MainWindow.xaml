@@ -812,6 +812,9 @@
                                         <TextBox Text="{Binding SiteHint, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,2,0,0" />
                                         <Button Content="{l:T sites.check.add_exclude}" Style="{StaticResource Primary}" Command="{Binding AddExcludeCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
                                                 Visibility="{Binding SiteSuggestExclude, Converter={StaticResource Vis}}" />
+                                        <!-- «Только из списков», сайта в списках роутера нет и он не открывается — в свой список user-general (как страница роутера), затем проверка заново. -->
+                                        <Button Content="{l:T home.sitecheck.add_list}" Style="{StaticResource Primary}" Command="{Binding AddListCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                                Visibility="{Binding SiteSuggestList, Converter={StaticResource Vis}}" />
                                         <Expander Header="{l:T common.more}" Visibility="{Binding HasSiteDetail, Converter={StaticResource Vis}}">
                                             <TextBox Text="{Binding SiteDetail, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" />
                                         </Expander>
