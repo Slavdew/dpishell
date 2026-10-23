@@ -57,11 +57,13 @@ public enum ArgKind
     ProxyPac,
     /// <summary>Строки продвинутого режима [{domains: [домен…], strategy}]: домены — строгий шаблон (<see cref="AdvancedSites.IsDomain"/>), стратегия — auto, direct или id из каталога. Других полей нет.</summary>
     AdvancedRows,
+    /// <summary>Свои сайты по группам (API 1.18) [{name, sites: [строка…]}]: имя до <see cref="SiteGroups.MaxName"/> знаков без управляющих (пусто — «Прочее»), сайты — как <see cref="Lines"/>, всего не больше MaxItems. Других полей нет.</summary>
+    SiteGroups,
     /// <summary>Сайты вида example.com — строгий шаблон (<see cref="AdvancedSites.IsDomain"/>), без повторов; на выходе список строк.</summary>
     Domains,
     /// <summary>План загрузки настроек (JSON-строка <see cref="Export.ImportRequest"/>): разобран строго, каждая запись проверена теми же правилами, что и при чтении чужих файлов, без правок — подделка отклоняется целиком.</summary>
     SettingsPlan,
-    /// <summary>Часть архива ядра в base64 (API 1.17, core_offline_part): только байты, до <see cref="HelperCommands.MaxOfflineChunkBytes"/>; на выходе byte[].</summary>
+    /// <summary>Часть архива ядра в base64 (API 1.19, core_offline_part): только байты, до <see cref="HelperCommands.MaxOfflineChunkBytes"/>; на выходе byte[].</summary>
     Base64Chunk,
 }
 
@@ -88,6 +90,7 @@ public sealed record HelperCall(long Id, CommandSpec Spec, IReadOnlyDictionary<s
     public byte[]? Bytes(string name) => Args.TryGetValue(name, out var v) ? (byte[])v : null;
     public IReadOnlyList<string>? List(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyList<string>)v : null;
     public IReadOnlyDictionary<string, string>? Map(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyDictionary<string, string>)v : null;
+    public IReadOnlyList<SiteGroup>? Groups(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyList<SiteGroup>)v : null;
     public IReadOnlyList<AdvancedRowInput>? Rows(string name) => Args.TryGetValue(name, out var v) ? (IReadOnlyList<AdvancedRowInput>)v : null;
 }
 
@@ -135,6 +138,8 @@ public static partial class HelperCommands
             new ArgSpec("lines", ArgKind.Lines, Required: true, MaxItems: IpsetValidator.MaxUserLines),
             new ArgSpec("exclude", ArgKind.Bool), new ArgSpec("confirmed", ArgKind.Bool)),
         new("user_targets_set", true, false, new ArgSpec("lines", ArgKind.Lines, Required: true, MaxItems: MaxUserTargets)),
+        // Свои сайты по группам (API 1.18): список целиком, как user_targets_set, плюс имена групп; сайты без группы — name "".
+        new("user_groups_set", true, false, new ArgSpec("groups", ArgKind.SiteGroups, Required: true, MaxItems: MaxUserTargets)),
         // Сайты, которые открываются без оптимизации (API 1.10): список целиком, только домены (тот же разбор, что у «Своих сайтов»);
         // в командную строку они попадают как --hostlist-exclude файла user-exclude.txt, который собирает сам помощник.
         new("user_exclude_set", true, false, new ArgSpec("lines", ArgKind.Lines, Required: true, MaxItems: AdvancedSites.MaxExclude)),
@@ -239,7 +244,7 @@ public static partial class HelperCommands
         new("av_exclusion_status", false, false),
         new("av_exclusion_add", true, false),
         new("av_exclusion_remove", true, false),
-        // Офлайн-архив ядра (API 1.17, «Указать архив ядра…»): окно без прав передаёт байты файла частями, путь не передаётся вовсе.
+        // Офлайн-архив ядра (API 1.19, «Указать архив ядра…»): окно без прав передаёт байты файла частями, путь не передаётся вовсе.
         // Помощник собирает их в своей закрытой папке (core.offline) и ставит ядро, только если sha256 архива совпал с core.json — тем же путём, что скачанное.
         new("core_offline_part", true, false, new ArgSpec("data", ArgKind.Base64Chunk, Required: true), new ArgSpec("first", ArgKind.Bool)),
         new("core_offline_install", true, true),
@@ -545,6 +550,35 @@ public static partial class HelperCommands
                 var (value, ok) = ProxyValues.NormalizePac(str);
                 if (!ok || value is null) throw new HelperRequestException(id, L.T("core.req.pac", new { where = Where() }));
                 return value;
+            }
+
+            case ArgKind.SiteGroups:
+            {
+                if (v is not JsonArray arr || arr.Count > SiteGroups.MaxGroups + 1) throw new HelperRequestException(id, L.T("core.req.string_list", new { where = Where() }));
+                var groups = new List<SiteGroup>(arr.Count);
+                int total = 0;
+                for (int i = 0; i < arr.Count; i++)
+                {
+                    if (arr[i] is not JsonObject row) throw new HelperRequestException(id, L.T("core.req.adv_row", new { where = $"{Where()}[{i}]", shape = "{name, sites}" }));
+                    foreach (var (k, _) in row)
+                        if (k is not ("name" or "sites")) throw new HelperRequestException(id, L.T("core.req.arg_extra", new { cmd = $"{Where()}[{i}]", name = Short(k) }));
+                    var name = row["name"] is null ? "" : row["name"] is JsonValue nv && nv.TryGetValue<string>(out var nameText) && nameText.Length <= SiteGroups.MaxName
+                        ? nameText : throw new HelperRequestException(id, L.T("core.req.control_chars", new { where = $"{Where()}[{i}].name" }));
+                    if (name.Any(char.IsControl)) throw new HelperRequestException(id, L.T("core.req.control_chars", new { where = $"{Where()}[{i}].name" }));
+                    if (row["sites"] is not JsonArray ds) throw new HelperRequestException(id, L.T("core.req.string_list", new { where = $"{Where()}[{i}].sites" }));
+                    var sites = new List<string>(ds.Count);
+                    foreach (var item in ds)
+                    {
+                        if (item is null) throw new HelperRequestException(id, L.T("core.req.empty_item", new { where = $"{Where()}[{i}].sites" }));
+                        var line = String(id, $"{Where()}[{i}].sites", item, MaxLineLength);
+                        if (ForbiddenInLineRx().IsMatch(line)) throw new HelperRequestException(id, L.T("core.req.path_like", new { where = $"{Where()}[{i}].sites" }));
+                        sites.Add(line);
+                    }
+                    total += sites.Count;
+                    if (total > s.MaxItems) throw new HelperRequestException(id, L.T("core.req.too_many_lines", new { where = Where(), max = s.MaxItems }));
+                    groups.Add(new SiteGroup(name, sites));
+                }
+                return groups;
             }
 
             case ArgKind.AdvancedRows:

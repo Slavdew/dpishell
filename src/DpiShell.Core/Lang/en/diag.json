@@ -160,6 +160,7 @@
   "diag.report.router.state_off": "optimization off",
   "diag.report.router.state_nologin": "not signed in",
   "diag.report.sites.own": "My sites: {n}",
+  "diag.report.sites.groups": "Groups of own sites: {n}",
   "diag.report.sites.exclude": "Exclusions: {n}",
   "diag.report.log.unavailable": "unavailable (helper not responding or an older version)",
   "diag.report.log.empty": "empty"

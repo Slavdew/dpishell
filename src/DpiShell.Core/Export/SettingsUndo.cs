@@ -27,6 +27,12 @@ public sealed class SettingsImportUndoer(Shell shell) : IChangeUndoer
         return p.Length == 2 && p[0].Length > 0 && p[1].Length > 0 ? new HostsEntry(p[1], p[0]) : null;
     }
 
+    static Dictionary<string, string> GroupMap(JsonObject o) =>
+        o.Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => (string?)kv.Value ?? "", StringComparer.Ordinal);
+
+    static bool Same(IReadOnlyDictionary<string, string> a, IReadOnlyDictionary<string, string> b) =>
+        a.Count == b.Count && a.All(kv => b.TryGetValue(kv.Key, out var v) && v == kv.Value);
+
     public Task<UndoOutcome> UndoAsync(ChangeEntry e, CancellationToken ct)
     {
         var before = e.Before as JsonObject ?? [];
@@ -46,6 +52,13 @@ public sealed class SettingsImportUndoer(Shell shell) : IChangeUndoer
         }
 
         Part("sites", SettingsSections.Title(SettingsSections.Sites), () => shell.State.UserTargets, v => shell.SetUserTargets(v));
+        // Группы своих сайтов: прежние возвращаются, если сейчас стоят те, что поставила загрузка.
+        if (before["site_groups"] is JsonObject groupsWas && after["site_groups"] is JsonObject groupsOurs)
+        {
+            var was = GroupMap(groupsWas);
+            var cur = shell.UserGroupMap();
+            if (!Same(cur, was) && Same(cur, GroupMap(groupsOurs))) shell.SetUserTargetsGrouped(shell.State.UserTargets, was);
+        }
         Part("exclude", SettingsSections.Title(SettingsSections.Exclude), () => shell.State.UserExclude, v => shell.SetUserExclude(v));
         Part("subnets", SettingsSections.Title(SettingsSections.Subnets), () => shell.IpLists.Read(IpLists.UserFile), v => shell.WriteUserIpset(v, false, true));
         Part("subnets_exclude", L.T("export.undo.subnets_exclude"),

@@ -26,6 +26,8 @@ public interface IHelperBackend : IHelperCatalog
     IpsetUpdateSummary UpdateIpsetFromContent(string content, bool confirmed);
     IpsetVerdictSummary WriteUserIpset(IReadOnlyList<string> lines, bool exclude, bool confirmed);
     UserTargetsResult SetUserTargets(IReadOnlyList<string> lines);
+    /// <summary>Свои сайты по группам (API 1.18): список целиком, имя группы "" — «Прочее».</summary>
+    UserGroupsResult SetUserGroups(IReadOnlyList<SiteGroup> groups);
     /// <summary>Сайты, которые на этом ПК открываются без оптимизации (API 1.10): список целиком, домены проходят тот же разбор, что «Свои сайты».</summary>
     UserTargetsResult SetUserExclude(IReadOnlyList<string> lines);
     Task<HostsCheckReport> HostsCheckAsync(IProgress<HostsCheckProgress> progress, CancellationToken ct);
@@ -49,7 +51,7 @@ public interface IHelperBackend : IHelperCatalog
     HostsRestoreResult HostsRestore();
     StopForeignResult StopForeign();
     Task CoreRepairAsync(IProgress<string> log, CancellationToken ct);
-    /// <summary>Часть офлайн-архива ядра от окна (API 1.17): first — начать заново. Возвращает собранный размер. Только байты в закрытой папке.</summary>
+    /// <summary>Часть офлайн-архива ядра от окна (API 1.19): first — начать заново. Возвращает собранный размер. Только байты в закрытой папке.</summary>
     long CoreOfflinePart(byte[] data, bool first);
     /// <summary>Поставить ядро из собранного архива: sha256 архива — из core.json, дальше как у скачанного; обход перезапускается как при восстановлении.</summary>
     Task CoreOfflineInstallAsync(IProgress<string> log, CancellationToken ct);
@@ -153,7 +155,8 @@ public sealed record HelperStatus(
     IReadOnlyList<string> SelectedGroups, IReadOnlyList<string> UserTargets, IReadOnlyList<string> Fallbacks,
     bool TimestampsEnabledByUs, bool HostsFix, IReadOnlyList<Conflict> Foreign,
     string HelperVersion, string? DataVersion = null,
-    string? Api = null, IReadOnlyList<string>? Commands = null, IReadOnlyList<string>? UserExclude = null)
+    string? Api = null, IReadOnlyList<string>? Commands = null, IReadOnlyList<string>? UserExclude = null,
+    IReadOnlyList<SiteGroup>? UserGroups = null)
 {
     // Api — версия протокола «мажор.минор», Commands — белый список этого помощника (helper-protocol §6). Заполняет сервер;
     // помощник до 1.1 их не присылает (null = «1.0», список неизвестен).
@@ -189,7 +192,16 @@ public sealed record IpsetUpdateSummary(bool Applied, bool NeedsConfirm, string 
 /// <param name="Rejected">Не распознаны и убраны.</param>
 public sealed record UserTargetsResult(IReadOnlyList<string> Saved, IReadOnlyList<string> Rejected);
 
-public sealed record StopForeignResult(IReadOnlyList<string> Stopped, IReadOnlyList<string> ComeBackOnReboot);
+/// <summary>Итог stop_foreign. Failed, StillRunning, Hints — с API 1.16; от помощника старше — null.</summary>
+/// <param name="Failed">Не остановлено: «что: причина».</param>
+/// <param name="StillRunning">После остановки снова работает.</param>
+/// <param name="Hints">Как остановить вручную.</param>
+public sealed record StopForeignResult(IReadOnlyList<string> Stopped, IReadOnlyList<string> ComeBackOnReboot,
+    IReadOnlyList<string>? Failed = null, IReadOnlyList<string>? StillRunning = null, IReadOnlyList<string>? Hints = null);
+/// <param name="Saved">Принятые группы: именованные по порядку, «Прочее» (имя "") последней.</param>
+/// <param name="Rejected">Не распознаны и убраны.</param>
+public sealed record UserGroupsResult(IReadOnlyList<SiteGroup> Saved, IReadOnlyList<string> Rejected);
+
 
 /// <param name="Stats">Статистика стратегий по результатам подборов.</param>
 /// <param name="Results">Последние результаты подборов (свои сайты в них уже скрыты — ResultStore).</param>
@@ -244,7 +256,8 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
             [.. shell.DefaultTargets.Groups.Select(g => new GroupInfo(g.Id, g.Title, g.Targets.Count)), new GroupInfo("user", L.T("select.group.user"), st.UserTargets.Count)],
             st.Groups, st.UserTargets, st.Fallbacks,
             st.TimestampsEnabledByUs, st.HostsFix, foreign,
-            HelperProtocol.AppVersion, shell.DataVersion, UserExclude: st.UserExclude);
+            HelperProtocol.AppVersion, shell.DataVersion, UserExclude: st.UserExclude,
+            UserGroups: st.UserGroups.Count > 0 ? shell.UserSiteGroups() : null);
     }
 
     /// <summary>Клиент HTTP для обновления данных; в тестах — подмена без сети.</summary>
@@ -400,6 +413,13 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
         return new(saved, rejected);
     }
 
+    /// <summary>Свои сайты по группам (API 1.18): <see cref="Shell.SetUserGroups"/>.</summary>
+    public UserGroupsResult SetUserGroups(IReadOnlyList<SiteGroup> groups)
+    {
+        var (saved, rejected) = shell.SetUserGroups(groups);
+        return new(saved, rejected);
+    }
+
     /// <summary>
     /// «Открывать без оптимизации» (API 1.10): <see cref="Shell.SetUserExclude"/> — список в user-exclude.txt и в состояние, работающая оптимизация перезапускается.
     /// Только домены: остальное отбрасывается и возвращается в Rejected.
@@ -490,8 +510,8 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
 
     public StopForeignResult StopForeign()
     {
-        var (stopped, back) = shell.StopForeign();
-        return new(stopped, back);
+        var r = shell.StopForeign();
+        return new(r.Stopped, r.ComeBackOnReboot, r.Failed, r.StillRunning, r.Hints);
     }
 
     public Task CoreRepairAsync(IProgress<string> log, CancellationToken ct) => ReplaceCoreAsync(() => shell.RepairCoreAsync(log, ct));

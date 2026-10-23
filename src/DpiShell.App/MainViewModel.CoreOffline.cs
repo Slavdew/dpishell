@@ -7,7 +7,7 @@ namespace DpiShell.App;
 
 /// <summary>
 /// «Указать архив ядра…» (ТЗ av-exclusion, п. 9): GitHub не открывается — ядро из файла выпуска zapret-core-offline.zip (или zapret-vX.zip от bol-van).
-/// Окно без прав читает выбранный файл само и передаёт помощнику только байты (core_offline_part, API 1.17); путь помощнику не уходит.
+/// Окно без прав читает выбранный файл само и передаёт помощнику только байты (core_offline_part, API 1.19); путь помощнику не уходит.
 /// Помощник собирает их в своей закрытой папке и ставит ядро, только если sha256 совпал с core.json, — тем же путём, что скачанное.
 /// </summary>
 public sealed partial class MainViewModel

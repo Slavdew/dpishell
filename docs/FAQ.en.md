@@ -16,14 +16,14 @@ Results depend on the ISP, the network and the device: "usually" and "on most" b
 
 ## Antivirus deletes files
 
-Windows Defender and other antivirus software may flag the zapret core: the `vendor\zapret-v72.13.zip` archive in the download or `%ProgramData%\DpiShell\core.download\core.zip` on the first "Turn on". The protection history shows it as `Trojan:Win32/Tecabans.STV!cl`, `Misleading:Win32/Malgent!AMTB` or `RiskTool…WinDivert`; in Defender, the `!cl` suffix means a cloud heuristic verdict, not a matched signature.
+Windows Defender and other antivirus software may flag the zapret core: `%ProgramData%\DpiShell\core.download\core.zip` on the first "Turn on", or the `vendor\zapret-v72.13.zip` archive inside the source code archive (Source code on the release page is not the program: the program archive `DpiShell-…-portable.zip` has no core). The protection history shows it as `Trojan:Win32/Tecabans.STV!cl`, `Misleading:Win32/Malgent!AMTB` or `RiskTool…WinDivert`; in Defender, the `!cl` suffix means a cloud heuristic verdict, not a matched signature.
 
 The reason is the WinDivert driver: it intercepts network traffic, and malware does that too. DpiShell does not build or modify the core: it is the [official zapret v72.13 archive](https://github.com/bol-van/zapret/releases/tag/v72.13) by bol-van, sha256 `c493e33a0dc4eba23a8686efdaba55f59755ad6ade3564aebd9d13f4c65e2e0c`. The app checks it and every core file before each start ([data/core.json](../data/core.json), [vetting](vetting.md)) and does not run modified files.
 
 **What to do**
 
 1. Add two folders to the exclusions: the one you unpacked the program to (for example `C:\Programs\DpiShell`) and `%ProgramData%\DpiShell`.
-   - Easiest for `%ProgramData%\DpiShell`: the "Add to exclusions" button on "Home" (Windows Defender). On the first "Turn on" the app asks about it itself, before the core is downloaded. The button does not exclude the program folder: any program without rights can write there, and an exclusion would turn it into a hiding place. If Defender refuses (tamper protection, organization policy), the card shows the path, "Copy path" and "Open Defender".
+   - Easiest for `%ProgramData%\DpiShell`: the "Add to exclusions" button on "Home" (Windows Defender). On the first "Turn on" the app asks about it itself: first the helper is installed (rights request), then the question, and only then the core is downloaded. If you decline, the core is downloaded right away. The button does not exclude the program folder: any program without rights can write there, and an exclusion would turn it into a hiding place. If Defender refuses (tamper protection, organization policy), the card shows the path, "Copy path" and "Open Defender".
    - Fastest: PowerShell as administrator; the folders do not have to exist yet:
      ```powershell
      Add-MpPreference -ExclusionPath "$env:ProgramData\DpiShell", "C:\Programs\DpiShell"
@@ -31,7 +31,7 @@ The reason is the WinDivert driver: it intercepts network traffic, and malware d
      Replace the second path with your program folder.
    - Manually: "Windows Security" > "Virus & threat protection" > "Manage settings" > "Exclusions" > "Add or remove exclusions" > "Add an exclusion" > "Folder". Names depend on the Windows version. The folder picker needs an existing folder: `%ProgramData%\DpiShell` appears after the first "Turn on". Do not create it yourself: the app moves such a folder aside and creates its own with closed permissions.
    - Other antivirus: use its exclusion settings. DpiShell adds an exclusion only on the button and only for the core folder (in Windows Defender); "Undo all" and removing DpiShell remove it, only if DpiShell added it.
-2. If files are already deleted: download and unpack the program again; for the core, "Add to exclusions and restore" on "Home" (or "Restore" if the exclusion is already there).
+2. If files are already deleted: for the core, "Add to exclusions and restore" on "Home" (or "Restore" if the exclusion is already there). If GitHub does not open, use "Choose core archive…" (there and in "Diagnostics") with `zapret-core-offline.zip` from the DpiShell release page or `zapret-v72.13.zip` from the [bol-van release](https://github.com/bol-van/zapret/releases/tag/v72.13): the app installs it only if the sha256 matches `core.json`. The antivirus may delete that file on download too; then add the exclusion first.
 3. Before the next "Turn on", the protection history should have no new DpiShell entries.
 
 An exclusion turns off scanning of these folders; that is your decision. If in doubt, do not install the program.
@@ -42,6 +42,7 @@ An exclusion turns off scanning of these folders; that is your decision. If in d
 2. **Find a strategy.** YouTube, Discord or another blocked site does not open: "Find strategy" (on the router, "Find strategy" on its page). It usually takes a few minutes and sites may drop out meanwhile. A finished search turns on the best strategy by itself. Did not help: "Search deeper" (appears after the result, up to 15 minutes).
 3. **Exclusions.** The site worked without DpiShell but not with it (bank, government site): "Add to exclusions" in the same "Check a site", or "Sites" > "Exclusions". Optimization leaves such sites alone. Still nothing: remove the site from exclusions.
 4. **Optimization list.** Optimization applies to sites in the lists (YouTube, Discord, "My sites"). If your site is not there, add it in "Sites" > "My sites" or with "Add to optimization list" after "Check a site". On the router in "All sites" mode, optimization covers everything except exclusions.
+   Many own sites and it is unclear which service does not open: put them into groups ("Sites" > "My sites" > "New group"; lines can be moved between groups). The strategy search shows a result per group: "Telegram ✗ 0/12", "Other ✓ 7/8 — not opening: example.org". For a large group the search checks at most 10 addresses ("checked 10 of 120"), the same for every strategy. An address that does not even accept a connection (neither without optimization nor with any strategy) is marked "blocked by address — optimization will not help" and does not affect the choice of strategy: only "All addresses" with IP lists, a router or a VPN may help there.
 5. **An address does not open even with optimization** (GitHub downloads, Telegram Web, Discord start-up): "Network" > "Fix addresses". The ISP spoofs DNS answers: "Network" > DNS. Both can be undone, see [How to restore the previous state](#how-to-restore-the-previous-state).
 6. **A VPN or a similar program is on** (Flowseal, another zapret, GoodbyeDPI): two optimizations together break sites. "Diagnostics" shows what interferes.
 

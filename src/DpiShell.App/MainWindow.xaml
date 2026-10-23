@@ -543,6 +543,12 @@
                                 <StackPanel>
                                     <TextBox Text="{Binding ResultText, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="16" FontWeight="SemiBold" ToolTip="{Binding ResultTip}" />
                                     <TextBox Text="{Binding ResultHint, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" /><TextBox Text="{Binding AddressNote, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
+                                    <!-- Свои сайты по группам: строка на группу («Telegram ✗ 0/12»), для выбранной строки таблицы. -->
+                                    <ItemsControl ItemsSource="{Binding ResultGroupLines}" Margin="0,6,0,0" Focusable="False" Visibility="{Binding HasResultGroupLines, Converter={StaticResource Vis}}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,1,0,0" local:Demo.Sensitive="True" /></DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                     <!-- Блокировка по адресу: следующий шаг — кнопкой, а не только словами (аудит С-5). -->
                                     <Button Content="{l:T select.addr.go}" Style="{StaticResource LinkButton}" Command="{Binding GoIpListsCmd}" HorizontalAlignment="Left" Margin="0,4,0,0"
                                             Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
@@ -793,9 +799,46 @@
                                                Text="{l:T sites.my.hint}" />
                                 </StackPanel>
                             </DockPanel>
-                            <TextBox Text="{Binding TargetsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AutomationProperties.Name="{l:T sites.my.title}"
-                                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" Height="150"
-                                     FontFamily="Consolas" FontSize="14" Padding="8" />
+                            <!-- Группы своих сайтов: без именованных групп — один список, как раньше; с ними у каждой шапка (свернуть, переименовать, удалить, перенести). -->
+                            <ItemsControl ItemsSource="{Binding SiteGroupRows}" Focusable="False" AutomationProperties.Name="{l:T sites.my.title}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,0,0,8">
+                                            <DockPanel Margin="0,0,0,4" Visibility="{Binding DataContext.GroupHeaders, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource Vis}}">
+                                                <ToggleButton DockPanel.Dock="Left" Style="{StaticResource RowToggle}" IsChecked="{Binding Expanded}" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                              ToolTip="{l:T sites.group.expand}" AutomationProperties.Name="{l:T sites.group.expand}" />
+                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Button Content="{l:T sites.group.move}" Style="{StaticResource LinkButton}" FontSize="13" Margin="10,0,0,0" Click="MoveSites_Click" ToolTip="{l:T sites.group.move.tip}" />
+                                                    <Button Content="{l:T sites.group.rename}" Style="{StaticResource LinkButton}" FontSize="13" Margin="10,0,0,0"
+                                                            Command="{Binding DataContext.RenameGroupCmd, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
+                                                            Visibility="{Binding Named, Converter={StaticResource Vis}}" />
+                                                    <Button Content="{l:T sites.group.delete}" Style="{StaticResource LinkButton}" FontSize="13" Margin="10,0,0,0"
+                                                            Command="{Binding DataContext.DeleteGroupCmd, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"
+                                                            Visibility="{Binding Named, Converter={StaticResource Vis}}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding NotEditing, Converter={StaticResource Vis}}">
+                                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" local:Demo.Sensitive="True" />
+                                                    <TextBlock Text="{Binding CountText}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="10,0,0,0" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding Editing, Converter={StaticResource Vis}}">
+                                                    <TextBox Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}" Width="220" MaxLength="40" AutomationProperties.Name="{l:T sites.group.rename}">
+                                                        <TextBox.InputBindings>
+                                                            <KeyBinding Key="Return" Command="{Binding DataContext.RenameGroupCmd, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
+                                                            <KeyBinding Key="Escape" Command="{Binding DataContext.CancelRenameCmd, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
+                                                        </TextBox.InputBindings>
+                                                    </TextBox>
+                                                    <Button Content="{l:T sites.group.rename_ok}" Margin="6,0,0,0" Command="{Binding DataContext.RenameGroupCmd, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
+                                                </StackPanel>
+                                            </DockPanel>
+                                            <TextBox Tag="SitesBox" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AutomationProperties.Name="{Binding Title}"
+                                                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" MinHeight="64" MaxHeight="220"
+                                                     FontFamily="Consolas" FontSize="14" Padding="8" local:Demo.Sensitive="True"
+                                                     Visibility="{Binding Expanded, Converter={StaticResource Vis}}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Content="{l:T sites.group.add}" Style="{StaticResource LinkButton}" FontSize="13" HorizontalAlignment="Left" Margin="0,0,0,0" Command="{Binding AddGroupCmd}" />
                             <!-- Простой список исключений ПК (UX-аудит 7, п. 5): сюда же сайт попадает с Главной по «Сайт не открывается?». Строки «Напрямую» продвинутого режима — отдельно. -->
                             <TextBlock Text="{l:T sites.exclude.title}" Style="{StaticResource H2}" Margin="0,14,0,0" />
                             <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,2" Text="{l:T sites.exclude.caption}" />
@@ -1882,6 +1925,8 @@
                                     <Button ContentTemplate="{StaticResource Shield}" Content="{l:T diag.conflicts.stop}" Command="{Binding StopConflictsCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
                                             ToolTip="{Binding StopConflictsTip}" ToolTipService.ShowOnDisabled="True"
                                             Visibility="{Binding ConflictList.Count, Converter={StaticResource NonZero}}" />
+                                    <TextBox Text="{Binding StopConflictsResult, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,6,0,0" local:Demo.Sensitive="True"
+                                             Visibility="{Binding HasStopConflictsResult, Converter={StaticResource Vis}}" />
                                 </StackPanel>
                             </Border>
 

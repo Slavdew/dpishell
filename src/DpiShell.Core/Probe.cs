@@ -7,15 +7,18 @@ using System.Text.Json;
 
 namespace DpiShell.Core;
 
-/// <summary>Цель проверки. handshake_only — достаточно TLS и заголовков ответа (у адреса нет стабильного большого тела).</summary>
-public sealed record Target(string Url, int MinBytes = 0, bool HandshakeOnly = false, bool Required = true);
+/// <summary>
+/// Цель проверки. handshake_only — достаточно TLS и заголовков ответа (у адреса нет стабильного большого тела).
+/// Group — имя группы «Своих сайтов» (API 1.18); null — не из групп или «Прочее».
+/// </summary>
+public sealed record Target(string Url, int MinBytes = 0, bool HandshakeOnly = false, bool Required = true, string? Group = null);
 
 /// <summary>Control — «Обычные сайты»: не цель подбора, а условие «стратегия их не ломает» (architecture.md «Оценка и порядок»).</summary>
 /// <summary>
 /// Extra — дополнительная группа (строка продвинутого режима, <see cref="AdvancedSites"/>): проверяется вместе со всеми, но в оценку стратегии
 /// не входит и стратегию не бракует — по ней выбирается лучшая стратегия для строки.
 /// </summary>
-public sealed record TargetGroup(string Id, string Title, List<Target> Targets, bool Control = false, bool Extra = false)
+public sealed record TargetGroup(string Id, string Title, List<Target> Targets, bool Control = false, bool Extra = false, Dictionary<string, int>? Totals = null)
 {
     /// <summary>Цель подбора: не контрольная и не дополнительная.</summary>
     public bool Goal => !Control && !Extra;
@@ -32,12 +35,33 @@ public sealed record TargetSet(List<TargetGroup> Groups)
     public static TargetGroup UserGroup(IEnumerable<string> entries) => new("user", L.T("select.group.user"),
         entries.Select(e => e.Trim()).Where(e => e.Length > 0)
             .Select(e => new Target(e.Contains("://") ? e : $"https://{e}/")).ToList());
+
+    /// <summary>
+    /// «Свои сайты» по группам: одна цель подбора «user», у каждого адреса — имя его группы. Из большой группы проверяется выборка
+    /// (<see cref="SiteGroups.Sample"/>, одна и та же у всех стратегий); сколько адресов в группе всего — в <see cref="TargetGroup.Totals"/> (ключ — имя, «Прочее» — "").
+    /// </summary>
+    public static TargetGroup UserGroups(IEnumerable<SiteGroup> groups, int sample = SiteGroups.SampleSize)
+    {
+        var targets = new List<Target>();
+        var totals = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var g in groups)
+        {
+            var entries = g.Sites.Select(e => e.Trim()).Where(e => e.Length > 0).ToList();
+            if (entries.Count == 0) continue;
+            var name = SiteGroups.CleanName(g.Name);
+            totals[name] = entries.Count;
+            foreach (var e in SiteGroups.Sample(entries, sample))
+                targets.Add(new Target(e.Contains("://") ? e : $"https://{e}/", Group: name.Length == 0 ? null : name));
+        }
+        return new("user", L.T("select.group.user"), targets, Totals: totals);
+    }
 }
 
 /// <summary>Blocked — HTTP 451 «недоступно по требованию закона»: блокировка, а не сайт.</summary>
 public enum ProbeOutcome { Ok, Timeout, ConnectFailed, TlsFailed, Reset, Truncated, BadStatus, ForeignRedirect, Error, Blocked }
 
-public sealed record ProbeResult(Target Target, SslProtocols Tls, ProbeOutcome Outcome, double Seconds, long Bytes, string Detail)
+/// <param name="NoTcp">TCP-соединение с адресом не установилось (таймаут или отказ при соединении; не ошибка имени): сайт не отвечает вовсе, а не режется потоком. Нужно, чтобы отличить блокировку по адресу (<see cref="AddressBlocks"/>).</param>
+public sealed record ProbeResult(Target Target, SslProtocols Tls, ProbeOutcome Outcome, double Seconds, long Bytes, string Detail, bool NoTcp = false)
 {
     public bool Ok => Outcome == ProbeOutcome.Ok;
 }
@@ -92,8 +116,15 @@ public sealed class HttpProbe
             AutomaticDecompression = DecompressionMethods.None,
             SslOptions = { EnabledSslProtocols = tls },
         };
-        if (Resolver is { } resolver)
-            handler.ConnectCallback = (ctx, token) => ConnectAsync(resolver, ctx.DnsEndPoint, token);
+        // Соединение через свой обратный вызов — чтобы знать, дошло ли дело до TCP (NoTcp): таймаут при соединении и таймаут ответа — разные вещи.
+        bool connected = false;
+        var resolver = Resolver;
+        handler.ConnectCallback = async (ctx, token) =>
+        {
+            var stream = resolver is not null ? await ConnectAsync(resolver, ctx.DnsEndPoint, token) : await ConnectDefaultAsync(ctx.DnsEndPoint, token);
+            connected = true;
+            return stream;
+        };
         using var http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(ConnectTimeout + ReadTimeout);
@@ -160,11 +191,12 @@ public sealed class HttpProbe
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             return new(t, tls, bytes > 0 ? ProbeOutcome.Truncated : ProbeOutcome.Timeout, sw.Elapsed.TotalSeconds, bytes,
-                bytes > 0 ? L.T("core.probe.stream_cut", new { bytes }) : L.T("core.probe.timeout"));
+                bytes > 0 ? L.T("core.probe.stream_cut", new { bytes }) : L.T("core.probe.timeout"), NoTcp: !connected);
         }
         catch (HttpRequestException e)
         {
-            return new(t, tls, Classify(e), sw.Elapsed.TotalSeconds, bytes, Flatten(e));
+            var outcome = Classify(e);
+            return new(t, tls, outcome, sw.Elapsed.TotalSeconds, bytes, Flatten(e), NoTcp: !connected && outcome == ProbeOutcome.ConnectFailed && !IsNameError(e));
         }
         catch (IOException e)
         {
@@ -182,6 +214,27 @@ public sealed class HttpProbe
     /// <summary>Куда ведёт переход: путь, если хост тот же; иначе хост и путь («www.youtube.com/»).</summary>
     static string Short(Uri next, Uri from) =>
         next.Host.Equals(from.Host, StringComparison.OrdinalIgnoreCase) && next.Scheme == from.Scheme ? next.PathAndQuery : next.Host + next.PathAndQuery;
+
+    /// <summary>То, что делает SocketsHttpHandler сам: имя → адреса → TCP (порядок и «happy eyeballs» — как у системы).</summary>
+    static async ValueTask<Stream> ConnectDefaultAsync(DnsEndPoint ep, CancellationToken ct)
+    {
+        var s = new System.Net.Sockets.Socket(System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp) { NoDelay = true };
+        try
+        {
+            await s.ConnectAsync(ep, ct);
+            return new System.Net.Sockets.NetworkStream(s, ownsSocket: true);
+        }
+        catch { s.Dispose(); throw; }
+    }
+
+    /// <summary>Имя не нашлось: до TCP дело не дошло из-за DNS, а не из-за адреса.</summary>
+    static bool IsNameError(Exception e)
+    {
+        for (Exception? x = e; x is not null; x = x.InnerException)
+            if (x is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.HostNotFound or System.Net.Sockets.SocketError.NoData or System.Net.Sockets.SocketError.TryAgain })
+                return true;
+        return e is HttpRequestException { HttpRequestError: HttpRequestError.NameResolutionError };
+    }
 
     static async ValueTask<Stream> ConnectAsync(IAddressResolver resolver, DnsEndPoint ep, CancellationToken ct)
     {

@@ -370,6 +370,7 @@ public sealed class HelperServer : IAsyncDisposable
             case "user_ipset_set":
                 return await Task.Run(() => b.WriteUserIpset(c.List("lines")!, c.Bool("exclude"), c.Bool("confirmed")), ct);
             case "user_targets_set": return await Task.Run(() => b.SetUserTargets(c.List("lines")!), ct);
+            case "user_groups_set": return await Task.Run(() => b.SetUserGroups(c.Groups("groups")!), ct);
             case "user_exclude_set": return await Task.Run(() => b.SetUserExclude(c.List("lines")!), ct);
             case "settings_export_read": return await Task.Run(b.SettingsExportRead, ct);
             case "settings_import": return await Task.Run(() => b.SettingsImportAsync(c.Str("plan")!, ct), ct);

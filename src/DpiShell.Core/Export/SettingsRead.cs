@@ -145,6 +145,10 @@ public static class SettingsImport
                 }
                 if (!any) return firstWhy;
                 d.Sites = all;
+                // Группы: «# group: Имя» в sites.txt (необязательно); сайты без метки — «Прочее».
+                if (listed.Contains(SettingsSections.Sites) && ReadText(Path.Combine(folder, SettingsSections.SitesFile), SettingsSections.SitesFile,
+                        SettingsSections.SitesBytes, SettingsSections.MaxSites + SettingsSections.CommentLines, out _) is { } sitesText)
+                    d.SiteGroups = SiteGroupMarks(sitesText);
                 return null;
             }
             case SettingsSections.Exclude:
@@ -330,6 +334,27 @@ public static class SettingsImport
         int lines = 1;
         foreach (var c in text) if (c == '\n' && ++lines > maxLines) { why = L.T("export.file.too_many_lines", new { file = display, max = maxLines }); return null; }
         return text;
+    }
+
+    static readonly System.Text.RegularExpressions.Regex GroupMarkRx = new(@"^#\s*group\s*:\s*(.*)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>Группы в sites.txt: строка «# group: Имя» — сайты ниже до следующей метки в этой группе. Нет ни одной — null.</summary>
+    static Dictionary<string, string>? SiteGroupMarks(string text)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var group = "";
+        foreach (var raw in text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+        {
+            var l = raw.Trim();
+            if (l.StartsWith('#'))
+            {
+                if (GroupMarkRx.Match(l) is { Success: true } m) group = SiteGroups.CleanName(m.Groups[1].Value);
+                continue;
+            }
+            if (l.Length == 0 || group.Length == 0) continue;
+            if (AdvancedSites.Domain(l) is { } d) map.TryAdd(d, group);
+        }
+        return map.Count == 0 ? null : map;
     }
 
     /// <summary>Строки без пустых и комментариев, с номерами строк файла (нумерация с единицы). Для hosts отсекается и хвостовой комментарий.</summary>

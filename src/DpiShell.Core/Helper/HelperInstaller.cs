@@ -20,7 +20,7 @@ public sealed class HelperInstaller(AppPaths paths)
     public const string OwnerFile = "owner.sid";
     /// <summary>
     /// Защитник — для снятия своего исключения при <c>--purge</c>. Добавляет исключение только служба по команде окна (av_exclusion_add):
-    /// ключа установки --av-exclusion больше нет (API 1.17) — ядро теперь ждёт окна (<see cref="CoreWait"/>), спешить до запуска службы незачем.
+    /// ключа установки --av-exclusion больше нет (API 1.19) — ядро теперь ждёт окна (<see cref="CoreWait"/>), спешить до запуска службы незачем.
     /// </summary>
     public IDefenderSystem Defender { get; init; } = new WmiDefender();
 

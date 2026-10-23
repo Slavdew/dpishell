@@ -70,6 +70,7 @@ public class HelperChannelTests
             ["ipset_update"] = new { from = "manifest" },
             ["user_ipset_set"] = new { lines = new[] { "10.0.0.0/8" } },
             ["user_targets_set"] = new { lines = new[] { "example.com" } },
+            ["user_groups_set"] = new { groups = new[] { new { name = "Telegram", sites = new[] { "telegram.org" } }, new { name = "", sites = new[] { "example.com" } } } },
             ["user_exclude_set"] = new { lines = new[] { "bank.example" } },
             ["dns_set"] = new { preset = "google" },
             ["strategy_add"] = new { title = "Моя", roles = new { general = "--dpi-desync=fake --dpi-desync-repeats=6" }, source = "user" },
@@ -87,6 +88,7 @@ public class HelperChannelTests
             ["proxy_machine_set"] = new { enabled = true, server = "127.0.0.1:7897", winhttp = true },
             ["advanced_set"] = new { enabled = true, others = "lists", rows = new object[] { new { domains = new[] { "example.com" }, strategy = "alt9" } } },
             ["joint_set"] = new { active = true, owned = new[] { "youtube.com" } },
+            ["core_offline_part"] = new { data = "UEsDBA==", first = true },
             ["settings_import"] = new { plan = System.Text.Json.JsonSerializer.Serialize(new DpiShell.Core.Export.ImportRequest { Mode = DpiShell.Core.Export.ImportMode.Add, Sections = ["sites"], Data = new() { Sites = ["a.example"] } }, DpiShell.Core.Export.SettingsSections.Json) },
         };
         foreach (var cmd in HelperCommands.Specs.Keys.Where(k => k != "cancel"))

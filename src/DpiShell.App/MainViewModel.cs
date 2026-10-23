@@ -398,11 +398,7 @@ public sealed partial class MainViewModel : Observable
                 var chosen = s.SelectedGroups.ToHashSet();
                 foreach (var g in Groups) g.IsChecked = chosen.Contains(g.Id);
             }
-            if (!_targetsFromHelper)
-            {
-                _targetsFromHelper = true;
-                if (s.UserTargets.Count > 0) TargetsText = string.Join(Environment.NewLine, s.UserTargets);
-            }
+            TakeTargetsFromHelper(s);
             TakeExcludeFromHelper();
         }
         ReloadChoices();
@@ -827,6 +823,7 @@ public sealed partial class MainViewModel : Observable
             // Только последний прогон: прошлые подборы о сегодняшней сети не говорят.
             if (stats.TryGetValue(s.Id, out var st) && st.Runs > 0)
             {
+                Names.UserGroupNames = SavedGroupNames();
                 var (note, warning) = StrategyChoice.Describe(st, Names);
                 choices.Add(new(s.Id, ShownTitle(s.Id, s.Title), note, s.Source == "search", warning, StrategyChoice.LastDetails(st, Names), ParamsOf(s.Id)) { Opened = StrategyOrder.Opened(st), Tip = TipFor(s.Id, s.Title), Source = s.Source });
             }
@@ -1213,8 +1210,9 @@ public sealed partial class MainViewModel : Observable
         if (want.Contains("user"))
         {
             // То, что в поле «Свои сайты», — как видит человек, сохранено оно или нет.
-            var mine = DraftTargets();
-            if (mine.Count > 0) groups.Add(TargetSet.UserGroup(mine));
+            // Группы — как в окне; «Проверить сейчас» проверяет всё без выборки (выборка — для подбора).
+            var mine = SiteGroups.Normalize(DraftGroups().Select(g => new SiteGroup(g.Name, g.Sites.Select(DataStore.NormalizeDomain).OfType<string>())), out _);
+            if (mine.Any(g => g.Sites.Count > 0)) groups.Add(TargetSet.UserGroups(mine, int.MaxValue));
         }
         return groups;
     }
@@ -1345,7 +1343,7 @@ public sealed partial class MainViewModel : Observable
     public string DeepText { get => _deepText; private set => Set(ref _deepText, value); }
 
     ScoreRow? _selected;
-    public ScoreRow? SelectedScore { get => _selected; set { if (Set(ref _selected, value)) { Raise(nameof(HasSelectedScore)); Raise(nameof(ApplySelectedText)); CommandManager.InvalidateRequerySuggested(); } } }
+    public ScoreRow? SelectedScore { get => _selected; set { if (Set(ref _selected, value)) { RaiseResultGroupLines(); Raise(nameof(HasSelectedScore)); Raise(nameof(ApplySelectedText)); CommandManager.InvalidateRequerySuggested(); } } }
     public bool HasSelectedScore => _selected is not null;
     /// <summary>Выбрана лучшая — «Применить лучшую»; другая строка таблицы — «Применить выбранную».</summary>
     public string ApplySelectedText => L.T(_selected is { IsBest: true } ? "select.apply_best" : "select.apply_selected");
@@ -1401,7 +1399,7 @@ public sealed partial class MainViewModel : Observable
     void ResetResults()
     {
         SetAddressNote(false);
-        Scores.Clear(); SelectedScore = null;
+        Scores.Clear(); SelectedScore = null; _reportTested = [];
         ResultText = ""; ResultHint = ""; SetBest(null); _resultId = null; OfferDeep = false;
         ResultSummary = ""; ResultExpanded = false;
         SelectProgress = 0; SelectIndeterminate = false;
@@ -1570,12 +1568,30 @@ public sealed partial class MainViewModel : Observable
     {
         if (!Confirm(L.T("home.conflict.confirm", new { names = ConflictNames }))) return;
         StopForeignResult r = new([], []);
+        StopConflictsResult = "";
         if (!await WithHelper(L.T("home.conflict.busy"), async c => r = await c.StopForeignAsync())) return;
         await RefreshStatusAsync();
+        StopConflictsResult = Message = StopForeignText(r);
+    }
+
+    /// <summary>Итог «Остановить» под кнопкой (выделяемый: причины и как остановить вручную); пусто — не нажимали.</summary>
+    public string StopConflictsResult { get => _stopConflictsResult; private set { _stopConflictsResult = value; Raise(); Raise(nameof(HasStopConflictsResult)); } }
+    string _stopConflictsResult = "";
+    public bool HasStopConflictsResult => _stopConflictsResult.Length > 0;
+
+    /// <summary>Правда об остановке: «Остановлено» — только остановленное; не вышло — что и почему, снова работает — что; и как остановить вручную.</summary>
+    public static string StopForeignText(StopForeignResult r)
+    {
+        var parts = new List<string>();
         var stopped = string.Join(", ", r.Stopped);
-        Message = r.Stopped.Count == 0 ? L.T("home.conflict.none")
-            : r.ComeBackOnReboot.Count > 0 ? L.T("home.conflict.stopped_service", new { names = stopped, services = string.Join(", ", r.ComeBackOnReboot) })
-            : L.T("home.conflict.stopped", new { names = stopped });
+        if (r.Stopped.Count > 0)
+            parts.Add(r.ComeBackOnReboot.Count > 0 ? L.T("home.conflict.stopped_service", new { names = stopped, services = string.Join(", ", r.ComeBackOnReboot) })
+                : L.T("home.conflict.stopped", new { names = stopped }));
+        if (r.Failed is { Count: > 0 } failed) parts.Add(L.T("home.conflict.failed", new { items = string.Join("; ", failed) }));
+        if (r.StillRunning is { Count: > 0 } still) parts.Add(L.T("home.conflict.still_running", new { names = string.Join(", ", still) }));
+        if (parts.Count == 0) return L.T("home.conflict.none");
+        if (r.Hints is { } hints) parts.AddRange(hints.Distinct());
+        return string.Join(" ", parts);
     }
 
     string? _autoApplyId;
@@ -1611,6 +1627,7 @@ public sealed partial class MainViewModel : Observable
 
     void ShowReport(SelectionReport r)
     {
+        _reportTested = r.TestedGroups;
         foreach (var s in r.Scores) _titles[s.Strategy.Id] = (s.Strategy.Title, s.Strategy.Roles);
         // Итоговая таблица — в порядке оценки, лучшая отмечена.
         var ordered = r.Scores.OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds).ToList();
@@ -1619,6 +1636,7 @@ public sealed partial class MainViewModel : Observable
         foreach (var s in ordered) Scores.Add(new ScoreRow(s, Names, StrategyTitle) { IsBest = best is not null && s.Strategy.Id == best.Strategy.Id });
         ResortScores();
         SelectedScore = Scores.FirstOrDefault(r => r.IsBest);   // лучшая выбрана сразу — «Применить лучшую» активна
+        RaiseResultGroupLines();
         SelectProgress = SelectProgressMax;
         // Статистика до этого подбора — для подсказки «работала N раз подряд, сейчас нет»; перечитывается ниже.
         var regression = StrategyChoice.Regression(Helper.Results?.Stats, r, CurrentStrategyId, Names);
@@ -1672,27 +1690,8 @@ public sealed partial class MainViewModel : Observable
 
     // ---------- свои сайты ----------
 
-    string _targetsText = "";
-    /// <summary>Черновик до «Сохранить»: сохраняет помощник.</summary>
-    public string TargetsText
-    {
-        get => _targetsText;
-        // Правка после «Сохранено адресов: N» — прежний итог уже не про то, что в поле.
-        set { if (Set(ref _targetsText, value)) { TargetsMessage = ""; RaiseSitesDirty(); } }
-    }
-
-    /// <summary>
-    /// В поле не то, что сохранено (UX-аудит 2, п. 15; п. 33 первого круга): подбор берёт сохранённое у помощника,
-    /// поэтому перед подбором и при уходе с вкладки черновик сохраняется (или об этом говорит тост).
-    /// </summary>
-    public bool TargetsDirty
-    {
-        get
-        {
-            var saved = UserTargets.Select(DataStore.NormalizeDomain).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
-            return !saved.SetEquals(DraftTargets());
-        }
-    }
+    // Черновик «Своих сайтов» (TargetsText) и группы — в MainViewModel.SiteGroups.cs. Подбор берёт сохранённое у помощника (UX-аудит 2, п. 15;
+    // п. 33 первого круга), поэтому перед подбором и при уходе с вкладки черновик сохраняется (или об этом говорит тост).
 
     /// <summary>Ушли с «Своих сайтов», не сохранив: с помощником — сохранить сами (прав не спросит), без него — тост «Сохранить».</summary>
     async Task SaveDraftOnLeaveAsync()
@@ -1726,19 +1725,26 @@ public sealed partial class MainViewModel : Observable
     async Task<bool> SaveTargetsAsync()
     {
         var lines = TargetsText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+        // С группами (или были сохранённые группы, которых теперь нет) — командой групп; без них — прежним плоским списком.
+        bool withGroups = SiteGroupRows.Any(g => g.Named) || Helper.Status?.UserGroups is { Count: > 0 };
         UserTargetsResult? r = null;
+        UserGroupsResult? gr = null;
         if (!await WithHelper(L.T("sites.targets.busy.save"), async c =>
             {
-                r = await c.SetUserTargetsAsync(lines);
+                if (withGroups && c.Compat.Supports("user_groups_set")) gr = await c.SetUserGroupsAsync(DraftGroups());
+                else r = await c.SetUserTargetsAsync(lines);
                 await FetchAsync(full: false);
-            }) || r is null)
+            }) || (r is null && gr is null))
             return false;
+        IReadOnlyList<string> savedSites = r?.Saved ?? SiteGroups.Flatten(gr!.Saved);
+        IReadOnlyList<string> rejected = r?.Rejected ?? gr!.Rejected;
         // Свои сайты сохранены — подбор их проверяет (галочка группы сама); список пуст — галочка снимается.
-        if (Groups.FirstOrDefault(g => g.Id == "user") is { } ug) ug.IsChecked = r.Saved.Count > 0;
-        TargetsText = string.Join(Environment.NewLine, r.Saved);
-        TargetsMessage = r.Rejected.Count == 0
-            ? L.T("sites.targets.saved", new { n = r.Saved.Count })
-            : L.T("sites.targets.saved_rejected", new { n = r.Saved.Count, rejected = string.Join(", ", r.Rejected) });
+        if (Groups.FirstOrDefault(g => g.Id == "user") is { } ug) ug.IsChecked = savedSites.Count > 0;
+        if (gr is not null) LoadGroups(gr.Saved);
+        else TargetsText = string.Join(Environment.NewLine, savedSites);
+        TargetsMessage = rejected.Count == 0
+            ? L.T("sites.targets.saved", new { n = savedSites.Count })
+            : L.T("sites.targets.saved_rejected", new { n = savedSites.Count, rejected = string.Join(", ", rejected) });
         RaiseSitesDirty();
         Router.JointRecheck();   // свои сайты — часть связки: роутеру они уходят сразу, а не через минуту
         return true;

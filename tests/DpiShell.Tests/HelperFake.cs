@@ -172,6 +172,14 @@ public sealed class FakeHelperBackend : IHelperBackend
         return new(lines, []);
     }
 
+    public UserGroupsResult SetUserGroups(IReadOnlyList<SiteGroup> groups)
+    {
+        var normalized = SiteGroups.Normalize(groups, out var rejected);
+        Call("user_groups_set " + string.Join(";", normalized.Select(g => g.Name + ":" + string.Join(",", g.Sites))));
+        StatusValue = StatusValue with { UserTargets = SiteGroups.Flatten(normalized), UserGroups = SiteGroups.Named(normalized) };
+        return new(normalized, rejected);
+    }
+
     public UserTargetsResult SetUserExclude(IReadOnlyList<string> lines)
     {
         Call("user_exclude_set " + string.Join(",", lines));
@@ -224,7 +232,9 @@ public sealed class FakeHelperBackend : IHelperBackend
     public HostsCommentResult HostsUncomment() { Call("hosts_uncomment"); return new(false, [], [], null); }
     public HostsRestoreResult HostsRestore() { Call("hosts_restore"); return new(false, 0, 0, 0, null); }
 
-    public StopForeignResult StopForeign() { Call("stop_foreign"); return new(["zapret от Flowseal"], []); }
+    /// <summary>Что отвечает stop_foreign.</summary>
+    public StopForeignResult StopForeignValue { get; set; } = new(["zapret от Flowseal"], []);
+    public StopForeignResult StopForeign() { Call("stop_foreign"); return StopForeignValue; }
 
     public async Task CoreRepairAsync(IProgress<string> log, CancellationToken ct)
     {
@@ -233,7 +243,7 @@ public sealed class FakeHelperBackend : IHelperBackend
         ct.ThrowIfCancellationRequested();
     }
 
-    /// <summary>Офлайн-архив ядра (API 1.17): что окно прислало частями.</summary>
+    /// <summary>Офлайн-архив ядра (API 1.19): что окно прислало частями.</summary>
     public MemoryStream OfflineReceived { get; } = new();
     public int OfflineParts { get; private set; }
     /// <summary>Ожидаемый sha256 архива; не совпал — отказ, как у настоящего помощника. Null — принять любой.</summary>

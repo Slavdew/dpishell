@@ -196,7 +196,7 @@ public sealed class Shell
     {
         var want = (ids ?? State.Groups).ToHashSet();
         var groups = DefaultTargets.Groups.Where(g => want.Contains(g.Id)).ToList();
-        if (want.Contains("user") && State.UserTargets.Count > 0) groups.Add(TargetSet.UserGroup(State.UserTargets));
+        if (want.Contains("user") && State.UserTargets.Count > 0) groups.Add(TargetSet.UserGroups(UserSiteGroups()));
         return groups;
     }
 
@@ -268,39 +268,15 @@ public sealed class Shell
         return new(state, exe, strategy, ours);
     }
 
+    /// <summary>Службы и процессы для «Остановить» похожие программы; в тестах — подмена.</summary>
+    public IForeignSystem Foreign { get => _foreign ??= new SystemForeign(Paths, () => AllStrategies); set => _foreign = value; }
+    IForeignSystem? _foreign;
+
     /// <summary>
-    /// Остановить чужие обходы (Flowseal и т. п.), чтобы не мешали: процессы завершаются, службы останавливаются,
-    /// но не удаляются — чужие настройки не трогаем. Возвращает, что остановили, и службы, которые вернутся после перезагрузки.
+    /// Остановить чужие оптимизации (Flowseal и т. п.), чтобы не мешали: процессы завершаются, службы останавливаются,
+    /// но не удаляются — чужие настройки не трогаем. Итог честный: что остановлено, что нет и почему (<see cref="ForeignStop"/>).
     /// </summary>
-    public (IReadOnlyList<string> Stopped, IReadOnlyList<string> ComeBackOnReboot) StopForeign()
-    {
-        var stopped = new List<string>(); var comeBack = new List<string>();
-        var snapshotAt = DateTime.Now;   // процесс из снимка запущен не позже этого момента
-        var found = ZapretDetector.Find(Paths, AllStrategies).Where(z => z.Owner != ZapretOwner.DpiShell).ToList();
-        foreach (var z in found.Where(z => z.Kind == "service"))
-        {
-            ServiceManager.Sc("stop", z.Name);
-            ServiceManager.WaitFor(z.Name, SvcState.Stopped, TimeSpan.FromSeconds(10));
-            stopped.Add(L.T("core.shell.stopped_service", new { owner = z.OwnerTitle, name = z.Name }));
-            comeBack.Add(z.Name);
-        }
-        foreach (var z in found.Where(z => z.Kind == "process"))
-        {
-            if (!int.TryParse(z.Name.Replace("PID ", ""), out var pid)) continue;
-            try
-            {
-                using var p = System.Diagnostics.Process.GetProcessById(pid);
-                // Между снимком и Kill номер мог достаться другому процессу (в т. ч. чужого пользователя) — тогда не трогаем.
-                if (!IsSameProcess(p, z.ExePath, snapshotAt)) continue;
-                p.Kill(entireProcessTree: true);
-                p.WaitForExit(5000);
-                stopped.Add(z.OwnerTitle);
-            }
-            catch (ArgumentException) { }            // уже завершился
-            catch (InvalidOperationException) { }
-        }
-        return (stopped, comeBack);
-    }
+    public ForeignStopOutcome StopForeign() => ForeignStop.Run(Foreign, Paths.Winws);
 
     /// <summary>
     /// Тот ли это процесс, что был в снимке: запущен не позже снимка, то же имя и (если система его отдаёт) тот же путь образа.
@@ -712,7 +688,10 @@ public sealed class Shell
     public IpsetVerdict WriteUserIpset(IEnumerable<string> lines, bool exclude = false, bool confirmed = false) =>
         IpLists.WriteUser(lines, exclude, confirmed);
 
-    /// <summary>Свои сайты: файл доменов, список целей, группа «Свои» включается. Негодные строки отбрасываются и возвращаются.</summary>
+    /// <summary>
+    /// Свои сайты: файл доменов, список целей, группа «Свои» включается. Негодные строки отбрасываются и возвращаются.
+    /// Группы (API 1.18) не трогаются: сайты, оставшиеся в списке, сохраняют свою группу, ушедшие из списка уходят и из групп.
+    /// </summary>
     public (IReadOnlyList<string> Saved, IReadOnlyList<string> Rejected) SetUserTargets(IEnumerable<string> lines)
     {
         Paths.EnsureDirectories();
@@ -720,10 +699,51 @@ public sealed class Shell
         var rejected = Data.WriteUserDomains(trimmed);
         var good = trimmed.Where(l => DataStore.NormalizeDomain(l) is not null).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         State.UserTargets = good;
+        State.UserGroups = SiteGroups.Named(SiteGroups.Apply(good, State.UserGroups));
         if (good.Count > 0 && !State.Groups.Contains("user")) State.Groups.Add("user");
         SaveState();
         return (good, rejected);
     }
+
+    /// <summary>
+    /// Свои сайты по группам (API 1.18): те же файл и список, что у <see cref="SetUserTargets"/>, плюс группы. Возвращается итог
+    /// (именованные группы по порядку, «Прочее» последней) и отброшенные строки.
+    /// </summary>
+    public (IReadOnlyList<SiteGroup> Saved, IReadOnlyList<string> Rejected) SetUserGroups(IEnumerable<SiteGroup> groups)
+    {
+        var normalized = SiteGroups.Normalize(groups, out var rejected);
+        var (_, rejectedFile) = SetUserTargets(SiteGroups.Flatten(normalized));
+        State.UserGroups = SiteGroups.Named(normalized);
+        SaveState();
+        return (UserSiteGroups(), [.. rejected, .. rejectedFile]);
+    }
+
+    /// <summary>Группы своих сайтов как домен → имя (для выгрузки и журнала); сайты «Прочее» не перечислены.</summary>
+    public Dictionary<string, string> UserGroupMap()
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var g in State.UserGroups)
+            foreach (var s in g.Sites)
+                if (AdvancedSites.Domain(s) is { } d) map.TryAdd(d, g.Name);
+        return map;
+    }
+
+    /// <summary>Свои сайты списком и группы картой «домен → имя» (загрузка настроек и её откат): сайт без записи в карте — «Прочее».</summary>
+    public void SetUserTargetsGrouped(IReadOnlyList<string> sites, IReadOnlyDictionary<string, string> groups)
+    {
+        var named = new List<SiteGroup>();
+        foreach (var s in sites)
+        {
+            if (AdvancedSites.Domain(s) is not { } d || !groups.TryGetValue(d, out var name)) continue;
+            (named.FirstOrDefault(g => string.Equals(g.Name, name, StringComparison.OrdinalIgnoreCase)) ?? AddGroup(named, name)).Sites.Add(s);
+        }
+        SetUserGroups([.. named, new SiteGroup("", sites.Where(s => AdvancedSites.Domain(s) is not { } d || !groups.ContainsKey(d)))]);
+
+        static SiteGroup AddGroup(List<SiteGroup> list, string name) { var g = new SiteGroup(name, []); list.Add(g); return g; }
+    }
+
+    /// <summary>Свои сайты по группам: именованные по порядку и «Прочее» последней (всегда есть, возможно пустая).</summary>
+    public List<SiteGroup> UserSiteGroups() => SiteGroups.Apply(State.UserTargets, State.UserGroups);
 
     /// <summary>
     /// Профили программ целиком (загрузка настроек и её откат): профили из <paramref name="add"/> добавляются как есть (id и дата сохраняются),

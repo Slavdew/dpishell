@@ -124,6 +124,13 @@
   "select.check.no_name": "имени нет",
   "select.check.cant_open": "не открыть",
   "select.check.missed": "не открылось: {groups}",
+  "select.check.note.addr_blocked": "заблокирован по адресу — оптимизация не поможет",
+  "select.sub.other": "Прочее",
+  "select.sub.line": "{name} {mark} {ok}/{total}",
+  "select.sub.missed": "не открыто: {hosts}",
+  "select.sub.more": " и ещё {n}",
+  "select.sub.sampled": "проверено {n} из {all}",
+  "select.sub.blocked": "заблокировано по адресу: {n} — оптимизация не поможет",
   "select.regression": {
     "one": "«{name}» работала последние {n} раз, а сейчас {failed} — похоже, провайдер изменил правила или сеть сбоит. Можно поискать новые.",
     "few": "«{name}» работала последние {n} раза, а сейчас {failed} — похоже, провайдер изменил правила или сеть сбоит. Можно поискать новые.",

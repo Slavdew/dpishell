@@ -261,9 +261,13 @@ public static partial class SettingsClean
     /// Проверить содержимое пакета. <paramref name="env"/> — сведения о ПК (фейки, варианты, известные стратегии); null — только то, что видно из самих данных.
     /// Всё негодное отбрасывается, причины — в <paramref name="problems"/>.
     /// </summary>
-    public static ImportData Clean(ImportData d, SettingsState? env, List<SectionProblem> problems) => new()
+    public static ImportData Clean(ImportData d, SettingsState? env, List<SectionProblem> problems)
     {
-        Sites = d.Sites is null ? null : Domains(d.Sites, SettingsSections.MaxSites, SettingsSections.Sites, SettingsSections.SitesFile, problems),
+        var sites = d.Sites is null ? null : Domains(d.Sites, SettingsSections.MaxSites, SettingsSections.Sites, SettingsSections.SitesFile, problems);
+        return new()
+        {
+        Sites = sites,
+        SiteGroups = sites is null ? null : CleanGroups(d.SiteGroups, sites),
         Exclude = d.Exclude is null ? null : Domains(d.Exclude, SettingsSections.MaxExclude, SettingsSections.Exclude, SettingsSections.ExcludeFile, problems),
         Subnets = d.Subnets is null ? null : Subnets(string.Join('\n', d.Subnets), SettingsSections.MaxSubnets, SettingsSections.Subnets, SettingsSections.SubnetsFile, problems),
         SubnetsExclude = d.SubnetsExclude is null ? null : Subnets(string.Join('\n', d.SubnetsExclude), SettingsSections.MaxSubnets, SettingsSections.Subnets, SettingsSections.SubnetsExcludeFile, problems),
@@ -272,5 +276,32 @@ public static partial class SettingsClean
         Apps = d.Apps is null ? null : Apps(d.Apps, env, problems),
         Hosts = d.Hosts is null ? null : Hosts([.. d.Hosts.Select(h => (0, h))], SettingsSections.MaxHosts, SettingsSections.Hosts, SettingsSections.HostsFile, problems),
         Dns = d.Dns is null ? null : Dns(d.Dns, problems),
-    };
+        };
+    }
+
+    /// <summary>
+    /// Группы своих сайтов: только для принятых сайтов, имя очищено (<see cref="SiteGroups.CleanName"/>), групп не больше <see cref="SiteGroups.MaxGroups"/>
+    /// (остальные сайты — «Прочее»). Нет ни одной — null: пакет без групп остаётся таким же, каким был.
+    /// </summary>
+    public static Dictionary<string, string>? CleanGroups(Dictionary<string, string>? raw, IReadOnlyList<string> sites)
+    {
+        if (raw is not { Count: > 0 }) return null;
+        var res = new Dictionary<string, string>(StringComparer.Ordinal);
+        var names = new List<string>();
+        foreach (var site in sites)
+        {
+            if (!raw.TryGetValue(site, out var n)) continue;
+            var name = DpiShell.Core.SiteGroups.CleanName(n);
+            if (name.Length == 0) continue;
+            var known = names.FirstOrDefault(x => string.Equals(x, name, StringComparison.OrdinalIgnoreCase));
+            if (known is null)
+            {
+                if (names.Count >= DpiShell.Core.SiteGroups.MaxGroups) continue;
+                names.Add(name);
+                known = name;
+            }
+            res[site] = known;
+        }
+        return res.Count == 0 ? null : res;
+    }
 }
