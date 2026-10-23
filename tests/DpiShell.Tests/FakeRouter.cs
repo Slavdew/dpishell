@@ -469,7 +469,7 @@ public sealed partial class FakeRouter : IDisposable
             "flow_offload_fix" => Do(() => { FlowOffloadFixed = true; WarningsJson = "[]"; }, """{ "changed": true, "flowoffload": "software" }"""),
             "ipv6_set" => Do(() => { Ipv6Enabled = args["enabled"]!.GetValue<bool>(); WarningsJson = "[]"; }),
             "lists_set" => Do(() => Lists[args["name"]!.GetValue<string>()] = args["lines"]!.AsArray().Select(x => x!.GetValue<string>()).ToList()),
-            "select_progress" => Progress(),
+            "select_progress" => Progress(args),
             "targets_get" => System.Text.Json.JsonSerializer.Serialize(new { items = UserTargets.Select(t => new { url = t.Url, important = t.Important }) }),
             "lists_get" => args["name"]?.GetValue<string>() == "exclude"
                 ? """{ "lines": ["gosuslugi.ru"], "editable": false }"""
@@ -702,26 +702,55 @@ public sealed partial class FakeRouter : IDisposable
     string Step0(string payload) { _selectStep = -1; _cancelled = false; return payload; }
 
     /// <summary>Первые вызовы — running: true; последний — best, applied: true и backups (§5.1, редакция §9). После select_cancel — cancelled.</summary>
-    string Progress()
+    /// <summary>
+    /// Роутер 0.2.1-r2: select_progress принимает since/run и отдаёт run, rows_from, rows_total (router-api §9). false — старый
+    /// роутер: всегда весь список; присланный since копится в <see cref="SinceOnOldRouter"/> (окно не должно его слать).
+    /// </summary>
+    public bool ProgressSince { get; set; }
+    public long ProgressRun { get; set; } = 1792000000;
+    /// <summary>Строки по шагам: на шаге k — первые min(k+1, n) (подбор досылает строки по одной). null — SelectRowsJson целиком.</summary>
+    public List<string>? SelectRowsGrowing { get; set; }
+    public int SinceOnOldRouter { get; private set; }
+
+    string RowsFor(int step, JsonObject args, out string extra)
+    {
+        var all = SelectRowsGrowing is { } g
+            ? g.Take(Math.Clamp(step + 1, 0, g.Count)).ToList()
+            : JsonNode.Parse(SelectRowsJson)!.AsArray().Select(x => x!.ToJsonString()).ToList();
+        extra = "";
+        if (!ProgressSince)
+        {
+            if (args.ContainsKey("since") || args.ContainsKey("run")) SinceOnOldRouter++;
+            return "[" + string.Join(",", all) + "]";
+        }
+        var since = args["since"]?.GetValue<int>() ?? 0;
+        if (args["run"]?.GetValue<long>() is { } run && run > 0 && run != ProgressRun) since = 0;
+        var from = Math.Clamp(since, 0, all.Count);
+        extra = $$""", "run": {{ProgressRun}}, "rows_from": {{from}}, "rows_total": {{all.Count}}""";
+        return "[" + string.Join(",", all.Skip(from)) + "]";
+    }
+
+    string Progress(JsonObject args)
     {
         var step = Interlocked.Increment(ref _selectStep);
+        var rows = RowsFor(step, args, out var extra);
         if (_cancelled)
             return $$"""
                 { "running": false, "started_by": "{{StartedBy}}", "depth": "main", "index": {{step}}, "total": 20, "eta_s": null,
-                  "message": "", "rows": {{SelectRowsJson}},
+                  "message": "", "rows": {{rows}}{{extra}},
                   "finished_at": "2026-10-16T21:05:00Z", "cancelled": true, "best": null, "applied": false, "backups": [] }
                 """;
         if (step < SelectSteps)
             return $$"""
                 { "running": true, "started_by": "{{StartedBy}}", "depth": "main", "index": {{step + 1}}, "total": 20, "eta_s": 95,
                   "message": "alt3: YouTube",
-                  "rows": {{SelectRowsJson}},
+                  "rows": {{rows}}{{extra}},
                   "finished_at": null, "cancelled": false, "best": null, "applied": false, "backups": [] }
                 """;
         if (Applied) { Strategy = BestId; SelectRunningJob = false; }
         return $$"""
             { "running": false, "started_by": "{{StartedBy}}", "depth": "main", "index": 20, "total": 20, "eta_s": null,
-              "message": "", "rows": {{SelectRowsJson}},
+              "message": "", "rows": {{rows}}{{extra}},
               "finished_at": "2026-10-16T21:05:00Z", "cancelled": false, "best": "{{BestId}}", "applied": {{(Applied ? "true" : "false")}}, "backups": {{BackupsJson}} }
             """;
     }

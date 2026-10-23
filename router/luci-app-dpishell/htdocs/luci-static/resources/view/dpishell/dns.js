@@ -259,7 +259,7 @@ return view.extend({
 		this.comparing = true;
 		this.el.presetErr.textContent = '';
 		this.renderPresets(false);
-		return api.call('dns_compare').then(function(r) {
+		return this.compareCall().then(function(r) {
 			self.speed = {};
 			(r.items || []).forEach(function(it) { self.speed[it.id] = it.ms; });
 		}, function(e) {
@@ -268,6 +268,27 @@ return view.extend({
 			self.comparing = false;
 			self.renderPresets(false);
 		});
+	},
+
+	// Роутер с dns_compare_start (0.2.1-r2): замер фоном, итог — опросом dns_compare_result раз в 1 с (до 20 с), rpcd не
+	// ждёт curl и остальная LuCI не стоит. Старый роутер — прежний синхронный dns_compare.
+	compareCall: function() {
+		var m = this.status && this.status.methods;
+		if (!Array.isArray(m) || m.indexOf('dns_compare_start') < 0 || m.indexOf('dns_compare_result') < 0)
+			return api.call('dns_compare');
+		var tries = 20;
+		var poll = function() {
+			return new Promise(function(ok) { window.setTimeout(ok, 1000); }).then(function() {
+				return api.call('dns_compare_result');
+			}).then(function(r) {
+				if (!r.running && r.items)
+					return r;
+				if (!r.running || --tries <= 0)
+					throw api.error(api.t('web.dns.compare_failed'), 'dns_compare_result');
+				return poll();
+			});
+		};
+		return api.call('dns_compare_start').then(poll);
 	},
 
 	applyPreset: function() {

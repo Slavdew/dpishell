@@ -573,8 +573,12 @@ methods.select_start = {
 	}
 };
 
+// since/run (с 0.2.1-r2, router-api §9): строки rows с номера since — окно и страница досылают новые, а не тянут весь
+// select.json (~60 КБ) раз в секунду. run — started_at подбора, по которому считали since: другой подбор — строки с 0.
+// В ответе всегда (и без since) run, rows_from, rows_total — по ним клиент понимает, что роутер умеет since.
 methods.select_progress = {
-	call: function() {
+	args: { since: 0, run: 0 },
+	call: function(req) {
 		let p = st.read_json('/tmp/dpishell/select.json', { running: false, index: 0, total: 0, rows: [], best: null, applied: false, backups: [] });
 		// Запись и живой процесс расходятся: задание умерло (убито, перезагрузка) — итог «прервался»; запись ещё не
 		// обновилась, а задание идёт — «идёт».
@@ -585,6 +589,15 @@ methods.select_progress = {
 			p = { ...p, running: true, index: 0, total: 0, rows: [], message: 'Запуск подбора…',
 				message_msg: { key: 'router.select.starting', params: {}, text: 'Запуск подбора…' }, finished_at: null };
 		p.finished_at = st.iso(p.finished_at);
+		let rows = type(p.rows) == 'array' ? p.rows : [], n = length(rows), a = req.args ?? {};
+		let since = type(a.since) == 'int' && a.since > 0 ? a.since : 0;
+		if (type(a.run) == 'int' && a.run > 0 && a.run != (p.started_at ?? 0))
+			since = 0;
+		let from = since < n ? since : n;
+		p.rows = from ? slice(rows, from) : rows;
+		p.run = p.started_at ?? 0;
+		p.rows_from = from;
+		p.rows_total = n;
 		return p;
 	}
 };
@@ -977,9 +990,34 @@ methods.changes_undo = {
 methods.changes_undo_all = { call: function() { return changes_start('all'); } };
 
 // «Сравнить скорость» (как на ПК): время ответа защищённого DNS каждого варианта, мс; null — не ответил.
+// Прежний синхронный вызов (до 4 с внутри rpcd — стоит вся LuCI) — для старых страниц; новые — dns_compare_start/_result.
 methods.dns_compare = {
 	call: function() {
 		return { items: dns.compare() };
+	}
+};
+
+const DNS_COMPARE = '/tmp/dpishell/dns_compare.json';
+
+// Фоном (с 0.2.1-r2): rpcd возвращается сразу, итог — dns_compare_result. Идёт — второй запуск не плодит процессы (замок).
+methods.dns_compare_start = {
+	call: function() {
+		let tok = st.job_reserve('dns_compare');
+		if (tok) {
+			st.write_atomic(DNS_COMPARE, sprintf('%J\n', { running: true, started_at: time(), items: null, at: null }));
+			spawn('dns_compare', tok);
+		}
+		return { started: true };
+	}
+};
+
+methods.dns_compare_result = {
+	call: function() {
+		let r = st.read_json(DNS_COMPARE, { running: false, items: null, at: null });
+		// Задание умерло (убито, перезагрузка) — не «идёт» вечно.
+		if (r.running && !st.job_running('dns_compare') && time() - (r.started_at ?? 0) > 10)
+			r = { running: false, items: null, at: null };
+		return { running: !!r.running, items: r.items ?? null, at: st.iso(r.at) };
 	}
 };
 

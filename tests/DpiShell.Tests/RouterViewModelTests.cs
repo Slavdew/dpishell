@@ -233,6 +233,62 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.StartsWith("Включена на роутере: ", vm.ResultText);
     }
 
+    static readonly List<string> GrowingRows =
+    [
+        """{ "id": "alt", "title": "general (ALT)", "group_share": 1.0, "target_share": 0.88, "avg_s": 0.74, "error": null }""",
+        """{ "id": "alt2", "title": "general (ALT2)", "group_share": 0.5, "target_share": 0.5, "avg_s": 0.9, "error": null }""",
+        """{ "id": "alt3", "title": "general (ALT3)", "group_share": 0.0, "target_share": 0.0, "avg_s": 0, "error": "не открылось" }""",
+        """{ "id": "alt9", "title": "general (ALT9)", "group_share": 1.0, "target_share": 0.80, "avg_s": 0.60, "error": null }""",
+    ];
+
+    static List<int?> SinceArgs(FakeRouter r) =>
+        r.Calls.Where(c => Method(c) == "select_progress").Select(c => c["params"]![3]?["since"]?.GetValue<int>()).ToList();
+
+    [Fact]
+    public async Task Select_NewRouter_PollsOnlyNewRows_WithSinceAndRun()
+    {
+        using var r = new FakeRouter { SelectSteps = 4, ProgressSince = true, SelectRowsGrowing = GrowingRows };
+        var (vm, _) = Make(r);
+        await vm.ConnectAsync("secret");
+        await vm.StartSelectAsync(deep: false);
+
+        Assert.False(vm.Selecting);
+        // Первый опрос — без since (роутер ещё не показал rows_total), дальше — с числа уже полученных строк.
+        Assert.Equal([null, 1, 2, 3, 4], SinceArgs(r));
+        Assert.All(r.Calls.Where(c => Method(c) == "select_progress").Skip(1),
+            c => Assert.Equal(r.ProgressRun, c["params"]![3]!["run"]!.GetValue<long>()));
+        Assert.Equal(["alt", "alt2", "alt3", "alt9"], vm.Scores.Select(s => s.Id).Order());
+        Assert.True(vm.Scores.Single(s => s.Id == "alt").IsBest);
+    }
+
+    [Fact]
+    public async Task Select_OldRouter_NoSinceSent_FullRowsAsBefore()
+    {
+        using var r = new FakeRouter { SelectSteps = 4, ProgressSince = false, SelectRowsGrowing = GrowingRows };
+        var (vm, _) = Make(r);
+        await vm.ConnectAsync("secret");
+        await vm.StartSelectAsync(deep: false);
+
+        Assert.Equal(0, r.SinceOnOldRouter);
+        Assert.All(SinceArgs(r), x => Assert.Null(x));
+        Assert.Equal(["alt", "alt2", "alt3", "alt9"], vm.Scores.Select(s => s.Id).Order());
+    }
+
+    [Fact]
+    public async Task Select_NewRouter_OtherRun_RouterSendsAllRows()
+    {
+        using var r = new FakeRouter { ProgressSince = true, SelectRowsGrowing = GrowingRows };
+        using var c = new RouterClient(r.Address);
+        await c.LoginAsync(() => r.Password);
+        var p = await c.SelectProgressAsync(3, r.ProgressRun);
+        Assert.Equal(1, p.RowsTotal);            // шаг 0 — одна строка: since больше — пусто, rows_from = всего
+        Assert.Equal(1, p.RowsFrom);
+        Assert.Empty(p.Rows!);
+        var other = await c.SelectProgressAsync(1, r.ProgressRun - 5);   // метка другого подбора — строки с начала
+        Assert.Equal(0, other.RowsFrom);
+        Assert.Equal(2, other.Rows!.Count);
+    }
+
     [Fact]
     public async Task Select_ProgressErrorsRightAfterStart_ShowStarting_NotError()
     {

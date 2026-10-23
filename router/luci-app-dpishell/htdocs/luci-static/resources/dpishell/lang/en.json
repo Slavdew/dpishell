@@ -369,6 +369,7 @@
  "web.dns.boot": "Secure DNS server IP",
  "web.dns.boot_hint": "Needed if the secure DNS address contains a name, not an IP",
  "web.dns.choose_other": "Choose another DNS to apply",
+ "web.dns.compare_failed": "Measurement did not finish — try again",
  "web.dns.cons1": "DNS queries go to Google and Cloudflare encrypted: the ISP usually cannot spoof them, but can block secure DNS itself — then the router switches back to the ISP’s DNS.",
  "web.dns.cons2": "ISP filters (such as ISP parental controls) will stop working.",
  "web.dns.cons3": "Sites may open slightly slower.",

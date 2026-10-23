@@ -387,6 +387,12 @@ public sealed class RouterClient : IDisposable
     public Task<RouterStatus> StatusAsync(CancellationToken ct = default) => CallAsync<RouterStatus>("status", null, ct);
     public Task<RouterStrategies> StrategiesAsync(CancellationToken ct = default) => CallAsync<RouterStrategies>("strategies", null, ct);
     public Task<RouterSelectProgress> SelectProgressAsync(CancellationToken ct = default) => CallAsync<RouterSelectProgress>("select_progress", null, ct);
+    /// <summary>
+    /// Ход подбора со строками rows с номера since (роутер 0.2.1-r2, §9): звать, только если прошлый ответ был с rows_total —
+    /// старый роутер параметров не объявлял. run — Run прошлого ответа: другой подбор — роутер отдаст строки с 0 (rows_from = 0).
+    /// </summary>
+    public Task<RouterSelectProgress> SelectProgressAsync(int since, long? run, CancellationToken ct = default) =>
+        CallAsync<RouterSelectProgress>("select_progress", run is { } r ? new JsonObject { ["since"] = since, ["run"] = r } : new JsonObject { ["since"] = since }, ct);
     public Task<RouterTargets> TargetsGetAsync(CancellationToken ct = default) => CallAsync<RouterTargets>("targets_get", null, ct);
     /// <summary>
     /// name: user-general, user-exclude, exclude (стандартные исключения, только чтение) или встроенный список роли — google, discord, general

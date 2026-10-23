@@ -1511,12 +1511,23 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         Selecting = true;
         int failures = 0;
         var grace = justStarted ? DateTime.UtcNow + SelectStartGrace : DateTime.MinValue;
+        // Роутер с rows_total (0.2.1-r2) досылает только новые строки (since): ShowProgress сливает их по id с уже показанными.
+        RouterSelectProgress? last = null;
+        int rowsSeen = 0;
         try
         {
             while (Connected)
             {
                 RouterSelectProgress p;
-                try { p = await Call(c => c.SelectProgressAsync()); failures = 0; }
+                var prev = last;
+                var seen = rowsSeen;
+                try
+                {
+                    p = await Call(c => prev?.RowsTotal is not null ? c.SelectProgressAsync(seen, prev.Run) : c.SelectProgressAsync());
+                    failures = 0;
+                    last = p;
+                    rowsSeen = p.RowsTotal is not null ? (p.RowsFrom ?? 0) + (p.Rows?.Count ?? 0) : 0;
+                }
                 catch (RouterException e) when (e.Failure != RouterFailure.AccessDenied && DateTime.UtcNow < grace)
                 {
                     SelectProgressText = StartingText;
