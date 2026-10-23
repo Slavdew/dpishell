@@ -1819,7 +1819,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     bool _siteSuggest, _siteChecking;
     string? _siteHost;
     public string SiteUrl { get => _siteUrl; set => Set(ref _siteUrl, value); }
-    public string SiteResult { get => _siteResult; private set { if (Set(ref _siteResult, value)) Raise(nameof(HasSiteResult)); } }
+    public string SiteResult { get => _siteResult; private set { if (Set(ref _siteResult, value)) { Raise(nameof(HasSiteResult)); Raise(nameof(ShowSiteAgain)); } } }
     public bool HasSiteResult => SiteResult.Length > 0;
     public string SiteHint { get => _siteHint; private set => Set(ref _siteHint, value); }
     /// <summary>Что именно ответил сайт с обходом и без — под «Подробнее».</summary>
@@ -1832,7 +1832,12 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public bool SiteSuggestList { get => _siteSuggestList; private set { if (Set(ref _siteSuggestList, value)) Requery(); } }
     public ICommand AddListCmd => _addListCmd ??= RelayCommand.Async(AddSiteToListAsync, () => Can("lists_set") && SiteSuggestList);
     ICommand? _addListCmd;
-    public bool SiteChecking { get => _siteChecking; private set => Set(ref _siteChecking, value); }
+    public bool SiteChecking { get => _siteChecking; private set { if (Set(ref _siteChecking, value)) { Raise(nameof(ShowSiteAgain)); Requery(); } } }
+    /// <summary>«Проверить снова» у итога (аудит С-16): тот же сайт ещё раз — после «Добавить в исключения» или просто повторно.</summary>
+    public bool ShowSiteAgain => HasSiteResult && !SiteChecking && _siteHost is not null;
+    public ICommand SiteAgainCmd => _siteAgainCmd ??= RelayCommand.Async(() => { if (_siteHost is { } h && RouterTexts.Host(SiteUrl) != h) SiteUrl = h; return SiteCheckAsync(); },
+        () => Can("site_check") && !SiteChecking && _siteHost is not null);
+    ICommand? _siteAgainCmd;
     public ICommand SiteCheckCmd { get; }
     public ICommand AddExcludeCmd { get; }
 
@@ -1875,6 +1880,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     void ShowSiteResult(string host, RouterSiteCheckResult? r, bool? covered = null)
     {
         _siteHost = host;
+        Raise(nameof(ShowSiteAgain));
         if (r is null) { SiteResult = L.T("router.site.pending"); SiteHint = ""; SiteDetail = ""; return; }
         bool with = r.WithBypass?.Ok == true, without = r.WithoutBypass?.Ok == true;
         bool notInList = covered == false;

@@ -251,6 +251,9 @@
                                             </StackPanel>
                                             <TextBox Text="{Binding DirectMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,6,0,0"
                                                      Visibility="{Binding HasDirectMessage, Converter={StaticResource Vis}}" />
+                                            <!-- «Проверить снова» (аудит С-16): тот же сайт ещё раз — после добавления в список, в исключения или просто повторно. -->
+                                            <Button Content="{l:T home.sitecheck.again}" Style="{StaticResource LinkButton}" Command="{Binding SiteAgainCmd}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                                    Visibility="{Binding ShowSiteAgain, Converter={StaticResource Vis}}" />
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
@@ -815,6 +818,8 @@
                                         <!-- «Только из списков», сайта в списках роутера нет и он не открывается — в свой список user-general (как страница роутера), затем проверка заново. -->
                                         <Button Content="{l:T home.sitecheck.add_list}" Style="{StaticResource Primary}" Command="{Binding AddListCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
                                                 Visibility="{Binding SiteSuggestList, Converter={StaticResource Vis}}" />
+                                        <Button Content="{l:T home.sitecheck.again}" Style="{StaticResource LinkButton}" Command="{Binding SiteAgainCmd}" HorizontalAlignment="Left" Margin="0,6,0,0"
+                                                Visibility="{Binding ShowSiteAgain, Converter={StaticResource Vis}}" />
                                         <Expander Header="{l:T common.more}" Visibility="{Binding HasSiteDetail, Converter={StaticResource Vis}}">
                                             <TextBox Text="{Binding SiteDetail, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" />
                                         </Expander>

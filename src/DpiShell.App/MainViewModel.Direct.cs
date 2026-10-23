@@ -23,7 +23,7 @@ public sealed partial class MainViewModel
 
     bool _directOpen;
     /// <summary>Блок «Проверить сайт: с оптимизацией и без неё» раскрыт.</summary>
-    public bool DirectOpen { get => _directOpen; set => Set(ref _directOpen, value); }
+    public bool DirectOpen { get => _directOpen; set { if (Set(ref _directOpen, value)) Raise(nameof(ShowSiteAgain)); } }
 
     string _directSite = "";
     public string DirectSite { get => _directSite; set => Set(ref _directSite, value); }
@@ -48,17 +48,19 @@ public sealed partial class MainViewModel
     public SiteCheckOutcome SiteOutcome
     {
         get => _siteOutcome;
-        private set { if (Set(ref _siteOutcome, value)) { Raise(nameof(SiteCheckLine)); Raise(nameof(SiteCheckHealth)); Raise(nameof(HasSiteCheckLine)); Raise(nameof(ShowAddExclude)); Raise(nameof(ShowAddToList)); CommandManager.InvalidateRequerySuggested(); } }
+        private set { if (Set(ref _siteOutcome, value)) { Raise(nameof(SiteCheckLine)); Raise(nameof(SiteCheckHealth)); Raise(nameof(HasSiteCheckLine)); Raise(nameof(ShowAddExclude)); Raise(nameof(ShowAddToList)); Raise(nameof(ShowSiteAgain)); CommandManager.InvalidateRequerySuggested(); } }
     }
     public bool HasSiteCheckLine => _siteOutcome is not (SiteCheckOutcome.None or SiteCheckOutcome.Message);
     public string SiteCheckLine => _siteOutcome switch
     {
         SiteCheckOutcome.Checking => L.T("home.sitecheck.checking", new { site = _siteHost }),
-        SiteCheckOutcome.Opens => L.T("home.sitecheck.opens"),
+        // С оптимизацией или без — сказано прямо (аудит С-16): сайт вне списков открывается сам, под оптимизацией — с ней.
+        SiteCheckOutcome.Opens => L.T(_siteExcluded ? "home.sitecheck.excluded_opens" : _siteNotInList ? "home.sitecheck.opens_plain" : _siteCovered ? "home.sitecheck.opens_with" : "home.sitecheck.opens"),
         SiteCheckOutcome.OnlyWithout => L.T("home.sitecheck.only_without"),
         SiteCheckOutcome.FailsWith => L.T("home.sitecheck.fails_with"),
         SiteCheckOutcome.Closed => L.T("home.sitecheck.closed"),
-        SiteCheckOutcome.NotInList => L.T("home.sitecheck.not_in_list", new { site = _siteHost }),
+        // Окно говорит итог прямо («Не открывается. … нет в списке»); "home.sitecheck.not_in_list" остаётся странице роутера (lang-src/shared-keys.txt).
+        SiteCheckOutcome.NotInList => L.T("home.sitecheck.not_in_list_closed", new { site = _siteHost }),
         _ => "",
     };
     public Health SiteCheckHealth => _siteOutcome switch
@@ -74,6 +76,15 @@ public sealed partial class MainViewModel
 
     public ICommand AddToListCmd => _addToListCmd ??= RelayCommand.Async(AddCheckedToListAsync, () => !Busy && !IsLoading);
     ICommand? _addToListCmd;
+
+    /// <summary>«Проверить снова» у итога (аудит С-16): тот же сайт ещё раз — после добавления в список или в исключения и просто повторно.</summary>
+    public bool ShowSiteAgain => DirectOpen && _siteHost.Length > 0 && _siteOutcome is not (SiteCheckOutcome.None or SiteCheckOutcome.Checking);
+    public ICommand SiteAgainCmd => _siteAgainCmd ??= RelayCommand.Async(() => { DirectSite = _siteHost; return SiteCheckAsync(); },
+        () => !Busy && !IsLoading && _siteHost.Length > 0 && SiteOutcome != SiteCheckOutcome.Checking);
+    ICommand? _siteAgainCmd;
+
+    /// <summary>Сайт под оптимизацией там, где она работает (для итога «Открывается с оптимизацией»); вне списков — «без неё».</summary>
+    bool _siteCovered, _siteNotInList, _siteExcluded;
 
     /// <summary>Где сайта нет в списке при режиме «Только из списков» — туда «Добавить в список оптимизации».</summary>
     bool _listPc, _listRouter;
@@ -104,6 +115,9 @@ public sealed partial class MainViewModel
             bool? router = Router.Found && Router.RouterEnabled ? await Router.CoversHostAsync(host) : null;
             _listPc = pc == false; _listRouter = router == false;
             bool notInList = (_listPc || _listRouter) && pc != true && router != true;
+            _siteNotInList = notInList;
+            _siteCovered = pc == true || router == true;
+            _siteExcluded = false;
             if (Router.Found && Router.RouterEnabled && Router.Connected && Router.CanSiteCheck)
             {
                 var r = await Router.CheckSiteQuietAsync(host);
@@ -114,6 +128,8 @@ public sealed partial class MainViewModel
                 return;
             }
             bool ok = await ProbeSiteAsync(host);
+            // Сайт в «Исключениях» ПК — оптимизация его не трогает: «открывается» здесь значит «без неё».
+            _siteExcluded = _active && Hostlist.Covers(host, [.. SavedExclude, .. DraftExclude()]);
             // Без оптимизации (ничего не ведёт) — проверка и есть «без неё»: не открылось — дело не в ней.
             SiteOutcome = ok ? SiteCheckOutcome.Opens : notInList ? SiteCheckOutcome.NotInList : _active ? SiteCheckOutcome.FailsWith : SiteCheckOutcome.Closed;
         }

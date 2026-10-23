@@ -187,7 +187,7 @@ public sealed class FirstRunAuditTests : IDisposable
         vm.DirectSite = "bank.example";
         await vm.SiteCheckAsync();
         Assert.Equal(SiteCheckOutcome.Opens, vm.SiteOutcome);
-        Assert.Equal(L.T("home.sitecheck.opens"), vm.SiteCheckLine);
+        Assert.Equal(L.T("home.sitecheck.opens_plain"), vm.SiteCheckLine);   // «Только из списков», сайта в них нет — открывается без оптимизации
         Assert.False(vm.ShowAddExclude);
         Assert.DoesNotContain(f.Backend.Calls, c => c.StartsWith("user_exclude_set"));
     }
@@ -247,7 +247,7 @@ public sealed class FirstRunAuditTests : IDisposable
         vm.DirectSite = "https://Bank.Example/login";
         await vm.SiteCheckAsync();
         Assert.Equal(SiteCheckOutcome.NotInList, vm.SiteOutcome);
-        Assert.Equal(L.T("home.sitecheck.not_in_list", new { site = "bank.example" }), vm.SiteCheckLine);
+        Assert.Equal(L.T("home.sitecheck.not_in_list_closed", new { site = "bank.example" }), vm.SiteCheckLine);
         Assert.Equal(Health.Warn, vm.SiteCheckHealth);
         Assert.True(vm.ShowAddToList);
         Assert.False(vm.ShowAddExclude);
@@ -259,10 +259,20 @@ public sealed class FirstRunAuditTests : IDisposable
         Assert.Contains("user_targets_set mysite.example,bank.example", f.Backend.Calls);
         Assert.DoesNotContain(f.Backend.Calls, c => c.StartsWith("user_exclude_set"));
         Assert.Equal(SiteCheckOutcome.Opens, vm.SiteOutcome);
+        Assert.Equal(L.T("home.sitecheck.opens_with"), vm.SiteCheckLine);   // теперь в списке — «с оптимизацией» сказано прямо (С-16)
         Assert.False(vm.ShowAddToList);
         Assert.Equal(L.T("home.sitecheck.listed_pc", new { site = "bank.example" }), vm.DirectMessage);
         Assert.Equal("mysite.example" + Environment.NewLine + "bank.example", vm.TargetsText);
         Assert.Equal("", vm.DirectSite);
+        // «Проверить снова» — тот же сайт, хотя поле очищено.
+        vm.DirectOpen = true;
+        Assert.True(vm.ShowSiteAgain);
+        Assert.True(vm.SiteAgainCmd.CanExecute(null));
+        on = false;
+        vm.SiteAgainCmd.Execute(null);
+        for (int i = 0; i < 200 && vm.SiteOutcome != SiteCheckOutcome.FailsWith; i++) await Task.Delay(10);
+        Assert.Equal(SiteCheckOutcome.FailsWith, vm.SiteOutcome);
+        Assert.Equal("bank.example", vm.DirectSite);
     }
 
     [Fact]

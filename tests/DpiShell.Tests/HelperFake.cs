@@ -168,6 +168,7 @@ public sealed class FakeHelperBackend : IHelperBackend
     public UserTargetsResult SetUserTargets(IReadOnlyList<string> lines)
     {
         Call("user_targets_set " + string.Join(",", lines));
+        StatusValue = StatusValue with { UserTargets = [.. lines] };   // как настоящий помощник: status отдаёт сохранённые
         return new(lines, []);
     }
 
