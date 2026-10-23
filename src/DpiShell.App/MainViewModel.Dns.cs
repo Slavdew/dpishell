@@ -25,7 +25,7 @@ public sealed partial class MainViewModel
     public ICommand FixDnsCmd { get; private set; } = null!;
     public ICommand ChooseDnsCmd { get; private set; } = null!;
 
-    static bool Windows11 => Environment.OSVersion.Version.Build >= 22000;
+    static bool Windows11 => OsInfo.IsWindows11;
 
     void InitPcDns()
     {
