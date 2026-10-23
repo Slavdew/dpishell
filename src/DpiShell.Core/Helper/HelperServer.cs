@@ -423,6 +423,9 @@ public sealed class HelperServer : IAsyncDisposable
             case "advanced_set": return await Task.Run(() => b.AdvancedSet(c.Bool("enabled"), c.Str("others")!, c.Rows("rows")!), ct);
             case "joint_get": return await Task.Run(b.JointGet, ct);
             case "joint_set": return await Task.Run(() => b.JointSet(c.Bool("active"), c.List("owned") ?? []), ct);
+            case "av_exclusion_status": return await Task.Run(b.AvExclusionStatus, ct);
+            case "av_exclusion_add": return await Task.Run(b.AvExclusionAdd, ct);
+            case "av_exclusion_remove": return await Task.Run(b.AvExclusionRemove, ct);
         }
         // Белый список и диспетчер должны совпадать — тест проверяет, что сюда не попасть.
         throw new HelperRequestException(c.Id, $"Команда «{c.Cmd}» не поддерживается.");

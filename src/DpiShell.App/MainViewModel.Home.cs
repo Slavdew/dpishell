@@ -129,7 +129,8 @@ public sealed partial class MainViewModel
             if (Router.BothOn)
                 list.Add(new(Health.Error, "", L.T("home.warn.both_on"), L.T("home.stop_pc"), Router.StopPcCmd));
             if (CoreProblemText is { } core)
-                list.Add(new(Health.Error, L.T("home.pc.core.label"), core, L.T("home.pc.core.fix"), GoDiagCmd));
+                list.Add(AvOffer ? new(Health.Error, L.T("home.pc.core.label"), core, AvAddText, AvAddCmd, Shield: true)
+                    : new(Health.Error, L.T("home.pc.core.label"), core, L.T("diag.repair"), RepairCoreCmd, Shield: true));
             // Совместная работа откатилась (роутер пропал и т. п.): ПК работает сам — почему, пунктом «!» (строка показывает только состояние).
             if (IsRunning && Router.JointIsFallback && Router.HasJointStatus)
                 list.Add(new(Health.Warn, L.T("router.joint.title"), Router.JointStatus));
@@ -423,6 +424,7 @@ public sealed partial class MainViewModel
         List(ref _tiles, BuildTiles, nameof(Tiles));
         List(ref _autoRows, BuildAutoRows, nameof(AutoRows));
         if (lists) Raise(nameof(PanelItems));
+        RaiseAv();
         foreach (var (name, value) in new (string, Func<object>)[]
                  {
                      (nameof(PcHealth), () => PcHealth), (nameof(PcHealthTip), () => PcHealthTip), (nameof(RouterHealth), () => RouterHealth),

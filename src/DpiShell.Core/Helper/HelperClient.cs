@@ -497,6 +497,11 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     // ---------- выгрузка и загрузка своих настроек (API 1.11) ----------
 
     /// <summary>Свои данные этого ПК из закрытой папки помощника (для <see cref="Export.SettingsExport"/>). Только чтение.</summary>
+    /// <summary>Исключение Защитника для папки ядра (API 1.16): аргументов нет — путь помощник берёт свой.</summary>
+    public Task<AvExclusionStatus> AvExclusionStatusAsync(CancellationToken ct = default) => CallAsync<AvExclusionStatus>("av_exclusion_status", null, null, ct);
+    public Task<AvExclusionResult> AvExclusionAddAsync(CancellationToken ct = default) => CallAsync<AvExclusionResult>("av_exclusion_add", null, null, ct);
+    public Task<AvExclusionResult> AvExclusionRemoveAsync(CancellationToken ct = default) => CallAsync<AvExclusionResult>("av_exclusion_remove", null, null, ct);
+
     public Task<Export.SettingsState> SettingsExportReadAsync(CancellationToken ct = default) =>
         CallAsync<Export.SettingsState>("settings_export_read", null, null, ct);
 

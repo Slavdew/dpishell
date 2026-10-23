@@ -1537,6 +1537,8 @@ public sealed partial class WindowSmokeTests
         {
             ThemeManager.Apply(ThemeManager.Light);
             var vm = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("root"), Repo.Data)));
+            // Карточка «Первый запуск» со своей «(i)» — при работающем Защитнике до установки помощника.
+            vm.Defender = FakeDefender.Active();
             // Вкладка «Роутер» со своими «(i)» — только при подключённом роутере.
             vm.Router.AddressAuto = false;
             vm.Router.CustomAddress = fake.Address;
@@ -1545,6 +1547,7 @@ public sealed partial class WindowSmokeTests
             vm.ShowAdvancedSetting = true;   // «Отладка подключений» видна только для опытных
             vm.Net.ListsOpen = true;         // IP-списки — в свёрнутом «Дополнительно»
             var w = Open(vm);
+            WaitUi(AvExclusionFlowTests.Probe(vm));
             foreach (var (page, _) in AllPages.Append((Pages.Router, "router")))
             {
                 vm.GoTo(page);

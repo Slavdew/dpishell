@@ -27,10 +27,11 @@ public static class InfoTexts
     public const string Advanced = "info.advanced";
     public const string Joint = "info.joint";
     public const string Service = "info.service";
+    public const string AvExclusion = "info.av_exclusion";
 
     /// <summary>Все темы (для проверок).</summary>
     public static readonly IReadOnlyList<string> All =
-        [Home, Select, Sites, DomainLists, IpLists, Game, Apps, Debug, Hosts, HostsTry, Dns, Proxy, Diag, RouterMode, SiteCheck, RouterDns, RouterWatchdog, Advanced, Joint, Service];
+        [Home, Select, Sites, DomainLists, IpLists, Game, Apps, Debug, Hosts, HostsTry, Dns, Proxy, Diag, RouterMode, SiteCheck, RouterDns, RouterWatchdog, Advanced, Joint, Service, AvExclusion];
 
     /// <summary>Текст пояснения на выбранном языке; неизвестная тема — пусто.</summary>
     public static string Get(string? topic) => topic is not null && L.Has(topic) ? L.T(topic) : "";

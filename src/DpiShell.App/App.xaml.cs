@@ -157,7 +157,7 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// --helper (служба, вызывает SCM), --install-helper [SID] и --uninstall-helper [--purge] (окно запускает их с runas).
+    /// --helper (служба, вызывает SCM), --install-helper [SID] [--lang=…] [--av-exclusion] и --uninstall-helper [--purge] (окно запускает их с runas).
     /// Null — обычный запуск окна. Ход установки — в журнал помощника (logs\helper.log), окно показывает код выхода.
     /// </summary>
     static int? HelperMode(string[] args)
@@ -168,7 +168,8 @@ public partial class App : Application
         return args[0] switch
         {
             "--helper" => HelperEntry.RunService(args),
-            "--install-helper" => HelperEntry.Install(args.Length > 1 && !args[1].StartsWith("--") ? args[1] : null, log, HelperInstaller.LangFrom(args.Skip(1))),
+            "--install-helper" => HelperEntry.Install(args.Length > 1 && !args[1].StartsWith("--") ? args[1] : null, log, HelperInstaller.LangFrom(args.Skip(1)),
+                avExclusion: args.Skip(1).Contains(HelperInstaller.AvExclusionArg)),
             "--uninstall-helper" => HelperEntry.Uninstall(log, purge: args.Skip(1).Contains(HelperLink.PurgeArg)),
             _ => null,
         };

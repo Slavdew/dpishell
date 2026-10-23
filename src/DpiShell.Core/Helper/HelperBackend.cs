@@ -125,6 +125,14 @@ public interface IHelperBackend : IHelperCatalog
     Export.SettingsState SettingsExportRead();
     /// <summary>Применить план загрузки (JSON <see cref="Export.ImportRequest"/>). Помощник проверяет его сам, сверяет со своим состоянием и пишет в журнал изменений; подделка — исключение.</summary>
     Task<Export.ImportResult> SettingsImportAsync(string request, CancellationToken ct);
+
+    // ---------- исключение Защитника для папки ядра (API 1.16) ----------
+    /// <summary>Есть ли папка программы (%ProgramData%\DpiShell) в исключениях, кто главный антивирус. Только чтение.</summary>
+    AvExclusionStatus AvExclusionStatus();
+    /// <summary>Добавить свою папку в исключения Защитника (путь — свой, не из запроса); сторонний антивирус — не пишем, отказ — с фразой для ручного пути.</summary>
+    AvExclusionResult AvExclusionAdd();
+    /// <summary>Снять исключение, если его добавил DpiShell (по журналу); чужое не трогаем.</summary>
+    AvExclusionResult AvExclusionRemove();
 }
 
 /// <summary>Ответ proxy_status. Previous — что вернёт «Вернуть прежний» для машины (null — нечего).</summary>
@@ -495,7 +503,7 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
         }
     }
 
-    /// <summary>«Удалить полностью»: служба обхода и WinDivert, наш winws, временные метки TCP — если включали мы.</summary>
+    /// <summary>«Удалить полностью»: служба обхода и WinDivert, наш winws, временные метки TCP и исключение Защитника — если их ставили мы.</summary>
     public void RemoveAll()
     {
         shell.StopOwnProcess();
@@ -506,6 +514,7 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
         shell.ClearAdvanced();
         lock (_jointLock) { _jointTimer?.Dispose(); _jointTimer = null; }
         shell.ClearJoint();
+        RemoveOwnExclusion();
         shell.State.Enabled = false;
         shell.SaveState();
     }
@@ -681,6 +690,7 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
             e.Register(new AdvancedUndoer(() => shell.State.Advanced, shell.RestoreAdvanced));
             e.Register(new JointUndoer(() => shell.State.Joint, shell.RestoreJointOff));
             e.Register(new Export.SettingsImportUndoer(shell));
+            e.Register(new AvExclusionUndoer(Defender, shell.Paths.Root));
             return _changes = e;
         }
     }

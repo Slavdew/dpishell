@@ -259,6 +259,38 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- «Первый запуск» (ТЗ av-exclusion): исключение Защитника для папки ядра и «Восстановить» ядро на месте; отказ — ручной путь
+                                 (папка выделяемым текстом, «Скопировать путь», «Открыть Защитник»). Видна, пока не выполнено. -->
+                            <Border Style="{StaticResource Card}" Padding="18,12" Margin="0,0,0,12" Visibility="{Binding ShowAvCard, Converter={StaticResource Vis}}"
+                                    AutomationProperties.Name="{l:T home.av.aria}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding AvCardText}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding AvHasText, Converter={StaticResource Vis}}" />
+                                    <StackPanel Orientation="Horizontal" Visibility="{Binding AvOk, Converter={StaticResource Vis}}">
+                                        <Path Data="{StaticResource HomeIcon.Checkmark}" Fill="{DynamicResource Ok}" Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="{l:T home.av.ok}" Style="{StaticResource Hint}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <TextBlock Text="{l:T home.av.update_helper}" Style="{StaticResource Hint}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                               Visibility="{Binding AvNeedsUpdate, Converter={StaticResource Vis}}" />
+                                    <WrapPanel Margin="0,8,0,0">
+                                        <Button ContentTemplate="{StaticResource Shield}" Content="{Binding AvAddText}" Command="{Binding AvAddCmd}" Margin="0,0,8,4" VerticalAlignment="Center"
+                                                Visibility="{Binding AvOffer, Converter={StaticResource Vis}}" />
+                                        <Button ContentTemplate="{StaticResource Shield}" Content="{l:T diag.repair}" Command="{Binding RepairCoreCmd}" Margin="0,0,8,4" VerticalAlignment="Center"
+                                                Visibility="{Binding AvShowRestore, Converter={StaticResource Vis}}" />
+                                        <local:InfoButton Topic="{x:Static local:InfoTexts.AvExclusion}" Margin="0,0,0,4" VerticalAlignment="Center" />
+                                    </WrapPanel>
+                                    <StackPanel Margin="0,4,0,0" Visibility="{Binding AvManual, Converter={StaticResource Vis}}">
+                                        <TextBlock Text="{Binding AvManualText}" TextWrapping="Wrap" />
+                                        <TextBox Text="{Binding AvPath, Mode=OneWay}" Style="{StaticResource SelectableText}" FontFamily="Consolas" Margin="0,4,0,0"
+                                                 AutomationProperties.Name="{l:T home.av.path_aria}" />
+                                        <WrapPanel Margin="-4,4,0,0">
+                                            <Button Content="{l:T diag.copy_path}" Style="{StaticResource LinkButton}" Command="{Binding CopyAvPathCmd}" Margin="0,0,10,0" />
+                                            <Button Content="{l:T diag.open_defender}" Style="{StaticResource LinkButton}" Command="{Binding OpenDefenderCmd}"
+                                                    Visibility="{Binding AvShowDefender, Converter={StaticResource Vis}}" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
                             <!-- «Показать стратегии»: сразу под карточкой — раскрытый список виден, а не уходит за край окна (UX-аудит 2, п. 2). -->
                             <StackPanel x:Name="StrategiesBlock" Visibility="{Binding ShowStrategies, Converter={StaticResource Vis}}">
                                 <TextBlock Text="{Binding StrategyHeader}" Style="{StaticResource H2}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding StrategyHeader}" />
