@@ -105,7 +105,11 @@ return view.extend({
 		var text = job.ok === false
 			? (m ? api.t('router.dns.job.failed_msg', { action: name, message: m }) : api.t('router.dns.job.failed', { action: name }))
 			: name + ': ' + (m || api.t('web.done'));
-		return api.line(text + (job.at ? ' · ' + api.time(job.at) : ''), job.ok === false ? 'dps-error' : 'dps-muted');
+		text += job.at ? ' · ' + api.time(job.at) : '';
+		// Неудача — с «Подробнее»: там сырой вывод apk (job.detail).
+		if (job.ok === false)
+			return api.errorLine(api.error(text, job.action, null, job.detail));
+		return api.line(text, 'dps-muted');
 	},
 
 	update: function() {
@@ -142,7 +146,8 @@ return view.extend({
 			kids.push(E('div', { 'class': 'spinning' }, api.t('web.dns.running')));
 
 		actions.push(api.btn(api.t('dns.check'), function() { return self.analyze(); }, 'cbi-button-action'));
-		if (!d.__error && d.mode != 'provider')
+		// После неудачного задания «Вернуть как было» есть всегда: на него ссылается инструкция в тексте ошибки.
+		if (!d.__error && (d.mode != 'provider' || (d.job && d.job.ok === false)))
 			actions.push(api.btn(api.t('router.dns.restore'), function() { return self.restore(); }, 'cbi-button-remove'));
 		else if (!d.__error && d.spoofed === true)
 			actions.push(api.btn(api.t('router.dns.enable'), function() { api.dnsEnableDialog(function() { self.wait(); }); }, 'cbi-button-apply'));

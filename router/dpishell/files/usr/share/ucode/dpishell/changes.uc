@@ -169,6 +169,9 @@ function undo_one(it) {
 		let e = null;
 		try { e = dns.restore(); } catch (x) { e = `${x}`; }
 		unlink(l);
+		// Сообщение dns.uc (ключ словаря и параметры) или строка.
+		if (type(e) == 'object')
+			return { status: 'failed', note: e.text, note_key: e.key, note_params: e.params ?? {} };
 		return e ? { status: 'failed', note: e } : { status: 'restored' };
 	}
 	return { status: 'failed', note: 'Отдельно отменить нельзя', note_key: 'router.changes.row.core' };
@@ -184,7 +187,7 @@ function undo(id) {
 		let r;
 		try { r = undo_one(it); } catch (x) { r = { status: 'failed', note: `${x}` }; }
 		push(job.items, { id: it.id, kind: it.kind, key: it.key, params: it.params, text: it.text, status: r.status,
-			...(r.note ? { note: r.note } : {}), ...(r.note_key ? { note_key: r.note_key } : {}) });
+			...(r.note ? { note: r.note } : {}), ...(r.note_key ? { note_key: r.note_key } : {}), ...(r.note_params ? { note_params: r.note_params } : {}) });
 		st.write_atomic(JOB, sprintf('%J\n', job));
 	}
 	job.running = false;

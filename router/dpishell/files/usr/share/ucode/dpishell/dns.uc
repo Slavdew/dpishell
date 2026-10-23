@@ -3,10 +3,11 @@
 // dnsmasq (проверено в эмуляторе). Вариант только с обычным DNS — серверы dnsmasq, прокси выключен.
 'use strict';
 
-import { readfile, stat, popen, unlink } from 'fs';
+import { readfile, writefile, stat, popen, unlink } from 'fs';
 import { cursor } from 'uci';
 import * as st from 'dpishell.state';
 import * as pr from 'dpishell.probe';
+import * as pk from 'dpishell.pkgs';
 
 const STATUS = '/etc/dpishell/dns-status.json';
 const BACKUP = '/etc/dpishell/dns-backup.json';
@@ -16,6 +17,12 @@ const NEUTRAL = ['example.com', 'wikipedia.org'];
 const PROBE_QUERY = 'AAABAAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE';
 const FIRST_PORT = 5053;
 const PROXY_CONF = '/etc/config/https-dns-proxy';
+// Полные копии настроек в ОЗУ до изменений (weak-router-test.md: uci commit на полном флеше оставлял пустой dhcp).
+const SNAP = '/tmp/dpishell/dns-snap';
+const SNAP_FILES = ['dhcp', 'network', 'https-dns-proxy'];
+// Место для установки прокси: пакеты из индекса + запас, не меньше 2 МБ; без установки (только uci commit) — 256 КБ.
+const PROXY_MIN_KB = 2048;
+const CONF_MIN_KB = 256;
 
 function sh(cmd) {
 	let p = popen(`${cmd} 2>&1`);
@@ -208,10 +215,10 @@ function resolves_locally() {
 	return match(sh('nslookup example.com 127.0.0.1').out, /Address:[ \t]*[0-9.]+/) != null;
 }
 
-function pkg(action, name) {
+function pkg_remove(name) {
 	if (stat('/usr/bin/apk'))
-		return sh(`apk ${action == 'install' ? 'add' : 'del'} ${q(name)}`);
-	return sh(`opkg ${action == 'install' ? 'update >/dev/null; opkg install' : 'remove'} ${q(name)}`);
+		return sh(`apk del ${q(name)}`);
+	return sh(`opkg remove ${q(name)}`);
 }
 
 function dnsmasq_restart_checked() {
@@ -222,6 +229,72 @@ function dnsmasq_restart_checked() {
 		sh('sleep 2');
 	}
 	return resolves_locally();
+}
+
+// DNS роутера жив: dnsmasq запущен и отвечает через 127.0.0.1.
+function dns_alive() {
+	return sh('pidof dnsmasq').rc == 0 && resolves_locally();
+}
+
+// Файл настроек цел: не пустой и uci его читает (пустой dhcp — dnsmasq не стартует: нет DNS и DHCP в сети).
+function conf_ok(n) {
+	let s = stat(`/etc/config/${n}`);
+	if (!s || s.size <= 0)
+		return false;
+	let r = sh(`uci -q show ${q(n)}`);
+	return r.rc == 0 && length(trim(r.out)) > 0;
+}
+
+// Вернуть файл настроек целиком; на месте (без .tmp), если на атомарную запись места нет.
+function conf_put(n, text) {
+	let f = `/etc/config/${n}`;
+	if (!st.write_atomic(f, text))
+		writefile(f, text);
+	return conf_ok(n);
+}
+
+// Полные копии dhcp, network и https-dns-proxy в ОЗУ — до любых изменений. Испорченный файл копию не затирает;
+// пропавший файл прокси — убирает копию (прокси удалён). dhcp уже испорчен (сбой прежней версии) — вернуть копию из
+// dns-backup.json (с r17 она там есть).
+function snap_take() {
+	st.own_dir('/tmp/dpishell', 0o700);
+	st.own_dir(SNAP, 0o700);
+	for (let n in SNAP_FILES) {
+		if (conf_ok(n))
+			writefile(`${SNAP}/${n}`, readfile(`/etc/config/${n}`));
+		else if (!stat(`/etc/config/${n}`) && n == 'https-dns-proxy')
+			unlink(`${SNAP}/${n}`);
+	}
+	let b = st.read_json(BACKUP, null);
+	if (!conf_ok('dhcp') && type(b?.dhcp_file) == 'string' && length(b.dhcp_file)) {
+		if (!stat(`${SNAP}/dhcp`))
+			writefile(`${SNAP}/dhcp`, b.dhcp_file);
+		conf_put('dhcp', readfile(`${SNAP}/dhcp`));
+	}
+}
+
+// После каждого изменения настроек (наш uci commit, старт/стоп/удаление прокси — он сам правит dhcp): файл пуст или не
+// читается — вернуть копию целиком и перезапустить dnsmasq. Файл прокси проверяется, только если он есть.
+function guard() {
+	let fixed = false;
+	for (let n in SNAP_FILES) {
+		let copy = readfile(`${SNAP}/${n}`);
+		if (copy == null || (n == 'https-dns-proxy' && !stat(`/etc/config/${n}`)) || conf_ok(n))
+			continue;
+		conf_put(n, copy);
+		fixed = true;
+	}
+	if (fixed)
+		dnsmasq_restart_checked();
+	return fixed;
+}
+
+// DNS после неудачи не ожил — честно и с инструкцией, как вернуть (decisions-owner-2026-10-20.md, «оборвать связь»).
+function broken_msg(why) {
+	let hint = `cp ${SNAP}/dhcp /etc/config/dhcp; /etc/init.d/dnsmasq restart`;
+	return pk.msg('web.err.dns_broken', { error: why, cmd: hint },
+		`${pk.text_of(why)}. DNS роутера не отвечает. Как вернуть: освободите место во флеше и нажмите «Вернуть как было» на вкладке DNS; если не помогло — по ssh до перезагрузки: ${hint}`,
+		type(why) == 'object' ? why.detail : null);
 }
 
 // Копия могла быть снята, когда https-dns-proxy уже стоял (поставлен вручную): его адреса 127.0.0.1#505x
@@ -272,6 +345,7 @@ function proxy_put_back(px) {
 }
 
 function restore() {
+	snap_take();
 	let b = clean_backup(st.read_json(BACKUP, null));
 	// Пакет и его настройки убираем, только если ставили сами. Копия до r12 (без proxy) — как раньше: прокси наш.
 	// Копии нет — DNS не меняли; прокси убираем, лишь если включён наш вариант.
@@ -280,7 +354,9 @@ function restore() {
 	if (!theirs && ours) {
 		if (stat('/etc/init.d/https-dns-proxy'))
 			sh('/etc/init.d/https-dns-proxy stop; /etc/init.d/https-dns-proxy disable');
-		pkg('remove', 'https-dns-proxy');
+		guard();
+		pkg_remove('https-dns-proxy');
+		guard();
 		// Настройки прокси — как до нас: apk при удалении оставляет изменённый файл настроек.
 		if (b?.proxy && exists(b.proxy, 'config')) {
 			if (b.proxy.config != null)
@@ -292,8 +368,10 @@ function restore() {
 	}
 	// Чужой прокси останавливаем до возврата dnsmasq (stop сам возвращает свои правки dnsmasq), а запускаем — после:
 	// при запуске он снова пропишет себя в dnsmasq, как было до нас.
-	if (theirs)
+	if (theirs) {
 		sh('/etc/init.d/https-dns-proxy stop');
+		guard();
+	}
 	if (b) {
 		let c = cursor();
 		let sec = b.section ?? c.get_first('dhcp', 'dnsmasq');
@@ -302,20 +380,23 @@ function restore() {
 		if (b.noresolv != null) c.set('dhcp', sec, 'noresolv', b.noresolv);
 		if (b.server != null) c.set('dhcp', sec, 'server', b.server);
 		c.commit('dhcp');
-		if (b.peerdns != null && c.get('network', 'wan', 'peerdns') != b.peerdns) { c.set('network', 'wan', 'peerdns', b.peerdns); c.commit('network'); }
+		guard();
+		if (b.peerdns != null && c.get('network', 'wan', 'peerdns') != b.peerdns) { c.set('network', 'wan', 'peerdns', b.peerdns); c.commit('network'); guard(); }
 	}
-	if (theirs)
+	if (theirs) {
 		proxy_put_back(b.proxy);
+		guard();
+	}
 	// После удаления пакета dnsmasq сам не перезапускается — DNS роутера пропадает (проверено в эмуляторе).
-	let ok = dnsmasq_restart_checked();
+	let ok = dnsmasq_restart_checked() || (guard() && resolves_locally());
 	sh('rm -f /tmp/dpishell/dns-fallback');
-	if (ok) {
+	if (ok && dns_alive()) {
 		sh(`rm -f ${q(BACKUP)}`);
 		// «Как было» — без своей записи (по умолчанию и так провайдер): настройки — как до первого изменения DNS.
 		st.uci_set({ dns_preset: null });
 		return null;
 	}
-	return 'DNS роутера не отвечает после возврата — перезагрузите роутер';
+	return broken_msg(pk.msg('web.err.dns_restore', {}, 'DNS провайдера вернуть не удалось'));
 }
 
 // Прежние настройки dnsmasq — один раз, до первого изменения (возврат — restore()).
@@ -334,6 +415,8 @@ function backup() {
 		at: time(), section: sec,
 		noresolv: c.get('dhcp', sec, 'noresolv'), server: c.get('dhcp', sec, 'server'),
 		peerdns: c.get('network', 'wan', 'peerdns'), proxy: px,
+		// Весь dhcp как есть (~1 КБ, с r17): испорченный после сбоя файл snap_take вернёт целиком и после перезагрузки.
+		dhcp_file: conf_ok('dhcp') ? readfile('/etc/config/dhcp') : null,
 	}));
 }
 
@@ -388,25 +471,66 @@ function apply(id) {
 	let res = p.resolvers ?? [];
 	if (length(res) && !length(filter(res, r => doh_check(r).ok)))
 		return `Серверы «${p.title}» не отвечают — включать нельзя, сеть останется без DNS`;
-	backup();
-	if (length(res)) {
-		if (!stat('/etc/init.d/https-dns-proxy')) {
-			let r = pkg('install', 'https-dns-proxy');
-			if (r.rc != 0 && !stat('/etc/init.d/https-dns-proxy'))
-				return `Не удалось установить https-dns-proxy: ${trim(r.out)}`;
+	// Место — до любых изменений: прокси с зависимостями (размеры из индекса apk) + запас, не меньше 2 МБ; иначе честный
+	// отказ без изменений (на полном флеше apk ставил прокси без libcares, а uci commit оставлял пустой dhcp).
+	let install = length(res) && !stat('/etc/init.d/https-dns-proxy');
+	let e = null;
+	if (install) {
+		// Меньше нижней границы — отказ сразу, без apk (на полном флеше и его запросы могут сбоить).
+		e = pk.space_check(PROXY_MIN_KB);
+		if (e)
+			return e;
+		if (stat('/usr/bin/apk')) {
+			let u = sh('apk update');
+			if (u.rc != 0 && match(u.out, /No space left/))
+				return pk.apk_error(u.out, 'https-dns-proxy');
 		}
+		let plan = pk.plan(['https-dns-proxy']);
+		if (plan.error)
+			return plan.error;
+		e = pk.space_check(pk.need_kb(plan, PROXY_MIN_KB));
+	} else
+		e = pk.space_check(CONF_MIN_KB);
+	if (e)
+		return e;
+	snap_take();
+	let fresh = !stat(BACKUP);
+	backup();
+	if (install) {
+		// Прокси, установившийся с ошибкой (нет библиотеки — «Error relocating»), не считается установленным.
+		e = pk.add(['https-dns-proxy'], 'https-dns-proxy', () => {
+			let r = sh('/usr/sbin/https-dns-proxy -h');
+			return !stat('/usr/sbin/https-dns-proxy') || match(r.out, /Error relocating|not found|No such file|symbol/) ? trim(r.out) || 'нет /usr/sbin/https-dns-proxy' : null;
+		});
+		if (e) {
+			// Поставленное убрано (pk.add); настройки — из копии, если прокси успел их испортить; копия «до» — не нужна.
+			guard();
+			if (fresh && prev == 'provider')
+				unlink(BACKUP);
+			if (!dns_alive() && !dnsmasq_restart_checked() && !dns_alive())
+				return broken_msg(e);
+			return e;
+		}
+	}
+	if (length(res)) {
 		// Сначала прокси останавливаем (он возвращает dnsmasq как было), затем — свои резолверы и запуск.
 		sh('/etc/init.d/https-dns-proxy stop');
+		guard();
 		set_plain(null);
+		guard();
 		set_resolvers(res);
+		guard();
 		sh('/etc/init.d/https-dns-proxy enable; /etc/init.d/https-dns-proxy restart');
+		guard();
 		// Прокси поднимает соединение с сервером не сразу (свой вариант после обычного DNS — до ~10 с).
 		for (let i = 0; i < 15 && !resolves_locally(); i++)
 			sleep(1000);
 	} else {
 		if (stat('/etc/init.d/https-dns-proxy'))
 			sh('/etc/init.d/https-dns-proxy stop; /etc/init.d/https-dns-proxy disable');
+		guard();
 		set_plain(p.plain);
+		guard();
 		dnsmasq_restart_checked();
 	}
 	sh('rm -f /tmp/dpishell/dns-fallback');
@@ -414,11 +538,12 @@ function apply(id) {
 		st.uci_set({ dns_preset: id });
 		return null;
 	}
-	if (prev != id && prev != 'provider')
-		apply(prev);
-	else
-		restore();
-	return `DNS «${p.title}» не заработал — возвращено как было`;
+	let back = (prev != id && prev != 'provider') ? apply(prev) : restore();
+	let why = pk.msg('web.err.dns_failed', { title: p.title }, `DNS «${p.title}» не заработал`);
+	// «Возвращено как было» — только если DNS роутера действительно отвечает.
+	if (!back && dns_alive())
+		return pk.msg('web.err.dns_reverted', { title: p.title }, `DNS «${p.title}» не заработал — возвращено как было`);
+	return broken_msg(why);
 }
 
 // Прежняя кнопка «Включить защищённый DNS» (router-api §5): Google + Cloudflare.

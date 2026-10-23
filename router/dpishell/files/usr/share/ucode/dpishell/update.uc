@@ -5,6 +5,7 @@
 
 import { readfile, writefile, stat, lstat, popen, lsdir, unlink, rename, mkdir } from 'fs';
 import * as st from 'dpishell.state';
+import * as pk from 'dpishell.pkgs';
 
 const FILE = '/etc/dpishell/update.json';
 const RELEASE_URL = 'https://slavdew.github.io/dpishell/feed/release.json';
@@ -343,16 +344,7 @@ function status() {
 // apk add из файла пишет в /etc/apk/world «имя><хеш» — пакет пришпилен к файлу, и apk upgrade его больше не трогает
 // (r8, поставленный офлайн, снова и снова «обновлялся» до r10). Возвращаем наши пакеты к обычному «имя».
 function unpin() {
-	if (!apk())
-		return;
-	let w = readfile('/etc/apk/world');
-	if (w == null)
-		return;
-	let fixed = w;
-	for (let n in PACKAGES)
-		fixed = replace(fixed, regexp(`(^|[ \n])${replace(n, '-', '\\-')}><[^ \n]*`, 'g'), `$1${n}`);
-	if (fixed != w)
-		st.write_atomic('/etc/apk/world', fixed);
+	pk.unpin(PACKAGES);
 }
 
 // Папка обновления: каталог root (кладёт окно ПК по SSH), не ссылка, писать в неё может только root. null — годится.
@@ -442,6 +434,19 @@ function job_put(job, extra) {
 	st.write_atomic(JOB, sprintf('%J\n', job));
 }
 
+// Места для обновления, КБ: новые версии пакетов (индекс витрины; пакет из папки — файл × 4: распакованный ~3.5× больше)
+// + запас pkgs.MARGIN_KB (база apk, конфиги). На полном флеше apk обрывался «No space left» — проверяем заранее.
+function update_need_kb(files, names) {
+	let kb = 0;
+	if (files)
+		for (let f in files) {
+			let sz = (lstat(f)?.size ?? 0) * 4 + 1023;
+			kb += int(sz / 1024);
+		}
+	let idx = pk.sizes_kb(names);
+	return pk.need_kb({ kb: kb > idx ? kb : idx }, 0);
+}
+
 // Установка обновления. from: feed | local. job — запись хода (job_put). null — успех, иначе текст ошибки.
 // rollback — откат (update_rollback): from saved (prev во флеше) | local (папка окна ПК); ставится только версия старше установленной.
 function install(from, job, rollback) {
@@ -458,6 +463,9 @@ function install(from, job, rollback) {
 		let target = m ? m[1] : null;
 		if (rollback && !older(target, installed_version('dpishell')))
 			return `Пакеты ${target ?? '—'} не старше установленной версии — это не откат`;
+		let e = pk.space_check(update_need_kb(files, names));
+		if (e)
+			return e;
 		job_put(job, { step: 'install', target });
 		// Откат: старшую версию apk меняет на младшую по явному файлу; opkg — только с --force-downgrade.
 		r = apk() ? sh(`apk add --allow-untrusted ${join(' ', files)}`)
@@ -469,13 +477,16 @@ function install(from, job, rollback) {
 		// Сбой постороннего фида не должен мешать: apk без --force-missing-repositories отказывает в upgrade, если недоступен
 		// хоть один репозиторий («Not continuing due to stale/unavailable repositories»), а мы ставим только свои пакеты.
 		sh(apk() ? 'apk update' : 'opkg update');
+		let e = pk.space_check(update_need_kb(null, names));
+		if (e)
+			return e;
 		job_put(job, { step: 'install', target: feed_version('dpishell') });
 		unpin();
 		r = sh(apk() ? `apk upgrade --force-missing-repositories ${join(' ', names)}` : `opkg upgrade ${join(' ', names)}`);
 	}
 	job.log = tail(r.out, 6);
 	if (r.rc != 0)
-		return `Не удалось обновить: ${join('; ', tail(r.out, 2))}`;
+		return pk.apk_error(r.out, 'DpiShell');
 	// postinst перезапускает rpcd через 2 с: ждём, пока объект dpishell снова отвечает (до 20 с).
 	job_put(job, { step: 'restart' });
 	for (let i = 0; i < 20; i++) {

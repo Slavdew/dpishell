@@ -35,7 +35,8 @@ snap)
 		uci export "$c" > "$S/uci-$c" 2>/dev/null || echo "(нет)" > "$S/uci-$c"
 	done
 	apk list -I 2>/dev/null | cut -d' ' -f1 | sort > "$S/packages"
-	tr ' ' '\n' < /etc/apk/world | sed '/^$/d' | sort > "$S/world"
+	# Пришпиленные к файлу «dpishell><Q1…» DpiShell сам переводит в «dpishell» (pkgs.unpin перед apk add) — это не разница.
+	tr ' ' '\n' < /etc/apk/world | sed '/^$/d; s/^\(dpishell\|luci-app-dpishell\)><.*/\1/' | sort > "$S/world"
 	cat /etc/crontabs/root > "$S/crontab" 2>/dev/null
 	# nft без таблицы zapret (её ведёт ядро обхода) и без счётчиков (-s).
 	nft -s list ruleset 2>/dev/null | awk '/^table inet zapret /{skip=1} !skip{print} skip&&/^}/{skip=0}' > "$S/nft"
@@ -110,7 +111,8 @@ uninstall)
 dns_set)
 	# Задание DNS начинается не сразу (rpcd запускает его в фоне), а прежний итог dns_job.json остаётся от прошлого задания:
 	# ждать итог именно этого — dns_set, законченный не раньше вызова (at ≥ t0), а не «running=false» вообще.
-	t0=$(date +%s)
+	# Прежний итог — убрать: законченное в ту же секунду прежнее задание иначе принималось за это (at ≥ t0).
+	rm -f /tmp/dpishell/dns_job.json; t0=$(date +%s)
 	ubus call dpishell dns_set "{\"preset\":\"$1\"}" >/dev/null || { fail "dns_set $1: вызов"; exit 0; }
 	i=0
 	while [ $i -lt 180 ]; do
@@ -191,7 +193,8 @@ rollback)
 	else
 		want=$(ubus call dpishell status | jsonfilter -e '@.rollback.version')
 	fi
-	t0=$(date +%s)
+	# Прежний итог (отказ отката из флеша в ту же секунду) — убрать, иначе он принимался за итог этого задания.
+	rm -f /tmp/dpishell/update_job.json; t0=$(date +%s)
 	r=$(ubus call dpishell update_rollback "{\"from\":\"$1\"}")
 	echo "$r" | grep -q '"started": true' || fail "откат ($1): вызов — $r"
 	i=0
@@ -202,6 +205,9 @@ rollback)
 	done
 	sleep 3
 	i=0; while [ $i -lt 20 ] && ! ubus -t 2 list dpishell >/dev/null 2>&1; do sleep 1; i=$((i + 1)); done
+	# Старая версия (r10) при старте сама закрывает «зависшее» задание (не понимает замок новой) — раньше, чем оно
+	# закончится; новое задание затем дописывает итог. Ждать окончательный итог.
+	i=0; while [ $i -lt 60 ] && [ "$(jsonfilter -i /tmp/dpishell/update_job.json -e '@.running' 2>/dev/null)" != false ]; do sleep 1; i=$((i + 1)); done
 	check "откат ($1): задание ок" [ "$(jsonfilter -i /tmp/dpishell/update_job.json -e '@.ok')" = true ]
 	check "откат ($1): стоит $want" grep -qx "V:$want" /lib/apk/db/installed
 	jsonfilter -i /tmp/dpishell/update_job.json -e '@.message'

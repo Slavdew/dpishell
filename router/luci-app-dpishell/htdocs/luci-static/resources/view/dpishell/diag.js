@@ -139,7 +139,7 @@ return view.extend({
 			var rep = (j.items || []).map(function(r) {
 				n[r.status] = (n[r.status] || 0) + 1;
 				var st = { restored: 'settings.changes.status_restored', same: 'settings.changes.status_same', skipped: 'settings.changes.status_skipped' }[r.status] || 'settings.changes.status_failed';
-				var why = r.note ? ' — ' + api.msg({ key: r.note_key, params: {}, text: r.note }) : '';
+				var why = r.note ? ' — ' + api.msg({ key: r.note_key, params: r.note_params || {}, text: r.note }) : '';
 				return E('li', {}, api.msg({ key: r.key, params: r.params, text: r.text }) + ': ' + api.t(st) + why);
 			});
 			if (j.error)

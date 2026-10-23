@@ -165,9 +165,12 @@ function declare(method) {
 }
 
 // method и args — что вызывали: для «Подробнее» и «Скопировать» у ошибки (действие; введённое — скрывается).
-function makeError(text, code, field, method, args) {
+function makeError(text, code, field, method, args, detail) {
 	var e = new Error(text);
 	e.code = code || 'failed';
+	// Сырой текст (вывод apk и т. п.) — только в «Подробнее».
+	if (detail)
+		e.detail = String(detail);
 	if (field)
 		e.field = field;
 	e.method = method || null;
@@ -505,9 +508,10 @@ return baseclass.extend({
 		return this.content(box, e ? this.errorParts(e) : '');
 	},
 
-	// Ошибка не из вызова (итог задания и т. п.): текст, метод-действие и его аргументы (введённое — скрывается в описании).
-	error: function(text, method, args) {
-		return makeError(text, 'failed', null, method, args);
+	// Ошибка не из вызова (итог задания и т. п.): текст, метод-действие и его аргументы (введённое — скрывается в описании),
+	// detail — сырой текст задания (job.detail) для «Подробнее».
+	error: function(text, method, args, detail) {
+		return makeError(text, 'failed', null, method, args, detail);
 	},
 
 	errorParts: function(e) {
@@ -538,6 +542,8 @@ return baseclass.extend({
 		lines.push(this.t('web.fail.text', { v: clean(this.text(e)) }));
 		if (e && (e.code || e.field))
 			lines.push(this.t('web.fail.code', { v: clean([e.code, e.field].filter(Boolean).join(', ')) }));
+		if (e && e.detail)
+			lines.push(this.t('web.fail.detail', { v: scrub(String(e.detail).trim(), hide, mark) }));
 		var v = VERS || {}, parts = [];
 		parts.push('DpiShell ' + (v.dpishell || '—'));
 		parts.push('luci-app-dpishell ' + (v.luci || '—'));
