@@ -82,7 +82,7 @@ public sealed partial class WindowSmokeTests
                 // «Только из списков», сайта в них нет — «не в списке оптимизации» и «Добавить в список оптимизации», исключений не предлагают.
                 WaitUi(vm.SiteCheckAsync());
                 Pump();
-                if (!Visible(t => t.Text == L.T("home.sitecheck.not_in_list", new { site = "bank.example" }))) throw new Exception("Нет итога «не в списке оптимизации»");
+                if (!Visible(t => t.Text == L.T("home.sitecheck.not_in_list_closed", new { site = "bank.example" }))) throw new Exception("Нет итога «не в списке оптимизации»");
                 if (Find<Button>(tabs, b => b.IsVisible && b.Content as string == L.T("home.sitecheck.add_list")) is null) throw new Exception("Нет «Добавить в список оптимизации»");
                 if (Find<Button>(tabs, b => b.IsVisible && b.Content as string == L.T("home.sitecheck.add")) is not null) throw new Exception("«Добавить в исключения» при сайте вне списков");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-home-sitecheck-not-in-list.png"));
@@ -100,6 +100,13 @@ public sealed partial class WindowSmokeTests
                 // Сайт без оптимизации проверен сразу — итог в той же строке (аудит-2 С-5); адрес остаётся в поле для повторной «Проверить».
                 if (!Visible(t => t.Text == L.T("home.direct.done_pc", new { site = "bank.example" }) + " " + L.T("home.sitecheck.excluded_opens"))) throw new Exception("Нет ответа под ссылками");
                 if (vm.DirectSite != "bank.example") throw new Exception("После добавления адрес ушёл из поля");
+                // «Проверить снова» у итога (аудит С-16): тот же сайт ещё раз, итог прямо — «с оптимизацией» или без.
+                if (Link(L.T("home.sitecheck.again")) is not { IsEnabled: true } again) throw new Exception("Нет «Проверить снова» после добавления в исключения");
+                again.Command.Execute(null);
+                for (int i = 0; i < 200 && vm.SiteOutcome == SiteCheckOutcome.Checking; i++) { Pump(); Thread.Sleep(10); }
+                Pump();
+                if (!Visible(t => t.Text == L.T("home.sitecheck.excluded_opens"))) throw new Exception("После «Проверить снова» нет «Без оптимизации открывается.» (сайт в исключениях): " + vm.SiteCheckLine);
+                if (Link(L.T("home.sitecheck.again")) is null) throw new Exception("После повторной проверки пропала «Проверить снова»");
                 foreach (var t in FindAll<TextBlock>(tabs, t => t.IsVisible && t.Text.Contains("bank.example")))
                     if (t.Text.Contains("обход", StringComparison.OrdinalIgnoreCase)) throw new Exception("В ответе запретное слово: " + t.Text);
                 foreach (var t in FindAll<TextBox>(tabs, t => t.IsVisible && t.IsReadOnly && t.Text.Contains("bank.example")))

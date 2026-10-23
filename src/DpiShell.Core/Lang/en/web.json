@@ -26,5 +26,7 @@
   "web.diag.flow_on": "on — interferes with optimization",
   "web.diag.ipv6_bad": "present — sites over IPv6 bypass optimization",
   "web.diag.ipv6_none": "none — no interference",
-  "web.diag.ipv6_on": "present, optimization is on for IPv6 too — no interference"
+  "web.diag.ipv6_on": "present, optimization is on for IPv6 too — no interference",
+  "web.site.listed": "{host} is in the router’s optimization list (“Sites” → “Optimize”).",
+  "web.site.not_in_list_hint": "“Only from lists” is on: the router leaves sites outside the lists alone."
 }

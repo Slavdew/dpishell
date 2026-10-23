@@ -251,6 +251,9 @@
                                             </StackPanel>
                                             <TextBox Text="{Binding DirectMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,6,0,0"
                                                      Visibility="{Binding HasDirectMessage, Converter={StaticResource Vis}}" />
+                                            <!-- «Проверить снова» (аудит С-16): тот же сайт ещё раз — после добавления в список, в исключения или просто повторно. -->
+                                            <Button Content="{l:T home.sitecheck.again}" Style="{StaticResource LinkButton}" Command="{Binding SiteAgainCmd}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                                    Visibility="{Binding ShowSiteAgain, Converter={StaticResource Vis}}" />
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
@@ -817,6 +820,11 @@
                                         <TextBox Text="{Binding SiteHint, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,2,0,0" />
                                         <Button Content="{l:T sites.check.add_exclude}" Style="{StaticResource Primary}" Command="{Binding AddExcludeCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
                                                 Visibility="{Binding SiteSuggestExclude, Converter={StaticResource Vis}}" />
+                                        <!-- «Только из списков», сайта в списках роутера нет и он не открывается — в свой список user-general (как страница роутера), затем проверка заново. -->
+                                        <Button Content="{l:T home.sitecheck.add_list}" Style="{StaticResource Primary}" Command="{Binding AddListCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                                Visibility="{Binding SiteSuggestList, Converter={StaticResource Vis}}" />
+                                        <Button Content="{l:T home.sitecheck.again}" Style="{StaticResource LinkButton}" Command="{Binding SiteAgainCmd}" HorizontalAlignment="Left" Margin="0,6,0,0"
+                                                Visibility="{Binding ShowSiteAgain, Converter={StaticResource Vis}}" />
                                         <Expander Header="{l:T common.more}" Visibility="{Binding HasSiteDetail, Converter={StaticResource Vis}}">
                                             <TextBox Text="{Binding SiteDetail, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" />
                                         </Expander>
@@ -2440,6 +2448,22 @@
                                     </Expander>
                                     <Button Content="{l:T router.update.check}" Style="{StaticResource LinkButton}" Command="{Binding UpdateCheckCmd}" HorizontalAlignment="Left"
                                             Margin="0,10,0,0" Visibility="{Binding Connected, Converter={StaticResource Vis}}" />
+                                    <!-- Итог проверки — у ссылки и держится (аудит С-23): «Проверка…», «Доступна X» + «Обновить до X», «Последняя версия · проверено в …», ошибка. -->
+                                    <WrapPanel Margin="0,2,0,0" Visibility="{Binding HasUpdateCheckLine, Converter={StaticResource Vis}}" AutomationProperties.LiveSetting="Polite">
+                                        <TextBox Text="{Binding UpdateCheckLine, Mode=OneWay}" VerticalAlignment="Center" Margin="0,0,10,0" TextWrapping="Wrap">
+                                            <TextBox.Style>
+                                                <Style TargetType="TextBox" BasedOn="{StaticResource SelectableHint}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding UpdateCheckFailed}" Value="True">
+                                                            <Setter Property="Foreground" Value="{DynamicResource Danger}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBox.Style>
+                                        </TextBox>
+                                        <Button Content="{Binding UpdateToText}" Style="{StaticResource Small}" Command="{Binding UpdateCmd}" VerticalAlignment="Center"
+                                                Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
+                                    </WrapPanel>
                                     <!-- «Вернуть версию» (status.rollback, роутер с 0.2.0-r16): только по кнопке, с вопросом; старый роутер — ссылки нет. -->
                                     <Button Content="{Binding RollbackText}" Style="{StaticResource LinkButton}" Command="{Binding RollbackCmd}" HorizontalAlignment="Left"
                                             Margin="0,10,0,0" Visibility="{Binding RollbackShown, Converter={StaticResource Vis}}" />
@@ -2810,8 +2834,8 @@
                                                        Text="{l:T about.app.verify_note}" />
                                         </StackPanel>
                                         <TextBox Text="{Binding AppOsNote, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,8,0,0" Visibility="{Binding HasAppOsNote, Converter={StaticResource Vis}}" />
-                                        <TextBlock Text="{Binding AppText}" Margin="0,8,0,0" TextWrapping="Wrap"
-                                                   Visibility="{Binding AppHintOnly, Converter={StaticResource Vis}}" />
+                                        <TextBox Text="{Binding AppText, Mode=OneWay}" Style="{StaticResource SelectableText}" FontWeight="SemiBold" Margin="0,8,0,0" TextWrapping="Wrap"
+                                                 Visibility="{Binding AppHintOnly, Converter={StaticResource Vis}}" />
                                         <StackPanel Margin="0,8,0,0" Visibility="{Binding AppBusy, Converter={StaticResource Vis}}" AutomationProperties.LiveSetting="Polite">
                                             <TextBox Text="{Binding AppProgressText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
                                             <ProgressBar Height="6" IsIndeterminate="True" Margin="0,6,0,0" />
@@ -2834,9 +2858,22 @@
                                         </Expander>
                                         <WrapPanel Margin="0,10,0,0">
                                             <Button Content="{Binding AppUpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateAppCmd}"
-                                                    Visibility="{Binding AppReleaseReady, Converter={StaticResource Vis}}" />
+                                                    Visibility="{Binding ShowAppUpdateButton, Converter={StaticResource Vis}}" />
                                             <Button Content="{l:T about.app.check_button}" Command="{Binding CheckCmd}"
                                                     Visibility="{Binding ShowCheckButton, Converter={StaticResource Vis}}" />
+                                            <!-- Итог проверки — рядом с кнопкой и держится: «Проверка…», «Последняя версия · проверено в …», «Не проверено: причина». -->
+                                            <TextBox Text="{Binding AppCheckLine, Mode=OneWay}" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"
+                                                     Visibility="{Binding HasAppCheckLine, Converter={StaticResource Vis}}">
+                                                <TextBox.Style>
+                                                    <Style TargetType="TextBox" BasedOn="{StaticResource SelectableHint}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding AppCheckFailed}" Value="True">
+                                                                <Setter Property="Foreground" Value="{DynamicResource Danger}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBox.Style>
+                                            </TextBox>
                                             <Button Content="{Binding RollbackText}" Command="{Binding RollbackCmd}" ToolTip="{l:T about.app.rollback_tip}"
                                                     Visibility="{Binding CanRollback, Converter={StaticResource Vis}}" />
                                         </WrapPanel>

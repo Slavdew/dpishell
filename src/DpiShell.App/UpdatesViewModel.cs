@@ -65,7 +65,7 @@ public sealed class UpdatesViewModel : Observable
         CheckCmd = RelayCommand.Async(() => CheckAsync(quiet: false), () => !_checking && !_appBusy);
         InstallCmd = RelayCommand.Async(InstallAsync, () => !_checking && DataAvailable);
         OpenReleaseCmd = new RelayCommand(OpenRelease);
-        UpdateAppCmd = RelayCommand.Async(UpdateAppAsync, () => AppReleaseReady && !_appBusy && !_checking);
+        UpdateAppCmd = RelayCommand.Async(UpdateAppAsync, () => ShowAppUpdateButton && !_appBusy && !_checking);
         RollbackCmd = RelayCommand.Async(RollbackAsync, () => _canRollback && !_appBusy);
         RetryCmd = RelayCommand.Async(() => AppReleaseReady ? UpdateAppAsync() : CheckAsync(quiet: false), () => !_appBusy && !_checking);
         RefreshRollback();
@@ -93,8 +93,32 @@ public sealed class UpdatesViewModel : Observable
     /// <summary>Подсказка без проверенного описания выпуска (его не получили): обновить из окна нельзя — только ссылка на страницу релизов.</summary>
     public bool AppHintOnly => AppAvailable && !AppReleaseReady;
     public string AppText => AppHintOnly ? L.T("about.app.hint_only", new { version = _s.UpdatesApp }) : "";
-    /// <summary>Одна главная кнопка по состоянию: выпуск проверен — «Обновить до X», иначе «Проверить обновления».</summary>
-    public bool ShowCheckButton => !AppReleaseReady;
+    /// <summary>
+    /// Одна главная кнопка по состоянию: о новой версии известно (выпуск проверен или подсказка манифеста) — «Обновить до X» сразу,
+    /// без лишнего «Проверить обновления» (аудит С-23; описание выпуска получается по нажатию); иначе — «Проверить обновления».
+    /// </summary>
+    public bool ShowCheckButton => !ShowAppUpdateButton;
+    public bool ShowAppUpdateButton => AppReleaseReady || (AppHintOnly && !HasAppError);
+
+    /// <summary>
+    /// Итог проверки программы — у кнопки «Проверить обновления» и держится: «Проверка…», «Последняя версия · проверено в ЧЧ:ММ», «Не проверено: причина».
+    /// Новая версия, ошибка, «нужна новая Windows», ход обновления — своими строками, тогда эта пуста.
+    /// </summary>
+    public string AppCheckLine
+    {
+        get
+        {
+            if (_checking) return L.T("about.app.line_checking");
+            if (AppReleaseReady || AppHintOnly || HasAppError || HasAppOsNote || _appBusy) return "";
+            if (_checkFailedReason.Length > 0) return L.T("about.app.line_failed", new { reason = _checkFailedReason });
+            if (_s.UpdatesCheckedAt is not { } at) return "";
+            if (_s.UpdatesOkAt is { } ok && ok >= at) return L.T("about.app.line_latest", new { when = CheckedWhen(ok, Now()) });
+            return L.T("about.app.line_failed", new { reason = L.T("about.app.reason_sources") });
+        }
+    }
+    public bool HasAppCheckLine => AppCheckLine.Length > 0;
+    public bool AppCheckFailed => !_checking && AppCheckLine.Length > 0 && (_checkFailedReason.Length > 0 || _s.UpdatesOkAt is not { } o || _s.UpdatesCheckedAt is { } a && o < a);
+    string _checkFailedReason = "";
     /// <summary>«Скачать программу 99.0» — рядом с «Обновить списки» видно, что это разные вещи (UX-аудит 2, п. 13).</summary>
     public string AppButtonText => L.T("about.app.download_button", new { version = _s.UpdatesApp });
 
@@ -103,7 +127,7 @@ public sealed class UpdatesViewModel : Observable
     /// <summary>Есть выпуск новее с верной подписью, подходящий этому компьютеру: можно обновить из окна.</summary>
     public bool AppReleaseReady => _appCheck is { Available: true } c && c.Version is { } v && AppRelease.IsOlder(Three(AppVersion), v);
     public string AppReleaseTitle => AppReleaseReady ? L.T("about.app.release_title", new { version = _appCheck!.Version, current = Three(AppVersion) }) : "";
-    public string AppUpdateButtonText => L.T("about.app.update_button", new { version = _appCheck?.Version });
+    public string AppUpdateButtonText => L.T("about.app.update_button", new { version = AppReleaseReady ? _appCheck!.Version : _s.UpdatesApp });
     /// <summary>«Что нового» — из подписанного описания выпуска, показывается до обновления.</summary>
     public IReadOnlyList<string> AppNotes => AppReleaseReady ? _appCheck!.Changes : [];
     public bool HasAppNotes => AppNotes.Count > 0;
@@ -195,7 +219,7 @@ public sealed class UpdatesViewModel : Observable
     {
         foreach (var p in new[] { nameof(CurrentVersion), nameof(DataAvailable), nameof(AnyAvailable), nameof(AvailableText), nameof(AppAvailable), nameof(AppHintOnly), nameof(AppText), nameof(AppButtonText), nameof(StatusText),
                                   nameof(AppReleaseReady), nameof(AppReleaseTitle), nameof(AppUpdateButtonText), nameof(AppNotes), nameof(HasAppNotes), nameof(AppProgressText),
-                                  nameof(AppError), nameof(HasAppError), nameof(AppErrorDetails), nameof(HasAppErrorDetails), nameof(AppErrorShort), nameof(AppErrorMore), nameof(HasAppErrorMore), nameof(ShowCheckButton), nameof(AppNotice), nameof(HasAppNotice),
+                                  nameof(AppError), nameof(HasAppError), nameof(AppErrorDetails), nameof(HasAppErrorDetails), nameof(AppErrorShort), nameof(AppErrorMore), nameof(HasAppErrorMore), nameof(ShowCheckButton), nameof(ShowAppUpdateButton), nameof(AppCheckLine), nameof(HasAppCheckLine), nameof(AppCheckFailed), nameof(AppNotice), nameof(HasAppNotice),
                                   nameof(AppOsNote), nameof(HasAppOsNote), nameof(CanRollback), nameof(RollbackText) })
             Raise(p);
         CommandManager.InvalidateRequerySuggested();
@@ -268,6 +292,7 @@ public sealed class UpdatesViewModel : Observable
             var r = await client.FetchManifestAsync();
             _s.UpdatesCheckedAt = Now();
             string? say = null;
+            _checkFailedReason = r.Result is null ? L.T(r.Stale ? "about.app.reason_stale" : "about.app.reason_sources") : "";
             if (r.Result is { } got)
             {
                 _s.UpdatesOkAt = _s.UpdatesCheckedAt;
@@ -319,6 +344,18 @@ public sealed class UpdatesViewModel : Observable
     /// </summary>
     async Task UpdateAppAsync()
     {
+        if (_appBusy) return;
+        // О версии известно из манифеста, описание выпуска ещё не получено — получить его по этому же нажатию (аудит С-23).
+        if (!AppReleaseReady && AppHintOnly && Http is not null)
+        {
+            var hinted = _s.UpdatesApp;
+            await CheckAppOnlyAsync();
+            if (!AppReleaseReady)
+            {
+                if (!HasAppError) SetAppError(L.T("about.app.no_release", new { version = hinted }));
+                return;
+            }
+        }
         if (_appCheck is not { Available: true } check || check.Version is not { } version || _appBusy) return;
         if (IsBusy())
         {
@@ -473,4 +510,7 @@ public sealed class UpdatesViewModel : Observable
             ? L.Date(d.ToDateTime(TimeOnly.MinValue)) : version ?? "";
 
     static string When(DateTime t) => L.T("about.when", new { date = L.DayMonth(t), time = L.Time(t) });
+
+    /// <summary>Когда проверено — для строки итога «Последняя версия · проверено …»: сегодня — «в 14:05», иначе — «22.10 в 14:05».</summary>
+    public static string CheckedWhen(DateTime local, DateTime now) => local.Date == now.Date ? L.T("about.when_today", new { time = L.Time(local) }) : When(local);
 }
