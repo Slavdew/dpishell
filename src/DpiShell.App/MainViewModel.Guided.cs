@@ -75,7 +75,7 @@ public sealed partial class MainViewModel
 
     public ICommand GuidedActionCmd => _guidedActionCmd ??= RelayCommand.Async(GuidedActionAsync, () => _guided is not null && !Busy);
     ICommand? _guidedActionCmd;
-    public ICommand ReportIssueCmd => _reportIssueCmd ??= new RelayCommand(() => OpenLink(IssueUrl()));
+    public ICommand ReportIssueCmd => _reportIssueCmd ??= new RelayCommand(() => OpenAny(IssueUrl()));
     ICommand? _reportIssueCmd;
 
     /// <summary>Ссылка «Написать о проблеме»: версии и текст ошибки в заготовке обращения; личное вычищено так же, как в отчёте (<see cref="ErrorReport"/>).</summary>
@@ -131,7 +131,7 @@ public sealed partial class MainViewModel
         finally { _retry = prev; }
     }
 
-    async Task GuidedActionAsync()
+    public async Task GuidedActionAsync()
     {
         if (_guided is not { } g) return;
         switch (g.Kind)
@@ -220,10 +220,19 @@ public sealed partial class MainViewModel
     async Task DiagnoseFailureAsync(string error)
     {
         if (!GuidedEnabled || _guided is not null) return;
-        if (await DiagnoseNetworkAsync()) return;
+        if (await DiagnoseNetworkAsync()) { CauseFound(); return; }
         var findings = await Task.Run(() => SystemFindings is { } f ? f() : SystemChecks.Run(_shell.Paths));
-        if (findings.FirstOrDefault(x => !x.Ok) is { } bad) ShowGuidedCard(new(GuidedKind.Finding, Finding: bad));
+        if (findings.FirstOrDefault(x => !x.Ok) is { } bad) { ShowGuidedCard(new(GuidedKind.Finding, Finding: bad)); CauseFound(); }
         else ShowGuidedCard(new(GuidedKind.Unknown, Error: error));
+    }
+
+    /// <summary>Причина найдена — общая «Ошибка» в карточке статуса и тост не нужны: причина и кнопка уже на месте.</summary>
+    void CauseFound()
+    {
+        _error = null;
+        HideToast();
+        Message = "";
+        UpdateStatus();
     }
 
     /// <summary>Перед подбором: без интернета (или за входом в сеть) подбор не начинается. true — можно начинать.</summary>
