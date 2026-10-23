@@ -4,6 +4,7 @@
 
 Results depend on the ISP, the network and the device: "usually" and "on most" below mean exactly that.
 
+- [Antivirus deletes files](#antivirus-deletes-files)
 - [A site does not open](#a-site-does-not-open)
 - [A game or program cannot connect](#a-game-or-program-cannot-connect)
 - [Router: install, update, watchdog, emergency button](#router)
@@ -12,6 +13,27 @@ Results depend on the ISP, the network and the device: "usually" and "on most" b
 - [Router security](#router-security-for-reference)
 - [How to restore the previous state](#how-to-restore-the-previous-state)
 - [Version compatibility](#version-compatibility)
+
+## Antivirus deletes files
+
+Windows Defender and other antivirus software may flag the zapret core: the `vendor\zapret-v72.13.zip` archive in the download or `%ProgramData%\DpiShell\core.download\core.zip` on the first "Turn on". The protection history shows it as `Trojan:Win32/Tecabans.STV!cl`, `Misleading:Win32/Malgent!AMTB` or `RiskTool…WinDivert`; in Defender, the `!cl` suffix means a cloud heuristic verdict, not a matched signature.
+
+The reason is the WinDivert driver: it intercepts network traffic, and malware does that too. DpiShell does not build or modify the core: it is the [official zapret v72.13 archive](https://github.com/bol-van/zapret/releases/tag/v72.13) by bol-van, sha256 `c493e33a0dc4eba23a8686efdaba55f59755ad6ade3564aebd9d13f4c65e2e0c`. The app checks it and every core file before each start ([data/core.json](../data/core.json), [vetting](vetting.md)) and does not run modified files.
+
+**What to do**
+
+1. Add two folders to the exclusions: the one you unpacked the program to (for example `C:\Programs\DpiShell`) and `%ProgramData%\DpiShell`.
+   - Fastest: PowerShell as administrator; the folders do not have to exist yet:
+     ```powershell
+     Add-MpPreference -ExclusionPath "$env:ProgramData\DpiShell", "C:\Programs\DpiShell"
+     ```
+     Replace the second path with your program folder.
+   - Manually: "Windows Security" > "Virus & threat protection" > "Manage settings" > "Exclusions" > "Add or remove exclusions" > "Add an exclusion" > "Folder". Names depend on the Windows version. The folder picker needs an existing folder: `%ProgramData%\DpiShell` appears after the first "Turn on". Do not create it yourself: the app moves such a folder aside and creates its own with closed permissions.
+   - Other antivirus: use its exclusion settings; DpiShell does not add exclusions itself.
+2. If files are already deleted: download and unpack the program again; for the core, "Diagnostics" > "Restore".
+3. Before the next "Turn on", the protection history should have no new DpiShell entries.
+
+An exclusion turns off scanning of these folders; that is your decision. If in doubt, do not install the program.
 
 ## A site does not open
 
