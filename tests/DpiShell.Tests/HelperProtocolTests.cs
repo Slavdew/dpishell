@@ -176,7 +176,7 @@ public class HelperProtocolTests
         string[] spec =
         [
             "status", "enable", "disable", "set_run_mode", "select", "search", "cancel", "ipset_mode", "all_addresses_start",
-            "all_addresses_stop", "game_mode", "ipset_update", "user_ipset_set", "user_targets_set", "user_exclude_set", "hosts_check", "hosts_preview",
+            "all_addresses_stop", "game_mode", "ipset_update", "user_ipset_set", "user_targets_set", "user_groups_set", "user_exclude_set", "hosts_check", "hosts_preview",
             "hosts_apply", "hosts_revert", "hosts_recheck", "stop_foreign", "core_repair", "remove_all", "clear_history", "read_results",
             "details", "choose", "tcp_timestamps_on", "data_update", "dns_status", "dns_set", "dns_restore",
             "strategy_add", "strategy_delete", "strategy_check",
@@ -200,6 +200,8 @@ public class HelperProtocolTests
         Assert.Contains("1.15 — отмена загрузки настроек отдельно", doc);
         Assert.All(["av_exclusion_status", "av_exclusion_add", "av_exclusion_remove"], cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.Contains("1.16 — исключение Защитника для папки ядра", doc);
+        Assert.Contains("`user_groups_set {groups}`", doc);
+        Assert.Contains("1.18 — группы своих сайтов", doc);
         Assert.All(["proxy_status", "proxy_user_set {enabled, server?, bypass?, pac?}", "proxy_machine_set {enabled, server?, bypass?, pac?, winhttp?}", "proxy_machine_restore"],
             cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.All(["joint_get", "joint_set {active, owned?}"], cmd => Assert.Contains("`" + cmd + "`", doc));

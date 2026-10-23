@@ -30,6 +30,8 @@ sealed record AdvancedFinal(bool Enabled, string Others, List<AdvancedFinalRow> 
 sealed class PlanOps
 {
     public List<string>? Sites, Exclude, Subnets, SubnetsExclude, Hosts;
+    /// <summary>Группы итогового списка своих сайтов (домен → имя); null — пакет групп не принёс, прежние группы остаются у оставшихся сайтов.</summary>
+    public Dictionary<string, string>? SiteGroups;
     public List<ImportStrategy> NewStrategies = [];
     public AdvancedFinal? Advanced;
     public List<ImportApp> NewApps = [];
@@ -93,10 +95,12 @@ public sealed class ImportPlan
     public SectionPlan? Section(string id) => Sections.FirstOrDefault(s => s.Id == id);
 
     /// <summary>Запрос помощнику (JSON): разделы с изменениями, данные только по ним.</summary>
-    public string ToRequest()
+    public string ToRequest(bool groups = true)
     {
         var ids = Sections.Where(s => s.Changes).Select(s => s.Id).ToList();
-        return JsonSerializer.Serialize(new ImportRequest { Mode = Mode, Sections = ids, Data = Data.Only(ids) }, SettingsSections.Json);
+        var data = Data.Only(ids);
+        if (!groups) data.SiteGroups = null;   // помощник до 1.18 лишних полей не принимает
+        return JsonSerializer.Serialize(new ImportRequest { Mode = Mode, Sections = ids, Data = data }, SettingsSections.Json);
     }
 }
 
@@ -115,6 +119,8 @@ public interface ISettingsTarget
     string? BeginImport(ImportPlan plan);
     void EndImport(string? record, ImportResult result);
     void SetSites(IReadOnlyList<string> sites);
+    /// <summary>Свои сайты с группами (домен → имя; остальные — «Прочее»). Цель без групп (подмена в тестах) пишет плоский список.</summary>
+    void SetSites(IReadOnlyList<string> sites, IReadOnlyDictionary<string, string> groups) => SetSites(sites);
     void SetExclude(IReadOnlyList<string> sites);
     void SetSubnets(IReadOnlyList<string> lines, bool exclude);
     /// <summary>Сохранить стратегию как вставленную; возвращает её новый id.</summary>
@@ -157,7 +163,10 @@ public static class SettingsPlanner
             }
             switch (id)
             {
-                case SettingsSections.Sites: ops.Sites = Merge(sp, current.Sites, clean.Sites!, SettingsSections.MaxSites, mode, x => x); break;
+                case SettingsSections.Sites:
+                    ops.Sites = Merge(sp, current.Sites, clean.Sites!, SettingsSections.MaxSites, mode, x => x);
+                    ops.SiteGroups = MergeGroups(current, clean.SiteGroups, ops.Sites, mode);
+                    break;
                 case SettingsSections.Exclude: ops.Exclude = Merge(sp, current.Exclude, clean.Exclude!, SettingsSections.MaxExclude, mode, x => x); break;
                 case SettingsSections.Hosts: ops.Hosts = Merge(sp, current.Hosts, clean.Hosts!, SettingsSections.MaxHosts, mode, x => x); break;
                 case SettingsSections.Subnets:
@@ -174,6 +183,22 @@ public static class SettingsPlanner
             plans.Add(sp);
         }
         return new() { Mode = mode, Sections = plans, Data = clean, Problems = problems, Ops = ops };
+    }
+
+    /// <summary>
+    /// Группы итогового списка. «Добавить» — свои сайты остаются в своих группах, новые берут группу из пакета; «заменить» — как в пакете.
+    /// Пакет групп не принёс — null (прежние группы остаются у сайтов, что остались).
+    /// </summary>
+    static Dictionary<string, string>? MergeGroups(SettingsState current, IReadOnlyDictionary<string, string>? incoming, IReadOnlyList<string> final, ImportMode mode)
+    {
+        if (incoming is not { Count: > 0 }) return null;
+        var res = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var site in final)
+        {
+            if (mode == ImportMode.Add && current.SiteGroups is { } mine && mine.TryGetValue(site, out var own)) res[site] = own;
+            else if (incoming.TryGetValue(site, out var name)) res[site] = name;
+        }
+        return res;
     }
 
     /// <summary>Слияние списка: «добавить» — свои остаются и дополняются, «заменить» — остаётся только пришедшее. Итог — в возврате.</summary>

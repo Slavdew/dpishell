@@ -42,6 +42,7 @@
   "core.profile.udp_params": "Параметры UDP: {problem}",
   "core.profile.not_set": "не заданы",
   "core.addr.user_n": "свой адрес №{n}",
+  "core.addr.group_n": "группа №{n}",
   "core.upd.no_sources": "Не заданы адреса выпусков (update-sources.json).",
   "core.upd.bad_release_sig": "{host}: подпись описания выпуска не совпала — источник отброшен",
   "core.upd.bad_archive_hash": "{host}: sha256 архива не совпал с описанием выпуска — файл отброшен",

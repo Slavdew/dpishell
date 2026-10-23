@@ -42,6 +42,7 @@
   "core.profile.udp_params": "UDP parameters: {problem}",
   "core.profile.not_set": "not set",
   "core.addr.user_n": "custom address #{n}",
+  "core.addr.group_n": "group #{n}",
   "core.upd.no_sources": "Release addresses are not set (update-sources.json).",
   "core.upd.bad_release_sig": "{host}: release description signature does not match — source rejected",
   "core.upd.bad_archive_hash": "{host}: archive sha256 does not match the release description — file rejected",

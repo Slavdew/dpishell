@@ -102,6 +102,8 @@
   "home.params.game.off": "выкл",
   "home.strategy.not_checked_yet": "ещё не проверялась",
   "home.stats.mine": "свои {ok} из {total}",
+  "home.stats.subs_rest": "остальные ✓ {ok}/{total}",
+  "home.stats.subs_more": "ещё не открывают: {n}",
   "home.stats.all": "открыла всё",
   "home.stats.some": "открыла {ok} из {total} групп",
   "home.stats.checked": "проверено {date} в {time}",

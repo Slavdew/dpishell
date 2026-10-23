@@ -37,9 +37,20 @@ public static class StrategyStats
     public sealed record GroupStat(string Id, int Runs, int Ok);
 
     /// <summary>Последний прогон с разбивкой по адресам (свои сайты — «свой адрес №N», как в файле).</summary>
-    public sealed record LastRun(string File, IReadOnlyList<TargetStat> Targets);
+    public sealed record LastRun(string File, IReadOnlyList<TargetStat> Targets)
+    {
+        /// <summary>
+        /// Свои сайты по группам (API 1.18): «группа №N» (имена в истории скрыты), «Прочее» — без имени и во всех прежних файлах. Адреса, закрытые
+        /// по адресу, считаются отдельно. Пусто — своих сайтов в прогоне не было.
+        /// </summary>
+        public IReadOnlyList<SubLine> Subs => SiteGroupSummary.Build(Targets.Where(t => t.GroupId == "user")
+            .Select(t => new SubItem(t.Sub, t.Url, t.Ok, t.Blocked, t.SubTotal)));
+    }
 
-    public sealed record TargetStat(string GroupId, string Url, bool Ok, bool Required, bool Control, double Seconds, IReadOnlyList<ProbeStat> Probes);
+    /// <param name="Sub">Группа своих сайтов («группа №N»; пусто — «Прочее», в том числе в старых файлах). SubTotal — сколько адресов в группе всего (0 — не записано).</param>
+    /// <param name="Blocked">Закрыт по адресу (<see cref="AddressBlocks"/>): в оценку и порядок не входит.</param>
+    public sealed record TargetStat(string GroupId, string Url, bool Ok, bool Required, bool Control, double Seconds, IReadOnlyList<ProbeStat> Probes,
+        string Sub = "", int SubTotal = 0, bool Blocked = false);
 
     /// <summary>Tls и Outcome — имена из SslProtocols и ProbeOutcome.</summary>
     public sealed record ProbeStat(string Tls, string Outcome, string Detail, double Seconds);
@@ -92,7 +103,7 @@ public static class StrategyStats
                 foreach (var x in ps.EnumerateArray())
                     probes.Add(new(Str(x, "Tls"), Str(x, "Outcome"), Str(x, "Detail"), Num(x, "Seconds")));
             list.Add(new(group, Str(t, "Url"), Bool(t, "Ok"), !t.TryGetProperty("Required", out var r) || r.ValueKind != JsonValueKind.False,
-                Bool(t, "Control"), Num(t, "Seconds"), probes));
+                Bool(t, "Control"), Num(t, "Seconds"), probes, Str(t, "Sub"), (int)Num(t, "SubTotal"), Bool(t, "Blocked")));
         }
         return list;
 
@@ -119,8 +130,9 @@ public static class StrategyStats
             var r = runs[k];
             double weight = 1.0 / (k + 1);
             double share = (double)r.Passed / r.Total;
-            if (r.Targets is { } targets)
+            if (r.Targets is { } all)
             {
+                var targets = all.Where(t => !t.Blocked).ToList();   // закрытые по адресу — не провал стратегии
                 var byGroup = targets.Where(Catalog).GroupBy(t => t.GroupId).ToList();
                 foreach (var g in byGroup)
                 {

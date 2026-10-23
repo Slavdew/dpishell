@@ -37,7 +37,7 @@ public sealed class AddressBlockTracker
     public void Add(StrategyScore s)
     {
         if (s.Error is not null) return;   // не запустилась — адреса не проверялись
-        foreach (var v in s.Verdicts) Add(s.Strategy.Id, v);
+        foreach (var v in s.Verdicts.Concat(s.Blocked)) Add(s.Strategy.Id, v);   // закрытые по адресу тоже учитываются: из оценки они убраны, но подсказка про IP-списки нужна
     }
 
     /// <summary>Все проверки адреса — без ответа: таймаут, нет соединения или сброс (по обеим версиям TLS).</summary>

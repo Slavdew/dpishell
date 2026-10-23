@@ -160,6 +160,7 @@
   "diag.report.router.state_off": "оптимизация выключена",
   "diag.report.router.state_nologin": "нет входа",
   "diag.report.sites.own": "Свои сайты: {n}",
+  "diag.report.sites.groups": "Групп своих сайтов: {n}",
   "diag.report.sites.exclude": "Исключения: {n}",
   "diag.report.log.unavailable": "недоступен (помощник не отвечает или старой версии)",
   "diag.report.log.empty": "пусто"

@@ -96,7 +96,7 @@ public static class SettingsExport
         {
             switch (id)
             {
-                case SettingsSections.Sites: WriteLines(folder, SettingsSections.SitesFile, "own sites, one domain per line", data.Sites!); break;
+                case SettingsSections.Sites: WriteSites(folder, data); break;
                 case SettingsSections.Exclude: WriteLines(folder, SettingsSections.ExcludeFile, "sites opened without optimization, one domain per line", data.Exclude!); break;
                 case SettingsSections.Subnets:
                     if (data.Subnets is { Count: > 0 }) WriteLines(folder, SettingsSections.SubnetsFile, "own IP subnets (CIDR), one per line", data.Subnets);
@@ -210,6 +210,24 @@ public static class SettingsExport
         return t.Length == 0 ? null : t;
     }
 
+    /// <summary>
+    /// sites.txt: домен в строке. Группы — комментарии «# group: Имя» перед сайтами группы (сайты без группы идут первыми, без метки): остальные читатели
+    /// (роутер, прежние версии) пропускают комментарии и видят обычный список. Формат пакета не меняется.
+    /// </summary>
+    static void WriteSites(string folder, ImportData data)
+    {
+        var sites = data.Sites!;
+        var groups = data.SiteGroups;
+        if (groups is not { Count: > 0 }) { WriteLines(folder, SettingsSections.SitesFile, "own sites, one domain per line", sites); return; }
+        var lines = new List<string>(sites.Where(s => !groups.ContainsKey(s)));
+        foreach (var name in sites.Where(groups.ContainsKey).Select(s => groups[s]).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            lines.Add("# group: " + SiteGroups.CleanName(name));
+            lines.AddRange(sites.Where(s => groups.TryGetValue(s, out var g) && string.Equals(g, name, StringComparison.OrdinalIgnoreCase)));
+        }
+        WriteLines(folder, SettingsSections.SitesFile, "own sites, one domain per line; \"# group: Name\" starts a group", lines);
+    }
+
     static void WriteLines(string folder, string file, string what, IEnumerable<string> lines) =>
         WriteText(Path.Combine(folder, file), "# DpiShell settings: " + what + "\n" + string.Concat(lines.Select(l => l + "\n")));
 
@@ -229,6 +247,7 @@ public static class SettingsExport
     {
         var d = new ImportData();
         d.Sites = [.. s.Sites];
+        d.SiteGroups = s.SiteGroups is { Count: > 0 } ? new(s.SiteGroups) : null;
         d.Exclude = [.. s.Exclude];
         d.Subnets = [.. s.Subnets];
         d.SubnetsExclude = [.. s.SubnetsExclude];
