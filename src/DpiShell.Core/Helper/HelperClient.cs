@@ -411,6 +411,24 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public Task<StopForeignResult> StopForeignAsync(CancellationToken ct = default) => CallAsync<StopForeignResult>("stop_foreign", null, null, ct);
     public Task CoreRepairAsync(IProgress<string>? log = null, CancellationToken ct = default) => CallAsync("core_repair", null, MapLog(log), ct);
 
+    /// <summary>
+    /// «Указать архив ядра…» (API 1.17): байты файла — частями по <see cref="HelperCommands.MaxOfflineChunkBytes"/>, путь помощнику не передаётся.
+    /// Помощник ставит ядро, только если sha256 архива совпал с core.json.
+    /// </summary>
+    public async Task CoreOfflineAsync(Stream zip, IProgress<string>? log = null, CancellationToken ct = default)
+    {
+        var buf = new byte[HelperCommands.MaxOfflineChunkBytes];
+        bool first = true;
+        int n;
+        while ((n = await zip.ReadAtLeastAsync(buf, buf.Length, throwOnEndOfStream: false, ct)) > 0)
+        {
+            await CallAsync("core_offline_part", new { data = Convert.ToBase64String(buf, 0, n), first }, null, ct);
+            first = false;
+        }
+        if (first) throw new InvalidDataException(L.T("core.core.offline_missing"));
+        await CallAsync("core_offline_install", null, MapLog(log), ct);
+    }
+
     /// <summary>Обновить данные по манифесту: что и откуда качать, помощник решает сам (окно не передаёт ни адресов, ни путей).</summary>
     public Task<DataUpdateResult> UpdateDataAsync(bool confirmed = false, IProgress<string>? log = null, CancellationToken ct = default) =>
         CallAsync<DataUpdateResult>("data_update", new { confirmed }, MapLog(log), ct);

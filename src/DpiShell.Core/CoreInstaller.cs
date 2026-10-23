@@ -73,8 +73,71 @@ public sealed class CoreInstaller(AppPaths paths, CoreManifest manifest)
                 failure = new SecurityException(L.T("core.core.zip_hash", new { url, expected = manifest.ZipSha256, actual = zipHash }));
             }
             if (failure is not null) throw failure;
+            InstallVerifiedZip(zip, tmp, log);
+        }
+        finally
+        {
+            if (Directory.Exists(tmp)) Directory.Delete(tmp, true);
+        }
+    }
 
+    /// <summary>Предел офлайн-архива ядра (окно передаёт его помощнику частями): релиз bol-van — около 8 МБ.</summary>
+    public const long MaxOfflineZipBytes = 64L * 1024 * 1024;
+
+    /// <summary>Куда помощник собирает присланный окном архив (закрытая папка программы; окно сюда не пишет).</summary>
+    public string OfflineDir => Path.Combine(paths.Root, "core.offline");
+    public string OfflineZip => Path.Combine(OfflineDir, "core.zip");
+
+    /// <summary>
+    /// Часть офлайн-архива от окна: <paramref name="first"/> — начать заново. Возвращает размер собранного. Больше
+    /// <see cref="MaxOfflineZipBytes"/> — отказ и файл стирается. Это только байты в закрытой папке: ставится лишь то, что сойдётся с core.json.
+    /// </summary>
+    public long AppendOffline(ReadOnlySpan<byte> chunk, bool first)
+    {
+        paths.EnsureDirectories();
+        if (first && Directory.Exists(OfflineDir)) Directory.Delete(OfflineDir, true);
+        Directory.CreateDirectory(OfflineDir);
+        if (!first && !File.Exists(OfflineZip)) throw new InvalidOperationException(L.T("core.core.offline_missing"));
+        using (var fs = new FileStream(OfflineZip, first ? FileMode.Create : FileMode.Append, FileAccess.Write, FileShare.None))
+        {
+            if (fs.Length + chunk.Length > MaxOfflineZipBytes)
+            {
+                fs.Dispose();
+                Directory.Delete(OfflineDir, true);
+                throw new InvalidOperationException(L.T("core.core.offline_too_big", new { mb = MaxOfflineZipBytes / 1024 / 1024 }));
+            }
+            fs.Write(chunk);
+            return fs.Length;
+        }
+    }
+
+    /// <summary>
+    /// Поставить ядро из присланного архива (<see cref="AppendOffline"/>): тот же sha256 архива из манифеста и те же проверки каждого файла,
+    /// что у скачанного. Архив стирается в любом случае.
+    /// </summary>
+    public void InstallOffline(IProgress<string>? log = null)
+    {
+        try
+        {
+            if (!File.Exists(OfflineZip)) throw new InvalidOperationException(L.T("core.core.offline_missing"));
+            var hash = Sha256(OfflineZip);
+            if (!string.Equals(hash, manifest.ZipSha256, StringComparison.OrdinalIgnoreCase))
+                throw new SecurityException(L.T("core.core.offline_hash", new { version = manifest.Version }));
+            log?.Report(L.T("core.core.offline_ok", new { version = manifest.Version }));
+            InstallVerifiedZip(OfflineZip, OfflineDir, log);
+        }
+        finally
+        {
+            if (Directory.Exists(OfflineDir)) Directory.Delete(OfflineDir, true);
+        }
+    }
+
+    /// <summary>Архив уже сверен с манифестом: извлечь только перечисленные файлы во временную папку, сверить каждый и заменить ядро атомарно.</summary>
+    void InstallVerifiedZip(string zip, string tmp, IProgress<string>? log)
+    {
+        {
             var staged = Path.Combine(tmp, "core");
+            if (Directory.Exists(staged)) Directory.Delete(staged, true);
             Directory.CreateDirectory(staged);
             using (var archive = ZipFile.OpenRead(zip))
             {
@@ -97,10 +160,6 @@ public sealed class CoreInstaller(AppPaths paths, CoreManifest manifest)
             catch { if (Directory.Exists(backup)) Directory.Move(backup, paths.Core); throw; }
             if (Directory.Exists(backup)) Directory.Delete(backup, true);
             log?.Report(L.T("core.core.installed", new { version = manifest.Version }));
-        }
-        finally
-        {
-            if (Directory.Exists(tmp)) Directory.Delete(tmp, true);
         }
     }
 

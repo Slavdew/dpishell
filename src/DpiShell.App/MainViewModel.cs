@@ -294,23 +294,21 @@ public sealed partial class MainViewModel : Observable
             HelperState.Denied => L.T("shell.helper.ask_reinstall_user", new { problem = Helper.Problem }),
             _ => L.T("shell.helper.ask_install"),
         };
-        // Первая установка при работающем Защитнике: в том же вопросе — исключение для папки ядра (служба качает ядро сразу после установки).
-        if (AskInstallWithExclusion(question) is not { } avExclusion) { Message = L.T("shell.helper.view_only"); return null; }
-        if (!await InstallHelperAsync(avExclusion)) return null;
-        if (avExclusion) AfterAvAttempt(_av);
-        return Helper.Client;
+        if (!AskHelper(question)) { Message = L.T("shell.helper.view_only"); return null; }
+        if (!await InstallHelperAsync()) return null;
+        // Порядок первого запуска (ТЗ av-exclusion, п. 10): помощник уже стоит и ядро сам не качает — вопрос об исключении, затем скачивание.
+        return Helper.Client is { } c && await FirstRunCoreAsync(c, add: null) ? c : null;
     }
 
     /// <summary>Установка/обновление/переустановка: UAC → ожидание → подключение → данные помощника.</summary>
-    /// <param name="avExclusion">Установка до запуска службы добавит папку ядра в исключения Защитника (человек согласился).</param>
-    async Task<bool> InstallHelperAsync(bool avExclusion = false)
+    async Task<bool> InstallHelperAsync()
     {
         if (_installing) return false;
         _installing = true;
         Busy = true; BusyText = L.T("shell.helper.busy_install"); Message = L.T("shell.helper.confirm_prompt");
         UpdateStatus();
         SetupOutcome r;
-        try { r = await Helper.InstallAsync(avExclusion: avExclusion); }
+        try { r = await Helper.InstallAsync(); }
         catch (Exception e) { r = new(SetupResult.Failed, Texts.Friendly(e)); }
         finally
         {

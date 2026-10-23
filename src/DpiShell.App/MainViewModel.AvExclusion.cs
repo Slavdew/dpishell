@@ -7,8 +7,8 @@ namespace DpiShell.App;
 
 /// <summary>
 /// Карточка «Первый запуск» на Главной (ТЗ av-exclusion): исключение Защитника для папки ядра и «Восстановить» ядро на месте, без отсылки в «Диагностику».
-/// Исключение добавляет помощник (путь — свой, окно его не передаёт); до установки помощника — сама установка по ключу <c>--av-exclusion</c>,
-/// раньше, чем служба скачает ядро. Добавляется только по нажатию. Отказ Защитника или сторонний антивирус — ручной путь: папка выделяемым текстом,
+/// Исключение добавляет помощник (путь — свой, окно его не передаёт), только по нажатию. Порядок первого запуска (п. 10): установка помощника (UAC) →
+/// вопрос об исключении (добавляет уже помощник) → скачивание ядра; помощник после установки ядро сам не качает (<see cref="CoreWait"/>). Отказ Защитника или сторонний антивирус — ручной путь: папка выделяемым текстом,
 /// «Скопировать путь», «Открыть Защитник».
 /// </summary>
 public sealed partial class MainViewModel
@@ -66,6 +66,9 @@ public sealed partial class MainViewModel
 
     public bool ShowAvCard => AvOffer || AvManual || AvOk || AvCoreBad;
 
+    /// <summary>«Указать архив ядра…» — рядом с восстановлением: ядро не найдено или изменено (GitHub может не открываться).</summary>
+    public bool AvShowOffline => AvCoreBad;
+
     /// <summary>Что случилось или зачем исключение; только что добавили и ядро в порядке — текста нет, одна строка «✓».</summary>
     public string AvCardText => AvCoreBad
         ? L.T(_coreState == CoreState.Missing ? "home.av.core_missing" : "home.av.core_damaged")
@@ -90,7 +93,7 @@ public sealed partial class MainViewModel
     static readonly string[] AvProps =
     [
         nameof(AvOffer), nameof(AvManual), nameof(AvManualText), nameof(AvShowDefender), nameof(AvOk), nameof(AvNeedsUpdate),
-        nameof(AvShowRestore), nameof(ShowAvCard), nameof(AvCardText), nameof(AvHasText), nameof(AvAddText), nameof(AvPath),
+        nameof(AvShowRestore), nameof(ShowAvCard), nameof(AvShowOffline), nameof(AvCardText), nameof(AvHasText), nameof(AvAddText), nameof(AvPath),
     ];
 
     /// <summary>Сообщить окну то, что изменилось (Главная пересобирается часто — как <see cref="RaiseIssues"/>).</summary>
@@ -127,16 +130,56 @@ public sealed partial class MainViewModel
         RaiseAv();
     }
 
-    /// <summary>Перед первой установкой помощника: Защитник работает — вопрос в том же диалоге; «Отмена» — null.</summary>
-    bool? AskInstallWithExclusion(string question)
+    /// <summary>
+    /// Сразу после установки помощника: ядра нет — сначала исключение, потом скачивание (помощник ждёт этой команды, <see cref="CoreWait"/>).
+    /// Вопрос — только если главный антивирус Защитник и папки в исключениях нет (или список скрыт); отказ или закрытый вопрос — качать сразу.
+    /// <paramref name="add"/>: null — спросить, true — уже выбрано кнопкой карточки. False — ядро не скачалось (причина в строке состояния).
+    /// </summary>
+    async Task<bool> FirstRunCoreAsync(HelperClient c, bool? add)
     {
-        if (!HelperMissing || _avLocal?.State is not (AvStates.Missing or AvStates.Unknown)) return AskHelper(question) ? false : null;
-        int i = Choose(question + "\n\n" + L.T("home.av.ask"), [L.T("home.av.ask_add"), L.T("home.av.ask_skip")]);
-        return i switch { 0 => true, 1 => false, _ => null };
+        // Состояние ядра — из ответа помощника сразу после подключения (status), не из строки окна: она обновляется позже.
+        if ((Helper.Status?.Core ?? _coreState) != CoreState.Missing) return true;
+        if (AvSupported && _av?.State is AvStates.Missing or AvStates.Unknown)
+        {
+            add ??= Choose(L.T("home.av.ask"), [L.T("home.av.ask_add"), L.T("home.av.ask_skip")]) == 0;
+            if (add == true) await Step(L.T("home.av.busy"), () => AddExclusionAsync(c));
+        }
+        bool ok = await Step(L.T("home.av.busy_core"), async () =>
+        {
+            await c.CoreRepairAsync(new Progress<string>(s => Message = s));
+            await RefreshStatusAsync();
+        });
+        RaiseAv();
+        return ok;
+    }
+
+    /// <summary>Шаг первого запуска: под <see cref="Guard"/>, а если вызвавшая кнопка уже держит Busy — внутри неё, с той же обработкой ошибок.</summary>
+    async Task<bool> Step(string busyText, Func<Task> work)
+    {
+        if (!Busy) return await Guard(busyText, work);
+        try { Message = busyText; await work(); return true; }
+        catch (Exception e)
+        {
+            if (e is HelperUnavailableException u) Helper.MarkLost(u);
+            _error = Texts.Friendly(e);
+            Fail(_error, e);
+            return false;
+        }
+    }
+
+    /// <summary>Команда помощнику: исключение для его папки; отказ или сторонний антивирус — ручной путь на карточке.</summary>
+    async Task AddExclusionAsync(HelperClient c)
+    {
+        _avFail = null; _avFailProduct = null;
+        var r = await c.AvExclusionAddAsync();
+        _av = r.Status;
+        if (!r.Ok) { _avFail = r.Outcome == AvOutcomes.ThirdParty ? AvOutcomes.ThirdParty : AvOutcomes.Refused; _avFailProduct = r.Status.Product; }
+        else { _avJustAdded = r.Outcome == AvOutcomes.Added || _avJustAdded; Message = r.Message; }
+        RaiseAv();
     }
 
     /// <summary>
-    /// «Добавить в исключения» (и «…и восстановить», если ядро сломано). Помощника нет — установка с ключом --av-exclusion (исключение до первого скачивания ядра).
+    /// «Добавить в исключения» (и «…и восстановить», если ядро сломано). Помощника нет — установка, затем исключение и только потом скачивание ядра.
     /// Отказ Защитника или сторонний антивирус — ручной путь на карточке; восстановление при этом всё равно идёт, если его просили.
     /// </summary>
     async Task AvAddAsync()
@@ -144,21 +187,18 @@ public sealed partial class MainViewModel
         _avFail = null; _avFailProduct = null;
         if (HelperMissing)
         {
-            // Как у остальных кнопок со щитом: сначала «Нужен помощник» (один запрос прав), затем установка — она и добавит исключение.
+            // Как у остальных кнопок со щитом: сначала «Нужен помощник» (один запрос прав), затем установка; исключение добавит уже помощник, потом — ядро.
             if (!AskHelper(L.T("shell.helper.ask_install"))) { Message = L.T("shell.helper.view_only"); return; }
-            if (!await InstallHelperAsync(avExclusion: true)) { RaiseAv(); return; }
-            await RefreshAvAsync();
-            AfterAvAttempt(_av);
+            if (!await InstallHelperAsync() || Helper.Client is not { } fresh) { RaiseAv(); return; }
+            if ((Helper.Status?.Core ?? _coreState) == CoreState.Missing) await FirstRunCoreAsync(fresh, add: true);
+            else if (AvSupported && _av?.State is AvStates.Missing or AvStates.Unknown) await Step(L.T("home.av.busy"), () => AddExclusionAsync(fresh));
             return;
         }
         bool repair = AvCoreBad;
         await WithHelper(L.T(repair ? "about.core.busy" : "home.av.busy"), async c =>
         {
             if (!c.Compat.Supports(AvAddCommand)) { Message = L.T("home.av.update_helper"); return; }
-            var r = await c.AvExclusionAddAsync();
-            _av = r.Status;
-            if (!r.Ok) { _avFail = r.Outcome == AvOutcomes.ThirdParty ? AvOutcomes.ThirdParty : AvOutcomes.Refused; _avFailProduct = r.Status.Product; }
-            else { _avJustAdded = r.Outcome == AvOutcomes.Added || _avJustAdded; Message = r.Message; }
+            await AddExclusionAsync(c);
             if (repair)
             {
                 await c.CoreRepairAsync(new Progress<string>(s => Message = s));
@@ -166,15 +206,6 @@ public sealed partial class MainViewModel
             }
             await RefreshStatusAsync();
         });
-        RaiseAv();
-    }
-
-    /// <summary>После установки с ключом: исключения так и нет (Защитник не дал) — ручной путь.</summary>
-    void AfterAvAttempt(AvExclusionStatus? st)
-    {
-        if (st?.State == AvStates.Excluded) _avJustAdded = true;
-        else if (st?.State == AvStates.ThirdParty) { _avFail = AvOutcomes.ThirdParty; _avFailProduct = st.Product; }
-        else if (st?.State == AvStates.Missing) _avFail = AvOutcomes.Refused;
         RaiseAv();
     }
 }

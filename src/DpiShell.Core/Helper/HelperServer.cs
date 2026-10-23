@@ -389,6 +389,8 @@ public sealed class HelperServer : IAsyncDisposable
             case "hosts_restore": return await Task.Run(b.HostsRestore, ct);
             case "stop_foreign": return await Task.Run(b.StopForeign, ct);
             case "core_repair": await Task.Run(() => b.CoreRepairAsync(log, ct), ct); return null;
+            case "core_offline_part": return new { size = await Task.Run(() => b.CoreOfflinePart(c.Bytes("data")!, c.Bool("first")), ct) };
+            case "core_offline_install": await Task.Run(() => b.CoreOfflineInstallAsync(log, ct), ct); return null;
             case "remove_all": await Task.Run(b.RemoveAll, ct); return null;
             case "clear_history": return new { removed = await Task.Run(b.ClearHistory, ct) };
             case "read_results": return await Task.Run(b.ReadResults, ct);

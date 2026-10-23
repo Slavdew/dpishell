@@ -49,6 +49,10 @@ public interface IHelperBackend : IHelperCatalog
     HostsRestoreResult HostsRestore();
     StopForeignResult StopForeign();
     Task CoreRepairAsync(IProgress<string> log, CancellationToken ct);
+    /// <summary>Часть офлайн-архива ядра от окна (API 1.17): first — начать заново. Возвращает собранный размер. Только байты в закрытой папке.</summary>
+    long CoreOfflinePart(byte[] data, bool first);
+    /// <summary>Поставить ядро из собранного архива: sha256 архива — из core.json, дальше как у скачанного; обход перезапускается как при восстановлении.</summary>
+    Task CoreOfflineInstallAsync(IProgress<string> log, CancellationToken ct);
     void RemoveAll();
     int ClearHistory();
     ResultsSnapshot ReadResults();
@@ -490,15 +494,21 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
         return new(stopped, back);
     }
 
-    public Task CoreRepairAsync(IProgress<string> log, CancellationToken ct)
+    public Task CoreRepairAsync(IProgress<string> log, CancellationToken ct) => ReplaceCoreAsync(() => shell.RepairCoreAsync(log, ct));
+
+    public long CoreOfflinePart(byte[] data, bool first) => shell.Installer.AppendOffline(data, first);
+
+    public Task CoreOfflineInstallAsync(IProgress<string> log, CancellationToken ct) => ReplaceCoreAsync(() => shell.InstallOfflineAsync(log, ct));
+
+    /// <summary>Ядро меняется — работающий winws держит файлы; после замены обход возвращается.</summary>
+    Task ReplaceCoreAsync(Func<Task> install)
     {
-        // Ядро меняется — работающий winws держит файлы; после восстановления обход возвращается.
         bool wasOn = shell.State.Enabled && shell.IsActive;
         return Run();
         async Task Run()
         {
             if (wasOn) { if (shell.ServiceMode) shell.Service.Stop(); else shell.StopOwnProcess(); }
-            await shell.RepairCoreAsync(log, ct);
+            await install();
             if (wasOn && shell.State.StrategyId is { } id) shell.Enable(id);
         }
     }
