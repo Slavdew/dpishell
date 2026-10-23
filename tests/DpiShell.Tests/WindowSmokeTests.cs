@@ -1548,6 +1548,9 @@ public sealed partial class WindowSmokeTests
             vm.Net.ListsOpen = true;         // IP-списки — в свёрнутом «Дополнительно»
             var w = Open(vm);
             WaitUi(AvExclusionFlowTests.Probe(vm));
+            // Карточка «Драйвер перехвата не запустился» со своей «(i)».
+            typeof(MainViewModel).GetMethod("ShowGuidedCard", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                .Invoke(vm, [new GuidedState(GuidedKind.Driver)]);
             foreach (var (page, _) in AllPages.Append((Pages.Router, "router")))
             {
                 vm.GoTo(page);

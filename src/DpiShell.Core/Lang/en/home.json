@@ -278,5 +278,10 @@
   "home.guided.unknown": "Cause unknown. {error}",
   "home.guided.save_report": "Save report",
   "home.guided.report_issue": "Report a problem",
-  "home.guided.issue_title": "DpiShell error"
+  "home.guided.issue_title": "DpiShell error",
+  "home.guided.driver": "Windows did not let the interception driver start - optimization does not work without it.",
+  "home.guided.driver_open": "Open settings",
+  "home.guided.disk": "Low disk space on {disk}.",
+  "home.guided.disk_need": "Low disk space on {disk} - about {need} MB needed.",
+  "home.guided.disk_open": "Open Storage"
 }

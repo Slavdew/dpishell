@@ -273,6 +273,8 @@
                                                 Visibility="{Binding GuidedIsUnknown, Converter={StaticResource Vis}}" />
                                         <Button Content="{l:T home.guided.report_issue}" Command="{Binding ReportIssueCmd}" Margin="0,0,8,4" VerticalAlignment="Center"
                                                 Visibility="{Binding GuidedIsUnknown, Converter={StaticResource Vis}}" />
+                                        <local:InfoButton Topic="{x:Static local:InfoTexts.DriverBlock}" Margin="0,0,0,4" VerticalAlignment="Center"
+                                                          Visibility="{Binding GuidedIsDriver, Converter={StaticResource Vis}}" />
                                     </WrapPanel>
                                 </StackPanel>
                             </Border>

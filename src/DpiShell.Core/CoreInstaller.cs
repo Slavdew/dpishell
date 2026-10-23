@@ -161,6 +161,7 @@ public sealed class CoreInstaller(AppPaths paths, CoreManifest manifest)
                     string h;
                     // Распакованный файл удалили или закрыли сразу (обычно WinDivert64.sys или winws.exe) — антивирус, а не битый архив.
                     try { entry.ExtractToFile(target); Written?.Invoke(target); h = Sha256(target); }
+                    catch (IOException e) when (DiskSpace.IsDiskFull(e)) { throw new InvalidOperationException(DiskSpace.Message(DiskSpace.DiskOf(target)), e); }
                     catch (Exception e) when (AvBlock.IsVanished(e)) { throw new AvBlockedException(L.T("core.av.what.file", new { name }), target, e); }
                     if (!string.Equals(h, hash, StringComparison.OrdinalIgnoreCase))
                         throw new SecurityException(L.T("core.core.file_hash", new { name }));
@@ -198,6 +199,11 @@ public sealed class CoreInstaller(AppPaths paths, CoreManifest manifest)
             catch (Exception e) when (AvBlock.IsVirusError(e) || e is UnauthorizedAccessException)
             {
                 throw new AvBlockedException(L.T("core.av.what.zip"), file, e);
+            }
+            // Диск полон — повтор не поможет: сразу понятная причина (окно покажет «Мало места на диске»).
+            catch (IOException e) when (DiskSpace.IsDiskFull(e))
+            {
+                throw new InvalidOperationException(DiskSpace.Message(DiskSpace.DiskOf(file)), e);
             }
             // 4xx (файла нет) повтором не лечится — сразу к запасному адресу.
             catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException && !ct.IsCancellationRequested

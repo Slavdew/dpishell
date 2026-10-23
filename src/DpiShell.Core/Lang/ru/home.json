@@ -280,5 +280,10 @@
   "home.guided.unknown": "Причина не определена. {error}",
   "home.guided.save_report": "Сохранить отчёт",
   "home.guided.report_issue": "Написать о проблеме",
-  "home.guided.issue_title": "Ошибка в DpiShell"
+  "home.guided.issue_title": "Ошибка в DpiShell",
+  "home.guided.driver": "Windows не дала запустить драйвер перехвата — без него оптимизация не работает.",
+  "home.guided.driver_open": "Открыть настройку",
+  "home.guided.disk": "Мало места на диске {disk}.",
+  "home.guided.disk_need": "Мало места на диске {disk} — нужно ≈{need} МБ.",
+  "home.guided.disk_open": "Открыть «Память»"
 }

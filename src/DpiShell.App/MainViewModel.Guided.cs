@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows.Input;
 using DpiShell.Core;
 using DpiShell.Core.Helper;
@@ -5,10 +6,10 @@ using DpiShell.Core.Helper;
 namespace DpiShell.App;
 
 /// <summary>Вид карточки «Почему не получилось» на Главной.</summary>
-public enum GuidedKind { NoInternet, Portal, Clock, Uac, NetChanged, Finding, Unknown }
+public enum GuidedKind { NoInternet, Portal, Clock, Uac, NetChanged, Finding, Driver, DiskFull, Unknown }
 
 /// <summary>Состояние карточки: данные, из которых текст собирается при показе (язык окна меняется на лету).</summary>
-public sealed record GuidedState(GuidedKind Kind, TimeSpan Skew = default, string? Url = null, SystemFinding? Finding = null, string? Error = null, Func<Task>? Retry = null);
+public sealed record GuidedState(GuidedKind Kind, TimeSpan Skew = default, string? Url = null, SystemFinding? Finding = null, string? Error = null, Func<Task>? Retry = null, string? Disk = null, long? NeedMb = null);
 
 /// <summary>
 /// «Окно само ведёт» (docs/dev/architecture.md, «Общие ошибки»): когда «Включить», «Подобрать» или «Проверить сайт» не удались, вместо общей ошибки
@@ -53,6 +54,9 @@ public sealed partial class MainViewModel
         { Kind: GuidedKind.Uac } => L.T("home.guided.uac"),
         { Kind: GuidedKind.NetChanged } => L.T("home.guided.net_changed"),
         { Kind: GuidedKind.Finding, Finding: { } f } => L.T("home.guided.finding", new { title = f.Refreshed().Title, text = f.Refreshed().Text }),
+        { Kind: GuidedKind.Driver } => L.T("home.guided.driver"),
+        { Kind: GuidedKind.DiskFull, NeedMb: { } n } g => L.T("home.guided.disk_need", new { disk = g.Disk, need = n }),
+        { Kind: GuidedKind.DiskFull } g => L.T("home.guided.disk", new { disk = g.Disk }),
         { Kind: GuidedKind.Unknown } g => L.T("home.guided.unknown", new { error = g.Error ?? "" }),
         _ => "",
     };
@@ -66,11 +70,15 @@ public sealed partial class MainViewModel
         { Kind: GuidedKind.NetChanged } => L.T("home.guided.select"),
         { Kind: GuidedKind.Finding, Finding.Go: SystemFinding.GoProxy } => L.T("home.guided.open_proxy"),
         { Kind: GuidedKind.Finding } => L.T("home.guided.open_diag"),
+        { Kind: GuidedKind.Driver } => L.T("home.guided.driver_open"),
+        { Kind: GuidedKind.DiskFull } => L.T("home.guided.disk_open"),
         _ => "",
     };
 
     public bool GuidedHasAction => GuidedActionText.Length > 0 && !(_guided is { Kind: GuidedKind.NoInternet or GuidedKind.Uac, Retry: null });
     /// <summary>Причина неизвестна: «Сохранить отчёт» и «Написать о проблеме» вместо кнопки исправления.</summary>
+    /// <summary>Драйвер не запустился из-за защиты Windows: рядом с кнопкой «(i)» — что это и чем рискует выключение.</summary>
+    public bool GuidedIsDriver => _guided is { Kind: GuidedKind.Driver };
     public bool GuidedIsUnknown => _guided is { Kind: GuidedKind.Unknown };
 
     public ICommand GuidedActionCmd => _guidedActionCmd ??= RelayCommand.Async(GuidedActionAsync, () => _guided is not null && !Busy);
@@ -118,7 +126,7 @@ public sealed partial class MainViewModel
 
     void RaiseGuided()
     {
-        foreach (var p in new[] { nameof(Guided), nameof(ShowGuided), nameof(GuidedTitle), nameof(GuidedText), nameof(GuidedActionText), nameof(GuidedHasAction), nameof(GuidedIsUnknown) }) Raise(p);
+        foreach (var p in new[] { nameof(Guided), nameof(ShowGuided), nameof(GuidedTitle), nameof(GuidedText), nameof(GuidedActionText), nameof(GuidedHasAction), nameof(GuidedIsUnknown), nameof(GuidedIsDriver) }) Raise(p);
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -151,6 +159,12 @@ public sealed partial class MainViewModel
                 Page = Pages.Select;
                 await StartSelectAsync();
                 break;
+            case GuidedKind.Driver:
+                OpenWithFallback(CoreIsolation, SecurityHome);
+                break;
+            case GuidedKind.DiskFull:
+                OpenWithFallback(StorageSettings, SettingsHome);
+                break;
             case GuidedKind.Finding:
                 if (g.Finding?.Go == SystemFinding.GoProxy) GoProxyCmd.Execute(null); else Page = Pages.Diag;
                 break;
@@ -158,6 +172,22 @@ public sealed partial class MainViewModel
     }
 
     const string TimeSettings = "ms-settings:dateandtime";
+    /// <summary>«Безопасность Windows» → «Безопасность устройства» → «Изоляция ядра» (Windows 10 1803+ и 11); запасной — главная «Безопасности Windows».</summary>
+    public const string CoreIsolation = "windowsdefender://coreisolation";
+    public const string SecurityHome = "windowsdefender://";
+    /// <summary>«Параметры» → «Память» (Windows 10 1703+ и 11); запасной — главная «Параметров».</summary>
+    public const string StorageSettings = "ms-settings:storagesense";
+    public const string SettingsHome = "ms-settings:";
+
+    /// <summary>Открыть адрес; система не нашла обработчик (старая сборка) — запасной. В тестах открывается подмена, один раз, без запасного.</summary>
+    void OpenWithFallback(string target, string fallback)
+    {
+        if (LinkOpener is { } open) { open(target); return; }
+        try { UiGuard.CheckOpen(target); Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
+        catch (System.ComponentModel.Win32Exception) { OpenLink(fallback); }
+        catch (InvalidOperationException) { OpenLink(fallback); }
+    }
+
 
     /// <summary>«Синхронизировать время»: помощник делает w32tm /resync; не вышло (или помощник старый) — «Параметры → Время».</summary>
     async Task SyncTimeAsync()
@@ -220,10 +250,20 @@ public sealed partial class MainViewModel
     async Task DiagnoseFailureAsync(string error)
     {
         if (!GuidedEnabled || _guided is not null) return;
+        // Причина видна прямо в тексте ошибки (код драйвера, «не хватает места») — сеть и находки не спрашиваем.
+        if (FromErrorText(error) is { } known) { ShowGuidedCard(known); CauseFound(); return; }
         if (await DiagnoseNetworkAsync()) { CauseFound(); return; }
         var findings = await Task.Run(() => SystemFindings is { } f ? f() : SystemChecks.Run(_shell.Paths));
         if (findings.FirstOrDefault(x => !x.Ok) is { } bad) { ShowGuidedCard(new(GuidedKind.Finding, Finding: bad)); CauseFound(); }
         else ShowGuidedCard(new(GuidedKind.Unknown, Error: error));
+    }
+
+    /// <summary>Причина по тексту ошибки: драйвер перехвата заблокирован защитой Windows; не хватает места на диске. Иначе null.</summary>
+    internal static GuidedState? FromErrorText(string? error)
+    {
+        if (WinwsFailure.IsDriverBlocked(error)) return new(GuidedKind.Driver, Error: error);
+        if (DiskSpace.TryParse(error, out var disk, out var need)) return new(GuidedKind.DiskFull, Error: error, Disk: disk, NeedMb: need);
+        return null;
     }
 
     /// <summary>Причина найдена — общая «Ошибка» в карточке статуса и тост не нужны: причина и кнопка уже на месте.</summary>

@@ -16,6 +16,16 @@ public static partial class WinwsFailure
     public static int? DriverCode(string output) =>
         DriverCodeRx().Match(output) is { Success: true } m && int.TryParse(m.Groups[1].Value, out var c) ? c : null;
 
+    /// <summary>
+    /// Windows отказалась загружать драйвер по защите, а не из-за файла или антивируса: 577 (ERROR_INVALID_IMAGE_HASH — подпись не принята,
+    /// «Целостность памяти»), 1275 (ERROR_DRIVER_BLOCKED — драйвер в списке блокировки), 1260 (ERROR_ACCESS_DISABLED_BY_POLICY — политика).
+    /// Текст ошибки приходит от помощника строкой, поэтому ищем и по русскому «код», и по английскому «code».
+    /// </summary>
+    public static bool IsDriverBlocked(string? error) => error is { Length: > 0 } && DriverBlockedRx().IsMatch(error);
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"(?is)windivert[^\r\n]*?(?:code|код)\s*(?:577|1275|1260)\b")]
+    private static partial System.Text.RegularExpressions.Regex DriverBlockedRx();
+
     public static string? Explain(string output) => DriverCode(output) switch
     {
         null => null,
@@ -24,6 +34,7 @@ public static partial class WinwsFailure
         5 => L.T("core.winws.driver.denied"),
         577 => L.T("core.winws.driver.signature"),
         1275 => L.T("core.winws.driver.blocked"),
+        1260 => L.T("core.winws.driver.policy"),
         var c => L.T("core.winws.driver.other", new { code = c }),
     };
 }
