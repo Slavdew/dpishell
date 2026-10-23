@@ -116,7 +116,7 @@ public static class RouterInstallDialog
         input.Children.Add(password);
         var noPassword = new CheckBox { Content = L.T("router.password.none"), Margin = new Thickness(0, 2, 0, 6), HorizontalAlignment = HorizontalAlignment.Left };
         noPassword.Checked += (_, _) => { password.Clear(); password.IsEnabled = false; };
-        noPassword.Unchecked += (_, _) => { password.IsEnabled = true; password.Focus(); };
+        noPassword.Unchecked += (_, _) => { password.IsEnabled = true; System.Windows.Input.FocusManager.SetFocusedElement(w, password); };
         input.Children.Add(noPassword);
         if (vm.Router.HasSavedPassword) input.Children.Add(DialogKit.Hint(L.T("router.password.empty_hint"), new Thickness(0, 0, 0, 6)));
         input.Children.Add(RouterLoginDialog.AddressExpander(vm.Router));
@@ -211,7 +211,8 @@ public static class RouterInstallDialog
             e.Cancel = true;
         };
         w.Closed += (_, _) => password.Clear();
-        w.Loaded += (_, _) => password.Focus();
+        // Логический фокус, не Focus(): тот активирует окно, даже показанное без активации (тесты отнимали фокус у владельца).
+        System.Windows.Input.FocusManager.SetFocusedElement(w, password);
         return w;
     }
 }

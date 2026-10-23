@@ -61,7 +61,7 @@ public sealed class LangRouterWindowTests : IDisposable
         {
             d.WindowStartupLocation = WindowStartupLocation.Manual;
             d.Left = d.Top = -20000;
-            d.ShowActivated = false;
+            d.ShowActivated = false; d.ShowInTaskbar = false;
             d.Show();
             Pump();
             return d;

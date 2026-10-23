@@ -292,7 +292,7 @@ public sealed class TransferWindowTests : IDisposable
                     var w = TransferView.Create(model);
                     w.WindowStartupLocation = WindowStartupLocation.Manual;
                     w.Left = w.Top = -20000;
-                    w.ShowActivated = false;
+                    w.ShowActivated = false; w.ShowInTaskbar = false;
                     w.Show();
                     Pump();
                     CyrillicScan.CheckIfEn(w, "transfer-" + name);

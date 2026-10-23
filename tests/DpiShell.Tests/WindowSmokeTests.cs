@@ -711,7 +711,7 @@ public sealed partial class WindowSmokeTests
                         var login = RouterLoginDialog.Create(vm.Router, null);
                         login.WindowStartupLocation = WindowStartupLocation.Manual;
                         login.Left = login.Top = -20000;
-                        login.ShowActivated = false;
+                        login.ShowActivated = false; login.ShowInTaskbar = false;
                         login.Show();
                         Pump();
                         if (Find<Button>(login, b => b.IsDefault && b.Content as string == "Войти") is null || Find<Button>(login, b => b.IsCancel) is null || Find<PasswordBox>(login) is null)
@@ -734,7 +734,7 @@ public sealed partial class WindowSmokeTests
                             ], L.T("router.both.footer"), "HomeIcon.Router"), _ => { });
                             ask.WindowStartupLocation = WindowStartupLocation.Manual;
                             ask.Left = ask.Top = -20000;
-                            ask.ShowActivated = false;
+                            ask.ShowActivated = false; ask.ShowInTaskbar = false;
                             ask.Show();
                             Pump();
                             if (Find<Button>(ask, b => b.IsCancel) is null || FindAll<Button>(ask, b => b.Style == (Style)w.FindResource("ChoiceCard")).Count() != 3)
@@ -1401,7 +1401,7 @@ public sealed partial class WindowSmokeTests
                 {
                     d.WindowStartupLocation = WindowStartupLocation.Manual;
                     d.Left = d.Top = -20000;
-                    d.ShowActivated = false;
+                    d.ShowActivated = false; d.ShowInTaskbar = false;
                     d.Show();
                     Pump();
                     return d;

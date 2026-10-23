@@ -46,7 +46,7 @@ public static class RouterLoginDialog
         // У свежей OpenWrt пароль root не задан (UX-аудит 2, п. 11): явный выбор, а не «пустое поле», — пустое поле значит «взять сохранённый».
         var noPassword = new CheckBox { Content = L.T("router.password.none"), Margin = new Thickness(0, 2, 0, 6), HorizontalAlignment = HorizontalAlignment.Left };
         noPassword.Checked += (_, _) => { password.Clear(); password.IsEnabled = false; };
-        noPassword.Unchecked += (_, _) => { password.IsEnabled = true; password.Focus(); };
+        noPassword.Unchecked += (_, _) => { password.IsEnabled = true; System.Windows.Input.FocusManager.SetFocusedElement(w, password); };
         panel.Children.Add(noPassword);
         // «Поле пустое — вход с сохранённым» — только когда сохранённый есть.
         var note = new TextBlock
@@ -80,9 +80,10 @@ public static class RouterLoginDialog
             if (router.Connected) { w.Close(); return; }
             error.Text = router.ConnectionText;
             error.Visibility = Visibility.Visible;
-            password.Focus();
+            System.Windows.Input.FocusManager.SetFocusedElement(w, password);
         };
-        w.Loaded += (_, _) => password.Focus();
+        // Логический фокус, не Focus(): тот активирует окно, даже показанное без активации (тесты отнимали фокус у владельца).
+        System.Windows.Input.FocusManager.SetFocusedElement(w, password);
         return w;
     }
 
