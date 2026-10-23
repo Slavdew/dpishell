@@ -60,7 +60,7 @@
   "settings.changes.summary_none": "Отменять было нечего.",
   "settings.changes.summary": "Возвращено: {restored} · уже было как раньше: {same} · пропущено: {skipped} · не удалось: {failed}",
   "settings.changes.question": "Пункты «пропущено» после DpiShell изменили вы или другая программа. При необходимости их можно вернуть вручную.",
-  "settings.changes.question_failed": "Пункты «не удалось» остаются в списке: устраните причину (например, закройте программу, которая заняла hosts) и нажмите «Отменить всё» ещё раз.",
+  "settings.changes.question_failed": "Пункты «не удалось» остаются в списке: устраните причину (например, закройте программу, которая заняла hosts) и нажмите «Повторить».",
   "settings.changes.row.undo": "Отменить",
   "settings.changes.row.undo_import": "Отменить загрузку настроек",
   "settings.changes.row.old_helper": "Отдельно — после обновления помощника.",

@@ -73,7 +73,7 @@ public partial class MainWindow : Window
     /// <summary>Прокрутить страницу к месту; к выбору DNS — ещё и раскрыть список вариантов.</summary>
     public void ShowSpot(Spot spot)
     {
-        FrameworkElement target = spot == Spot.PcDns ? PcDnsPicker : StrategiesBlock;
+        FrameworkElement target = spot switch { Spot.PcDns => PcDnsPicker, Spot.IpLists => IpListsBlock, _ => StrategiesBlock };
         if (!target.IsVisible) return;
         UpdateLayout();
         DependencyObject? up = target;

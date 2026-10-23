@@ -10,8 +10,13 @@ namespace DpiShell.Core.Helper;
 /// </summary>
 public sealed class HelperInstaller(AppPaths paths)
 {
-    public const string DisplayName = "DpiShell — помощник";
-    public const string Description = "Выполняет действия DpiShell, которым нужны права администратора (оптимизация соединения, подбор, hosts). Управляется окном DpiShell.";
+    /// <summary>Имя и описание в «Службах» — на языке окна при установке (ключ --lang); имя службы <see cref="HelperProtocol.ServiceName"/> не меняется (аудит-2, П-17).</summary>
+    public static string DisplayName => L.T("core.helper.svc.name");
+    public static string Description => L.T("core.helper.svc.description");
+    /// <summary>Ключ к --install-helper: язык окна (<c>--lang=en</c>) — на нём журнал установки и имя службы в «Службах».</summary>
+    public const string LangArg = "--lang=";
+    public static string? LangFrom(IEnumerable<string> args) =>
+        args.FirstOrDefault(a => a.StartsWith(LangArg, StringComparison.OrdinalIgnoreCase)) is { } a ? a[LangArg.Length..] : null;
     public const string OwnerFile = "owner.sid";
 
     public static string HelperDir(AppPaths p) => Path.Combine(p.Root, "helper");

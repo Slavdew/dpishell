@@ -168,7 +168,7 @@ public partial class App : Application
         return args[0] switch
         {
             "--helper" => HelperEntry.RunService(args),
-            "--install-helper" => HelperEntry.Install(args.Length > 1 ? args[1] : null, log),
+            "--install-helper" => HelperEntry.Install(args.Length > 1 && !args[1].StartsWith("--") ? args[1] : null, log, HelperInstaller.LangFrom(args.Skip(1))),
             "--uninstall-helper" => HelperEntry.Uninstall(log, purge: args.Skip(1).Contains(HelperLink.PurgeArg)),
             _ => null,
         };

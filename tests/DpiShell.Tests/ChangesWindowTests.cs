@@ -97,6 +97,33 @@ public sealed class ChangesWindowTests : IDisposable
     }
 
     [Fact]
+    public async Task Failed_items_offer_retry_which_reruns_without_asking_again()
+    {
+        await using var f = new HelperFixture();
+        f.Backend.ChangesValue.Add(Info("aaaaaaaaaaaa", "Закомментированы чужие строки в файле hosts", 5));
+        var vm = TestWindow.Model(NewShell(), await f.LinkAsync());
+        int asked = 0;
+        vm.Changes.Confirm = _ => { asked++; return true; };
+        await vm.Changes.RefreshAsync();
+
+        // hosts занят — пункт остался, в отчёте «Повторить» (аудит-2, П-12).
+        f.Backend.UndoAnswer = UndoStatus.Failed;
+        Assert.True(await vm.Changes.UndoAllAsync());
+        Assert.True(vm.Changes.CanRetry);
+        Assert.True(vm.Changes.RetryCmd.CanExecute(null));
+        Assert.Contains(L.T("common.retry"), vm.Changes.Question);
+
+        // Причину убрали — повтор без второго вопроса, пункт отменён, кнопка ушла.
+        f.Backend.UndoAnswer = UndoStatus.Restored;
+        vm.Changes.RetryCmd.Execute(null);
+        for (int i = 0; i < 100 && vm.Changes.HasItems; i++) await Task.Delay(20);
+        Assert.Equal(1, asked);
+        Assert.Equal(2, f.Backend.Calls.Count(c => c == "changes_undo_all"));
+        Assert.Empty(vm.Changes.Items);
+        Assert.False(vm.Changes.CanRetry);
+    }
+
+    [Fact]
     public async Task Declined_confirm_does_nothing()
     {
         await using var f = new HelperFixture();

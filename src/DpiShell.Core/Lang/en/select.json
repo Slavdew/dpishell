@@ -65,6 +65,7 @@
   "select.best.of_checked_partial": "Best of those checked: {name} — {ok} of {total} open",
   "select.addr.next": "Next: try “All addresses” for 10 minutes (“Games & apps” → “IP lists”), a router or a VPN.",
   "select.addr.next_router": "Next: try “All addresses” for 10 minutes on the PC (“Games & apps” → “IP lists”) or a VPN.",
+  "select.addr.go": "Open IP lists",
   "select.deep.none": "No suitable strategy found — new ones can be searched for.",
   "select.deep.partial": "Not everything opened — new strategies can be searched for.",
   "select.result.nothing_blocked": "Everything opens without optimization: it is not needed, or a VPN is on.",

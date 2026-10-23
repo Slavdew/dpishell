@@ -73,6 +73,18 @@ public class HelperProtocolTests
         Assert.Contains(why, Rejected(json), StringComparison.OrdinalIgnoreCase);
 
     [Fact]
+    public void Rejections_follow_request_language()
+    {
+        // Отказ виден в «Подробнее» английского окна — на языке поля lang (аудит-2, П-18); без поля — по-русски, как раньше.
+        Assert.Equal("Unknown command “nope”.", Rejected("""{"id":7,"cmd":"nope","lang":"en"}"""));
+        Assert.Equal("Неизвестная команда «nope».", Rejected("""{"id":7,"cmd":"nope"}"""));
+        var en = Rejected("""{"id":3,"cmd":"enable","args":{"strategy":"no-such"},"lang":"en"}""");
+        Assert.Equal("enable.strategy: no such strategy in the catalog.", en);
+        Assert.DoesNotMatch("[А-Яа-яЁё]", Rejected("""{"id":3,"cmd":"dns_set","args":{"preset":"custom"},"lang":"en"}"""));
+        Assert.DoesNotContain("core.req.", Rejected("""{"id":3,"cmd":"enable","args":{},"lang":"en"}"""));
+    }
+
+    [Fact]
     public void Id_is_reported_back_when_readable()
     {
         var e = Assert.Throws<HelperRequestException>(() => Parse("""{"id":7,"cmd":"nope"}"""));

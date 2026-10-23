@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -270,49 +271,51 @@ public static partial class HelperCommands
             if (node is JsonObject probe) _ = probe.Count;   // объект разбирается лениво — повтор ключа всплыл бы позже
         }
         catch (Exception e) when (e is JsonException or ArgumentException or InvalidOperationException)
-        { throw new HelperRequestException(0, "Запрос — не JSON или с повтором полей."); }
-        if (node is not JsonObject o) throw new HelperRequestException(0, "Запрос должен быть JSON-объектом.");
+        { throw new HelperRequestException(0, L.T("core.req.not_json")); }
+        if (node is not JsonObject o) throw new HelperRequestException(0, L.T("core.req.not_object"));
+        // Отказы — на языке окна (поле lang, API 1.13), как и остальные ответы: окно показывает их в «Подробнее» (аудит-2, П-18).
+        using var scope = L.Scope(o["lang"] is JsonValue lpeek && lpeek.TryGetValue<string>(out var lcode) && LangRx().IsMatch(lcode) ? lcode : null);
 
         long id = 0;
         if (o["id"] is JsonValue idv && idv.TryGetValue<long>(out var parsed) && parsed > 0) id = parsed;
-        else throw new HelperRequestException(0, "Нет поля id (целое число больше нуля).");
+        else throw new HelperRequestException(0, L.T("core.req.no_id"));
 
         foreach (var (k, _) in o)
-            if (!TopLevel.Contains(k)) throw new HelperRequestException(id, $"Лишнее поле «{Short(k)}».");
+            if (!TopLevel.Contains(k)) throw new HelperRequestException(id, L.T("core.req.extra_field", new { name = Short(k) }));
 
         // lang (API 1.13): код языка окна для ответа; неузнанный помощником код ничего не меняет.
         string? lang = null;
         if (o["lang"] is { } lv)
         {
             if (lv is not JsonValue lval || !lval.TryGetValue<string>(out lang) || !LangRx().IsMatch(lang) || lang.Length > 16)
-                throw new HelperRequestException(id, "lang: нужен код языка, например ru или en.");
+                throw new HelperRequestException(id, L.T("core.req.lang"));
         }
 
         if (o["cmd"] is not JsonValue cv || !cv.TryGetValue<string>(out var cmd))
-            throw new HelperRequestException(id, "Нет поля cmd.");
+            throw new HelperRequestException(id, L.T("core.req.no_cmd"));
         if (!Specs.TryGetValue(cmd, out var spec))
-            throw new HelperRequestException(id, $"Неизвестная команда «{Short(cmd)}».");
+            throw new HelperRequestException(id, L.T("core.req.unknown_cmd", new { name = Short(cmd) }));
 
         if (spec.Name == "cancel")
         {
-            if (o.ContainsKey("args")) throw new HelperRequestException(id, "У cancel нет аргументов — только target.");
+            if (o.ContainsKey("args")) throw new HelperRequestException(id, L.T("core.req.cancel_args"));
             if (o["target"] is not JsonValue tv || !tv.TryGetValue<long>(out var target) || target <= 0)
-                throw new HelperRequestException(id, "cancel: нужен target — id отменяемого запроса.");
+                throw new HelperRequestException(id, L.T("core.req.cancel_target"));
             return new HelperCall(id, spec, new Dictionary<string, object>(), target) { Lang = lang };
         }
-        if (o.ContainsKey("target")) throw new HelperRequestException(id, "Лишнее поле «target».");
+        if (o.ContainsKey("target")) throw new HelperRequestException(id, L.T("core.req.extra_field", new { name = "target" }));
 
         var args = new Dictionary<string, object>();
         var raw = o["args"];
-        if (raw is not null and not JsonObject) throw new HelperRequestException(id, "args должен быть объектом.");
+        if (raw is not null and not JsonObject) throw new HelperRequestException(id, L.T("core.req.args_object"));
         var a = raw as JsonObject ?? [];
         foreach (var (k, _) in a)
-            if (!spec.Args.Any(s => s.Name == k)) throw new HelperRequestException(id, $"{cmd}: лишнее поле «{Short(k)}».");
+            if (!spec.Args.Any(s => s.Name == k)) throw new HelperRequestException(id, L.T("core.req.arg_extra", new { cmd, name = Short(k) }));
         foreach (var s in spec.Args)
         {
             if (!a.TryGetPropertyValue(s.Name, out var v) || v is null)
             {
-                if (s.Required) throw new HelperRequestException(id, $"{cmd}: нет обязательного поля «{s.Name}».");
+                if (s.Required) throw new HelperRequestException(id, L.T("core.req.arg_required", new { cmd, name = s.Name }));
                 continue;
             }
             args[s.Name] = Check(id, cmd, s, v, catalog);
@@ -323,22 +326,22 @@ public static partial class HelperCommands
         {
             bool fromContent = (string)args["from"] == "content";
             if (fromContent != args.ContainsKey("content"))
-                throw new HelperRequestException(id, fromContent ? "ipset_update: нет содержимого списка." : "ipset_update: content — только при from = content.");
+                throw new HelperRequestException(id, fromContent ? L.T("core.req.ipset_no_content") : L.T("core.req.ipset_content_only"));
         }
         // dns_set: адреса и шаблон — только у своего варианта, и тогда адреса обязательны.
         if (spec.Name == "dns_set")
         {
             bool custom = (string)args["preset"] == DnsPresets.Custom;
-            if (custom && !args.ContainsKey("ips")) throw new HelperRequestException(id, "dns_set: у своего варианта нужны адреса.");
+            if (custom && !args.ContainsKey("ips")) throw new HelperRequestException(id, L.T("core.req.dns_need_ips"));
             if (!custom && (args.ContainsKey("ips") || args.ContainsKey("doh")))
-                throw new HelperRequestException(id, "dns_set: ips и doh — только при preset = custom.");
+                throw new HelperRequestException(id, L.T("core.req.dns_custom_only"));
         }
         // rec_start: pid нужен только для режима «process» (и тогда обязателен).
         if (spec.Name == "rec_start")
         {
             bool process = (string)args["mode"] == "process";
             if (process != args.ContainsKey("pid"))
-                throw new HelperRequestException(id, process ? "rec_start: для режима process нужен pid." : "rec_start: pid — только для режима process.");
+                throw new HelperRequestException(id, process ? L.T("core.req.rec_need_pid") : L.T("core.req.rec_pid_only"));
         }
         // proxy_*_set: включить — адрес или PAC обязателен; выключить — без значений и без галочки WinHTTP-адресов.
         if (spec.Name is "proxy_user_set" or "proxy_machine_set")
@@ -346,11 +349,11 @@ public static partial class HelperCommands
             bool on = (bool)args["enabled"];
             bool values = args.ContainsKey("server") || args.ContainsKey("pac") || args.ContainsKey("bypass");
             if (on && !args.ContainsKey("server") && !args.ContainsKey("pac"))
-                throw new HelperRequestException(id, $"{spec.Name}: нужен адрес прокси или адрес автонастройки.");
-            if (!on && values) throw new HelperRequestException(id, $"{spec.Name}: при enabled = false адрес, исключения и PAC не передаются.");
+                throw new HelperRequestException(id, L.T("core.req.proxy_need", new { cmd = spec.Name }));
+            if (!on && values) throw new HelperRequestException(id, L.T("core.req.proxy_off_values", new { cmd = spec.Name }));
         }
         if (spec.Name == "app_profile_set" && !args.ContainsKey("tcp") && !args.ContainsKey("udp"))
-            throw new HelperRequestException(id, "app_profile_set: нужны порты TCP или UDP.");
+            throw new HelperRequestException(id, L.T("core.req.ports_need"));
         return new HelperCall(id, spec, args) { Lang = lang };
     }
 
@@ -361,26 +364,26 @@ public static partial class HelperCommands
         {
             case ArgKind.Bool:
                 if (v is JsonValue bv && bv.GetValueKind() is JsonValueKind.True or JsonValueKind.False) return bv.GetValue<bool>();
-                throw new HelperRequestException(id, $"{Where()}: нужно true или false.");
+                throw new HelperRequestException(id, L.T("core.req.bool", new { where = Where() }));
 
             case ArgKind.StrategyId:
             {
                 var str = String(id, Where(), v, 64);
                 if (!IdRx().IsMatch(str) || !catalog.StrategyIds.Contains(str))
-                    throw new HelperRequestException(id, $"{Where()}: нет такой стратегии в каталоге.");
+                    throw new HelperRequestException(id, L.T("core.req.no_strategy", new { where = Where() }));
                 return str;
             }
 
             case ArgKind.GroupIds:
             {
-                if (v is not JsonArray arr || arr.Count > MaxGroups) throw new HelperRequestException(id, $"{Where()}: нужен список групп.");
+                if (v is not JsonArray arr || arr.Count > MaxGroups) throw new HelperRequestException(id, L.T("core.req.groups_list", new { where = Where() }));
                 var list = new List<string>();
                 foreach (var item in arr)
                 {
                     var g = item is null ? "" : String(id, Where(), item, 64);
                     if (!IdRx().IsMatch(g) || !catalog.GroupIds.Contains(g))
-                        throw new HelperRequestException(id, $"{Where()}: нет такой группы целей.");
-                    if (list.Contains(g)) throw new HelperRequestException(id, $"{Where()}: группа указана дважды.");
+                        throw new HelperRequestException(id, L.T("core.req.no_group", new { where = Where() }));
+                    if (list.Contains(g)) throw new HelperRequestException(id, L.T("core.req.group_twice", new { where = Where() }));
                     list.Add(g);
                 }
                 return list;
@@ -389,22 +392,22 @@ public static partial class HelperCommands
             case ArgKind.Choice:
             {
                 var str = String(id, Where(), v, 32);
-                if (!s.Choices!.Contains(str)) throw new HelperRequestException(id, $"{Where()}: допустимо {string.Join(", ", s.Choices!)}.");
+                if (!s.Choices!.Contains(str)) throw new HelperRequestException(id, L.T("core.req.choices", new { where = Where(), choices = string.Join(", ", s.Choices!) }));
                 return str;
             }
 
             case ArgKind.Lines:
             {
-                if (v is not JsonArray arr) throw new HelperRequestException(id, $"{Where()}: нужен список строк.");
-                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, $"{Where()}: больше {s.MaxItems} строк.");
+                if (v is not JsonArray arr) throw new HelperRequestException(id, L.T("core.req.string_list", new { where = Where() }));
+                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, L.T("core.req.too_many_lines", new { where = Where(), max = s.MaxItems }));
                 var list = new List<string>(arr.Count);
                 foreach (var item in arr)
                 {
-                    if (item is null) throw new HelperRequestException(id, $"{Where()}: пустой элемент.");
+                    if (item is null) throw new HelperRequestException(id, L.T("core.req.empty_item", new { where = Where() }));
                     var line = String(id, Where(), item, MaxLineLength);
                     // Домены и подсети не содержат ни обратного слеша, ни кавычек, ни управляющих символов.
                     if (ForbiddenInLineRx().IsMatch(line))
-                        throw new HelperRequestException(id, $"{Where()}: строка похожа на путь или командную строку.");
+                        throw new HelperRequestException(id, L.T("core.req.path_like", new { where = Where() }));
                     list.Add(line);
                 }
                 return list;
@@ -413,15 +416,15 @@ public static partial class HelperCommands
             case ArgKind.HostEntries:
             case ArgKind.PublicHostEntries:
             {
-                if (v is not JsonArray arr) throw new HelperRequestException(id, $"{Where()}: нужен список строк.");
-                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, $"{Where()}: больше {s.MaxItems} строк.");
+                if (v is not JsonArray arr) throw new HelperRequestException(id, L.T("core.req.string_list", new { where = Where() }));
+                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, L.T("core.req.too_many_lines", new { where = Where(), max = s.MaxItems }));
                 var list = new List<string>(arr.Count);
                 foreach (var item in arr)
                 {
-                    if (item is null) throw new HelperRequestException(id, $"{Where()}: пустой элемент.");
+                    if (item is null) throw new HelperRequestException(id, L.T("core.req.empty_item", new { where = Where() }));
                     var line = String(id, Where(), item, MaxLineLength);
                     if (!HostsPaste.TryEntry(line, s.Kind == ArgKind.PublicHostEntries, out var e))
-                        throw new HelperRequestException(id, $"{Where()}: «{Short(line)}» — не пара «адрес имя».");
+                        throw new HelperRequestException(id, L.T("core.req.hosts_pair", new { where = Where(), value = Short(line) }));
                     var canon = $"{e.Ip} {e.Host}";
                     if (!list.Contains(canon)) list.Add(canon);
                 }
@@ -430,14 +433,14 @@ public static partial class HelperCommands
 
             case ArgKind.HostLineIds:
             {
-                if (v is not JsonArray arr) throw new HelperRequestException(id, $"{Where()}: нужен список строк.");
-                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, $"{Where()}: больше {s.MaxItems} строк.");
+                if (v is not JsonArray arr) throw new HelperRequestException(id, L.T("core.req.string_list", new { where = Where() }));
+                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, L.T("core.req.too_many_lines", new { where = Where(), max = s.MaxItems }));
                 var list = new List<string>(arr.Count);
                 foreach (var item in arr)
                 {
                     var line = item is null ? "" : String(id, Where(), item, 20);
-                    if (!HostsText.TryParseId(line, out _, out _)) throw new HelperRequestException(id, $"{Where()}: «{Short(line)}» — не «номер:отпечаток».");
-                    if (list.Contains(line)) throw new HelperRequestException(id, $"{Where()}: строка указана дважды.");
+                    if (!HostsText.TryParseId(line, out _, out _)) throw new HelperRequestException(id, L.T("core.req.hosts_id", new { where = Where(), value = Short(line) }));
+                    if (list.Contains(line)) throw new HelperRequestException(id, L.T("core.req.line_twice", new { where = Where() }));
                     list.Add(line);
                 }
                 return list;
@@ -446,20 +449,20 @@ public static partial class HelperCommands
             case ArgKind.Content:
             {
                 var str = String(id, Where(), v, MaxContentChars);
-                if (str.Contains('\0')) throw new HelperRequestException(id, $"{Where()}: недопустимые символы.");
+                if (str.Contains('\0')) throw new HelperRequestException(id, L.T("core.req.bad_chars", new { where = Where() }));
                 return str;
             }
 
             case ArgKind.IpAddresses:
             {
                 if (v is not JsonArray arr || arr.Count == 0 || arr.Count > s.MaxItems)
-                    throw new HelperRequestException(id, $"{Where()}: нужно от 1 до {s.MaxItems} адресов.");
+                    throw new HelperRequestException(id, L.T("core.req.ips_count", new { where = Where(), max = s.MaxItems }));
                 var list = new List<string>();
                 foreach (var item in arr)
                 {
                     var raw = item is null ? "" : String(id, Where(), item, 45);
-                    var ip = DnsValues.NormalizeIp(raw) ?? throw new HelperRequestException(id, $"{Where()}: «{Short(raw)}» — не адрес IPv4/IPv6.");
-                    if (list.Contains(ip)) throw new HelperRequestException(id, $"{Where()}: адрес указан дважды.");
+                    var ip = DnsValues.NormalizeIp(raw) ?? throw new HelperRequestException(id, L.T("core.req.not_ip", new { where = Where(), value = Short(raw) }));
+                    if (list.Contains(ip)) throw new HelperRequestException(id, L.T("core.req.ip_twice", new { where = Where() }));
                     list.Add(ip);
                 }
                 return list;
@@ -468,55 +471,55 @@ public static partial class HelperCommands
             case ArgKind.DohTemplate:
             {
                 var str = String(id, Where(), v, DnsValues.MaxTemplate);
-                if (!DnsValues.IsDohTemplate(str)) throw new HelperRequestException(id, $"{Where()}: нужен адрес вида https://сервер/путь.");
+                if (!DnsValues.IsDohTemplate(str)) throw new HelperRequestException(id, L.T("core.req.doh", new { where = Where() }));
                 return str;
             }
 
             case ArgKind.Title:
             {
                 var str = String(id, Where(), v, StrategyExchange.MaxTitle);
-                if (str.Any(char.IsControl)) throw new HelperRequestException(id, $"{Where()}: управляющие знаки в названии.");
+                if (str.Any(char.IsControl)) throw new HelperRequestException(id, L.T("core.req.control_chars", new { where = Where() }));
                 return str;
             }
 
             case ArgKind.Int:
             {
                 if (v is not JsonValue iv || !iv.TryGetValue<int>(out var n) || n < 0 || n > s.MaxItems)
-                    throw new HelperRequestException(id, $"{Where()}: нужно целое число от 0 до {s.MaxItems}.");
+                    throw new HelperRequestException(id, L.T("core.req.int_range", new { where = Where(), max = s.MaxItems }));
                 return n;
             }
 
             case ArgKind.Ports:
             {
                 var str = String(id, Where(), v, 200);
-                return AppProfiles.NormalizePorts(str) ?? throw new HelperRequestException(id, $"{Where()}: порты записаны неверно (пример: 443,27015-27030).");
+                return AppProfiles.NormalizePorts(str) ?? throw new HelperRequestException(id, L.T("core.req.ports", new { where = Where() }));
             }
 
             case ArgKind.ProfileId:
             {
                 var str = String(id, Where(), v, 16);
-                if (!AppProfiles.IsValidId(str)) throw new HelperRequestException(id, $"{Where()}: неверный номер профиля.");
+                if (!AppProfiles.IsValidId(str)) throw new HelperRequestException(id, L.T("core.req.profile_id", new { where = Where() }));
                 return str;
             }
 
             case ArgKind.ChangeId:
             {
                 var str = String(id, Where(), v, 12);
-                if (!ChangeIdRx().IsMatch(str)) throw new HelperRequestException(id, $"{Where()}: неверный номер записи журнала.");
+                if (!ChangeIdRx().IsMatch(str)) throw new HelperRequestException(id, L.T("core.req.change_id", new { where = Where() }));
                 return str;
             }
 
             case ArgKind.ProxyServer:
             {
                 var str = String(id, Where(), v, ProxyValues.MaxServerLength);
-                return ProxyValues.NormalizeServer(str) ?? throw new HelperRequestException(id, $"{Where()}: нужен адрес вида хост:порт (или схема=хост:порт;…).");
+                return ProxyValues.NormalizeServer(str) ?? throw new HelperRequestException(id, L.T("core.req.proxy_server", new { where = Where() }));
             }
 
             case ArgKind.ProxyBypass:
             {
                 var str = String(id, Where(), v, 2_000);
                 var (value, ok) = ProxyValues.NormalizeBypass(str);
-                if (!ok || value is null) throw new HelperRequestException(id, $"{Where()}: исключения — имена и маски через «;».");
+                if (!ok || value is null) throw new HelperRequestException(id, L.T("core.req.proxy_bypass", new { where = Where() }));
                 return value;
             }
 
@@ -524,32 +527,32 @@ public static partial class HelperCommands
             {
                 var str = String(id, Where(), v, ProxyValues.MaxPacLength);
                 var (value, ok) = ProxyValues.NormalizePac(str);
-                if (!ok || value is null) throw new HelperRequestException(id, $"{Where()}: нужна ссылка http:// или https://.");
+                if (!ok || value is null) throw new HelperRequestException(id, L.T("core.req.pac", new { where = Where() }));
                 return value;
             }
 
             case ArgKind.AdvancedRows:
             {
-                if (v is not JsonArray arr) throw new HelperRequestException(id, $"{Where()}: нужен список строк.");
-                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, $"{Where()}: больше {s.MaxItems} строк.");
+                if (v is not JsonArray arr) throw new HelperRequestException(id, L.T("core.req.string_list", new { where = Where() }));
+                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, L.T("core.req.too_many_lines", new { where = Where(), max = s.MaxItems }));
                 var rows = new List<AdvancedRowInput>(arr.Count);
                 for (int i = 0; i < arr.Count; i++)
                 {
-                    if (arr[i] is not JsonObject row) throw new HelperRequestException(id, $"{Where()}[{i}]: нужен объект {{domains, strategy}}.");
+                    if (arr[i] is not JsonObject row) throw new HelperRequestException(id, L.T("core.req.adv_row", new { where = $"{Where()}[{i}]", shape = "{domains, strategy}" }));
                     foreach (var (k, _) in row)
-                        if (k is not ("domains" or "strategy")) throw new HelperRequestException(id, $"{Where()}[{i}]: лишнее поле «{Short(k)}».");
+                        if (k is not ("domains" or "strategy")) throw new HelperRequestException(id, L.T("core.req.arg_extra", new { cmd = $"{Where()}[{i}]", name = Short(k) }));
                     if (row["domains"] is not JsonArray ds || ds.Count is 0 or > AdvancedSites.MaxDomains)
-                        throw new HelperRequestException(id, $"{Where()}[{i}].domains: от 1 до {AdvancedSites.MaxDomains} сайтов.");
+                        throw new HelperRequestException(id, L.T("core.req.adv_domains_count", new { where = $"{Where()}[{i}].domains", max = AdvancedSites.MaxDomains }));
                     var domains = new List<string>(ds.Count);
                     foreach (var item in ds)
                     {
                         var d = item is null ? "" : String(id, Where(), item, 253);
-                        if (!AdvancedSites.IsDomain(d)) throw new HelperRequestException(id, $"{Where()}[{i}].domains: «{Short(d)}» — не сайт вида example.com.");
+                        if (!AdvancedSites.IsDomain(d)) throw new HelperRequestException(id, L.T("core.req.not_site", new { where = $"{Where()}[{i}].domains", value = Short(d) }));
                         if (!domains.Contains(d)) domains.Add(d);
                     }
                     var strategy = row["strategy"] is { } sn ? String(id, Where(), sn, 64) : AdvancedSites.Auto;
                     if (strategy is not (AdvancedSites.Auto or AdvancedSites.Direct) && (!IdRx().IsMatch(strategy) || !catalog.StrategyIds.Contains(strategy)))
-                        throw new HelperRequestException(id, $"{Where()}[{i}].strategy: нужно auto, direct или стратегия из каталога.");
+                        throw new HelperRequestException(id, L.T("core.req.adv_strategy", new { where = $"{Where()}[{i}].strategy" }));
                     rows.Add(new(domains, strategy));
                 }
                 return rows;
@@ -557,13 +560,13 @@ public static partial class HelperCommands
 
             case ArgKind.Domains:
             {
-                if (v is not JsonArray arr) throw new HelperRequestException(id, $"{Where()}: нужен список сайтов.");
-                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, $"{Where()}: больше {s.MaxItems} сайтов.");
+                if (v is not JsonArray arr) throw new HelperRequestException(id, L.T("core.req.site_list", new { where = Where() }));
+                if (arr.Count > s.MaxItems) throw new HelperRequestException(id, L.T("core.req.too_many_sites", new { where = Where(), max = s.MaxItems }));
                 var list = new List<string>(arr.Count);
                 foreach (var item in arr)
                 {
                     var d = item is null ? "" : String(id, Where(), item, 253);
-                    if (!AdvancedSites.IsDomain(d)) throw new HelperRequestException(id, $"{Where()}: «{Short(d)}» — не сайт вида example.com.");
+                    if (!AdvancedSites.IsDomain(d)) throw new HelperRequestException(id, L.T("core.req.not_site", new { where = Where(), value = Short(d) }));
                     if (!list.Contains(d)) list.Add(d);
                 }
                 return list;
@@ -580,7 +583,7 @@ public static partial class HelperCommands
             case ArgKind.Roles:
             {
                 if (v is not JsonObject ro || ro.Count == 0 || ro.Count > WinwsArgs.RoleOrder.Length)
-                    throw new HelperRequestException(id, $"{Where()}: нужен объект «роль: параметры».");
+                    throw new HelperRequestException(id, L.T("core.req.roles_object", new { where = Where() }));
                 var roles = new Dictionary<string, string>();
                 foreach (var (role, node) in ro)
                 {
@@ -591,14 +594,14 @@ public static partial class HelperCommands
                 return roles;
             }
         }
-        throw new HelperRequestException(id, $"{Where()}: неизвестный тип аргумента.");
+        throw new HelperRequestException(id, L.T("core.req.unknown_kind", new { where = Where() }));
     }
 
     static string String(long id, string where, JsonNode v, int max)
     {
-        if (v is not JsonValue sv || sv.GetValueKind() != JsonValueKind.String) throw new HelperRequestException(id, $"{where}: нужна строка.");
+        if (v is not JsonValue sv || sv.GetValueKind() != JsonValueKind.String) throw new HelperRequestException(id, L.T("core.req.string", new { where }));
         var s = sv.GetValue<string>();
-        if (s.Length == 0 || s.Length > max) throw new HelperRequestException(id, $"{where}: пустая или слишком длинная строка.");
+        if (s.Length == 0 || s.Length > max) throw new HelperRequestException(id, L.T("core.req.string_len", new { where }));
         return s;
     }
 

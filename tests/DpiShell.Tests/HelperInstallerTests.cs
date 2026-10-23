@@ -1,5 +1,6 @@
 using DpiShell.Core;
 using DpiShell.Core.Helper;
+using DpiShell.Core.Localization;
 
 namespace DpiShell.Tests;
 
@@ -19,6 +20,28 @@ public class HelperInstallerTests
         // Путь с пробелами разбирается Windows обратно в exe + ключ.
         var parsed = Native.ParseCommandLine(HelperInstaller.BinPath(@"C:\Program Data\Dpi Shell\helper\DpiShell.exe"));
         Assert.Equal([@"C:\Program Data\Dpi Shell\helper\DpiShell.exe", "--helper"], parsed);
+    }
+
+    [Fact]
+    public void Display_name_and_description_follow_window_language_service_name_stays()
+    {
+        using (L.Scope(L.En))
+        {
+            var a = HelperInstaller.ScCreateArgs(Exe);
+            Assert.Equal("DpiShellHelper", a[1]);
+            Assert.Equal("DpiShell Helper", a[Array.IndexOf(a, "DisplayName=") + 1]);
+            Assert.DoesNotMatch("[А-Яа-яЁё]", HelperInstaller.ScDescriptionArgs()[2]);
+            Assert.Equal("DpiShell Helper", HelperInstaller.ScConfigArgs(Exe)[Array.IndexOf(HelperInstaller.ScConfigArgs(Exe), "DisplayName=") + 1]);
+        }
+        using (L.Scope(L.Ru))
+            Assert.Equal("DpiShell — помощник", HelperInstaller.ScCreateArgs(Exe)[Array.IndexOf(HelperInstaller.ScCreateArgs(Exe), "DisplayName=") + 1]);
+    }
+
+    [Fact]
+    public void Install_lang_arg_is_parsed_from_command_line()
+    {
+        Assert.Equal("en", HelperInstaller.LangFrom(["S-1-5-21-1-2-3-1001", HelperInstaller.LangArg + "en"]));
+        Assert.Null(HelperInstaller.LangFrom(["S-1-5-21-1-2-3-1001"]));
     }
 
     [Fact]

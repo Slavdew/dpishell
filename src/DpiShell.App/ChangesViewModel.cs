@@ -85,6 +85,13 @@ public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window)
     public ICommand UndoAllCmd => _undoAll ??= RelayCommand.Async(() => UndoAllAsync(), () => HasItems);
     ICommand? _undoAll;
 
+    /// <summary>Как повторить то, что дало отчёт: отмену пункта — тем же пунктом; null — «Отменить всё».</summary>
+    Func<Task<bool>>? _retry;
+    /// <summary>«Повторить» в отчёте: есть «не удалось», а пункты ещё в списке (аудит-2, П-12). Вопрос уже задан — повтор без него.</summary>
+    public bool CanRetry => HasItems && _lastReport is { } r && r.Any(i => i.Status == UndoStatus.Failed);
+    public ICommand RetryCmd => _retryCmd ??= RelayCommand.Async(() => (_retry ?? (() => UndoAllAsync(ask: false)))(), () => CanRetry);
+    ICommand? _retryCmd;
+
     static string When(DateTime utc) => L.LongDate(utc.ToLocalTime()) + ", " + L.Time(utc.ToLocalTime());
 
     /// <summary>После отмены (всего или пункта): окно перечитывает то, что показывает из данных помощника.</summary>
@@ -183,6 +190,7 @@ public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window)
         });
         if (!ran) return false;
         Show(all);
+        _retry = () => RunOneAsync(fromHelper, id, group);
         await RefreshAsync();
         await AfterUndo();
         Say(Summary);
@@ -199,7 +207,7 @@ public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window)
 
     void RaiseShape()
     {
-        Raise(nameof(HasItems)); Raise(nameof(ShowEmpty)); Raise(nameof(HasReport)); Raise(nameof(CountText));
+        Raise(nameof(HasItems)); Raise(nameof(ShowEmpty)); Raise(nameof(HasReport)); Raise(nameof(CountText)); Raise(nameof(CanRetry));
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -221,6 +229,7 @@ public sealed class ChangesViewModel(HelperLink helper, ChangeUndoEngine window)
         });
         if (!ran) return false;
         Show(all);
+        _retry = null;   // повтор — снова «Отменить всё»
         _lastAllReport = all;
         await RefreshAsync();
         await AfterUndo();

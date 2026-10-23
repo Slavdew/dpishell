@@ -85,16 +85,17 @@ public sealed partial class ServiceManager(AppPaths paths) : IServiceOps
             var rec = Recorder.Begin(ChangeKinds.Service, L.T("core.svc.journal"),
                 new System.Text.Json.Nodes.JsonObject { ["exists"] = false },
                 new System.Text.Json.Nodes.JsonObject { ["exe"] = paths.Winws });
-            try { Check(Sc("create", Name, "binPath=", bin, "DisplayName=", "DpiShell DPI bypass", "start=", "auto"), L.T("core.svc.sc_create")); }
+            try { Check(Sc("create", Name, "binPath=", bin, "DisplayName=", L.T("core.svc.name"), "start=", "auto"), L.T("core.svc.sc_create")); }
             catch { Recorder.Abort(rec); throw; }
             Recorder.Done(rec);
         }
         else
         {
             Stop();
-            Check(Sc("config", Name, "binPath=", bin, "start=", "auto"), L.T("core.svc.sc_config"));
+            Check(Sc("config", Name, "binPath=", bin, "DisplayName=", L.T("core.svc.name"), "start=", "auto"), L.T("core.svc.sc_config"));
         }
-        Sc("description", Name, "Оптимизация соединения (zapret winws), управляется приложением DpiShell");
+        // Имя и описание в «Службах» — на языке окна, приславшего запрос (L.Scope помощника, API 1.13).
+        Sc("description", Name, L.T("core.svc.description"));
         Sc("failure", Name, "reset=", "60", "actions=", "restart/5000/restart/5000/none/0");
         Check(Sc("start", Name), L.T("core.svc.sc_start"));
     }

@@ -1,3 +1,4 @@
+using DpiShell.Core.Localization;
 using System.Security.Principal;
 using System.ServiceProcess;
 
@@ -139,8 +140,10 @@ public static class HelperEntry
     /// <paramref name="userSid"/> — SID пользователя окна: при вводе пароля другого администратора в UAC процесс
     /// установки работает от его имени, поэтому окно передаёт свой SID явно. null — SID текущего процесса.
     /// </summary>
-    public static int Install(string? userSid = null, IProgress<string>? log = null)
+    /// <param name="lang">Язык окна (--lang=): на нём журнал установки и имя службы; нет — по языку Windows.</param>
+    public static int Install(string? userSid = null, IProgress<string>? log = null, string? lang = null)
     {
+        using var scope = L.Scope(lang ?? L.DefaultFor(System.Globalization.CultureInfo.CurrentUICulture));
         try
         {
             var sid = userSid is null ? WindowsIdentity.GetCurrent().User! : new SecurityIdentifier(userSid);
