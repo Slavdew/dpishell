@@ -64,6 +64,10 @@ public sealed class FakeHelperBackend : IHelperBackend
 
     public bool TcpTimestampsOn() { Call("tcp_timestamps_on"); return true; }
 
+    /// <summary>Итог time_sync в тесте; по умолчанию часы синхронизированы.</summary>
+    public TimeSyncResult TimeSyncValue { get; set; } = new(true, "");
+    public TimeSyncResult TimeSync() { Call("time_sync"); return TimeSyncValue; }
+
     /// <summary>enable/disable меняют то, что отвечает status (оптимизация на ПК включена/выключена); по умолчанию — нет.</summary>
     public bool TrackEnabled { get; set; }
 

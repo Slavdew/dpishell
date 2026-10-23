@@ -319,7 +319,9 @@ public sealed partial class MainViewModel : Observable
         switch (r.Result)
         {
             case SetupResult.Declined:
-                Fail(L.T("shell.helper.declined"));
+                // «Включить» или «Подобрать» без прав: не ошибка, а карточка с причиной и «Повторить» (docs/dev/architecture.md, «Общие ошибки»).
+                if (_retry is { } again) { ShowGuidedCard(new(GuidedKind.Uac, Retry: again)); Message = ""; }
+                else Fail(L.T("shell.helper.declined"));
                 return false;
             case SetupResult.Failed:
                 Fail(L.T("shell.helper.install_failed", new { error = r.Error }));
@@ -1053,11 +1055,15 @@ public sealed partial class MainViewModel : Observable
 
     public async Task EnableAsync()
     {
+        ClearGuided();
         // Роутер уже обходит для всего дома — двойная обработка ломает сайты (router-api §6): подобрать там или выключить там.
         if (!IsRunning && !await RouterGateAsync(select: false)) return;
         // Роутер не отвечает, а человек включает обход здесь — его выбор: при следующем старте окно этот обход не выключит.
         if (!Router.Found) Router.ForgetBypass();
-        await EnableCoreAsync();
+        _error = null;
+        await WithRetry(EnableAsync, EnableCoreAsync);
+        // Сорвалось с ошибкой (не конфликт с чужой программой — для него своя вкладка): окно само ищет причину и ведёт к исправлению.
+        if (_error is { } failed && _guided is null && Page != Pages.Diag) await DiagnoseFailureAsync(failed);
     }
 
     Task EnableCoreAsync()
@@ -1201,6 +1207,11 @@ public sealed partial class MainViewModel : Observable
             if (gen == _checkGen) Checking = false;
         }
         await RefreshStatusAsync();
+        if (result is not null && gen == _checkGen)
+        {
+            if (FailingCheckGroups() is null) { if (_guided is { Kind: not GuidedKind.Uac }) ClearGuided(); await RememberNetworkStrategyAsync(); }
+            else if (_guided is null) await DiagnoseNetworkAsync();   // не открылось: может, дело не в стратегии, а в сети или времени
+        }
         return result;
     }
 
@@ -1425,7 +1436,11 @@ public sealed partial class MainViewModel : Observable
     {
         if (Busy) return;
         if (!AnyChecked()) return;
-        if (await NeedHelperAsync() is not { } c) return;
+        // Нет интернета, вход в сеть или сбитое время: подбор не начинаем — «ни одна не подошла» тут было бы неверным выводом.
+        if (!await NetworkAllowsSelectAsync()) return;
+        HelperClient? c = null;
+        await WithRetry(StartSelectAsync, async () => c = await NeedHelperAsync());
+        if (c is null) return;
         // Свои сайты проверяем после подключения: до установки их у помощника ещё нет.
         if (!await SaveDraftBeforeSelectAsync()) return;
         if (TakeGroups() is not { } ids) return;
@@ -1449,9 +1464,10 @@ public sealed partial class MainViewModel : Observable
             UpdateStatus();
         });
         var quick = Quick;
+        bool selectOk = false;
         try
         {
-            await Guard(L.T("select.busy.select"), async () =>
+            selectOk = await Guard(L.T("select.busy.select"), async () =>
             {
                 try { ShowReport(await c.SelectAsync(quick, ids, progress, cts.Token, CheckDnsMode)); }
                 catch (OperationCanceledException) { ResultText = L.T("select.stopped"); }
@@ -1464,6 +1480,7 @@ public sealed partial class MainViewModel : Observable
             SelectProgressText = "";
             UpdateStatus();
         }
+        if (!selectOk && _error is { } selectFailed && Page != Pages.Diag) await DiagnoseFailureAsync(selectFailed);
         await AutoApplyAsync();
         await RefreshStatusAsync();
         await RouterResumeAsync();
@@ -1985,8 +2002,11 @@ public sealed partial class MainViewModel : Observable
             // Проверки окружения (§4) и временные метки — только чтение: netsh show, sc query, реестр, процессы.
             var (ts, findings) = await Task.Run(() => (TcpTimestamps.IsEnabled(), SystemChecks.Run(_shell.Paths)));
             TimestampsTextIs(() => TimestampsLine(ts));
+            // Telegram: одна TCP-проба, на подбор не влияет (docs: telegram-check). Без пробы (тесты) строки нет.
+            var all = findings.ToList();
+            if (TelegramTcp is { } tcp) all.Add(TelegramFinding(await TelegramCheck.RunAsync(tcp)));
             Findings.Clear();
-            foreach (var f in findings) Findings.Add(new FindingRow(f.Ok, f.Title, f.Text, f.Go, f));
+            foreach (var f in all) Findings.Add(new FindingRow(f.Ok, f.Title, f.Text, f.Go, f));
             OnHelperChanged();
             var updated = DateTime.Now;
             DiagUpdatedIs(() => L.T("diag.updated", new { time = L.Time(updated) }));

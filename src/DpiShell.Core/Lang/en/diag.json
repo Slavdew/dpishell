@@ -170,5 +170,9 @@
   "diag.report.sites.groups": "Groups of own sites: {n}",
   "diag.report.sites.exclude": "Exclusions: {n}",
   "diag.report.log.unavailable": "unavailable (helper not responding or an older version)",
-  "diag.report.log.empty": "empty"
+  "diag.report.log.empty": "empty",
+  "diag.find.telegram.title": "Telegram",
+  "diag.find.telegram.blocked": "the addresses are blocked entirely — optimization will not help here, a proxy is needed (MTProto or SOCKS5 in Telegram settings).",
+  "diag.find.telegram.open": "the servers are reachable. If Telegram does not work, check the selection.",
+  "diag.find.telegram.unknown": "not checked — no internet access."
 }

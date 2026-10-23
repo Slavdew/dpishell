@@ -259,7 +259,25 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- «Первый запуск» (ТЗ av-exclusion): исключение Защитника для папки ядра и «Восстановить» ядро на месте; отказ — ручной путь
+                            <!-- «Почему не получилось»: на месте сорвавшегося действия (Включить, Подобрать, Проверить сайт) — причина и одна кнопка исправления;
+                                 причина неизвестна — «Сохранить отчёт» и «Написать о проблеме» (docs/dev/architecture.md, «Общие ошибки»). -->
+                            <Border Style="{StaticResource Card}" Padding="18,12" Margin="0,0,0,12" Visibility="{Binding ShowGuided, Converter={StaticResource Vis}}"
+                                    AutomationProperties.Name="{Binding GuidedTitle}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding GuidedTitle}" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding GuidedText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
+                                    <WrapPanel Margin="0,8,0,0">
+                                        <Button Content="{Binding GuidedActionText}" Command="{Binding GuidedActionCmd}" Margin="0,0,8,4" VerticalAlignment="Center"
+                                                Visibility="{Binding GuidedHasAction, Converter={StaticResource Vis}}" />
+                                        <Button Content="{l:T home.guided.save_report}" Command="{Binding SaveReportCmd}" Margin="0,0,8,4" VerticalAlignment="Center"
+                                                Visibility="{Binding GuidedIsUnknown, Converter={StaticResource Vis}}" />
+                                        <Button Content="{l:T home.guided.report_issue}" Command="{Binding ReportIssueCmd}" Margin="0,0,8,4" VerticalAlignment="Center"
+                                                Visibility="{Binding GuidedIsUnknown, Converter={StaticResource Vis}}" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- «Первый запуск» (ТЗ av-exclusion):исключение Защитника для папки ядра и «Восстановить» ядро на месте; отказ — ручной путь
                                  (папка выделяемым текстом, «Скопировать путь», «Открыть Защитник»). Видна, пока не выполнено. -->
                             <Border Style="{StaticResource Card}" Padding="18,12" Margin="0,0,0,12" Visibility="{Binding ShowAvCard, Converter={StaticResource Vis}}"
                                     AutomationProperties.Name="{l:T home.av.aria}">
