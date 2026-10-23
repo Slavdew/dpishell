@@ -182,7 +182,7 @@ public static class RouterTexts
             "auto_selected" => w.Text?.StartsWith("Сторож", StringComparison.Ordinal) == true ? L.T("router.wd.select_found", new { name }) : L.T("web.warn.auto_selected", new { name }),
             "watchdog_select_failed" => L.T("router.wd.select_failed"),
             "auto_select_failed" => L.T("web.warn.auto_select_failed"),
-            "strategy_failing" => L.T(WarningTs(w) ? "web.warn.strategy_failing_ts" : "web.warn.strategy_failing"),
+            "strategy_failing" => L.T("web.warn.strategy_failing"),
             "switched_backup" => L.T("web.warn.switched_backup", new { name }),
             "dns_fallback" => L.T("web.warn.dns_fallback"),
             "dns_spoofed" => L.T("web.warn.dns_spoofed"),
@@ -192,10 +192,6 @@ public static class RouterTexts
     }
 
     static readonly System.Text.RegularExpressions.Regex OldNameRx = new(@"(?:включена запасная|^Автоподбор включил|подобрал и включил) (.+?)\.?$", System.Text.RegularExpressions.RegexOptions.Compiled);
-
-    /// <summary>strategy_failing: проверка шла со стратегией на метках TCP (params.ts).</summary>
-    static bool WarningTs(RouterWarning w) =>
-        w.Params is not null && w.Params.TryGetValue("ts", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.True;
 
     /// <summary>Когда случилось, если новый роутер прислал время в params (unix-секунды).</summary>
     public static DateTime? WarningTime(RouterWarning w) => RouterPhrase.Time(w.Params);

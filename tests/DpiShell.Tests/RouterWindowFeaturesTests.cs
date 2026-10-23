@@ -695,15 +695,12 @@ public sealed class RouterWindowFeaturesTests : IDisposable
     }
 
     [Fact]
-    public void Warning_StrategyFailing_TextByParams_AndSelectAction()
+    public void Warning_StrategyFailing_TextByCode_AndSelectAction()
     {
         static RouterWarning W(string json) => System.Text.Json.JsonSerializer.Deserialize<RouterWarning>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
-        var plain = RouterTexts.Warning(W("""{ "code": "strategy_failing", "text": "x", "params": { "strategy": "alt1", "ts": false } }"""));
+        var plain = RouterTexts.Warning(W("""{ "code": "strategy_failing", "text": "x", "params": { "strategy": "alt1" } }"""));   // без key — перевод по коду
         Assert.Equal(L.T("web.warn.strategy_failing"), plain.Text);
         Assert.Equal(L.T("router.select"), plain.Fix);
-        var ts = RouterTexts.Warning(W("""{ "code": "strategy_failing", "text": "x", "params": { "strategy": "alt9", "ts": true } }"""));
-        Assert.Equal(L.T("web.warn.strategy_failing_ts"), ts.Text);
-        Assert.Contains("(обычно Windows)", ts.Text);
     }
 
     [Fact]

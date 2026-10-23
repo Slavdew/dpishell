@@ -16,7 +16,6 @@
   "web.warn.dns_spoofed": "Провайдер подменяет адреса сайтов — приложения вне браузера могут не работать",
   "web.warn.select_failed": "Подбор прервался: {error}",
   "web.warn.strategy_failing": "Стратегия не проходит проверку — нужен подбор",
-  "web.warn.strategy_failing_ts": "Стратегия не проходит проверку — нужен подбор. Не работает для устройств без TCP timestamps (обычно Windows)",
   "web.warn.switched_backup": "Стратегия перестала работать — включена запасная {name}",
   "web.core.missing": "Ядро zapret не установлено",
   "web.diag.conflict_row": "{name} — мешает оптимизации",

@@ -820,12 +820,21 @@ function check_run(source, light) {
 	let groups = load_groups(null, s.mode);
 	let strat = cat.find(st.catalogs(), s.strategy);
 	let ts_was = ts_get();
-	if (strat && cat.uses_ts(strat)) ts_set(0);
-	let verdicts = run_checks(items_of(groups, light ? ['1.3'] : TLS, light), {});
+	// Мерка — как у подбора (eval_strategy): ts-стратегия сначала глазами Windows (без меток), не прошла — ещё раз с метками;
+	// прошла только так — годится с пометкой (needs_ts, status.needs_tcp_timestamps), а не провал: подбор такую включает сам.
+	let uses_ts = strat && cat.uses_ts(strat), items = items_of(groups, light ? ['1.3'] : TLS, light);
+	if (uses_ts) ts_set(0);
+	let verdicts = run_checks(items, {});
 	ts_set(ts_was);
-	let sc = score(groups, verdicts);
+	let sc = score(groups, verdicts), needs_ts = false;
+	if (uses_ts && !sc.perfect) {
+		let vs2 = run_checks(items, {});
+		let sc2 = score(groups, vs2);
+		if (sc2.perfect) { sc = sc2; verdicts = vs2; needs_ts = true; }
+	}
 	let lc = { at: time(), source, ok: sc.perfect, groups: map(filter(groups, g => !g.control), g => ({
-		id: g.id, ok: length(filter(verdicts, v => v.group == g.id && v.required && !v.ok)) == 0 })) , error: sc.error };
+		id: g.id, ok: length(filter(verdicts, v => v.group == g.id && v.required && !v.ok)) == 0 })) , error: sc.error,
+		...(needs_ts ? { needs_ts } : {}) };
 	// Флеш — только при перемене (проверка по таймеру раз в час иначе переписывала бы 4 файла): свежая запись — в /tmp
 	// (st.last_check читает её первой), во флеш — если сменился итог или группы, нет файла или проверку запустил человек.
 	st.write_atomic(`${st.P.run}/last-check.json`, sprintf('%J\n', lc));

@@ -7,8 +7,7 @@ namespace DpiShell.Tests;
 public sealed partial class WindowSmokeTests
 {
     /// <summary>
-    /// strategy_failing (роутер 0.2.2-r2): на вкладке «Роутер» — строка «Стратегия не проходит проверку — нужен подбор» с пояснением
-    /// про метки TCP (params.ts) и кнопка «Подобрать»; нажатие ведёт на экран «Подбор» на роутере, как кнопка вкладки.
+    /// strategy_failing (роутер 0.2.2-r2): на вкладке «Роутер» — строка «Стратегия не проходит проверку — нужен подбор» и кнопка «Подобрать»; нажатие ведёт на экран «Подбор» на роутере, как кнопка вкладки.
     /// </summary>
     [Fact]
     public void Router_StrategyFailing_Warning_HasSelectAction()
@@ -19,7 +18,7 @@ public sealed partial class WindowSmokeTests
             ThemeManager.Apply(ThemeManager.Light);
             using var fake = new FakeRouter
             {
-                WarningsJson = """[ { "code": "strategy_failing", "text": "Стратегия не проходит проверку — нужен подбор. Не работает для устройств без TCP timestamps (обычно Windows)", "key": "web.warn.strategy_failing_ts", "params": { "strategy": "alt9", "ts": true } } ]""",
+                WarningsJson = """[ { "code": "strategy_failing", "text": "Стратегия не проходит проверку — нужен подбор", "key": "web.warn.strategy_failing", "params": { "strategy": "alt9" } } ]""",
             }.As020();
             var shell = new Shell(new AppPaths(tmp.Sub("root"), Repo.Data));
             var vm = TestWindow.Model(shell);
@@ -32,8 +31,7 @@ public sealed partial class WindowSmokeTests
             vm.GoTo(Pages.Router);
             Pump();
             var tabs = Find<TabControl>(w)!;
-            var text = L.T("web.warn.strategy_failing_ts");
-            if (!text.Contains("Windows")) throw new Exception("В тексте нет пояснения про метки TCP: " + text);
+            var text = L.T("web.warn.strategy_failing");
             var page = ((TabItem)tabs.Items[Pages.Router]).Content as System.Windows.DependencyObject;
             var box = Find<TextBox>(page!, t => t.IsVisible && t.Text == text) ?? throw new Exception("Нет строки предупреждения на вкладке «Роутер»");
             var row = System.Windows.Media.VisualTreeHelper.GetParent(box) as System.Windows.DependencyObject;

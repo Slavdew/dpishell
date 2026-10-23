@@ -53,19 +53,15 @@ function title_of(id) {
 
 // «Стратегия не проходит проверку — нужен подбор» (strategy_failing, с 0.2.2-r2): без него таймер молча копил неудачи,
 // когда сменить не на что. on — показать для включённой стратегии, иначе снять. params.strategy — для какой: сменили
-// стратегию или выключили — rpcd status.warnings его не отдаёт. ts — стратегия с метками TCP: проверка шла «глазами Windows».
+// стратегию или выключили — rpcd status.warnings его не отдаёт. Ts-стратегия, прошедшая только с метками TCP, сюда не
+// попадает: проверка мерит как подбор (check_run), это «годится с пометкой» — status.needs_tcp_timestamps.
 function strategy_failing(on) {
 	if (!on) {
 		warn('strategy_failing', null);
 		return;
 	}
-	let s = st.settings();
-	let strat = cat.find(st.catalogs(), s.strategy);
-	let ts = !!(strat && cat.uses_ts(strat));
 	warn('auto_select_failed', null);   // тот же итог — одной строкой
-	warn('strategy_failing', ts ? 'Стратегия не проходит проверку — нужен подбор. Не работает для устройств без TCP timestamps (обычно Windows)'
-		: 'Стратегия не проходит проверку — нужен подбор', ts ? 'web.warn.strategy_failing_ts' : 'web.warn.strategy_failing',
-		{ strategy: s.strategy, ts });
+	warn('strategy_failing', 'Стратегия не проходит проверку — нужен подбор', 'web.warn.strategy_failing', { strategy: st.settings().strategy });
 }
 
 // Подбор после сторожа: один раз, быстрый, все группы (cron tick уже под nice). Найденная стратегия прошла и обычные
