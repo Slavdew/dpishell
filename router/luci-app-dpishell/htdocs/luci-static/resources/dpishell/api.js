@@ -615,6 +615,37 @@ return baseclass.extend({
 		return '%02d.%02d %s'.format(d.getDate(), d.getMonth() + 1, hm);
 	},
 
+	// Итог проверки старше часа — справочно («проверено 5 ч назад»), не текущая ошибка.
+	// То же число в окне ПК — RouterTexts.CheckStaleAfter (сверяется тестом).
+	CHECK_STALE_S: 3600,
+
+	// Сколько секунд назад (по часам браузера); null — время не разобрать.
+	ageS: function(iso) {
+		if (!iso)
+			return null;
+		var d = (typeof iso == 'number' || /^\d+$/.test(iso)) ? new Date(iso * 1000) : new Date(iso);
+		return isNaN(d.getTime()) ? null : (Date.now() - d.getTime()) / 1000;
+	},
+
+	stale: function(iso) {
+		var a = this.ageS(iso);
+		return a != null && a > this.CHECK_STALE_S;
+	},
+
+	// «12 мин назад», «5 ч назад», дальше суток — число и месяц.
+	ago: function(iso) {
+		var a = this.ageS(iso);
+		if (a == null)
+			return '';
+		if (a < 3600)
+			return this.t('router.check.age_min', { n: Math.max(1, Math.floor(a / 60)) });
+		if (a < 86400)
+			return this.t('router.check.age_h', { n: Math.floor(a / 3600) });
+		var d = (typeof iso == 'number' || /^\d+$/.test(iso)) ? new Date(iso * 1000) : new Date(iso);
+		try { return d.toLocaleDateString(LANG_CODE, { day: '2-digit', month: '2-digit' }); } catch (e) {}
+		return '%02d.%02d'.format(d.getDate(), d.getMonth() + 1);
+	},
+
 	duration: function(sec) {
 		if (sec == null || isNaN(sec))
 			return '';

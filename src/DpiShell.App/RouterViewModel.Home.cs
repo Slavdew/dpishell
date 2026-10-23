@@ -140,7 +140,9 @@ public sealed partial class RouterViewModel
                 if (JointOn && !JointIsFallback) parts.Add(L.T("home.router.state.joint"));
                 var at = _status?.LastCheck?.At ?? _detection?.Status?.CheckedAt;
                 if (Checking) parts.Add(L.T("router.home.checking"));
-                else if (at is not null) parts.Add(L.T("router.home.checked", new { time = RouterTexts.Time(at) }));
+                else if (at is { } a)
+                    parts.Add(RouterTexts.IsStale(a, UtcNow()) ? L.T("router.home.checked_ago", new { ago = RouterTexts.Ago(a, UtcNow()) })
+                        : L.T("router.home.checked", new { time = RouterTexts.Time(a) }));
             }
             else parts.Add(L.T("home.router.state.off"));
             if (!Updating && _status?.Update is { Available: true, Version: { } uv }) parts.Add(L.T("router.home.update_available", new { version = uv }));
@@ -167,15 +169,21 @@ public sealed partial class RouterViewModel
 
         // Сайты через роутер: проверка с этого ПК (то, что видит человек) и последняя проверка самого роутера.
         var bad = new List<string>(pcFailing);
+        // Итог роутера старше часа — не действующая ошибка: при включённых проверках по расписанию — серым с возрастом и «Проверить сейчас»,
+        // при выключенных — вовсе не здесь (только в карточке вкладки «Роутер»).
         var last = _status?.LastCheck;
-        if (RouterEnabled && last is { Ok: false })
+        var now = UtcNow();
+        bool stale = RouterTexts.IsStale(last?.At, now);
+        if (RouterEnabled && last is { Ok: false } && !stale)
             foreach (var g in (last.Groups ?? []).Where(g => !g.Ok).Select(g => GroupTitle(g.Id)))
                 if (!bad.Contains(g)) bad.Add(g);
-        var when = last?.At is { } at ? L.T("router.home.checked", new { time = RouterTexts.Time(at) }) : "";
+        var when = last?.At is not { } at ? ""
+            : stale ? L.T("router.home.checked_ago", new { ago = RouterTexts.Ago(at, now) })
+            : L.T("router.home.checked", new { time = RouterTexts.Time(at) });
         if (RouterEnabled)
         {
             foreach (var g in bad)
-                list.Add(new(Health.Error, g, when.Length > 0 ? L.T("home.r.site.closed_at", new { when }) : L.T("home.r.site.closed"),
+                list.Add(new(Health.Error, g, when.Length > 0 && !stale ? L.T("home.r.site.closed_at", new { when }) : L.T("home.r.site.closed"),
                     L.T("home.find_on_router"), GoSelectCmd, Short: L.T("home.r.site.short", new { group = g })));
             if (bad.Count == 0 && last is { Ok: true })
             {
@@ -183,6 +191,12 @@ public sealed partial class RouterViewModel
                 list.Add(new(Health.Ok, L.T("home.r.sites.label"), groups.Count > 0
                     ? L.T("home.r.sites.ok", new { ok = groups.Count, total = groups.Count, when })
                     : L.T("home.r.sites.ok_plain", new { when })));
+            }
+            else if (bad.Count == 0 && last is { Ok: false, At: { } old } && stale)
+            {
+                if (ScheduleEnabled)
+                    list.Add(new(Health.None, L.T("home.r.sites.label"), L.T("router.home.checked_bad_ago", new { ago = RouterTexts.Ago(old, now) }),
+                        L.T("home.check_now"), CheckCmd));
             }
             else if (bad.Count == 0 && Connected)
                 list.Add(new(Health.None, L.T("home.r.sites.label"), L.T("home.r.sites.not_checked"), L.T("router.check"), CheckCmd));

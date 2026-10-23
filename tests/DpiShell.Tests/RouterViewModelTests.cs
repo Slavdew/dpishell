@@ -46,6 +46,7 @@ public sealed class RouterViewModelTests : IDisposable
     {
         using var r = new FakeRouter();
         var (vm, shell) = Make(r);
+        vm.UtcNow = () => r.CheckedAt.AddMinutes(10);   // свежая проверка: «проверено в …», а не «… ч назад»
         Assert.True(await vm.ConnectAsync("secret"));
         Assert.True(vm.Connected);
         Assert.Equal("Подключено, DpiShell 0.1.0", vm.ConnectionText);
