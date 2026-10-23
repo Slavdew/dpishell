@@ -185,7 +185,7 @@ public sealed partial class MainViewModel
     /// «Прочее ✓ 7/8 — не открыто: example.org», «проверено 10 из 120», «заблокировано по адресу…». Пусто — своих сайтов не проверяли.
     /// </summary>
     public IReadOnlyList<string> ResultGroupLines =>
-        SelectedScore is { Score: { Error: null } score }
+        (SelectedScore ?? Scores.FirstOrDefault()) is { Score: { Error: null } score }
             ? [.. SiteGroupSummary.Build(score, _reportTested).Select(l => Texts.SubLineText(l, Names))]
             : [];
     public bool HasResultGroupLines => ResultGroupLines.Count > 0;

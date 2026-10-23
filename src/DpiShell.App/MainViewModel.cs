@@ -1638,6 +1638,7 @@ public sealed partial class MainViewModel : Observable
         foreach (var s in ordered) Scores.Add(new ScoreRow(s, Names, StrategyTitle) { IsBest = best is not null && s.Strategy.Id == best.Strategy.Id });
         ResortScores();
         SelectedScore = Scores.FirstOrDefault(r => r.IsBest);   // лучшая выбрана сразу — «Применить лучшую» активна
+        RaiseResultGroupLines();
         SelectProgress = SelectProgressMax;
         // Статистика до этого подбора — для подсказки «работала N раз подряд, сейчас нет»; перечитывается ниже.
         var regression = StrategyChoice.Regression(Helper.Results?.Stats, r, CurrentStrategyId, Names);

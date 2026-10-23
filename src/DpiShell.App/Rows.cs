@@ -379,7 +379,8 @@ public static class Texts
     public static string SubLineText(SubLine l, GroupNames names)
     {
         var extra = new List<string>();
-        if (l.Missed.Count > 0) extra.Add(L.T("select.sub.missed", new { hosts = string.Join(", ", l.Missed.Take(4)) + (l.Missed.Count > 4 ? L.T("select.sub.more", new { n = l.Missed.Count - 4 }) : "") }));
+        // Не открылось ничего — перечислять нечего («Telegram ✗ 0/12»); частично — кто именно («Прочее ✓ 7/8 — не открыто: example.org»).
+        if (l.Missed.Count > 0 && l.Ok > 0) extra.Add(L.T("select.sub.missed", new { hosts = string.Join(", ", l.Missed.Take(4)) + (l.Missed.Count > 4 ? L.T("select.sub.more", new { n = l.Missed.Count - 4 }) : "") }));
         if (l.Sampled) extra.Add(L.T("select.sub.sampled", new { n = l.Checked, all = l.OfAll }));
         if (l.Blocked > 0) extra.Add(L.T("select.sub.blocked", new { n = l.Blocked }));
         return SubShort(l, names) + (extra.Count > 0 ? " — " + string.Join("; ", extra) : "");
