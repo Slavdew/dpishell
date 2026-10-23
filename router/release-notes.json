@@ -1,15 +1,17 @@
 {
   "_comment": "Что нового — для плашки «Доступно обновление» и страницы релиза. Ключ — версия X.Y.Z; коротко, словами пользователя, самое важное сверху, не больше 15 строк (роутер показывает первые 15). Нет записи — release-json.py возьмёт заголовки коммитов. Русские строки — в записи версии (список). Английский перевод — в разделе \"en\" под тем же ключом версии: строки один к одному с русскими (release-json.py сверяет число строк), в release.json — changes_en.",
   "0.2.1": [
-    "«Изменено DpiShell» → «Изменения DpiShell»: отмена по пунктам и «Отменить всё», возврат прежней версии пакета — из флеша роутера или через окно на ПК",
-    "Страница: у ошибок «Подробнее» и «Скопировать»; заметки к обновлению — на языке страницы (английские заметки выпусков)",
-    "«Безопасность роутера» — справочно, только чтение: что защищено и что можно улучшить, на «Диагностике»",
-    "Безопаснее: страница без XSS, обновление из папки проверяет подпись выпуска, надёжнее /tmp и замки, строже права панели (ACL)",
-    "Вход по HTTPS: панель отвечает и на порту 443, окно на ПК закрепляет сертификат",
-    "Бережнее к ресурсам: меньше записей во флеш и нагрузки, точные удаления при снятии пакета",
-    "FAQ в «О программе» на русском и английском, раздел «Как вернуть как было»",
-    "Исправлено: после офлайн-установки обновление больше не «застревает»",
-    "Исправлено: проверка после действий показывает честный итог, следы прежних неудач (.bad-*) не мешают"
+    "«Изменения DpiShell»: отмена по пунктам и «Отменить всё»",
+    "Возврат прежней версии DpiShell — с роутера или через окно на ПК",
+    "«Безопасность роутера» на «Диагностике»: что защищено и что можно улучшить (только подсказки, настройки не меняются)",
+    "Страница роутера защищена от вредных названий и адресов из чужих файлов настроек и ответов сайтов",
+    "Обновление через ПК проверяет, что файлы не подменены",
+    "Бережнее к роутеру: меньше записей в память, меньше трафика и нагрузки",
+    "Удаление трогает только своё и не задевает другие программы",
+    "Смена DNS сети не начинается, если на роутере мало места, и возвращает как было только проверенно",
+    "У ошибок — «Подробнее» и «Скопировать»; заметки к обновлению — на языке страницы",
+    "«Частые вопросы» и «Как вернуть как было» — ссылка в «О программе»",
+    "Исправлено: после установки без интернета обновление больше не «застревает»"
   ],
   "0.2.0": [
     "Установка, обновление и удаление из приложения DpiShell на ПК — по паролю роутера, даже если у роутера нет доступа к GitHub",
@@ -30,15 +32,17 @@
   ],
   "en": {
     "0.2.1": [
-      "“Changed by DpiShell” → “DpiShell changes”: undo per item and “Undo all”, returning to the previous package version — from the router flash or through the PC window",
-      "Page: errors have “Details” and “Copy”; update notes in the page language (English release notes)",
-      "“Router security” is informational and read-only: what is protected and what can be improved, on “Diagnostics”",
-      "Safer: the page is free of XSS, updating from a folder checks the release signature, more reliable /tmp and locks, stricter panel permissions (ACL)",
-      "Signing in over HTTPS: the panel also answers on port 443, the PC window pins the certificate",
-      "Easier on resources: fewer flash writes and less load, exact removals when the package is deleted",
-      "A FAQ in “About” in Russian and English, with a “How to restore the previous state” section",
-      "Fixed: after an offline install the update no longer gets stuck",
-      "Fixed: the check after actions shows an honest result, and traces of earlier failures (.bad-*) do not interfere"
+      "“DpiShell changes”: undo item by item and “Undo all”",
+      "Return to the previous DpiShell version — on the router or from the PC window",
+      "“Router security” on “Diagnostics”: what is protected and what can be improved (tips only, no settings changed)",
+      "Router page protected from harmful names and addresses in foreign settings files and site responses",
+      "Updates through the PC check that files were not tampered with",
+      "Easier on the router: fewer writes to memory, less traffic and load",
+      "Removal touches only its own files and leaves other software alone",
+      "Network DNS change does not start when the router is low on space and restores only after checking",
+      "Errors have “Details” and “Copy”; update notes in the page language",
+      "“FAQ” and “How to undo” — link in “About”",
+      "Fixed: after an offline install, updates no longer get stuck"
     ],
     "0.2.0": [
       "Install, update and removal from the DpiShell app on the PC with the router password, even if the router has no access to GitHub",
