@@ -60,6 +60,9 @@ internal static class CyrillicScan
     public static void CheckIfEn(DependencyObject root, string where)
     {
         if (L.Current == L.En) { Report(root, where); return; }
+        // Смена языка — общее состояние L: вне коллекции lang параллельные тесты видят английский вместо русского (так падали тесты роутера).
+        if (!CalledFromLangCollection())
+            throw new InvalidOperationException($"[{where}] CheckIfEn переключает язык всем тестам — только из [Collection(LangCollection.Name)]");
         // Диалоги (вход, установка…) строятся один раз и при открытом окне язык не меняют — переключение проверяется на главном окне.
         if (Find<TabControl>(root) is null) return;
         void Failed(object model, Exception e)
@@ -78,6 +81,17 @@ internal static class CyrillicScan
             Report(root, where + " (после смены языка)");
         }
         finally { Observable.LanguageHandlerFailed -= Failed; L.Set(L.Ru); Pump(); }
+    }
+
+    // Класс теста в стеке (лямбды и async — вложенные классы, поэтому вверх по DeclaringType) помечен коллекцией lang.
+    static bool CalledFromLangCollection()
+    {
+        foreach (var frame in new System.Diagnostics.StackTrace().GetFrames())
+            for (var t = frame.GetMethod()?.DeclaringType; t is not null; t = t.DeclaringType)
+                if (t.GetCustomAttributesData().Any(d => d.AttributeType == typeof(CollectionAttribute)
+                        && d.ConstructorArguments.Count > 0 && d.ConstructorArguments[0].Value as string == LangCollection.Name))
+                    return true;
+        return false;
     }
 
     static void Report(DependencyObject root, string where)

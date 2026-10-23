@@ -104,7 +104,7 @@ public sealed partial class WindowSmokeTests
                 if (Btn(L.T("diag.repair")) is null) throw new Exception("Нет «Восстановить» при стороннем антивирусе");
                 foreach (var t in FindAll<TextBlock>(tabs, t => t.IsVisible && t.Text.Contains("исключ")))
                     if (t.Text.Contains("обход", StringComparison.OrdinalIgnoreCase)) throw new Exception("Запретное слово: " + t.Text);
-                CyrillicScan.CheckIfEn(w, "home-av");
+                // Английское окно — не здесь: CheckIfEn меняет язык всем тестам (только коллекция lang); ключи ru/en сверяет LocalizationTests.
                 Close(w);
                 Stop(vm, f);
             }
