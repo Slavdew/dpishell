@@ -51,8 +51,16 @@ public sealed partial class ServiceManager(AppPaths paths) : IServiceOps
     {
         var (code, o) = Sc("query", name);
         if (code == 1060) return SvcState.NotInstalled;
-        // Подписи полей sc переводит («Состояние» на русской Windows), а коды состояний (RUNNING и т. п.) — нет.
-        var m = StateRx().Match(o);
+        return ParseState(o);
+    }
+
+    /// <summary>
+    /// Состояние из вывода <c>sc query</c>. Подписи полей sc переводит («Состояние» / «STATE» / «ZUSTAND»), а номер и код состояния (4 RUNNING) — нет;
+    /// вид строки на Windows 10 и 11 одинаков. Не узнали — <see cref="SvcState.Unknown"/>.
+    /// </summary>
+    public static SvcState ParseState(string o)
+    {
+        var m = StateRx().Match(o ?? "");
         if (!m.Success) return SvcState.Unknown;
         return m.Groups[1].Value switch
         {

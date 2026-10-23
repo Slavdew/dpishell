@@ -86,11 +86,12 @@ public static class ThemeManager
     {
         var hwnd = new WindowInteropHelper(w).Handle;
         if (hwnd == IntPtr.Zero) return;
+        // Windows 10 1809–1909: тот же атрибут называется 19; раньше 1809 тёмного заголовка нет (светлый остаётся).
+        int attr = DpiShell.Core.OsInfo.DarkTitleAttribute(DpiShell.Core.OsInfo.Build);
+        if (attr == 0) return;
         int on = IsDark ? 1 : 0;
-        _ = DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, ref on, sizeof(int));
+        _ = DwmSetWindowAttribute(hwnd, attr, ref on, sizeof(int));
     }
-
-    const int DwmwaUseImmersiveDarkMode = 20;
 
     [DllImport("dwmapi.dll")]
     static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);

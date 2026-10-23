@@ -27,7 +27,7 @@ public static class TlsSupport
         public readonly HashSet<string> Hosts = new(StringComparer.OrdinalIgnoreCase);
     }
 
-    static readonly State Machine = new(BuildHasTls13(Environment.OSVersion.Version));
+    static readonly State Machine = new(BuildHasTls13(new Version(Environment.OSVersion.Version.Major, 0, OsInfo.Build)));
     static readonly AsyncLocal<State?> Local = new();
     static State Current => Local.Value ?? Machine;
 

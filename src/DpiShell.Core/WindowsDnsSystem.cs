@@ -28,7 +28,7 @@ public sealed class WindowsDnsSystem : IDnsSystem
     const string WellKnown = @"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters\DohWellKnownServers";
 
     /// <summary>Встроенный DoH — с Windows 11 (сборка 22000).</summary>
-    public bool DohSupported => Environment.OSVersion.Version.Build >= 22000;
+    public bool DohSupported => OsInfo.DohSupported;
 
     public IReadOnlyList<NetAdapter> Adapters() =>
         NetworkInterface.GetAllNetworkInterfaces().Select(n =>
