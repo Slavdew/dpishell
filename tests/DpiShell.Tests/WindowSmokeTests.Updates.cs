@@ -53,11 +53,13 @@ public sealed partial class WindowSmokeTests
             var link = Btn(L.T("router.update.check")) ?? throw new Exception("Нет ссылки «Проверить обновления»");
             // Во время — «Проверка…», ссылка недоступна.
             fake.UpdateAvailable = true;
+            router.PollInterval = TimeSpan.FromSeconds(1);   // первый опрос итога — через секунду: «Проверка…» успевает быть видна и под нагрузкой
             var check = router.CheckUpdatesAsync();
             Pump();
             if (!Shown(t => t == L.T("router.update.line_checking"))) throw new Exception("Нет «Проверка…» у ссылки во время проверки");
             if (link.IsEnabled) throw new Exception("Ссылка «Проверить обновления» доступна во время проверки");
             WaitUi(check);
+            router.PollInterval = TimeSpan.FromMilliseconds(10);
             Pump();
             if (!Shown(t => t == "Доступна 0.2.1-r1")) throw new Exception("Нет «Доступна 0.2.1-r1» у ссылки после проверки");
             if (Btn("Обновить до 0.2.1-r1") is not { IsEnabled: true }) throw new Exception("Нет доступной «Обновить до 0.2.1-r1» рядом с итогом");

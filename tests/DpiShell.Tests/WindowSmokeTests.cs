@@ -653,7 +653,7 @@ public sealed partial class WindowSmokeTests
                         bool Has(string text) => Find<TextBlock>(tabsAbout, t => t.Text == text && t.IsVisible) is not null
                                                  || Find<TextBox>(tabsAbout, t => t.Text == text && t.IsVisible) is not null
                                                  || Find<Button>(tabsAbout, b => b.Content as string == text && b.IsVisible) is not null;
-                        string[] aboutOnly = [L.T("about.version.title"), L.T("about.app.check_button"), L.T("about.lists.update"), L.T("about.row.core"), L.T("about.row.router"), L.T("about.row.app"), L.T("about.row.helper"), L.T("about.row.data")];
+                        string[] aboutOnly = [L.T("about.version.title"), L.T("about.app.update_button", new { version = "99.0" }) /* версия известна — сразу «Обновить до», С-23 */, L.T("about.lists.update"), L.T("about.row.core"), L.T("about.row.router"), L.T("about.row.app"), L.T("about.row.helper"), L.T("about.row.data")];
                         foreach (var t in aboutOnly)
                             if (Has(t) != (page == Pages.About))
                                 throw new Exception($"«{t}»: {(page == Pages.About ? "нет на «Информация и обновления»" : "осталось в «Настройках»")}");
