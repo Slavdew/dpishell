@@ -2648,6 +2648,9 @@
                                         </ItemsControl>
                                         <TextBlock Text="{Binding Question}" Style="{StaticResource Hint}" Margin="0,8,0,0" TextWrapping="Wrap"
                                                    Visibility="{Binding HasQuestion, Converter={StaticResource Vis}}" />
+                                        <!-- «Не удалось» — повтор кнопкой, без поиска «Отменить всё» выше (аудит-2, П-12). -->
+                                        <Button ContentTemplate="{StaticResource Shield}" Content="{l:T common.retry}" Command="{Binding RetryCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                                Visibility="{Binding CanRetry, Converter={StaticResource Vis}}" />
                                     </StackPanel>
                                 </StackPanel>
                             </Border>

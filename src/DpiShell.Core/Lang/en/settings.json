@@ -58,7 +58,7 @@
   "settings.changes.summary_none": "Nothing to undo.",
   "settings.changes.summary": "Restored: {restored} · already as before: {same} · skipped: {skipped} · failed: {failed}",
   "settings.changes.question": "The “skipped” items were changed after DpiShell by you or another app. If needed, restore them manually.",
-  "settings.changes.question_failed": "The “failed” items stay in the list: remove the cause (for example, close the app that locked hosts) and click “Undo all” again.",
+  "settings.changes.question_failed": "The “failed” items stay in the list: remove the cause (for example, close the app that locked hosts) and click “Retry”.",
   "settings.changes.row.undo": "Undo",
   "settings.changes.row.undo_import": "Undo settings import",
   "settings.changes.row.old_helper": "Separately — after the helper is updated.",

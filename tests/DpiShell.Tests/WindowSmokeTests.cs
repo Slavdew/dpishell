@@ -2266,8 +2266,13 @@ public sealed partial class WindowSmokeTests
                     throw new Exception("В отчёте нет всех четырёх исходов");
                 if (Find<TextBlock>(Card(), t => t.Text == L.T("settings.changes.question") + " " + L.T("settings.changes.question_failed") && t.IsVisible) is null) throw new Exception("Нет вопроса про изменённое после нас");
                 if (FindAll<TextBlock>(Card()).Any(t => System.Text.RegularExpressions.Regex.IsMatch(t.Text, @"\bобход", System.Text.RegularExpressions.RegexOptions.IgnoreCase))) throw new Exception("В карточке осталось слово «обход»");
+                // «Не удалось» — кнопка «Повторить» в отчёте (аудит-2, П-12); без неудавшихся её нет.
+                if (Find<Button>(Card(), b => b.Content as string == L.T("common.retry") && b.IsVisible && b.IsEnabled) is null) throw new Exception("В отчёте с «не удалось» нет кнопки «Повторить»");
                 ScrollToCard();
                 Shot("report");
+                vm.Changes.Show([new("1", "Включён запуск окна вместе с Windows (свёрнутым в трей)", now, UndoStatus.Restored, "")]);
+                Pump();
+                if (Find<Button>(Card(), b => b.Content as string == L.T("common.retry") && b.IsVisible) is not null) throw new Exception("«Повторить» видна, хотя всё отменилось");
 
                 // Отмена по пунктам: загрузка — «Отменить загрузку», её DNS — «вместе с загрузкой», ядро — только «Отменить всё»,
                 // ранний DNS — «сначала поздний»; у остальных — «Отменить».
