@@ -90,7 +90,8 @@ finally { $archive.Dispose() }
 Remove-Item $work -Recurse -Force
 
 # 5. Офлайн-копия ядра — отдельным файлом выпуска: тот же архив bol-van, что в core.json (окно сверит тот же sha256).
-$core = Get-Content (Join-Path $data 'core.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+# data\ поставки уже проверена по data.json и совпадает с data\ репозитория; папка сборки к этому шагу стёрта.
+$core = Get-Content (Join-Path $repo 'data\core.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $vendorZip = Join-Path $repo "vendor\zapret-$($core.version).zip"
 if (-not (Test-Path $vendorZip)) { throw "Нет $vendorZip — офлайн-копии ядра для выпуска" }
 if ((Get-FileHash $vendorZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $core.zip_sha256) { throw "$vendorZip не совпал с zip_sha256 в data\core.json" }
