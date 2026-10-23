@@ -26,10 +26,13 @@ public static class HelperProtocol
     /// Версия протокола «мажор.минор» (helper-protocol §6): минор — добавления без поломок (команды, поля), мажор — несовместимые
     /// изменения. В hello и status; помощник без поля — «1.0». Сравнение — <see cref="HelperCompat"/>.
     /// </summary>
-    public const string Api = "1.17";
+    public const string Api = "1.18";
 
     /// <summary>С этой версии протокола запрос может нести необязательное поле <c>lang</c> — язык окна для ответа (старый помощник отвергает лишние поля).</summary>
     public const string LangApi = "1.13";
+
+    /// <summary>С этой версии: группы своих сайтов — команда <c>user_groups_set</c>, поле <c>userGroups</c> в status и <c>siteGroups</c> в плане загрузки настроек (старый помощник лишних полей не принимает).</summary>
+    public const string GroupsApi = "1.18";
 
     /// <summary>
     /// С этой версии hello несёт <c>machine</c>: принимает ли помощник от этого подключения действия на весь компьютер (hosts, DNS, прокси машины).

@@ -102,6 +102,8 @@
   "home.params.game.off": "off",
   "home.strategy.not_checked_yet": "not checked yet",
   "home.stats.mine": "my sites {ok} of {total}",
+  "home.stats.subs_rest": "others ✓ {ok}/{total}",
+  "home.stats.subs_more": "{n} more not opening",
   "home.stats.all": "opened everything",
   "home.stats.some": "opened {ok} of {total} groups",
   "home.stats.checked": "checked {date} at {time}",

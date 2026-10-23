@@ -2,7 +2,7 @@ namespace DpiShell.Core;
 
 /// <summary>
 /// Блокировка по адресу в подборе: адрес «Своих сайтов», до которого не устанавливается даже TCP-соединение — ни без обхода, ни ни с одной
-/// проверенной стратегией (все версии TLS: <see cref="ProbeOutcome.ConnectFailed"/>). Стратегия меняет только поток для DPI, а не то, отвечает
+/// проверенной стратегией (все версии TLS: <see cref="ProbeResult.NoTcp"/> — таймаут или отказ при соединении). Стратегия меняет только поток для DPI, а не то, отвечает
 /// ли адрес, поэтому это не провал стратегии: такие адреса не входят в оценку и выбор, в сводке они помечены отдельно. Не то же самое, что
 /// <see cref="AddressBlockTracker"/>: тот учитывает и молчание после соединения (таймаут, сброс) и лишь подсказывает; этот строже и решает оценку.
 /// </summary>
@@ -17,8 +17,8 @@ public static class AddressBlocks
     public static string Key(TargetVerdict v) => v.GroupId + "\n" + v.Target.Url;
     public static string UrlOf(string key) => key[(key.IndexOf('\n') + 1)..];
 
-    /// <summary>TCP-соединение не устанавливается: каждая проверка (по обеим версиям TLS) закончилась «нет соединения».</summary>
-    public static bool NoConnection(TargetVerdict v) => !v.Ok && v.Probes.Count > 0 && v.Probes.All(p => p.Outcome == ProbeOutcome.ConnectFailed);
+    /// <summary>TCP-соединение не устанавливается: каждая проверка (по обеим версиям TLS) закончилась на соединении (<see cref="ProbeResult.NoTcp"/>).</summary>
+    public static bool NoConnection(TargetVerdict v) => !v.Ok && v.Probes.Count > 0 && v.Probes.All(p => p.NoTcp);
 
     /// <summary>Ключи адресов, закрытых по адресу, по проверке без обхода и итогам стратегий. Стратегии с ошибкой запуска не считаются.</summary>
     public static HashSet<string> Find(IReadOnlyList<TargetVerdict> baseline, IEnumerable<StrategyScore> scores)

@@ -12,6 +12,8 @@ public sealed record SubLine(string Group, int Ok, int Total, int Blocked, int O
     public bool IsOther => Group.Length == 0;
     /// <summary>Открылось всё, что можно проверить; нечего проверять (все адреса закрыты по адресу) — не провал.</summary>
     public bool Passed => Ok == Total;
+    /// <summary>Метка «✓»: открылась хотя бы половина проверенных адресов; меньше — «✗» («Telegram ✗ 0/12», «Прочее ✓ 7/8»).</summary>
+    public bool Good => Total > 0 && Ok * 2 >= Total;
     public bool Sampled => OfAll > Total + Blocked;
     /// <summary>Сколько адресов группы проверяли: выборка вместе с закрытыми по адресу.</summary>
     public int Checked => Total + Blocked;

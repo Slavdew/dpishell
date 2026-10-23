@@ -385,7 +385,7 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
         CallAsync<UserTargetsResult>("user_targets_set", new { lines }, null, ct);
 
     /// <summary>Сайты, которые на этом ПК открываются без оптимизации (API 1.10): весь список целиком.</summary>
-    /// <summary>Свои сайты по группам (API 1.17); помощник старее — команды нет в <c>commands</c>, окно сохраняет плоским списком.</summary>
+    /// <summary>Свои сайты по группам (API 1.18); помощник старее — команды нет в <c>commands</c>, окно сохраняет плоским списком.</summary>
     public Task<UserGroupsResult> SetUserGroupsAsync(IReadOnlyList<SiteGroup> groups, CancellationToken ct = default) =>
         CallAsync<UserGroupsResult>("user_groups_set", new { groups }, null, ct);
 
@@ -511,5 +511,5 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
 
     /// <summary>Загрузить проверенный план. Помощник проверяет его заново, пишет в журнал изменений и возвращает итог по разделам.</summary>
     public Task<Export.ImportResult> SettingsImportAsync(Export.ImportPlan plan, IProgress<JsonElement>? progress = null, CancellationToken ct = default) =>
-        CallAsync<Export.ImportResult>("settings_import", new { plan = plan.ToRequest() }, progress, ct);
+        CallAsync<Export.ImportResult>("settings_import", new { plan = plan.ToRequest(HelperCompat.AtLeast(HelperApi, HelperProtocol.GroupsApi)) }, progress, ct);
 }

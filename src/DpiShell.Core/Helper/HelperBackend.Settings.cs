@@ -14,6 +14,7 @@ public sealed partial class ShellHelperBackend
         var s = new SettingsState
         {
             Sites = [.. st.UserTargets],
+            SiteGroups = shell.UserGroupMap() is { Count: > 0 } groups ? groups : null,
             Exclude = [.. st.UserExclude],
             Strategies = [.. all],
             Advanced = st.Advanced.Clone(),
@@ -76,6 +77,12 @@ public sealed partial class ShellHelperBackend
             var before = new JsonObject();
             var after = new JsonObject();
             if (ops.Sites is not null) { before["sites"] = Arr(Sh.State.UserTargets); after["sites"] = Arr(ops.Sites); }
+            // Группы своих сайтов: до и после, чтобы «Отменить загрузку» вернула и их.
+            if (ops.Sites is not null && ops.SiteGroups is not null)
+            {
+                before["site_groups"] = GroupsNode(Sh.UserGroupMap());
+                after["site_groups"] = GroupsNode(ops.SiteGroups);
+            }
             if (ops.Exclude is not null) { before["exclude"] = Arr(Sh.State.UserExclude); after["exclude"] = Arr(ops.Exclude); }
             if (ops.Subnets is not null) { before["subnets"] = Arr(Sh.IpLists.Read(IpLists.UserFile)); after["subnets"] = Arr(ops.Subnets); }
             if (ops.SubnetsExclude is not null) { before["subnets_exclude"] = Arr(Sh.IpLists.Read(IpLists.UserExcludeFile)); after["subnets_exclude"] = Arr(ops.SubnetsExclude); }
@@ -112,6 +119,14 @@ public sealed partial class ShellHelperBackend
         }
 
         public void SetSites(IReadOnlyList<string> sites) => Sh.SetUserTargets(sites);
+        public void SetSites(IReadOnlyList<string> sites, IReadOnlyDictionary<string, string> groups) => Sh.SetUserTargetsGrouped(sites, groups);
+
+        static JsonObject GroupsNode(IReadOnlyDictionary<string, string> map)
+        {
+            var o = new JsonObject();
+            foreach (var (site, name) in map) o[site] = name;
+            return o;
+        }
         public void SetExclude(IReadOnlyList<string> sites) => Sh.SetUserExclude(sites);
 
         public void SetSubnets(IReadOnlyList<string> lines, bool exclude)

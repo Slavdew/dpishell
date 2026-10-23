@@ -70,8 +70,7 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
         {
             foreach (var g in last.Targets.Where(t => t.GroupId != "user" && !AdvancedSites.IsGroupId(t.GroupId) && !t.Control).GroupBy(t => t.GroupId))
                 parts.Add($"{names.Title(g.Key)} {(g.Where(t => t.Required).All(t => t.Ok) && g.Any(t => t.Ok) ? "✓" : "✗")}");
-            var mine = last.Targets.Where(t => t.GroupId == "user").ToList();
-            if (mine.Count > 0) parts.Add(L.T("home.stats.mine", new { ok = mine.Count(t => t.Ok), total = mine.Count }));
+            parts.AddRange(UserParts(last.Subs, names));
             broken = newest?.ControlBroken ?? last.Targets.Any(t => t.Control && !t.Ok);
         }
         else if (newest is not null)
@@ -82,6 +81,31 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
         else return (L.T("home.strategy.not_checked_yet"), "");
         if (Checked(newest?.File ?? st.Last!.File) is { } at) parts.Add(L.T("home.stats.checked", new { date = L.DayMonth(at), time = L.Time(at) }));
         return (string.Join(" · ", parts), broken ? L.T("home.stats.breaks") : "");
+    }
+
+    /// <summary>
+    /// Свои сайты в строке стратегии. Без групп (и без выборки) — как раньше, «свои 7 из 9»; с группами — по строке на группу:
+    /// «Telegram ✗ 0/12 · Прочее ✓ 7/8». Групп больше трёх — не открывшие (до трёх) и одной частью остальные: «остальные ✓ 30/30».
+    /// </summary>
+    static IEnumerable<string> UserParts(IReadOnlyList<SubLine> subs, GroupNames names)
+    {
+        subs = [.. subs.Where(s => s.Total > 0)];
+        if (subs.Count == 0) yield break;
+        if (subs.Count == 1 && subs[0].IsOther && !subs[0].Sampled)
+        {
+            yield return L.T("home.stats.mine", new { ok = subs[0].Ok, total = subs[0].Total });
+            yield break;
+        }
+        if (subs.Count <= 3)
+        {
+            foreach (var s in subs) yield return Texts.SubShort(s, names);
+            yield break;
+        }
+        var bad = subs.Where(s => !s.Good).ToList();
+        foreach (var s in bad.Take(3)) yield return Texts.SubShort(s, names);
+        var good = subs.Where(s => s.Good).ToList();
+        if (bad.Count > 3) yield return L.T("home.stats.subs_more", new { n = bad.Count - 3 });
+        if (good.Count > 0) yield return L.T("home.stats.subs_rest", new { ok = good.Sum(s => s.Ok), total = good.Sum(s => s.Total) });
     }
 
     /// <summary>Время подбора из имени файла результатов (yyyy-MM-dd_HH-mm-ss.json).</summary>
@@ -121,15 +145,21 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
     }
 
     /// <summary>Адреса последнего прогона — те же строки, что в таблице подбора.</summary>
-    public static IReadOnlyList<CheckRow> LastDetails(StrategyStats.Stat st, GroupNames names) =>
-        st.Last is not { } last ? [] : CheckRow.List(last.Targets.Select(t =>
+    public static IReadOnlyList<CheckRow> LastDetails(StrategyStats.Stat st, GroupNames names)
+    {
+        if (st.Last is not { } last) return [];
+        TargetVerdict Verdict(StrategyStats.TargetStat t)
         {
-            var target = new Target(t.Url, Required: t.Required);
+            var target = new Target(t.Url, Required: t.Required, Group: t.Sub.Length > 0 ? names.SubTitle(t.Sub) : null);
             var probes = t.Probes.Select(p => new ProbeResult(target,
                 Enum.TryParse<SslProtocols>(p.Tls, out var tls) ? tls : SslProtocols.None,
                 Enum.TryParse<ProbeOutcome>(p.Outcome, out var o) ? o : ProbeOutcome.Error, p.Seconds, 0, p.Detail)).ToList();
             return new TargetVerdict(t.Control ? "control" : t.GroupId, target, t.Ok, t.Seconds, probes);
-        }), names);
+        }
+        var live = last.Targets.Where(t => !t.Blocked).Select(Verdict).ToList();
+        var gone = last.Targets.Where(t => t.Blocked).Select(Verdict).ToList();
+        return CheckRow.List(live, names, gone);
+    }
 }
 
 /// <summary>
@@ -172,6 +202,19 @@ public sealed class GroupNames
     }
 
     public static readonly GroupNames Empty = new([]);
+
+    /// <summary>
+    /// Имена групп своих сайтов сейчас, по порядку (окно задаёт): в истории имена скрыты («группа №N»), и окно подставляет текущее имя N-й группы.
+    /// Групп стало меньше или порядок другой — остаётся «группа №N». Это приближение, история о сегодняшних именах не знает.
+    /// </summary>
+    public IReadOnlyList<string> UserGroupNames { get; set; } = [];
+
+    /// <summary>«группа №N» из истории → текущее имя N-й группы; остальное — как есть.</summary>
+    public string SubTitle(string label)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(label, @"^(?:группа №|group #)(\d+)$");
+        return m.Success && int.TryParse(m.Groups[1].Value, out var n) && n >= 1 && n <= UserGroupNames.Count ? UserGroupNames[n - 1] : label;
+    }
 
     /// <summary>Название на языке окна: «Свои сайты» и контрольная группа — по ключам (в каталоге целей контрольная названа по-русски), остальные — как в каталоге.</summary>
     public string Title(string id) => id == "user" ? L.T("select.group.user")
@@ -217,11 +260,29 @@ public sealed record CheckRow(bool Ok, string Group, string Url, string Detail, 
 
     static string Ips(IPAddress[] a) => string.Join(", ", a.Take(2)) + (a.Length > 2 ? " …" : "");
 
-    public static CheckRow From(TargetVerdict v, GroupNames names) => From(v, names.Title, names.Control(v.GroupId));
+    public static CheckRow From(TargetVerdict v, GroupNames names, bool subs = false) =>
+        From(v, id => Title(id, v, names, subs), names.Control(v.GroupId));
 
-    /// <summary>Подробности по адресам: сначала провалы, решающие исход, затем остальное в порядке проверки.</summary>
-    public static IReadOnlyList<CheckRow> List(IEnumerable<TargetVerdict> verdicts, GroupNames names) =>
-        verdicts.Select(v => From(v, names)).OrderByDescending(r => r.Alert).ToList();
+    /// <summary>Название группы в строке: свои сайты с группами — имя группы («Прочее» — у тех, что без неё); остальные — из каталога.</summary>
+    static string Title(string id, TargetVerdict v, GroupNames names, bool subs) =>
+        id == "user" && subs ? v.Target.Group ?? L.T("select.sub.other") : names.Title(id);
+
+    /// <summary>Закрыт по адресу: в оценку не входит, провалом стратегии не считается.</summary>
+    public static CheckRow Gone(TargetVerdict v, GroupNames names, bool subs)
+    {
+        var seconds = v.Probes.Select(p => p.Seconds).DefaultIfEmpty(0).Max();
+        return new(false, Title(v.GroupId, v, names, subs), L.Relocalize(v.Target.Url), Texts.ProbeDetail(v.Probes),
+            L.T("select.check.time", new { sec = seconds.ToString("0.0", L.Culture) }), L.T("select.check.note.addr_blocked"), Alert: false);
+    }
+
+    /// <summary>Подробности по адресам: сначала провалы, решающие исход, затем остальное в порядке проверки; закрытые по адресу — в конце.</summary>
+    public static IReadOnlyList<CheckRow> List(IEnumerable<TargetVerdict> verdicts, GroupNames names, IEnumerable<TargetVerdict>? blocked = null)
+    {
+        var all = verdicts.ToList();
+        var gone = (blocked ?? []).ToList();
+        bool subs = all.Concat(gone).Any(v => v.GroupId == "user" && v.Target.Group is { Length: > 0 });
+        return [.. all.Select(v => From(v, names, subs)).OrderByDescending(r => r.Alert), .. gone.Select(v => Gone(v, names, subs))];
+    }
 
     /// <summary>«не открылось: YouTube, Discord» — группы, где не открылся обязательный адрес (видно в строке таблицы, без раскрытия).</summary>
     public static string Missed(IEnumerable<CheckRow> rows)
@@ -267,9 +328,9 @@ public sealed class ScoreRow(StrategyScore s, GroupNames? names = null, Func<str
     /// <summary>Вставлена или собрана руками и ещё не прошла проверку сайтов: «Применить» — только с подтверждением.</summary>
     public bool Unchecked => Score.Error is null && Score.Verdicts.Count == 0;
 
-    public IReadOnlyList<CheckRow> Details => _details ??= CheckRow.List(Score.Verdicts, names ?? GroupNames.Empty);
+    public IReadOnlyList<CheckRow> Details => _details ??= CheckRow.List(Score.Verdicts, names ?? GroupNames.Empty, Score.Blocked);
     protected override void OnLanguageChanged() => _details = null;   // адреса собираются заново на языке окна
-    public bool HasDetails => Score.Verdicts.Count > 0;
+    public bool HasDetails => Score.Verdicts.Count > 0 || Score.Blocked.Count > 0;
     public bool Expanded { get => _expanded; set => Set(ref _expanded, value); }
 }
 
@@ -302,6 +363,27 @@ public static class Texts
     /// <summary>К заметке «похоже на блокировку по адресу» — что можно сделать дальше (одной строкой, без обещаний). Пустая заметка остаётся пустой.</summary>
     public static string WithNextStep(string note, bool router) =>
         note.Length == 0 ? note : note + " " + L.T(router ? "select.addr.next_router" : "select.addr.next");
+
+    /// <summary>Название группы своих сайтов в сводке: «Прочее» — без имени; «группа №N» из истории — текущее имя, если оно известно.</summary>
+    public static string SubName(SubLine l, GroupNames names) => l.IsOther ? L.T("select.sub.other") : names.SubTitle(l.Group);
+
+    static string Mark(SubLine l) => l.Total == 0 ? "–" : l.Good ? "✓" : "✗";
+
+    /// <summary>Коротко, для строки стратегии: «Telegram ✗ 0/12».</summary>
+    public static string SubShort(SubLine l, GroupNames names) => L.T("select.sub.line", new { name = SubName(l, names), mark = Mark(l), ok = l.Ok, total = l.Total });
+
+    /// <summary>
+    /// Строка сводки подбора: «Telegram ✗ 0/12», «Прочее ✓ 7/8 — не открыто: example.org». Дальше, если есть: «проверено 10 из 120» (выборка)
+    /// и «заблокирован по адресу — оптимизация не поможет» (такие адреса в счёт не идут).
+    /// </summary>
+    public static string SubLineText(SubLine l, GroupNames names)
+    {
+        var extra = new List<string>();
+        if (l.Missed.Count > 0) extra.Add(L.T("select.sub.missed", new { hosts = string.Join(", ", l.Missed.Take(4)) + (l.Missed.Count > 4 ? L.T("select.sub.more", new { n = l.Missed.Count - 4 }) : "") }));
+        if (l.Sampled) extra.Add(L.T("select.sub.sampled", new { n = l.Checked, all = l.OfAll }));
+        if (l.Blocked > 0) extra.Add(L.T("select.sub.blocked", new { n = l.Blocked }));
+        return SubShort(l, names) + (extra.Count > 0 ? " — " + string.Join("; ", extra) : "");
+    }
 
     public static string Svc(SvcState s) => s switch
     {

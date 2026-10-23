@@ -26,7 +26,7 @@ public interface IHelperBackend : IHelperCatalog
     IpsetUpdateSummary UpdateIpsetFromContent(string content, bool confirmed);
     IpsetVerdictSummary WriteUserIpset(IReadOnlyList<string> lines, bool exclude, bool confirmed);
     UserTargetsResult SetUserTargets(IReadOnlyList<string> lines);
-    /// <summary>Свои сайты по группам (API 1.17): список целиком, имя группы "" — «Прочее».</summary>
+    /// <summary>Свои сайты по группам (API 1.18): список целиком, имя группы "" — «Прочее».</summary>
     UserGroupsResult SetUserGroups(IReadOnlyList<SiteGroup> groups);
     /// <summary>Сайты, которые на этом ПК открываются без оптимизации (API 1.10): список целиком, домены проходят тот же разбор, что «Свои сайты».</summary>
     UserTargetsResult SetUserExclude(IReadOnlyList<string> lines);
@@ -409,7 +409,7 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
         return new(saved, rejected);
     }
 
-    /// <summary>Свои сайты по группам (API 1.17): <see cref="Shell.SetUserGroups"/>.</summary>
+    /// <summary>Свои сайты по группам (API 1.18): <see cref="Shell.SetUserGroups"/>.</summary>
     public UserGroupsResult SetUserGroups(IReadOnlyList<SiteGroup> groups)
     {
         var (saved, rejected) = shell.SetUserGroups(groups);

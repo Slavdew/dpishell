@@ -108,6 +108,8 @@ public sealed class DnsChoice
 public sealed class SettingsState
 {
     public List<string> Sites { get; set; } = [];
+    /// <summary>Группы своих сайтов (API 1.18): домен → имя группы; сайты «Прочее» не перечислены. null — групп нет.</summary>
+    public Dictionary<string, string>? SiteGroups { get; set; }
     public List<string> Exclude { get; set; } = [];
     /// <summary>Все известные стратегии (готовые и свои): готовые нужны для сверки «такая уже есть», выгружаются только свои и найденные.</summary>
     public List<Strategy> Strategies { get; set; } = [];
@@ -168,6 +170,8 @@ public sealed class ImportApp
 public sealed class ImportData
 {
     public List<string>? Sites { get; set; }
+    /// <summary>Группы своих сайтов (необязательно): домен → имя. В файле — строки «# group: Имя» перед сайтами группы в sites.txt; для остальных читателей это комментарии.</summary>
+    public Dictionary<string, string>? SiteGroups { get; set; }
     public List<string>? Exclude { get; set; }
     public List<string>? Subnets { get; set; }
     public List<string>? SubnetsExclude { get; set; }
@@ -207,6 +211,7 @@ public sealed class ImportData
     public ImportData Only(IReadOnlyCollection<string> sections) => new()
     {
         Sites = sections.Contains(SettingsSections.Sites) ? Sites : null,
+        SiteGroups = sections.Contains(SettingsSections.Sites) ? SiteGroups : null,
         Exclude = sections.Contains(SettingsSections.Exclude) ? Exclude : null,
         Subnets = sections.Contains(SettingsSections.Subnets) ? Subnets : null,
         SubnetsExclude = sections.Contains(SettingsSections.Subnets) ? SubnetsExclude : null,

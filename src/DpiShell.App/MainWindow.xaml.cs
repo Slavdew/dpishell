@@ -11,6 +11,39 @@ namespace DpiShell.App;
 
 public partial class MainWindow : Window
 {
+    /// <summary>«Перенести выделенное…» у группы своих сайтов: меню групп, куда перенести строки, затронутые выделением (или строку с курсором).</summary>
+    void MoveSites_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button button || button.DataContext is not SiteGroupRow from) return;
+        System.Windows.Controls.TextBox? box = null;
+        for (DependencyObject? up = button; up is not null && box is null; up = System.Windows.Media.VisualTreeHelper.GetParent(up))
+            if (up is System.Windows.Controls.ContentPresenter cp) box = FindSitesBox(cp);
+        if (box is null) return;
+        var lines = SiteGroupRow.LinesAt(box.Text, box.SelectionStart, box.SelectionLength);
+        var menu = new System.Windows.Controls.ContextMenu { PlacementTarget = button };
+        foreach (var target in _vm.SiteGroupRows.Where(g => g != from))
+        {
+            var item = new System.Windows.Controls.MenuItem { Header = target.Title };
+            item.Click += (_, _) => _vm.MoveSites(from, lines, target);
+            menu.Items.Add(item);
+        }
+        var fresh = new System.Windows.Controls.MenuItem { Header = L.T("sites.group.move.new") };
+        fresh.Click += (_, _) => _vm.MoveSites(from, lines, null);
+        menu.Items.Add(fresh);
+        menu.IsOpen = true;
+    }
+
+    static System.Windows.Controls.TextBox? FindSitesBox(DependencyObject parent)
+    {
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is System.Windows.Controls.TextBox { Tag: "SitesBox" } tb) return tb;
+            if (FindSitesBox(child) is { } found) return found;
+        }
+        return null;
+    }
+
     readonly MainViewModel _vm;
     readonly Tray _tray;
     readonly DispatcherTimer _timer;

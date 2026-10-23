@@ -635,7 +635,7 @@ public sealed class Shell
 
     /// <summary>
     /// Свои сайты: файл доменов, список целей, группа «Свои» включается. Негодные строки отбрасываются и возвращаются.
-    /// Группы (API 1.17) не трогаются: сайты, оставшиеся в списке, сохраняют свою группу, ушедшие из списка уходят и из групп.
+    /// Группы (API 1.18) не трогаются: сайты, оставшиеся в списке, сохраняют свою группу, ушедшие из списка уходят и из групп.
     /// </summary>
     public (IReadOnlyList<string> Saved, IReadOnlyList<string> Rejected) SetUserTargets(IEnumerable<string> lines)
     {
@@ -651,7 +651,7 @@ public sealed class Shell
     }
 
     /// <summary>
-    /// Свои сайты по группам (API 1.17): те же файл и список, что у <see cref="SetUserTargets"/>, плюс группы. Возвращается итог
+    /// Свои сайты по группам (API 1.18): те же файл и список, что у <see cref="SetUserTargets"/>, плюс группы. Возвращается итог
     /// (именованные группы по порядку, «Прочее» последней) и отброшенные строки.
     /// </summary>
     public (IReadOnlyList<SiteGroup> Saved, IReadOnlyList<string> Rejected) SetUserGroups(IEnumerable<SiteGroup> groups)
@@ -661,6 +661,30 @@ public sealed class Shell
         State.UserGroups = SiteGroups.Named(normalized);
         SaveState();
         return (UserSiteGroups(), [.. rejected, .. rejectedFile]);
+    }
+
+    /// <summary>Группы своих сайтов как домен → имя (для выгрузки и журнала); сайты «Прочее» не перечислены.</summary>
+    public Dictionary<string, string> UserGroupMap()
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var g in State.UserGroups)
+            foreach (var s in g.Sites)
+                if (AdvancedSites.Domain(s) is { } d) map.TryAdd(d, g.Name);
+        return map;
+    }
+
+    /// <summary>Свои сайты списком и группы картой «домен → имя» (загрузка настроек и её откат): сайт без записи в карте — «Прочее».</summary>
+    public void SetUserTargetsGrouped(IReadOnlyList<string> sites, IReadOnlyDictionary<string, string> groups)
+    {
+        var named = new List<SiteGroup>();
+        foreach (var s in sites)
+        {
+            if (AdvancedSites.Domain(s) is not { } d || !groups.TryGetValue(d, out var name)) continue;
+            (named.FirstOrDefault(g => string.Equals(g.Name, name, StringComparison.OrdinalIgnoreCase)) ?? AddGroup(named, name)).Sites.Add(s);
+        }
+        SetUserGroups([.. named, new SiteGroup("", sites.Where(s => AdvancedSites.Domain(s) is not { } d || !groups.ContainsKey(d)))]);
+
+        static SiteGroup AddGroup(List<SiteGroup> list, string name) { var g = new SiteGroup(name, []); list.Add(g); return g; }
     }
 
     /// <summary>Свои сайты по группам: именованные по порядку и «Прочее» последней (всегда есть, возможно пустая).</summary>

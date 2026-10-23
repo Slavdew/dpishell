@@ -57,7 +57,7 @@ public enum ArgKind
     ProxyPac,
     /// <summary>Строки продвинутого режима [{domains: [домен…], strategy}]: домены — строгий шаблон (<see cref="AdvancedSites.IsDomain"/>), стратегия — auto, direct или id из каталога. Других полей нет.</summary>
     AdvancedRows,
-    /// <summary>Свои сайты по группам (API 1.17) [{name, sites: [строка…]}]: имя до <see cref="SiteGroups.MaxName"/> знаков без управляющих (пусто — «Прочее»), сайты — как <see cref="Lines"/>, всего не больше MaxItems. Других полей нет.</summary>
+    /// <summary>Свои сайты по группам (API 1.18) [{name, sites: [строка…]}]: имя до <see cref="SiteGroups.MaxName"/> знаков без управляющих (пусто — «Прочее»), сайты — как <see cref="Lines"/>, всего не больше MaxItems. Других полей нет.</summary>
     SiteGroups,
     /// <summary>Сайты вида example.com — строгий шаблон (<see cref="AdvancedSites.IsDomain"/>), без повторов; на выходе список строк.</summary>
     Domains,
@@ -133,7 +133,7 @@ public static partial class HelperCommands
             new ArgSpec("lines", ArgKind.Lines, Required: true, MaxItems: IpsetValidator.MaxUserLines),
             new ArgSpec("exclude", ArgKind.Bool), new ArgSpec("confirmed", ArgKind.Bool)),
         new("user_targets_set", true, false, new ArgSpec("lines", ArgKind.Lines, Required: true, MaxItems: MaxUserTargets)),
-        // Свои сайты по группам (API 1.17): список целиком, как user_targets_set, плюс имена групп; сайты без группы — name "".
+        // Свои сайты по группам (API 1.18): список целиком, как user_targets_set, плюс имена групп; сайты без группы — name "".
         new("user_groups_set", true, false, new ArgSpec("groups", ArgKind.SiteGroups, Required: true, MaxItems: MaxUserTargets)),
         // Сайты, которые открываются без оптимизации (API 1.10): список целиком, только домены (тот же разбор, что у «Своих сайтов»);
         // в командную строку они попадают как --hostlist-exclude файла user-exclude.txt, который собирает сам помощник.
@@ -553,7 +553,8 @@ public static partial class HelperCommands
                     if (arr[i] is not JsonObject row) throw new HelperRequestException(id, L.T("core.req.adv_row", new { where = $"{Where()}[{i}]", shape = "{name, sites}" }));
                     foreach (var (k, _) in row)
                         if (k is not ("name" or "sites")) throw new HelperRequestException(id, L.T("core.req.arg_extra", new { cmd = $"{Where()}[{i}]", name = Short(k) }));
-                    var name = row["name"] is { } nn ? String(id, $"{Where()}[{i}].name", nn, SiteGroups.MaxName) : "";
+                    var name = row["name"] is null ? "" : row["name"] is JsonValue nv && nv.TryGetValue<string>(out var nameText) && nameText.Length <= SiteGroups.MaxName
+                        ? nameText : throw new HelperRequestException(id, L.T("core.req.control_chars", new { where = $"{Where()}[{i}].name" }));
                     if (name.Any(char.IsControl)) throw new HelperRequestException(id, L.T("core.req.control_chars", new { where = $"{Where()}[{i}].name" }));
                     if (row["sites"] is not JsonArray ds) throw new HelperRequestException(id, L.T("core.req.string_list", new { where = $"{Where()}[{i}].sites" }));
                     var sites = new List<string>(ds.Count);

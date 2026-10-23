@@ -40,7 +40,7 @@ public static class StrategyStats
     public sealed record LastRun(string File, IReadOnlyList<TargetStat> Targets)
     {
         /// <summary>
-        /// Свои сайты по группам (API 1.17): «группа №N» (имена в истории скрыты), «Прочее» — без имени и во всех прежних файлах. Адреса, закрытые
+        /// Свои сайты по группам (API 1.18): «группа №N» (имена в истории скрыты), «Прочее» — без имени и во всех прежних файлах. Адреса, закрытые
         /// по адресу, считаются отдельно. Пусто — своих сайтов в прогоне не было.
         /// </summary>
         public IReadOnlyList<SubLine> Subs => SiteGroupSummary.Build(Targets.Where(t => t.GroupId == "user")

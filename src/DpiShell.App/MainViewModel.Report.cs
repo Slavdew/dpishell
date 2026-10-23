@@ -128,6 +128,7 @@ public sealed partial class MainViewModel
         sections.Add(new(L.T("diag.report.sec.sites"),
         [
             L.T("diag.report.sites.own", new { n = own.Count }),
+            .. SiteGroupRows.Count(g => g.Named) is var groupsN and > 0 ? [L.T("diag.report.sites.groups", new { n = groupsN })] : Array.Empty<string>(),
             L.T("diag.report.sites.exclude", new { n = excluded.Count }),
         ]));
 
@@ -163,6 +164,8 @@ public sealed partial class MainViewModel
         foreach (var row in Proxy.Items) { hide.AddRange(SupportReport.Variants(row.Entry.Server)); hide.AddRange(SupportReport.Variants(row.Entry.Pac)); }
         if (Router.Found) hide.AddRange(SupportReport.Variants(Router.Detection?.Address));
         hide.AddRange(Lines(TargetsText)); hide.AddRange(Lines(ExcludeText));
+        // Имена групп своих сайтов задаёт человек — как и адреса, в отчёт и описание ошибки они не попадают.
+        hide.AddRange(SiteGroupRows.Where(g => g.Named).Select(g => g.Name)); hide.AddRange(SavedGroupNames());
         if (Live is { } st) { hide.AddRange(st.UserTargets); hide.AddRange(st.UserExclude ?? []); }
         // Свои строки hosts (имена и адреса) и свои DNS (адреса, DoH): попадают в тексты ошибок помощника («строка … отвергнута»).
         foreach (var row in Hosts.UserRows) { hide.Add(row.Host); hide.Add(row.Ip); }

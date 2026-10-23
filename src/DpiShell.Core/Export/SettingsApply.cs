@@ -32,7 +32,9 @@ public static class SettingsApplier
             {
                 switch (id)
                 {
-                    case SettingsSections.Sites: target.SetSites(ops.Sites!); break;
+                    case SettingsSections.Sites:
+                        if (ops.SiteGroups is { Count: > 0 }) target.SetSites(ops.Sites!, ops.SiteGroups); else target.SetSites(ops.Sites!);
+                        break;
                     case SettingsSections.Exclude: target.SetExclude(ops.Exclude!); break;
                     case SettingsSections.Subnets:
                         if (ops.Subnets is not null) target.SetSubnets(ops.Subnets, false);

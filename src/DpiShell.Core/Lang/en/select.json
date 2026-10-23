@@ -123,6 +123,13 @@
   "select.check.src_dns": "Windows DNS",
   "select.check.no_name": "no such name",
   "select.check.cant_open": "cannot be opened",
+  "select.check.note.addr_blocked": "blocked by address — optimization will not help",
+  "select.sub.other": "Other",
+  "select.sub.line": "{name} {mark} {ok}/{total}",
+  "select.sub.missed": "not opening: {hosts}",
+  "select.sub.more": " and {n} more",
+  "select.sub.sampled": "checked {n} of {all}",
+  "select.sub.blocked": "blocked by address: {n} — optimization will not help",
   "select.check.missed": "not opened: {groups}",
   "select.regression": {
     "one": "“{name}” worked the last {n} time, but now {failed} — the provider may have changed its rules or the network is failing. New strategies can be searched for.",
