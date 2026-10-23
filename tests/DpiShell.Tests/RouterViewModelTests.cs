@@ -681,6 +681,7 @@ public sealed class RouterViewModelTests : IDisposable
     [InlineData("0.2.0-r9", "0.2.0-r10", true)]
     [InlineData("0.1.0", "0.2.0-r1", true)]
     [InlineData("0.2.1-r1", "0.2.0-r16", false)]
+    [InlineData("0.2.0-r17", "0.2.1-r1", true)]
     [InlineData("x", "0.2.0-r16", false)]
     public void Rollback_OlderPackage(string a, string b, bool older) => Assert.Equal(older, RouterViewModel.OlderPackage(a, b));
 

@@ -1,6 +1,38 @@
 {
   "_comment": "Что нового в программе для Windows — для окна «Доступно обновление» и страницы релиза. Ключ — версия X.Y.Z (= Version в Directory.Build.props); значение — {\"ru\": [...], \"en\": [...]}: коротко, словами пользователя, до 15 строк; строки en — перевод строк ru один к одному (нет en — окно показывает русский; прежний вид, просто список, читается как ru). Нет записи для версии — тег windows-vX.Y.Z не выпускается (packaging/release-json.py). min_os — минимальная Windows (10.0.17763 = Windows 10 1809); на более старой окно обновление не предлагает.",
   "min_os": "10.0.17763",
+  "0.11.0": {
+    "ru": [
+      "«Проверить сайт» учитывает режим оптимизации; сайт вне списков добавляется кнопкой «Добавить в список оптимизации»",
+      "Безопасность: служба меняет hosts, DNS и прокси только по команде этого окна, а перед неочевидными изменениями спрашивает",
+      "Ядро проверяется перед каждым запуском; подменённые папки и ссылки в данных программы отклоняются",
+      "Описания выпусков без даты выпуска не принимаются — защита от подмены старыми версиями",
+      "Вход на роутер по HTTPS: сертификат закрепляется при первом входе, пароль по HTTP молча не уходит",
+      "Отмена по пунктам при загрузке настроек и «Отменить загрузку настроек»",
+      "«Удалить DpiShell с этого ПК…»: по шагам, с возвратом изменений",
+      "У ошибок — «Подробнее» и «Скопировать»; в копии свои hosts и DNS скрыты",
+      "«Безопасность роутера» — справочно: что защищено и что можно улучшить",
+      "«Изменения DpiShell на роутере»: отмена по пунктам и «Отменить всё»; возврат прежней версии пакета на роутере",
+      "Справочник FAQ в «Информации», в том числе «Как вернуть как было»",
+      "Документация и README на английском",
+      "Исправлены тексты окна: яснее и короче, правки перевода"
+    ],
+    "en": [
+      "“Check a site” follows the optimization mode; a site outside the lists is added with “Add to optimization list”",
+      "Security: the service changes hosts, DNS and proxy only on a command from this window, and asks before non-obvious changes",
+      "The core is verified before every start; replaced folders and links in the program data are rejected",
+      "Release descriptions without an issue date are not accepted — protection against replacement with old ones",
+      "Signing in to the router over HTTPS: the certificate is pinned on first sign-in, the password is never silently sent over HTTP",
+      "Undo per item when importing settings, and “Cancel settings import”",
+      "“Remove DpiShell from this PC…”: step by step, with changes restored",
+      "Errors have “Details” and “Copy”; your own hosts and DNS are hidden in the copy",
+      "“Router security” is informational: what is protected and what can be improved",
+      "“DpiShell changes on the router”: undo per item and “Undo all”; returning the router package to its previous version",
+      "A FAQ in “Information”, including “How to restore the previous state”",
+      "Documentation and README in English",
+      "Window texts fixed: clearer and shorter, translation corrections"
+    ]
+  },
   "0.10.0": {
     "ru": [
       "Выгрузка и загрузка своих настроек папкой или архивом .zip с текстовыми файлами: сайты, исключения, стратегии, настройки для сайтов, профили игр, подсети, DNS и (осторожно) строки hosts — чтобы делиться ими, например, с абонентами того же провайдера",

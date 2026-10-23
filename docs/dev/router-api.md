@@ -47,7 +47,7 @@
 
 **`status`** `{}` →
 ```json
-{ "api": "1.0", "version": "0.2.0", "min_app": "0.9.0", "methods": ["apply", "check_now", "…", "uninstall", "update_install"], "engine": "zapret1",
+{ "api": "1.0", "version": "0.2.1", "min_app": "0.9.0", "methods": ["apply", "check_now", "…", "uninstall", "update_install"], "engine": "zapret1",
   "core": { "version": "v72.13", "installed": true, "hash_ok": true, "installed_version": "v72.13" },
   "packages": { "dpishell": "0.2.0-r8", "luci-app-dpishell": "0.2.0-r5" },
   "enabled": true, "mode": "all", "strategy": "alt10", "backups": ["alt9", "alt13"], "needs_tcp_timestamps": true,
