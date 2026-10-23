@@ -208,7 +208,7 @@ public sealed class HelperLink : IAsyncDisposable
         _quiet = true;
         try
         {
-            var r = await Setup.RunElevatedAsync("--install-helper " + UserSid());
+            var r = await Setup.RunElevatedAsync("--install-helper " + UserSid() + " " + HelperInstaller.LangArg + L.Current);
             if (r.Result != SetupResult.Done) return r;
             Drop();
             var until = DateTime.UtcNow + ConnectWait;
