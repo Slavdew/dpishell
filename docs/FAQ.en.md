@@ -23,14 +23,15 @@ The reason is the WinDivert driver: it intercepts network traffic, and malware d
 **What to do**
 
 1. Add two folders to the exclusions: the one you unpacked the program to (for example `C:\Programs\DpiShell`) and `%ProgramData%\DpiShell`.
+   - Easiest for `%ProgramData%\DpiShell`: the "Add to exclusions" button on "Home" (Windows Defender). On the first "Turn on" the app asks about it itself, before the core is downloaded. The button does not exclude the program folder: any program without rights can write there, and an exclusion would turn it into a hiding place. If Defender refuses (tamper protection, organization policy), the card shows the path, "Copy path" and "Open Defender".
    - Fastest: PowerShell as administrator; the folders do not have to exist yet:
      ```powershell
      Add-MpPreference -ExclusionPath "$env:ProgramData\DpiShell", "C:\Programs\DpiShell"
      ```
      Replace the second path with your program folder.
    - Manually: "Windows Security" > "Virus & threat protection" > "Manage settings" > "Exclusions" > "Add or remove exclusions" > "Add an exclusion" > "Folder". Names depend on the Windows version. The folder picker needs an existing folder: `%ProgramData%\DpiShell` appears after the first "Turn on". Do not create it yourself: the app moves such a folder aside and creates its own with closed permissions.
-   - Other antivirus: use its exclusion settings; DpiShell does not add exclusions itself.
-2. If files are already deleted: download and unpack the program again; for the core, "Diagnostics" > "Restore".
+   - Other antivirus: use its exclusion settings. DpiShell adds an exclusion only on the button and only for the core folder (in Windows Defender); "Undo all" and removing DpiShell remove it, only if DpiShell added it.
+2. If files are already deleted: download and unpack the program again; for the core, "Add to exclusions and restore" on "Home" (or "Restore" if the exclusion is already there).
 3. Before the next "Turn on", the protection history should have no new DpiShell entries.
 
 An exclusion turns off scanning of these folders; that is your decision. If in doubt, do not install the program.
