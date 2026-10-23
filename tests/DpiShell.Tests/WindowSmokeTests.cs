@@ -366,6 +366,8 @@ public sealed partial class WindowSmokeTests
                 if (Find<Button>(tabs, b => b.Content as string == "Применить" && b.IsVisible && b.IsEnabled) is null) throw new Exception("В карточке итога нет главной кнопки «Применить»");
                 if (!blockedNote.Contains(L.T("select.addr.next"))) throw new Exception("У строки про блокировку по адресу нет следующего шага");
                 if (vm.Scores[0].ErrorShown == L.T("select.row.none")) throw new Exception("Таблица пишет «нет», хотя адреса не открылись");
+                // Следующий шаг — кнопкой (аудит С-5).
+                if (Find<Button>(tabs, b => b.Content as string == L.T("select.addr.go") && b.IsVisible && b.IsEnabled) is null) throw new Exception("У строки про блокировку по адресу нет кнопки «Открыть IP-списки»");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-select-result-blocked-full.png"));
 
                 // Лучшая включена — одна строка.
@@ -395,6 +397,12 @@ public sealed partial class WindowSmokeTests
                 if (Visible(t => t.Text == blockedNote)) throw new Exception("Новый подбор не убрал строку про блокировку по адресу");
                 if (!Visible(t => t.Text.StartsWith("Подходит:")) || Visible(t => t.Text.StartsWith("✓ Включена")))
                     throw new Exception("Новый подбор не вернул полную карточку");
+                if (Find<Button>(tabs, b => b.Content as string == L.T("select.addr.go") && b.IsVisible) is not null) throw new Exception("Без строки про блокировку осталась кнопка «Открыть IP-списки»");
+                // «Открыть IP-списки» ведёт на «Игры и программы» с раскрытым блоком IP-списков.
+                vm.GoIpListsCmd.Execute(null);
+                Pump();
+                if (vm.Page != Pages.Apps || !vm.Net.ListsOpen) throw new Exception("«Открыть IP-списки» не открыло блок IP-списков");
+                if (!Visible(t => t.Text == L.T("apps.ipset.title"))) throw new Exception("После «Открыть IP-списки» заголовок блока не виден");
                 Close(w);
             }
         });
@@ -1088,6 +1096,7 @@ public sealed partial class WindowSmokeTests
                         Pump();
                         if (!VisibleText(tabs, t => t.Text.StartsWith("Включена на роутере"))) throw new Exception("«Подробнее» не раскрыло итог роутера");
                         if (!VisibleText(tabs, t => t.Text == rBlocked)) throw new Exception("В «Подробнее» роутера нет строки про блокировку по адресу");
+                        if (Find<Button>(tabs, b => b.Content as string == L.T("select.addr.go") && b.IsVisible && b.IsEnabled && b.DataContext == router) is null) throw new Exception("В «Подробнее» роутера нет кнопки «Открыть IP-списки»");
                         if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-router-select-blocked-expanded.png"));
                         SetProp(router, "AddressNote", "");
                         Pump();

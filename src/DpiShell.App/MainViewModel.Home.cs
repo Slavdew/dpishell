@@ -13,7 +13,7 @@ public sealed record CheckGroupMark(string Title, bool Ok, bool Browser = false)
 }
 
 /// <summary>Место в окне, куда прокрутить по ссылке (<see cref="MainViewModel.ShowRequested"/>).</summary>
-public enum Spot { Strategies, PcDns }
+public enum Spot { Strategies, PcDns, IpLists }
 
 /// <summary>
 /// Главная по варианту A макета (prototypes/combined, снимки A-*, A2-*): карточка статуса с круглым значком, одна большая кнопка ПК,
@@ -112,6 +112,9 @@ public sealed partial class MainViewModel
     ICommand? _goRouterCmd;
     public ICommand GoHostsCmd => _goHostsCmd ??= new RelayCommand(() => OpenNet(NetBlock.Hosts));
     ICommand? _goHostsCmd;
+    /// <summary>Из итога подбора «похоже на блокировку по адресу» — к IP-спискам («Игры и программы», блок раскрыт), где «Все адреса» на 10 минут (аудит С-5).</summary>
+    public ICommand GoIpListsCmd => _goIpListsCmd ??= new RelayCommand(() => { Net.ListsOpen = true; Page = Pages.Apps; ShowRequested?.Invoke(Spot.IpLists); });
+    ICommand? _goIpListsCmd;
 
     // ---------- значки состояния и панели ----------
 

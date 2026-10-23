@@ -506,6 +506,9 @@
                                 <StackPanel>
                                     <TextBox Text="{Binding ResultText, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="16" FontWeight="SemiBold" ToolTip="{Binding ResultTip}" />
                                     <TextBox Text="{Binding ResultHint, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" /><TextBox Text="{Binding AddressNote, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
+                                    <!-- Блокировка по адресу: следующий шаг — кнопкой, а не только словами (аудит С-5). -->
+                                    <Button Content="{l:T select.addr.go}" Style="{StaticResource LinkButton}" Command="{Binding GoIpListsCmd}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                            Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
                                     <!-- Глубокий поиск — только когда готовые не помогли со всем (UX-аудит, п. 30); фраза — цифрой, что не открылось (UX-аудит 6, п. 9). -->
                                     <TextBlock Text="{Binding DeepText}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="{Binding OfferDeep, Converter={StaticResource Vis}}" />
                                 </StackPanel>
@@ -635,6 +638,8 @@
                                     <StackPanel>
                                         <TextBox Text="{Binding ResultText, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="16" FontWeight="SemiBold" />
                                         <TextBox Text="{Binding ResultHint, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" /><TextBox Text="{Binding AddressNote, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
+                                        <Button Content="{l:T select.addr.go}" Style="{StaticResource LinkButton}" Command="{Binding DataContext.GoIpListsCmd, RelativeSource={RelativeSource AncestorType=Window}}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                                Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
                                         <Button Content="{l:T select.deep}" Command="{Binding StartDeepCmd}" HorizontalAlignment="Left" Margin="0,10,0,0"
                                                 Visibility="{Binding OfferDeep, Converter={StaticResource Vis}}" ToolTip="{l:T select.router.deep.tip}" />
                                     </StackPanel>
@@ -1103,7 +1108,7 @@
                                 </Border>
 
                                 <!-- IP-списки и свои подсети правят редко: профиль под программу заполняет их сам. Идут «Все адреса» — раскрыто, чтобы отсчёт был виден. -->
-                                <Expander Header="{l:T apps.more_tools}" IsExpanded="{Binding ListsOpen, Mode=TwoWay}">
+                                <Expander x:Name="IpListsBlock" Header="{l:T apps.more_tools}" IsExpanded="{Binding ListsOpen, Mode=TwoWay}">
                                     <StackPanel Margin="0,8,0,0">
                                         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                                             <TextBlock Text="{l:T apps.ipset.title}" Style="{StaticResource H1}" FontSize="19" />
