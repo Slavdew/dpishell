@@ -152,7 +152,7 @@ public class RouterUpdateUninstallTests
     {
         var releases = RouterReleases.Load(Path.Combine(Repo.Data, "router-releases.json"));
         Assert.Equal("0.2.1", RouterUpdatePackages.BaseVersion("0.2.1-r1"));
-        Assert.Equal(releases.Releases[0].ReleaseJson, RouterUpdatePackages.ReleaseJsonUrl(releases, "0.2.0-r3"));
+        Assert.Equal(releases.Releases.First(r => r.Version == "0.2.0").ReleaseJson, RouterUpdatePackages.ReleaseJsonUrl(releases, "0.2.0-r3"));
         Assert.Equal("https://github.com/Slavdew/dpishell/releases/download/router-v0.2.1/release.json", RouterUpdatePackages.ReleaseJsonUrl(releases, "0.2.1-r1"));
     }
 

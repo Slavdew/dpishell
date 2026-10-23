@@ -29,7 +29,7 @@ public class RouterInstallFlowTests
         var o = await Flow(ssh, d).InstallAsync(new("192.168.1.1"), () => "pw", new LineProgress(steps.Add));
 
         Assert.True(o.Ok);
-        Assert.Equal("0.2.0", o.Verdict.Release!.Version);
+        Assert.Equal("0.2.1", o.Verdict.Release!.Version);
         Assert.Empty(ssh.Forwards);
         var cmds = ssh.Runs.Select(x => x.Command).ToList();
         Assert.Equal("sh -s -- --update", cmds[0]);
