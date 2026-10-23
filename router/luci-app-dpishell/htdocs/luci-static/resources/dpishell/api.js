@@ -150,7 +150,7 @@ var PARAMS = {
 	advanced_get: [],
 	advanced_set: ['enabled', 'others', 'rows', 'confirm_s'],
 	advanced_revert: [],
-	dns_compare: [],
+	dns_compare: [], dns_compare_start: [], dns_compare_result: [],
 	security_check: [],
 	changes_list: [], changes_undo: ['id'], changes_undo_all: [],
 	update_rollback: ['from']

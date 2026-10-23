@@ -240,6 +240,10 @@
     "Нужны, если в адресе защищённого DNS имя, а не IP",
     "Needed if the secure DNS address contains a name, not an IP"
   ],
+  "web.dns.compare_failed": [
+    "Замер не завершился — повторите",
+    "Measurement did not finish — try again"
+  ],
   "web.dns.choose_other": [
     "Выберите другой DNS, чтобы применить",
     "Choose another DNS to apply"

@@ -4,7 +4,8 @@
 		"read": {
 			"ubus": {
 				"dpishell": [ "status", "strategies", "select_progress", "targets_get", "lists_get", "diag",
-				              "dns_status", "site_check_result", "dns_presets", "advanced_get", "dns_compare" ]
+				              "dns_status", "site_check_result", "dns_presets", "advanced_get", "dns_compare",
+				              "dns_compare_start", "dns_compare_result" ]
 			}
 		},
 		"write": {

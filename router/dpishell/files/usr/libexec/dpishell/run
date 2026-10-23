@@ -188,6 +188,10 @@ function cleanup_tmp() {
 	}
 	if (!st.job_running('select'))
 		unlink(st.P.trial_config);
+	// Итог «Сравнить скорость» нужен минуту-другую (страница держит его у себя) — старше 10 мин не хранить.
+	let dc = `${st.P.run}/dns_compare.json`, dcs = lstat(dc);
+	if (dcs?.type == 'file' && time() - dcs.mtime > 600 && !st.job_running('dns_compare'))
+		unlink(dc);
 	try { core.cleanup_tmp(); } catch (x) {}
 	try { upd.local_cleanup(3600); } catch (x) {}
 }
@@ -344,6 +348,15 @@ else if (cmd == 'dns_analyze' || cmd == 'dns_enable' || cmd == 'dns_restore' || 
 		'web.warn.dns_spoofed');
 	unlink(l);
 }
+else if (cmd == 'dns_compare') {
+	// «Сравнить скорость» фоном (rpcd dns_compare_start): curl по 4 с — вне rpcd, итог — dns_compare_result.
+	let l = lock('dns_compare');
+	if (!l) exit(1);
+	let f = `${st.P.run}/dns_compare.json`, items = null;
+	try { items = dns.compare(); } catch (x) {}
+	st.write_atomic(f, sprintf('%J\n', { running: false, items, at: time() }));
+	unlink(l);
+}
 else if (cmd == 'site_check') {
 	let l = lock('site_check');
 	if (!l) exit(1);
@@ -384,6 +397,6 @@ else if (cmd == 'changes_undo') {
 	unlink(l);
 }
 else {
-	print('usage: run select|check|watch|core_install|site_check\n');
+	print('usage: run select|check|watch|core_install|site_check|dns_compare\n');
 	exit(2);
 }
