@@ -603,7 +603,8 @@ public sealed partial class RouterViewModel
     void RaiseUpdate()
     {
         foreach (var n in new[] { nameof(UpdateAvailable), nameof(ShowUpdate), nameof(UpdateTitle), nameof(UpdateNotes), nameof(HasUpdateNotes),
-                     nameof(UpdateSteps), nameof(HasUpdateSteps), nameof(UpdateButtonText) }) Raise(n);
+                     nameof(UpdateSteps), nameof(HasUpdateSteps), nameof(UpdateButtonText),
+                     nameof(UpdateCheckLine), nameof(HasUpdateCheckLine), nameof(UpdateCheckFailed), nameof(UpdateToText) }) Raise(n);
     }
 
     /// <summary>Ждать итог update_check не дольше.</summary>
@@ -612,29 +613,67 @@ public sealed partial class RouterViewModel
     public ICommand UpdateCheckCmd => _updateCheckCmd ??= RelayCommand.Async(CheckUpdatesAsync, () => Connected && !Busy && Compat?.CanCall("update_check") != false);
     ICommand? _updateCheckCmd;
 
-    /// <summary>«Проверить обновления»: update_check и ждать новый status.update.checked_at.</summary>
+    /// <summary>«Проверить обновления»: update_check и ждать новый status.update.checked_at. Итог — строкой у ссылки (<see cref="UpdateCheckLine"/>) и в строке состояния.</summary>
     public async Task CheckUpdatesAsync()
     {
         if (Busy || !Connected) return;
         Busy = true;
+        _updateChecking = true;
+        _updateCheckError = "";
+        RaiseUpdate();
         Say(L.T("router.update.check_busy"));
         try
         {
             var before = _status?.Update?.CheckedAt;
             await Call(c => c.UpdateCheckAsync());
             var started = DateTime.UtcNow;
+            bool answered = false;
             while (DateTime.UtcNow - started < UpdateCheckTimeout)
             {
                 await Task.Delay(PollInterval);
                 var s = await Call(c => c.StatusAsync());
                 Status = s;
-                if (s.Jobs?.Update != true && s.Update?.CheckedAt != before) break;
+                if (s.Jobs?.Update != true && s.Update?.CheckedAt != before) { answered = true; break; }
             }
-            Say(_status?.Update is { Available: true } u ? L.T("router.update.available_say", new { version = u.Version }) : L.T("router.update.none"));
+            if (!answered && _status?.Update is not { Available: true })
+            {
+                _updateCheckError = L.T("router.update.check_timeout");
+                Say(L.T("router.update.line_failed", new { reason = _updateCheckError }));
+            }
+            else Say(_status?.Update is { Available: true } u ? L.T("router.update.available_say", new { version = u.Version }) : L.T("router.update.none"));
         }
-        catch (RouterException e) { Failed(RouterTexts.Friendly(e)); }
-        finally { Busy = false; }
+        catch (RouterException e)
+        {
+            _updateCheckError = RouterTexts.Friendly(e);
+            Failed(_updateCheckError);
+        }
+        finally { _updateChecking = false; Busy = false; RaiseUpdate(); }
     }
+
+    bool _updateChecking;
+    string _updateCheckError = "";
+
+    /// <summary>
+    /// Итог «Проверить обновления» — у самой ссылки, держится: «Проверка…», «Доступна X» (рядом «Обновить до X»), «Последняя версия · проверено в ЧЧ:ММ»,
+    /// «Не проверено: причина». Новая версия уже известна (автопроверка роутера) — «Доступна X» сразу, без нажатия (аудит С-23).
+    /// </summary>
+    public string UpdateCheckLine
+    {
+        get
+        {
+            if (!Connected || Updating) return "";
+            if (_updateChecking) return L.T("router.update.line_checking");
+            if (UpdateAvailable) return L.T("router.update.line_available", new { version = _status?.Update?.Version });
+            if (_updateCheckError.Length > 0) return L.T("router.update.line_failed", new { reason = _updateCheckError });
+            if (_status?.Update?.CheckedAt is { } at)
+                return L.T("router.update.line_latest", new { when = UpdatesViewModel.CheckedWhen((at.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(at, DateTimeKind.Utc) : at).ToLocalTime(), DateTime.Now) });
+            return "";
+        }
+    }
+    public bool HasUpdateCheckLine => UpdateCheckLine.Length > 0;
+    public bool UpdateCheckFailed => !_updateChecking && !UpdateAvailable && _updateCheckError.Length > 0;
+    /// <summary>«Обновить до X» рядом со строкой итога.</summary>
+    public string UpdateToText => L.T("router.update.update_to", new { version = _status?.Update?.Version });
 
     /// <summary>
     /// Обновление закончилось — rpcd перезапустится через ~2 с: переждать перезапуск и дождаться dpishell (<see cref="WaitDpishellAsync"/>),

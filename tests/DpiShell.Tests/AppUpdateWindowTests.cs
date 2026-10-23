@@ -136,6 +136,56 @@ public sealed class AppUpdateWindowTests
         Assert.False(r.Vm.HasAppError);
     }
 
+    /// <summary>Аудит С-23: о версии известно из манифеста — сразу «Обновить до X» (не «Проверить обновления»); нажатие получает описание выпуска и обновляет.</summary>
+    [Fact]
+    public async Task Hint_UpdateButtonAtOnce_ClickFetchesReleaseAndUpdates()
+    {
+        using var r = new Rig(Release());
+        r.Settings.UpdatesApp = "1.2.0";
+        Assert.True(r.Vm.AppHintOnly);
+        Assert.True(r.Vm.ShowAppUpdateButton);
+        Assert.False(r.Vm.ShowCheckButton);
+        Assert.Equal("Обновить до 1.2.0", r.Vm.AppUpdateButtonText);
+        Assert.True(r.Vm.UpdateAppCmd.CanExecute(null));
+        r.Vm.UpdateAppCmd.Execute(null);
+        await r.Wait(() => r.Restarts.Count > 0 || r.Vm.HasAppError);
+        Assert.False(r.Vm.HasAppError, r.Vm.AppError);
+        Assert.Single(r.Restarts);
+    }
+
+    /// <summary>Подсказка есть, а описание выпуска не получено — понятная ошибка и ссылка на страницу релизов, не молчание.</summary>
+    [Fact]
+    public async Task Hint_NoRelease_ExplainsOnClick()
+    {
+        using var r = new Rig(new MapHandler());
+        r.Settings.UpdatesApp = "1.2.0";
+        r.Vm.UpdateAppCmd.Execute(null);
+        await r.Wait(() => r.Vm.HasAppError);
+        Assert.Equal(L.T("about.app.no_release", new { version = "1.2.0" }), r.Vm.AppError);
+        Assert.Empty(r.Restarts);
+        Assert.False(r.Vm.ShowAppUpdateButton);   // под ошибкой — «Повторить», вторая главная кнопка не нужна
+    }
+
+    /// <summary>Итог проверки — строкой у кнопки: источники молчат — «Не проверено: …»; проверено — «Последняя версия · проверено в ЧЧ:ММ».</summary>
+    [Fact]
+    public async Task CheckLine_FailedAndLatest()
+    {
+        using var r = new Rig(new MapHandler());
+        await r.Vm.CheckAsync(quiet: false);
+        Assert.Equal("Не проверено: " + L.T("about.app.reason_sources"), r.Vm.AppCheckLine);
+        Assert.True(r.Vm.AppCheckFailed);
+
+        using var ok = new Rig(new MapHandler());
+        var at = new DateTime(2026, 10, 23, 14, 5, 0);
+        ok.Vm.Now = () => at.AddMinutes(1);
+        ok.Settings.UpdatesCheckedAt = at;
+        ok.Settings.UpdatesOkAt = at;
+        Assert.Equal("Последняя версия · проверено в " + L.Time(at), ok.Vm.AppCheckLine);
+        Assert.False(ok.Vm.AppCheckFailed);
+        ok.Vm.Now = () => at.AddDays(1);
+        Assert.Equal("Последняя версия · проверено " + L.T("about.when", new { date = L.DayMonth(at), time = L.Time(at) }), ok.Vm.AppCheckLine);
+    }
+
     [Fact]
     public async Task Update_Succeeds_RestartsIntoNewCopy_AndKeepsOldForRollback()
     {

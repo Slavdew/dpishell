@@ -659,6 +659,38 @@ public sealed class RouterSetupViewModelTests : IDisposable
         await vm.CheckUpdatesAsync();
         Assert.Equal(1, r.UpdateCheckCalls);
         Assert.Contains(L.T("router.update.none"), _said);
+        // Итог — у ссылки и держится: «Последняя версия · проверено …» по времени проверки роутера.
+        Assert.StartsWith("Последняя версия · проверено ", vm.UpdateCheckLine);
+        Assert.False(vm.UpdateCheckFailed);
+    }
+
+    /// <summary>Аудит С-23: новая версия уже известна (автопроверка роутера) — «Доступна X» и «Обновить до X» сразу, без «Проверить обновления».</summary>
+    [Fact]
+    public async Task UpdateCheck_KnownVersion_ShownWithoutClick()
+    {
+        using var r = new FakeRouter().As020();
+        var vm = Make(r, new FakeSshConnector(new FakeSsh()));
+        await vm.ConnectAsync("secret");
+        Assert.Equal(0, r.UpdateCheckCalls);
+        Assert.Equal("Доступна 0.2.1-r1", vm.UpdateCheckLine);
+        Assert.Equal("Обновить до 0.2.1-r1", vm.UpdateToText);
+        Assert.True(vm.UpdateCmd.CanExecute(null));
+    }
+
+    /// <summary>Роутер не дописал итог проверки за отведённое время — «Не проверено: роутер не ответил за минуту», а не «обновлений нет».</summary>
+    [Fact]
+    public async Task UpdateCheck_NoAnswer_SaysNotChecked()
+    {
+        using var r = new FakeRouter().As020();
+        r.UpdateAvailable = false;
+        r.UpdateCheckedAt = "2026-10-17T15:00:00Z";   // update_check ставит то же время — итог «не пришёл»
+        var vm = Make(r, new FakeSshConnector(new FakeSsh()));
+        await vm.ConnectAsync("secret");
+        vm.UpdateCheckTimeout = TimeSpan.FromMilliseconds(50);
+        await vm.CheckUpdatesAsync();
+        Assert.Equal("Не проверено: " + L.T("router.update.check_timeout"), vm.UpdateCheckLine);
+        Assert.True(vm.UpdateCheckFailed);
+        Assert.DoesNotContain(L.T("router.update.none"), _said);
     }
 
     // ---------- 5. ключ роутера изменился ----------
