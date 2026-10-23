@@ -28,6 +28,12 @@ public sealed record StrategyScore(Strategy Strategy, IReadOnlyList<TargetVerdic
         _ => Error,
     };
 
+    /// <summary>
+    /// Адреса «Своих сайтов», до которых не устанавливается даже TCP-соединение ни без обхода, ни ни с одной стратегией (<see cref="AddressBlocks"/>):
+    /// это не провал стратегии, в оценку они не входят и из <see cref="Verdicts"/> убраны — здесь они только для показа.
+    /// </summary>
+    public IReadOnlyList<TargetVerdict> Blocked { get; init; } = [];
+
     public double GroupShare => GroupsTotal == 0 ? 0 : (double)GroupsPassed / GroupsTotal;
     public double TargetShare => Verdicts.Count == 0 ? 0 : (double)Verdicts.Count(v => v.Ok) / Verdicts.Count;
     public double AvgSeconds => Verdicts.Where(v => v.Ok).Select(v => v.BestSeconds).DefaultIfEmpty(99).Average();
@@ -42,6 +48,9 @@ public sealed record SelectionReport(
 {
     /// <summary>Откуда проверка брала адреса сайтов (<see cref="CheckDns"/>): защищённый DNS, система по выбору или система, потому что DoH не ответил. null — не известно.</summary>
     public string? AddressSource { get; init; }
+
+    /// <summary>Адреса своих сайтов, заблокированные по адресу (<see cref="AddressBlocks"/>); из оценок исключены.</summary>
+    public IReadOnlyList<string> AddressBlocked { get; init; } = [];
 
     public StrategyScore? Best => Scores.Where(s => s.Error is null && s.GroupsPassed > 0)
         .OrderByDescending(s => s.GroupShare).ThenByDescending(s => s.TargetShare).ThenBy(s => s.AvgSeconds).FirstOrDefault();
@@ -106,20 +115,27 @@ public class Selector(AppPaths paths, HttpProbe probe)
         if (blocked.All(g => g.Control)) return new(baseline, blocked, [], false);
 
         var scores = new List<StrategyScore>();
+        // Итог всегда пересчитывается без адресов, закрытых по адресу: они не провал стратегии и в выбор не входят.
+        SelectionReport Finish(bool cancelled)
+        {
+            var gone = AddressBlocks.Find(baseline, scores);
+            return new SelectionReport(baseline, blocked, [.. scores.Select(x => AddressBlocks.Rescore(x, blocked, gone))], cancelled)
+            { AddressBlocked = [.. gone.Select(AddressBlocks.UrlOf)] };
+        }
         for (int i = 0; i < strategies.Count; i++)
         {
-            if (ct.IsCancellationRequested) return new(baseline, blocked, scores, true);
+            if (ct.IsCancellationRequested) return Finish(true);
             var s = strategies[i];
             progress?.Report(new(i, strategies.Count, L.T("core.select.strategy", new { title = s.Title })));
             StrategyScore score;
             try { score = await RunOneAsync(s, blocked, ct); }
-            catch (OperationCanceledException) { return new(baseline, blocked, scores, true); }
+            catch (OperationCanceledException) { return Finish(true); }
             scores.Add(score);
             progress?.Report(new(i + 1, strategies.Count, $"{s.Title}: {score.GroupsPassed}/{score.GroupsTotal}", score));
-            if (quick && score.Perfect) break;
+            if (quick && AddressBlocks.Rescore(score, blocked, AddressBlocks.Find(baseline, scores)).Perfect) break;
             await Task.Delay(300, ct);
         }
-        var report = new SelectionReport(baseline, blocked, scores, false);
+        var report = Finish(false);
         if (!mix) return report;
 
         // Одной стратегии на всё не нашлось — собрать смешанную из вердиктов этого же прогона и проверить её одним прогоном.
@@ -127,12 +143,12 @@ public class Selector(AppPaths paths, HttpProbe probe)
         if (MixBuilder.Build(report) is not { } plan) return report;
         progress?.Report(new(strategies.Count, strategies.Count + 1, L.T("core.select.mixed", new { title = plan.Mix.Title })));
         StrategyScore mixScore;
-        try { mixScore = await RunOneAsync(plan.Mix, blocked, ct); }
+        var withoutBlocked = AddressBlocks.Without(blocked, report.AddressBlocked);
+        try { mixScore = await RunOneAsync(plan.Mix, withoutBlocked, ct); }
         catch (OperationCanceledException) { return report with { Cancelled = true }; }
         if (!MixBuilder.BeatsSingle(mixScore, report.Best)) return report;
-        scores.Add(mixScore);
         progress?.Report(new(strategies.Count + 1, strategies.Count + 1, $"{plan.Mix.Title}: {mixScore.GroupsPassed}/{mixScore.GroupsTotal}", mixScore));
-        return new(baseline, blocked, scores, false);
+        return report with { Scores = [.. report.Scores, mixScore] };
     }
 
     public virtual async Task<StrategyScore> RunOneAsync(Strategy s, IReadOnlyList<TargetGroup> groups, CancellationToken ct)

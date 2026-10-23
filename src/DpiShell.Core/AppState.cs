@@ -9,6 +9,11 @@ public sealed class AppState
     public string? StrategyId { get; set; }
     public bool Enabled { get; set; }
     public List<string> UserTargets { get; set; } = [];
+    /// <summary>
+    /// Группы своих сайтов (API 1.17), только именованные: сайты, которых тут нет, — «Прочее». Необязательное поле: старые файлы читаются как есть,
+    /// старая версия программы его не знает и игнорирует. <see cref="UserTargets"/> остаётся полным плоским списком — его читает всё остальное.
+    /// </summary>
+    public List<SiteGroup> UserGroups { get; set; } = [];
     /// <summary>Сайты, которые на этом ПК открываются без оптимизации (user-exclude.txt, API 1.10): «Открыть без оптимизации» и список на «Сайтах».</summary>
     public List<string> UserExclude { get; set; } = [];
     public List<string> Groups { get; set; } = ["youtube", "discord"];
@@ -89,8 +94,22 @@ public static class ResultStore
 
         // Свои сайты пользователя в историю не пишем: «свой адрес №N», хост вычищается и из текстов ошибок.
         var userNo = new Dictionary<string, int>();
-        foreach (var v in r.Baseline.Concat(r.Scores.SelectMany(s => s.Verdicts)).Where(v => IsUserGroup(v.GroupId)))
+        foreach (var v in r.Baseline.Concat(r.Scores.SelectMany(s => s.Verdicts.Concat(s.Blocked))).Where(v => IsUserGroup(v.GroupId)))
             userNo.TryAdd(v.Target.Url, userNo.Count + 1);
+        // Имена групп задаёт человек — в историю идут номером («группа №N»), как адреса; «Прочее» — без имени. Сколько адресов в группе всего — для «проверено 10 из 120».
+        var groupNo = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var v in r.Scores.SelectMany(s => s.Verdicts.Concat(s.Blocked)).Where(v => v.GroupId == "user" && v.Target.Group is { Length: > 0 }))
+            groupNo.TryAdd(v.Target.Group!, groupNo.Count + 1);
+        var control = r.TestedGroups.Where(g => g.Control).Select(g => g.Id).ToHashSet();
+        var totals = r.TestedGroups.FirstOrDefault(g => g.Id == "user")?.Totals;
+        string? Sub(TargetVerdict v) => v.GroupId == "user" && v.Target.Group is { Length: > 0 } g ? L.T("core.addr.group_n", new { n = groupNo[g] }) : null;
+        int? SubTotal(TargetVerdict v) => v.GroupId == "user" && totals is not null && totals.TryGetValue(v.Target.Group ?? "", out var n) ? n : null;
+        object Entry(TargetVerdict v, bool blocked) => new
+        {
+            v.GroupId, Url = Url(v), v.Ok, v.Target.Required, Control = control.Contains(v.GroupId), Seconds = Seconds(v), detail = Detail(v),
+            Probes = v.Probes.Select(x => new { Tls = x.Tls.ToString(), Outcome = x.Outcome.ToString(), Detail = Hide(v, x.Detail), x.Seconds }),
+            Sub = Sub(v), SubTotal = SubTotal(v), Blocked = blocked ? true : (bool?)null,
+        };
         string Url(TargetVerdict v) => IsUserGroup(v.GroupId) ? L.T("core.addr.user_n", new { n = userNo[v.Target.Url] }) : v.Target.Url;
         IEnumerable<string> Detail(TargetVerdict v) => v.Probes.Select(x => Hide(v, $"{x.Tls}: {x.Outcome} {x.Detail}"));
         string Hide(TargetVerdict v, string d)
@@ -100,7 +119,6 @@ public static class ResultStore
             return d.Replace(v.Target.Url, "***").Replace(host, "***", StringComparison.OrdinalIgnoreCase);
         }
         static double Seconds(TargetVerdict v) => Math.Round(v.Ok ? v.BestSeconds : v.Probes.Select(p => p.Seconds).DefaultIfEmpty(0).Max(), 2);
-        var control = r.TestedGroups.Where(g => g.Control).Select(g => g.Id).ToHashSet();
 
         var doc = new
         {
@@ -114,11 +132,8 @@ public static class ResultStore
             {
                 s.Strategy.Id, s.GroupsPassed, s.GroupsTotal, s.TargetShare, s.AvgSeconds, s.Error,
                 ControlBroken = s.Verdicts.Any(v => control.Contains(v.GroupId) && !v.Ok),
-                targets = s.Verdicts.Select(v => new
-                {
-                    v.GroupId, Url = Url(v), v.Ok, v.Target.Required, Control = control.Contains(v.GroupId), Seconds = Seconds(v), detail = Detail(v),
-                    Probes = v.Probes.Select(x => new { Tls = x.Tls.ToString(), Outcome = x.Outcome.ToString(), Detail = Hide(v, x.Detail), x.Seconds }),
-                }),
+                // Blocked — адреса, закрытые по адресу (AddressBlocks): в оценку и статистику не входят, в списке — для показа.
+                targets = s.Verdicts.Select(v => Entry(v, false)).Concat(s.Blocked.Select(v => Entry(v, true))),
             }),
         };
         File.WriteAllText(file, JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));

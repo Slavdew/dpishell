@@ -7,15 +7,18 @@ using System.Text.Json;
 
 namespace DpiShell.Core;
 
-/// <summary>Цель проверки. handshake_only — достаточно TLS и заголовков ответа (у адреса нет стабильного большого тела).</summary>
-public sealed record Target(string Url, int MinBytes = 0, bool HandshakeOnly = false, bool Required = true);
+/// <summary>
+/// Цель проверки. handshake_only — достаточно TLS и заголовков ответа (у адреса нет стабильного большого тела).
+/// Group — имя группы «Своих сайтов» (API 1.17); null — не из групп или «Прочее».
+/// </summary>
+public sealed record Target(string Url, int MinBytes = 0, bool HandshakeOnly = false, bool Required = true, string? Group = null);
 
 /// <summary>Control — «Обычные сайты»: не цель подбора, а условие «стратегия их не ломает» (architecture.md «Оценка и порядок»).</summary>
 /// <summary>
 /// Extra — дополнительная группа (строка продвинутого режима, <see cref="AdvancedSites"/>): проверяется вместе со всеми, но в оценку стратегии
 /// не входит и стратегию не бракует — по ней выбирается лучшая стратегия для строки.
 /// </summary>
-public sealed record TargetGroup(string Id, string Title, List<Target> Targets, bool Control = false, bool Extra = false)
+public sealed record TargetGroup(string Id, string Title, List<Target> Targets, bool Control = false, bool Extra = false, Dictionary<string, int>? Totals = null)
 {
     /// <summary>Цель подбора: не контрольная и не дополнительная.</summary>
     public bool Goal => !Control && !Extra;
@@ -32,6 +35,26 @@ public sealed record TargetSet(List<TargetGroup> Groups)
     public static TargetGroup UserGroup(IEnumerable<string> entries) => new("user", L.T("select.group.user"),
         entries.Select(e => e.Trim()).Where(e => e.Length > 0)
             .Select(e => new Target(e.Contains("://") ? e : $"https://{e}/")).ToList());
+
+    /// <summary>
+    /// «Свои сайты» по группам: одна цель подбора «user», у каждого адреса — имя его группы. Из большой группы проверяется выборка
+    /// (<see cref="SiteGroups.Sample"/>, одна и та же у всех стратегий); сколько адресов в группе всего — в <see cref="TargetGroup.Totals"/> (ключ — имя, «Прочее» — "").
+    /// </summary>
+    public static TargetGroup UserGroups(IEnumerable<SiteGroup> groups, int sample = SiteGroups.SampleSize)
+    {
+        var targets = new List<Target>();
+        var totals = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var g in groups)
+        {
+            var entries = g.Sites.Select(e => e.Trim()).Where(e => e.Length > 0).ToList();
+            if (entries.Count == 0) continue;
+            var name = SiteGroups.CleanName(g.Name);
+            totals[name] = entries.Count;
+            foreach (var e in SiteGroups.Sample(entries, sample))
+                targets.Add(new Target(e.Contains("://") ? e : $"https://{e}/", Group: name.Length == 0 ? null : name));
+        }
+        return new("user", L.T("select.group.user"), targets, Totals: totals);
+    }
 }
 
 /// <summary>Blocked — HTTP 451 «недоступно по требованию закона»: блокировка, а не сайт.</summary>
