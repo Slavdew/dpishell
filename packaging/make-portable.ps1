@@ -7,6 +7,9 @@
     2. Проверяет data\ по data\data.json (sha256 каждого файла) — в архив не попадёт то, что не проверено.
     3. Кладёт рядом README.txt, THIRD-PARTY-NOTICES.txt (тексты лицензий полностью) и LICENSE.txt, если он есть в корне репозитория.
     4. Упаковывает папку DpiShell\ в publish\DpiShell-<версия>-portable.zip и печатает sha256 архива.
+       Архива ядра zapret в нём нет (и это проверяется): на такой архив Защитник срабатывает ещё в скачанном zip.
+    5. Кладёт рядом publish\zapret-core-offline.zip — копию vendor\zapret-<версия ядра>.zip, сверенную с zip_sha256 из data\core.json:
+       отдельный файл выпуска для тех, у кого не открывается GitHub (кнопка «Указать архив ядра…» в окне).
 
   Запуск из корня репозитория:  powershell -ExecutionPolicy Bypass -File packaging\make-portable.ps1
   Сам архив в git не кладётся (publish\ в .gitignore).
@@ -64,6 +67,10 @@ $license = Join-Path $repo 'LICENSE'
 if (Test-Path $license) { Copy-Item $license (Join-Path $stage 'LICENSE.txt') }
 else { Write-Warning 'В корне репозитория нет LICENSE: лицензия DpiShell (MIT) должна лежать там — архив без неё.' }
 
+# Архива ядра в поставке быть не должно: на него Защитник срабатывает (Tecabans) ещё в скачанном zip программы.
+$coreZips = @(Get-ChildItem $stage -Recurse -File | Where-Object { $_.Name -like 'zapret-*.zip' -or $_.FullName.Substring($stage.Length) -match '\\vendor\\' })
+if ($coreZips.Count -gt 0) { throw "В поставку попал архив ядра: $($coreZips.Name -join ', ')" }
+
 # 4. Архив: внутри — папка DpiShell\.
 $version = (Get-Item $exe).VersionInfo.ProductVersion
 if (-not $version) { $version = (Get-Item $exe).VersionInfo.FileVersion }
@@ -81,6 +88,15 @@ try {
 }
 finally { $archive.Dispose() }
 Remove-Item $work -Recurse -Force
+
+# 5. Офлайн-копия ядра — отдельным файлом выпуска: тот же архив bol-van, что в core.json (окно сверит тот же sha256).
+$core = Get-Content (Join-Path $data 'core.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$vendorZip = Join-Path $repo "vendor\zapret-$($core.version).zip"
+if (-not (Test-Path $vendorZip)) { throw "Нет $vendorZip — офлайн-копии ядра для выпуска" }
+if ((Get-FileHash $vendorZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $core.zip_sha256) { throw "$vendorZip не совпал с zip_sha256 в data\core.json" }
+$offline = Join-Path $OutDir 'zapret-core-offline.zip'
+Copy-Item $vendorZip $offline -Force
+Write-Host "Офлайн-копия ядра: $offline ($($core.version), sha256 $($core.zip_sha256))"
 
 $zipHash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 $size = [math]::Round((Get-Item $zip).Length / 1MB, 1)

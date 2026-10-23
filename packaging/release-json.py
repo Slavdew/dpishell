@@ -11,7 +11,8 @@ issued — момент сборки описания (UTC, ISO 8601 с Z). Пр
 
 Версия — <Version> в Directory.Build.props (единый источник). Тег (windows-vX.Y.Z) должен совпадать с ней,
 для версии должна быть запись в packaging/release-notes.json (словами пользователя; у версии {ru, en}) — иначе выход с ошибкой.
-В папке должен лежать DpiShell-<версия>-portable.zip (имя пишет make-portable.ps1 по версии exe — вторая сверка).
+В папке должен лежать DpiShell-<версия>-portable.zip (имя пишет make-portable.ps1 по версии exe — вторая сверка)
+и zapret-core-offline.zip (офлайн-копия ядра; sha256 обязан совпасть с zip_sha256 в data/core.json).
 """
 import datetime, hashlib, json, pathlib, re, sys
 
@@ -20,6 +21,7 @@ for stream in (sys.stdout, sys.stderr):
     stream.reconfigure(encoding='utf-8')
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+OFFLINE_CORE = 'zapret-core-offline.zip'
 mode = sys.argv[1] if len(sys.argv) > 1 else ''
 if mode not in ('check', 'write', 'reissue'):
     sys.exit(__doc__)
@@ -90,6 +92,16 @@ if not (out / zip_name).is_file():
     found = ', '.join(p.name for p in out.glob('*.zip')) or 'нет архивов'
     sys.exit(f'нет {zip_name} в {out} ({found}) — версия exe не совпала с Directory.Build.props?')
 assets = [{'name': zip_name, 'sha256': hashlib.sha256((out / zip_name).read_bytes()).hexdigest()}]
+# Офлайн-копия ядра (make-portable.ps1, шаг 5) — отдельный файл выпуска; хеш тот же, что zip_sha256 в data/core.json.
+# Программа берёт из assets только свой portable-архив (AppRelease.Portable), лишняя запись старым версиям не мешает.
+offline = out / OFFLINE_CORE
+if not offline.is_file():
+    sys.exit(f'нет {OFFLINE_CORE} в {out} — make-portable.ps1 кладёт его рядом с архивом')
+core = json.loads((ROOT / 'data/core.json').read_text(encoding='utf-8'))
+offline_sha = hashlib.sha256(offline.read_bytes()).hexdigest()
+if offline_sha != core['zip_sha256']:
+    sys.exit(f'{OFFLINE_CORE}: sha256 {offline_sha} не совпал с zip_sha256 в data/core.json')
+assets.append({'name': OFFLINE_CORE, 'sha256': offline_sha})
 doc = {
     'schema': 1, 'product': 'dpishell-windows', 'version': version, 'tag': f'windows-v{version}',
     'issued': now_issued(), 'min_os': min_os, 'changes': changes, 'assets': assets,
