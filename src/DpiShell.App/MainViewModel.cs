@@ -1659,6 +1659,7 @@ public sealed partial class MainViewModel : Observable
 
         // Готовые не помогли (или помогли не со всем), подбор дошёл до конца — предложить глубокий поиск; после него — уже нет.
         OfferDeep = !r.Cancelled && !r.NothingBlocked && !_searching && best is not { Perfect: true };
+        if (TlsSupport.Tls13Client && TlsSupport.Tls12Only(r) != _tls12Seen) { _tls12Seen = !_tls12Seen; Raise(nameof(TlsText)); }
         foreach (var s in r.Scores) _addressBlock.Add(s);
         SetAddressNote(true);
         // Лучшая не открыла только то, что молчит у всех стратегий, — искать новые ради этого нечего.
@@ -1677,7 +1678,8 @@ public sealed partial class MainViewModel : Observable
             ResultText = L.T(r.Cancelled ? "select.result.cancelled_none" : "select.result.none");
             if (!r.Cancelled)
                 ResultHint = (regression.Length > 0 ? regression + " " : "") + L.T("select.result.none_hint")
-                    + (AddressSourceNote(r.AddressSource, fragment: false) is { } addr0 ? " " + addr0 : "");
+                    + (AddressSourceNote(r.AddressSource, fragment: false) is { } addr0 ? " " + addr0 : "")
+                    + (TlsNote(r) is { } tls0 ? " " + char.ToUpper(tls0[0]) + tls0[1..] + "." : "");
             else ResultHint = regression;
             return;
         }
@@ -1693,6 +1695,7 @@ public sealed partial class MainViewModel : Observable
             if (!best.Perfect) notes.Add(L.T("select.note.partial", new { ok = best.GroupsPassed, total = best.GroupsTotal }));
             if (r.Cancelled) notes.Add(L.T("select.note.cancelled"));
             if (AddressSourceNote(r.AddressSource, fragment: true) is { } addr) notes.Add(addr);
+            if (TlsNote(r) is { } tls) notes.Add(tls);
             if (MixBuilder.IsMix(best.Strategy.Source)) notes.Insert(0, L.T("select.note.mix"));
             var blocked = string.Join(", ", r.TestedGroups.Select(g => Names.Title(g.Id)));
             notes.Add(L.T("select.note.blocked", new { groups = blocked }));
@@ -1824,6 +1827,7 @@ public sealed partial class MainViewModel : Observable
         _message = _message == "" ? "" : L.BuiltIn.Values.Any(p => p.Strings.TryGetValue("common.ready", out var r) && r.Text == _message) ? ReadyText : L.Relocalize(_message, own: true);
         Retranslate(ref _result); Retranslate(ref _appliedLine); Retranslate(ref _deepText);
         foreach (var t in new[] { _resultHint, _checkSummary, _dnsSummary, _checkedAt, _timestampsText, _diagUpdated }) t.Retranslate();
+        Raise(nameof(TlsText));
         // Главная: списки и строки, собранные на прежнем языке, — заново (вычисляемые свойства прочтутся после этого).
         _pcItems = _routerItems = null; _tiles = null; _autoRows = null; _homeShown.Clear();
         Retranslate(ref _directMessage); Retranslate(ref _toast); Retranslate(ref _toastAction);
@@ -1995,6 +1999,26 @@ public sealed partial class MainViewModel : Observable
     /// <summary>Решение 8: метки включаются сами при «Включить» и перед подбором — здесь только показываем.</summary>
     public string TimestampsText { get => _timestampsText.Value; private set { _timestampsText.Set(value); Raise(); } }
     void TimestampsTextIs(Func<string> build) { _timestampsText.Set(build); Raise(nameof(TimestampsText)); }
+
+    /// <summary>Подбор шёл без TLS 1.3 (самопроверка помощника), хотя по сборке окна он есть.</summary>
+    bool _tls12Seen;
+    /// <summary>«Диагностика»: какими версиями TLS идут проверки (на Windows 10 — только 1.2, <see cref="TlsSupport"/>).</summary>
+    public string TlsText => TlsLine(TlsSupport.Tls13Client && !_tls12Seen ? null : TlsSupport.DisabledHere || (TlsSupport.Tls13Client && _tls12Seen));
+
+    /// <summary>null — 1.3 и 1.2; false — 1.3 нет в этой Windows (до Windows 11); true — по сборке есть, но отключён.</summary>
+    public static string TlsLine(bool? disabled) => disabled switch
+    {
+        null => L.T("diag.tls.both"),
+        false => L.T("diag.tls.only12"),
+        true => L.T("diag.tls.off12"),
+    };
+
+    /// <summary>Фрагмент пояснения к подбору без TLS 1.3; null — 1.3 проверялся.</summary>
+    string? TlsNote(SelectionReport r)
+    {
+        if (!TlsSupport.Tls12Only(r)) return null;
+        return L.T(TlsSupport.Tls13Client || TlsSupport.DisabledHere ? "select.note.tls_off" : "select.note.tls12");
+    }
 
     public static string TimestampsLine(bool? enabled) => enabled switch
     {

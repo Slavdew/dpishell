@@ -1875,13 +1875,17 @@
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
                                             <TextBlock Text="{l:T diag.driver}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                             <TextBox Grid.Column="1" Text="{Binding DriverText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,0,0,6" />
                                             <TextBlock Grid.Row="1" Text="{l:T diag.core_files}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                             <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CoreText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,0,0,6" />
-                                            <TextBlock Grid.Row="2" Text="{l:T diag.timestamps}" Style="{StaticResource Hint}" />
-                                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding TimestampsText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
+                                            <TextBlock Grid.Row="2" Text="{l:T diag.timestamps}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
+                                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding TimestampsText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,0,0,6" />
+                                            <!-- Windows 10 не умеет TLS 1.3 клиентом — проверки идут по 1.2 (TlsSupport). -->
+                                            <TextBlock Grid.Row="3" Text="{l:T diag.tls}" Style="{StaticResource Hint}" />
+                                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding TlsText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
                                         </Grid>
                                     </Expander>
                                 </StackPanel>

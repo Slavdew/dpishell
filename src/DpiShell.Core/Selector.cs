@@ -80,8 +80,9 @@ public class Selector(AppPaths paths, HttpProbe probe)
             async (i, token) =>
             {
                 var (gid, t) = items[i];
-                var probes = await probe.CheckAsync(t, Tls, token);
-                var ok = probes.All(p => p.Ok);
+                // TLS 1.3, которого нет в этой Windows, — не провал стратегии (TlsSupport); HttpProbe такие уже выбрасывает.
+                var probes = (await probe.CheckAsync(t, Tls, token)).Where(p => p.Outcome != ProbeOutcome.Tls13Unsupported).ToList();
+                var ok = probes.Count > 0 && probes.All(p => p.Ok);
                 results[i] = new(gid, t, ok, ok ? probes.Max(p => p.Seconds) : 0, probes);
             });
         return results;
