@@ -1827,7 +1827,7 @@ public sealed partial class WindowSmokeTests
         }
     }
 
-    static void PumpUntil(Func<bool> cond, string what)
+    internal static void PumpUntil(Func<bool> cond, string what)
     {
         for (int i = 0; i < 400 * 10 && !cond(); i++) { Pump(); Thread.Sleep(15); }
         if (!cond()) throw new Exception("Не дождались: " + what);

@@ -211,6 +211,31 @@ public static class RouterTexts
         ? L.Time((t.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(t, DateTimeKind.Utc) : t).ToLocalTime())
         : "";
 
+    /// <summary>
+    /// Итог проверки роутера старше этого — справочно («проверено 5 ч назад»), не действующая ошибка.
+    /// То же число на странице роутера — <c>CHECK_STALE_S</c> в dpishell/api.js (сверяется тестом).
+    /// </summary>
+    public static readonly TimeSpan CheckStaleAfter = TimeSpan.FromHours(1);
+
+    static DateTime Utc(DateTime t) => t.Kind switch
+    {
+        DateTimeKind.Unspecified => DateTime.SpecifyKind(t, DateTimeKind.Utc),
+        DateTimeKind.Local => t.ToUniversalTime(),
+        _ => t,
+    };
+
+    /// <summary>Проверка была дольше <see cref="CheckStaleAfter"/> назад. Нет времени — не устарела (не узнать).</summary>
+    public static bool IsStale(DateTime? at, DateTime utcNow) => at is { } t && utcNow - Utc(t) > CheckStaleAfter;
+
+    /// <summary>Сколько прошло: «12 мин назад», «5 ч назад», дальше суток — число и месяц («21.10»).</summary>
+    public static string Ago(DateTime at, DateTime utcNow)
+    {
+        var age = utcNow - Utc(at);
+        if (age < TimeSpan.FromHours(1)) return L.T("router.check.age_min", new { n = Math.Max(1, (int)age.TotalMinutes) });
+        if (age < TimeSpan.FromDays(1)) return L.T("router.check.age_h", new { n = (int)age.TotalHours });
+        return L.DayMonth(Utc(at).ToLocalTime());
+    }
+
     public static string NotFoundText => L.T("router.not_found");
 
     public static string Found(RouterFound f, string? version) => f switch
@@ -852,6 +877,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         var strategy = _status?.Strategy ?? pub?.Strategy;
         var at = _status?.LastCheck?.At ?? pub?.CheckedAt;
         var ok = _status?.LastCheck?.Ok ?? pub?.LastCheckOk;
+        // Старый итог (больше часа) — справочно, с возрастом: «проверено 5 ч назад — открывалось не всё».
+        var now = UtcNow();
+        bool stale = RouterTexts.IsStale(at, now);
 
         HomeTitle = Selecting ? L.T("router.home.selecting")
             : enabled ? L.T("router.home.on") : L.T("router.home.off");
@@ -861,7 +889,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         {
             parts.Add(L.T("router.home.strategy", new { name = StrategyTitle(strategy) }));
             if (Checking) parts.Add(L.T("router.home.checking"));
-            else if (enabled && at is not null) parts.Add(L.T(ok == false ? "router.home.checked_bad" : "router.home.checked", new { time = RouterTexts.Time(at) }));
+            else if (enabled && at is { } a)
+                parts.Add(stale ? L.T(ok == false ? "router.home.checked_bad_ago" : "router.home.checked_ago", new { ago = RouterTexts.Ago(a, now) })
+                    : L.T(ok == false ? "router.home.checked_bad" : "router.home.checked", new { time = RouterTexts.Time(a) }));
         }
         if (Updating) parts.Add(L.T("router.home.updating"));
         else if (_status?.Update is { Available: true, Version: { } uv }) parts.Add(L.T("router.home.update_available", new { version = uv }));
@@ -870,7 +900,9 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             parts.Add(RouterTexts.Found(_detection.Found, null) is var t ? char.ToLowerInvariant(t[0]) + t[1..] : "");
         // Выключение сторожем, кнопкой или откатом — отдельной фразой с «Подробнее» (UpdateOff), не строкой предупреждений.
         UpdateOff();
-        var rows = (_status?.Warnings ?? []).Where(w => !RouterTexts.IsOffCode(w.Code) && !(w.Code == "auto_selected" && _wdState == WatchdogSelectState.Found)).Select(w => RouterTexts.Warning(w, Conflicts)).ToList();
+        // strategy_failing держится на last_check (ручная проверка не снимает его, пока не пройдёт следующая): итог старше часа — не текущая ошибка.
+        var rows = (_status?.Warnings ?? []).Where(w => !RouterTexts.IsOffCode(w.Code) && !(w.Code == "auto_selected" && _wdState == WatchdogSelectState.Found)
+                && !(w.Code == "strategy_failing" && stale)).Select(w => RouterTexts.Warning(w, Conflicts)).ToList();
         if (!rows.SequenceEqual(WarningRows))
         {
             WarningRows.Clear();

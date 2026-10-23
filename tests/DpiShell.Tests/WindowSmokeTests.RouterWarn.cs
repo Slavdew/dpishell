@@ -25,6 +25,7 @@ public sealed partial class WindowSmokeTests
             vm.Router.AddressAuto = false;
             vm.Router.CustomAddress = fake.Address;
             vm.Router.PcTimestamps = () => true;
+            vm.Router.UtcNow = () => fake.CheckedAt.AddMinutes(10);   // свежий итог проверки: предупреждение действует
             Task.Run(() => vm.Router.ConnectAsync("secret")).GetAwaiter().GetResult();
             var w = Open(vm);
             SetProp(vm, "IsLoading", false);

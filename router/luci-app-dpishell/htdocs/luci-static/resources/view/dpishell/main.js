@@ -195,6 +195,10 @@ return view.extend({
 		if (!s.enabled)
 			return { kind: 'off', title: api.t('home.status.off'), sub: s.strategy ? title : api.t('web.main.off_no_strategy') };
 		var lc = s.last_check;
+		// Итог старше часа — справочно, с возрастом: не «Работает частично», а «проверено 5 ч назад — открывалось не всё».
+		if (lc && lc.at && api.stale(lc.at))
+			return { kind: 'ok', title: api.t('home.status.running'),
+				sub: title + ' · ' + api.t(lc.ok === false ? 'router.home.checked_bad_ago' : 'router.home.checked_ago', { ago: api.ago(lc.at) }) };
 		var when = lc && lc.at ? api.t('router.home.checked', { time: api.time(lc.at) }) : api.t('router.wd.not_checked');
 		if (lc && lc.ok === false)
 			return { kind: 'err', title: api.t('home.status.partial'), sub: title + ' · ' + when };
@@ -288,14 +292,16 @@ return view.extend({
 			var groups = lc.groups || [];
 			var okN = groups.filter(function(g) { return g.ok; }).length;
 			var src = { manual: 'web.src.manual', timer: 'web.src.timer', app: 'web.src.app' }[lc.source];
+			// Старый итог (больше часа) — серым и с возрастом: справочно, не текущая ошибка; «Проверить сейчас» — рядом.
+			var old = api.stale(lc.at);
 			// Итог проверки значками (ux-audit-web п.3) и строкой «Открывается N из M», как на ПК (матрица п. 4).
 			api.content(this.el.lastCheck, [
-				E('div', { 'class': 'dps-verdicts' }, groups.map(function(g) {
-					return E('span', { 'class': g.ok ? 'dps-v-ok' : 'dps-v-bad' }, (g.ok ? '✓ ' : '✗ ') +
+				E('div', { 'class': 'dps-verdicts' + (old ? ' dps-muted' : '') }, groups.map(function(g) {
+					return E('span', { 'class': old ? '' : g.ok ? 'dps-v-ok' : 'dps-v-bad' }, (g.ok ? '✓ ' : '✗ ') +
 						(GROUP_KEYS[g.id] ? api.t(GROUP_KEYS[g.id]) : ({ youtube: 'YouTube', discord: 'Discord' }[g.id] || g.id)));
 				})),
 				E('div', { 'class': 'dps-muted' }, (groups.length ? api.t('home.check.summary', { ok: okN, total: groups.length }) + ' · ' : '') +
-					api.t('web.main.checked', { time: api.time(lc.at) }) + (src ? ' ' + api.t(src) : ''))
+					api.t('web.main.checked', { time: old ? api.ago(lc.at) : api.time(lc.at) }) + (src ? ' ' + api.t(src) : ''))
 			]);
 		} else
 			api.content(this.el.lastCheck, []);
@@ -305,10 +311,13 @@ return view.extend({
 		this.confirmDeadline = s.pending_confirm ? Date.now() + (s.pending_confirm.left_s || 0) * 1000 : 0;
 		this.renderConfirm();
 
-		var wj = JSON.stringify(s.warnings || []);
+		// strategy_failing держится на last_check (ручная проверка не снимает его до следующей): итог старше часа — не текущая ошибка.
+		var lcOld = !!(lc && lc.at && api.stale(lc.at));
+		var warns = (s.warnings || []).filter(function(w) { return !(w.code == 'strategy_failing' && lcOld); });
+		var wj = JSON.stringify(warns);
 		if (wj != this.lastWarnJson) {
 			this.lastWarnJson = wj;
-			this.renderWarnings(s.warnings || []);
+			this.renderWarnings(warns);
 		}
 	},
 

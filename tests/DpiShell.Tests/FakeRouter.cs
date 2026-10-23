@@ -46,6 +46,9 @@ public sealed partial class FakeRouter : IDisposable
     public bool AutoSelect { get; set; }
     public string SiteCheckUrl { get; set; } = "";
     public DateTime CheckedAt { get; set; } = new(2026, 10, 16, 21, 0, 0, DateTimeKind.Utc);
+    /// <summary>Итог status.last_check: false — YouTube не открылся (Discord открылся), как у неудачной проверки; check_now — снова как задано.</summary>
+    public bool LastCheckOk { get; set; } = true;
+    public string LastCheckSource { get; set; } = "timer";
     public bool SelectRunningJob { get; set; }
     public bool ScheduleEnabled { get; set; } = true;
     public double ScheduleHours { get; set; } = 1;
@@ -415,8 +418,8 @@ public sealed partial class FakeRouter : IDisposable
                 { "api": {{StatusApi}}, "version": "{{RouterVersion}}", "engine": "zapret1",{{Contract020()}}
                   "core": { "version": "v72.13", "installed": {{(CoreInstalledVersion == "none" ? "false" : "true")}}, "hash_ok": true{{CoreInstalledField()}} },{{PackagesField()}}
                   "enabled": {{(Enabled ? "true" : "false")}}, "mode": "{{Mode}}", "strategy": "{{Strategy}}", "backups": ["alt9", "alt13"], "needs_tcp_timestamps": {{(NeedsTcpTimestamps ? "true" : "false")}},
-                  "last_check": { "at": "{{CheckedAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture)}}", "source": "timer", "ok": true,
-                                  "groups": [ { "id": "youtube", "ok": true }, { "id": "discord", "ok": true } ] },
+                  "last_check": { "at": "{{CheckedAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture)}}", "source": "{{LastCheckSource}}", "ok": {{(LastCheckOk ? "true" : "false")}},
+                                  "groups": [ { "id": "youtube", "ok": {{(LastCheckOk ? "true" : "false")}} }, { "id": "discord", "ok": true } ] },
                   "fail_streak": 0,
                   "schedule": { "enabled": {{(ScheduleEnabled ? "true" : "false")}}, "hours": {{ScheduleHours.ToString(System.Globalization.CultureInfo.InvariantCulture)}}, "auto_select": {{(AutoSelect ? "true" : "false")}}{{(KillSwitch ? $", \"watchdog\": {(WatchdogEnabled ? "true" : "false")}" : "")}} },
                   "jobs": { "select": {{(SelectRunningJob ? "true" : "false")}}, "check": false, "core_install": false, "dns_analyze": false, "site_check": false, "dns": false, "update": {{(_updateRunning ? "true" : "false")}} },

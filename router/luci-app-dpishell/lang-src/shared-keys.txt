@@ -38,6 +38,8 @@ home.strategy.none
 home.sitecheck.add_list
 home.sitecheck.not_in_list_closed
 router.apply.backups
+router.check.age_h
+router.check.age_min
 router.core.not_installed
 router.details
 router.diag.save_report
@@ -73,6 +75,8 @@ router.enable
 router.eta.minutes
 router.eta.under_minute
 router.home.checked
+router.home.checked_ago
+router.home.checked_bad_ago
 router.mode.hint_lists
 router.row.groups_of
 router.row.seconds
