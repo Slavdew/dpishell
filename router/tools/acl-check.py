@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Методы ubus-объекта dpishell и доступ к ним: каждый метод rpcd есть в ACL (иначе окно ПК и страница по HTTP получают
 # «нет доступа», а локальный ubus в тестах этого не видит), каждый метод, который зовёт страница, описан в PARAMS
-# api.js (LuCI отбрасывает неописанные аргументы). Запуск из корня репозитория: python3 router/tools/acl-check.py
+# api.js (LuCI отбрасывает неописанные аргументы); личное и сведения о защите — только в группе записи (WRITE_ONLY). Запуск из корня репозитория: python3 router/tools/acl-check.py
 import json
 import re
 import sys
@@ -31,8 +31,15 @@ for f in [API, *VIEWS.glob('*.js')]:
     called |= set(re.findall(r"api\.(?:call|safe)\('(\w+)'", f.read_text(encoding='utf-8')))
     called |= set(re.findall(r"self\.act\('(\w+)'", f.read_text(encoding='utf-8')))
 
+# Личное и сведения о защите — только группе записи (учётка LuCI «только чтение» их не видит): отчёт с адресами, связки с ПК (MAC),
+# список изменений (MAC в pc:<id>), «Безопасность роутера» (пустой ли пароль root, открыт ли вход с WAN, открытый Wi-Fi).
+WRITE_ONLY = {'report', 'pc_link_get', 'changes_list', 'security_check'}
+read = set(acl['read']['ubus']['dpishell'])
+
 bad = []
 bad += [f'метод {m} нет в ACL ({ACL.name})' for m in sorted(methods - allowed)]
+bad += [f'{m} — только в группе write (личное или сведения о защите)' for m in sorted(WRITE_ONLY & read)]
+bad += [f'{m} из WRITE_ONLY нет в группе write' for m in sorted(WRITE_ONLY - set(acl['write']['ubus']['dpishell']))]
 bad += [f'в ACL лишний {m} — такого метода нет' for m in sorted(allowed - methods)]
 bad += [f'страница зовёт {m}, а в PARAMS api.js его нет' for m in sorted(called - params)]
 for b in bad:

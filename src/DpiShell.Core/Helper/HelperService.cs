@@ -147,6 +147,11 @@ public static class HelperEntry
             new HelperInstaller(new AppPaths()).Install(sid, log);
             return 0;
         }
+        catch (ServiceMarkedForDeleteException e)
+        {
+            log?.Report(e.Message);
+            return HelperInstaller.MarkedForDelete;
+        }
         catch (Exception e)
         {
             log?.Report(e.Message);
@@ -161,6 +166,11 @@ public static class HelperEntry
         {
             new HelperInstaller(new AppPaths()).Uninstall(log, purge);
             return 0;
+        }
+        catch (ServiceMarkedForDeleteException e)
+        {
+            log?.Report(e.Message);
+            return HelperInstaller.MarkedForDelete;
         }
         catch (Exception e)
         {

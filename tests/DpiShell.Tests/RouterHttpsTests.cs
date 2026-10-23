@@ -135,6 +135,43 @@ public sealed class RouterHttpsTests : IDisposable
     }
 
     [Fact]
+    public async Task HttpAnswers_HttpsOpen_PasswordGoesHttps_PinsAtFirstLogin()
+    {
+        // HTTP отвечает без перенаправления, а HTTPS открыт: пароль — по HTTPS, сертификат закрепляется при входе.
+        using var r = new FakeRouter().WithHttps(redirect: false);
+        var pins = new MemoryPins();
+        using var c = new RouterClient(r.Address, pins: pins, httpsPort: r.TlsPort);
+        Assert.Equal(RouterFound.Ok, (await c.DetectAsync()).Found);
+        Assert.False(c.Https);
+        await c.LoginAsync(() => r.Password);
+        Assert.True(c.Https);
+        Assert.Equal(r.CertificateFingerprint, pins.Get(RouterCert.PinId("localhost", r.TlsPort)));
+        lock (r.Schemes) Assert.Equal(["http", "https"], r.Schemes);
+    }
+
+    [Fact]
+    public async Task FirstLogin_HttpsSeenThenDown_PasswordNotSent_UntilAllowed()
+    {
+        // Поиск прошёл по HTTPS (отпечаток ещё не закреплён), до входа HTTPS оборвался — пароль по HTTP без согласия не уходит.
+        using var r = new FakeRouter().WithHttps();
+        var pins = new MemoryPins();
+        using var c = new RouterClient(r.Address, pins: pins);
+        Assert.Equal(RouterFound.Ok, (await c.DetectAsync()).Found);
+        Assert.True(c.Https);
+        r.RedirectToHttps = false;
+        r.HttpsClosed = true;
+        var e = await Assert.ThrowsAsync<RouterException>(() => c.LoginAsync(() => r.Password));
+        Assert.Equal(RouterFailure.HttpsLost, e.Failure);
+        Assert.Equal(0, r.Logins);
+        lock (r.RawBodies) Assert.Empty(r.RawBodies);
+        c.AllowPlainHttp();
+        Assert.Null(c.HttpsLost);
+        await c.LoginAsync(() => r.Password);
+        Assert.Equal(1, r.Logins);
+        Assert.Empty(pins.D);
+    }
+
+    [Fact]
     public void WebCertificate_DerAndPem()
     {
         using var cert = FakeRouter.NewCertificate();

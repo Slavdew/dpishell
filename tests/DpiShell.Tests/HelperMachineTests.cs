@@ -127,9 +127,10 @@ public class HelperMachineTests
         Assert.Equal(ClientBuild.Other, check.Check(null));
         Assert.Equal(ClientBuild.Other, check.Check(t.Sub("none.exe")));
 
-        // Файл в записываемой папке подменили после проверки — новая проверка видит другой хеш (кэш по размеру и времени записи).
-        File.WriteAllText(same, "build A, но не та");
-        File.SetLastWriteTimeUtc(same, DateTime.UtcNow.AddMinutes(1));
+        // Файл в записываемой папке подменили после проверки той же длиной и с прежним временем записи — новая проверка видит другой хеш.
+        var written = File.GetLastWriteTimeUtc(same);
+        File.WriteAllText(same, "build B");
+        File.SetLastWriteTimeUtc(same, written);
         Assert.Equal(ClientBuild.Other, check.Check(same));
     }
 

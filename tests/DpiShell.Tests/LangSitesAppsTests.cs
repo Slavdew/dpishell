@@ -97,6 +97,11 @@ public sealed class LangSitesAppsTests : IDisposable
             Pump();
             NoRawKeys(tabs, "Сайты (ПК)");
             Shot("sites-pc");
+            // Аудит Б-1: окно на языке (у ru — после проверки en на лету и возврата) — у каждой строки в списке «Стратегия» видно её значение.
+            var combos = FindAll<ComboBox>(tabs, c => c.IsVisible && c.DataContext is AdvancedRowVm).ToList();
+            Assert.Equal(3, combos.Count);
+            Assert.All(combos, c => Assert.Equal(((AdvancedRowVm)c.DataContext).Strategy, c.SelectedValue as string));
+            Assert.All(combos, c => Assert.NotNull(c.SelectedItem));
             a.Rows[1].DomainsText = "bank example";
             WaitUi(a.ApplyAsync());
             Pump();

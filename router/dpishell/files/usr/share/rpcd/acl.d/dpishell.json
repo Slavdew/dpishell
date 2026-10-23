@@ -4,7 +4,7 @@
 		"read": {
 			"ubus": {
 				"dpishell": [ "status", "strategies", "select_progress", "targets_get", "lists_get", "diag",
-				              "dns_status", "site_check_result", "dns_presets", "advanced_get", "dns_compare", "security_check", "changes_list" ]
+				              "dns_status", "site_check_result", "dns_presets", "advanced_get", "dns_compare" ]
 			}
 		},
 		"write": {
@@ -16,7 +16,8 @@
 				              "schedule_set", "targets_set", "lists_set", "strategies_user_set", "conflict_stop", "core_install",
 				              "dns_analyze", "dns_enable", "dns_restore", "site_check", "flow_offload_fix", "ipv6_set", "dns_set", "uninstall", "update_install", "update_check", "confirm",
 				              "advanced_set", "advanced_revert", "pc_link_set", "pc_link_del",
-				              "report", "pc_link_get", "changes_undo", "changes_undo_all", "update_rollback" ]
+				              "report", "pc_link_get", "changes_undo", "changes_undo_all", "update_rollback",
+				              "security_check", "changes_list" ]
 			}
 		}
 	}

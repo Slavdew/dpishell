@@ -178,18 +178,20 @@ function cleanup_tmp() {
 }
 
 // Хеш установленного nfqws совпадает с манифестом. status зовёт это на каждый опрос страницы — хеш (sha256sum, процесс)
-// считается заново, только если файл сменился (размер, время, inode); в rpcd модуль живёт между вызовами.
+// считается заново, если файл сменился (размер, время, inode) и не реже раза в сутки: размер и время подделываются,
+// сверка в окне должна оставаться настоящей. В rpcd модуль живёт между вызовами.
+const VERIFY_MAX_AGE = 86400;
 let verify_memo = null;
 
 function verify() {
 	let f = `${st.P.zapret}/nfq/nfqws`, s = stat(f);
-	let key = s ? `${s.size}:${s.mtime}:${s.inode}` : null;
-	if (key && verify_memo?.key == key)
+	let key = s ? `${s.size}:${s.mtime}:${s.inode}` : null, now = time();
+	if (key && verify_memo?.key == key && now - verify_memo.at < VERIFY_MAX_AGE && now >= verify_memo.at)
 		return verify_memo.ok;
 	let m = manifest(), a = arch();
 	let h = sha256(f);
 	let ok = h != null && a != null && h == m.nfqws[a];
-	verify_memo = key ? { key, ok } : null;
+	verify_memo = key ? { key, ok, at: now } : null;
 	return ok;
 }
 

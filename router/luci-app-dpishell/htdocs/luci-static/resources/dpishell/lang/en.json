@@ -52,7 +52,7 @@
  "home.params.show": "Parameters",
  "home.params.tip": "Parameters and winws command line",
  "home.sitecheck.add_list": "Add to optimization list",
- "home.sitecheck.not_in_list": "{site} is not in the optimization list.",
+ "home.sitecheck.not_in_list": "{site} is not in the optimization list: optimization does not apply to it. If it does not open, use “Add to optimization list”.",
  "home.status.deep": "Deep search…",
  "home.status.off": "Off",
  "home.status.partial": "Not everything opens",

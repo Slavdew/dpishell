@@ -148,8 +148,19 @@ public sealed class HelperInstaller(AppPaths paths)
         }
     }
 
+    /// <summary>
+    /// ERROR_SERVICE_MARKED_FOR_DELETE: службу уже удаляют, но её держит открытой «Службы» (services.msc) или другой процесс.
+    /// Процесс установки/удаления выходит с этим кодом — окно говорит, что делать, словами.
+    /// </summary>
+    public const int MarkedForDelete = 1072;
+
     static void Check((int Code, string Output) r, string what)
     {
+        if (r.Code == MarkedForDelete)
+            throw new ServiceMarkedForDeleteException(L.T("core.helper.sc_failed", new { what, code = r.Code, output = r.Output.Trim() }));
         if (r.Code != 0) throw new InvalidOperationException(L.T("core.helper.sc_failed", new { what, code = r.Code, output = r.Output.Trim() }));
     }
 }
+
+/// <summary>sc вернул 1072: служба помечена на удаление (<see cref="HelperInstaller.MarkedForDelete"/>).</summary>
+public sealed class ServiceMarkedForDeleteException(string message) : InvalidOperationException(message);

@@ -213,7 +213,8 @@ public sealed partial class MainViewModel
 
     /// <summary>
     /// Проверенный сайт — в исключения там, где работает оптимизация. На ПК «без неё» проверяется сразу после этого:
-    /// не открылось и так — дело не в оптимизации (сайт остаётся в исключениях, убрать — на «Сайтах»).
+    /// не открылось и так — дело не в оптимизации (сайт остаётся в исключениях, убрать — на «Сайтах»); открылось — так и сказано.
+    /// Не проверено (роутер, сбой проверки) — «Проверьте ещё раз»; адрес остаётся в поле, чтобы «Проверить» шла по нему.
     /// </summary>
     public async Task AddCheckedToExcludeAsync()
     {
@@ -222,19 +223,21 @@ public sealed partial class MainViewModel
         if (was is SiteCheckOutcome.OnlyWithout or SiteCheckOutcome.FailsWith && host.Length > 0) DirectSite = host;
         await OpenDirectAsync();
         bool added = DirectSite.Length == 0 && HasDirectMessage;
+        if (added) DirectSite = host;
+        bool? opens = null;
         if (added && was == SiteCheckOutcome.FailsWith)
         {
             SiteOutcome = SiteCheckOutcome.Checking;
-            bool ok;
-            try { ok = await ProbeSiteAsync(host); }
-            catch (Exception e) when (e is not OperationCanceledException) { ok = true; }   // проверить не вышло — остаётся сообщение «добавлено»
-            if (!ok)
+            try { opens = await ProbeSiteAsync(host); }
+            catch (Exception e) when (e is not OperationCanceledException) { }   // проверить не вышло — «проверьте ещё раз»
+            if (opens == false)
             {
                 SiteOutcome = SiteCheckOutcome.Closed;
                 DirectMessage = L.T("home.sitecheck.excluded_closed", new { site = host });
                 return;
             }
         }
+        if (added) DirectMessage += " " + L.T(opens == true ? "home.sitecheck.excluded_opens" : "home.sitecheck.recheck");
         if (HasDirectMessage) SiteOutcome = SiteCheckOutcome.Message;
     }
 

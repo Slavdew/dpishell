@@ -38,6 +38,23 @@ const SUBNET_RX = /^([0-9]{1,3}\.){3}[0-9]{1,3}(\/[0-9]{1,2})?$/;
 // Свои настройки и результаты — только root; status.json — публичный для uhttpd (router-api §2).
 const DIRS = { '/etc/dpishell': 0o711, '/etc/dpishell/lists': 0o755, '/tmp/dpishell': 0o700, '/tmp/dpishell-pub': 0o755, '/www/dpishell': 0o755 };
 
+// Отложенные в сторону «<каталог>.bad-<время>» (own_dir): оставить только последний — для разбора, остальные стереть
+// (иначе подкладывающий процесс плодил бы их в ОЗУ). Только точные свои имена; rm -rf по ссылкам не заходит.
+function prune_bad(d) {
+	let cut = rindex(d, '/'), dir = substr(d, 0, cut), base = substr(d, cut + 1);
+	if (!match(base, /^[a-z0-9-]+$/))
+		return;
+	let rx = regexp(`^${base}[.]bad-([0-9]+)$`), bad = [];
+	for (let f in lsdir(dir) ?? []) {
+		let m = match(f, rx);
+		if (m)
+			push(bad, [+m[1], f]);
+	}
+	sort(bad, (a, b) => a[0] - b[0]);
+	for (let i = 0; i < length(bad) - 1; i++)
+		system(`rm -rf '${dir}/${bad[i][1]}'`);
+}
+
 // Каталог только root (security-audit-router №4): /tmp общий, и /tmp/dpishell мог заранее создать другой пользователь
 // (nfqws работает от daemon) или подложить ссылку. Чужой, ссылка или не каталог — в сторону, создаётся свой. true — каталог наш.
 function own_dir(d, mode) {
@@ -46,6 +63,7 @@ function own_dir(d, mode) {
 		let aside = `${d}.bad-${time()}`;
 		if (!rename(d, aside))
 			system(`rm -rf '${d}'`);
+		prune_bad(d);
 		s = null;
 	}
 	if (!s)

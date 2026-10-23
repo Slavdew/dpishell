@@ -39,6 +39,7 @@ public sealed class AdvancedRowVm : Observable
 {
     readonly Action _edited;
     string _domains, _strategy, _hint = "";
+    bool _bounce;
 
     public AdvancedRowVm(string domains, string strategy, Action edited)
     {
@@ -53,7 +54,7 @@ public sealed class AdvancedRowVm : Observable
     /// <summary>«auto», «direct» или id стратегии (ComboBox.SelectedValue).</summary>
     public string Strategy
     {
-        get => _strategy;
+        get => _bounce ? null! : _strategy;
         set
         {
             // Пересборка списка вариантов (смена языка) обнуляет выбор ComboBox, и привязка пишет null: это не выбор человека.
@@ -65,8 +66,18 @@ public sealed class AdvancedRowVm : Observable
 
     public string Hint { get => _hint; set { if (Set(ref _hint, value)) Raise(nameof(HasHint)); } }
 
-    /// <summary>Список вариантов пересобрался — выбор строки показывается заново.</summary>
-    public void RefreshChoice() => Raise(nameof(Strategy));
+    /// <summary>
+    /// Список вариантов пересобрался — выбор строки показывается заново. Сначала пусто, потом значение: после Clear+Add у ComboBox
+    /// SelectedValue уже равен значению строки, но элемент не выбран, и простое повторное оповещение ничего не меняло — строка
+    /// оставалась пустой (аудит Б-1: русский → английский → русский).
+    /// </summary>
+    public void RefreshChoice()
+    {
+        _bounce = true;
+        try { Raise(nameof(Strategy)); }
+        finally { _bounce = false; }
+        Raise(nameof(Strategy));
+    }
     public bool HasHint => _hint.Length > 0;
 
     public static IReadOnlyList<string> Split(string text) =>
@@ -99,7 +110,6 @@ public sealed class AdvancedViewModel : Observable
     protected override void OnLanguageChanged()
     {
         RebuildChoices();
-        foreach (var r in Rows) r.RefreshChoice();
         RefreshHints();
         if (_message.Length > 0) _message = L.Relocalize(_message, own: true);
     }
@@ -258,6 +268,8 @@ public sealed class AdvancedViewModel : Observable
         if (Choices.Select(c => c).SequenceEqual(list)) return;
         Choices.Clear();
         foreach (var c in list) Choices.Add(c);
+        // Clear сбросил выбор у показанных строк — вернуть.
+        foreach (var r in Rows) r.RefreshChoice();
     }
 
     string TitleOf(string id) => Choices.FirstOrDefault(c => c.Id == id)?.Title ?? id;
@@ -295,7 +307,7 @@ public sealed class AdvancedViewModel : Observable
 
     void AddRow()
     {
-        Rows.Add(new AdvancedRowVm("", AdvancedSites.Auto, MarkDirty) { });
+        Rows.Add(new AdvancedRowVm("", AdvancedSites.Auto, MarkDirty));
         RefreshHints();
         MarkDirty();
         Raise(nameof(AddText)); Raise(nameof(StoredText));

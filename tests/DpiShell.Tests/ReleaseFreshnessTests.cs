@@ -20,6 +20,7 @@ public sealed class ReleaseFreshnessTests
     {
         var o = JsonNode.Parse(ReleaseJson(version, GoodZip(version)))!.AsObject();
         if (issued is not null) o["issued"] = issued;
+        else o.Remove("issued");
         return Encoding.UTF8.GetBytes(o.ToJsonString() + "\n");
     }
 
@@ -61,12 +62,13 @@ public sealed class ReleaseFreshnessTests
     }
 
     [Fact]
-    public async Task App_release_without_or_with_fresh_issued_is_accepted_bad_issued_rejected()
+    public async Task App_release_with_fresh_issued_is_accepted_without_or_bad_issued_rejected()
     {
-        var old = await FreshClient(Serve(new MapHandler(), A, "1.2.0"), A).CheckAsync("1.0.0");   // release.json до поля issued
-        Assert.True(old.Available);
-        Assert.Null(old.Found!.Release.Issued);
-        Assert.False(old.Stale);
+        // release.json до поля issued: подписан верно, но без даты его мог бы вечно отдавать подменённый источник (аудит-2 №6) — «не удалось проверить».
+        var old = await FreshClient(Serve(new MapHandler(), A, "1.2.0", release: Rel("1.2.0", null)), A).CheckAsync("1.0.0");
+        Assert.Null(old.Found);
+        Assert.True(old.Stale);
+        Assert.Equal(L.T("core.upd.undated_release", new { host = "github.example" }), Assert.Single(old.Errors));
 
         var future = await FreshClient(Serve(new MapHandler(), A, "1.2.0", release: Rel("1.2.0", Iso(Now.AddDays(3)))), A).CheckAsync("1.0.0");
         Assert.True(future.Available);
@@ -128,14 +130,15 @@ public sealed partial class DataUpdateTests
         Assert.True(r.Stale);
         Assert.Contains("старше 120 дней", Assert.Single(r.Errors));
 
-        // Свежее зеркало — принято; без issued (манифест до этой защиты) — как раньше.
+        // Свежее зеркало — принято; подписанный без issued (манифест до этой защиты) — нет (аудит-2 №6).
         ServeSigned(stale, B, Remote(Repo.Data, "2026-12-02", issued: ReleaseFreshnessTests.Iso(now.AddDays(-6))));
         var m = await FreshDataClient(stale, now, A, B).FetchManifestAsync();
         Assert.Equal(B, m.Result!.Source);
         Assert.Equal(now.AddDays(-6), m.Result.Manifest.IssuedAt);
-        var plain = await FreshDataClient(ServeSigned(new MapHandler(), A, Remote(Repo.Data, "2026-12-01")), now, A).FetchManifestAsync();
-        Assert.NotNull(plain.Result);
-        Assert.False(plain.Stale);
+        var plain = await FreshDataClient(ServeSigned(new MapHandler(), A, Remote(Repo.Data, "2026-12-01", issued: "")), now, A).FetchManifestAsync();
+        Assert.Null(plain.Result);
+        Assert.True(plain.Stale);
+        Assert.Equal(L.T("core.data.undated", new { host = "primary.example" }), Assert.Single(plain.Errors));
 
         // Нечитаемая дата — манифест не годен.
         var bad = await FreshDataClient(ServeSigned(new MapHandler(), A, Remote(Repo.Data, "2026-12-01", issued: "2026-10-22")), now, A).FetchManifestAsync();

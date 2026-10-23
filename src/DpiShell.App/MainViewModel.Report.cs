@@ -149,7 +149,7 @@ public sealed partial class MainViewModel
 
     /// <summary>
     /// Что окно знает как личное и чего не должно быть в отчёте и в описании ошибки: адреса прокси (текущие и из списка), адрес роутера,
-    /// свои сайты и исключения (они попадают в чужие тексты: подбор, журнал). Одно место для «Сохранить отчёт» и «Скопировать» у ошибки.
+    /// свои сайты и исключения (они попадают в чужие тексты: подбор, журнал), свои строки hosts и свои DNS. Одно место для «Сохранить отчёт» и «Скопировать» у ошибки.
     /// </summary>
     List<string> PrivateNames()
     {
@@ -164,6 +164,13 @@ public sealed partial class MainViewModel
         if (Router.Found) hide.AddRange(SupportReport.Variants(Router.Detection?.Address));
         hide.AddRange(Lines(TargetsText)); hide.AddRange(Lines(ExcludeText));
         if (Live is { } st) { hide.AddRange(st.UserTargets); hide.AddRange(st.UserExclude ?? []); }
+        // Свои строки hosts (имена и адреса) и свои DNS (адреса, DoH): попадают в тексты ошибок помощника («строка … отвергнута»).
+        foreach (var row in Hosts.UserRows) { hide.Add(row.Host); hide.Add(row.Ip); }
+        foreach (var d in Settings.DnsCustom)
+        {
+            hide.AddRange(d.Ips);
+            hide.AddRange(SupportReport.Variants(d.Doh));
+        }
         return hide;
     }
 

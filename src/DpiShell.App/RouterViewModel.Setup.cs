@@ -56,6 +56,7 @@ public sealed partial class RouterViewModel
         if (!interactive) { SetConnection(() => L.T("router.https.lost")); return false; }
         if (!AllowPlainHttp(PlainHttpText)) { SetConnection(() => L.T("router.https.cancelled")); return false; }
         _settings.HostKeys.Remove(pin);
+        _client?.AllowPlainHttp();
         Say(L.T("router.https.dropped"));
         return true;
     }

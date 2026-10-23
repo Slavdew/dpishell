@@ -1,5 +1,4 @@
 using DpiShell.Core.Localization;
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
@@ -35,7 +34,6 @@ public sealed class HelperClientImage
     readonly string _helperExe;
     readonly string _helperVersion;
     readonly Lazy<string?> _helperPrint;
-    readonly ConcurrentDictionary<string, (long Length, DateTime Written, string? Print)> _cache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Сборки рядом с exe, без которых программа не та же (сборка не одним файлом — разработка); у single-file их нет.</summary>
     public static readonly IReadOnlyList<string> Companions = ["DpiShell.dll", "DpiShell.Core.dll"];
@@ -61,13 +59,10 @@ public sealed class HelperClientImage
         {
             var fi = new FileInfo(clientExe);
             if (!fi.Exists) return ClientBuild.Other;
-            if (_cache.TryGetValue(fi.FullName, out var hit) && hit.Length == fi.Length && hit.Written == fi.LastWriteTimeUtc) print = hit.Print;
-            else
-            {
-                var companions = Companions.Where(c => File.Exists(Path.Combine(Path.GetDirectoryName(_helperExe)!, c))).ToList();
-                print = Fingerprint(fi.FullName, companions);
-                _cache[fi.FullName] = (fi.Length, fi.LastWriteTimeUtc, print);
-            }
+            // Хеш на каждое подключение, без кеша: размер и время записи подделываются (подмена файла той же длины с прежним mtime).
+            // Подключение одно на окно, single-file exe ~70 МБ — около 0,1 с.
+            var companions = Companions.Where(c => File.Exists(Path.Combine(Path.GetDirectoryName(_helperExe)!, c))).ToList();
+            print = Fingerprint(fi.FullName, companions);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { return ClientBuild.Other; }
         if (print is not null && print == own) return ClientBuild.Same;
@@ -114,7 +109,8 @@ public sealed class HelperClientImage
 
         static string Hash(string path)
         {
-            using var s = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            // Без FileShare.Write: файл не перепишут, пока считается хеш.
+            using var s = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
             return Convert.ToHexString(SHA256.HashData(s));
         }
     }

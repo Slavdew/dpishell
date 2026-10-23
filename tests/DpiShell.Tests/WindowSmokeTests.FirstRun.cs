@@ -97,7 +97,9 @@ public sealed partial class WindowSmokeTests
                 WaitUi(vm.AddCheckedToExcludeAsync());
                 Pump();
                 if (!f.Backend.Calls.Contains("user_exclude_set bank.example")) throw new Exception("Сайт не ушёл в список исключений ПК: " + string.Join(" | ", f.Backend.Calls));
-                if (!Visible(t => t.Text == L.T("home.direct.done_pc", new { site = "bank.example" }))) throw new Exception("Нет ответа под ссылками");
+                // Сайт без оптимизации проверен сразу — итог в той же строке (аудит-2 С-5); адрес остаётся в поле для повторной «Проверить».
+                if (!Visible(t => t.Text == L.T("home.direct.done_pc", new { site = "bank.example" }) + " " + L.T("home.sitecheck.excluded_opens"))) throw new Exception("Нет ответа под ссылками");
+                if (vm.DirectSite != "bank.example") throw new Exception("После добавления адрес ушёл из поля");
                 foreach (var t in FindAll<TextBlock>(tabs, t => t.IsVisible && t.Text.Contains("bank.example")))
                     if (t.Text.Contains("обход", StringComparison.OrdinalIgnoreCase)) throw new Exception("В ответе запретное слово: " + t.Text);
                 foreach (var t in FindAll<TextBox>(tabs, t => t.IsVisible && t.IsReadOnly && t.Text.Contains("bank.example")))

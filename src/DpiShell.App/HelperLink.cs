@@ -59,6 +59,7 @@ public sealed class ElevatedSelf : IHelperSetup
         {
             await p.WaitForExitAsync();
             return p.ExitCode == 0 ? new(SetupResult.Done)
+                : p.ExitCode == HelperInstaller.MarkedForDelete ? new(SetupResult.Failed, L.T("shell.helper.marked_for_delete"))
                 : new(SetupResult.Failed, L.T("shell.helper.install_exit", new { code = p.ExitCode }));
         }
     }

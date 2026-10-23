@@ -95,7 +95,20 @@ static class SafeFolder
                 removed.Add(entry);
                 continue;
             }
-            try { ResetToInherited(entry, isDir, setOwner); }
+            try
+            {
+                // Права ставятся по хендлу самой записи; запись успела стать ссылкой или жёсткой ссылкой — убираем её, как выше.
+                if (!ResetToInherited(entry, isDir, setOwner))
+                {
+                    if (Attributes(entry) is { } now)
+                    {
+                        if ((now & FileAttributes.ReparsePoint) != 0) DeleteLink(entry, now);
+                        else { File.SetAttributes(entry, FileAttributes.Normal); File.Delete(entry); }
+                    }
+                    removed.Add(entry);
+                    continue;
+                }
+            }
             catch (UnauthorizedAccessException)
             {
                 if (isDir) Directory.Delete(entry, recursive: true);
@@ -130,23 +143,41 @@ static class SafeFolder
         }
     }
 
-    static void ResetToInherited(string path, bool isDir, bool setOwner)
+    /// <summary>
+    /// Наследуемые права (и владелец «Администраторы») — по хендлу, открытому без разыменования ссылки (FILE_FLAG_OPEN_REPARSE_POINT):
+    /// проверка «не ссылка» и смена прав относятся к одной и той же записи, подменить её junction между ними нельзя.
+    /// Запись оказалась ссылкой или файлом с несколькими именами — false, права не меняются. Нет доступа — <see cref="UnauthorizedAccessException"/>.
+    /// </summary>
+    static bool ResetToInherited(string path, bool isDir, bool setOwner)
     {
-        if (isDir)
+        using var h = CreateFileW(path, ReadControl | WriteDac | (setOwner ? WriteOwner : 0), FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero,
+            FileMode.Open, FileFlagOpenReparsePoint | FileFlagBackupSemantics, IntPtr.Zero);
+        if (h.IsInvalid) throw Fail(Marshal.GetLastWin32Error(), path);
+        if (!GetFileInformationByHandle(h, out var info)) throw Fail(Marshal.GetLastWin32Error(), path);
+        if ((info.FileAttributes & (uint)FileAttributes.ReparsePoint) != 0) return false;
+        if (((info.FileAttributes & (uint)FileAttributes.Directory) != 0) != isDir) return false;
+        if (!isDir && info.NumberOfLinks > 1) return false;
+
+        // Пустой DACL без защиты: остаются только права, унаследованные от родителя. Не NULL — NULL DACL значит «всем всё».
+        var dacl = new byte[new RawAcl(GenericAcl.AclRevision, 0).BinaryLength];
+        new RawAcl(GenericAcl.AclRevision, 0).GetBinaryForm(dacl, 0);
+        var owner = new byte[Admins.BinaryLength];
+        Admins.GetBinaryForm(owner, 0);
+        var gd = GCHandle.Alloc(dacl, GCHandleType.Pinned);
+        var go = GCHandle.Alloc(owner, GCHandleType.Pinned);
+        try
         {
-            var ds = new DirectorySecurity();
-            ds.SetAccessRuleProtection(false, false);
-            if (setOwner) ds.SetOwner(Admins);
-            new DirectoryInfo(path).SetAccessControl(ds);
+            uint what = DaclSecurityInformation | UnprotectedDaclSecurityInformation | (setOwner ? OwnerSecurityInformation : 0);
+            var err = SetSecurityInfo(h, SeFileObject, what, setOwner ? go.AddrOfPinnedObject() : IntPtr.Zero, IntPtr.Zero, gd.AddrOfPinnedObject(), IntPtr.Zero);
+            if (err != 0) throw Fail((int)err, path);
         }
-        else
-        {
-            var fs = new FileSecurity();
-            fs.SetAccessRuleProtection(false, false);
-            if (setOwner) fs.SetOwner(Admins);
-            new FileInfo(path).SetAccessControl(fs);
-        }
+        finally { gd.Free(); go.Free(); }
+        return true;
     }
+
+    static Exception Fail(int err, string path) => err == 5
+        ? new UnauthorizedAccessException(path)
+        : new IOException($"{path}: {new System.ComponentModel.Win32Exception(err).Message}", err);
 
     /// <summary>Нет ссылок и записей с чужим владельцем (по ссылкам не заходим).</summary>
     public static bool TreeIsClean(string dir)
@@ -190,7 +221,9 @@ static class SafeFolder
         return GetFileInformationByHandle(h, out var info) ? info.NumberOfLinks : 1;
     }
 
-    const uint FileReadAttributes = 0x80;
+    const uint FileReadAttributes = 0x80, ReadControl = 0x00020000, WriteDac = 0x00040000, WriteOwner = 0x00080000;
+    const uint OwnerSecurityInformation = 0x1, DaclSecurityInformation = 0x4, UnprotectedDaclSecurityInformation = 0x20000000;
+    const int SeFileObject = 1;
     const uint FileFlagOpenReparsePoint = 0x00200000, FileFlagBackupSemantics = 0x02000000;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -203,6 +236,9 @@ static class SafeFolder
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     static extern SafeFileHandle CreateFileW(string name, uint access, FileShare share, IntPtr security, FileMode mode, uint flags, IntPtr template);
+
+    [DllImport("advapi32.dll")]
+    static extern uint SetSecurityInfo(SafeFileHandle handle, int objectType, uint securityInfo, IntPtr owner, IntPtr group, IntPtr dacl, IntPtr sacl);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     static extern bool GetFileInformationByHandle(SafeFileHandle h, out ByHandleFileInformation info);

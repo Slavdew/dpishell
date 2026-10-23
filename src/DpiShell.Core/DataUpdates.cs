@@ -148,9 +148,11 @@ public sealed class DataUpdateClient(HttpClient http, UpdateSources sources)
                 continue;
             }
             // Подписан, но давно: подменённый источник может отдавать старый манифест вечно — «новее нет» тогда неправда.
-            if (ReleaseFreshness.IsStale(m.IssuedAt, Now()))
+            // Подписанный без issued — тоже: CI ставит его вместе с подписью, подписанный манифест без даты — выпущен до этой защиты.
+            if (sig is not null && m.IssuedAt is null || ReleaseFreshness.IsStale(m.IssuedAt, Now()))
             {
-                errors.Add(L.T("core.data.stale", new { host = Host(src), days = ReleaseFreshness.MaxAgeDays }));
+                errors.Add(m.IssuedAt is null ? L.T("core.data.undated", new { host = Host(src) })
+                    : L.T("core.data.stale", new { host = Host(src), days = ReleaseFreshness.MaxAgeDays }));
                 stale = true;
                 continue;
             }

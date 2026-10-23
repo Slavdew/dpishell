@@ -156,6 +156,47 @@ public sealed class FolderSafetyTests : IDisposable
         Assert.Equal(p.Package, p.Seed);
     }
 
+    /// <summary>
+    /// Sanitize ставит права по хендлу записи (аудит-2 №2: проверка «не ссылка» и смена прав — одна запись, без гонки с junction).
+    /// Без прав администратора (владелец не меняется): закрытые свои права у папки и файла сменяются наследуемыми, junction — удаляется.
+    /// </summary>
+    [Fact]
+    public void Sanitize_ResetsToInherited_ByHandle_LinksRemoved()
+    {
+        var root = _t.Sub("sanitize");
+        var sub = Path.Combine(root, "sub");
+        Directory.CreateDirectory(sub);
+        var file = Path.Combine(sub, "f.txt");
+        File.WriteAllText(file, "x");
+        var outside = _t.Sub("outside");
+        Directory.CreateDirectory(outside);
+        Junction(Path.Combine(root, "link"), outside);
+        using var me = WindowsIdentity.GetCurrent();
+        var ds = new DirectorySecurity();
+        ds.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        ds.AddAccessRule(new FileSystemAccessRule(me.User!, FileSystemRights.FullControl, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow));
+        new DirectoryInfo(sub).SetAccessControl(ds);
+        var fs = new FileSecurity();
+        fs.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        fs.AddAccessRule(new FileSystemAccessRule(me.User!, FileSystemRights.FullControl, AccessControlType.Allow));
+        new FileInfo(file).SetAccessControl(fs);
+        var outsideBefore = Sddl(outside);
+
+        var removed = new List<string>();
+        var sanitize = typeof(AppPaths).Assembly.GetType("DpiShell.Core.SafeFolder")!.GetMethod("Sanitize")!;
+        sanitize.Invoke(null, [root, false, removed]);
+
+        Assert.Equal([Path.Combine(root, "link")], removed);
+        Assert.Equal(outsideBefore, Sddl(outside));   // цель ссылки не тронута
+        foreach (var sec in new FileSystemSecurity[] { new DirectoryInfo(sub).GetAccessControl(), new FileInfo(file).GetAccessControl() })
+        {
+            Assert.False(sec.AreAccessRulesProtected);
+            var rules = sec.GetAccessRules(true, true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().ToList();
+            Assert.NotEmpty(rules);
+            Assert.All(rules, r => Assert.True(r.IsInherited));
+        }
+    }
+
     [AdminFact]
     public void Harden_ClosedRoot_NothingRemoved_DataKept()
     {

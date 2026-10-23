@@ -49,6 +49,7 @@
   "shell.err.start_core": "Не удалось запустить ядро zapret (антивирус?): {error}",
   "shell.err.helper_old": "Помощник старее программы и этого не умеет — обновите его на вкладке «Информация и обновления» (один запрос прав администратора).",
   "shell.helper.install_exit": "код {code}; подробности — в журнале помощника (logs\\helper.log)",
+  "shell.helper.marked_for_delete": "служба помечена на удаление. Закройте «Службы» (services.msc) и повторите; не помогло — перезагрузите ПК и повторите.",
   "shell.undo.no_record": "Записи об изменении нет — вернуть нечего.",
   "shell.about_text": "DpiShell {version} · помощник: {helper}",
   "shell.open_failed": "Не удалось открыть: {error}",

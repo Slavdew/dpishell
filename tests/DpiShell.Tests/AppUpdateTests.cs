@@ -40,6 +40,8 @@ public sealed class AppUpdateTests
             ["schema"] = 1, ["product"] = "dpishell-windows", ["version"] = version, ["tag"] = tag ?? "windows-v" + version,
             ["min_os"] = minOs ?? "10.0.17763", ["changes"] = new JsonArray("Быстрее подбор", "Исправлен трей"), ["changes_en"] = new JsonArray("Faster search", "Tray fixed"),
             ["assets"] = new JsonArray(new JsonObject { ["name"] = asset ?? AppRelease.PortableName(version), ["sha256"] = Convert.ToHexStringLower(SHA256.HashData(zip)) }),
+            // Как у CI: описание всегда с датой (без неё подписанное описание не принимается — аудит-2 №6).
+            ["issued"] = ReleaseFreshnessTests.Iso(DateTimeOffset.UtcNow),
         };
         return Encoding.UTF8.GetBytes(o.ToJsonString() + "\n");
     }

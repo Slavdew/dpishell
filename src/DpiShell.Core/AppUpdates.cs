@@ -170,9 +170,11 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
                 continue;
             }
             // Подписано, но давно: подменённый источник может отдавать старое описание вечно — не верить, что «новее нет».
-            if (ReleaseFreshness.IsStale(r.Issued, Now()))
+            // Без issued — тоже: CI ставит его у каждого выпуска (и переподписывает последний), старое описание без даты — та же «заморозка».
+            if (r.Issued is null || ReleaseFreshness.IsStale(r.Issued, Now()))
             {
-                errors.Add(L.T("core.upd.stale_release", new { host = Host(src), days = ReleaseFreshness.MaxAgeDays }));
+                errors.Add(r.Issued is null ? L.T("core.upd.undated_release", new { host = Host(src) })
+                    : L.T("core.upd.stale_release", new { host = Host(src), days = ReleaseFreshness.MaxAgeDays }));
                 stale = true;
                 continue;
             }

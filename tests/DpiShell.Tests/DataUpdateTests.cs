@@ -87,7 +87,9 @@ public sealed partial class DataUpdateTests
         var o = new JsonObject { ["version"] = version, ["files"] = files };
         if (minApp is not null) o["min_app_version"] = minApp;
         if (app is not null) o["app_version"] = app;
-        if (issued is not null) o["issued"] = issued;
+        // Как у CI: подписанный манифест — с датой; "" — без поля (манифест до этой защиты).
+        issued ??= ReleaseFreshnessTests.Iso(DateTimeOffset.UtcNow);
+        if (issued.Length > 0) o["issued"] = issued;
         return (o.ToJsonString(), bodies);
     }
 

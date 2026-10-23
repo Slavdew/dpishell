@@ -328,8 +328,23 @@ public sealed partial class WindowSmokeTests
                 if (!Visible(t => t.Text.StartsWith("Подходит:"))) throw new Exception("До применения нет карточки итога");
                 if (Visible(t => t.Text.StartsWith("✓ Включена"))) throw new Exception("До применения уже показана свёрнутая строка");
                 if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-select-result-full.png")); }
-                // Адрес молчит у всех стратегий — строка под итогом (и в свёрнутом виде, и в «Подробнее»).
-                const string blockedNote = "Не открылось ни с одной стратегией: redirector.googlevideo.com, yt3.ggpht.com — похоже на блокировку по адресу, подбор стратегии тут, скорее всего, не поможет. Сайт YouTube откроется, а видео может не воспроизводиться.";
+                // Адрес молчит у всех стратегий — строка под итогом (и в свёрнутом виде, и в «Подробнее»), с тем, что делать дальше,
+                // как её собирает окно (Texts.WithNextStep). Таблица — честная: эти адреса не открылись ни у одной стратегии (аудит-2, С-3).
+                string[] silent = ["redirector.googlevideo.com", "yt3.ggpht.com"];
+                vm.Scores.Clear();
+                for (int i = 0; i < strategies.Count; i++)
+                {
+                    var verdicts = groups.SelectMany(g => g.Targets.Select(t =>
+                    {
+                        bool dead = silent.Contains(new Uri(t.Url).Host);
+                        var ps = new[] { SslProtocols.Tls13, SslProtocols.Tls12 }.Select(v => dead
+                            ? new ProbeResult(t, v, ProbeOutcome.Timeout, 5, 0, "timeout")
+                            : new ProbeResult(t, v, ProbeOutcome.Ok, 0.4, 0, "HTTP 200")).ToList();
+                        return new TargetVerdict(g.Id, t, !dead, dead ? 5 : 0.4, ps);
+                    })).ToList();
+                    vm.Scores.Add(new ScoreRow(DpiShell.Core.Selector.Score(strategies[i], groups, verdicts), vm.Names) { IsBest = i == 0 });
+                }
+                string blockedNote = Texts.WithNextStep("Не открылось ни с одной стратегией: redirector.googlevideo.com, yt3.ggpht.com — похоже на блокировку по адресу, подбор стратегии тут, скорее всего, не поможет. Сайт YouTube откроется, а видео может не воспроизводиться.", router: false);
                 SetProp(vm, "AddressNote", blockedNote);
                 // С такой оговоркой заголовок не обещает успех (UX-аудит 7, п. 7), а в карточке есть главная «Применить» (как после настоящего подбора).
                 SetProp(vm, "ResultText", MainViewModel.BestTitle(perfect: true, addressNote: true, strategies[0].Title));
@@ -338,6 +353,8 @@ public sealed partial class WindowSmokeTests
                 if (!Visible(t => t.Text == blockedNote)) throw new Exception("В карточке итога нет строки про блокировку по адресу");
                 if (Visible(t => t.Text.StartsWith("Подходит:")) || !Visible(t => t.Text.StartsWith("Лучшая из проверенных:"))) throw new Exception("Заголовок итога с оговоркой про блокировку обещает успех");
                 if (Find<Button>(tabs, b => b.Content as string == "Применить" && b.IsVisible && b.IsEnabled) is null) throw new Exception("В карточке итога нет главной кнопки «Применить»");
+                if (!blockedNote.Contains(L.T("select.addr.next"))) throw new Exception("У строки про блокировку по адресу нет следующего шага");
+                if (vm.Scores[0].ErrorShown == L.T("select.row.none")) throw new Exception("Таблица пишет «нет», хотя адреса не открылись");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-select-result-blocked-full.png"));
 
                 // Лучшая включена — одна строка.

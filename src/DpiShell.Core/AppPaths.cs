@@ -98,7 +98,8 @@ public sealed class AppPaths
         }
         else if (rootAttr is not null && !SafeFolder.TrustedOwner(Root))
         {
-            var aside = $"{Root}.untrusted-{DateTime.Now:yyyyMMdd-HHmmss}";
+            // Случайный хвост: заранее созданное имя не сорвёт перенос (иначе установка помощника не проходит).
+            var aside = $"{Root}.untrusted-{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}";
             Directory.Move(Root, aside);
             removed.Add(Root + " → " + aside);
         }

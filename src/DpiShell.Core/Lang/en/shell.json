@@ -49,6 +49,7 @@
   "shell.err.start_core": "Could not start the zapret core (antivirus?): {error}",
   "shell.err.helper_old": "The helper is older than the app and cannot do this — update it on the “About & updates” tab (one administrator rights prompt).",
   "shell.helper.install_exit": "code {code}; details are in the helper log (logs\\helper.log)",
+  "shell.helper.marked_for_delete": "the service is marked for deletion. Close “Services” (services.msc) and try again; if that does not help, restart the PC and try again.",
   "shell.undo.no_record": "There is no change record — nothing to revert.",
   "shell.about_text": "DpiShell {version} · helper: {helper}",
   "shell.open_failed": "Could not open: {error}",

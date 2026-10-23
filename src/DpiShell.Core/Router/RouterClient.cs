@@ -30,6 +30,7 @@ public sealed class RouterClient : IDisposable
     readonly IRouterHostKeyStore? _pins;
     Uri _base;
     string? _pinId, _seenCert, _lostPin;
+    bool _httpsWorked, _httpsTried, _plainAllowed;
     RouterCertChange? _certChanged;
     string? _session;
     Func<string>? _password;
@@ -64,6 +65,8 @@ public sealed class RouterClient : IDisposable
     public string Address { get; }
     public TimeSpan CallTimeout { get; init; } = TimeSpan.FromSeconds(10);   // §4: таймаут HTTP 10 с
     public TimeSpan DetectTimeout { get; init; } = TimeSpan.FromSeconds(1);  // §2.2: 1 с
+    /// <summary>Сколько ждать HTTPS перед входом, когда HTTP отвечает без перенаправления (закрытый 443 у Windows — отказ ~1–2 с).</summary>
+    public TimeSpan HttpsTryTimeout { get; init; } = TimeSpan.FromSeconds(1);
 
     // ---------- HTTP или HTTPS ----------
 
@@ -123,6 +126,26 @@ public sealed class RouterClient : IDisposable
     async Task<HttpResponseMessage> SendAsync(Func<Uri, HttpRequestMessage> make, string path, CancellationToken ct, bool secret = false)
     {
         if (secret && HttpsLost is { } lost) throw HttpsLostError(lost);
+        // Пароль и сессия по HTTP — только если HTTPS нет: HTTP отвечает без перенаправления, а HTTPS открыт — сначала HTTPS
+        // (первый вход: сертификат закрепится после входа). Пробуем один раз за подключение.
+        if (secret && !Https && _ownsHttp && !_httpsTried)
+        {
+            _httpsTried = true;
+            using var probe = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            probe.CancelAfter(HttpsTryTimeout);
+            var (httpBase, httpPin) = (_base, _pinId);
+            _seenCert = null;
+            try { return await SwitchAsync(HttpsUri(HttpsPort), make, path, probe.Token); }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested && _seenCert is not null)
+            {
+                // TLS ответил, но медленно (слабый роутер): HTTPS есть — ждём его, а не уходим на HTTP.
+                return await SwitchAsync(HttpsUri(HttpsPort), make, path, ct);
+            }
+            catch (Exception e) when (e is HttpRequestException or OperationCanceledException && !ct.IsCancellationRequested)
+            {
+                (_base, _pinId) = (httpBase, httpPin);
+            }
+        }
         HttpResponseMessage resp;
         try { resp = await SendToAsync(_base, make, path, ct); }
         catch (HttpRequestException first) when (_ownsHttp && !ct.IsCancellationRequested)
@@ -133,7 +156,8 @@ public sealed class RouterClient : IDisposable
                 if (Https)
                 {
                     _base = HttpUri(); _pinId = null;
-                    if (prevPin is not null && _pins?.Get(prevPin) is not null) _lostPin = prevPin;
+                    // Закреплён или уже работал в этом подключении (первый вход: поиск по HTTPS, вход ещё нет) — без согласия пароль по HTTP не идёт.
+                    if (prevPin is not null && (_pins?.Get(prevPin) is not null || _httpsWorked)) _lostPin = prevPin;
                     if (secret && HttpsLost is { } l) { await ProbeHttpAsync(ct); throw HttpsLostError(l); }
                     return await SendToAsync(_base, make, path, ct);
                 }
@@ -157,7 +181,10 @@ public sealed class RouterClient : IDisposable
     /// <summary>
     /// HTTPS закреплён, а роутер отвечает только по HTTP (пароль по HTTP не уходит без согласия). Закрепление сняли (<see cref="IRouterHostKeyStore.Remove"/>) — null.
     /// </summary>
-    public string? HttpsLost => !Https && _lostPin is { } p && _pins?.Get(p) is not null ? p : null;
+    public string? HttpsLost => !Https && _lostPin is { } p && (_pins?.Get(p) is not null || _httpsWorked && !_plainAllowed) ? p : null;
+
+    /// <summary>Пользователь согласился на HTTP после пропажи HTTPS (вместе со снятием закрепления).</summary>
+    public void AllowPlainHttp() => _plainAllowed = true;
 
     static RouterException HttpsLostError(string pin) => new(RouterFailure.HttpsLost, L.T("core.rt.err.https_lost")) { LostHttpsPin = pin };
 
@@ -183,7 +210,12 @@ public sealed class RouterClient : IDisposable
     {
         _certChanged = null;
         using var req = make(new Uri(baseUri, path));
-        try { return await _http.SendAsync(req, ct); }
+        try
+        {
+            var r = await _http.SendAsync(req, ct);
+            if (baseUri.Scheme == Uri.UriSchemeHttps) _httpsWorked = true;
+            return r;
+        }
         catch (HttpRequestException) when (_certChanged is { } changed)
         {
             // Не HttpRequestException: перебирать HTTP/HTTPS дальше нельзя — пользователь должен решить.
