@@ -6,49 +6,6 @@ using Forms = System.Windows.Forms;
 
 namespace DpiShell.App;
 
-/// <summary>Иконки рисуются программно: кружок цвета состояния. Кэшируются, чтобы не плодить HICON.</summary>
-public static class Icons
-{
-    static readonly Dictionary<StatusKind, Drawing.Icon> Cache = [];
-
-    public static Drawing.Icon For(StatusKind k)
-    {
-        if (Cache.TryGetValue(k, out var ic)) return ic;
-        var c = k switch
-        {
-            StatusKind.On => Drawing.Color.FromArgb(0x16, 0xA3, 0x4A),
-            StatusKind.Busy => Drawing.Color.FromArgb(0xD9, 0x77, 0x06),
-            StatusKind.Error => Drawing.Color.FromArgb(0xDC, 0x26, 0x26),
-            _ => Drawing.Color.FromArgb(0x6B, 0x72, 0x80),
-        };
-        using var bmp = new Drawing.Bitmap(32, 32);
-        using (var g = Drawing.Graphics.FromImage(bmp))
-        {
-            g.SmoothingMode = Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.Clear(Drawing.Color.Transparent);
-            using var fill = new Drawing.SolidBrush(c);
-            g.FillEllipse(fill, 1, 1, 30, 30);
-            // Белая «стрелка вперёд» — обход.
-            using var pen = new Drawing.Pen(Drawing.Color.White, 4) { StartCap = Drawing.Drawing2D.LineCap.Round, EndCap = Drawing.Drawing2D.LineCap.Round, LineJoin = Drawing.Drawing2D.LineJoin.Round };
-            g.DrawLines(pen, [new(13, 9), new(20, 16), new(13, 23)]);
-        }
-        var h = bmp.GetHicon();
-        ic = (Drawing.Icon)Drawing.Icon.FromHandle(h).Clone();
-        DestroyIcon(h);
-        Cache[k] = ic;
-        return ic;
-    }
-
-    public static BitmapSource ImageFor(StatusKind k)
-    {
-        var src = Imaging.CreateBitmapSourceFromHIcon(For(k).Handle, System.Windows.Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-        src.Freeze();
-        return src;
-    }
-
-    [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
-}
-
 /// <summary>Иконка в трее с меню. Закрытие окна прячет его сюда.</summary>
 public sealed class Tray : IDisposable
 {
