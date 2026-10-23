@@ -674,7 +674,10 @@ function select_run(args) {
 	let ts_was = ts_get();
 	let ids = type(args.ids) == 'array' && length(args.ids) ? args.ids : null;
 	let deep = args.depth == 'deep' && !ids;
-	let p = { running: true, started_by: args.started_by ?? 'app', depth: deep ? 'deep' : 'main', index: 0, total: 0, eta_s: null,
+	// started_at — метка подбора (select_progress.run): rpcd пишет её в начальный select.json и передаёт в args; без неё
+	// (таймер, сторож) — сейчас. Держится в p до конца: иначе первый же progress(p) стирал её и run был 0.
+	let started_at = type(args.started_at) == 'int' && args.started_at > 0 ? args.started_at : time();
+	let p = { running: true, started_at, started_by: args.started_by ?? 'app', depth: deep ? 'deep' : 'main', index: 0, total: 0, eta_s: null,
 		groups: map(groups, g => g.id), ids, rows: [], finished_at: null, cancelled: false, best: null, applied: false, backups: [] };
 	p.groups = filter(p.groups, g => g != 'control');
 	say(p, 'web.msg.baseline', 'Проверка без оптимизации');
