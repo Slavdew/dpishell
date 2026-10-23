@@ -185,6 +185,7 @@ public class HelperProtocolTests
             "changes_list", "changes_undo_all", "changes_undo", "changes_undo_group",
             "proxy_status", "proxy_user_set", "proxy_machine_set", "proxy_machine_restore",
             "advanced_get", "advanced_set", "joint_get", "joint_set", "settings_export_read", "settings_import", "log_tail",
+            "av_exclusion_status", "av_exclusion_add", "av_exclusion_remove",
         ];
         Assert.Equal(spec.Order(), HelperCommands.Specs.Keys.Order());
         // Команды DNS описаны в helper-protocol §3 (часть старых там записана сокращённо: hosts_check/preview/…).
@@ -197,6 +198,8 @@ public class HelperProtocolTests
             cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.All(["changes_list", "changes_undo_all", "changes_undo {id}", "changes_undo_group {id}"], cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.Contains("1.15 — отмена загрузки настроек отдельно", doc);
+        Assert.All(["av_exclusion_status", "av_exclusion_add", "av_exclusion_remove"], cmd => Assert.Contains("`" + cmd + "`", doc));
+        Assert.Contains("1.16 — исключение Защитника для папки ядра", doc);
         Assert.All(["proxy_status", "proxy_user_set {enabled, server?, bypass?, pac?}", "proxy_machine_set {enabled, server?, bypass?, pac?, winhttp?}", "proxy_machine_restore"],
             cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.All(["joint_get", "joint_set {active, owned?}"], cmd => Assert.Contains("`" + cmd + "`", doc));
@@ -207,7 +210,7 @@ public class HelperProtocolTests
         Assert.All(["settings_export_read", "settings_import {plan}"], cmd => Assert.Contains("`" + cmd + "`", doc));
         Assert.Contains($"Текущая версия — `{HelperProtocol.Api}`", doc);
         // Только чтение — не занимает «одну операцию за раз».
-        Assert.Equal(["advanced_get", "app_profiles", "cancel", "changes_list", "details", "dns_status", "hosts_preview", "joint_get", "log_tail", "proxy_status", "read_results", "rec_status", "settings_export_read", "status"],
+        Assert.Equal(["advanced_get", "app_profiles", "av_exclusion_status", "cancel", "changes_list", "details", "dns_status", "hosts_preview", "joint_get", "log_tail", "proxy_status", "read_results", "rec_status", "settings_export_read", "status"],
             HelperCommands.Specs.Values.Where(s => !s.Exclusive).Select(s => s.Name).Order());
     }
 

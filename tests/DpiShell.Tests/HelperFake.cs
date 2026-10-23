@@ -275,6 +275,24 @@ public sealed class FakeHelperBackend : IHelperBackend
     }
 
     public void RemoveAll() => Call("remove_all");
+
+    /// <summary>Защитник помощника (подмена): по умолчанию выключен — карточка исключения на Главной не видна.</summary>
+    public FakeDefender Defender { get; set; } = FakeDefender.Off();
+    /// <summary>Журнал помощника для исключения (в памяти): «наше» исключение и его снятие.</summary>
+    public MemoryRecorder AvJournal { get; } = new();
+    public const string AvRoot = @"C:\ProgramData\DpiShell";
+    AvExclusions Av => new(Defender, AvRoot, AvJournal);
+
+    public AvExclusionStatus AvExclusionStatus() { Call("av_exclusion_status"); return Av.Status(); }
+    public AvExclusionResult AvExclusionAdd() { Call("av_exclusion_add"); return Av.Add(); }
+    public AvExclusionResult AvExclusionRemove()
+    {
+        Call("av_exclusion_remove");
+        if (AvJournal.Active(ChangeKinds.AvExclusion).Count == 0) return new(false, AvOutcomes.NotOurs, "not ours", Av.Status());
+        Defender.RemovePath(AvRoot);
+        AvJournal.Close(ChangeKinds.AvExclusion, "removed");
+        return new(true, AvOutcomes.Removed, "removed", Av.Status());
+    }
     public int ClearHistory() { Call("clear_history"); return 3; }
 
     /// <summary>Что отвечает read_results; по умолчанию — одна стратегия с общей статистикой.</summary>
@@ -595,6 +613,8 @@ public static class PcHelper
         // Запись подключений: настоящий драйвер и список процессов машины в тестах не трогаем.
         RecorderSources = _ => [flows ?? new FakeFlowSource()],
         Processes = processes ?? new FakeProcesses(),
+        // Защитник: настоящие исключения машины не трогаем (выключен — карточка исключения не видна).
+        Defender = FakeDefender.Off(),
     };
 }
 
@@ -611,6 +631,7 @@ public static class TestWindow
     public static WindowSettings Settings(Shell shell) =>
         WindowSettings.Load(Path.Combine(shell.Paths.Root, "window", "window.json"));
 
+    /// <summary>Защитник окна — подмена (по умолчанию выключен: карточка исключения не видна); настоящий под тестами запрещён (<see cref="WmiDefender.Forbidden"/>).</summary>
     public static MainViewModel Model(Shell shell, HelperLink? link = null, WindowSettings? settings = null) =>
-        new(shell, link ?? NoHelper(), settings ?? Settings(shell));
+        new(shell, link ?? NoHelper(), settings ?? Settings(shell)) { Defender = FakeDefender.Off() };
 }

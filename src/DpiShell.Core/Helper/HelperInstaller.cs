@@ -18,6 +18,14 @@ public sealed class HelperInstaller(AppPaths paths)
     public static string? LangFrom(IEnumerable<string> args) =>
         args.FirstOrDefault(a => a.StartsWith(LangArg, StringComparison.OrdinalIgnoreCase)) is { } a ? a[LangArg.Length..] : null;
     public const string OwnerFile = "owner.sid";
+    /// <summary>
+    /// Ключ к --install-helper: до запуска службы (она сразу скачивает ядро) добавить %ProgramData%\DpiShell в исключения Защитника — человек согласился
+    /// в окне до запроса прав. Путь — свой, у ключа значения нет.
+    /// </summary>
+    public const string AvExclusionArg = "--av-exclusion";
+
+    /// <summary>Защитник для <see cref="AvExclusionArg"/> и снятия своего исключения при <c>--purge</c>.</summary>
+    public IDefenderSystem Defender { get; init; } = new WmiDefender();
 
     public static string HelperDir(AppPaths p) => Path.Combine(p.Root, "helper");
     public static string OwnerPath(AppPaths p) => Path.Combine(HelperDir(p), OwnerFile);
@@ -66,7 +74,8 @@ public sealed class HelperInstaller(AppPaths paths)
         catch (Exception e) when (e is ArgumentException or IOException or UnauthorizedAccessException) { return null; }
     }
 
-    public void Install(SecurityIdentifier user, IProgress<string>? log = null)
+    /// <param name="avExclusion">Добавить папку программы в исключения Защитника до запуска службы (<see cref="AvExclusionArg"/>).</param>
+    public void Install(SecurityIdentifier user, IProgress<string>? log = null, bool avExclusion = false)
     {
         if (!Shell.IsAdmin()) throw new UnauthorizedAccessException(L.T("core.helper.need_admin_install"));
         var exe = Environment.ProcessPath ?? throw new InvalidOperationException(L.T("core.helper.no_exe"));
@@ -100,6 +109,9 @@ public sealed class HelperInstaller(AppPaths paths)
         foreach (var r in paths.Harden()) log?.Report(L.T("core.shell.unsafe_removed", new { item = r }));
         if (!paths.IsHardened()) throw new InvalidOperationException(L.T("core.helper.lock_failed"));
 
+        // Служба при запуске сразу скачивает ядро — исключение должно стоять раньше, иначе Защитник успевает удалить архив.
+        if (avExclusion) AddExclusion(log);
+
         var helperExe = Path.Combine(dir, Path.GetFileName(exe));
         Check(ServiceManager.Sc(exists ? ScConfigArgs(helperExe) : ScCreateArgs(helperExe)), L.T(exists ? "core.helper.sc_reconfigure" : "core.helper.sc_create"));
         ServiceManager.Sc(ScDescriptionArgs());
@@ -127,8 +139,34 @@ public sealed class HelperInstaller(AppPaths paths)
         }
         DeleteWhenReleased(HelperDir(paths));
         log?.Report(L.T("core.helper.inst.removed"));
-        // Последним: журнал помощника лежит там же — после этого в него ничего не пишется.
-        if (purge) paths.Purge();
+        // Последним: журнал помощника лежит там же — после этого в него ничего не пишется. Своё исключение Защитника — снять до того (чужое остаётся).
+        if (purge)
+        {
+            RemoveOwnExclusion(log);
+            paths.Purge();
+        }
+    }
+
+    /// <summary>Исключение для папки программы по согласию из окна; отказ Защитника установку не останавливает (окно покажет ручной путь).</summary>
+    public void AddExclusion(IProgress<string>? log)
+    {
+        try
+        {
+            // Не внутри log?.Report(…): при log = null аргумент не вычислялся бы вовсе.
+            var r = new AvExclusions(Defender, paths.Root, new ChangeJournal(paths.ChangesFile)).Add();
+            log?.Report(r.Message);
+        }
+        catch (Exception e) when (AvExclusions.IsWmiError(e) || e is IOException) { log?.Report(e.Message); }
+    }
+
+    /// <summary>Снять исключение, если его добавил DpiShell (по журналу); ошибка Защитника удаление не останавливает.</summary>
+    public void RemoveOwnExclusion(IProgress<string>? log)
+    {
+        try
+        {
+            foreach (var i in AvExclusionUndoer.UndoOwn(new ChangeJournal(paths.ChangesFile), Defender, paths.Root).Items) log?.Report($"{i.Title}: {i.Note}");
+        }
+        catch (Exception e) when (AvExclusions.IsWmiError(e) || e is IOException) { log?.Report(e.Message); }
     }
 
     /// <summary>

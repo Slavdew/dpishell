@@ -639,5 +639,19 @@
   "core.joint.note.rndsni": "TLS decoy with a random name",
   "core.joint.note.quic_nofile": "QUIC decoy without a file",
   "core.joint.note.hostfake_random": "hostfakesplit with a random name",
-  "core.joint.note.all_supply": "the list includes all decoy names from the bundle"
+  "core.joint.note.all_supply": "the list includes all decoy names from the bundle",
+  "core.av.journal": "Core folder in Defender exclusions: {path}",
+  "core.av.already": "The core folder is already in Defender exclusions.",
+  "core.av.not_needed": "Defender is off; no exclusion needed.",
+  "core.av.third_party": "Antivirus: {name}. Add the folder to its exclusions manually:",
+  "core.av.refused": "Defender did not allow the exclusion (tamper protection or policy). Add it manually:",
+  "core.av.unavailable": "Defender does not respond. Add the exclusion manually:",
+  "core.av.added": "The core folder is added to Defender exclusions.",
+  "core.av.removed": "Exclusion removed.",
+  "core.av.not_ours": "The exclusion was not added by DpiShell; remove it in Defender.",
+  "core.undo.av_removed": "core folder removed from Defender exclusions",
+  "core.undo.av_gone": "the core folder is no longer in exclusions",
+  "core.undo.av_before": "the exclusion existed before DpiShell; left as is",
+  "core.undo.av_unknown": "unknown whether the exclusion existed before DpiShell (list hidden); left as is",
+  "core.undo.av_refused": "Defender did not allow removing the exclusion; remove it in Windows Security"
 }

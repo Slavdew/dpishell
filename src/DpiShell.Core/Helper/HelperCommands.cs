@@ -229,6 +229,11 @@ public static partial class HelperCommands
         // пишет в журнал изменений («Отменить всё» вернёт прежнее) и применяет разделы теми же проверками, что и обычные команды (домены, белый список winws, публичные адреса hosts).
         new("settings_export_read", false, false),
         new("settings_import", true, true, new ArgSpec("plan", ArgKind.SettingsPlan, Required: true)),
+        // Исключение Защитника для папки ядра (API 1.16): аргументов нет вовсе — путь помощник берёт свой (%ProgramData%\DpiShell), любой присланный — отказ.
+        // Иначе пользователь без прав исключил бы через помощника что угодно. Только WMI, только по нажатию; снимается только своё (журнал, before.present).
+        new("av_exclusion_status", false, false),
+        new("av_exclusion_add", true, false),
+        new("av_exclusion_remove", true, false),
     ];
 
     public static IReadOnlyDictionary<string, CommandSpec> Specs { get; } = All.ToDictionary(c => c.Name);
@@ -237,13 +242,15 @@ public static partial class HelperCommands
     public static IReadOnlyList<string> Names { get; } = [.. All.Select(c => c.Name).Order(StringComparer.Ordinal)];
 
     /// <summary>
-    /// Действия на весь компьютер (API 1.14, helper-protocol §5): правка и дополнение hosts, смена DNS, прокси машины. Принимаются только от окна
+    /// Действия на весь компьютер (API 1.14, helper-protocol §5): правка и дополнение hosts, смена DNS, прокси машины, исключение Защитника (1.16). Принимаются только от окна
     /// той же сборки, что помощник (<see cref="HelperClientImage"/>). Возврат как было (hosts_revert, hosts_restore, hosts_uncomment, dns_restore,
     /// changes_undo*) сюда не входит: он только снимает наше.
     /// </summary>
     public static IReadOnlySet<string> MachineCommands { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         "hosts_apply", "hosts_user_set", "hosts_comment", "dns_set", "proxy_machine_set", "proxy_machine_restore",
+        // Исключение Защитника — на весь компьютер (API 1.16); снятие своего (av_exclusion_remove) — возврат как было, не ограничено.
+        "av_exclusion_add",
     };
 
     /// <summary>Запрос меняет настройки всего компьютера: команда из <see cref="MachineCommands"/> или загрузка настроек с разделом hosts или DNS.</summary>

@@ -294,19 +294,23 @@ public sealed partial class MainViewModel : Observable
             HelperState.Denied => L.T("shell.helper.ask_reinstall_user", new { problem = Helper.Problem }),
             _ => L.T("shell.helper.ask_install"),
         };
-        if (!AskHelper(question)) { Message = L.T("shell.helper.view_only"); return null; }
-        return await InstallHelperAsync() ? Helper.Client : null;
+        // Первая установка при работающем Защитнике: в том же вопросе — исключение для папки ядра (служба качает ядро сразу после установки).
+        if (AskInstallWithExclusion(question) is not { } avExclusion) { Message = L.T("shell.helper.view_only"); return null; }
+        if (!await InstallHelperAsync(avExclusion)) return null;
+        if (avExclusion) AfterAvAttempt(_av);
+        return Helper.Client;
     }
 
     /// <summary>Установка/обновление/переустановка: UAC → ожидание → подключение → данные помощника.</summary>
-    async Task<bool> InstallHelperAsync()
+    /// <param name="avExclusion">Установка до запуска службы добавит папку ядра в исключения Защитника (человек согласился).</param>
+    async Task<bool> InstallHelperAsync(bool avExclusion = false)
     {
         if (_installing) return false;
         _installing = true;
         Busy = true; BusyText = L.T("shell.helper.busy_install"); Message = L.T("shell.helper.confirm_prompt");
         UpdateStatus();
         SetupOutcome r;
-        try { r = await Helper.InstallAsync(); }
+        try { r = await Helper.InstallAsync(avExclusion: avExclusion); }
         catch (Exception e) { r = new(SetupResult.Failed, Texts.Friendly(e)); }
         finally
         {
@@ -381,6 +385,8 @@ public sealed partial class MainViewModel : Observable
     async Task FetchAsync(bool full)
     {
         if (await Helper.FetchAsync(full) is { } error) Message = error;
+        // Исключение Защитника — вместе с полными данными (подключение, «Диагностика», после действий), не каждым тиком: WMI у помощника не бесплатен.
+        if (full) await RefreshAvAsync();
     }
 
     /// <summary>Данные помощника — на экраны (синхронно: и тест окна строит экран по готовому состоянию).</summary>
@@ -591,6 +597,8 @@ public sealed partial class MainViewModel : Observable
         {
             ApplyHelperData();
             await RefreshStatusAsync();
+            // Первый запуск: Защитник работает — карточка предложит исключение до первого скачивания ядра.
+            if (Helper.State == HelperState.NotInstalled) await ProbeLocalAvAsync();
         }
         _ = ReconcileRouterPcAsync(router);
         _ = CheckDnsAsync();

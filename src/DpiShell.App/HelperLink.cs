@@ -203,12 +203,13 @@ public sealed class HelperLink : IAsyncDisposable
     /// Установить или обновить помощника: один запрос прав, затем ждать, пока он ответит.
     /// Done — подключены и можно действовать.
     /// </summary>
-    public async Task<SetupOutcome> InstallAsync(CancellationToken ct = default)
+    /// <param name="avExclusion">Человек согласился добавить папку ядра в исключения Защитника: установка сделает это до запуска службы (она сразу качает ядро).</param>
+    public async Task<SetupOutcome> InstallAsync(CancellationToken ct = default, bool avExclusion = false)
     {
         _quiet = true;
         try
         {
-            var r = await Setup.RunElevatedAsync("--install-helper " + UserSid() + " " + HelperInstaller.LangArg + L.Current);
+            var r = await Setup.RunElevatedAsync("--install-helper " + UserSid() + " " + HelperInstaller.LangArg + L.Current + (avExclusion ? " " + HelperInstaller.AvExclusionArg : ""));
             if (r.Result != SetupResult.Done) return r;
             Drop();
             var until = DateTime.UtcNow + ConnectWait;

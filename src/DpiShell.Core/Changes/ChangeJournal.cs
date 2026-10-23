@@ -34,6 +34,8 @@ public static class ChangeKinds
     public const string RouterJoint = "router_joint";
     /// <summary>Загрузка своих настроек из папки файлов (помощник, журнал помощника): откат возвращает прежние сайты, исключения, подсети, стратегии и профили; hosts, DNS и продвинутый режим откатываются своими записями.</summary>
     public const string SettingsImport = "settings_import";
+    /// <summary>Папка ядра (%ProgramData%\DpiShell) в исключениях Защитника (помощник или установка, журнал помощника): откат снимает исключение, только если до нас его не было.</summary>
+    public const string AvExclusion = "av_exclusion";
 }
 
 public enum ChangeState
