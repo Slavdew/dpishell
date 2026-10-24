@@ -22,7 +22,7 @@ public sealed class DohResolverTests
         Assert.Empty(DohResolver.Parse("""{"Status":3,"Authority":[{"name":"x.","type":6,"data":"a"}]}"""));
 
     [Theory]
-    [InlineData(new string[0], true)]                              // система: «имени нет» (как у провайдера пользователя)
+    [InlineData(new string[0], false)]                             // система не ответила (старт, сон, смена сети) — не подмена
     [InlineData(new[] { "127.0.0.1" }, true)]                       // заглушка
     [InlineData(new[] { "0.0.0.0" }, true)]
     [InlineData(new[] { "10.10.34.36" }, true)]                     // страница-заглушка в частной сети

@@ -77,17 +77,17 @@ public sealed partial class WindowSmokeTests
                 // 4) Находка «Диагностики»: системный прокси — одна кнопка к нужному месту.
                 verdict = new NetVerdict(NetCause.Ok);
                 f.Backend.EnableThrows = new InvalidOperationException("сбой запуска");
-                vm.SystemFindings = () => [SystemChecks.ProxyFinding((true, "proxy.local:8080"))];
+                vm.SystemFindings = () => [SystemFinding.Of(false, () => ("Adguard", "мешает обходу")) with { Key = "adguard" }];
                 WaitUi(vm.EnableAsync());
-                if (!vm.GuidedText.Contains("proxy.local:8080")) throw new Exception("В находке нет адреса прокси: " + vm.GuidedText);
-                Card("finding", vm.GuidedText, "Настроить прокси");
+                if (!vm.GuidedText.Contains("Adguard")) throw new Exception("В находке нет названия: " + vm.GuidedText);
+                Card("finding", vm.GuidedText, L.T("home.guided.open_diag"));
 
                 // 5) Причина неизвестна: «Сохранить отчёт» и «Написать о проблеме», кнопки исправления нет.
                 vm.SystemFindings = () => [];
                 WaitUi(vm.EnableAsync());
                 if (!vm.GuidedText.StartsWith("Причина не определена.") || !vm.GuidedText.Contains("сбой запуска")) throw new Exception("Текст неизвестной причины: " + vm.GuidedText);
                 Card("unknown", vm.GuidedText, "Сохранить отчёт", "Написать о проблеме");
-                if (Btn("Повторить") is not null || Btn("Настроить прокси") is not null) throw new Exception("При неизвестной причине есть кнопка исправления");
+                if (Btn("Повторить") is not null || Btn(L.T("home.guided.open_diag")) is not null) throw new Exception("При неизвестной причине есть кнопка исправления");
 
                 Close(w);
                 Stop(vm, f);

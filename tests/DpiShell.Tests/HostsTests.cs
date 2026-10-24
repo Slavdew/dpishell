@@ -437,6 +437,83 @@ public sealed class HostsVerifierTests
         Assert.Equal("127.0.0.1 localhost\r\n", File.ReadAllText(hosts));
         Assert.False(m.Status().BlockLost);
     }
+
+    // ---------- аудит уведомлений №6: перепроверка без сети ничего не меняет ----------
+
+    sealed class FlakyProbe(Func<string, int, EndpointOutcome> outcome) : IEndpointProbe
+    {
+        readonly Dictionary<string, int> _n = [];
+        public Task<EndpointCheck> CheckAsync(string host, IPAddress ip, CancellationToken ct = default)
+        {
+            var key = $"{host}@{ip}";
+            int n;
+            lock (_n) { _n[key] = n = _n.GetValueOrDefault(key) + 1; }
+            // По адресу из DNS домен не открывается (потому запись и нужна); открывается только по адресам кандидатов.
+            var o = ip.ToString() is "140.82.121.3" or "146.75.22.132" ? outcome(key, n) : EndpointOutcome.NoConnect;
+            return Task.FromResult(new EndpointCheck(o, 0.1, o.ToString()));
+        }
+    }
+
+    async Task<(HostsManager M, string Hosts)> TwoHostBlock(TempDir t, IEndpointProbe probe, Func<CancellationToken, Task<bool>>? up = null)
+    {
+        var hosts = t.Sub("hosts");
+        File.WriteAllText(hosts, "127.0.0.1 localhost\r\n");
+        var dns = new FakeDns(new() { ["github.com"] = ["185.199.108.133"], ["raw.githubusercontent.com"] = ["185.199.108.133"] });
+        var rdap = new FakeRdap(new() { ["140.82.121.3"] = "GITHU", ["146.75.22.132"] = "FASTLY" });
+        var cands = new List<HostsCandidate> { C("github.com", ["140.82.121.3"], "GITHU"), C("raw.githubusercontent.com", ["146.75.22.132"], "FASTLY", "GITHU") };
+        var m = new HostsManager(Make.Paths(t), hosts, probe, dns, rdap, () => cands);
+        m.Apply(await m.CheckAsync());
+        Assert.Equal(2, m.Status().Block.Entries.Count);
+        if (up is not null) m.NetworkUp = up;
+        return (m, hosts);
+    }
+
+    [Fact]
+    public async Task Recheck_without_network_changes_nothing_and_says_it_was_skipped()
+    {
+        using var t = new TempDir("-hm");
+        bool online = true;
+        var (m, hosts) = await TwoHostBlock(t, new FlakyProbe((_, _) => online ? EndpointOutcome.Ok : EndpointOutcome.Timeout), _ => Task.FromResult(online));
+        var before = File.ReadAllText(hosts);
+        online = false;   // сеть пропала: все пробы «не отвечают»
+        var r = await m.RecheckAsync();
+        Assert.True(m.LastRecheckSkipped);
+        Assert.Empty(r.Removed);
+        Assert.False(r.BlockLost);
+        Assert.Equal(before, File.ReadAllText(hosts));
+        Assert.Equal(2, m.Status().Block.Entries.Count);
+    }
+
+    [Fact]
+    public async Task Unreachable_address_is_removed_only_when_it_fails_twice_with_network_up()
+    {
+        using var t = new TempDir("-hm");
+        // github.com при перепроверке: первая проба не прошла, повторная — прошла (случайный сбой) — запись остаётся.
+        var (m, _) = await TwoHostBlock(t, new FlakyProbe((key, n) => key.StartsWith("github.com") && n == 2 ? EndpointOutcome.Timeout : EndpointOutcome.Ok));
+        var r = await m.RecheckAsync();
+        Assert.False(m.LastRecheckSkipped);
+        Assert.Empty(r.Removed);
+        Assert.Equal(2, m.Status().Block.Entries.Count);
+
+        // Не прошла дважды подряд при живой сети — адрес устарел.
+        using var t2 = new TempDir("-hm");
+        var (m2, hosts2) = await TwoHostBlock(t2, new FlakyProbe((key, n) => key.StartsWith("github.com") && n >= 2 ? EndpointOutcome.Timeout : EndpointOutcome.Ok));
+        var r2 = await m2.RecheckAsync();
+        Assert.Equal("github.com", Assert.Single(r2.Removed).Host);
+        Assert.DoesNotContain("140.82.121.3", File.ReadAllText(hosts2));
+    }
+
+    [Fact]
+    public async Task Network_that_disappears_between_the_two_probes_keeps_the_record()
+    {
+        using var t = new TempDir("-hm");
+        int asked = 0;
+        var (m, hosts) = await TwoHostBlock(t, new FlakyProbe((key, n) => n >= 2 ? EndpointOutcome.Timeout : EndpointOutcome.Ok), _ => Task.FromResult(Interlocked.Increment(ref asked) <= 1));
+        var r = await m.RecheckAsync();
+        Assert.Empty(r.Removed);
+        Assert.Contains("140.82.121.3", File.ReadAllText(hosts));
+        Assert.Contains("146.75.22.132", File.ReadAllText(hosts));
+    }
 }
 
 /// <summary>Живая проверка на локальном TLS-сервере с самоподписанным сертификатом: должна отклонить.</summary>

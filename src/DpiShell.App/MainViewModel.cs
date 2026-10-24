@@ -225,6 +225,7 @@ public sealed partial class MainViewModel : Observable
         Apps.DetailRequested += () => { _detailOpened = true; Raise(nameof(ShowAdvanced)); };
         Hosts = new HostsViewModel(helper)
         {
+            Settings = settings,
             Need = NeedHelperAsync,
             Say = s => Message = s,
             Confirm = s => Confirm(s),
@@ -659,10 +660,16 @@ public sealed partial class MainViewModel : Observable
     /// <summary>«YouTube, Discord» — группы, не открывшиеся в последней проверке «Проверить сейчас»; null — проверки нет или открылось всё.</summary>
     string? FailingCheckGroups()
     {
-        if (Checking || CheckGroups.Count == 0) return null;
+        // Итог старше CheckOldAfter не красит заголовок: за это время сеть и сайты могли стать другими (на плитках он серым «проверено давно»).
+        if (Checking || CheckGroups.Count == 0 || CheckIsOld) return null;
         var bad = CheckGroups.Where(g => !g.Ok || g.Browser).Select(g => g.Title).ToList();
         return bad.Count == 0 ? null : string.Join(", ", bad);
     }
+
+    /// <summary>Через сколько итог «Проверить сейчас» считается давним (красным в заголовке не показывается).</summary>
+    public TimeSpan CheckOldAfter { get; set; } = TimeSpan.FromMinutes(10);
+    public bool CheckIsOld => _checkedTime is { } t && DateTime.Now - t > CheckOldAfter;
+    bool _checkOldShown;
 
     /// <summary>Заголовок и подробности статуса из состояния (без побочных действий): вызывается и при смене языка.</summary>
     void ComputeStatus()
@@ -741,12 +748,24 @@ public sealed partial class MainViewModel : Observable
     }
     public string VpnWarning { get => _vpnWarning.Value; private set { _vpnWarning.Set(value); Raise(); Raise(nameof(HasVpn)); RaiseIssues(); } }
     /// <summary>Плашка VPN на главной: есть VPN и человек не сказал «Понятно» про этот же набор адаптеров.</summary>
-    public bool HasVpn => VpnWarning.Length > 0 && _vpnNames != _vpnDismissed;
+    public bool HasVpn => VpnWarning.Length > 0 && !Settings.IsHidden(VpnKey);
 
-    string? _vpnDismissed;
-    /// <summary>«Понятно, не показывать»: до смены набора VPN-адаптеров (в «Диагностике» VPN виден всегда).</summary>
-    public ICommand DismissVpnCmd => _dismissVpnCmd ??= new RelayCommand(() => { _vpnDismissed = _vpnNames; Raise(nameof(HasVpn)); RaiseIssues(); });
+    string VpnKey => "vpn:" + _vpnNames;
+    /// <summary>«Понятно, не показывать»: до смены набора VPN-адаптеров, и после перезапуска (запоминается в настройках окна; в «Диагностике» VPN виден всегда).</summary>
+    public ICommand DismissVpnCmd => _dismissVpnCmd ??= new RelayCommand(() =>
+    {
+        foreach (var k in Settings.HiddenNotices.Where(k => k.StartsWith("vpn:", StringComparison.Ordinal)).ToList()) Settings.SetHidden(k, false);
+        Settings.SetHidden(VpnKey, true);
+        Raise(nameof(HasVpn)); RaiseIssues();
+    });
     ICommand? _dismissVpnCmd;
+
+    /// <summary>«Скрыть» у пункта панели (по ключу, <see cref="HealthItem.HideKey"/>): запоминается в настройках окна.</summary>
+    public ICommand HideNoticeCmd => _hideNoticeCmd ??= new RelayCommand(p =>
+    {
+        if (p is string key && key.Length > 0) { Settings.SetHidden(key, true); RaiseIssues(); }
+    });
+    ICommand? _hideNoticeCmd;
 
     IReadOnlyList<Conflict> _conflicts = [];
     IReadOnlyList<Conflict> _dormant = [];
@@ -1044,6 +1063,9 @@ public sealed partial class MainViewModel : Observable
         }
         _ = Hosts.RecheckIfDueAsync();
         await RefreshStatusAsync();
+        // Итог проверки состарился — заголовок и значок перестают быть красными; карточка причины, чья причина ушла, исчезает сама.
+        if (CheckIsOld != _checkOldShown) { _checkOldShown = CheckIsOld; UpdateStatus(); }
+        if (_guided is not null && DateTime.UtcNow - _guidedCheckedAt >= GuidedRecheckEvery) await RecheckGuidedAsync();
     }
 
     string? CoreProblemText => _coreState switch
@@ -1156,7 +1178,35 @@ public sealed partial class MainViewModel : Observable
         // Роутер включился, а состояние ПК то же: прежний итог (без оптимизации) уже не про это.
         if (!was && _checkFor is not null) DropCheck();
         if (!AutoCheck || IsLoading || Busy || Selecting || Checking || _checkFor is not null || CheckedGroups().Count == 0) return;
+        // Старт, сон, смена сети: сеть ещё поднимается — «не открывается» в это окно ложно. Проверим, когда установится.
+        if (InNetQuiet) { _ = AfterQuietAsync(MaybeAutoCheck); return; }
         _ = CheckNowAsync();
+    }
+
+    /// <summary>Сколько после старта, сна и смены сети сеть считается неустановившейся: автопроверки и карточки про сеть ждут (0 — не ждать; в окне — 20 с).</summary>
+    public TimeSpan NetQuiet { get; set; }
+    DateTime _quietUntil;
+    bool _quietWaiting;
+    public bool InNetQuiet => DateTime.UtcNow < _quietUntil;
+
+    /// <summary>Старт, пробуждение или смена сети (событие системы; App): окно «сеть нестабильна» начинается заново, прежний итог проверки — не про эту сеть.</summary>
+    public void NetworkEvent()
+    {
+        _quietUntil = DateTime.UtcNow + NetQuiet;
+        if (_checkFor is not null && !Checking) { DropCheck(); UpdateStatus(); }
+    }
+
+    /// <summary>Подождать конец окна «сеть нестабильна» и сделать дело (одно ожидание за раз).</summary>
+    async Task AfterQuietAsync(Action then)
+    {
+        if (_quietWaiting) return;
+        _quietWaiting = true;
+        try
+        {
+            while (InNetQuiet) await Task.Delay(_quietUntil - DateTime.UtcNow + TimeSpan.FromMilliseconds(50));
+        }
+        finally { _quietWaiting = false; }
+        then();
     }
 
     /// <summary>«Проверить сейчас» — без прав: HTTPS-проверка целей с DoH, winws не нужен. Не занимает окно: идёт рядом с другими действиями.</summary>
@@ -1210,6 +1260,7 @@ public sealed partial class MainViewModel : Observable
         if (result is not null && gen == _checkGen)
         {
             if (FailingCheckGroups() is null) { if (_guided is { Kind: not GuidedKind.Uac }) ClearGuided(); await RememberNetworkStrategyAsync(); }
+            else if (InNetQuiet) { DropCheck(); UpdateStatus(); }   // сеть ещё устаивается: итог «не открывается» не показываем, перепроверим сами
             else if (_guided is null) await DiagnoseNetworkAsync();   // не открылось: может, дело не в стратегии, а в сети или времени
         }
         return result;
@@ -1285,11 +1336,20 @@ public sealed partial class MainViewModel : Observable
         try
         {
             var hosts = CheckedGroups().SelectMany(g => g.Targets).Select(t => new Uri(t.Url).Host).Distinct().ToList();
-            var list = await Task.Run(async () =>
+            var list = await CompareDnsAsync(hosts);
+            // «Подмена» подтверждается повтором через паузу: DNS мог ответить заглушкой на секунду (старт, сон, смена сети).
+            if (list.Any(c => c.Spoofed) && DnsRecheckDelay > TimeSpan.Zero)
             {
-                using var doh = new DohResolver();
-                return await Task.WhenAll(hosts.Select(h => DnsCheck.CompareAsync(h, doh)));
-            });
+                await Task.Delay(DnsRecheckDelay);
+                var again = (await CompareDnsAsync([.. list.Where(c => c.Spoofed).Select(c => c.Host)])).ToDictionary(c => c.Host, StringComparer.OrdinalIgnoreCase);
+                list = [.. list.Select(c => again.TryGetValue(c.Host, out var a) ? a : c)];
+            }
+            // Заглушка 0.0.0.0 / 127.x из hosts (блокировщики рекламы) — не вина провайдера.
+            if (list.Any(c => c.Spoofed))
+            {
+                var map = (HostsLookup ?? BrowserCheck.SystemHosts)();
+                list = [.. list.Select(c => c.Spoofed && map(c.Host) is not null ? c with { FromHosts = true } : c)];
+            }
             _dnsList = list;
             DnsRows.Clear();
             foreach (var c in list) DnsRows.Add(DnsRow.From(c));
@@ -1302,6 +1362,23 @@ public sealed partial class MainViewModel : Observable
         }
         catch (Exception e) { DnsSummary = Texts.Friendly(e); }
         finally { DnsChecking = false; }
+    }
+
+    /// <summary>Через сколько повторить сравнение DNS, если оно нашло подмену (в окне — 10 с; 0 — не повторять).</summary>
+    public TimeSpan DnsRecheckDelay { get; set; }
+    /// <summary>Адрес имени из hosts (null — записи нет). Null — настоящий файл hosts.</summary>
+    public Func<Func<string, string?>>? HostsLookup { get; set; }
+    /// <summary>Сравнение DNS системы с DoH (в тестах — подмена без сети). Null — настоящее.</summary>
+    public Func<IReadOnlyList<string>, Task<DnsComparison[]>>? DnsCompare { get; set; }
+
+    async Task<DnsComparison[]> CompareDnsAsync(IReadOnlyList<string> hosts)
+    {
+        if (DnsCompare is { } f) return await f(hosts);
+        return await Task.Run(async () =>
+        {
+            using var doh = new DohResolver();
+            return await Task.WhenAll(hosts.Select(h => DnsCheck.CompareAsync(h, doh)));
+        });
     }
 
     void RebuildDnsRows()

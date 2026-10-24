@@ -27,6 +27,13 @@ public sealed partial class RouterViewModel
     ICommand? _copyCurrentParamsCmd;
 
     /// <summary>Включить сторожа с главной (то же, что галочка «Сторож» на вкладке).</summary>
+    /// <summary>«Скрыть» у рекомендации роутера: запоминается в настройках окна, пока причина (версия обновления, выключенный сторож) та же.</summary>
+    public ICommand HideNoticeCmd => _hideNoticeCmd ??= new RelayCommand(p =>
+    {
+        if (p is string key && key.Length > 0) { _settings.SetHidden(key, true); Changed?.Invoke(); }
+    });
+    ICommand? _hideNoticeCmd;
+
     public ICommand EnableWatchdogCmd => _enableWatchdogCmd ??= new RelayCommand(() => WatchdogEnabled = true, () => CanAct);
     ICommand? _enableWatchdogCmd;
 
@@ -233,11 +240,17 @@ public sealed partial class RouterViewModel
         if (TimestampsNeedAction)
             list.Add(new(Health.Warn, "", TimestampsNeed, L.T("router.enable"), EnableTimestampsCmd, Shield: true));
         // Обновление — пунктом «!», а не хвостом строки: ставится на вкладке «Информация и обновления», где видны шаги.
-        if (!Updating && _status?.Update is { Available: true, Version: { } uv })
-            list.Add(new(Health.Warn, L.T("home.r.update.label"), L.T("router.update.available", new { version = uv }), L.T("home.r.update.go"), GoUpdatesCmd));
+        // Обновление и выключенный сторож — рекомендации (выбор человека), а не ошибки: значок «!» не красят, у каждой — «Скрыть» (помнится).
+        if (!Updating && _status?.Update is { Available: true, Version: { } uv } && !_settings.IsHidden("r_update:" + uv))
+            list.Add(new(Health.None, L.T("home.r.update.label"), L.T("router.update.available", new { version = uv }), L.T("home.r.update.go"), GoUpdatesCmd,
+                HideCommand: HideNoticeCmd, HideKey: "r_update:" + uv));
         if (WatchdogAvailable)
-            list.Add(_watchdog ? new(Health.Ok, L.T("home.r.watchdog.label"), L.T("home.r.watchdog.on"))
-                : new(Health.Warn, L.T("home.r.watchdog.label"), L.T("home.r.watchdog.off"), L.T("router.enable"), EnableWatchdogCmd));
+        {
+            if (_watchdog) { _settings.SetHidden("r_watchdog_off", false); list.Add(new(Health.Ok, L.T("home.r.watchdog.label"), L.T("home.r.watchdog.on"))); }
+            else if (!_settings.IsHidden("r_watchdog_off"))
+                list.Add(new(Health.None, L.T("home.r.watchdog.label"), L.T("home.r.watchdog.off"), L.T("router.enable"), EnableWatchdogCmd,
+                    HideCommand: HideNoticeCmd, HideKey: "r_watchdog_off"));
+        }
         return list;
     }
 

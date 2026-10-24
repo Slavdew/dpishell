@@ -142,7 +142,7 @@ public sealed partial class HostsViewModel : Observable
 
     public IReadOnlyList<string> AppliedLines => _status?.Block.Entries.Select(e => $"{e.Host} → {e.Ip}").ToList() ?? [];
 
-    /// <summary>Предупреждения: снято Защитником, «только чтение», повреждённый блок, чужие записи, блок при выключенной функции.</summary>
+    /// <summary>Предупреждения: снято Защитником, повреждённый блок, чужие записи, блок при выключенной функции.</summary>
     public IReadOnlyList<string> Warnings
     {
         get
@@ -153,8 +153,7 @@ public sealed partial class HostsViewModel : Observable
                 list.Add(L.T("hosts.warn.lost"));
             if (s.Block.Damaged)
                 list.Add(L.T("hosts.warn.damaged"));
-            if (s.ReadOnly)
-                list.Add(L.T("hosts.warn.read_only"));
+            // «Только чтение» — штатное состояние, при записи отметка снимается и возвращается сама: не предупреждение.
             // Функция выключена — нашей записи нет и чужая никому не мешает: плашку не показываем.
             if (Enabled)
                 foreach (var c in s.Conflicts.GroupBy(c => c.Host).Select(g => g.First()))
@@ -194,6 +193,8 @@ public sealed partial class HostsViewModel : Observable
     {
         _status = _helper.Reader is not null ? _helper.Details?.Hosts : null;
         if (HelperOn) _draftOn = false;   // включено у помощника — черновик больше не нужен
+        // Записи на месте — «о пропаже сказано» сбрасывается: если пропадут снова, скажем снова.
+        if (Settings is { HostsLostSaid: true } t && _status is { BlockLost: false }) { t.HostsLostSaid = false; SaveSettings(); }
         RefreshTools();
         RaiseEnabled();
     }
@@ -355,15 +356,35 @@ public sealed partial class HostsViewModel : Observable
         try
         {
             var r = await c.HostsRecheckAsync();
-            foreach (var host in r.Removed.Select(x => x.Host).Distinct())
-                Notify?.Invoke(L.T("hosts.notify.stale_removed", new { host }));
-            foreach (var e in r.NewStaleUser ?? [])
-                Notify?.Invoke(L.T("hosts.notify.user_stale", new { host = e.Host }));
-            if (r.BlockLost) Notify?.Invoke(L.T("hosts.notify.lost"));
+            // Один итоговый пузырь на перепроверку, а не по одному на хост.
+            var parts = new List<string>();
+            var removed = r.Removed.Select(x => x.Host).Distinct().ToList();
+            if (removed.Count == 1) parts.Add(L.T("hosts.notify.stale_removed", new { host = removed[0] }));
+            else if (removed.Count > 1) parts.Add(L.T("hosts.notify.stale_removed_n", new { n = removed.Count }));
+            var stale = (r.NewStaleUser ?? []).Select(e => e.Host).Distinct().ToList();
+            if (stale.Count == 1) parts.Add(L.T("hosts.notify.user_stale", new { host = stale[0] }));
+            else if (stale.Count > 1) parts.Add(L.T("hosts.notify.user_stale_n", new { n = stale.Count }));
+            // О пропаже записей говорим один раз — пока записи не вернутся (суточная перепроверка не повторяет).
+            if (r.BlockLost && Settings is { HostsLostSaid: false } s)
+            {
+                parts.Add(L.T("hosts.notify.lost"));
+                s.HostsLostSaid = true;
+                SaveSettings();
+            }
+            if (parts.Count == 1) Notify?.Invoke(parts[0]);
+            else if (parts.Count > 1) Notify?.Invoke(L.T("hosts.notify.several"));
         }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); }
         catch (HelperException e) { Say(e.Message); }
         finally { Busy = false; }
         await RefreshAsync();
+    }
+
+    /// <summary>Настройки окна (о пропаже записей уже сказано); null — не запоминается.</summary>
+    public WindowSettings? Settings { get; set; }
+
+    void SaveSettings()
+    {
+        try { Settings?.Save(); } catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { }
     }
 }

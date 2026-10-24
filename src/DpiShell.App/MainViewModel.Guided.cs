@@ -114,14 +114,59 @@ public sealed partial class MainViewModel
     void ShowGuidedCard(GuidedState g)
     {
         _guided = g;
+        _guidedCheckedAt = DateTime.UtcNow;
         RaiseGuided();
     }
 
+    /// <summary>Убрать карточку: действие человека началось заново или причина ушла. Прежнее «Скрыть» перестаёт действовать.</summary>
     void ClearGuided()
     {
+        _guidedHidden = null;
         if (_guided is null) return;
         _guided = null;
         RaiseGuided();
+    }
+
+    GuidedKind? _guidedHidden;
+    DateTime _guidedCheckedAt;
+    /// <summary>Как часто, пока карточка висит, перепроверять, ушла ли причина.</summary>
+    public TimeSpan GuidedRecheckEvery { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>«Скрыть»: карточка уходит; одна и та же причина сама (без действия человека) её не возвращает — до следующего «Включить», «Подобрать», «Проверить».</summary>
+    public ICommand HideGuidedCmd => _hideGuidedCmd ??= new RelayCommand(() =>
+    {
+        if (_guided is not { } g) return;
+        _guided = null;
+        _guidedHidden = g.Kind;
+        RaiseGuided();
+    });
+    ICommand? _hideGuidedCmd;
+
+    /// <summary>
+    /// Условие карточки перепроверяется: интернет, вход в сеть и время — повторным разбором сети; смена сети — итогом проверки сайтов;
+    /// находка — той же проверкой окружения. Причина ушла — карточка уходит сама. Права и неизвестная причина ждут человека.
+    /// </summary>
+    public async Task RecheckGuidedAsync()
+    {
+        if (!GuidedEnabled || _guided is not { } g) return;
+        _guidedCheckedAt = DateTime.UtcNow;
+        bool gone;
+        switch (g.Kind)
+        {
+            case GuidedKind.NoInternet or GuidedKind.Portal or GuidedKind.Clock:
+                gone = (await NetVerdictAsync()).Cause == NetCause.Ok;
+                break;
+            case GuidedKind.NetChanged:
+                gone = CheckGroups.Count == 0 || FailingCheckGroups() is null;
+                break;
+            case GuidedKind.Finding when g.Finding?.Key is { } key:
+                var all = await Task.Run(() => SystemFindings is { } f ? f() : SystemChecks.Run(_shell.Paths));
+                gone = all.FirstOrDefault(x => x.Key == key)?.Ok != false;
+                break;
+            default:
+                return;
+        }
+        if (gone && ReferenceEquals(_guided, g)) { _guided = null; RaiseGuided(); }
     }
 
     void RaiseGuided()
@@ -221,7 +266,11 @@ public sealed partial class MainViewModel
         try
         {
             if (NetDiagnose is { } f) return await f(CancellationToken.None);
-            return await NetDiagnosis.RunAsync(ControlUrls(), new HttpNetFetcher());
+            var v = await NetDiagnosis.RunAsync(ControlUrls(), new HttpNetFetcher());
+            // Прямо не вышло, а системный прокси включён (владелец работает через него) — «нет интернета» только если и через прокси нет.
+            if (v.Cause == NetCause.NoInternet && await Task.Run(SystemChecks.ProxyOn))
+                v = await NetDiagnosis.RunAsync(ControlUrls(), new HttpNetFetcher { UseProxy = true });
+            return v;
         }
         catch (Exception e) when (e is not OperationCanceledException) { return new(NetCause.Ok); }
     }
@@ -254,7 +303,8 @@ public sealed partial class MainViewModel
         if (FromErrorText(error) is { } known) { ShowGuidedCard(known); CauseFound(); return; }
         if (await DiagnoseNetworkAsync()) { CauseFound(); return; }
         var findings = await Task.Run(() => SystemFindings is { } f ? f() : SystemChecks.Run(_shell.Paths));
-        if (findings.FirstOrDefault(x => !x.Ok) is { } bad) { ShowGuidedCard(new(GuidedKind.Finding, Finding: bad)); CauseFound(); }
+        // Только то, что относится к сорвавшемуся действию: системный прокси (у человека может быть нужным), папка окна и hosts — не причина.
+        if (findings.FirstOrDefault(x => !x.Ok && !x.IsContext) is { } bad) { ShowGuidedCard(new(GuidedKind.Finding, Finding: bad)); CauseFound(); }
         else ShowGuidedCard(new(GuidedKind.Unknown, Error: error));
     }
 
@@ -293,6 +343,13 @@ public sealed partial class MainViewModel
         if (!GuidedEnabled || NetworkIdentity is not { } identity) return;
         var id = await Task.Run(identity.CurrentId);
         if (id is null || id == _networkId) return;
+        // Wi-Fi переподключается: ждём, пока сеть установится, и читаем идентификатор заново — иначе сравниваем со случайным.
+        if (InNetQuiet)
+        {
+            while (InNetQuiet) await Task.Delay(_quietUntil - DateTime.UtcNow + TimeSpan.FromMilliseconds(50));
+            id = await Task.Run(identity.CurrentId);
+            if (id is null || id == _networkId) return;
+        }
         bool first = _networkId is null;
         _networkId = id;
         if (first || Busy || Selecting || IsLoading) return;
@@ -307,7 +364,10 @@ public sealed partial class MainViewModel
         }
         if (!IsRunning) return;
         await CheckNowCoreAsync();
-        if (FailingCheckGroups() is not null && _guided is null) ShowGuidedCard(new(GuidedKind.NetChanged));
+        if (FailingCheckGroups() is null || _guided is not null || _guidedHidden == GuidedKind.NetChanged) return;
+        // Интернет есть? Нет — это не «стратегия для новой сети», а сеть ещё поднимается или пропала: карточку не ставим.
+        if (FromVerdict(await NetVerdictAsync()) is not null) return;
+        ShowGuidedCard(new(GuidedKind.NetChanged));
     }
 
     /// <summary>Итог проверки: всё открылось на включённой стратегии — запомнить её для этой сети.</summary>

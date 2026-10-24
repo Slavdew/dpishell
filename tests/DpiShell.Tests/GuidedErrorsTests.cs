@@ -276,12 +276,12 @@ public class GuidedErrorsTests
         f.Backend.EnableThrows = new InvalidOperationException("сбой");
         f.Backend.StatusValue = FakeHelperBackend.DefaultStatus with { Enabled = false, Active = false };
         var vm = Window(t, await f.LinkAsync());
-        vm.SystemFindings = () => [SystemFinding.Of(true, () => ("hosts", "в порядке")), SystemChecks.ProxyFinding((true, "proxy.example:8080"))];
+        vm.SystemFindings = () => [SystemFinding.Of(true, () => ("hosts", "в порядке")), SystemFinding.Of(false, () => ("Adguard", "мешает")) with { Key = "adguard" }];
         await vm.RefreshStatusAsync();
         await vm.EnableAsync();
         Assert.Equal(GuidedKind.Finding, vm.Guided!.Kind);
-        Assert.Contains("proxy.example", vm.GuidedText);
-        Assert.Equal(L.T("home.guided.open_proxy"), vm.GuidedActionText);
+        Assert.Contains("Adguard", vm.GuidedText);
+        Assert.Equal(L.T("home.guided.open_diag"), vm.GuidedActionText);
         Assert.False(vm.GuidedIsUnknown);
     }
 

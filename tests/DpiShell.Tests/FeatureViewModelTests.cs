@@ -456,4 +456,93 @@ public sealed class FeatureViewModelTests
         Assert.Single(notices);
         Assert.Contains(vm.Warnings, w => w.Contains("github.com больше не работает"));
     }
+
+    // ---------- аудит уведомлений №6, №13: один пузырь, без сети — тишина, «пропали» — один раз ----------
+
+    static readonly Func<IReadOnlyList<HostsCandidate>> TwoHosts = () =>
+    [
+        new("github.com", ["140.82.121.3"], ["GITHU"], "r", "s", "s"),
+        new("raw.githubusercontent.com", ["146.75.22.132"], ["GITHU"], "r", "s", "s"),
+    ];
+
+    async Task<(Shell Shell, HostsViewModel Vm, string Hosts, HelperFixture F)> TwoHostsApplied(TempDir t, WindowSettings? settings = null)
+    {
+        var paths = Make.Paths(t);
+        var shell = new Shell(paths);
+        var hosts = t.Sub("hosts");
+        File.WriteAllText(hosts, "127.0.0.1 localhost\r\n");
+        shell.Hosts = new HostsManager(paths, hosts, new Probe("github.com@140.82.121.3", "raw.githubusercontent.com@146.75.22.132"), new Dns("185.199.108.133"), new NoRdap(), TwoHosts);
+        var (f, link) = await Helper(shell);
+        var vm = new HostsViewModel(link) { Confirm = _ => true, Settings = settings };
+        vm.RefreshNow();
+        vm.Enabled = true;
+        await vm.CheckAsync();
+        await vm.ApplyAsync();
+        return (shell, vm, hosts, f);
+    }
+
+    [Fact]
+    public async Task Hosts_Recheck_SeveralStaleAddresses_GiveOneBubble()
+    {
+        using var t = new TempDir();
+        var (shell, vm, hosts, f) = await TwoHostsApplied(t);
+        await using var _f = f;
+        shell.State.HostsCheckedAt = DateTime.Now.AddDays(-2);
+        await vm.RefreshAsync();
+        var notices = new List<string>();
+        vm.Notify += s => notices.Add(s);
+        shell.Hosts = new HostsManager(shell.Paths, hosts, new Probe(), new Dns("185.199.108.133"), new NoRdap(), TwoHosts);
+        await vm.RecheckIfDueAsync();
+        Assert.Single(notices);
+        Assert.Contains("2", notices[0]);
+        Assert.DoesNotContain("140.82.121.3", File.ReadAllText(hosts));
+    }
+
+    [Fact]
+    public async Task Hosts_Recheck_WithoutNetwork_ChangesNothing_AndKeepsTheDailyMark()
+    {
+        using var t = new TempDir();
+        var (shell, vm, hosts, f) = await TwoHostsApplied(t);
+        await using var _f = f;
+        var checkedAt = DateTime.Now.AddDays(-2);
+        shell.State.HostsCheckedAt = checkedAt;
+        await vm.RefreshAsync();
+        var notices = new List<string>();
+        vm.Notify += s => notices.Add(s);
+        var before = File.ReadAllText(hosts);
+        // Сети нет: все пробы «не отвечают» — блок остаётся, пузырей нет, перепроверка не засчитана.
+        shell.Hosts = new HostsManager(shell.Paths, hosts, new Probe(), new Dns("185.199.108.133"), new NoRdap(), TwoHosts) { NetworkUp = _ => Task.FromResult(false) };
+        await vm.RecheckIfDueAsync();
+        Assert.Empty(notices);
+        Assert.Equal(before, File.ReadAllText(hosts));
+        Assert.Equal(checkedAt, shell.State.HostsCheckedAt);
+    }
+
+    [Fact]
+    public async Task Hosts_Recheck_BlockLost_IsSaidOnceUntilTheEntriesAreBack()
+    {
+        using var t = new TempDir();
+        var settings = WindowSettings.Load(t.Sub("w.json"));
+        var (shell, vm, hosts, f) = await TwoHostsApplied(t, settings);
+        await using var _f = f;
+        File.WriteAllText(hosts, "127.0.0.1 localhost\r\n");   // Защитник убрал блок
+        var notices = new List<string>();
+        vm.Notify += s => notices.Add(s);
+        shell.State.HostsCheckedAt = DateTime.Now.AddDays(-2);
+        await vm.RefreshAsync();
+        await vm.RecheckIfDueAsync();
+        Assert.Single(notices);
+        Assert.True(settings.HostsLostSaid);
+
+        shell.State.HostsCheckedAt = DateTime.Now.AddDays(-2);
+        await vm.RefreshAsync();
+        await vm.RecheckIfDueAsync();   // на следующие сутки — снова «пропали», но пузыря второй раз нет
+        Assert.Single(notices);
+        Assert.Contains(vm.Warnings, w => w.Contains("пропали"));   // на вкладке предупреждение остаётся
+
+        // Записи вернули — пометка снимается: пропадут снова — скажем снова.
+        await vm.CheckAsync();
+        await vm.ApplyAsync();
+        Assert.False(settings.HostsLostSaid);
+    }
 }

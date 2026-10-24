@@ -15,12 +15,15 @@ public interface INetFetcher
     Task<NetReply?> GetAsync(string url, CancellationToken ct);
 }
 
-/// <summary>Настоящая сеть: без системного прокси, без перенаправлений, сертификаты проверяются как обычно.</summary>
+/// <summary>Настоящая сеть: по умолчанию без системного прокси (как идут проверки), без перенаправлений, сертификаты проверяются как обычно.</summary>
 public sealed class HttpNetFetcher : INetFetcher
 {
+    /// <summary>Идти через системный прокси: когда выход в интернет возможен только через него, прямые запросы не проходят.</summary>
+    public bool UseProxy { get; init; }
+
     public async Task<NetReply?> GetAsync(string url, CancellationToken ct)
     {
-        using var handler = new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(4), PooledConnectionLifetime = TimeSpan.Zero };
+        using var handler = new SocketsHttpHandler { UseProxy = UseProxy, AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(4), PooledConnectionLifetime = TimeSpan.Zero };
         using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(8) };
         try
         {
@@ -49,6 +52,8 @@ public sealed class HttpNetFetcher : INetFetcher
 public static class NetDiagnosis
 {
     public const string PortalProbeUrl = "http://www.msftconnecttest.com/connecttest.txt";
+    /// <summary>Второй независимый адрес проверки: ждём ровно 204. Вход в сеть подменяет и его; заглушка провайдера на одном адресе — нет.</summary>
+    public const string PortalProbe2Url = "http://connectivitycheck.gstatic.com/generate_204";
     const string PortalBody = "Microsoft Connect Test";
     /// <summary>Расхождение часов, с которого проверки сертификатов уже не проходят (запас от обычного дрейфа).</summary>
     public static readonly TimeSpan SkewLimit = TimeSpan.FromMinutes(5);
@@ -57,7 +62,8 @@ public static class NetDiagnosis
     {
         now ??= () => DateTimeOffset.UtcNow;
         var portal = await net.GetAsync(PortalProbeUrl, ct);
-        if (portal is not null && IsForeign(portal))
+        // Вход в сеть — когда чужим ответил и второй адрес: заглушка провайдера или рекламная вставка на одном адресе порталом не считается.
+        if (portal is not null && IsForeign(portal) && !(await net.GetAsync(PortalProbe2Url, ct) is { Status: 204 }))
             return new(NetCause.CaptivePortal, PortalUrl: PortalUrlOf(portal));
 
         var results = await Task.WhenAll(controlUrls.Take(4).Select(u => net.GetAsync(u, ct)));

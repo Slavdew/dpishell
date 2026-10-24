@@ -228,8 +228,8 @@ public static class Conflicts
         return System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
             .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up)
             .Where(n => n.GetIPProperties().UnicastAddresses.Any(a => a.Address.Equals(outbound)))
-            .Where(n => n.NetworkInterfaceType is System.Net.NetworkInformation.NetworkInterfaceType.Ppp
-                     || VpnRx.IsMatch(n.Description) || VpnRx.IsMatch(n.Name))
+            // Тип Ppp не берём: это и PPPoE дома, и мобильный модем, не VPN. Только имя или описание адаптера.
+            .Where(n => VpnRx.IsMatch(n.Description) || VpnRx.IsMatch(n.Name))
             .Select(n => n.Name).Distinct().ToList();
     }
 

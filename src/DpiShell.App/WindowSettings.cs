@@ -60,6 +60,23 @@ public sealed class WindowSettings
     /// <summary>Откуда подбор и проверки берут адреса сайтов: "doh" (защищённый DNS, по умолчанию) или "system" (как у системы) — Настройки, п. 17.</summary>
     public string CheckDns { get; set; } = Core.CheckDns.Secure;
 
+    /// <summary>
+    /// «Скрыть» у предупреждений с постоянной причиной (плашка VPN, предложение исключения Защитника, списки сайтов): ключи скрытых. Ключ с хвостом
+    /// «:набор» (VPN — имена адаптеров) скрывает только этот набор; смена набора — предупреждение возвращается.
+    /// </summary>
+    public List<string> HiddenNotices { get; set; } = [];
+    /// <summary>О пропаже записей из hosts уже сказано: повторный пузырь не нужен, пока блок не изменится (сбрасывается, когда записи на месте).</summary>
+    public bool HostsLostSaid { get; set; }
+
+    public bool IsHidden(string key) => HiddenNotices.Contains(key, StringComparer.Ordinal);
+
+    public void SetHidden(string key, bool hidden)
+    {
+        if (IsHidden(key) == hidden) return;
+        if (hidden) HiddenNotices.Add(key); else HiddenNotices.RemoveAll(k => k == key);
+        try { Save(); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
+
     /// <summary>Порядок списка стратегий: "result" (по числу открывшихся сайтов) или "name" (по имени). Один на оба списка и на ПК, и на роутере.</summary>
     public string StrategySort { get; set; } = StrategyOrder.ByResult;
     [System.Text.Json.Serialization.JsonIgnore]

@@ -475,6 +475,7 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
     public async Task<HostsRecheckResult> HostsRecheckAsync(CancellationToken ct)
     {
         var r = await shell.Hosts.RecheckAsync(ct);
+        if (shell.Hosts.LastRecheckSkipped) return r;   // сети не было: проверку не засчитываем — повторится, когда сеть появится
         shell.State.HostsCheckedAt = DateTime.Now;
         shell.SaveState();
         return r;

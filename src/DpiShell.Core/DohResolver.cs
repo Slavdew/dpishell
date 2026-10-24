@@ -76,8 +76,17 @@ public sealed class DohResolver : IAddressResolver, IResolverSource, IDisposable
 
 public sealed record DnsComparison(string Host, IPAddress[] System, IPAddress[] Doh, string? SystemError)
 {
-    /// <summary>Система не нашла имя или вернула адреса-заглушки, а DoH — нашёл. Разные адреса CDN подменой не считаются.</summary>
-    public bool Spoofed => Doh.Length > 0 && (System.Length == 0 || System.All(IsBogus));
+    /// <summary>Заглушка стоит в hosts самого пользователя (блокировщик рекламы): причина — файл, а не провайдер.</summary>
+    public bool FromHosts { get; init; }
+
+    /// <summary>
+    /// Система вернула только адреса-заглушки, а DoH нашёл настоящий. Разные адреса CDN подменой не считаются; пустой ответ системы — тоже
+    /// (DNS ещё не поднялся после старта, сна или смены сети: это «нет ответа», а не «ответ подменили»).
+    /// </summary>
+    public bool Spoofed => !FromHosts && Doh.Length > 0 && System.Length > 0 && System.All(IsBogus);
+
+    /// <summary>Система ничего не ответила, а DoH ответил: подменой не считается, в таблице видно отдельно.</summary>
+    public bool SystemSilent => Doh.Length > 0 && System.Length == 0;
 
     static bool IsBogus(IPAddress ip)
     {

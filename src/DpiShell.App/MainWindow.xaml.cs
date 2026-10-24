@@ -76,7 +76,8 @@ public partial class MainWindow : Window
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _clock.Tick += (_, _) => { vm.Net.Tick(); _ = vm.Apps.TickAsync(); };
         _clock.Start();
-        vm.Notify += s => _tray.Hint(s);
+        // Окно открыто и активно — сообщение уже в строке состояния; пузырь нужен, когда окно свёрнуто или в трее.
+        vm.Notify += s => { if (!(IsVisible && IsActive && WindowState != WindowState.Minimized)) _tray.Hint(s); };
 
         // Смена сети — с паузой, пока сеть поднимается.
         _netSettle = new DispatcherTimer { Interval = WatchdogPolicy.NetworkSettle };
