@@ -30,6 +30,12 @@
 - Встроенный фейк `--dpi-desync-fake-tls=!`: в `.bat` записан как `^!` (экранирование cmd); в каталог идёт `!`.
 - `bin/winws.exe` у Flowseal отличается размером от сборки bol-van — не используем, ядро только от bol-van.
 
+### Обновление до 1.10.4 (`176f56dc3f11ce5915c26abcdde903f93d835b64`, 2026-10-24)
+- Сравнение `eb16c14...1.10.4` (8 коммитов): в `general*.bat` единственная правка — фейк `tls_clienthello_max_ru.bin` заменён на `tls_clienthello_www_sferum_ru.bin` во всех местах (fake-http, fake-tls, fake-unknown); других параметров не меняли. У нас так же в `data/strategies.json`; `max_ru` остаётся в `data/fake/` — его берёт глубокий поиск.
+- `bin/tls_clienthello_www_sferum_ru.bin` (PR #17063): 661 байт, одна запись TLS Handshake (16 03 01, длина 656 сходится), ClientHello, единственная строка — SNI `www.sferum.ru`; sha256 `e6dd8d72…80ad`. Новые фейки #17925 (steam, teamspeak, awswaf, lemana) в `.bat` не используются — не берём.
+- `lists/list-exclude.txt`: добавлен `lesta.pw` (#17849), в остальном совпадает с нашим `exclude.txt`. IP-список и hosts не менялись.
+- Ядро: bol-van v72.13 — по-прежнему последний выпуск; WinDivert 2.2.2 — последний.
+
 ### Кандидаты hosts («Починить адреса»)
 - Источник: `Flowseal/.service/hosts` @ `eb16c14`, sha256 `e7dcca4f…a9a9`; совпадает с `main` (последняя правка файла — `ffec6c8` 2026-09-20). Только ASCII, 82 строки: 80 «IP домен» и 2 пустые.
 - Все 56 доменов — из белого списка (github.com, `*.githubusercontent.com`, Telegram, `discord.com`, `updates.discord.com`); адреса: `140.82.121.3`, `146.75.22.132`, `2606:50c0:8000::154`, `149.154.167.220`, четыре `162.159.x` — все публичные.

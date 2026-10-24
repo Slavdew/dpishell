@@ -61,12 +61,12 @@ public sealed class JointTests : IDisposable
             Assert.All(d.Names, n => Assert.True(AdvancedSites.IsDomain(n), n));
             if (s.Roles.GetValueOrDefault("quic") is { Length: > 0 }) Assert.Contains("www.google.com", d.Names);
         }
-        // Стратегия с fake-tls www.google.com и fake-http «max_ru» (внутри onetrust): оба настоящих имени в списке, в том числе www. — без обрезки (google.com родитель play.google.com роутера).
-        var withFiles = Catalog.Strategies.First(s => s.Roles.GetValueOrDefault("general") is { } g && g.Contains("tls_clienthello_www_google_com.bin") && g.Contains("tls_clienthello_max_ru.bin"));
+        // Стратегия с fake-tls www.google.com и fake-http «sferum» (Flowseal 1.10.4, раньше max_ru с onetrust внутри): оба настоящих имени в списке, в том числе www. — без обрезки (google.com родитель play.google.com роутера).
+        var withFiles = Catalog.Strategies.First(s => s.Roles.GetValueOrDefault("general") is { } g && g.Contains("tls_clienthello_www_google_com.bin") && g.Contains("tls_clienthello_www_sferum_ru.bin"));
         var names = Decoys(("general", withFiles.Roles["general"])).Names;
         Assert.Contains("www.google.com", names);
-        Assert.Contains("www.onetrust.com", names);
-        Assert.DoesNotContain("max.ru", names);
+        Assert.Contains("www.sferum.ru", names);
+        Assert.DoesNotContain("sferum.ru", names);
         Assert.DoesNotContain("google.com", names);
         Assert.All(names, n => Assert.Contains(n, supply.Concat(["www.google.com"])));
     }
