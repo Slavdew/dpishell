@@ -23,7 +23,7 @@ public static class ChoiceDialog
     {
         UiGuard.Check(text);
         int result = -1;
-        var owner = Application.Current?.MainWindow is { IsVisible: true } m ? m : null;
+        var owner = Dialogs.CurrentOwner;   // свёрнутое окно не владелец: диалог ушёл бы за экран
         var w = new Window
         {
             Title = "DpiShell",
@@ -32,6 +32,7 @@ public static class ChoiceDialog
             WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
             Owner = owner,
             ShowInTaskbar = owner is null,
+            Topmost = owner is null,   // окна не видно (трей) — вопрос поверх всех окон
             FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
             FontSize = 14,
         };
@@ -62,6 +63,7 @@ public static class ChoiceDialog
         UiGuard.Check(request.Title);
         int result = -1;
         var w = Create(request, i => result = i);
+        if (w.Owner is null) w.Topmost = true;   // окна не видно (трей) — вопрос поверх всех окон
         w.ShowDialog();
         return result;
     }
@@ -69,7 +71,7 @@ public static class ChoiceDialog
     /// <summary>Окно вопроса с пояснениями (без показа — для теста окна и снимка). <paramref name="chosen"/> получает индекс действия.</summary>
     public static Window Create(ChoiceRequest request, Action<int> chosen)
     {
-        var owner = Application.Current?.MainWindow is { IsVisible: true } m ? m : null;
+        var owner = Dialogs.CurrentOwner;   // свёрнутое окно не владелец: диалог ушёл бы за экран
         var w = new Window
         {
             Title = "DpiShell",

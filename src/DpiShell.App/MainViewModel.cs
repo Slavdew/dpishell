@@ -79,18 +79,11 @@ public sealed partial class MainViewModel : Observable
     public event Action<string>? Notify;
 
     /// <summary>Вопрос «Да/Нет» (в тестах подменяется).</summary>
-    public Func<string, bool> Confirm { get; set; } = text =>
-    {
-        UiGuard.Check(text);
-        return MessageBox.Show(text, "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
-    };
+    public Func<string, bool> Confirm { get; set; } = text => Dialogs.YesNo(text);
 
     /// <summary>Вопрос об установке помощника (в тестах подменяется).</summary>
     public Func<string, bool> AskHelper { get; set; } = text =>
-    {
-        UiGuard.Check(text);
-        return MessageBox.Show(text, "DpiShell", MessageBoxButton.OKCancel, MessageBoxImage.Information, MessageBoxResult.OK) == MessageBoxResult.OK;
-    };
+        Dialogs.Show(text, MessageBoxButton.OKCancel, MessageBoxImage.Information, MessageBoxResult.OK) == MessageBoxResult.OK;
 
     public event Action? StatusChanged;
 

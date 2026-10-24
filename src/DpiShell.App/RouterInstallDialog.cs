@@ -206,8 +206,7 @@ public static class RouterInstallDialog
         w.Closing += (_, e) =>
         {
             if (!vm.Working) return;
-            if (MessageBox.Show(w, L.T("router.install.abort_confirm"), "DpiShell",
-                    MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes) vm.Cancel();
+            if (Dialogs.YesNo(L.T("router.install.abort_confirm"), MessageBoxImage.Question, owner: w)) vm.Cancel();
             e.Cancel = true;
         };
         w.Closed += (_, _) => password.Clear();

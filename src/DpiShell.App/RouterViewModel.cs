@@ -327,11 +327,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public Func<IReadOnlyList<Strategy>> FoundStrategies { get; set; } = () => [];
     /// <summary>Свои сайты этого ПК (сохранены у помощника).</summary>
     public Func<IReadOnlyList<string>> PcUserTargets { get; set; } = () => [];
-    public Func<string, bool> Confirm { get; set; } = text =>
-    {
-        UiGuard.Check(text);
-        return MessageBox.Show(text, "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
-    };
+    public Func<string, bool> Confirm { get; set; } = text => Dialogs.YesNo(text, MessageBoxImage.Question);
     public Func<string?> AskReportPath { get; set; } = () =>
     {
         var d = new Microsoft.Win32.SaveFileDialog { FileName = $"dpishell-router-{DateTime.Now:yyyy-MM-dd_HH-mm}.txt", Filter = L.T("router.save.filter") };
