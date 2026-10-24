@@ -43,8 +43,7 @@ public partial class App : Application
         catch (UnauthorizedAccessException)
         {
             // Мьютекс создала копия, запущенная с правами (прежняя версия), — окно без прав к нему не допущено: копия уже есть.
-            MessageBox.Show(L.T("shell.app.already_admin"),
-                "DpiShell", MessageBoxButton.OK, MessageBoxImage.Information);
+            Dialogs.Tell(L.T("shell.app.already_admin"), MessageBoxImage.Information);
             Shutdown(0);
             return;
         }
@@ -53,9 +52,9 @@ public partial class App : Application
             Acquire = () => first || TakeOver(),
             SignalShow = () => { _shownSignal.Reset(); _showSignal.Set(); },
             WaitShown = t => _shownSignal.WaitOne(t),
-            Ask = q => MessageBox.Show(q, "DpiShell", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.Yes) == MessageBoxResult.Yes,
+            Ask = q => Dialogs.YesNo(q, byDefault: MessageBoxResult.Yes),
             KillOld = SingleInstance.KillOtherWindows,
-            Tell = s => MessageBox.Show(s, "DpiShell", MessageBoxButton.OK, MessageBoxImage.Error),
+            Tell = s => Dialogs.Tell(s, MessageBoxImage.Error),
         };
         if (!gate.ShouldRun())
         {
@@ -94,7 +93,7 @@ public partial class App : Application
         // Запуск прямо из архива (Проводник распаковал один exe в %TEMP%\Temp*_*.zip\): только сообщение, без кнопок и скачиваний.
         if (ArchiveRun.DataMissing(AppContext.BaseDirectory))
         {
-            MessageBox.Show(L.T("shell.app.from_archive"), "DpiShell", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialogs.Tell(L.T("shell.app.from_archive"), MessageBoxImage.Warning);
             Shutdown(1);
             return;
         }
@@ -102,8 +101,7 @@ public partial class App : Application
         try { shell = new Shell(); }
         catch (Exception ex)
         {
-            MessageBox.Show(L.T("shell.app.no_data", new { error = ex.Message }),
-                "DpiShell", MessageBoxButton.OK, MessageBoxImage.Error);
+            Dialogs.Tell(L.T("shell.app.no_data", new { error = ex.Message }), MessageBoxImage.Error);
             Shutdown(1);
             return;
         }
@@ -166,12 +164,12 @@ public partial class App : Application
         {
             // Окно не открылось — сказать и выйти, а не висеть в фоне без окна.
             TryLog(ex);
-            MessageBox.Show(L.T("shell.app.open_failed", new { log = ErrorLog, error = Texts.Friendly(ex) }),
-                "DpiShell", MessageBoxButton.OK, MessageBoxImage.Error);
+            Dialogs.Tell(L.T("shell.app.open_failed", new { log = ErrorLog, error = Texts.Friendly(ex) }), MessageBoxImage.Error);
             Shutdown(1);
             return;
         }
         // Окно открылось — эта версия запускается. Итог обновления или отката — на вкладке «Информация и обновления».
+        // При --tray тоже: окно создано, хоть и не показано, — подтверждение не пропускается (аудит уведомлений, №19).
         try
         {
             versions.ConfirmStarted();
@@ -222,7 +220,7 @@ public partial class App : Application
         else
         {
             // Ошибка до того, как окно показалось: без окна приложение бесполезно и висело бы в фоне.
-            MessageBox.Show(Texts.Friendly(e.Exception), "DpiShell", MessageBoxButton.OK, MessageBoxImage.Error);
+            Dialogs.Tell(Texts.Friendly(e.Exception), MessageBoxImage.Error);
             Shutdown(1);
         }
     }

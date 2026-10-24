@@ -10,6 +10,7 @@
   "diag.tls.both": "TLS 1.3 and TLS 1.2",
   "diag.tls.only12": "TLS 1.2 — TLS 1.3 is checked on Windows 11 only",
   "diag.tls.off12": "TLS 1.2 — TLS 1.3 is disabled in this Windows",
+  "diag.av.missing": "The core folder is not in Defender exclusions — Defender may delete the WinDivert driver.",
   "diag.core_broken": "Core files are damaged — usually caused by antivirus.",
   "diag.repair": "Restore",
   "diag.exclusion_hint": "To prevent this, add this folder to the antivirus exclusions:",

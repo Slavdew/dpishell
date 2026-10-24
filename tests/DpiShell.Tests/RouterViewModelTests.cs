@@ -114,6 +114,31 @@ public sealed class RouterViewModelTests : IDisposable
         Assert.Equal(0, r.Logins);
     }
 
+    /// <summary>Аудит уведомлений, №11: фоновый опрос убирает найденный роутер только после двух неудач подряд; удачный опрос между ними счёт сбрасывает.</summary>
+    [Fact]
+    public async Task Background_poll_loses_the_router_only_after_two_misses_in_a_row()
+    {
+        using var r = new FakeRouter();
+        var (vm, _) = Make(r);
+        Assert.True(await vm.ConnectAsync("secret"));
+        var status = r.StatusJson;
+
+        r.StatusJson = null;            // сеть переключается: status.json не ответил
+        await vm.RefreshAsync();
+        Assert.True(vm.Found);
+        Assert.True(vm.Connected);
+        r.StatusJson = status;          // сеть вернулась
+        await vm.RefreshAsync();
+        Assert.True(vm.Found);
+
+        r.StatusJson = null;            // снова одна неудача — после удачи счёт с нуля
+        await vm.RefreshAsync();
+        Assert.True(vm.Found);
+        await vm.RefreshAsync();        // вторая подряд — роутера нет
+        Assert.False(vm.Found);
+        Assert.Equal("DpiShell на роутере не найден", vm.ConnectionText);
+    }
+
     [Theory]
     [InlineData("""{ "product": "dpishell-router", "version": "0.0.9", "enabled": true, "strategy": "alt10" }""", "\"0.9\"", "Обновите пакет на роутере", "устарел", false)]
     [InlineData("""{ "product": "dpishell-router", "api": 2, "enabled": true, "strategy": "alt10" }""", "\"2.0\"", "Обновите программу: роутер новее", "новее программы", true)]

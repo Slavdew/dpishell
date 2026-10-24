@@ -39,10 +39,19 @@ public sealed partial class MainViewModel
     /// <summary>Ядро не найдено или изменено — и есть кому восстановить (помощник установлен).</summary>
     bool AvCoreBad => !HelperMissing && _coreState != CoreState.Ok;
 
-    /// <summary>Предложить «Добавить в исключения»: Защитник работает и папки нет; до помощника или при сломанном ядре — и когда список не прочитать.</summary>
-    /// <remarks>«Скрыть» запоминается в настройках окна: у отказавшихся и добавивших исключение вручную карточка не висит бессрочно.</remarks>
-    public bool AvOffer => _avFail is null && !AvHidden && AvNow?.State is { } s
-        && (s == AvStates.Missing || s == AvStates.Unknown && (HelperMissing || AvCoreBad));
+    /// <summary>Карточка предлагает «Добавить в исключения» только до помощника (первый запуск) или при сломанном ядре: папки нет или список не прочитать.</summary>
+    /// <remarks>
+    /// «Скрыть» запоминается в настройках окна: у отказавшихся и добавивших исключение вручную карточка не висит бессрочно.
+    /// Помощник стоит, ядро цело, папки нет — ничего не сломано: строка в «Диагностике» (<see cref="AvDiagOffer"/>), не карточка (аудит уведомлений, №2).
+    /// </remarks>
+    public bool AvOffer => _avFail is null && !AvHidden && (HelperMissing || AvCoreBad) && AvNow?.State is AvStates.Missing or AvStates.Unknown;
+
+    /// <summary>«Диагностика»: помощник стоит, ядро цело, Защитник работает, папки ядра в исключениях нет — сведение с кнопкой.</summary>
+    public bool AvDiagOffer => _avFail is null && !HelperMissing && !AvCoreBad && AvNow?.State == AvStates.Missing;
+
+    /// <summary>«Добавить в исключения» из «Диагностики»: строка уходит сама, «✓»-карточка на Главной не появляется.</summary>
+    public ICommand AvDiagAddCmd => _avDiagAddCmd ??= RelayCommand.Async(async () => { await AvAddAsync(); _avJustAdded = false; RaiseAv(); }, () => !Busy && !IsLoading);
+    ICommand? _avDiagAddCmd;
 
     const string AvHideKey = "av_card";
     bool AvHidden => Settings.IsHidden(AvHideKey);
@@ -103,7 +112,7 @@ public sealed partial class MainViewModel
     static readonly string[] AvProps =
     [
         nameof(AvOffer), nameof(AvManual), nameof(AvManualText), nameof(AvShowDefender), nameof(AvOk), nameof(AvNeedsUpdate),
-        nameof(AvShowRestore), nameof(ShowAvCard), nameof(AvShowOffline), nameof(AvCardText), nameof(AvHasText), nameof(AvAddText), nameof(AvPath), nameof(AvCanHide),
+        nameof(AvShowRestore), nameof(ShowAvCard), nameof(AvShowOffline), nameof(AvCardText), nameof(AvHasText), nameof(AvAddText), nameof(AvPath), nameof(AvCanHide), nameof(AvDiagOffer),
     ];
 
     /// <summary>Сообщить окну то, что изменилось (Главная пересобирается часто — как <see cref="RaiseIssues"/>).</summary>
