@@ -1914,6 +1914,14 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- Ядро цело, папки нет в исключениях Защитника: сведение здесь, а не карточка на Главной (аудит уведомлений, №2). -->
+                            <Border Style="{StaticResource Card}" Visibility="{Binding AvDiagOffer, Converter={StaticResource Vis}}">
+                                <StackPanel>
+                                    <TextBlock Text="{l:T diag.av.missing}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                    <Button ContentTemplate="{StaticResource Shield}" Content="{l:T home.av.add}" Command="{Binding AvDiagAddCmd}" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
+
                             <Border Style="{StaticResource Warn}" Visibility="{Binding CoreBroken, Converter={StaticResource Vis}}">
                                 <StackPanel>
                                     <TextBlock Text="{l:T diag.core_broken}" FontWeight="SemiBold" Margin="0,0,0,8" />

@@ -47,19 +47,41 @@ public sealed partial class WindowSmokeTests
                 bool Visible(string text) => VisibleText(tabs, t => t.Text == text);
                 string Shot(string name) => Path.Combine(snapDir!, $"{theme}-home-av-{name}.png");
 
-                // 1) Предложение: текст, кнопка, (i) с пояснением, почему только эта папка.
-                if (!vm.ShowAvCard || !Visible(L.T("home.av.offer"))) throw new Exception("Нет карточки «Первый запуск» с предложением");
-                if (Btn(L.T("home.av.add")) is null) throw new Exception("Нет «Добавить в исключения»");
-                var info = FindAll<InfoButton>(tabs, b => b.IsVisible && b.Topic == InfoTexts.AvExclusion).SingleOrDefault() ?? throw new Exception("Нет (i) у карточки");
-                if (!info.Text.Contains("%ProgramData%\\DpiShell") || !info.Text.Contains("не исключает")) throw new Exception("В (i) нет пути и причины: " + info.Text);
-                int primary = FindAll<Button>(tabs, b => b.IsVisible && b.Style == (Style)w.FindResource("Primary")).Count();
-                if (primary != 1) throw new Exception($"На Главной главных кнопок {primary}, ждали 1");
-                if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Shot("offer")); }
-                WaitUi(AvAdd(vm));
+                // 1) Помощник стоит, ядро цело, папки нет: ничего не сломано — карточки на Главной нет, строка в «Диагностике» (аудит уведомлений, №2).
+                if (vm.ShowAvCard || Visible(L.T("home.av.offer"))) throw new Exception("Карточка «Первый запуск» при целом ядре");
+                if (Btn(L.T("home.av.add")) is not null) throw new Exception("«Добавить в исключения» на Главной при целом ядре");
+                vm.GoTo(Pages.Diag);
+                Pump();
+                if (!Visible(L.T("diag.av.missing"))) throw new Exception("В «Диагностике» нет строки «папки нет в исключениях»");
+                var diagAdd = Btn(L.T("home.av.add")) ?? throw new Exception("В «Диагностике» нет «Добавить в исключения»");
+                if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Shot("diag")); }
+                diagAdd.Command.Execute(null);
+                for (int i = 0; i < 600 && (vm.Busy || vm.AvDiagOffer); i++) { Pump(); Thread.Sleep(20); }
                 Pump();
                 if (!f.Backend.Calls.Contains("av_exclusion_add")) throw new Exception("Добавление не ушло помощнику: " + string.Join(" | ", f.Backend.Calls));
-                if (!Visible(L.T("home.av.ok"))) throw new Exception("После добавления нет «Папка ядра в исключениях Защитника ✓»");
-                if (Btn(L.T("home.av.add")) is not null) throw new Exception("После добавления осталась кнопка");
+                if (Visible(L.T("diag.av.missing")) || Btn(L.T("home.av.add")) is not null) throw new Exception("После добавления строка в «Диагностике» осталась");
+                vm.GoTo(Pages.Home);
+                Pump();
+                if (vm.ShowAvCard) throw new Exception("После добавления из «Диагностики» на Главной появилась карточка");
+
+                // 1а) Помощника нет (первый запуск): предложение на Главной — текст, кнопка, (i) с пояснением, почему только эта папка.
+                var vmFirst = TestWindow.Model(new Shell(new AppPaths(tmp.Sub("first-" + theme), Repo.Data)));
+                vmFirst.Defender = FakeDefender.Active();
+                var wFirst = Open(vmFirst);
+                wFirst.Height = 760;
+                SetProp(vmFirst, "IsLoading", false);
+                vmFirst.GoTo(Pages.Home);
+                WaitUi(AvExclusionFlowTests.Probe(vmFirst));
+                Pump();
+                var tabsFirst = Find<TabControl>(wFirst)!;
+                if (!vmFirst.ShowAvCard || !VisibleText(tabsFirst, t => t.Text == L.T("home.av.offer"))) throw new Exception("Нет карточки «Первый запуск» с предложением");
+                if (Find<Button>(tabsFirst, b => b.IsVisible && b.Content as string == L.T("home.av.add")) is null) throw new Exception("Нет «Добавить в исключения»");
+                var info = FindAll<InfoButton>(tabsFirst, b => b.IsVisible && b.Topic == InfoTexts.AvExclusion).SingleOrDefault() ?? throw new Exception("Нет (i) у карточки");
+                if (!info.Text.Contains("%ProgramData%\\DpiShell") || !info.Text.Contains("не исключает")) throw new Exception("В (i) нет пути и причины: " + info.Text);
+                int primary = FindAll<Button>(tabsFirst, b => b.IsVisible && b.Style == (Style)wFirst.FindResource("Primary")).Count();
+                if (primary != 1) throw new Exception($"На Главной главных кнопок {primary}, ждали 1");
+                if (snapDir is not null) Snap(wFirst, Shot("offer"));
+                Close(wFirst);
 
                 // 2) Ядро удалено, исключения нет — одна кнопка «…и восстановить».
                 f.Backend.Defender = FakeDefender.Active();
