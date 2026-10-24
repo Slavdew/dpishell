@@ -1424,6 +1424,8 @@
                                 Padding="12,5" Margin="0" FontSize="13" Visibility="{Binding ShowShield, Converter={StaticResource Vis}}" />
                         <Button Content="{Binding Action}" Command="{Binding Command}" CommandParameter="{Binding Parameter}"
                                 Padding="12,5" Margin="0" FontSize="13" Visibility="{Binding ShowPlain, Converter={StaticResource Vis}}" />
+                        <Button Content="{l:T home.hide}" Style="{StaticResource LinkButton}" Command="{Binding HideCommand}" CommandParameter="{Binding HideKey}" Margin="8,0,0,0"
+                                Visibility="{Binding HasHide, Converter={StaticResource Vis}}" />
                     </StackPanel>
                     <ContentControl Content="{Binding State}" ContentTemplate="{StaticResource HealthIcon}" VerticalAlignment="Top" Margin="0,2,10,0" Focusable="False" />
                     <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"><Run Text="{Binding LabelPrefix, Mode=OneWay}" FontWeight="SemiBold" /><Run Text="{Binding Value, Mode=OneWay}" Foreground="{DynamicResource Muted}" /></TextBlock>

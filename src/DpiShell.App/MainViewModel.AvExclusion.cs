@@ -40,8 +40,18 @@ public sealed partial class MainViewModel
     bool AvCoreBad => !HelperMissing && _coreState != CoreState.Ok;
 
     /// <summary>Предложить «Добавить в исключения»: Защитник работает и папки нет; до помощника или при сломанном ядре — и когда список не прочитать.</summary>
-    public bool AvOffer => _avFail is null && AvNow?.State is { } s
+    /// <remarks>«Скрыть» запоминается в настройках окна: у отказавшихся и добавивших исключение вручную карточка не висит бессрочно.</remarks>
+    public bool AvOffer => _avFail is null && !AvHidden && AvNow?.State is { } s
         && (s == AvStates.Missing || s == AvStates.Unknown && (HelperMissing || AvCoreBad));
+
+    const string AvHideKey = "av_card";
+    bool AvHidden => Settings.IsHidden(AvHideKey);
+
+    /// <summary>«Скрыть»: предложение исключения и подсказка про сторонний антивирус; ядро сломано — «Восстановить» остаётся.</summary>
+    public bool AvCanHide => AvOffer || AvManual && _avFail is null;
+
+    public ICommand AvHideCmd => _avHideCmd ??= new RelayCommand(() => { Settings.SetHidden(AvHideKey, true); RaiseAv(); RaiseIssues(); });
+    ICommand? _avHideCmd;
 
     /// <summary>Ручной путь: Защитник не дал или антивирус сторонний (при первом запуске или сломанном ядре).</summary>
     public bool AvManual => AvManualText.Length > 0;
@@ -49,7 +59,7 @@ public sealed partial class MainViewModel
     public string AvManualText =>
         _avFail == AvOutcomes.ThirdParty ? L.T("home.av.third_party", new { name = _avFailProduct ?? "" })
         : _avFail is not null ? L.T("home.av.refused")
-        : AvNow is { State: AvStates.ThirdParty } t && (HelperMissing || AvCoreBad) ? L.T("home.av.third_party", new { name = t.Product ?? "" })
+        : AvNow is { State: AvStates.ThirdParty } t && (HelperMissing || AvCoreBad) && !AvHidden ? L.T("home.av.third_party", new { name = t.Product ?? "" })
         : "";
 
     /// <summary>«Открыть Защитник» — только когда отказал сам Защитник (у стороннего антивируса свои настройки).</summary>
@@ -93,7 +103,7 @@ public sealed partial class MainViewModel
     static readonly string[] AvProps =
     [
         nameof(AvOffer), nameof(AvManual), nameof(AvManualText), nameof(AvShowDefender), nameof(AvOk), nameof(AvNeedsUpdate),
-        nameof(AvShowRestore), nameof(ShowAvCard), nameof(AvShowOffline), nameof(AvCardText), nameof(AvHasText), nameof(AvAddText), nameof(AvPath),
+        nameof(AvShowRestore), nameof(ShowAvCard), nameof(AvShowOffline), nameof(AvCardText), nameof(AvHasText), nameof(AvAddText), nameof(AvPath), nameof(AvCanHide),
     ];
 
     /// <summary>Сообщить окну то, что изменилось (Главная пересобирается часто — как <see cref="RaiseIssues"/>).</summary>

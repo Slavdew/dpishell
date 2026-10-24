@@ -133,10 +133,19 @@ public partial class App : Application
         vm.Networks = new NetworkStrategies(Path.Combine(WindowSettings.DefaultDir, "networks.json"));
         vm.NetworkIdentity = new WindowsNetworkIdentity();
         vm.TelegramTcp = TelegramCheck.ConnectAsync;
+        // Старт, сон и смена сети: 20 с сеть считается неустановившейся — без «нет интернета», «DNS подменяет», «открывается не всё».
+        vm.NetQuiet = TimeSpan.FromSeconds(20);
+        vm.DnsRecheckDelay = TimeSpan.FromSeconds(10);
+        vm.NetworkEvent();
+        Microsoft.Win32.SystemEvents.PowerModeChanged += (_, a) =>
+        {
+            if (a.Mode == Microsoft.Win32.PowerModes.Resume) Dispatcher.BeginInvoke(vm.NetworkEvent);
+        };
         _ = Task.Run(() => vm.NetworkChangedAsync());   // запомнить сеть при старте
         DateTime lastNetEvent = DateTime.MinValue;
         System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) =>
         {
+            Dispatcher.BeginInvoke(vm.NetworkEvent);
             // События сети идут пачками; ждём, пока адреса устоятся.
             var stamp = lastNetEvent = DateTime.UtcNow;
             _ = Task.Delay(TimeSpan.FromSeconds(5)).ContinueWith(_ =>

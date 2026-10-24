@@ -133,7 +133,7 @@ public sealed partial class MainViewModel
                     : new(Health.Error, L.T("home.pc.core.label"), core, L.T("diag.repair"), RepairCoreCmd, Shield: true));
             // Совместная работа откатилась (роутер пропал и т. п.): ПК работает сам — почему, пунктом «!» (строка показывает только состояние).
             if (IsRunning && Router.JointIsFallback && Router.HasJointStatus)
-                list.Add(new(Health.Warn, L.T("router.joint.title"), Router.JointStatus));
+                list.Add(new(Health.None, L.T("router.joint.title"), Router.JointStatus));
             // Сайты — те, что ведёт этот ПК (при совместной работе — свои сайты; через роутер — в панели роутера).
             if (IsRunning)
             {
@@ -151,9 +151,13 @@ public sealed partial class MainViewModel
             }
             // DNS: браузер не откроет из-за DNS — кнопка защищённого DNS; запись hosts — на «Починить адреса».
             var browser = CheckRows.Where(r => r.HasBrowser).ToList();
-            var dnsGroups = string.Join(", ", browser.Where(r => r.Browser is BrowserPath.DnsReason or BrowserPath.WindowsOnlyReason).Select(r => r.Group).Distinct());
+            var dnsGroups = string.Join(", ", browser.Where(r => r.Browser == BrowserPath.DnsReason).Select(r => r.Group).Distinct());
+            var winGroups = string.Join(", ", browser.Where(r => r.Browser == BrowserPath.WindowsOnlyReason).Select(r => r.Group).Distinct());
             if (dnsGroups.Length > 0)
                 list.Add(new(Health.Warn, L.T("web.diag.dns_label"), L.T("home.pc.dns.browser", new { groups = dnsGroups }), RecommendedDnsText, FixDnsCmd, Shield: true));
+            else if (winGroups.Length > 0)
+                // Только «через DNS Windows не открылось»: браузер с собственным защищённым DNS может открыть — это сведение, не рекомендация.
+                list.Add(new(Health.None, L.T("web.diag.dns_label"), L.T("home.pc.dns.windows_only", new { groups = winGroups }), RecommendedDnsText, FixDnsCmd, Shield: true));
             else if (DnsSpoofed)
                 list.Add(new(Health.Warn, L.T("web.diag.dns_label"), L.T("home.pc.dns.spoofed"), RecommendedDnsText, FixDnsCmd, Shield: true));
             else if (_dnsList is not null)
@@ -166,15 +170,22 @@ public sealed partial class MainViewModel
                     Short: L.T("home.conflict.warn", new { names = ConflictNames }))
                 : _dormant.Count > 0 ? new(Health.Ok, L.T("router.diag.conflicts"), L.T("home.pc.dormant", new { names = DormantNames }))
                 : new(Health.Ok, L.T("router.diag.conflicts"), L.T("home.pc.none")));
-            list.Add(HasVpn ? new(Health.Warn, L.T("home.pc.vpn.label"), (_vpnNames.Length > 0 ? L.T("home.pc.vpn.on", new { names = _vpnNames }) : VpnWarning), L.T("home.vpn.dismiss"), DismissVpnCmd)
+            // Сведение, не тревога: с VPN оптимизация обычно не нужна — выбор человека; «Понятно» запоминается между запусками.
+            list.Add(HasVpn ? new(Health.None, L.T("home.pc.vpn.label"), (_vpnNames.Length > 0 ? L.T("home.pc.vpn.on", new { names = _vpnNames }) : VpnWarning), L.T("home.vpn.dismiss"), DismissVpnCmd)
                 : _vpnNames.Length > 0 ? new(Health.Ok, L.T("home.pc.vpn.label"), L.T("home.pc.vpn.known", new { names = _vpnNames }))
                 : new(Health.Ok, L.T("home.pc.vpn.label"), L.T("home.pc.vpn.off")));
             if (Hosts.ForeignHosts is { } foreign)
-                list.Add(foreign.Count > 0
-                    ? new(Health.Warn, L.T("home.pc.foreign.label"), string.Join(", ", foreign), L.T("home.pc.open_hosts"), GoHostsCmd)
-                    : new(Health.Ok, L.T("home.pc.foreign.label"), L.T("home.pc.none")));
-            if (Updates.DataAvailable)
-                list.Add(new(Health.Warn, L.T("home.pc.lists.label"), Lower(Updates.AvailableText), L.T("home.pc.lists.go"), GoAboutCmd));
+            {
+                var fkey = "foreign:" + string.Join(",", foreign);
+                if (foreign.Count > 0 && !Settings.IsHidden(fkey))
+                    list.Add(new(Health.Warn, L.T("home.pc.foreign.label"), string.Join(", ", foreign), L.T("home.pc.open_hosts"), GoHostsCmd, HideCommand: HideNoticeCmd, HideKey: fkey));
+                else if (foreign.Count == 0)
+                    list.Add(new(Health.Ok, L.T("home.pc.foreign.label"), L.T("home.pc.none")));
+            }
+            // Обновление списков приходит из тихой ежедневной проверки: сведение со ссылкой, значок «!» не красит.
+            var lkey = "lists:" + (Settings.UpdatesData ?? "");
+            if (Updates.DataAvailable && !Settings.IsHidden(lkey))
+                list.Add(new(Health.None, L.T("home.pc.lists.label"), Lower(Updates.AvailableText), L.T("home.pc.lists.go"), GoAboutCmd, HideCommand: HideNoticeCmd, HideKey: lkey));
             return list;
         }
     }
@@ -275,8 +286,11 @@ public sealed partial class MainViewModel
                     else if (browser is not null)
                         {
                         // Виноват DNS — исправление тут же, на плитке (та же кнопка, что в панели «Этот ПК»).
-                        bool dns = browser.Browser!.Reason is BrowserPath.DnsReason or BrowserPath.WindowsOnlyReason;
-                        tiles.Add(new(Names.Title(g.Key), Health.Warn, L.T("home.tile.browser"), Join(Texts.BrowserReason(browser.Browser!.Reason), who),
+                        bool winOnly = browser.Browser!.Reason == BrowserPath.WindowsOnlyReason;
+                        bool dns = winOnly || browser.Browser!.Reason == BrowserPath.DnsReason;
+                        // Только «через DNS Windows не открылось» — часть программ, не браузер вообще: серая плитка (сведение), не предупреждение.
+                        tiles.Add(new(Names.Title(g.Key), winOnly ? Health.None : Health.Warn, L.T(winOnly ? "home.tile.windows_only" : "home.tile.browser"),
+                            Join(Texts.BrowserReason(browser.Browser!.Reason), who),
                             dns ? RecommendedDnsText : null, dns ? FixDnsCmd : null, Shield: dns));
                     }
                     else
@@ -300,7 +314,7 @@ public sealed partial class MainViewModel
     }
 
     /// <summary>Четвёртая плитка: «Проверено в 10:02» и «Подробнее» (строки по адресам).</summary>
-    public string TilesMeta => Checking ? L.T("home.check.running") : _checkedTime is { } t ? L.T("home.tile.checked_at", new { time = L.Time(t) }) : L.T("home.tile.never");
+    public string TilesMeta => Checking ? L.T("home.check.running") : _checkedTime is { } t ? L.T(CheckIsOld ? "home.tile.checked_old" : "home.tile.checked_at", new { time = L.Time(t) }) : L.T("home.tile.never");
 
     bool _checkDetailsOpen;
     /// <summary>«Подробнее» у плиток: адреса последней проверки и ⚠ про браузер.</summary>
@@ -374,7 +388,7 @@ public sealed partial class MainViewModel
     {
         CheckGroups.Clear();
         // Как в подборе: группа открывается, если открылись её обязательные адреса (необязательный провал — только в «Подробнее»).
-        foreach (var g in CheckRows.GroupBy(r => r.Group)) CheckGroups.Add(new(g.Key, g.All(r => r.Ok || !r.Alert), g.Any(r => r.HasBrowser)));
+        foreach (var g in CheckRows.GroupBy(r => r.Group)) CheckGroups.Add(new(g.Key, g.All(r => r.Ok || !r.Alert), g.Any(r => r.HasBrowser && r.Browser != BrowserPath.WindowsOnlyReason)));
         Raise(nameof(HasCheck)); Raise(nameof(HasCheckDetails));
         Raise(nameof(BrowserWarning)); Raise(nameof(HasBrowserWarning)); Raise(nameof(ShowBrowserDnsFix));
         RaiseIssues();

@@ -69,6 +69,41 @@ public sealed class HostsManager
         _dns = dns is not null ? () => (dns, null) : () => { var d = new DohResolver(); return (new DohHostsDns(d), d); };
         _rdap = rdap is not null ? () => (rdap, null) : () => { var r = new RdapClient(); return (r, r); };
         _candidates = candidates ?? (() => HostsCandidates.LoadSeed(paths));
+        // Подставная проверка адресов — подставная и сеть (тесты не ходят в интернет); настоящая — TCP до нескольких публичных узлов.
+        NetworkUp = probe is not null ? _ => Task.FromResult(true) : DefaultNetworkUpAsync;
+        if (probe is not null) ConfirmDelay = TimeSpan.Zero;
+    }
+
+    /// <summary>
+    /// «Сеть есть»: перепроверка меняет файл hosts по пробам, а без сети все они «не отвечают» — тогда блок урезался бы до пустого.
+    /// Нет сети — перепроверка пропускается и ничего не меняет.
+    /// </summary>
+    public Func<CancellationToken, Task<bool>> NetworkUp { get; set; }
+
+    /// <summary>Пауза перед повторной пробой адреса, который «не ответил»: снять запись можно только по двум неудачам подряд.</summary>
+    public TimeSpan ConfirmDelay { get; set; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>Последняя <see cref="RecheckAsync"/> пропущена: сети не было (суточная отметка не обновляется, повторится позже).</summary>
+    public bool LastRecheckSkipped { get; private set; }
+
+    static async Task<bool> DefaultNetworkUpAsync(CancellationToken ct)
+    {
+        static async Task<bool> Connect(string ip, CancellationToken ct)
+        {
+            using var tcp = new System.Net.Sockets.TcpClient();
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(4));
+            try { await tcp.ConnectAsync(IPAddress.Parse(ip), 443, cts.Token); return true; }
+            catch (Exception e) when (e is System.Net.Sockets.SocketException or OperationCanceledException or IOException) { return false; }
+        }
+        var tasks = new[] { "1.1.1.1", "8.8.8.8", "77.88.8.8" }.Select(ip => Connect(ip, ct)).ToList();
+        while (tasks.Count > 0)
+        {
+            var done = await Task.WhenAny(tasks);
+            tasks.Remove(done);
+            if (await done) return true;
+        }
+        return false;
     }
 
     /// <summary>Кандидаты из поставки (с проверкой хеша и белого списка).</summary>
@@ -125,6 +160,12 @@ public sealed class HostsManager
     /// </summary>
     public async Task<HostsRecheckResult> RecheckAsync(CancellationToken ct = default)
     {
+        LastRecheckSkipped = false;
+        if (!await NetworkUp(ct))
+        {
+            LastRecheckSkipped = true;
+            return new([], [], new HostsWriteResult(false, [], [], null), false);
+        }
         var r = await RecheckBlockAsync(ct);
         var (stale, fresh) = await RecheckUserAsync(ct);
         return r with { StaleUser = stale, NewStaleUser = fresh };
@@ -158,8 +199,27 @@ public sealed class HostsManager
         }
 
         var report = await CheckAsync(toCheck, null, ct);
-        removed.AddRange(report.Rows.Where(r => !r.Install));
-        var keep = report.ToInstall;
+        var rows = report.Rows.ToList();
+        // «Не ответил» — ещё не «устарел»: повтор через паузу, и если сети уже нет — запись остаётся (не знаем, а не знаем — не трогаем).
+        var doubtful = rows.Where(r => r.Verdict == HostsVerdict.Unreachable).ToList();
+        var held = new List<HostsEntry>();
+        if (doubtful.Count > 0)
+        {
+            if (ConfirmDelay > TimeSpan.Zero) await Task.Delay(ConfirmDelay, ct);
+            if (!await NetworkUp(ct)) held.AddRange(doubtful.Select(r => r.Entry));
+            else
+            {
+                var again = await CheckAsync(doubtful.GroupBy(r => r.Host, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => known[g.Key] with { Ips = [.. g.Select(r => r.Ip)] }).ToList(), null, ct);
+                foreach (var r in again.Rows.Where(r => r.Install))
+                {
+                    int i = rows.FindIndex(x => x.Host == r.Host && x.Ip == r.Ip);
+                    if (i >= 0) rows[i] = r;
+                }
+            }
+        }
+        removed.AddRange(rows.Where(r => !r.Install && !held.Contains(r.Entry)));
+        var keep = new List<HostsEntry>([.. rows.Where(r => r.Install).Select(r => r.Entry), .. held]);
         var write = File.Apply(keep);
         SaveApplied(keep);
         return new(keep, removed, write, false);
