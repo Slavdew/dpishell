@@ -43,8 +43,10 @@ var BASE_CODE = 'en', BUILTIN = ['ru', 'en'];
 // Как окно ПК по языку Windows: эти языки — русский, если своего файла под них нет.
 var TO_RU = ['ru', 'uk', 'be', 'kk'];
 
+// Мимо кеша: файлы пакета датированы SOURCE_DATE_EPOCH, одной датой у всех сборок, а uhttpd на If-Modified-Since
+// отвечает 304 и при другом ETag — с 'no-cache' после обновления оставался прежний перевод (сырые ключи новых строк).
 function fetchLang(code) {
-	return fetch(L.resource('dpishell/lang/' + code + '.json'), { cache: 'no-cache' }).then(function(r) {
+	return fetch(L.resource('dpishell/lang/' + code + '.json'), { cache: 'reload' }).then(function(r) {
 		if (!r.ok)
 			throw { missing: true };
 		return r.text();
