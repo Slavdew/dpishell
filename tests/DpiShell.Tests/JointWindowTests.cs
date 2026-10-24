@@ -233,7 +233,13 @@ public sealed class JointWindowTests : IDisposable
         await ActiveAsync(vm);
 
         router.Remove();                                                  // роутер выключен / ноутбук вне дома
+        // Первый пустой опрос (смена Wi-Fi, сон) роутер не убирает: блок роутера остаётся (аудит уведомлений, №11).
+        // Связка при этом сама уходит на полную настройку ПК (продление не прошло) — это защита, её не откладываем.
         await vm.Router.RefreshAsync();
+        Assert.True(vm.Router.Found);
+        // Второй подряд — роутера нет.
+        await vm.Router.RefreshAsync();
+        Assert.False(vm.Router.Found);
         await WaitAsync(() => vm.Router.JointStatus == "Роутер не найден — этот ПК работает сам");
         await vm.Router.JointWhenIdleAsync();
         Assert.False(f.Backend.JointValue.Active);

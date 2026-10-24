@@ -566,9 +566,17 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     /// status.json без входа. false — роутера нет (блок на главной пропадает) или сменился сертификат HTTPS и новый не принят.
     /// <paramref name="interactive"/> — пользователь сам нажал «Войти»: можно спросить про сертификат; иначе (фоновая проверка) — только сверка по SSH.
     /// </summary>
-    async Task<bool> DetectAsync(bool interactive = false)
+    async Task<bool> DetectAsync(bool interactive = false, bool tolerateMiss = false)
     {
         Searched = true;
+        // Фоновый опрос: найденный роутер «пропадает» только после второй неудачи подряд (аудит уведомлений, №11) —
+        // смена Wi-Fi и сон дают один пустой опрос, и блок роутера с «ПК работает сам» не мигают.
+        bool Tolerated()
+        {
+            if (!tolerateMiss || !Found || _misses >= 1) { _misses = 0; return false; }
+            _misses++;
+            return true;
+        }
         if (!Enabled)
         {
             // «Показывать роутер» снята: как при ненайденном роутере, но сеть не трогаем.
@@ -579,10 +587,13 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         var address = EffectiveAddress();
         if (address is null)
         {
+            if (Tolerated()) return false;
             SetDetection(null);
             SetConnection(() => AddressAuto ? L.T("router.addr.unknown") : L.T("router.addr.enter"));
             return false;
         }
+        // Тот же адрес не ответил — терпим один раз; другой адрес (другая сеть) — роутера здесь нет, сразу.
+        bool sameRouter = _client is not null && string.Equals(_client.Address, address.Trim().TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
         if (ClientFor(address) is null) { SetDetection(null); return false; }
         RouterDetection d;
         try { d = await Call(c => c.DetectAsync()); }
@@ -592,6 +603,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             if (!await AcceptCertificateAsync(cert, interactive)) return false;
             d = await Call(c => c.DetectAsync());
         }
+        if (d.Found == RouterFound.NotFound && sameRouter && Tolerated()) return false;
+        if (d.Found != RouterFound.NotFound) _misses = 0;
         SetDetection(d);
         if (d.Found == RouterFound.NotFound)
         {
@@ -668,6 +681,10 @@ public sealed partial class RouterViewModel : Observable, IDisposable
 
     bool _refreshing;
     DateTime _refreshedAt;
+    /// <summary>Неудачные фоновые опросы найденного роутера подряд: первая не убирает роутер, вторая — убирает.</summary>
+    int _misses;
+    /// <summary>После первой неудачи повторный опрос — по таймеру окна, не через минуту.</summary>
+    static readonly TimeSpan MissRecheck = TimeSpan.FromSeconds(10);
 
     /// <summary>При запуске и после смены сети: поиск заново; есть сохранённый пароль — тихий вход; роутера нет — блок пропадает.</summary>
     /// <summary>Идёт обновление состояния — новый RefreshAsync сейчас выйдет сразу (тесты ждут, пока false).</summary>
@@ -680,7 +697,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         _refreshedAt = DateTime.Now;
         try
         {
-            if (!await DetectAsync()) return;
+            if (!await DetectAsync(tolerateMiss: true)) return;
             if (_client!.LoggedIn && Connected) await RefreshStatusCoreAsync();
             else if (HasSavedPassword) await LoginAsync(null);
             else if (_detection!.Found == RouterFound.Ok) SetFound(RouterFound.Ok, _detection.Status?.Version);
@@ -688,7 +705,11 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         catch (RouterException e)
         {
             // Тихо: роутер мог пропасть на полпути (смена сети) — блок покажет последнее, следующая проверка уточнит.
-            if (e.Failure is RouterFailure.Unreachable or RouterFailure.NoResponse) SetDetection(null);
+            if (e.Failure is RouterFailure.Unreachable or RouterFailure.NoResponse)
+            {
+                if (Found && _misses == 0) _misses = 1;   // первая неудача — роутер остаётся, следующий опрос уточнит
+                else { _misses = 0; SetDetection(null); }
+            }
             else SetConnection(() => RouterTexts.Friendly(e));
         }
         finally
@@ -701,7 +722,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     /// <summary>Тихое обновление по таймеру окна — раз в минуту, когда ничего не идёт.</summary>
     public async Task TickAsync()
     {
-        if (Busy || Selecting || _refreshing || DateTime.Now - _refreshedAt < TimeSpan.FromMinutes(1)) return;
+        if (Busy || Selecting || _refreshing || DateTime.Now - _refreshedAt < (_misses > 0 ? MissRecheck : TimeSpan.FromMinutes(1))) return;
         await RefreshAsync();
         await JointTickSafeAsync();   // совместная работа: продление связки не реже раза в час, проверка «действует ли» — раз в минуту
     }
