@@ -120,6 +120,7 @@ public partial class App : Application
         var helper = new HelperLink { Post = a => Dispatcher.BeginInvoke(a) };
         var vm = new MainViewModel(shell, helper, settings);
         // Настоящие реестр и сеть — только здесь: тесты окна получают память и выключенную проверку обновлений.
+        vm.AutoCheck = true;   // проверка сайтов, как только оптимизация заработала (в тестах выключена)
         vm.Autostart.Store = new RegistryRunKeyStore();
         vm.Autostart.Apply();
         vm.Proxy.Registry = new WindowsProxyRegistry();   // «для этого пользователя» окно пишет само (HKCU) + сообщает системе

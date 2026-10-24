@@ -1,6 +1,42 @@
 {
   "_comment": "Что нового в программе для Windows — для окна «Доступно обновление» и страницы релиза. Ключ — версия X.Y.Z (= Version в Directory.Build.props); значение — {\"ru\": [...], \"en\": [...]}: коротко, словами пользователя, до 15 строк; строки en — перевод строк ru один к одному (нет en — окно показывает русский; прежний вид, просто список, читается как ru). Нет записи для версии — тег windows-vX.Y.Z не выпускается (packaging/release-json.py). min_os — минимальная Windows (10.0.17763 = Windows 10 1809); на более старой окно обновление не предлагает.",
   "min_os": "10.0.17763",
+  "0.11.2": {
+    "ru": [
+      "Windows 10: подбор и проверки идут по TLS 1.2 — стратегии больше не бракуются все подряд",
+      "Кнопка «Добавить в исключения Защитника» для папки ядра; первый запуск: помощник → вопрос об исключении → ядро",
+      "Ядра нет в архиве программы — антивирус не удаляет его при распаковке; офлайн-копия — отдельным файлом выпуска, «Указать архив ядра…»",
+      "Если антивирус оборвал работу — понятная причина и кнопка исправления",
+      "Карточка «Почему не получилось» с кнопкой: нет интернета, вход в сеть, сбилось время, отказ в правах, драйвер заблокирован защитой Windows, мало места на диске",
+      "Меньше ложных предупреждений: после сна и смены сети, пустой ответ DNS, PPPoE не считается VPN; у предупреждений есть «Скрыть», карточки уходят сами",
+      "Без сети «Починить адреса» ничего не меняет в hosts",
+      "Группы своих сайтов: строка на группу в сводке подбора; сайт, заблокированный по адресу, не портит оценку стратегии",
+      "«Остановить» похожие программы честно говорит итог; остановленная служба — не помеха",
+      "«Диагностика»: Telegram заблокирован по адресу — нужен прокси",
+      "Устаревшая проверка роутера показана серым с «Проверить сейчас»",
+      "Сайты проверяются сами, как только оптимизация заработала",
+      "Новый значок: короб, состояние — меткой в углу",
+      "Стратегии по данным Flowseal 1.10.4",
+      "Тёмный заголовок окна на Windows 10 1809–1909"
+    ],
+    "en": [
+      "Windows 10: selection and checks use TLS 1.2 — strategies are no longer all rejected",
+      "“Add to Defender exclusions” button for the core folder; first run: helper → exclusion question → core",
+      "The core is no longer inside the app archive — antivirus does not delete it on unpacking; offline copy is a separate release file, “Choose core archive…”",
+      "If antivirus interrupts work — a clear reason and a fix button",
+      "“Why it failed” card with a button: no internet, network sign-in, clock off, permission refused, driver blocked by Windows security, low disk space",
+      "Fewer false warnings: after sleep and network change, empty DNS answer, PPPoE is not treated as VPN; warnings have “Hide”, cards go away by themselves",
+      "Without network “Fix addresses” changes nothing in hosts",
+      "Own site groups: one line per group in the selection summary; a site blocked by address does not spoil the strategy score",
+      "“Stop” for similar programs reports the result honestly; a stopped service is no obstacle",
+      "“Diagnostics”: Telegram is blocked by address — a proxy is needed",
+      "An old router check is shown in grey with “Check now”",
+      "Sites are checked automatically as soon as optimization starts working",
+      "New icon: a box, state shown by a badge in the corner",
+      "Strategies from Flowseal 1.10.4 data",
+      "Dark window title on Windows 10 1809–1909"
+    ]
+  },
   "0.11.1": {
     "ru": [
       "Итог «Проверить обновления» — рядом с кнопкой: «Последняя версия · проверено в …» или «Обновить до …»",

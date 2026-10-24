@@ -1,5 +1,13 @@
 {
   "_comment": "Что нового — для плашки «Доступно обновление» и страницы релиза. Ключ — версия X.Y.Z; коротко, словами пользователя, самое важное сверху, не больше 15 строк (роутер показывает первые 15). Нет записи — release-json.py возьмёт заголовки коммитов. Русские строки — в записи версии (список). Английский перевод — в разделе \"en\" под тем же ключом версии: строки один к одному с русскими (release-json.py сверяет число строк), в release.json — changes_en.",
+  "0.2.3": [
+    "Предупреждение «Стратегия не проходит проверку» с кнопкой «Подобрать»",
+    "Подбор, проверка и запасные стратегии одинаково меряют стратегии с временными метками TCP",
+    "Счётчик провалов сбрасывается при смене стратегии",
+    "Ход подбора больше не теряется во время работы",
+    "Итог проверки старше часа — серым, с «Проверить сейчас»",
+    "Стратегии по данным Flowseal 1.10.4"
+  ],
   "0.2.2": [
     "Ход подбора стратегий передаётся частями — меньше нагрузка на роутер и сеть",
     "«Сравнить скорость» DNS идёт в фоне — страница не замирает",
@@ -36,6 +44,14 @@
     "Исправлено: панель роутера могла перестать открываться после обновления или удаления, а после установки без интернета обновление предлагалось снова и снова"
   ],
   "en": {
+    "0.2.3": [
+      "Warning “Strategy fails the check” with a “Select” button",
+      "Selection, check and fallback strategies measure TCP-timestamp strategies the same way",
+      "The failure counter is reset when the strategy changes",
+      "Selection progress is no longer lost while it runs",
+      "A check result older than an hour is shown in grey with “Check now”",
+      "Strategies from Flowseal 1.10.4 data"
+    ],
     "0.2.2": [
       "Strategy selection progress is sent in parts — less load on the router and network",
       "DNS “Compare speed” runs in the background — the page no longer freezes",
