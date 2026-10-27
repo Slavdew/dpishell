@@ -93,6 +93,8 @@ public partial class MainWindow : Window
 
         // Ссылка ведёт к месту, а не в начало вкладки (UX-аудит 2, п. 2, 4): прокрутить, когда вкладка построится.
         vm.ShowRequested += spot => Dispatcher.BeginInvoke(() => ShowSpot(spot), DispatcherPriority.ContextIdle);
+        // «Записать игру…» открывает карточку записи под списком профилей — показать её целиком.
+        vm.Apps.RecordRequested += () => Dispatcher.BeginInvoke(() => RecordCard.BringIntoView(), DispatcherPriority.ContextIdle);
     }
 
     void ApplyLanguage()

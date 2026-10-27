@@ -381,7 +381,7 @@ public sealed class GameProfilesTests
     public void Import_ParamsWithoutProtocol_Refused()
     {
         Assert.Contains("TCP", Refused("", "--dpi-desync=fake --dpi-desync-any-protocol=1"));
-        Assert.Contains("Нечего", Refused("", ""));
+        Assert.Contains("Нет ни фильтра, ни параметров", Refused("", ""));
     }
 
     [Fact]

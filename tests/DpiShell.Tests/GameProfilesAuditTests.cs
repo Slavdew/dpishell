@@ -161,7 +161,7 @@ public sealed class GameProfilesAuditTests
         for (int i = 0; i < 200 && asked.Count == 0; i++) await Task.Delay(25);
         var q = Assert.Single(asked);
         Assert.Contains("вариантом 1", q);
-        Assert.Contains("повторным импортом", q);
+        Assert.Contains("только введя заново", q);
         await Task.Delay(100);
         Assert.Equal(-1, shell.State.AppProfiles[0].Variant);   // отказ — параметры из импорта на месте
 

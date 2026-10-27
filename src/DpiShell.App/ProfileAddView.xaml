@@ -1,0 +1,86 @@
+<UserControl x:Class="DpiShell.App.ProfileAddView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="clr-namespace:DpiShell.App">
+    <!-- «Новый профиль» (AppsViewModel: ImportTitle/Filter/Params/Subnets, ImportCmd). В пустом поле — условная подсказка формата,
+         серым и поверх поля: в значение не попадает. Отказ — текстом здесь же, окно остаётся; успех — окно закрывается (AddClosed). -->
+    <UserControl.Resources>
+        <Style x:Key="Cue" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+            <!-- Бледнее обычной подписи и курсивом: не путается с введённым значением. -->
+            <Setter Property="Opacity" Value="0.75" />
+            <Setter Property="FontStyle" Value="Italic" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Margin" Value="9,7,9,0" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="CodeBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="AcceptsReturn" Value="True" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="MinHeight" Value="52" />
+            <Setter Property="MaxHeight" Value="110" />
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="FontFamily" Value="Consolas" />
+            <Setter Property="Padding" Value="6" />
+            <Setter Property="l:Demo.Sensitive" Value="True" />
+        </Style>
+    </UserControl.Resources>
+    <DockPanel Margin="20,16,20,16" Width="640">
+        <TextBlock DockPanel.Dock="Top" Text="{l:T apps.add.title}" Style="{StaticResource H2}" Margin="0,0,0,2" />
+        <TextBlock DockPanel.Dock="Top" Text="{l:T apps.add.intro}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+        <!-- Отказ и кнопки — внизу. «Добавить» не по Enter: в многострочных полях Enter — новая строка. -->
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <TextBox x:Name="Error" Text="{Binding ImportMessage, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Danger}" Margin="0,0,0,10"
+                     Visibility="{Binding ShowImportError, Converter={StaticResource Vis}}" AutomationProperties.Name="{l:T apps.add.error}" />
+            <DockPanel>
+                <Button DockPanel.Dock="Left" Content="{l:T apps.import.paste}" Command="{Binding PasteAllCmd}" ToolTip="{l:T apps.import.paste_tip}" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="{l:T apps.import.add}" Style="{StaticResource Primary}" Command="{Binding ImportCmd}" IsDefault="False" />
+                    <Button Content="{l:T common.cancel}" Command="{Binding CancelAddCmd}" Margin="0,0,0,8" />
+                </StackPanel>
+            </DockPanel>
+        </StackPanel>
+
+        <StackPanel>
+            <TextBlock Text="{l:T apps.import.name}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+            <Grid>
+                <TextBox x:Name="TitleBox" Text="{Binding ImportTitle, UpdateSourceTrigger=PropertyChanged}" Padding="6" MaxLength="60" l:Demo.Sensitive="True"
+                         AutomationProperties.Name="{l:T apps.import.name}" />
+                <TextBlock Style="{StaticResource Cue}" Text="{l:T apps.add.cue.name}"
+                           Visibility="{Binding Text, ElementName=TitleBox, Converter={x:Static l:EmptyToVisible.Instance}}" />
+            </Grid>
+
+            <!-- Блок полей — параметры из сборки (не «импорт»: команды «Импорт»/«Экспорт» — отдельные). -->
+            <TextBlock Text="{l:T apps.add.block}" FontWeight="SemiBold" Margin="0,16,0,2" />
+            <TextBlock Text="{l:T apps.import.filter}" Style="{StaticResource Hint}" Margin="0,4,0,4" />
+            <Grid>
+                <TextBox x:Name="FilterBox" Text="{Binding ImportFilter, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CodeBox}"
+                         AutomationProperties.Name="{l:T apps.import.filter}" />
+                <TextBlock Style="{StaticResource Cue}" FontFamily="Consolas" Text="{l:T apps.add.cue.filter}"
+                           Visibility="{Binding Text, ElementName=FilterBox, Converter={x:Static l:EmptyToVisible.Instance}}" />
+            </Grid>
+
+            <TextBlock Text="{l:T apps.import.params}" Style="{StaticResource Hint}" Margin="0,10,0,4" />
+            <Grid>
+                <TextBox x:Name="ParamsBox" Text="{Binding ImportParams, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CodeBox}"
+                         AutomationProperties.Name="{l:T apps.import.params}" />
+                <TextBlock Style="{StaticResource Cue}" FontFamily="Consolas" Text="{l:T apps.add.cue.params}"
+                           Visibility="{Binding Text, ElementName=ParamsBox, Converter={x:Static l:EmptyToVisible.Instance}}" />
+            </Grid>
+
+            <TextBlock Text="{l:T apps.import.subnets}" Style="{StaticResource Hint}" Margin="0,10,0,4" />
+            <Grid>
+                <TextBox x:Name="SubnetsBox" Text="{Binding ImportSubnets, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CodeBox}" TextWrapping="NoWrap"
+                         AutomationProperties.Name="{l:T apps.import.subnets}" />
+                <TextBlock Style="{StaticResource Cue}" FontFamily="Consolas" Text="{l:T apps.add.cue.subnets}"
+                           Visibility="{Binding Text, ElementName=SubnetsBox, Converter={x:Static l:EmptyToVisible.Instance}}" />
+            </Grid>
+
+            <!-- Откуда брать куски — коротко; подробно — справка docs/windows/games.md. -->
+            <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,10,0,0" Text="{l:T apps.add.where}" />
+            <Button Content="{l:T apps.game.more}" Style="{StaticResource LinkButton}" Command="{Binding OpenGamesCmd}" HorizontalAlignment="Left" Margin="-4,2,0,0" />
+        </StackPanel>
+    </DockPanel>
+</UserControl>

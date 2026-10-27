@@ -12,7 +12,7 @@ Site optimization works by site name: at the start of a connection the browser o
 | **Custom profiles** | only the profiles you added: precise rules for a specific game | the game does not work and there is a profile for it (recorded by the program or taken from another build) |
 | **General** | all ports 1024–65535 to addresses from the IP list — like Flowseal's "Game Filter" | there is no profile, but you need to try; as a temporary measure |
 
-Profiles for specific games are not built into the program: you add them — by recording the game's connections (button on the tab) or by importing from another build (below).
+Profiles for specific games are not built into the program: you add them — by recording the game's connections (“Record a game…”) or from another build with “Add profile…” (below).
 
 ## Pitfalls
 
@@ -31,9 +31,9 @@ Profiles for specific games are not built into the program: you add them — by 
 - **Several profiles can be on at once**, but if two profiles catch the same ports, the first one wins.
 - **Selection does not test games.** Whether a profile works can only be seen in the game itself.
 
-## Importing a profile from another build
+## A profile from another build (“Add profile…”)
 
-There is no common format for game profiles. Flowseal builds (`zapret-discord-youtube`) and their forks keep settings in three places — the program accepts the same three pieces of text. At least one of the first two is required.
+There is no common format for game profiles. Flowseal builds (`zapret-discord-youtube`) and their forks keep settings in three places — the “Add profile…” window takes the same three pieces of text (empty fields show a format hint). At least one of the first two is required.
 
 ### 1. Interception filter
 
@@ -45,7 +45,7 @@ outbound and tcp.DstPort = 12001 and tcp.PayloadLength = 79 and tcp.Payload32[0]
 
 This is the signature: "TCP to port 12001, 79 bytes long, starts with `00 00 04 4D`". The program accepts such lines only when built from understood parts — direction, port, length, packet start; anything else is rejected with a note of what did not fit.
 
-A complex filter that does not break down into these parts is accepted as a custom filter — the import result says so. Required: direction `outbound`, protocol and destination port (`tcp.DstPort`/`udp.DstPort`): without them the filter would route all of the PC's traffic through the program. A custom filter is at your own risk: one that is too broad slows down all internet on the computer.
+A complex filter that does not break down into these parts is accepted as a custom filter — the result of adding says so. Required: direction `outbound`, protocol and destination port (`tcp.DstPort`/`udp.DstPort`): without them the filter would route all of the PC's traffic through the program. A custom filter is at your own risk: one that is too broad slows down all internet on the computer.
 
 ### 2. Processing parameters
 
@@ -63,7 +63,7 @@ Signs of a game piece: ports in `--filter-tcp`/`--filter-udp` other than 80/443,
 
 Where to look: the build's `lists\` folder, the file `--ipset=` points to in the same `.bat` piece. Copy its contents — one subnet per line (`3.120.0.0/14`). Service and home networks (`192.168.x.x`, `10.x.x.x`, etc.) are dropped. If the profile has a signature, the list is usually not needed.
 
-### Export
+### Sharing a profile
 
 "Copy" on a profile gives the same three pieces. You can send them to a friend with DpiShell or paste them into a Flowseal build: the filter — into a `windivert.filter\*.txt` file referenced by `--wf-raw-part=@…`, the parameters — as a separate piece after `--new`, the subnets — into `lists\`.
 
