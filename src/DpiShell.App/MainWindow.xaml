@@ -1071,8 +1071,7 @@
                                             <TextBlock Text="{l:T apps.import.filter}" Style="{StaticResource Hint}" Margin="0,8,0,4" />
                                             <TextBox Text="{Binding ImportFilter, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44" MaxHeight="90"
                                                      VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" local:Demo.Sensitive="True" AutomationProperties.Name="{l:T apps.import.filter}" />
-                                            <TextBlock Text="{l:T apps.import.filter_expert}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap"
-                                                       Visibility="{Binding ExpertTools, Converter={StaticResource Vis}}" />
+                                            <TextBlock Text="{l:T apps.import.filter_expert}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" />
                                             <TextBlock Text="{l:T apps.import.params}" Style="{StaticResource Hint}" Margin="0,8,0,4" />
                                             <TextBox Text="{Binding ImportParams, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44" MaxHeight="90"
                                                      VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" local:Demo.Sensitive="True" AutomationProperties.Name="{l:T apps.import.params}" />
@@ -2670,15 +2669,8 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Роутер: показывать ли его в окне (R-shell). Снято — окно как при ненайденном роутере, поиск не идёт. -->
-                            <Border Style="{StaticResource Card}">
-                                <StackPanel>
-                                    <TextBlock Text="{l:T settings.expert.title}" Style="{StaticResource H2}" />
-                                    <CheckBox Content="{l:T settings.expert.show}" IsChecked="{Binding ExpertTools}" HorizontalAlignment="Left" Margin="0,4,0,0" />
-                                    <TextBlock Text="{l:T settings.expert.hint}" Style="{StaticResource Hint}" Margin="26,2,0,0" TextWrapping="Wrap" />
-                                </StackPanel>
-                            </Border>
 
+                            <!-- Роутер: показывать ли его в окне (R-shell). Снято — окно как при ненайденном роутере, поиск не идёт. -->
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <TextBlock Text="{l:T common.nav.router}" Style="{StaticResource H2}" />

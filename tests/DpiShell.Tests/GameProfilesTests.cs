@@ -293,16 +293,16 @@ public sealed class GameProfilesTests
 
     // ---------- импорт и экспорт (формат Flowseal) ----------
 
-    static ProfileImport Import(string filter, string pars, string subnets = "", bool expert = false)
+    static ProfileImport Import(string filter, string pars, string subnets = "")
     {
-        var r = ProfileExchange.Import("Mistfall", filter, pars, subnets, Fakes, expert);
+        var r = ProfileExchange.Import("Mistfall", filter, pars, subnets, Fakes);
         Assert.True(r.Profile is not null, r.Problem);
         return r.Profile!;
     }
 
-    static string Refused(string filter, string pars, string subnets = "", bool expert = false)
+    static string Refused(string filter, string pars, string subnets = "")
     {
-        var r = ProfileExchange.Import("x", filter, pars, subnets, Fakes, expert);
+        var r = ProfileExchange.Import("x", filter, pars, subnets, Fakes);
         Assert.Null(r.Profile);
         return r.Problem!;
     }
@@ -383,16 +383,11 @@ public sealed class GameProfilesTests
     }
 
     [Theory]
-    [InlineData("true", "true")]
-    [InlineData("outbound and tcp.DstPort = 1 and ip.Length > 4", ">")]
-    [InlineData("outbound and tcp.DstPort = 12001 or udp.DstPort = 5", "or")]
+    [InlineData("true", "протокол")]
+    [InlineData("outbound and tcp.DstPort = 12001 or udp.DstPort = 5", "протокол")]
     [InlineData("tcp.DstPort = 12001 and tcp.PayloadLength = 5", "outbound")]
     [InlineData("outbound and tcp.PayloadLength = 5", "DstPort")]
-    [InlineData("outbound and tcp.DstPort = 12001 and udp.DstPort = 5", "TCP и UDP")]
-    [InlineData("outbound and tcp.DstPort = 12001 and tcp.Payload[0] = 1 and tcp.Payload[2] = 3", "подряд")]
-    [InlineData("outbound and tcp.DstPort = 12001 and tcp.Payload32[4] = 1", "Payload")]
-    [InlineData("outbound and tcp.DstPort = 12001 and tcp.PayloadLength = 0", "PayloadLength")]
-    [InlineData("outbound and tcp.DstPort = 12001 and tcp.PayloadLength = 5000", "PayloadLength")]
+    [InlineData("outbound and tcp.DstPort = 12001 and udp.DstPort = 5", "протокол")]
     [InlineData("outbound and tcp.DstPort = 12001; calc", "calc")]
     [InlineData("outbound and tcp.DstPort = 12001 and tcp.Syn = 1", "tcp.Syn")]
     [InlineData("outbound and tcp.DstPort = 70000", "порт")]
@@ -401,6 +396,19 @@ public sealed class GameProfilesTests
     {
         var msg = Refused(filter, "--filter-tcp=12001 --dpi-desync=fake --dpi-desync-any-protocol=1");
         Assert.Contains(part, msg, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Не раскладывается на простые поля, но проходит проверку своего фильтра — принимается как свой, с пометкой.</summary>
+    [Theory]
+    [InlineData("outbound and tcp.DstPort = 1 and ip.Length > 4")]
+    [InlineData("outbound and tcp.DstPort = 12001 and tcp.Payload[0] = 1 and tcp.Payload[2] = 3")]
+    [InlineData("outbound and tcp.DstPort = 12001 and tcp.Payload32[4] = 1")]
+    [InlineData("outbound and tcp.DstPort = 12001 and tcp.PayloadLength = 5000")]
+    public void Import_FilterOutsideSimpleFields_AcceptedAsCustom(string filter)
+    {
+        var p = Import(filter, "--filter-tcp=12001 --dpi-desync=fake --dpi-desync-any-protocol=1");
+        Assert.Equal(filter, p.Signature.TcpFilter);
+        Assert.Contains(p.Notes, n => n.Contains("ответственность"));
     }
 
     [Theory]
@@ -506,21 +514,21 @@ public sealed class GameProfilesTests
     }
 
     [Fact]
-    public void Import_UnparsableFilter_NeedsExpertTools()
+    public void Import_UnparsableFilter_BecomesCustomFilter_WithNote()
     {
         var custom = "outbound and tcp.DstPort = 12001 and (tcp.PayloadLength = 79 or tcp.PayloadLength = 80)";
         var pars = "--filter-tcp=12001 --dpi-desync=fake --dpi-desync-any-protocol=1";
-        var no = Refused(custom, pars);
-        Assert.Contains("опытных", no);      // подсказка
-        Assert.Contains("порт", no);   // и причина отказа остаётся
-        var p = Import(custom, pars, "", expert: true);
+        var p = Import(custom, pars, "");
         Assert.Equal(custom, p.ToSignature().TcpFilter);
         Assert.Equal("12001", p.TcpPorts);
-        // Свой фильтр проходит ту же проверку и при включённых инструментах.
-        Assert.Contains("верхнем", Refused("outbound and tcp.PayloadLength = 5 or tcp.DstPort = 1", pars, "", expert: true));
-        Assert.Contains("outbound", Refused("tcp.DstPort = 1 and (tcp.PayloadLength = 5 or tcp.PayloadLength = 6)", pars, "", expert: true));
-        // Простой фильтр с включёнными инструментами остаётся простым.
-        Assert.Equal("", Import(Mistfall, pars, "", expert: true).ToSignature().TcpFilter);
+        Assert.Contains(p.Notes, n => n.Contains("ответственность"));   // предупреждение в итоге импорта
+        // Свой фильтр проходит свою проверку.
+        Assert.Contains("верхнем", Refused("outbound and tcp.PayloadLength = 5 or tcp.DstPort = 1", pars, ""));
+        Assert.Contains("outbound", Refused("tcp.DstPort = 1 and (tcp.PayloadLength = 5 or tcp.PayloadLength = 6)", pars, ""));
+        // Простой фильтр остаётся простым, без пометки.
+        var simple = Import(Mistfall, pars, "");
+        Assert.Equal("", simple.ToSignature().TcpFilter);
+        Assert.DoesNotContain(simple.Notes, n => n.Contains("ответственность"));
     }
 
     // ---------- протокол помощника ----------

@@ -73,10 +73,10 @@ public static partial class ProfileExchange
     // ---------- импорт ----------
 
     /// <param name="knownFakes">Имена фейк-файлов из каталога («stun.bin»): чужие файлы профиль не принимает.</param>
-    /// <param name="expert">Включены «инструменты для опытных»: фильтр, не разобравшийся в простые поля, принимается как свой фильтр (после <see cref="CustomFilter.Problem"/>).</param>
-    public static ProfileImportResult Import(string title, string filterText, string paramsText, string subnetsText, IReadOnlySet<string> knownFakes, bool expert = false)
+    /// <remarks>Фильтр, не разобравшийся в простые поля, принимается как свой фильтр (после <see cref="CustomFilter.Problem"/>), с пометкой в итоге.</remarks>
+    public static ProfileImportResult Import(string title, string filterText, string paramsText, string subnetsText, IReadOnlySet<string> knownFakes)
     {
-        try { return Parse(title, filterText ?? "", paramsText ?? "", subnetsText ?? "", knownFakes, expert); }
+        try { return Parse(title, filterText ?? "", paramsText ?? "", subnetsText ?? "", knownFakes); }
         catch (ImportProblem e) { return new(null, e.Message); }
     }
 
@@ -86,7 +86,7 @@ public static partial class ProfileExchange
 
     sealed record Sig(bool Tcp, string Ports, int Length, string Hex, string Custom = "");
 
-    static ProfileImportResult Parse(string title, string filterText, string paramsText, string subnetsText, IReadOnlySet<string> knownFakes, bool expert)
+    static ProfileImportResult Parse(string title, string filterText, string paramsText, string subnetsText, IReadOnlySet<string> knownFakes)
     {
         var notes = new List<string>();
         // 1. Фильтры: по строке на фильтр, один на протокол.
@@ -97,10 +97,10 @@ public static partial class ProfileExchange
             if (line.Length == 0 || line.StartsWith('#') || line.StartsWith(';')) continue;
             Sig sig;
             try { sig = ParseFilter(line); }
-            catch (ImportProblem e)
+            catch (ImportProblem)
             {
-                if (!expert) throw new ImportProblem(e.Message + " " + L.T("core.xchg.filter.need_expert"));
                 sig = CustomSig(line);
+                notes.Add(L.T("core.xchg.filter.custom_note"));
             }
             if (!sigs.TryAdd(sig.Tcp, sig)) throw Bad("core.xchg.filter.twice", new { proto = sig.Tcp ? "TCP" : "UDP" });
         }

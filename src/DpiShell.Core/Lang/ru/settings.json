@@ -192,8 +192,5 @@
   "settings.checkdns.frag_fallback": "защищённый DNS не ответил — адреса сайтов взяты у системы",
   "settings.transfer.undo_hint_old": "Отменить только загрузку — после обновления помощника. «Отменить всё» вернёт и остальное: службу, DNS, hosts.",
   "settings.transfer.undo_import": "Отменить загрузку настроек",
-  "settings.transfer.undone": "Загрузка отменена. Итог по пунктам — «Настройки» → «Изменения DpiShell».",
-  "settings.expert.title": "Для опытных",
-  "settings.expert.show": "Показывать инструменты для опытных",
-  "settings.expert.hint": "Свой фильтр WinDivert в профилях «Игр и программ». Слишком широкий фильтр замедляет весь интернет на ПК."
+  "settings.transfer.undone": "Загрузка отменена. Итог по пунктам — «Настройки» → «Изменения DpiShell»."
 }

@@ -190,8 +190,5 @@
   "settings.history.done": "History cleared. Files deleted: {count}.",
   "settings.transfer.undo_hint_old": "To undo only the import — update the helper first. “Undo all” also reverts the rest: service, DNS, hosts.",
   "settings.transfer.undo_import": "Undo settings import",
-  "settings.transfer.undone": "Import undone. Per-item result — “Settings” → “DpiShell changes”.",
-  "settings.expert.title": "Advanced",
-  "settings.expert.show": "Show tools for advanced users",
-  "settings.expert.hint": "A custom WinDivert filter in the profiles of \"Games and apps\". A filter that is too wide slows the whole internet on the PC."
+  "settings.transfer.undone": "Import undone. Per-item result — “Settings” → “DpiShell changes”."
 }

@@ -273,9 +273,6 @@ public sealed class AppsViewModel : Observable
     // ---------- импорт и экспорт (формат Flowseal: фильтр, параметры, подсети) ----------
 
     /// <summary>Имена файлов фейков из каталога стратегий (задаёт окно); профиль из импорта других файлов не принимает.</summary>
-    bool _expert;
-    /// <summary>«Показывать инструменты для опытных» (Настройки): свой фильтр WinDivert в профилях и импорте.</summary>
-    public bool ExpertTools { get => _expert; set => Set(ref _expert, value); }
     public Func<IReadOnlySet<string>> KnownFakes { get; set; } = () => new HashSet<string>();
     public Action<string> CopyText { get; set; } = text => System.Windows.Clipboard.SetText(text);
     public Func<string?> ReadText { get; set; } = () => System.Windows.Clipboard.ContainsText() ? System.Windows.Clipboard.GetText() : null;
@@ -332,11 +329,10 @@ public sealed class AppsViewModel : Observable
     {
         string filter = ImportFilter, pars = ImportParams, subnets = ImportSubnets, rawTitle = ImportTitle.Trim();
         var fakes = KnownFakes();
-        bool expert = ExpertTools;
         string Title() => rawTitle.Length > 0 ? rawTitle : L.T("apps.import.default_title");
         // Текст отказа строится заново на языке окна: разбор — чистая функция.
-        var r = ProfileExchange.Import(Title(), filter, pars, subnets, fakes, expert);
-        if (r.Profile is not { } p) { Refuse(() => ProfileExchange.Import(Title(), filter, pars, subnets, fakes, expert).Problem ?? ""); return; }
+        var r = ProfileExchange.Import(Title(), filter, pars, subnets, fakes);
+        if (r.Profile is not { } p) { Refuse(() => ProfileExchange.Import(Title(), filter, pars, subnets, fakes).Problem ?? ""); return; }
         if (await Need() is not { } c) return;
         if (Variants.Count == 0) await RefreshAsync();
         if (Variants.Count == 0) { Refuse(() => L.T("apps.err.no_variants")); return; }
@@ -351,7 +347,7 @@ public sealed class AppsViewModel : Observable
         await RefreshAsync();
         ImportMessageIs(() =>
         {
-            var notes = ProfileExchange.Import(Title(), filter, pars, subnets, fakes, expert).Profile?.Notes ?? [];
+            var notes = ProfileExchange.Import(Title(), filter, pars, subnets, fakes).Profile?.Notes ?? [];
             return L.T("apps.profile.saved_summary", new { title = info?.Title, summary = info is null ? "" : Summarize(info) })
                 + (notes.Count > 0 ? " " + string.Join(" ", notes) : "");
         }, false);

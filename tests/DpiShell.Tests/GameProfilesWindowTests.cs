@@ -53,7 +53,6 @@ public sealed class GameProfilesWindowTests : IDisposable
             vm.ApplyHelperData();
             vm.Apps.OpenUrl = _ => { };
             vm.Net.OpenUrl = _ => { };
-            vm.ExpertTools = true;   // подсказка про свой фильтр видна только «опытным»
             var theme = dark ? "dark" : "light";
 
             var w = Open(vm);
