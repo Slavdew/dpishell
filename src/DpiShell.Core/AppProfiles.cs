@@ -18,9 +18,20 @@ public sealed class AppProfile
     public string UdpPorts { get; set; } = "";
     /// <summary>Подсети и адреса назначения (канонический вид, без служебных сетей).</summary>
     public List<string> Addresses { get; set; } = [];
-    /// <summary>Параметры игровой роли game_tcp / game_udp (проходят тот же белый список, что и каталог).</summary>
+    /// <summary>
+    /// Свои параметры профиля («Свои»: пришли из сборки Flowseal или строки обмена) для game_tcp / game_udp — тот же белый список, что у каталога.
+    /// Пусто — своих нет, профиль идёт игровой частью стратегии (<see cref="Strategy"/>).
+    /// </summary>
     public string TcpDesync { get; set; } = "";
     public string UdpDesync { get; set; } = "";
+    /// <summary>Профиль включён: в командную строку winws идут только включённые (каждый — отдельно, несколько сразу).</summary>
+    public bool Enabled { get; set; } = true;
+    /// <summary>
+    /// Чем идёт профиль при «Разных стратегиях» (<see cref="AppState.ProfilesSeparate"/>): <see cref="AppProfiles.Default"/> — игровая часть стратегии ПК,
+    /// <see cref="AppProfiles.Own"/> — свои параметры, иначе id стратегии (её игровая часть). Без «Разных стратегий» — всегда «По умолчанию», выбор хранится.
+    /// null — запись до API 1.22 (выбор выводится из <see cref="Variant"/>, <see cref="AppProfiles.MigrateChoices"/>).
+    /// </summary>
+    public string? Strategy { get; set; }
     /// <summary>
     /// Сигнатура пакета (необязательна, для TCP и UDP отдельно): длина полезной нагрузки (0 — не задана) и её начало, hex до 16 байт.
     /// Задана — помощник сам собирает фильтр WinDivert (<see cref="AppProfiles.Filter"/>), порты этого протокола в общий фильтр не попадают.
@@ -34,18 +45,36 @@ public sealed class AppProfile
     /// </summary>
     public string TcpCustomFilter { get; set; } = "";
     public string UdpCustomFilter { get; set; } = "";
-    /// <summary>Номер варианта параметров (для «Вариант N»); -1 — свои параметры (из импорта), не из готовых стратегий.</summary>
+    /// <summary>До API 1.22: номер варианта параметров; -1 — свои параметры. Читается только для перевода в <see cref="Strategy"/>.</summary>
     public int Variant { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>Копия (список адресов — свой).</summary>
+    public AppProfile Clone()
+    {
+        var c = (AppProfile)MemberwiseClone();
+        c.Addresses = [.. Addresses];
+        return c;
+    }
+
+    /// <summary>Свои параметры есть (хотя бы у одного протокола профиля).</summary>
+    public bool HasOwn => TcpPorts.Length > 0 && TcpDesync.Length > 0 || UdpPorts.Length > 0 && UdpDesync.Length > 0;
 }
 
-/// <summary>Вариант параметров для профиля: пара game_tcp/game_udp из готовых стратегий.</summary>
-public sealed record ProfileVariant(int Index, string Title, string Tcp, string Udp);
+/// <summary>Вариант параметров для профиля: пара game_tcp/game_udp из готовых стратегий (первым — текущая). <paramref name="StrategyId"/> — с API 1.22.</summary>
+public sealed record ProfileVariant(int Index, string Title, string Tcp, string Udp, string StrategyId = "");
 
 /// <summary>Правила профилей: что допустимо в state.json и в командной строке. Всё, что попадёт в winws, проходит здесь.</summary>
 public static partial class AppProfiles
 {
     public const int MaxProfiles = 8, MaxAddresses = 500, MaxPortRanges = 16, MaxTitle = 60, MaxVariants = 8;
+    /// <summary>Выбор стратегии профиля: игровая часть стратегии ПК / свои параметры (иначе — id стратегии).</summary>
+    public const string Default = "default", Own = "own";
+
+    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\z")] private static partial Regex ChoiceRx();
+
+    /// <summary>Выбор по форме: «default», «own» или id стратегии (есть ли такая — решает сборка, нет — «По умолчанию»).</summary>
+    public static bool IsValidChoice(string? s) => s is not null && ChoiceRx().IsMatch(s);
 
     [GeneratedRegex(@"^p[0-9a-f]{8}\z")] private static partial Regex IdRx();
     [GeneratedRegex(@"^[0-9]{1,5}(-[0-9]{1,5})?\z")] private static partial Regex PortRx();
@@ -139,9 +168,12 @@ public static partial class AppProfiles
             if (IpsetValidator.Forbidden.Any(f => f.Net.Overlaps(c))) return L.T("core.profile.service_addr", new { addr = Short(a) });
             if (c.Len < (c.V6 ? 48 : 16)) return L.T("core.profile.wide_net", new { addr = Short(a) });
         }
-        // Параметры оптимизации — тем же белым списком, что и каталог: только game_*, только разрешённые параметры, файлы из fake\.
-        if (tcp && Desync("game_tcp", p.TcpDesync) is { } t) return L.T("core.profile.tcp_params", new { problem = t });
-        if (udp && Desync("game_udp", p.UdpDesync) is { } u) return L.T("core.profile.udp_params", new { problem = u });
+        // Свои параметры (если есть) — тем же белым списком, что и каталог: только game_*, только разрешённые параметры, файлы из fake\.
+        // Без своих профиль идёт игровой частью стратегии из каталога — она проверена при загрузке каталога.
+        if (tcp && p.TcpDesync.Length > 0 && WinwsArgs.Problem("game_tcp", p.TcpDesync) is { } t) return L.T("core.profile.tcp_params", new { problem = t });
+        if (udp && p.UdpDesync.Length > 0 && WinwsArgs.Problem("game_udp", p.UdpDesync) is { } u) return L.T("core.profile.udp_params", new { problem = u });
+        if (!tcp && p.TcpDesync.Length > 0 || !udp && p.UdpDesync.Length > 0) return L.T("core.profile.sig_no_ports");
+        if (p.Strategy is not null && !IsValidChoice(p.Strategy)) return L.T("core.profile.bad_choice");
         return null;
     }
 
@@ -155,8 +187,6 @@ public static partial class AppProfiles
     /// <summary>Наименьший общий порт двух строк портов или null.</summary>
     public static int? FirstCommonPort(string a, string b) =>
         (from x in PortRanges(a) from y in PortRanges(b) where Math.Max(x.Lo, y.Lo) <= Math.Min(x.Hi, y.Hi) select (int?)Math.Max(x.Lo, y.Lo)).Min();
-
-    static string? Desync(string role, string args) => args.Length == 0 ? L.T("core.profile.not_set") : WinwsArgs.Problem(role, args);
 
     static string Canonical(string a) => Cidr.TryParse(a, false, out var c, out _, out _) ? c.ToString() : "";
     static string Short(string s) => s.Length > 40 ? s[..40] + "…" : s;
@@ -175,14 +205,83 @@ public static partial class AppProfiles
         var result = new List<ProfileVariant>();
         foreach (var s in list)
         {
-            var tcp = s.Roles.GetValueOrDefault("game_tcp") ?? WinwsArgs.DeriveGameTcp(s.Roles.GetValueOrDefault("general"));
-            var udp = s.Roles.GetValueOrDefault("game_udp") ?? WinwsArgs.GameUdpDefault;
+            var (tcp, udp) = GameParts(s);
             if (tcp is null || WinwsArgs.Problem("game_tcp", tcp) is not null || WinwsArgs.Problem("game_udp", udp) is not null) continue;
             if (!seen.Add((tcp, udp))) continue;
-            result.Add(new(result.Count, L.T(s.Id == currentId ? "apps.core.variant_current" : "apps.core.variant", new { title = s.Title }), tcp, udp));
+            result.Add(new(result.Count, L.T(s.Id == currentId ? "apps.core.variant_current" : "apps.core.variant", new { title = s.Title }), tcp, udp, s.Id));
             if (result.Count >= MaxVariants) break;
         }
         return result;
+    }
+
+    /// <summary>
+    /// Игровая часть стратегии — как у «Общего» игрового режима: game_tcp стратегии или выведенный из general (<see cref="WinwsArgs.DeriveGameTcp"/>),
+    /// game_udp или умолчание. TCP null — у стратегии нет ни game_tcp, ни general.
+    /// </summary>
+    public static (string? Tcp, string Udp) GameParts(Strategy s) =>
+        (s.Roles.GetValueOrDefault("game_tcp") ?? WinwsArgs.DeriveGameTcp(s.Roles.GetValueOrDefault("general")), s.Roles.GetValueOrDefault("game_udp") ?? WinwsArgs.GameUdpDefault);
+
+    /// <summary>Действующий выбор: без «Разных стратегий» — всегда «По умолчанию»; «Свои» без своих параметров — тоже.</summary>
+    public static string Choice(AppProfile p, bool separate) =>
+        !separate || p.Strategy is null ? Default : p.Strategy == Own && !p.HasOwn ? Default : p.Strategy;
+
+    /// <summary>
+    /// Профиль для сборки: копия, в которой <see cref="AppProfile.TcpDesync"/>/<see cref="AppProfile.UdpDesync"/> — то, чем он пойдёт сейчас,
+    /// кроме «По умолчанию»: там пусто, и <see cref="WinwsArgs.Build"/> берёт игровую часть той стратегии, с которой собирает (стратегия ПК меняется — меняется и она).
+    /// Стратегии из выбора нет (удалена) — «По умолчанию».
+    /// </summary>
+    public static AppProfile ForBuild(AppProfile p, bool separate, Func<string, Strategy?>? find)
+    {
+        var c = p.Clone();
+        var choice = Choice(p, separate);
+        if (choice == Own) return c;
+        c.TcpDesync = c.UdpDesync = "";
+        if (choice != Default && find?.Invoke(choice) is { } s)
+        {
+            var (tcp, udp) = GameParts(s);
+            if (p.TcpPorts.Length > 0 && tcp is not null && WinwsArgs.Problem("game_tcp", tcp) is null) c.TcpDesync = tcp;
+            if (p.UdpPorts.Length > 0 && WinwsArgs.Problem("game_udp", udp) is null) c.UdpDesync = udp;
+        }
+        return c;
+    }
+
+    /// <summary>Профиль, как он пойдёт со стратегией ПК <paramref name="current"/>: «По умолчанию» тоже заполнено (для показа, экспорта настроек и приманок связки).</summary>
+    public static AppProfile Effective(AppProfile p, bool separate, Func<string, Strategy?>? find, Strategy? current)
+    {
+        var c = ForBuild(p, separate, find);
+        if (current is not null)
+        {
+            var (tcp, udp) = GameParts(current);
+            if (c.TcpPorts.Length > 0 && c.TcpDesync.Length == 0) c.TcpDesync = tcp ?? "";
+            if (c.UdpPorts.Length > 0 && c.UdpDesync.Length == 0) c.UdpDesync = udp;
+        }
+        return c;
+    }
+
+    /// <summary>
+    /// Профили до API 1.22 (<see cref="AppProfile.Strategy"/> = null): «вариант» → выбор. Свои параметры (Variant -1) — «Свои»; вариант 0 (как у текущей
+    /// стратегии) — «По умолчанию», своих нет; другой вариант — та стратегия, чья игровая часть совпала с записанной; не нашлась — записанное остаётся «Своими»
+    /// (ничего не теряется). True — у кого-то выбор не «По умолчанию» (значит, нужны «Разные стратегии», чтобы всё шло как раньше).
+    /// </summary>
+    public static bool MigrateChoices(IEnumerable<AppProfile> profiles, IEnumerable<Strategy> all, string? currentId)
+    {
+        var list = all.ToList();
+        bool separate = false;
+        // Негодный профиль (state.json трогали) не «чинится» переводом: он как был не идёт в winws.
+        foreach (var p in profiles.Where(p => p.Strategy is null && Problem(p) is null))
+        {
+            if (p.Variant < 0) p.Strategy = Own;
+            else if (p.Variant == 0) { p.Strategy = Default; p.TcpDesync = p.UdpDesync = ""; }
+            else
+            {
+                var match = list.Where(s => s.Id != currentId).FirstOrDefault(s => GameParts(s) is var (t, u) && (p.TcpPorts.Length == 0 || t == p.TcpDesync) && (p.UdpPorts.Length == 0 || u == p.UdpDesync));
+                if (match is not null) { p.Strategy = match.Id; p.TcpDesync = p.UdpDesync = ""; }
+                else p.Strategy = Own;
+            }
+            p.Variant = 0;
+            if (p.Strategy != Default) separate = true;
+        }
+        return separate;
     }
 }
 

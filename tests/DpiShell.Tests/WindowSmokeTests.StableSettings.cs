@@ -163,7 +163,7 @@ public sealed partial class WindowSmokeTests
             var tabs = Find<TabControl>(w)!;
             Button? Btn(string content) => Find<Button>(tabs, b => b.IsVisible && b.Content as string == content);
 
-            // №9: раздел на месте и свёрнут; «Отладка подключений →» раскрывает его; «Другие параметры» у профиля без всяких галок.
+            // №9: раздел на месте и свёрнут; «Отладка подключений →» раскрывает его; у профиля — тумблер и «⋯» без всяких галок.
             vm.GoTo(Pages.Apps);
             PumpUntil(() => vm.Apps.Profiles.Count == 1, "профиль от помощника");
             Pump();
@@ -171,7 +171,7 @@ public sealed partial class WindowSmokeTests
             if (!debug.IsVisible || debug.IsExpanded) throw new Exception("«Отладка подключений» не видна или раскрыта по умолчанию");
             if (!VisibleText(tabs, t => t.Text == L.T("apps.debug.section"))) throw new Exception("Нет заголовка «Отладка подключений (для опытных)»");
             if (Btn(L.T("apps.debug.record")) is not null) throw new Exception("Содержимое свёрнутого раздела видно");
-            if (Btn(L.T("apps.profile.other_variant")) is null) throw new Exception("Нет «Другие параметры» у профиля");
+            if (Btn("⋯") is null || Find<CheckBox>(tabs, c => c.IsVisible && c.DataContext is ProfileRow) is null) throw new Exception("Нет тумблера и «⋯» у профиля");
             (Btn(L.T("apps.profiles.record")) ?? throw new Exception("Нет «Записать игру…»")).Command.Execute(null);   // ссылка — в карточке записи
             Pump();
             (Btn(L.T("apps.more")) ?? throw new Exception("Нет «Отладка подключений →»")).Command.Execute(null);

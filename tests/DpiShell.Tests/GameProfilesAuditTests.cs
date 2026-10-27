@@ -88,20 +88,17 @@ public sealed class GameProfilesAuditTests
     sealed record OldFeatures(IpsetMode Ipset, DateTime? AnyUntilUtc, IpsetMode ReturnTo, OldGameMode Game, bool GameActive, bool GameBlocked);
 
     [Fact]
-    public void Status_ProfilesMode_ReadableByOldWindow()
+    public void Status_GameField_OnlyOldValues_ReadableByOldWindow()
     {
-        var json = JsonSerializer.Serialize(new NetFeatures(IpsetMode.Off, null, IpsetMode.Off, GameMode.Profiles, true, false, null), HelperProtocol.Json);
-        Assert.Contains("\"game\":\"off\"", json);
-        Assert.Contains("\"gameProfiles\":true", json);
-        var old = JsonSerializer.Deserialize<OldFeatures>(json, HelperProtocol.Json)!;   // старое окно: строгий enum, лишнее поле пропускается
-        Assert.Equal(OldGameMode.Off, old.Game);
-        Assert.Equal(GameMode.Profiles, JsonSerializer.Deserialize<NetFeatures>(json, HelperProtocol.Json)!.Game);
-
-        var general = JsonSerializer.Serialize(new NetFeatures(IpsetMode.List, null, IpsetMode.List, GameMode.TcpUdp, true, false, null), HelperProtocol.Json);
-        Assert.Equal(OldGameMode.TcpUdp, JsonSerializer.Deserialize<OldFeatures>(general, HelperProtocol.Json)!.Game);
-        Assert.Equal(GameMode.TcpUdp, JsonSerializer.Deserialize<NetFeatures>(general, HelperProtocol.Json)!.Game);
-        Assert.Contains("\"gameProfiles\":false", general);
-        // Помощник до 1.22 поля gameProfiles не шлёт.
+        // «Общий» — прежними значениями; профили в status не входят (включаются каждый сам, их отдаёт app_profiles), лишних полей нет.
+        foreach (var (mode, old) in new[] { (GameMode.Off, OldGameMode.Off), (GameMode.TcpUdp, OldGameMode.TcpUdp), (GameMode.Tcp, OldGameMode.Tcp), (GameMode.Udp, OldGameMode.Udp) })
+        {
+            var json = JsonSerializer.Serialize(new NetFeatures(IpsetMode.List, null, IpsetMode.List, mode, mode != GameMode.Off, false, null), HelperProtocol.Json);
+            Assert.DoesNotContain("gameProfiles", json);
+            Assert.Equal(old, JsonSerializer.Deserialize<OldFeatures>(json, HelperProtocol.Json)!.Game);   // старое окно: строгий enum
+            Assert.Equal(mode, JsonSerializer.Deserialize<NetFeatures>(json, HelperProtocol.Json)!.Game);
+        }
+        Assert.Contains("\"game\":\"tcpUdp\"", JsonSerializer.Serialize(new NetFeatures(IpsetMode.List, null, IpsetMode.List, GameMode.TcpUdp, true, false, null), HelperProtocol.Json));
         Assert.Equal(GameMode.Udp, JsonSerializer.Deserialize<NetFeatures>("""{"ipset":"off","returnTo":"off","game":"udp","gameActive":false,"gameBlocked":false}""", HelperProtocol.Json)!.Game);
     }
 
@@ -136,10 +133,10 @@ public sealed class GameProfilesAuditTests
         Assert.Equal(System.Net.Sockets.SocketError.HostNotFound, e.SocketErrorCode);
     }
 
-    // ---------- 6. «Другой вариант» у профиля из импорта ----------
+    // ---------- 6. профиль из импорта: другая стратегия и обратно к «Свои» без потерь ----------
 
     [Fact]
-    public async Task OtherVariant_ImportedProfile_AsksFirst()
+    public async Task ImportedProfile_OtherStrategy_AndBackToOwn_NoQuestion_ParamsKept()
     {
         using var t = new TempDir();
         var shell = new Shell(Make.Paths(t));
@@ -150,26 +147,19 @@ public sealed class GameProfilesAuditTests
         var imp = ProfileExchange.Import("Игра", Mistfall, "--filter-tcp=12001 " + Pars, "", Fakes).Profile!;
         await link.Client!.AppProfileSetAsync(null, imp.Title, imp.TcpPorts, imp.UdpPorts, imp.Addresses, 0, imp.ToSignature());
         var asked = new List<string>();
-        bool answer = false;
-        var apps = new AppsViewModel(link) { Say = _ => { }, Confirm = q => { asked.Add(q); return answer; } };
+        var apps = new AppsViewModel(link) { Say = _ => { }, Confirm = q => { asked.Add(q); return false; } };
         await apps.RefreshAsync();
-        Assert.True(apps.Variants.Count >= 2, "в каталоге меньше двух вариантов");
+        Assert.True(apps.Separate);   // свои параметры — «Разные стратегии» включились сами
         var row = Assert.Single(apps.Profiles);
-        Assert.Equal(-1, row.Info.Variant);
+        Assert.Equal(AppProfiles.Own, row.Selected!.Key);
+        var other = row.Choices.First(c => c.Key is not (AppProfiles.Default or AppProfiles.Own));
 
-        row.NextCmd!.Execute(null);
-        for (int i = 0; i < 200 && asked.Count == 0; i++) await Task.Delay(25);
-        var q = Assert.Single(asked);
-        Assert.Contains("вариантом 1", q);
-        Assert.Contains("только введя заново", q);
-        await Task.Delay(100);
-        Assert.Equal(-1, shell.State.AppProfiles[0].Variant);   // отказ — параметры из импорта на месте
-
-        answer = true;
-        row.NextCmd!.Execute(null);
-        for (int i = 0; i < 200 && shell.State.AppProfiles[0].Variant == -1; i++) await Task.Delay(25);
-        Assert.Equal(0, shell.State.AppProfiles[0].Variant);
-        Assert.Equal(2, asked.Count);
-        Assert.Equal(79, shell.State.AppProfiles[0].TcpPayloadLength);   // сигнатура осталась
+        await apps.SetStrategyAsync(row.Id, other.Key);
+        Assert.Equal(other.Key, shell.State.AppProfiles[0].Strategy);
+        Assert.Equal(imp.TcpDesync, shell.State.AppProfiles[0].TcpDesync);   // свои параметры хранятся — к ним можно вернуться
+        Assert.Equal(79, shell.State.AppProfiles[0].TcpPayloadLength);
+        await apps.SetStrategyAsync(row.Id, AppProfiles.Own);
+        Assert.Equal(AppProfiles.Own, shell.State.AppProfiles[0].Strategy);
+        Assert.Empty(asked);   // подтверждения о потере параметров больше нет
     }
 }

@@ -30,7 +30,7 @@ public sealed class FeatureViewModelTests
         var net = new NetViewModel(link) { Say = said.Add };
         Assert.False(net.GameGeneral);
         Assert.True(net.IpsetOff);
-        Assert.Equal("Выключен", net.GameStatus);
+        Assert.StartsWith("Порты 1024–65535", net.GameStatus);
 
         await net.SetGameModeAsync(GameMode.TcpUdp);
 

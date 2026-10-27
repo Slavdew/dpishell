@@ -51,20 +51,19 @@ public sealed record BuildOptions(IpsetMode Ipset = IpsetMode.Off, GameMode Game
         var mode = ParseIpset(s.IpsetMode);
         if (mode == IpsetMode.Any && (s.IpsetAnyUntil is not { } until || until <= utcNow))
             mode = ParseIpset(s.IpsetModeBeforeAny) is var back && back != IpsetMode.Any ? back : IpsetMode.Off;
-        // Профили программ (ТЗ 13): в state.json их мог тронуть кто угодно — в командную строку идут только прошедшие проверку.
-        // Работают только в режимах «Свои профили» и «Общий»; при «Выкл» профили хранятся, но в командную строку не идут.
+        // Профили программ (ТЗ 13): в state.json их мог тронуть кто угодно — в командную строку идут только прошедшие проверку и включённые.
+        // От «Общего» не зависят. Параметры — по выбору профиля («Разные стратегии»), «По умолчанию» доставляет WinwsArgs.Build из своей стратегии.
         var game = ParseGame(s.GameMode);
         var profiles = new List<AppProfile>();
         int filtersSize = 0;
-        if (game != GameMode.Off)
-            foreach (var p in s.AppProfiles.Where(p => AppProfiles.Problem(p) is null).Take(AppProfiles.MaxProfiles))
-            {
-                // Предел фильтра WinDivert: лишний профиль не подаётся. Размер — накопительно, по одному профилю.
-                int size = AppProfiles.FiltersSize([p]);
-                if (filtersSize + size > AppProfiles.MaxFilterBytes) continue;
-                filtersSize += size;
-                profiles.Add(p);
-            }
+        foreach (var p in s.AppProfiles.Where(p => p.Enabled && AppProfiles.Problem(p) is null).Take(AppProfiles.MaxProfiles))
+        {
+            // Предел фильтра WinDivert: лишний профиль не подаётся. Размер — накопительно, по одному профилю.
+            int size = AppProfiles.FiltersSize([p]);
+            if (filtersSize + size > AppProfiles.MaxFilterBytes) continue;
+            filtersSize += size;
+            profiles.Add(AppProfiles.ForBuild(p, s.ProfilesSeparate, find));
+        }
         var advanced = find is null ? null : AdvancedSites.Plan(s.Advanced, find, currentId);
         // Связка действует, пока её продлевают: срок вышел (окно закрыто, роутер недоступен) — ПК сразу по полной настройке, как с «Все адреса».
         var joint = s.Joint is { Active: true, Until: { } leaseEnd } && leaseEnd > utcNow
@@ -76,9 +75,9 @@ public sealed record BuildOptions(IpsetMode Ipset = IpsetMode.Off, GameMode Game
 
     public static IpsetMode ParseIpset(string? s) => s switch { "list" => IpsetMode.List, "any" => IpsetMode.Any, _ => IpsetMode.Off };
     public static string Format(IpsetMode m) => m switch { IpsetMode.List => "list", IpsetMode.Any => "any", _ => "off" };
-    /// <summary>"all", "tcp", "udp" — «Общий» (прежние значения читаются так же); "profiles" — «Свои профили»; остальное — «Выкл».</summary>
-    public static GameMode ParseGame(string? s) => s switch { "all" => GameMode.TcpUdp, "tcp" => GameMode.Tcp, "udp" => GameMode.Udp, "profiles" => GameMode.Profiles, _ => GameMode.Off };
-    public static string Format(GameMode m) => m switch { GameMode.TcpUdp => "all", GameMode.Tcp => "tcp", GameMode.Udp => "udp", GameMode.Profiles => "profiles", _ => "off" };
+    /// <summary>"all", "tcp", "udp" — «Общий»; остальное — выключен.</summary>
+    public static GameMode ParseGame(string? s) => s switch { "all" => GameMode.TcpUdp, "tcp" => GameMode.Tcp, "udp" => GameMode.Udp, _ => GameMode.Off };
+    public static string Format(GameMode m) => m switch { GameMode.TcpUdp => "all", GameMode.Tcp => "tcp", GameMode.Udp => "udp", _ => "off" };
 }
 
 /// <summary>Сборка командной строки winws. Повторяет устройство general.bat Flowseal, включая game filter.</summary>
@@ -185,9 +184,9 @@ public static class WinwsArgs
     public static Dictionary<string, string> ActiveRoles(Strategy s, BuildOptions o)
     {
         var roles = s.Roles.Where(r => !r.Key.StartsWith("game_")).ToDictionary(r => r.Key, r => r.Value);
-        if (o.GameTcp && (s.Roles.GetValueOrDefault("game_tcp") ?? DeriveGameTcp(s.Roles.GetValueOrDefault("general"))) is { } t)
-            roles["game_tcp"] = t;
-        if (o.GameUdp) roles["game_udp"] = s.Roles.GetValueOrDefault("game_udp") ?? GameUdpDefault;
+        var (gameTcp, gameUdp) = AppProfiles.GameParts(s);
+        if (o.GameTcp && gameTcp is { } t) roles["game_tcp"] = t;
+        if (o.GameUdp) roles["game_udp"] = gameUdp;
         // Совместная работа: YouTube, Discord, IP-списки и игры ведёт роутер — на ПК остаются только общие роли (по своим сайтам).
         if (o.Joint is not null) roles = roles.Where(r => r.Key is "quic" or "general").ToDictionary(r => r.Key, r => r.Value);
         return roles;
@@ -295,12 +294,16 @@ public static class WinwsArgs
         // google и discord_media, где файла user-exclude.txt нет (его читают общие роли). Пустой список — командная строка каталога не меняется (эталон роутера).
         var direct = (adv?.Direct ?? []).Concat(routerOwned).Concat(o.Exclude ?? []).Where(AdvancedSites.IsDomain).Distinct().ToList();
         string[] directArgs = direct.Count > 0 ? ["--hostlist-exclude-domains=" + string.Join(',', direct)] : [];
-        // Профили программ идут сразу после строк продвинутого режима и до общих ролей: winws берёт первый подходящий профиль, а general и quic ловили бы те же порты.
+        // Профили программ идут сразу после строк продвинутого режима и до общих ролей (в том числе игровых ролей «Общего»): winws берёт первый подходящий профиль,
+        // а general, quic и game_* ловили бы те же порты. Без своих параметров и выбранной стратегии — игровая часть этой стратегии («По умолчанию»).
+        var (defTcp, defUdp) = AppProfiles.GameParts(s);
         foreach (var pr in profiles)
         {
-            foreach (var (ports, desync, isTcp) in new[] { (pr.TcpPorts, pr.TcpDesync, true), (pr.UdpPorts, pr.UdpDesync, false) })
+            foreach (var (ports, mine, isTcp) in new[] { (pr.TcpPorts, pr.TcpDesync, true), (pr.UdpPorts, pr.UdpDesync, false) })
             {
                 if (ports.Length == 0) continue;
+                var desync = mine.Length > 0 ? mine : (isTcp ? defTcp : defUdp) ?? "";
+                if (desync.Length == 0 || Problem(isTcp ? "game_tcp" : "game_udp", desync) is not null) continue;
                 if (!first) args.Add("--new");
                 first = false;
                 args.Add($"--filter-{(isTcp ? "tcp" : "udp")}={ports}");

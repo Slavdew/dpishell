@@ -1843,7 +1843,7 @@ public sealed partial class WindowSmokeTests
 
                 // Раскладка: «Игры и программы», игровой режим, профили с «Добавить профиль…» и «Записать игру…»; IP-списки — в свёрнутом «Дополнительно».
                 if (!Visible(t => t.Text == "Игры и программы") || !Visible(t => t.Text == "Профили программ")) throw new Exception("Нет заголовков вкладки");
-                if (!Visible(t => t.Text == "Игровой режим")) throw new Exception("Нет игрового режима");
+                if (!Visible(t => t.Text == "Общий игровой режим")) throw new Exception("Нет «Общего игрового режима»");
                 var more = Find<Expander>(tabs, e => e.Header as string == "Дополнительно: IP-списки и свои подсети")
                     ?? throw new Exception("Нет «Дополнительно»");
                 if (more.IsExpanded) throw new Exception("«Дополнительно» должно быть свёрнуто");
@@ -1896,7 +1896,7 @@ public sealed partial class WindowSmokeTests
                     foreach (var b in new[] { "Да, заработало", "Нет", "Стало хуже" })
                         if (Btn(b) is null) throw new Exception("Нет кнопки «" + b + "»");
                     if (!Visible(t => t.Text == "Профили программ")) throw new Exception("Профиль не в списке");
-                    if (Btn("Удалить") is null) throw new Exception("Нет «Удалить» у профиля");
+                    if (Btn("⋯") is null) throw new Exception("Нет «⋯» у профиля («Удалить» — в нём)");
                     if (!Visible(t => t.Text == L.T("apps.off_hint"))) throw new Exception("Нет подсказки, что оптимизация выключена");
                     if (Btn("Включить оптимизацию") is null) throw new Exception("Нет «Включить оптимизацию» рядом с подсказкой");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-simple-check.png"));
@@ -1937,7 +1937,7 @@ public sealed partial class WindowSmokeTests
                     PumpUntil(() => vm.Apps.Profiles.Count == 1, "профиль сохранён");
                     Pump();
                     if (!Visible(t => t.Text == "Профили программ")) throw new Exception("Нет списка профилей");
-                    if (Btn("Другие параметры") is null) throw new Exception("Для опытных нет «Другие параметры»");
+                    if (Btn("⋯") is null) throw new Exception("Нет «⋯» у профиля");
                     if (snapDir is not null)
                     {
                         Snap(w, Path.Combine(snapDir, $"{theme}-apps-advanced-saved.png"));

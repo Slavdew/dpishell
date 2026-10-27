@@ -28,7 +28,7 @@ public static class HelperProtocol
     /// </summary>
     public const string Api = "1.22";
 
-    /// <summary>С этой версии: игровой режим <c>game_mode profiles</c> («Свои профили»); у <c>app_profile_set</c> — необязательные <c>tcpLen</c>, <c>tcpHex</c>, <c>udpLen</c>, <c>udpHex</c> (сигнатура пакета), <c>tcpDesync</c>, <c>udpDesync</c> (свои параметры из импорта) и необязательные <c>addresses</c> для протокола с сигнатурой; в <c>AppProfileInfo</c> — те же поля. Старый помощник лишних полей не принимает.</summary>
+    /// <summary>С этой версии: профили программ включаются по отдельности и выбирают стратегию — <c>app_profile_options</c>, <c>app_profiles_separate</c>; у <c>app_profile_set</c> — необязательные <c>tcpLen</c>, <c>tcpHex</c>, <c>udpLen</c>, <c>udpHex</c> (сигнатура пакета), <c>tcpFilter</c>, <c>udpFilter</c>, <c>tcpDesync</c>, <c>udpDesync</c> (свои параметры) и необязательные <c>addresses</c> для протокола с сигнатурой; в <c>AppProfileInfo</c> — те же поля и выбор. Старый помощник лишних полей и команд не принимает.</summary>
     public const string ProfilesApi = "1.22";
 
     /// <summary>С этой версии <c>select</c>, <c>search</c> и <c>strategy_check</c> принимают необязательное <c>ownOnly</c> — подбор только своих сайтов рядом с роутером (старый помощник лишних полей не принимает).</summary>

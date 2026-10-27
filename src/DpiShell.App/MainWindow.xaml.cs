@@ -148,6 +148,12 @@ public partial class MainWindow : Window
     /// <summary>«⋯» у выбранной строки таблицы подбора (<see cref="MainViewModel.ScoreMenu"/>).</summary>
     void ScoreMenu_Click(object sender, RoutedEventArgs e) => ShowMenu((FrameworkElement)sender, _vm.ScoreMenu());
 
+    /// <summary>«⋯» у строки профиля: «Экспорт», «Скопировать для Flowseal», «Удалить».</summary>
+    void ProfileMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ProfileRow row } target) ShowMenu(target, row.Menu());
+    }
+
     /// <summary>Меню из пунктов модели под кнопкой: справа — подпись (итог прогона), в подсказке — параметры (моноширинно).</summary>
     public static System.Windows.Controls.ContextMenu BuildMenu(FrameworkElement target, IEnumerable<MenuEntry> entries)
     {

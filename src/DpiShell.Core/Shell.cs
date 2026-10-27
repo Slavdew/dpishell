@@ -39,6 +39,9 @@ public sealed class Shell
         Catalog = StrategyCatalog.Load(Path.Combine(Paths.Seed, "strategies.json"));
         DefaultTargets = TargetSet.Load(Path.Combine(Paths.Seed, "targets.json"));
         State = AppState.Load(Paths);
+        // Профили до API 1.22 хранили «вариант» — переводим в выбор стратегии (в памяти; запишется с ближайшим сохранением). Сохранится и поведение:
+        // у кого-то выбор не «По умолчанию» — «Разные стратегии» включены, как если бы человек выбрал их сам.
+        if (AppProfiles.MigrateChoices(State.AppProfiles, AllStrategies, State.StrategyId)) State.ProfilesSeparate = true;
     }
 
     public static bool IsAdmin()
@@ -644,9 +647,9 @@ public sealed class Shell
         State.IpsetMode = BuildOptions.Format(mode);
         State.IpsetAnyUntil = null;
         State.IpsetByGame = false;   // режим списка выбран рукой — игровой режим его больше не вернёт
-        // Без списка «Общему» нечего ловить: он выключается, а свои профили (они от списка не зависят) остаются.
+        // Без списка «Общему» нечего ловить: он выключается, а профили программ (они от списка не зависят) остаются.
         if (mode == IpsetMode.Off && BuildOptions.ParseGame(State.GameMode).IsGeneral())
-            State.GameMode = BuildOptions.Format(State.AppProfiles.Count > 0 ? GameMode.Profiles : GameMode.Off);
+            State.GameMode = BuildOptions.Format(GameMode.Off);
         State.Save(Paths);
         ReapplyIfActive();
     }
@@ -680,7 +683,7 @@ public sealed class Shell
         && StopAllAddresses();
 
     /// <summary>
-    /// Игровой режим. Окно передаёт Off, Profiles или TcpUdp («Общий»). При включении «Общего» без загруженного списка IP-список включается сам
+    /// «Общий игровой режим»: Off или TcpUdp. При включении без загруженного списка IP-список включается сам
     /// (если файла нет — ставится из поставки или скачивается по манифесту); при «Все адреса» — запрещено.
     /// </summary>
     public async Task<GameModeChange> SetGameModeAsync(GameMode mode, IProgress<string>? log = null, CancellationToken ct = default)
@@ -688,7 +691,7 @@ public sealed class Shell
         var was = BuildOptions.ParseGame(State.GameMode);
         if (was == mode) return new(false, null);
         string? note = null;
-        // «Выкл» и «Свои профили» списка не требуют; список, который включил сам «Общий», при уходе из него выключается (как было до него).
+        // Выключение списка не требует; список, который включил сам «Общий», при выключении выключается (как было до него).
         if (mode.IsGeneral())
         {
             var ipset = CurrentOptions.Ipset;
@@ -873,10 +876,11 @@ public sealed class Shell
     public IReadOnlyList<ProfileVariant> ProfileVariants() => AppProfiles.Variants(AllStrategies, State.StrategyId);
 
     /// <summary>
-    /// Создать профиль (id пуст) или заменить (id есть). Порты и адреса приводятся к каноническому виду, параметры берутся из варианта —
-    /// из числа готовых, окно своих параметров не передаёт. Работающая оптимизация перезапускается на той же стратегии.
+    /// Создать профиль (id пуст) или заменить (id есть). Порты и адреса приводятся к каноническому виду. Выбор стратегии — из варианта (0 — как у стратегии ПК,
+    /// то есть «По умолчанию»; другой — та стратегия, и «Разные стратегии» включаются, иначе выбор не действовал бы); свои параметры (из сборки или строки обмена) —
+    /// выбор «Свои», новый профиль с ними тоже включает «Разные стратегии». Работающая оптимизация перезапускается на той же стратегии.
     /// </summary>
-    /// <param name="signature">null — полей 1.22 в запросе нет (окно до 1.22, «Другой вариант»): у существующего профиля сигнатура и свой фильтр сохраняются.</param>
+    /// <param name="signature">null — полей 1.22 в запросе нет (окно до 1.22, «Другой вариант», запись игры): у существующего профиля сигнатура, свой фильтр и свои параметры сохраняются.</param>
     public AppProfile SetAppProfile(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant,
         ProfileSignature? signature = null)
     {
@@ -888,14 +892,20 @@ public sealed class Shell
         var verdict = IpsetValidator.Validate(string.Join('\n', addresses), IpsetKind.User);
         var existing = id is null ? null : State.AppProfiles.FirstOrDefault(p => p.Id == id);
         if (id is not null && existing is null) throw new InvalidOperationException(L.T("core.shell.no_profile"));
+        bool keepOwn = signature is null && existing is not null;
         signature ??= existing is null ? ProfileSignature.None
             : new(existing.TcpPayloadLength, existing.TcpPayloadHex, existing.UdpPayloadLength, existing.UdpPayloadHex,
                 TcpFilter: existing.TcpCustomFilter, UdpFilter: existing.UdpCustomFilter);
+        bool own = signature.TcpDesync is not null || signature.UdpDesync is not null;
+        // Вариант 0 — игровая часть стратегии ПК, то есть «По умолчанию»; другой — выбранная стратегия.
+        string choice = own ? AppProfiles.Own : variant == 0 || v.StrategyId == State.StrategyId || v.StrategyId.Length == 0 ? AppProfiles.Default : v.StrategyId;
         var profile = new AppProfile
         {
             Id = id ?? AppProfiles.NewId(), Title = title.Trim(), TcpPorts = tcp, UdpPorts = udp, Addresses = [.. verdict.Entries],
-            TcpDesync = tcp.Length == 0 ? "" : signature.TcpDesync ?? v.Tcp, UdpDesync = udp.Length == 0 ? "" : signature.UdpDesync ?? v.Udp,
-            Variant = signature.TcpDesync is not null || signature.UdpDesync is not null ? -1 : v.Index,
+            TcpDesync = tcp.Length == 0 ? "" : own ? signature.TcpDesync ?? "" : keepOwn ? existing!.TcpDesync : "",
+            UdpDesync = udp.Length == 0 ? "" : own ? signature.UdpDesync ?? "" : keepOwn ? existing!.UdpDesync : "",
+            Enabled = existing?.Enabled ?? true,
+            Strategy = choice,
             TcpPayloadLength = tcp.Length > 0 ? signature.TcpLength : 0, TcpPayloadHex = tcp.Length > 0 ? signature.TcpHex : "",
             UdpPayloadLength = udp.Length > 0 ? signature.UdpLength : 0, UdpPayloadHex = udp.Length > 0 ? signature.UdpHex : "",
             TcpCustomFilter = tcp.Length > 0 ? signature.TcpFilter.Trim() : "", UdpCustomFilter = udp.Length > 0 ? signature.UdpFilter.Trim() : "",
@@ -913,14 +923,15 @@ public sealed class Shell
             var rec = Journal.Begin(ChangeKinds.AppProfile, L.T("core.shell.journal_profile", new { title = profile.Title, ports = (profile.TcpPorts + " " + profile.UdpPorts).Trim() }),
                 new System.Text.Json.Nodes.JsonObject { ["exists"] = false }, snapshot);
             State.AppProfiles.Add(profile);
-            // Профиль создают, чтобы он работал: при «Выкл» режим становится «Свои профили» (при «Общем» профили и так действуют).
-            if (BuildOptions.ParseGame(State.GameMode) == GameMode.Off) State.GameMode = BuildOptions.Format(GameMode.Profiles);
+            // Выбор не «По умолчанию» (свои параметры, другой вариант записи игры) действует только при «Разных стратегиях» — включить их.
+            if (choice != AppProfiles.Default) State.ProfilesSeparate = true;
             State.Save(Paths);
             Journal.Done(rec);
         }
         else
         {
             State.AppProfiles[State.AppProfiles.IndexOf(existing)] = profile;
+            if (choice != AppProfiles.Default) State.ProfilesSeparate = true;
             State.Save(Paths);
             foreach (var en in Journal.Active(ChangeKinds.AppProfile).Where(x => x.After?["id"]?.GetValue<string>() == profile.Id))
                 Journal.Update(en.Id, snapshot);
@@ -936,7 +947,6 @@ public sealed class Shell
         var p = State.AppProfiles.FirstOrDefault(x => x.Id == id);
         if (p is null) return false;
         State.AppProfiles.Remove(p);
-        DropProfilesMode();
         State.Save(Paths);
         SyncAppProfileFiles();
         Journal.Close(ChangeKinds.AppProfile, L.T("core.shell.closed_profile"), en => en.After?["id"]?.GetValue<string>() == id);
@@ -944,17 +954,44 @@ public sealed class Shell
         return true;
     }
 
-    /// <summary>Профилей не осталось — режим «Свои профили» теряет смысл: «Выкл» (как до первого профиля).</summary>
-    void DropProfilesMode()
+    /// <summary>
+    /// Включить или выключить профиль и (или) выбрать ему стратегию: <see cref="AppProfiles.Default"/>, <see cref="AppProfiles.Own"/> (только если свои параметры есть)
+    /// или id стратегии, у которой есть годная игровая часть. Окну не доверяем: выбор проверяется здесь. Работающая оптимизация перезапускается.
+    /// </summary>
+    public AppProfile SetAppProfileOptions(string id, bool? enabled, string? strategy)
     {
-        if (State.AppProfiles.Count == 0 && BuildOptions.ParseGame(State.GameMode) == GameMode.Profiles) State.GameMode = BuildOptions.Format(GameMode.Off);
+        var p = State.AppProfiles.FirstOrDefault(x => x.Id == id) ?? throw new InvalidOperationException(L.T("core.shell.no_profile"));
+        if (strategy is not null && strategy != AppProfiles.Default)
+        {
+            if (strategy == AppProfiles.Own) { if (!p.HasOwn) throw new InvalidOperationException(L.T("core.shell.no_own")); }
+            else if (!ProfileVariants().Any(v => v.StrategyId == strategy) && strategy != State.StrategyId)
+                throw new InvalidOperationException(L.T("core.shell.no_variant"));
+        }
+        if (enabled is { } on) p.Enabled = on;
+        if (strategy is not null) p.Strategy = strategy;
+        State.Save(Paths);
+        SyncAppProfileFiles();
+        ReapplyIfActive();
+        return p;
     }
+
+    /// <summary>«Разные стратегии» у профилей: выключено — все идут «По умолчанию», выбор у профилей хранится.</summary>
+    public void SetProfilesSeparate(bool on)
+    {
+        if (State.ProfilesSeparate == on) return;
+        State.ProfilesSeparate = on;
+        State.Save(Paths);
+        ReapplyIfActive();
+    }
+
+    /// <summary>Профиль, как он пойдёт со стратегией ПК сейчас (параметры заполнены и у «По умолчанию»; стратегия не выбрана — первая, как вариант 0).</summary>
+    public AppProfile EffectiveProfile(AppProfile p) =>
+        AppProfiles.Effective(p, State.ProfilesSeparate, FindStrategy, (State.StrategyId is { } sid ? FindStrategy(sid) : null) ?? AllStrategies.FirstOrDefault());
 
     /// <summary>«Удалить полностью»: все профили и файлы.</summary>
     public void ClearAppProfiles()
     {
         State.AppProfiles.Clear();
-        DropProfilesMode();
         State.Save(Paths);
         SyncAppProfileFiles();
         Journal.Close(ChangeKinds.AppProfile, L.T("core.shell.closed_profiles"));
@@ -1125,7 +1162,7 @@ public sealed class Shell
         Roles(current);
         if (AdvancedSites.Plan(State.Advanced, FindStrategy, State.StrategyId) is { } plan)
             foreach (var row in plan.Applied) Roles(row.Strategy);
-        foreach (var p in State.AppProfiles)
+        foreach (var p in State.AppProfiles.Where(p => p.Enabled).Select(p => AppProfiles.Effective(p, State.ProfilesSeparate, FindStrategy, current)))
         {
             if (p.TcpDesync.Length > 0) desyncs.Add(("game_tcp", p.TcpDesync));
             if (p.UdpDesync.Length > 0) desyncs.Add(("game_udp", p.UdpDesync));
@@ -1229,25 +1266,8 @@ public sealed record AdvancedInfo(bool Enabled, string Others, IReadOnlyList<Adv
 /// <param name="GameActive">Игровые профили реально в командной строке.</param>
 /// <param name="GameBlocked">Игровой режим выбран, но не действует из-за «Все адреса» (переключатель серый).</param>
 /// <param name="List">Установленный общий список: подсети, доля IPv4, дата; null — не установлен.</param>
-public sealed record NetFeatures(IpsetMode Ipset, DateTime? AnyUntilUtc, IpsetMode ReturnTo,
-    [property: System.Text.Json.Serialization.JsonConverter(typeof(LegacyGameConverter))] GameMode Game, bool GameActive, bool GameBlocked, IpsetMeta? List)
-{
-    /// <summary>
-    /// API 1.22: выбран режим «Свои профили». В поле <c>game</c> он уходит как <c>off</c>: окно до 1.22 значения <c>profiles</c> не знает и не разобрало бы status.
-    /// Окно 1.22 читает это поле и восстанавливает <see cref="GameMode.Profiles"/>.
-    /// </summary>
-    public bool GameProfiles { get => Game == GameMode.Profiles; init { if (value) Game = GameMode.Profiles; } }
-}
-
-/// <summary>Игровой режим в status только старыми значениями (off/tcpUdp/tcp/udp): «Свои профили» — отдельным полем <see cref="NetFeatures.GameProfiles"/>.</summary>
-public sealed class LegacyGameConverter : System.Text.Json.Serialization.JsonConverter<GameMode>
-{
-    public override GameMode Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options) =>
-        Enum.TryParse<GameMode>(reader.GetString(), ignoreCase: true, out var m) && m != GameMode.Profiles ? m : GameMode.Off;
-
-    public override void Write(System.Text.Json.Utf8JsonWriter writer, GameMode value, System.Text.Json.JsonSerializerOptions options) =>
-        writer.WriteStringValue(value switch { GameMode.TcpUdp => "tcpUdp", GameMode.Tcp => "tcp", GameMode.Udp => "udp", _ => "off" });
-}
+/// <remarks>Поле <c>game</c> — только «Общий» (off/tcpUdp/tcp/udp, как до 1.22): профили программ включаются каждый сам и в status не входят (их отдаёт <c>app_profiles</c>).</remarks>
+public sealed record NetFeatures(IpsetMode Ipset, DateTime? AnyUntilUtc, IpsetMode ReturnTo, GameMode Game, bool GameActive, bool GameBlocked, IpsetMeta? List);
 
 /// <param name="IpsetSwitched">IP-список включён автоматически — показать <paramref name="Note"/> одной строкой.</param>
 public sealed record GameModeChange(bool IpsetSwitched, string? Note);

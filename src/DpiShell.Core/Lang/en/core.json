@@ -43,7 +43,6 @@
   "core.profile.wide_net": "Subnet “{addr}” is too wide for an app profile.",
   "core.profile.tcp_params": "TCP parameters: {problem}",
   "core.profile.udp_params": "UDP parameters: {problem}",
-  "core.profile.not_set": "not set",
   "core.addr.user_n": "custom address #{n}",
   "core.addr.group_n": "group #{n}",
   "core.upd.no_sources": "Release addresses are not set (update-sources.json).",
@@ -737,6 +736,13 @@
   "core.filter.need_compare": "Filter: a comparison is needed after \"{part}\" (position {at}).",
   "core.filter.need_value": "Filter: a number or address is needed after the comparison at \"{part}\" (position {at}).",
   "core.filter.no_proto_any": "Filter: no protocol (tcp or udp) found.",
-  "core.xchg.cutoff_added": "{proto}: --dpi-desync-cutoff=n2 added — without a signature, fakes would otherwise be sent on every packet.",
-  "core.xchg.filter.custom_note": "Filter accepted as custom: at your own risk, one that is too wide slows the whole internet on the PC."
+  "core.xchg.cutoff_added": "{proto}: --dpi-desync-cutoff=n2 added (without a signature, fakes would go on every packet).",
+  "core.xchg.filter.custom_note": "Filter accepted as custom: at your own risk, one that is too wide slows the whole internet on the PC.",
+  "core.profile.bad_choice": "Unknown profile strategy choice",
+  "core.shell.no_own": "The profile has no own parameters",
+  "core.xchg.is_game": "This is a game profile line — paste it in “Games & apps” → “Import…”",
+  "core.game_code.too_long": "The profile is too big to pass as a line",
+  "core.game_code.is_strategy": "This is a strategy line — paste it on the “Strategy” tab",
+  "core.game_code.not_code": "This is not a profile line: it starts with dpishell-game:1:",
+  "core.game_code.bad_field": "Field “{name}” has the wrong form"
 }

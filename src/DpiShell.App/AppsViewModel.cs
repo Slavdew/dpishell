@@ -55,21 +55,71 @@ public sealed class FlowRow : Observable
     public string State => Flow.State switch { "works" => L.T("apps.flow.state.works"), "noreply" => L.T("apps.flow.state.noreply"), _ => Flow.Proto == "udp" ? "—" : "" };
 }
 
-/// <summary>Сохранённый профиль в списке.</summary>
-public sealed class ProfileRow(AppProfileInfo info) : Observable
+/// <summary>Пункт выбора стратегии профиля: ключ («default», «own» или id стратегии) и подпись.</summary>
+/// <remarks>Подпись — правилом сборки: при смене языка пункт читается заново на месте, выбор в списке не сбрасывается.</remarks>
+public sealed class ChoiceItem(string key, Func<string> title) : Observable
 {
-    public AppProfileInfo Info { get; } = info;
+    public string Key { get; } = key;
+    public string Title => title();
+    public override string ToString() => Title;
+}
+
+/// <summary>
+/// Строка списка профилей: название и краткое описание слева, справа — выбор стратегии (при «Разных стратегиях»), тумблер «вкл» и меню «⋯»
+/// («Экспорт», «Скопировать для Flowseal», «Удалить»). Тумблер и выбор сразу уходят помощнику; список после этого перечитывается.
+/// </summary>
+public sealed class ProfileRow : Observable
+{
+    readonly AppsViewModel _owner;
+    ChoiceItem? _selected;
+
+    public ProfileRow(AppProfileInfo info, AppsViewModel owner)
+    {
+        Info = info;
+        _owner = owner;
+        Choices = owner.ChoicesFor(info);
+        _selected = Choices.FirstOrDefault(c => c.Key == info.Strategy) ?? Choices[0];
+    }
+
+    public AppProfileInfo Info { get; }
     public string Id => Info.Id;
     public string Title => Info.Title;
     public string Summary => AppsViewModel.Summarize(Info);
-    public string Variant => L.Relocalize(Info.VariantTitle);
-    public string VariantLabel => L.T("apps.profile.variant", new { variant = Variant });
-    public ICommand? RemoveCmd { get; set; }
-    public ICommand? NextCmd { get; set; }
-    public ICommand? CopyCmd { get; set; }
-    /// <summary>Свой фильтр профиля (если задан) — строки TCP и UDP; для «опытных».</summary>
-    public string CustomFilterText => string.Join(Environment.NewLine, new[] { Info.TcpFilter, Info.UdpFilter }.Where(f => f.Length > 0));
-    public bool HasCustomFilter => CustomFilterText.Length > 0;
+    /// <summary>Свой фильтр профиля (если задан) — в подсказке к описанию, для опытных.</summary>
+    public string? FilterTip => string.Join(Environment.NewLine, new[] { Info.TcpFilter, Info.UdpFilter }.Where(f => f.Length > 0)) is { Length: > 0 } f ? f : null;
+
+    /// <summary>Тумблер «вкл»: включает или выключает только этот профиль.</summary>
+    public bool IsOn
+    {
+        get => Info.Enabled;
+        set { if (value != Info.Enabled) _ = _owner.SetEnabledAsync(Id, value); }
+    }
+
+    /// <summary>«По умолчанию», игровые части стратегий каталога, «Свои» (если профиль пришёл со своими параметрами).</summary>
+    public IReadOnlyList<ChoiceItem> Choices { get; }
+    public ChoiceItem? Selected
+    {
+        get => _selected;
+        set
+        {
+            if (value is null || value == _selected) return;   // список ставит null при пересборке — не выбор человека
+            _selected = value;
+            Raise();
+            _ = _owner.SetStrategyAsync(Id, value.Key);
+        }
+    }
+    /// <summary>Выбор виден только при «Разных стратегиях»; без них профиль идёт «По умолчанию», выбор хранится.</summary>
+    public bool ShowChoice => _owner.Separate;
+    internal void SeparateChanged() => Raise(nameof(ShowChoice));
+
+    /// <summary>Меню «⋯» строки.</summary>
+    public IReadOnlyList<MenuEntry> Menu() =>
+    [
+        new(L.T("apps.profile.export"), () => _owner.ExportProfile(Id), Tip: L.T("apps.profile.export_tip")),
+        new(L.T("apps.profile.flowseal"), () => _owner.CopyProfile(Id), Tip: L.T("apps.profile.flowseal_tip")),
+        MenuEntry.Line,
+        new(L.T("apps.profile.remove"), () => _ = _owner.RemoveAsync(Id)),
+    ];
 }
 
 /// <summary>
@@ -208,6 +258,63 @@ public sealed class AppsViewModel : Observable
 
     public ObservableCollection<ProfileRow> Profiles { get; } = [];
     public bool HasProfiles => Profiles.Count > 0;
+    /// <summary>Хоть один профиль включён (для строки «Свои профили срабатывают первыми» у «Общего»).</summary>
+    public bool AnyOn => Profiles.Any(p => p.Info.Enabled);
+
+    bool _separate;
+    /// <summary>
+    /// «Разные стратегии» (у помощника, влияет на командную строку winws): включено — у строк выбор стратегии; выключено — все профили «По умолчанию»
+    /// (игровая часть стратегии ПК), выбор у строк скрыт, но хранится.
+    /// </summary>
+    public bool Separate
+    {
+        get => _separate;
+        set { if (value != _separate) _ = SetSeparateAsync(value); }
+    }
+    void SeparateIs(bool value)
+    {
+        if (!Set(ref _separate, value, nameof(Separate))) return;
+        foreach (var r in Profiles) r.SeparateChanged();
+    }
+
+    /// <summary>Пункты выбора стратегии профиля: «По умолчанию», игровые части стратегий (кроме совпадающей со стратегией ПК), «Свои» — если параметры есть.</summary>
+    internal IReadOnlyList<ChoiceItem> ChoicesFor(AppProfileInfo p)
+    {
+        var list = new List<ChoiceItem> { new(AppProfiles.Default, () => L.T("apps.profile.choice.default")) };
+        foreach (var v in _variantsRaw.Where(v => v.Index > 0 && v.StrategyId.Length > 0)) list.Add(new(v.StrategyId, () => L.Relocalize(v.Title)));
+        if (p.TcpOwn.Length > 0 || p.UdpOwn.Length > 0) list.Add(new(AppProfiles.Own, () => L.T("apps.profile.choice.own")));
+        // Выбранная стратегия совпала параметрами со стратегией ПК (или её убрали из списка вариантов) — показать её всё равно, а не подменять выбор.
+        var chosen = p.Strategy;
+        if (list.All(c => c.Key != chosen) && AppProfiles.IsValidChoice(chosen) && chosen != AppProfiles.Own) list.Add(new(chosen, () => chosen));
+        return list;
+    }
+
+    /// <summary>Тумблер строки: включить или выключить один профиль.</summary>
+    public async Task SetEnabledAsync(string id, bool on)
+    {
+        if (await Need() is not { } c) { await RefreshAsync(); return; }
+        await Guard(L.T(on ? "apps.busy.profile_on" : "apps.busy.profile_off"), () => c.AppProfileOptionsAsync(id, enabled: on));
+        await AfterChange();
+        await RefreshAsync();
+    }
+
+    /// <summary>Выбор стратегии у строки (только при «Разных стратегиях»).</summary>
+    public async Task SetStrategyAsync(string id, string strategy)
+    {
+        if (await Need() is not { } c) { await RefreshAsync(); return; }
+        await Guard(L.T("apps.busy.apply"), () => c.AppProfileOptionsAsync(id, strategy: strategy));
+        await AfterChange();
+        await RefreshAsync();
+    }
+
+    async Task SetSeparateAsync(bool on)
+    {
+        if (await Need() is not { } c) { Raise(nameof(Separate)); return; }
+        await Guard(L.T("apps.busy.apply"), () => c.AppProfilesSeparateAsync(on));
+        await AfterChange();
+        await RefreshAsync();
+        Raise(nameof(Separate));
+    }
 
     // ---------- запись игры: карточка под списком по кнопке «Записать игру…» ----------
 
@@ -241,14 +348,20 @@ public sealed class AppsViewModel : Observable
     public ICommand CancelAddCmd => _cancelAddCmd ??= new RelayCommand(() => AddClosed?.Invoke());
     ICommand? _cancelAddCmd;
 
-    /// <summary>Открыть «Новый профиль» с пустыми полями. Не добавили (отмена, крестик) — введённое не хранится.</summary>
+    /// <summary>
+    /// Открыть «Новый профиль» с пустыми полями. Не добавили (отмена, крестик) — введённое не хранится. «Вставить из буфера» со строкой профиля
+    /// (<c>dpishell-game:1:…</c>) закрывает окно и открывает «Импорт профиля» с этой строкой.
+    /// </summary>
     public void OpenAddProfile()
     {
         ClearImport();
         _added = false;
+        _toCode = null;
         AddProfileDialog(this);
         if (!_added) ClearImport();
+        if (_toCode is { } code) { _toCode = null; OpenImportCode(code); }
     }
+    string? _toCode;
 
     void ClearImport()
     {
@@ -269,6 +382,7 @@ public sealed class AppsViewModel : Observable
         {
             var info = await c.AppProfilesAsync();
             Variants = info.Variants;
+            SeparateIs(info.Separate);
             SetProfiles(info.Profiles);
         }
         catch (Exception e) when (e is HelperException or HelperUnavailableException) { SetProfiles([]); }
@@ -278,17 +392,9 @@ public sealed class AppsViewModel : Observable
     void SetProfiles(IReadOnlyList<AppProfileInfo> list)
     {
         Profiles.Clear();
-        foreach (var p in list)
-        {
-            var id = p.Id;
-            Profiles.Add(new(p)
-            {
-                RemoveCmd = RelayCommand.Async(() => RemoveAsync(id)),
-                NextCmd = RelayCommand.Async(() => OtherVariantAsync(id)),
-                CopyCmd = new RelayCommand(() => CopyProfile(id)),
-            });
-        }
+        foreach (var p in list) Profiles.Add(new(p, this));
         Raise(nameof(HasProfiles));
+        Raise(nameof(AnyOn));
         Raise(nameof(ShowOffHint));
     }
 
@@ -303,24 +409,6 @@ public sealed class AppsViewModel : Observable
         if (Step is AppsStep.Check or AppsStep.Done && _profileId == id) { Step = AppsStep.Idle; Status = ""; Detail = ""; }
         Say(L.T(removed ? "apps.profile.removed" : "apps.profile.gone"));
     }
-
-    /// <summary>Для опытных: тот же профиль с другим вариантом параметров.</summary>
-    async Task OtherVariantAsync(string id)
-    {
-        var row = Profiles.FirstOrDefault(p => p.Id == id);
-        if (row is null || Variants.Count < 2 || await Need() is not { } c) return;
-        int next = (row.Info.Variant + 1) % Variants.Count;
-        // Параметры из импорта (Variant = -1) нигде больше не хранятся: замена безвозвратна — сначала спросить.
-        if (row.Info.Variant < 0 && !Confirm(L.T("apps.profile.variant_replace_import", new { n = next + 1 }))) return;
-        if (!await Guard(L.T("apps.busy.apply"), () => c.AppProfileSetAsync(id, row.Info.Title, row.Info.TcpPorts, row.Info.UdpPorts, row.Info.Addresses, next, SignatureOf(row.Info)))) return;
-        await AfterChange();
-        await RefreshAsync();
-        Say(L.T("apps.profile.variant_changed", new { title = row.Title, variant = L.Relocalize(Variants[next].Title) }));
-    }
-
-    /// <summary>Сигнатура профиля как записана у помощника: «Другой вариант» и правка не должны её терять.</summary>
-    static ProfileSignature SignatureOf(AppProfileInfo p) =>
-        new(p.TcpPayloadLength, p.TcpPayloadHex, p.UdpPayloadLength, p.UdpPayloadHex, TcpFilter: p.TcpFilter, UdpFilter: p.UdpFilter);
 
     // ---------- импорт и экспорт (формат Flowseal: фильтр, параметры, подсети) ----------
 
@@ -373,11 +461,12 @@ public sealed class AppsViewModel : Observable
     void Refuse(string text) => ImportMessageIs(() => text, true);
     void Refuse(Func<string> build) => ImportMessageIs(build, true);
 
-    /// <summary>Вставить сразу все три куска из буфера (с заголовками, как их отдаёт «Скопировать»).</summary>
+    /// <summary>Вставить сразу все три куска из буфера (с заголовками, как их отдаёт «Скопировать для Flowseal»); строка профиля — в «Импорт профиля».</summary>
     void PasteAll()
     {
         var text = ReadText();
         if (string.IsNullOrWhiteSpace(text)) { Refuse(() => L.T("apps.import.clipboard_empty")); return; }
+        if (ProfileCode.Looks(text)) { _toCode = text.Trim(); AddClosed?.Invoke(); return; }
         if (ProfileExchange.SplitCombined(text) is not { } t) { Refuse(() => L.T("apps.import.no_marks")); return; }
         ImportFilter = t.Filter; ImportParams = t.Params; ImportSubnets = t.Subnets;
         ImportMessageIs(() => "", false);
@@ -404,22 +493,153 @@ public sealed class AppsViewModel : Observable
         catch (HelperException e) { Refuse(e.Message); return; }
         await AfterChange();
         await RefreshAsync();
+        var savedTitle = info?.Title;
         string Result()
         {
             var notes = ProfileExchange.Import(Title(), filter, pars, subnets, fakes).Profile?.Notes ?? [];
-            return L.T("apps.profile.saved_summary", new { title = info?.Title, summary = info is null ? "" : Summarize(info) })
-                + (notes.Count > 0 ? " " + string.Join(" ", notes) : "");
+            return Added(savedTitle, true) + (notes.Count > 0 ? " " + string.Join(" ", notes) : "");
         }
         ImportFilter = ImportParams = ImportSubnets = ImportTitle = "";
         ImportMessageIs(Result, false);
-        // В строку состояния — короткая готовая фраза (её окно переводит при смене языка); состав профиля и пометки импорта — под списком.
-        Say(L.T("apps.profile.saved", new { title = info?.Title }));
+        Say(L.T("apps.profile.saved", new { title = savedTitle }));
         _added = true;
         AddClosed?.Invoke();
     }
 
-    /// <summary>«Скопировать»: три куска профиля текстом — вставить другу или в сборку Flowseal.</summary>
-    void CopyProfile(string id)
+    /// <summary>Итог добавления одной строкой; со своими параметрами — что выбрано «Свои» и включены «Разные стратегии».</summary>
+    static string Added(string? title, bool own) => L.T(own ? "apps.profile.added_own" : "apps.profile.added", new { title });
+
+    // ---------- «Импорт…»: строка профиля dpishell-game:1:… с предпросмотром ----------
+
+    /// <summary>Окно «Импорт профиля» над этой моделью (в тестах — подмена): закрывается по <see cref="CodeClosed"/>.</summary>
+    public Action<AppsViewModel> ImportDialog { get; set; } = ProfileImportView.ShowDialog;
+    public event Action? CodeClosed;
+    public ICommand ImportCodeCmd => _importCodeCmd ??= new RelayCommand(() => OpenImportCode(""));
+    ICommand? _importCodeCmd;
+    public ICommand AddCodeCmd => _addCodeCmd ??= RelayCommand.Async(AddCodeAsync, () => _code is not null);
+    ICommand? _addCodeCmd;
+    public ICommand PasteCodeCmd => _pasteCodeCmd ??= new RelayCommand(() =>
+    {
+        var text = ReadText();
+        if (string.IsNullOrWhiteSpace(text)) { CodeErrorIs(() => L.T("apps.import.clipboard_empty")); return; }
+        CodeText = text.Trim();
+    });
+    ICommand? _pasteCodeCmd;
+    public ICommand CancelCodeCmd => _cancelCodeCmd ??= new RelayCommand(() => CodeClosed?.Invoke());
+    ICommand? _cancelCodeCmd;
+
+    /// <summary>Открыть «Импорт профиля» (со строкой из «Новый профиль» или пустым). Закрыли без добавления — строка не хранится.</summary>
+    public void OpenImportCode(string text)
+    {
+        CodeText = text;
+        ImportDialog(this);
+        CodeText = "";
+    }
+
+    string _codeText = "";
+    AppProfile? _code;
+    readonly LiveText _codePreview = new(), _codeError = new();
+    /// <summary>Строка профиля: разбирается сразу при вводе — ниже видно, что внутри, или почему не подходит.</summary>
+    public string CodeText
+    {
+        get => _codeText;
+        set { if (Set(ref _codeText, value ?? "")) ParseCode(); }
+    }
+    public string CodePreview => _codePreview.Value;
+    public bool HasCodePreview => _code is not null;
+    public string CodeError => _codeError.Value;
+    public bool HasCodeError => CodeError.Length > 0;
+
+    void ParseCode()
+    {
+        _code = null;
+        var text = _codeText;
+        var fakes = KnownFakes();
+        if (text.Trim().Length == 0) { _codePreview.Set(() => ""); CodeErrorIs(() => ""); }
+        else
+        {
+            try
+            {
+                _code = ProfileCode.Decode(text, fakes.Contains);
+                var p = _code;
+                _codePreview.Set(() => CodeSummary(p));
+                CodeErrorIs(() => "");
+            }
+            catch (StrategyFormatException)
+            {
+                _codePreview.Set(() => "");
+                // Причина строится заново на языке окна: разбор — чистая функция.
+                CodeErrorIs(() => { try { ProfileCode.Decode(text, fakes.Contains); return ""; } catch (StrategyFormatException e) { return e.Message; } });
+            }
+        }
+        Raise(nameof(CodePreview)); Raise(nameof(HasCodePreview));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    void CodeErrorIs(Func<string> build) { _codeError.Set(build); Raise(nameof(CodeError)); Raise(nameof(HasCodeError)); }
+
+    /// <summary>Что внутри строки: название, протоколы и порты, сигнатура или свой фильтр, параметры текстом, подсети — число и первые три.</summary>
+    public static string CodeSummary(AppProfile p)
+    {
+        var lines = new List<string> { p.Title };
+        var pars = new List<string>();
+        foreach (var tcp in new[] { true, false })
+        {
+            var ports = tcp ? p.TcpPorts : p.UdpPorts;
+            if (ports.Length == 0) continue;
+            string proto = tcp ? "TCP" : "UDP", filter = tcp ? p.TcpCustomFilter : p.UdpCustomFilter, hex = tcp ? p.TcpPayloadHex : p.UdpPayloadHex, desync = tcp ? p.TcpDesync : p.UdpDesync;
+            int len = tcp ? p.TcpPayloadLength : p.UdpPayloadLength;
+            var match = filter.Length > 0 ? L.T("apps.code.filter", new { filter })
+                : len > 0 || hex.Length > 0 ? L.T("apps.code.sig", new { what = string.Join(", ", new[] { len > 0 ? L.T("apps.code.len", new { n = len }) : "", hex.Length > 0 ? L.T("apps.code.hex", new { hex }) : "" }.Where(x => x.Length > 0)) })
+                : L.T("apps.code.by_addresses");
+            lines.Add($"{proto} {ports} · {match}");
+            pars.Add(proto + ": " + (desync.Length > 0 ? desync : L.T("apps.code.pc_strategy")));
+        }
+        // Своих параметров нет ни у одного протокола — одной строкой.
+        if (p.HasOwn) lines.AddRange(pars); else lines.Add(L.T("apps.code.params_pc"));
+        lines.Add(p.Addresses.Count == 0 ? L.T("apps.code.no_subnets")
+            : L.T("apps.code.subnets", new { n = p.Addresses.Count, first = string.Join(", ", p.Addresses.Take(3)) + (p.Addresses.Count > 3 ? ", …" : "") }));
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    /// <summary>«Добавить» в «Импорт профиля»: профиль уходит помощнику (он проверяет всё заново), окно закрывается; отказ — в окне.</summary>
+    public async Task AddCodeAsync()
+    {
+        if (_code is not { } p || await Need() is not { } c) return;
+        AppProfileInfo? info = null;
+        string? refused = null;
+        // Отказ помощника (его проверка строже окна или профилей уже восемь) — в окне импорта, как и ошибка разбора.
+        if (!await Guard(L.T("apps.busy.save_profile"), async () =>
+            {
+                try { info = await c.AppProfileSetAsync(null, p.Title, p.TcpPorts, p.UdpPorts, p.Addresses, 0, ProfileCode.ToSignature(p)); }
+                catch (HelperException e) { refused = e.Message; }
+            })) return;
+        if (refused is { } why) { CodeErrorIs(() => why); return; }
+        await AfterChange();
+        await RefreshAsync();
+        var title = info?.Title; var own = p.HasOwn;
+        ImportMessageIs(() => Added(title, own), false);
+        Say(L.T("apps.profile.saved", new { title }));
+        CodeClosed?.Invoke();
+    }
+
+    /// <summary>«Экспорт»: строка профиля в буфер — порты, сигнатура или фильтр, адреса и свои параметры; включён ли и выбранная стратегия не входят.</summary>
+    public void ExportProfile(string id)
+    {
+        if (Profiles.FirstOrDefault(p => p.Id == id)?.Info is not { } i) return;
+        var profile = new AppProfile
+        {
+            Id = i.Id, Title = i.Title, TcpPorts = i.TcpPorts, UdpPorts = i.UdpPorts, Addresses = [.. i.Addresses], TcpDesync = i.TcpOwn, UdpDesync = i.UdpOwn,
+            TcpPayloadLength = i.TcpPayloadLength, TcpPayloadHex = i.TcpPayloadHex, UdpPayloadLength = i.UdpPayloadLength, UdpPayloadHex = i.UdpPayloadHex,
+            TcpCustomFilter = i.TcpFilter, UdpCustomFilter = i.UdpFilter,
+        };
+        try { CopyText(ProfileCode.Encode(profile)); Say(L.T("apps.profile.exported", new { title = i.Title })); }
+        catch (StrategyFormatException e) { Say(e.Message); }
+        catch (System.Runtime.InteropServices.ExternalException) { Say(L.T("apps.import.copy_failed")); }
+    }
+
+    /// <summary>«Скопировать для Flowseal»: три куска профиля текстом (фильтр, параметры, подсети) — для сборки Flowseal; параметры — те, которыми профиль идёт сейчас.</summary>
+    public void CopyProfile(string id)
     {
         var row = Profiles.FirstOrDefault(p => p.Id == id);
         if (row is null) return;
@@ -736,7 +956,8 @@ public sealed class AppsViewModel : Observable
     /// <summary>Смена языка: таблица записанного собирается заново (причины «локальная сеть» и т. п.), строки шага — сами.</summary>
     protected override void OnLanguageChanged()
     {
-        _status.Retranslate(); _detail.Retranslate(); _recText.Retranslate();
+        _status.Retranslate(); _detail.Retranslate(); _recText.Retranslate(); _codePreview.Retranslate(); _codeError.Retranslate();
+        Raise(nameof(CodePreview)); Raise(nameof(CodeError));
         if (_variantsRaw.Count > 0)
         {
             var selected = SelectedVariant;

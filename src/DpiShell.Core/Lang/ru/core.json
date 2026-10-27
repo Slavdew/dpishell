@@ -43,7 +43,6 @@
   "core.profile.wide_net": "Подсеть «{addr}» слишком широкая для профиля программы.",
   "core.profile.tcp_params": "Параметры TCP: {problem}",
   "core.profile.udp_params": "Параметры UDP: {problem}",
-  "core.profile.not_set": "не заданы",
   "core.addr.user_n": "свой адрес №{n}",
   "core.addr.group_n": "группа №{n}",
   "core.upd.no_sources": "Не заданы адреса выпусков (update-sources.json).",
@@ -739,6 +738,13 @@
   "core.filter.need_compare": "Фильтр: после «{part}» (позиция {at}) нужно сравнение.",
   "core.filter.need_value": "Фильтр: после сравнения «{part}» (позиция {at}) нужно число или адрес.",
   "core.filter.no_proto_any": "Фильтр: не видно протокола (tcp или udp).",
-  "core.xchg.cutoff_added": "{proto}: добавлено --dpi-desync-cutoff=n2 — без сигнатуры фейки иначе шлются на каждый пакет.",
-  "core.xchg.filter.custom_note": "Фильтр принят как свой: на вашу ответственность, слишком широкий замедляет весь интернет на ПК."
+  "core.xchg.cutoff_added": "{proto}: добавлен --dpi-desync-cutoff=n2 (без сигнатуры фейк шёл бы на каждый пакет).",
+  "core.xchg.filter.custom_note": "Фильтр принят как свой: на вашу ответственность, слишком широкий замедляет весь интернет на ПК.",
+  "core.profile.bad_choice": "Неизвестный выбор стратегии профиля",
+  "core.shell.no_own": "У профиля нет своих параметров",
+  "core.xchg.is_game": "Это строка профиля игры — её вставляют в «Игры и программы» → «Импорт…»",
+  "core.game_code.too_long": "Профиль слишком большой, чтобы передать строкой",
+  "core.game_code.is_strategy": "Это строка стратегии — её вставляют на вкладке «Подбор»",
+  "core.game_code.not_code": "Это не строка профиля: она начинается с dpishell-game:1:",
+  "core.game_code.bad_field": "Поле «{name}» неверного вида"
 }
