@@ -724,7 +724,7 @@
             </Setter>
         </Style>
 
-        <!-- Список стратегий на главной: карточка с прокруткой внутри, выбранная строка — заливка и полоска акцента слева. -->
+        <!-- Списки (свои прокси и др.): карточка с прокруткой внутри, выбранная строка — заливка и полоска акцента слева. -->
         <Style TargetType="ListBox">
             <Setter Property="Foreground" Value="{DynamicResource Text}" />
             <Setter Property="Background" Value="{DynamicResource Surface}" />

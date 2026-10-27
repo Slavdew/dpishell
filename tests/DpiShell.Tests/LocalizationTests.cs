@@ -159,6 +159,9 @@ public sealed class LocalizationTests : IDisposable
     public void No_orphan_keys_in_ru()
     {
         var used = UsedKeys(mentions: true);
+        // Общие с роутером ключи (страница LuCI берёт их тексты отсюда, router/tools/lang-build.py): нужны, даже если окно их уже не показывает.
+        var shared = Path.Combine(Directory.GetParent(Repo.Data)!.FullName, "router", "luci-app-dpishell", "lang-src", "shared-keys.txt");
+        if (File.Exists(shared)) used.UnionWith(File.ReadAllLines(shared).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#')));
         var orphans = Ru.Strings.Keys.Where(k => !used.Contains(k) && !Composed(k)).ToList();
         Assert.True(orphans.Count == 0, "Ключи ru, которых нет в коде и разметке: " + string.Join(", ", orphans));
     }

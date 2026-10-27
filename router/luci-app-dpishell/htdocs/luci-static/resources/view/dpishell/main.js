@@ -30,7 +30,8 @@ return view.extend({
 
 	load: function() {
 		return api.lang().then(function() {
-			return Promise.all([api.safe('status'), api.safe('strategies')]);
+			// select_progress — только чтобы знать, есть ли отчёт для «Итогов подбора».
+			return Promise.all([api.safe('status'), api.safe('strategies'), api.safe('select_progress')]);
 		});
 	},
 
@@ -60,6 +61,8 @@ return view.extend({
 			toggle: api.btn(api.t('router.enable'), function() { return self.toggle(); }, 'cbi-button-positive dps-big'),
 			select: api.btn(api.t('router.select'), function() { return self.openSelect(); }, 'cbi-button-neutral'),
 			check: api.btn(api.t('home.check_now'), function() { return self.checkNow(); }, 'cbi-button-neutral'),
+			// «Итоги подбора» — последний отчёт (роутер хранит его до нового подбора), то же место, что на главной окна ПК.
+			report: api.btn(api.t('home.report'), function() { api.go('select'); }, 'cbi-button-neutral'),
 			err: E('div', { 'class': 'dps-error' }),
 			// Стратегия — не сразу: оптимизация для всей сети перезапускается (UX-аудит п. 50).
 			strategy: E('select', { 'class': 'cbi-input-select', 'style': 'width:100%;max-width:36em', 'change': function(ev) { self.pend(ev.target.value); } }),
@@ -106,7 +109,7 @@ return view.extend({
 				this.el.confirm,
 				this.el.warnings,
 				this.el.lastCheck,
-				E('div', { 'class': 'dps-actions' }, [this.el.check, this.el.select]),
+				E('div', { 'class': 'dps-actions' }, [this.el.check, this.el.select, this.el.report]),
 				this.el.err,
 				this.el.ts
 			]),
@@ -128,6 +131,7 @@ return view.extend({
 			])
 		]);
 
+		this.setReport(data[2]);
 		this.fillStrategies();
 		this.fillSchedule();
 		this.update();
@@ -166,13 +170,21 @@ return view.extend({
 			self.progress = null;
 			self.update();
 			if (wasSelecting)
-				return api.safe('strategies').then(function(st) {
-					if (!st.__error) {
-						self.strategies = st;
+				return Promise.all([api.safe('strategies'), api.safe('select_progress', { since: 1000000 })]).then(function(d) {
+					if (!d[0].__error) {
+						self.strategies = d[0];
 						self.fillStrategies();
 					}
+					self.setReport(d[1]);
 				});
 		});
+	},
+
+	// «Итоги подбора»: отчёта нет (подбора не было или идёт новый) — кнопка серая, в подсказке почему (не скрыта).
+	setReport: function(p) {
+		var has = !!(p && !p.__error && !p.running && p.finished_at);
+		this.el.report.disabled = !has;
+		this.el.report.title = has ? api.t('web.main.report_tip', { time: api.time(p.finished_at) }) : api.t('web.main.report_none');
 	},
 
 	// Состояние для панели — как на главной окна ПК: kind — ok | off | err | busy (цвет точки).

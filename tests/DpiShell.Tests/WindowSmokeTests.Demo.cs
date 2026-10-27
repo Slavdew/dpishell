@@ -66,12 +66,10 @@ public sealed partial class WindowSmokeTests
                         Snap(w, Path.Combine(dir, $"{theme}-{name}.png"));
                     }
 
-                    // Главная: список стратегий (новая главная — «Подробнее» проверки на плитке, отдельного снимка не нужно).
+                    // Главная: стратегия ПК — кнопкой «▾» в строке «Этот ПК» (списка под карточкой больше нет).
                     vm.GoTo(Pages.Home);
-                    vm.ShowStrategies = true;
                     Pump();
                     Snap(w, Path.Combine(dir, $"{theme}-home-strategies.png"));
-                    vm.ShowStrategies = false;
 
                     // Роутер подключён: FakeRouter в процессе (loopback), пароль не сохраняется на диск вне временной папки.
                     using var fake = new FakeRouter().As020().AsR8();

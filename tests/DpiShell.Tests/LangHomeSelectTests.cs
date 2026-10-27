@@ -132,14 +132,11 @@ public sealed class LangHomeSelectTests : IDisposable
             Pump();
             shot(w, $"select-pasted-{lang}");
 
-            // Главная: список стратегий, у вставленной раскрыты параметры.
-            SetProp(vm, "ShowStrategies", true);
+            // Главная: стратегия ПК — кнопкой «▾», вставленная — в её меню.
             vm.GoTo(Pages.Home);
             Pump();
             var own = vm.StrategyChoices.First(c => c.Personal);
-            vm.StrategyChoices.Move(vm.StrategyChoices.IndexOf(own), 0);
-            own.ShowParams = true;
-            Pump();
+            if (!vm.PcStrategyMenu().Any(m => m.Header.Trim() == own.Title)) throw new Exception("Вставленной нет в меню стратегии ПК");
             shot(w, $"home-strategies-{lang}");
             vm.GoTo(Pages.Select);
             Pump();
