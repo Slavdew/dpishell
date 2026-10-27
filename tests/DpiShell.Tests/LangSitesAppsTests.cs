@@ -126,6 +126,9 @@ public sealed class LangSitesAppsTests : IDisposable
             Button? Btn(string key) => Find<Button>(tabs, b => b.IsVisible && b.Content as string == L.T(key));
             NoRawKeys(tabs, "Игры (покой)");
             Shot("apps-idle");
+            Btn("apps.profiles.record")!.Command.Execute(null);   // карточка записи — по «Записать игру…»
+            Pump();
+            NoRawKeys(tabs, "Игры (карточка записи)");
             Btn("apps.start")!.Command.Execute(null);
             PumpUntil(() => vm.Apps.IsRecording, "запись");
             procs.List.Add(new ProcInfo(2000, 4, "game.exe"));

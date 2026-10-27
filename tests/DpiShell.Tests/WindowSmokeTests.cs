@@ -1841,20 +1841,26 @@ public sealed partial class WindowSmokeTests
                 bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
                 Button? Btn(string content) => Find<Button>(tabs, b => b.IsVisible && b.Content as string == content);
 
-                // Раскладка: сверху «Игры и программы» и «Настроить под игру», ниже игровой режим, IP-списки — в свёрнутом «Дополнительно».
-                if (!Visible(t => t.Text == "Игры и программы") || !Visible(t => t.Text == "Настроить под игру")) throw new Exception("Нет заголовков вкладки");
+                // Раскладка: «Игры и программы», игровой режим, профили с «Добавить профиль…» и «Записать игру…»; IP-списки — в свёрнутом «Дополнительно».
+                if (!Visible(t => t.Text == "Игры и программы") || !Visible(t => t.Text == "Профили программ")) throw new Exception("Нет заголовков вкладки");
                 if (!Visible(t => t.Text == "Игровой режим")) throw new Exception("Нет игрового режима");
                 var more = Find<Expander>(tabs, e => e.Header as string == "Дополнительно: IP-списки и свои подсети")
                     ?? throw new Exception("Нет «Дополнительно»");
                 if (more.IsExpanded) throw new Exception("«Дополнительно» должно быть свёрнуто");
                 if (Visible(t => t.Text == "Свои подсети")) throw new Exception("Свои подсети видны в свёрнутом блоке");
-                if (!Visible(t => t.Text.Contains("Vanguard"))) throw new Exception("Предупреждение про античиты не видно");
+                // Плашка про античиты — у выбора драйвера в карточке записи, а не на вкладке; карточка — по «Записать игру…».
+                if (Visible(t => t.Text.Contains("Vanguard"))) throw new Exception("Предупреждение про античиты висит на вкладке");
+                if (Btn("Начать") is not null) throw new Exception("«Начать» видна до «Записать игру…»");
+                (Btn("Записать игру…") ?? throw new Exception("Нет «Записать игру…»")).Command.Execute(null);
+                Pump();
+                if (!Visible(t => t.Text.Contains("Vanguard"))) throw new Exception("Предупреждение про античиты не видно в карточке записи");
                 if (Btn("Начать") is null) throw new Exception("Нет кнопки «Начать»");
-                // UX-аудит 7, п. 15: плашка про античиты — под карточкой «Настроить под игру», а не над ней; пояснение у галки UDP — две строки, детали — под «Подробнее».
+                // Пояснение у галки UDP — две строки, детали — под «Подробнее»; плашка про античиты — под галкой, над «Начать».
                 {
                     double Y(FrameworkElement e) => e.TranslatePoint(new Point(0, 0), tabs).Y;
                     var anti = Find<TextBlock>(tabs, t => t.IsVisible && t.Text.Contains("Vanguard"))!;
-                    if (Y(anti) <= Y(Btn("Начать")!)) throw new Exception("Плашка про античиты выше кнопки «Начать» — она должна быть под карточкой");
+                    var udp = Find<CheckBox>(tabs, c => c.IsVisible && c.Content as string == "Учитывать UDP-соединения (голосовой чат, игровые серверы)") ?? throw new Exception("Нет галки UDP");
+                    if (Y(anti) <= Y(udp) || Y(anti) >= Y(Btn("Начать")!)) throw new Exception("Плашка про античиты не между галкой UDP и «Начать»");
                     if (!Visible(t => t.Text.StartsWith("Нужен драйвер WinDivert.") && t.Text.Length < 130)) throw new Exception("Нет короткого пояснения у галки UDP");
                     if (Visible(t => t.Text == L.T("apps.rec.udp_more"))) throw new Exception("Детали про драйвер видны без «Подробнее»");
                     if (Find<Expander>(tabs, e => e.IsVisible && e.Header as string == "Подробнее" && e.Content is TextBlock tb && tb.Text == L.T("apps.rec.udp_more")) is null)
@@ -1890,7 +1896,7 @@ public sealed partial class WindowSmokeTests
                     foreach (var b in new[] { "Да, заработало", "Нет", "Стало хуже" })
                         if (Btn(b) is null) throw new Exception("Нет кнопки «" + b + "»");
                     if (!Visible(t => t.Text == "Профили программ")) throw new Exception("Профиль не в списке");
-                    if (Btn("Вернуть как было") is null) throw new Exception("Нет «Вернуть как было»");
+                    if (Btn("Удалить") is null) throw new Exception("Нет «Удалить» у профиля");
                     if (!Visible(t => t.Text == L.T("apps.off_hint"))) throw new Exception("Нет подсказки, что оптимизация выключена");
                     if (Btn("Включить оптимизацию") is null) throw new Exception("Нет «Включить оптимизацию» рядом с подсказкой");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-simple-check.png"));

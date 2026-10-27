@@ -322,4 +322,82 @@ public sealed class AppsViewModelTests
         foreach (var s in new[] { AppsViewModel.AntiCheat, InfoTexts.Get(InfoTexts.Apps), InfoTexts.Get(InfoTexts.Debug) })
             Assert.DoesNotContain("обход", s, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>«Добавить профиль…»: окно открывается с пустыми полями; отказ остаётся в окне (оно не закрывается), отмена забывает введённое,
+    /// успех закрывает окно, добавляет профиль и даёт итог под списком и в строке состояния.</summary>
+    [Fact]
+    public async Task AddProfile_Dialog_ErrorStays_CancelForgets_SuccessCloses()
+    {
+        var (f, vm, said) = await Make_();
+        await using var _ = f;
+        await vm.RefreshAsync();
+        int closes = 0;
+        vm.AddClosed += () => closes++;
+        vm.ImportFilter = "старое";   // от прошлого раза ничего не остаётся
+
+        vm.AddProfileDialog = a =>
+        {
+            Assert.Equal("", a.ImportFilter);
+            Assert.False(Can(a.ImportCmd));
+            a.ImportTitle = "Сломанный";
+            a.ImportFilter = "outbound and tcp.DstPort = 1 and tcp.Syn = 1";
+            a.ImportParams = "--filter-tcp=1 --dpi-desync=fake";
+            a.ImportAsync().GetAwaiter().GetResult();
+            Assert.True(a.ShowImportError);
+            Assert.False(a.ShowImportResult);
+            Assert.Equal(0, closes);
+            a.CancelAddCmd.Execute(null);
+            Assert.Equal(1, closes);
+        };
+        vm.OpenAddProfile();
+        Assert.Equal("", vm.ImportFilter);
+        Assert.Equal("", vm.ImportTitle);
+        Assert.False(vm.HasImportMessage);
+        Assert.Empty(vm.Profiles);
+
+        vm.AddProfileDialog = a =>
+        {
+            a.ImportTitle = "Моя игра";
+            a.ImportParams = "--filter-udp=27015 --dpi-desync=fake";
+            a.ImportSubnets = "203.0.113.0/24";
+            a.ImportAsync().GetAwaiter().GetResult();
+        };
+        vm.OpenAddProfile();
+        Assert.Equal(2, closes);
+        Assert.Equal("Моя игра", Assert.Single(vm.Profiles).Title);
+        Assert.True(vm.ShowImportResult);
+        Assert.StartsWith("Профиль «Моя игра» сохранён:", vm.ImportMessage);
+        Assert.Contains("Профиль «Моя игра» сохранён.", said);
+        Assert.Equal("", vm.ImportParams);
+    }
+
+    /// <summary>«Записать игру…» открывает карточку записи; во время записи она открыта; «Закрыть» после итога — снова «Начать».</summary>
+    [Fact]
+    public async Task RecordCard_OpensOnRequest_StaysOpenWhileRecording_CloseResets()
+    {
+        var (f, vm, _) = await Make_();
+        await using var _ = f;
+        int requested = 0;
+        vm.RecordRequested += () => requested++;
+        Assert.False(vm.RecordOpen);
+        vm.RecordCmd.Execute(null);
+        Assert.True(vm.RecordOpen);
+        Assert.Equal(1, requested);
+        Assert.True(Can(vm.CloseRecordCmd));
+        vm.CloseRecordCmd.Execute(null);
+        Assert.False(vm.RecordOpen);
+
+        await Run(vm.StartCmd);
+        await Until(() => vm.IsRecording, "запись");
+        Assert.True(vm.RecordOpen);
+        Assert.False(Can(vm.CloseRecordCmd));
+        await Run(vm.FinishCmd);
+        await Until(() => vm.IsCheck, "вопрос");
+        await Run(vm.YesCmd);
+        Assert.True(vm.IsDone);
+        vm.CloseRecordCmd.Execute(null);
+        Assert.False(vm.RecordOpen);
+        Assert.True(vm.IsIdle);
+        Assert.False(vm.HasStatus);
+    }
 }

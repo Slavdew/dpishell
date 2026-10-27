@@ -45,7 +45,7 @@ public sealed partial class MainViewModel : Observable
     public HelperLink Helper { get; }
     public WindowSettings Settings { get; }
     public RouterViewModel Router { get; }
-    /// <summary>Подключения программ: «Настроить под игру» и «Отладка подключений» (ТЗ 13).</summary>
+    /// <summary>Подключения программ: профили, «Записать игру…» и «Отладка подключений» (ТЗ 13).</summary>
     public AppsViewModel Apps { get; }
     /// <summary>Игровой режим и IP-списки — на вкладке «Игры и программы», в «Дополнительно» (09-features-spec §1–2).</summary>
     public NetViewModel Net { get; }

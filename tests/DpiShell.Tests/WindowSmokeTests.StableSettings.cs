@@ -172,6 +172,8 @@ public sealed partial class WindowSmokeTests
             if (!VisibleText(tabs, t => t.Text == L.T("apps.debug.section"))) throw new Exception("Нет заголовка «Отладка подключений (для опытных)»");
             if (Btn(L.T("apps.debug.record")) is not null) throw new Exception("Содержимое свёрнутого раздела видно");
             if (Btn(L.T("apps.profile.other_variant")) is null) throw new Exception("Нет «Другие параметры» у профиля");
+            (Btn(L.T("apps.profiles.record")) ?? throw new Exception("Нет «Записать игру…»")).Command.Execute(null);   // ссылка — в карточке записи
+            Pump();
             (Btn(L.T("apps.more")) ?? throw new Exception("Нет «Отладка подключений →»")).Command.Execute(null);
             Pump();
             if (!debug.IsExpanded || Btn(L.T("apps.debug.record")) is null) throw new Exception("«Отладка подключений →» не раскрыла раздел");

@@ -73,9 +73,10 @@ public sealed class ProfileRow(AppProfileInfo info) : Observable
 }
 
 /// <summary>
-/// «Игры и программы» (ТЗ 13, решения владельца 6–8): простой режим «Настроить под игру» — Начать → игра → Готово, всё само;
+/// «Игры и программы» (ТЗ 13, решения владельца 6–8): список профилей; «Добавить профиль…» — окно «Новый профиль» (формат Flowseal);
+/// «Записать игру…» — Начать → игра → Готово, всё само;
 /// «Отладка подключений» для опытных — список записанного с галочками, ручной выбор, сохранение профиля. Запись и применение —
-/// через помощника (команды rec_*, app_profile_*); окно ничего не меняет само. Действие обратимо: «Вернуть как было» удаляет профиль.
+/// через помощника (команды rec_*, app_profile_*); окно ничего не меняет само. Действие обратимо: «Удалить» у профиля.
 /// </summary>
 public sealed class AppsViewModel : Observable
 {
@@ -94,7 +95,7 @@ public sealed class AppsViewModel : Observable
     bool _debugOpen;
     /// <summary>
     /// Раздел «Отладка подключений (для опытных)» внизу вкладки раскрыт. Раздел виден всегда (UX-аудит 8, §3 №9), свёрнут по умолчанию;
-    /// «Отладка подключений →» у «Настроить под игру» раскрывает его. До перезапуска окна.
+    /// «Отладка подключений →» в карточке записи раскрывает его. До перезапуска окна.
     /// </summary>
     public bool DebugOpen { get => _debugOpen; set => Set(ref _debugOpen, value); }
 
@@ -127,6 +128,7 @@ public sealed class AppsViewModel : Observable
         private set
         {
             if (!Set(ref _step, value)) return;
+            if (value != AppsStep.Idle) RecordOpen = true;
             foreach (var p in new[] { nameof(IsIdle), nameof(IsRecording), nameof(IsWorking), nameof(IsCheck), nameof(IsDone), nameof(IsFailed), nameof(ShowStart), nameof(ShowMore), nameof(ShowOffHint), nameof(ShowIntro), nameof(StartText), nameof(ShowEnable), nameof(ShowEnablePrimary), nameof(ShowEnablePlain), nameof(ShowStartPrimary), nameof(ShowStartPlain) }) Raise(p);
             CommandManager.InvalidateRequerySuggested();
         }
@@ -188,15 +190,16 @@ public sealed class AppsViewModel : Observable
     ICommand? _enableCmd;
 
     public static string Summarize(AppProfileInfo p) =>
-        Summarize(p.TcpPorts, p.UdpPorts, p.Addresses.Count, p.TcpPayloadLength > 0 || p.TcpPayloadHex.Length > 0 || p.TcpFilter.Length > 0, p.UdpPayloadLength > 0 || p.UdpPayloadHex.Length > 0 || p.UdpFilter.Length > 0);
+        Summarize(p.TcpPorts, p.UdpPorts, p.Addresses.Count, p.TcpPayloadLength > 0 || p.TcpPayloadHex.Length > 0 || p.TcpFilter.Length > 0, p.UdpPayloadLength > 0 || p.UdpPayloadHex.Length > 0 || p.UdpFilter.Length > 0,
+            p.TcpFilter.Length > 0, p.UdpFilter.Length > 0);
 
-    /// <summary>«TCP … · UDP … · адресов: N»; у протокола с сигнатурой — пометка, без адресов — без «адресов: 0».</summary>
-    static string Summarize(string tcp, string udp, int addresses, bool tcpSig = false, bool udpSig = false)
+    /// <summary>«TCP … · UDP … · адресов: N»; у протокола с сигнатурой или своим фильтром — пометка, без адресов — без «адресов: 0».</summary>
+    static string Summarize(string tcp, string udp, int addresses, bool tcpSig = false, bool udpSig = false, bool tcpFilter = false, bool udpFilter = false)
     {
         var parts = new List<string>();
-        var sig = " (" + L.T("apps.profile.sig_mark") + ")";
-        if (tcp.Length > 0) parts.Add("TCP " + tcp + (tcpSig ? sig : ""));
-        if (udp.Length > 0) parts.Add("UDP " + udp + (udpSig ? sig : ""));
+        static string Mark(bool sig, bool filter) => filter ? " (" + L.T("apps.profile.filter_mark") + ")" : sig ? " (" + L.T("apps.profile.sig_mark") + ")" : "";
+        if (tcp.Length > 0) parts.Add("TCP " + tcp + Mark(tcpSig, tcpFilter));
+        if (udp.Length > 0) parts.Add("UDP " + udp + Mark(udpSig, udpFilter));
         if (addresses > 0 || !(tcpSig || udpSig)) parts.Add(L.T("apps.profile.addresses", new { n = addresses }));
         return string.Join(" · ", parts);
     }
@@ -205,6 +208,53 @@ public sealed class AppsViewModel : Observable
 
     public ObservableCollection<ProfileRow> Profiles { get; } = [];
     public bool HasProfiles => Profiles.Count > 0;
+
+    // ---------- запись игры: карточка под списком по кнопке «Записать игру…» ----------
+
+    bool _recordOpen;
+    /// <summary>
+    /// Карточка записи соединений игры открыта. Запись — шаг на вкладке, а не модальное окно: она длится минуты, пока человек в игре,
+    /// и ведёт через несколько шагов («Готово» → «Заработало?» → «Включить оптимизацию»). Пока шаг не «Начать» — карточка открыта.
+    /// </summary>
+    public bool RecordOpen { get => _recordOpen; set => Set(ref _recordOpen, value); }
+    /// <summary>«Записать игру…» — открыть карточку; окно прокручивает к ней.</summary>
+    public ICommand RecordCmd => _recordCmd ??= new RelayCommand(() => { RecordOpen = true; RecordRequested?.Invoke(); });
+    ICommand? _recordCmd;
+    public event Action? RecordRequested;
+    /// <summary>«Закрыть» карточку записи: итог прошлой записи не хранится — следующее открытие начинается с «Начать».</summary>
+    public ICommand CloseRecordCmd => _closeRecordCmd ??= new RelayCommand(() =>
+    {
+        if (Step is AppsStep.Done or AppsStep.Failed) { Step = AppsStep.Idle; Status = ""; Detail = ""; }
+        RecordOpen = false;
+    }, () => ShowStart);
+    ICommand? _closeRecordCmd;
+
+    // ---------- окно «Новый профиль» ----------
+
+    /// <summary>Окно «Новый профиль» над этой моделью (в тестах — подмена): закрывается по <see cref="AddClosed"/>.</summary>
+    public Action<AppsViewModel> AddProfileDialog { get; set; } = ProfileAddView.ShowDialog;
+    /// <summary>Окну «Новый профиль» — закрыться: профиль добавлен или «Отмена».</summary>
+    public event Action? AddClosed;
+    bool _added;
+    public ICommand AddProfileCmd => _addCmd ??= new RelayCommand(OpenAddProfile);
+    ICommand? _addCmd;
+    public ICommand CancelAddCmd => _cancelAddCmd ??= new RelayCommand(() => AddClosed?.Invoke());
+    ICommand? _cancelAddCmd;
+
+    /// <summary>Открыть «Новый профиль» с пустыми полями. Не добавили (отмена, крестик) — введённое не хранится.</summary>
+    public void OpenAddProfile()
+    {
+        ClearImport();
+        _added = false;
+        AddProfileDialog(this);
+        if (!_added) ClearImport();
+    }
+
+    void ClearImport()
+    {
+        ImportFilter = ImportParams = ImportSubnets = ImportTitle = "";
+        ImportMessageIs(() => "", false);
+    }
 
     // Варианты приходят от помощника (названия — «как у «general (ALT)»»): хранятся как есть, показываются на языке окна.
     IReadOnlyList<ProfileVariant> _variantsRaw = [], _variants = [];
@@ -242,7 +292,7 @@ public sealed class AppsViewModel : Observable
         Raise(nameof(ShowOffHint));
     }
 
-    /// <summary>«Вернуть как было»: профиль удаляется, оптимизация перезапускается без него.</summary>
+    /// <summary>«Удалить»: профиль удаляется, оптимизация перезапускается без него.</summary>
     public async Task RemoveAsync(string id)
     {
         if (await Need() is not { } c) return;
@@ -282,10 +332,12 @@ public sealed class AppsViewModel : Observable
 
     string _impTitle = "", _impFilter = "", _impParams = "", _impSubnets = "";
     readonly LiveText _impMsg = new();
-    bool _impOpen, _impFailed;
+    bool _impFailed;
     public string ImportTitle { get => _impTitle; set => Set(ref _impTitle, value); }
-    public string ImportFilter { get => _impFilter; set { if (Set(ref _impFilter, value)) Raise(nameof(CanImport)); } }
-    public string ImportParams { get => _impParams; set { if (Set(ref _impParams, value)) Raise(nameof(CanImport)); } }
+    public string ImportFilter { get => _impFilter; set { if (Set(ref _impFilter, value)) ImportInputChanged(); } }
+    public string ImportParams { get => _impParams; set { if (Set(ref _impParams, value)) ImportInputChanged(); } }
+    /// <summary>«Добавить» доступна, как только есть фильтр или параметры, — и после «Вставить из буфера», без ввода с клавиатуры.</summary>
+    void ImportInputChanged() { Raise(nameof(CanImport)); CommandManager.InvalidateRequerySuggested(); }
     public string ImportSubnets { get => _impSubnets; set => Set(ref _impSubnets, value); }
     /// <summary>Итог или отказ последнего импорта; хранится правилом сборки — после смены языка читается заново.</summary>
     public string ImportMessage => _impMsg.Value;
@@ -296,10 +348,15 @@ public sealed class AppsViewModel : Observable
         _impMsg.Set(build);
         Raise(nameof(ImportMessage));
         Raise(nameof(HasImportMessage));
+        Raise(nameof(ShowImportError));
+        Raise(nameof(ShowImportResult));
     }
+    /// <summary>Отказ — текстом в окне «Новый профиль», окно не закрывается.</summary>
+    public bool ShowImportError => ImportFailed && HasImportMessage;
+    /// <summary>Итог добавления (с пометками импорта) — под списком профилей.</summary>
+    public bool ShowImportResult => !ImportFailed && HasImportMessage;
     /// <summary>Последнее сообщение — отказ, а не итог.</summary>
     public bool ImportFailed { get => _impFailed; private set => Set(ref _impFailed, value); }
-    public bool ImportOpen { get => _impOpen; set => Set(ref _impOpen, value); }
     public bool CanImport => ImportParams.Trim().Length > 0 || ImportFilter.Trim().Length > 0;
 
     public ICommand ImportCmd => _importCmd ??= RelayCommand.Async(ImportAsync, () => CanImport);
@@ -347,13 +404,18 @@ public sealed class AppsViewModel : Observable
         catch (HelperException e) { Refuse(e.Message); return; }
         await AfterChange();
         await RefreshAsync();
-        ImportMessageIs(() =>
+        string Result()
         {
             var notes = ProfileExchange.Import(Title(), filter, pars, subnets, fakes).Profile?.Notes ?? [];
             return L.T("apps.profile.saved_summary", new { title = info?.Title, summary = info is null ? "" : Summarize(info) })
                 + (notes.Count > 0 ? " " + string.Join(" ", notes) : "");
-        }, false);
+        }
         ImportFilter = ImportParams = ImportSubnets = ImportTitle = "";
+        ImportMessageIs(Result, false);
+        // В строку состояния — короткая готовая фраза (её окно переводит при смене языка); состав профиля и пометки импорта — под списком.
+        Say(L.T("apps.profile.saved", new { title = info?.Title }));
+        _added = true;
+        AddClosed?.Invoke();
     }
 
     /// <summary>«Скопировать»: три куска профиля текстом — вставить другу или в сборку Flowseal.</summary>
@@ -465,7 +527,7 @@ public sealed class AppsViewModel : Observable
 
     void Yes()
     {
-        // Одна фраза вместо итога и жёлтой плашки; «Вернуть как было» — в списке профилей ниже.
+        // Одна фраза вместо итога и жёлтой плашки; «Удалить» — в списке профилей выше.
         var savedTitle = _draft?.Title; var savedOff = OptimizationOff;
         string Saved() => L.T(savedOff ? "apps.profile.saved_off" : "apps.profile.saved", new { title = savedTitle ?? L.T("apps.profile.default_title") });
         var saved = Saved();
