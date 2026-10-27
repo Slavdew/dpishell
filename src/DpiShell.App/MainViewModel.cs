@@ -200,6 +200,8 @@ public sealed partial class MainViewModel : Observable
         Net.Notify += s => Notify?.Invoke(s);
         Apps = new AppsViewModel(helper)
         {
+            KnownFakes = () => ProfileExchange.KnownFakes(_shell.Catalog.Strategies),
+            ExpertTools = Settings.ExpertTools,
             OptimizationRunning = () => IsRunning,
             // «Включить» ведёт на Главную; с «Игр» человек остаётся на месте — он пришёл настроить игру, а не смотреть итог.
             EnableOptimization = async () =>

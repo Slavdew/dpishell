@@ -33,6 +33,8 @@ public sealed class WindowSettings
     public bool JointWanted { get; set; }
     /// <summary>«Показывать роутер»: по умолчанию да. Снята — роутер не ищется и не показывается, окно как при ненайденном роутере.</summary>
     public bool ShowRouter { get; set; } = true;
+    /// <summary>«Показывать инструменты для опытных» (Настройки): в «Играх и программах» появляется свой фильтр WinDivert. По умолчанию выключено.</summary>
+    public bool ExpertTools { get; set; }
     /// <summary>Меню слева свёрнуто до значков (по умолчанию раскрыто).</summary>
     public bool NavCollapsed { get; set; }
     /// <summary>

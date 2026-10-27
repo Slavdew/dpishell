@@ -240,7 +240,7 @@ public sealed class AppProfileTests
     [Fact]
     public void BuildOptions_FromState_TakesOnlyValidProfiles_AtMostLimit()
     {
-        var st = new AppState();
+        var st = new AppState { GameMode = "profiles" };
         st.AppProfiles.Add(Profile());
         st.AppProfiles.Add(Profile(p => { p.Id = "p11111111"; p.UdpDesync = "--debug"; }));
         var o = BuildOptions.From(st, DateTime.UtcNow);

@@ -362,7 +362,7 @@ public sealed class HelperServer : IAsyncDisposable
             case "all_addresses_start": await Task.Run(b.StartAllAddresses, ct); return null;
             case "all_addresses_stop": return new { stopped = await Task.Run(b.StopAllAddresses, ct) };
             case "game_mode":
-                return await Task.Run(() => b.SetGameModeAsync(c.Str("mode") == "all" ? GameMode.TcpUdp : GameMode.Off, log, ct), ct);
+                return await Task.Run(() => b.SetGameModeAsync(c.Str("mode") switch { "all" => GameMode.TcpUdp, "profiles" => GameMode.Profiles, _ => GameMode.Off }, log, ct), ct);
             case "ipset_update":
                 return c.Str("from") == "manifest"
                     ? await Task.Run(() => b.UpdateIpsetFromManifestAsync(c.Bool("confirmed"), log, ct), ct)
@@ -410,7 +410,8 @@ public sealed class HelperServer : IAsyncDisposable
             case "rec_stop": return await Task.Run(b.RecStop, ct);
             case "app_profiles": return await Task.Run(b.AppProfilesInfo, ct);
             case "app_profile_set":
-                return await Task.Run(() => b.AppProfileSet(c.Str("id"), c.Str("title")!, c.Str("tcp"), c.Str("udp"), c.List("addresses")!, c.Int("variant")), ct);
+                return await Task.Run(() => b.AppProfileSet(c.Str("id"), c.Str("title")!, c.Str("tcp"), c.Str("udp"), c.List("addresses") ?? [], c.Int("variant"),
+                    new ProfileSignature(c.Int("tcpLen"), c.Str("tcpHex") ?? "", c.Int("udpLen"), c.Str("udpHex") ?? "", c.Str("tcpDesync"), c.Str("udpDesync"), c.Str("tcpFilter") ?? "", c.Str("udpFilter") ?? "")), ct);
             case "changes_list": return await Task.Run(b.ChangesList, ct);
             case "changes_undo_all": return await Task.Run(() => b.ChangesUndoAllAsync(ct), ct);
             case "changes_undo": return await Task.Run(() => b.ChangesUndoAsync(c.Str("id")!, ct), ct);

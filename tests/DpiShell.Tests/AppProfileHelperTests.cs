@@ -49,7 +49,6 @@ public sealed class AppProfileHelperTests
     public void Recording_abuse_rejected(string json, string part) => Assert.Contains(part, Rejected(json), StringComparison.OrdinalIgnoreCase);
 
     [Theory]
-    [InlineData("""{"id":1,"cmd":"app_profile_set","args":{"title":"x","tcp":"443","variant":0}}""", "обязательного")]                              // нет addresses
     [InlineData("""{"id":1,"cmd":"app_profile_set","args":{"title":"x","addresses":["203.0.113.5"],"variant":0}}""", "порты")]                      // нет портов
     [InlineData("""{"id":1,"cmd":"app_profile_set","args":{"title":"x","tcp":"443","addresses":["203.0.113.5"]}}""", "обязательного")]            // нет variant
     [InlineData("""{"id":1,"cmd":"app_profile_set","args":{"title":"x","tcp":"443","addresses":["203.0.113.5"],"variant":8}}""", "целое число")]   // за пределом

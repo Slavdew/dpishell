@@ -45,6 +45,12 @@ public enum ArgKind
     Int,
     /// <summary>Порты «443,27015-27030» — цифры, запятые, дефис; разбор и предел — <see cref="AppProfiles.NormalizePorts"/>.</summary>
     Ports,
+    /// <summary>Начало нагрузки пакета: hex строчными, до 16 байт (API 1.22).</summary>
+    PayloadHex,
+    /// <summary>Свой фильтр WinDivert профиля (API 1.22): одна строка до <see cref="CustomFilter.MaxLength"/> знаков без управляющих; разбор по белому списку и обязательные условия — <see cref="CustomFilter.Problem"/> (в <see cref="AppProfiles.Problem"/>).</summary>
+    WdFilter,
+    /// <summary>Параметры десинхронизации профиля одной строкой до <see cref="WinwsArgs.MaxRoleLength"/> знаков; белый список — в <see cref="AppProfiles.Problem"/>.</summary>
+    Desync,
     /// <summary>Номер профиля программы: p и 8 шестнадцатеричных цифр.</summary>
     ProfileId,
     /// <summary>Номер записи журнала изменений: 12 шестнадцатеричных цифр.</summary>
@@ -132,7 +138,7 @@ public static partial class HelperCommands
         new("ipset_mode", true, false, new ArgSpec("mode", ArgKind.Choice, Required: true, Choices: ["off", "list"])),
         new("all_addresses_start", true, false),
         new("all_addresses_stop", true, false),
-        new("game_mode", true, true, new ArgSpec("mode", ArgKind.Choice, Required: true, Choices: ["off", "all"])),
+        new("game_mode", true, true, new ArgSpec("mode", ArgKind.Choice, Required: true, Choices: ["off", "all", "profiles"])),
         new("ipset_update", true, true,
             new ArgSpec("from", ArgKind.Choice, Required: true, Choices: ["manifest", "content"]),
             new ArgSpec("content", ArgKind.Content), new ArgSpec("confirmed", ArgKind.Bool)),
@@ -202,8 +208,13 @@ public static partial class HelperCommands
         new("app_profile_set", true, false,
             new ArgSpec("id", ArgKind.ProfileId), new ArgSpec("title", ArgKind.Title, Required: true),
             new ArgSpec("tcp", ArgKind.Ports), new ArgSpec("udp", ArgKind.Ports),
-            new ArgSpec("addresses", ArgKind.Lines, Required: true, MaxItems: AppProfiles.MaxAddresses),
-            new ArgSpec("variant", ArgKind.Int, Required: true, MaxItems: AppProfiles.MaxVariants - 1)),
+            new ArgSpec("addresses", ArgKind.Lines, MaxItems: AppProfiles.MaxAddresses),
+            new ArgSpec("variant", ArgKind.Int, Required: true, MaxItems: AppProfiles.MaxVariants - 1),
+            // API 1.22: сигнатура пакета и свои параметры (из импорта). Окну не доверяем: поля проверяет AppProfiles.Problem, здесь — только форма.
+            new ArgSpec("tcpLen", ArgKind.Int, MaxItems: AppProfiles.MaxPayloadLength), new ArgSpec("tcpHex", ArgKind.PayloadHex),
+            new ArgSpec("udpLen", ArgKind.Int, MaxItems: AppProfiles.MaxPayloadLength), new ArgSpec("udpHex", ArgKind.PayloadHex),
+            new ArgSpec("tcpDesync", ArgKind.Desync), new ArgSpec("udpDesync", ArgKind.Desync),
+            new ArgSpec("tcpFilter", ArgKind.WdFilter), new ArgSpec("udpFilter", ArgKind.WdFilter)),
         new("app_profile_remove", true, false, new ArgSpec("id", ArgKind.ProfileId, Required: true)),
         // Откат всего (API 1.6): журнал изменений программы. Помощник откатывает только то, что записал сам, и только если сейчас стоит то,
         // что ставили мы; окно передаёт лишь номер записи — ни значений, ни путей.
@@ -518,6 +529,28 @@ public static partial class HelperCommands
             {
                 var str = String(id, Where(), v, 200);
                 return AppProfiles.NormalizePorts(str) ?? throw new HelperRequestException(id, L.T("core.req.ports", new { where = Where() }));
+            }
+
+            case ArgKind.PayloadHex:
+            {
+                var str = String(id, Where(), v, AppProfiles.MaxSignatureBytes * 2);
+                if (AppProfiles.SignatureProblem(0, str, true) is not null || str.Length == 0)
+                    throw new HelperRequestException(id, L.T("core.req.payload_hex", new { where = Where() }));
+                return str;
+            }
+
+            case ArgKind.WdFilter:
+            {
+                var str = String(id, Where(), v, CustomFilter.MaxLength);
+                if (str.Any(char.IsControl)) throw new HelperRequestException(id, L.T("core.req.control_chars", new { where = Where() }));
+                return str;
+            }
+
+            case ArgKind.Desync:
+            {
+                var str = String(id, Where(), v, WinwsArgs.MaxRoleLength);
+                if (str.Any(char.IsControl)) throw new HelperRequestException(id, L.T("core.req.control_chars", new { where = Where() }));
+                return str;
             }
 
             case ArgKind.ProfileId:

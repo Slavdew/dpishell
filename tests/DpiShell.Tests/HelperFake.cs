@@ -409,11 +409,13 @@ public sealed class FakeHelperBackend : IHelperBackend
         return new([.. ProfilesValue], VariantsValue, new(RecActive, RecActive, 0, 0, 0, true, []));
     }
 
-    public AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant)
+    public AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant, ProfileSignature? signature = null)
     {
         Call($"app_profile_set {id} {title} {tcpPorts} {udpPorts} {addresses.Count} {variant}");
+        signature ??= ProfileSignature.None;
         var info = new AppProfileInfo(id ?? "p0000000" + (ProfilesValue.Count + 1), title, tcpPorts ?? "", udpPorts ?? "", addresses, variant,
-            VariantsValue[variant].Title, DateTime.Now);
+            VariantsValue[variant].Title, DateTime.Now, signature.TcpLength, signature.TcpHex, signature.UdpLength, signature.UdpHex,
+            signature.TcpDesync ?? "", signature.UdpDesync ?? "");
         ProfilesValue.RemoveAll(p => p.Id == info.Id);
         ProfilesValue.Add(info);
         return info;

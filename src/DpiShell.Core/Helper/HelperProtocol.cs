@@ -26,7 +26,10 @@ public static class HelperProtocol
     /// Версия протокола «мажор.минор» (helper-protocol §6): минор — добавления без поломок (команды, поля), мажор — несовместимые
     /// изменения. В hello и status; помощник без поля — «1.0». Сравнение — <see cref="HelperCompat"/>.
     /// </summary>
-    public const string Api = "1.21";
+    public const string Api = "1.22";
+
+    /// <summary>С этой версии: игровой режим <c>game_mode profiles</c> («Свои профили»); у <c>app_profile_set</c> — необязательные <c>tcpLen</c>, <c>tcpHex</c>, <c>udpLen</c>, <c>udpHex</c> (сигнатура пакета), <c>tcpDesync</c>, <c>udpDesync</c> (свои параметры из импорта) и необязательные <c>addresses</c> для протокола с сигнатурой; в <c>AppProfileInfo</c> — те же поля. Старый помощник лишних полей не принимает.</summary>
+    public const string ProfilesApi = "1.22";
 
     /// <summary>С этой версии <c>select</c>, <c>search</c> и <c>strategy_check</c> принимают необязательное <c>ownOnly</c> — подбор только своих сайтов рядом с роутером (старый помощник лишних полей не принимает).</summary>
     public const string OwnOnlyApi = "1.21";

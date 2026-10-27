@@ -371,6 +371,7 @@ public sealed class AdvancedSitesTests : IDisposable
         Assert.Single(shell.State.Advanced.Rows);
         Assert.Null(shell.CurrentOptions.Advanced);
         // Профиль программы — тоже «есть что обрабатывать».
+        shell.State.GameMode = "profiles";
         shell.State.AppProfiles.Add(new AppProfile { Id = "p0a1b2c3d", Title = "Игра", TcpPorts = "27015", Addresses = ["203.0.113.50/32"], TcpDesync = WinwsArgs.DeriveGameTcp(Fake)! });
         shell.SetAdvanced(true, "direct", [Row("direct", "a.example")]);
         Assert.True(shell.State.Advanced.Enabled);

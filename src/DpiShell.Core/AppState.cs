@@ -45,8 +45,13 @@ public sealed class AppState
     public DateTime? IpsetAnyUntil { get; set; }
     /// <summary>Режим, в который «Все адреса» возвращается сам.</summary>
     public string IpsetModeBeforeAny { get; set; } = "off";
-    /// <summary>Игровой режим: "off" (по умолчанию), "all" (TCP+UDP — переключатель окна), "tcp"/"udp" — только отладочная консоль.</summary>
+    /// <summary>Игровой режим: "off" (по умолчанию), "profiles" (только свои профили), "all" (Общий: TCP+UDP по IP-списку), "tcp"/"udp" — части «Общего» для отладочной консоли.</summary>
     public string GameMode { get; set; } = "off";
+    /// <summary>
+    /// 0 — запись до режима «Свои профили»: тогда профили действовали всегда, и «off» с профилями при чтении превращается в "profiles"
+    /// (профили не пропадают). <see cref="Save"/> ставит 1.
+    /// </summary>
+    public int GameModeSchema { get; set; }
     /// <summary>IP-список включил игровой режим (был «выкл»): при выключении игрового режима список выключается — как было до него. Выбор режима списка рукой сбрасывает.</summary>
     public bool IpsetByGame { get; set; }
     /// <summary>«Починить адреса» (hosts, architecture.md «Починить адреса») включено. По умолчанию выключено.</summary>
@@ -67,8 +72,16 @@ public sealed class AppState
 
     public static AppState Load(AppPaths p)
     {
-        try { return File.Exists(p.StateFile) ? (JsonSerializer.Deserialize<AppState>(File.ReadAllText(p.StateFile), Json) ?? new()).BareDomains() : new(); }
+        try { return File.Exists(p.StateFile) ? (JsonSerializer.Deserialize<AppState>(File.ReadAllText(p.StateFile), Json) ?? new()).BareDomains().MigrateGameMode() : new(); }
         catch (JsonException) { return new(); }
+    }
+
+    /// <summary>Запись до режима «Свои профили»: профили действовали всегда — выбор «Выкл» с профилями не должен их отключить.</summary>
+    AppState MigrateGameMode()
+    {
+        if (GameModeSchema == 0 && GameMode == "off" && AppProfiles.Count > 0) GameMode = "profiles";
+        GameModeSchema = 1;
+        return this;
     }
 
     /// <summary>Свои сайты до 0.11.3 хранились строкой целиком («https://site/путь?…»): приводим к голым доменам, как пишет теперь <see cref="Shell.SetUserTargets"/>.</summary>
@@ -82,6 +95,7 @@ public sealed class AppState
     public void Save(AppPaths p)
     {
         p.EnsureDirectories();
+        GameModeSchema = 1;
         var tmp = p.StateFile + ".tmp";
         File.WriteAllText(tmp, JsonSerializer.Serialize(this, Json));
         File.Move(tmp, p.StateFile, overwrite: true);
