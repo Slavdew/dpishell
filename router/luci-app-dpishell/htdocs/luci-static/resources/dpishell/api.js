@@ -260,6 +260,28 @@ function injectStyle() {
 		'.dps-target.dps-bad input[type=text]{border-color:var(--error-color-high,#c00);outline:2px solid var(--error-color-high,#c00)}',
 		'.dps-table{width:100%}',
 		'.dps-table .td,.dps-table .th{word-break:break-word}',
+		// Таблица «Подбора» (select.js): числа и заголовки по содержимому, без переноса посреди слова; подробности — строкой на всю ширину.
+		'.dps-table.dps-sel{width:auto;max-width:100%}',
+		'.dps-table.dps-sel .th,.dps-table.dps-sel .td{word-break:normal;overflow-wrap:normal;vertical-align:top}',
+		'.dps-table.dps-sel .dps-strat{min-width:11em}',
+		'.dps-table.dps-sel .th{white-space:nowrap}',
+		'.dps-table.dps-sel .dps-num,.dps-table.dps-sel .dps-act{white-space:nowrap}',
+		'.dps-table.dps-sel .dps-strat,.dps-table.dps-sel .dps-prob{overflow-wrap:anywhere}',
+		'.dps-table.dps-sel .dps-prob .dps-error{margin:0}',
+		'.dps-act-box{display:flex;flex-direction:column;align-items:flex-start;gap:4px}',
+		'.dps-act-box .btn{margin:0}',
+		'.dps-more{background:none;border:0;padding:0;margin:.25em 0 0;color:var(--primary-color-high,#36c);cursor:pointer;font:inherit;font-size:.9em}',
+		'.dps-more::after{content:" \\25BE"}.dps-more[aria-expanded=true]::after{content:" \\25B4"}',
+		'.dps-table.dps-sel .dps-more-row[hidden]{display:none!important}',
+		'.dps-table.dps-sel .dps-has-more>.td{border-bottom:0}',
+		'.dps-table.dps-sel .dps-more-row>.td{padding-top:0;border-top:0;overflow-wrap:anywhere}',
+		'.dps-more-row .dps-list{font-size:.92em}',
+		'.dps-more-row .dps-list li{margin:0 0 .15em}',
+		'@media (max-width:600px){.dps-table.dps-sel,.dps-table.dps-sel tbody,.dps-table.dps-sel .tr,.dps-table.dps-sel .td{display:block;width:auto}'
+			+ '.dps-table.dps-sel .table-titles{display:none}.dps-table.dps-sel .tr{padding:.3em 0;border-top:1px solid var(--border-color-low,rgba(128,128,128,.3))}'
+			+ '.dps-table.dps-sel .td{border:0;padding:.15em 0}.dps-table.dps-sel .dps-num{display:inline-block;margin-right:1.2em}'
+			+ '.dps-table.dps-sel .td[data-title]::before{content:attr(data-title) ": ";display:inline;font-weight:600}.dps-table.dps-sel .dps-strat::before{content:none!important}'
+			+ '.dps-table.dps-sel .dps-more-row{border-top:0;padding-top:0}.dps-act-box{flex-direction:row;flex-wrap:wrap}}',
 		'.dps-radio{display:block;margin:.3em 0}',
 		'.dps-radio input{margin-right:.5em}',
 		'.dps-check{display:block;margin:.3em 0}',

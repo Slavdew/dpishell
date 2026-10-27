@@ -244,33 +244,46 @@ return view.extend({
 		return E('span', { 'class': 'dps-error' }, bad.length > 3 ? api.t('web.select.problem_more', { list: names, n: bad.length - 3 }) : api.t('web.select.problem', { list: names }));
 	},
 
-	// «Подробнее» — исход по каждой цели (select_progress rows[].verdicts); раскрытое не сворачивается при опросе.
+	// «Подробнее» — исход по каждой цели (select_progress rows[].verdicts): строкой на всю ширину под строкой стратегии,
+	// чтобы список не раздувал столбец «Стратегия» и не сжимал числа. Раскрытое не сворачивается при опросе.
 	details: function(r) {
 		var self = this;
 		if (!r.verdicts || !r.verdicts.length)
-			return '';
+			return null;
 		this.openDetails = this.openDetails || {};
-		var d = E('details', { 'class': 'dps-details', open: this.openDetails[r.id] ? '' : null, toggle: function() { self.openDetails[r.id] = d.open; } }, [
-			E('summary', {}, api.t('common.more')),
-			E('ul', { 'class': 'dps-list' }, r.verdicts.slice().sort(function(a, b) { return a.ok - b.ok; }).map(function(v) {
+		var open = !!this.openDetails[r.id];
+		var row = E('tr', { 'class': 'tr dps-more-row', hidden: open ? null : '' }, [
+			E('td', { 'class': 'td', colspan: 6 }, E('ul', { 'class': 'dps-list' }, r.verdicts.slice().sort(function(a, b) { return a.ok - b.ok; }).map(function(v) {
 				var text = api.t(v.ok ? 'web.select.v_ok' : 'web.select.v_fail', { host: self.host(v.url), detail: api.msg(v.detail_msg || v.detail) });
 				if (v.seconds)
 					text += ', ' + api.t('router.row.seconds', { value: v.seconds.toFixed(1) });
 				if (!v.ok && self.ipBlocked && self.ipBlocked[v.url])
 					text += ' — ' + api.t('web.select.ip_blocked');
 				return E('li', { 'class': v.ok ? '' : 'dps-error' }, text);
-			}))
+			})))
 		]);
-		return d;
+		var toggle = E('button', { 'type': 'button', 'class': 'dps-more', 'aria-expanded': open ? 'true' : 'false', click: function() {
+			open = !open;
+			self.openDetails[r.id] = open;
+			if (open)
+				row.removeAttribute('hidden');
+			else
+				row.setAttribute('hidden', '');
+			toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+		} }, api.t('common.more'));
+		return { toggle: toggle, row: row };
 	},
 
+	// Ширина: числа и заголовки — по содержимому, без переноса (dps-num); «Что не так» и название переносятся;
+	// отметка «лучшая» и кнопки — одним узким столбцом. На телефоне строка — карточкой (CSS dps-sel в api.js).
 	rowsTable: function(p, rows, withApply) {
 		var self = this;
 		if (!rows.length)
 			return E('div', { 'class': 'dps-muted' }, api.t('web.select.none_yet'));
 		var cols = [api.t('select.col.strategy'), api.t('select.col.services'), api.t('select.col.addresses'), api.t('select.col.time'), api.t('select.col.problem')];
-		var t = E('table', { 'class': 'table dps-table' }, [
-			E('tr', { 'class': 'tr table-titles' }, cols.map(function(c) { return E('th', { 'class': 'th' }, c); }).concat([E('th', { 'class': 'th' }, '')]))
+		var kind = ['dps-strat', 'dps-num', 'dps-num', 'dps-num', 'dps-prob'];
+		var t = E('table', { 'class': 'table dps-table dps-sel' }, [
+			E('tr', { 'class': 'tr table-titles' }, cols.map(function(c, i) { return E('th', { 'class': 'th ' + kind[i] }, c); }).concat([E('th', { 'class': 'th dps-act' }, '')]))
 		]);
 		rows.forEach(function(r) {
 			var isBest = p.best && r.id == p.best;
@@ -282,19 +295,22 @@ return view.extend({
 			// «Проверить только её» — как на ПК (матрица п. 29): только для готовых стратегий, не для кандидатов поиска.
 			if (withApply && !r.candidate && !p.running)
 				last.push(api.btn(api.t('web.select.check_one'), function() { return self.checkOne(r.id); }, 'cbi-button-neutral'));
-			t.appendChild(E('tr', { 'class': 'tr' }, [
-				E('td', { 'class': 'td', 'data-title': cols[0] }, [
+			var more = self.details(r);
+			t.appendChild(E('tr', { 'class': 'tr' + (more ? ' dps-has-more' : '') }, [
+				E('td', { 'class': 'td dps-strat', 'data-title': cols[0] }, [
 					isBest ? E('b', {}, api.stratTitle(r.title || r.id)) : api.stratTitle(r.title || r.id),
 					r.needs_ts ? E('div', { 'class': 'dps-muted', 'style': 'font-size:.85em' }, api.t('web.select.needs_ts')) : '',
-					self.details(r)
+					more ? E('div', {}, more.toggle) : ''
 				]),
 				// «N из M» (groups_ok/groups_total, роутер с r8); у старых — доля.
-				E('td', { 'class': 'td', 'data-title': cols[1] }, r.groups_total != null ? api.t('router.row.groups_of', { ok: r.groups_ok, total: r.groups_total }) : api.percent(r.group_share)),
-				E('td', { 'class': 'td', 'data-title': cols[2] }, api.percent(r.target_share)),
-				E('td', { 'class': 'td', 'data-title': cols[3] }, r.avg_s != null ? api.t('router.row.seconds', { value: r.avg_s.toFixed(1) }) : '—'),
-				E('td', { 'class': 'td', 'data-title': cols[4] }, self.problem(r)),
-				E('td', { 'class': 'td' }, E('div', { 'class': 'dps-actions', 'style': 'margin:0' }, last))
+				E('td', { 'class': 'td dps-num', 'data-title': cols[1] }, r.groups_total != null ? api.t('router.row.groups_of', { ok: r.groups_ok, total: r.groups_total }) : api.percent(r.group_share)),
+				E('td', { 'class': 'td dps-num', 'data-title': cols[2] }, api.percent(r.target_share)),
+				E('td', { 'class': 'td dps-num', 'data-title': cols[3] }, r.avg_s != null ? api.t('router.row.seconds', { value: r.avg_s.toFixed(1) }) : '—'),
+				E('td', { 'class': 'td dps-prob', 'data-title': cols[4] }, self.problem(r)),
+				E('td', { 'class': 'td dps-act' }, last.length ? E('div', { 'class': 'dps-act-box' }, last) : '')
 			]));
+			if (more)
+				t.appendChild(more.row);
 		});
 		return t;
 	},
