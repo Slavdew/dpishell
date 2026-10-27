@@ -15,6 +15,7 @@
   "core.probe.truncated_min": "{code}, получено {bytes}, нужно ≥ {min}",
   "core.probe.stream_cut": "поток оборвался на {bytes} байтах",
   "core.probe.timeout": "таймаут",
+  "core.probe.local_address": "адрес в локальной сети — не проверяется",
   "core.probe.handshake": "соединение есть (страницы у этого адреса нет — так и должно быть)",
   "core.probe.responds": "сервер отвечает (для проверки достаточно)",
   "core.probe.kb": "{n} КБ",

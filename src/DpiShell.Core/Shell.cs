@@ -746,7 +746,8 @@ public sealed class Shell
         Paths.EnsureDirectories();
         var trimmed = lines.Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
         var rejected = Data.WriteUserDomains(trimmed);
-        var good = trimmed.Where(l => DataStore.NormalizeDomain(l) is not null).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        // Хранится голый домен, не строка целиком: по сохранённому помощник под SYSTEM ходит при подборе.
+        var good = trimmed.Select(DataStore.NormalizeDomain).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         State.UserTargets = good;
         State.UserGroups = SiteGroups.Named(SiteGroups.Apply(good, State.UserGroups));
         if (good.Count > 0 && !State.Groups.Contains("user")) State.Groups.Add("user");

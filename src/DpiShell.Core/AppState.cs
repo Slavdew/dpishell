@@ -67,8 +67,16 @@ public sealed class AppState
 
     public static AppState Load(AppPaths p)
     {
-        try { return File.Exists(p.StateFile) ? JsonSerializer.Deserialize<AppState>(File.ReadAllText(p.StateFile), Json) ?? new() : new(); }
+        try { return File.Exists(p.StateFile) ? (JsonSerializer.Deserialize<AppState>(File.ReadAllText(p.StateFile), Json) ?? new()).BareDomains() : new(); }
         catch (JsonException) { return new(); }
+    }
+
+    /// <summary>Свои сайты до 0.11.3 хранились строкой целиком («https://site/путь?…»): приводим к голым доменам, как пишет теперь <see cref="Shell.SetUserTargets"/>.</summary>
+    AppState BareDomains()
+    {
+        UserTargets = [.. UserTargets.Select(DataStore.NormalizeDomain).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase)];
+        UserGroups = SiteGroups.Named(SiteGroups.Normalize(UserGroups, out _));
+        return this;
     }
 
     public void Save(AppPaths p)

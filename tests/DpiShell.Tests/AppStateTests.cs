@@ -26,7 +26,7 @@ public class AppStateTests
         var l = AppState.Load(p);
         Assert.Equal("alt", l.StrategyId);
         Assert.True(l.Enabled);
-        Assert.Equal(["a.com", "https://b.org/x"], l.UserTargets);
+        Assert.Equal(["a.com", "b.org"], l.UserTargets);   // строка целиком из старого состояния → голый домен
         Assert.Equal(["discord", "user"], l.Groups);
         Assert.Equal(new NetworkMemory("alt", at, 0.75), l.Networks["Home WiFi"]);
 

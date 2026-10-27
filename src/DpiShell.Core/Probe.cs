@@ -11,7 +11,9 @@ namespace DpiShell.Core;
 /// Цель проверки. handshake_only — достаточно TLS и заголовков ответа (у адреса нет стабильного большого тела).
 /// Group — имя группы «Своих сайтов» (API 1.18); null — не из групп или «Прочее».
 /// </summary>
-public sealed record Target(string Url, int MinBytes = 0, bool HandshakeOnly = false, bool Required = true, string? Group = null);
+/// <param name="PublicOnly">Адрес задал пользователь: соединяться только с интернетными адресами (<see cref="BrowserCheck.IsNonPublic"/>) — имя вида
+/// <c>192-168-1-1.nip.io</c> не должно приводить помощника под SYSTEM к устройствам локальной сети.</param>
+public sealed record Target(string Url, int MinBytes = 0, bool HandshakeOnly = false, bool Required = true, string? Group = null, bool PublicOnly = false);
 
 /// <summary>Control — «Обычные сайты»: не цель подбора, а условие «стратегия их не ломает» (architecture.md «Оценка и порядок»).</summary>
 /// <summary>
@@ -31,10 +33,14 @@ public sealed record TargetSet(List<TargetGroup> Groups)
     public static TargetSet Load(string path) =>
         JsonSerializer.Deserialize<TargetSet>(File.ReadAllText(path), Json) ?? new([]);
 
-    /// <summary>Группа «Свои сайты» из доменов/URL пользователя: каждый адрес обязателен, тело ≥ 1 байта не требуем.</summary>
+    /// <summary>
+    /// Группа «Свои сайты» из доменов/URL пользователя: каждый адрес обязателен, тело ≥ 1 байта не требуем. Проверяется только
+    /// <c>https://домен/</c> — путь, запрос, порт и схема из строки отбрасываются (строка могла прийти чужой: маячок, запрос в локальную сеть).
+    /// </summary>
     public static TargetGroup UserGroup(IEnumerable<string> entries) => new("user", L.T("select.group.user"),
-        entries.Select(e => e.Trim()).Where(e => e.Length > 0)
-            .Select(e => new Target(e.Contains("://") ? e : $"https://{e}/")).ToList());
+        [.. entries.Select(DataStore.NormalizeDomain).OfType<string>().Distinct().Select(d => UserTarget(d))]);
+
+    static Target UserTarget(string domain, string? group = null) => new($"https://{domain}/", Group: group, PublicOnly: true);
 
     /// <summary>
     /// «Свои сайты» по группам: одна цель подбора «user», у каждого адреса — имя его группы. Из большой группы проверяется выборка
@@ -46,12 +52,12 @@ public sealed record TargetSet(List<TargetGroup> Groups)
         var totals = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var g in groups)
         {
-            var entries = g.Sites.Select(e => e.Trim()).Where(e => e.Length > 0).ToList();
+            var entries = g.Sites.Select(DataStore.NormalizeDomain).OfType<string>().Distinct().ToList();
             if (entries.Count == 0) continue;
             var name = SiteGroups.CleanName(g.Name);
             totals[name] = entries.Count;
             foreach (var e in SiteGroups.Sample(entries, sample))
-                targets.Add(new Target(e.Contains("://") ? e : $"https://{e}/", Group: name.Length == 0 ? null : name));
+                targets.Add(UserTarget(e, name.Length == 0 ? null : name));
         }
         return new("user", L.T("select.group.user"), targets, Totals: totals);
     }
@@ -141,7 +147,7 @@ public class HttpProbe
         var resolver = Resolver;
         handler.ConnectCallback = async (ctx, token) =>
         {
-            var stream = resolver is not null ? await ConnectAsync(resolver, ctx.DnsEndPoint, token) : await ConnectDefaultAsync(ctx.DnsEndPoint, token);
+            var stream = resolver is not null ? await ConnectAsync(resolver, ctx.DnsEndPoint, t.PublicOnly, token) : await ConnectDefaultAsync(ctx.DnsEndPoint, t.PublicOnly, token);
             connected = true;
             return stream;
         };
@@ -217,6 +223,10 @@ public class HttpProbe
         {
             return new(t, tls, ProbeOutcome.Tls13Unsupported, sw.Elapsed.TotalSeconds, bytes, Flatten(e));
         }
+        catch (HttpRequestException e) when (e.InnerException is LocalAddressException)
+        {
+            return new(t, tls, ProbeOutcome.Error, sw.Elapsed.TotalSeconds, 0, L.T("core.probe.local_address"));
+        }
         catch (HttpRequestException e)
         {
             var outcome = Classify(e);
@@ -240,16 +250,35 @@ public class HttpProbe
         next.Host.Equals(from.Host, StringComparison.OrdinalIgnoreCase) && next.Scheme == from.Scheme ? next.PathAndQuery : next.Host + next.PathAndQuery;
 
     /// <summary>То, что делает SocketsHttpHandler сам: имя → адреса → TCP (порядок и «happy eyeballs» — как у системы).</summary>
-    static async ValueTask<Stream> ConnectDefaultAsync(DnsEndPoint ep, CancellationToken ct)
+    static async ValueTask<Stream> ConnectDefaultAsync(DnsEndPoint ep, bool publicOnly, CancellationToken ct)
     {
         var s = new System.Net.Sockets.Socket(System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp) { NoDelay = true };
         try
         {
+            if (publicOnly)
+            {
+                // Имя разрешаем сами и соединяемся по адресу: иначе система разрешит имя заново и может вернуть другой (частный) адрес.
+                var addrs = PublicOnly(await Dns.GetHostAddressesAsync(ep.Host, ct));
+                s.Dispose();
+                s = new System.Net.Sockets.Socket(addrs[0].AddressFamily, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp) { NoDelay = true };
+                await s.ConnectAsync(new IPEndPoint(addrs[0], ep.Port), ct);
+                return new System.Net.Sockets.NetworkStream(s, ownsSocket: true);
+            }
             await s.ConnectAsync(ep, ct);
             return new System.Net.Sockets.NetworkStream(s, ownsSocket: true);
         }
         catch { s.Dispose(); throw; }
     }
+
+    /// <summary>Только интернетные адреса; не осталось ни одного, а были — <see cref="LocalAddressException"/>.</summary>
+    static IPAddress[] PublicOnly(IPAddress[] addrs)
+    {
+        var pub = addrs.Where(a => !BrowserCheck.IsNonPublic(a.IsIPv4MappedToIPv6 ? a.MapToIPv4() : a)).ToArray();
+        return pub.Length > 0 || addrs.Length == 0 ? pub : throw new LocalAddressException();
+    }
+
+    /// <summary>Свой сайт ведёт в локальную сеть: не проверяется (<see cref="Target.PublicOnly"/>).</summary>
+    sealed class LocalAddressException() : IOException("local address");
 
     /// <summary>Имя не нашлось: до TCP дело не дошло из-за DNS, а не из-за адреса.</summary>
     static bool IsNameError(Exception e)
@@ -260,13 +289,14 @@ public class HttpProbe
         return e is HttpRequestException { HttpRequestError: HttpRequestError.NameResolutionError };
     }
 
-    static async ValueTask<Stream> ConnectAsync(IAddressResolver resolver, DnsEndPoint ep, CancellationToken ct)
+    static async ValueTask<Stream> ConnectAsync(IAddressResolver resolver, DnsEndPoint ep, bool publicOnly, CancellationToken ct)
     {
         IPAddress[] addrs = IPAddress.TryParse(ep.Host, out var literal) ? [literal]
             : ep.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ? [IPAddress.Loopback]
             : await resolver.ResolveAsync(ep.Host, ct);
         if (addrs.Length == 0)
             addrs = await Dns.GetHostAddressesAsync(ep.Host, System.Net.Sockets.AddressFamily.InterNetwork, ct);
+        if (publicOnly) addrs = PublicOnly(addrs);
 
         Exception? last = null;
         foreach (var ip in addrs.Take(3))

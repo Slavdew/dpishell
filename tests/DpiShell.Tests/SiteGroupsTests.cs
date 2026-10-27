@@ -32,6 +32,42 @@ public sealed class SiteGroupsTests : IDisposable
     }
 
     [Fact]
+    public void Normalize_keeps_bare_domain_only_and_strips_invisible_name_chars()
+    {
+        var groups = SiteGroups.Normalize(
+        [
+            new("Tele‮gram​", ["https://Site.example:8443/path?id=42", "site.example", "http://192-168-1-1.nip.io/admin"]),
+        ], out var rejected);
+        Assert.Equal("Telegram", groups[0].Name);
+        Assert.Equal(["site.example", "192-168-1-1.nip.io"], groups[0].Sites);
+        Assert.Empty(rejected);
+    }
+
+    [Fact]
+    public void UserTargets_are_https_root_of_domain_and_public_only()
+    {
+        var g = TargetSet.UserGroups([new("", ["https://site.example/track?u=1", "http://other.example:81/"])]);
+        Assert.Equal(["https://site.example/", "https://other.example/"], g.Targets.Select(t => t.Url));
+        Assert.All(g.Targets, t => Assert.True(t.PublicOnly));
+        Assert.True(TargetSet.UserGroup(["https://site.example/x"]).Targets.Single() is { Url: "https://site.example/", PublicOnly: true });
+    }
+
+    sealed class LanResolver : IAddressResolver
+    {
+        public Task<System.Net.IPAddress[]> ResolveAsync(string host, CancellationToken ct = default) =>
+            Task.FromResult(new[] { System.Net.IPAddress.Parse("192.168.1.1") });
+    }
+
+    [Fact]
+    public async Task Probe_refuses_user_site_resolving_to_local_network()
+    {
+        var probe = new HttpProbe { Resolver = new LanResolver() };
+        var r = await probe.OnceAsync(new Target("https://192-168-1-1.nip.io/", PublicOnly: true), SslProtocols.Tls12);
+        Assert.Equal(ProbeOutcome.Error, r.Outcome);
+        Assert.False(r.NoTcp);
+    }
+
+    [Fact]
     public void Sample_is_stable_whatever_the_order_and_capped()
     {
         var sites = Enumerable.Range(1, 120).Select(i => $"site{i}.example").ToList();

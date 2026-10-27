@@ -15,6 +15,7 @@
   "core.probe.truncated_min": "{code}, received {bytes}, need ≥ {min}",
   "core.probe.stream_cut": "stream cut off after {bytes} bytes",
   "core.probe.timeout": "timeout",
+  "core.probe.local_address": "local network address — not checked",
   "core.probe.handshake": "connection works (this address has no page — as expected)",
   "core.probe.responds": "server responds (enough for the check)",
   "core.probe.kb": "{n} KB",

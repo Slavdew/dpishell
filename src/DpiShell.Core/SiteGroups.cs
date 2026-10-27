@@ -26,18 +26,22 @@ public static class SiteGroups
     /// <summary>Длина имени группы.</summary>
     public const int MaxName = 40;
 
-    /// <summary>Имя без управляющих знаков и лишних пробелов, не длиннее <see cref="MaxName"/>; пусто — «Прочее».</summary>
+    /// <summary>
+    /// Имя без управляющих и невидимых знаков (Cc и Cf: U+200B, U+202E и т. п. — переворот текста, «двойники» имён) и лишних пробелов,
+    /// не длиннее <see cref="MaxName"/>; пусто — «Прочее».
+    /// </summary>
     public static string CleanName(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return "";
-        var s = new string(name.Where(c => !char.IsControl(c)).ToArray()).Trim();
+        var s = new string(name.Where(c => !char.IsControl(c) && char.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.Format).ToArray()).Trim();
         s = string.Join(' ', s.Split(' ', StringSplitOptions.RemoveEmptyEntries));
         return s.Length > MaxName ? s[..MaxName].TrimEnd() : s;
     }
 
     /// <summary>
     /// Привести группы к виду «именованные в порядке ввода + Прочее последней»: имена очищены, одинаковые (без учёта регистра) слиты,
-    /// сайт состоит в одной группе (первое вхождение), негодные строки — в <paramref name="rejected"/>. Группа без сайтов остаётся (её создали руками).
+    /// сайт — голый домен (<see cref="DataStore.NormalizeDomain"/>: без схемы, пути и порта) в одной группе (первое вхождение), негодные строки —
+    /// в <paramref name="rejected"/>. Группа без сайтов остаётся (её создали руками).
     /// Прочее — всегда последняя и всегда присутствует в результате (возможно пустая).
     /// </summary>
     public static List<SiteGroup> Normalize(IEnumerable<SiteGroup> groups, out List<string> rejected)
@@ -60,8 +64,8 @@ public static class SiteGroups
             {
                 var line = raw.Trim();
                 if (line.Length == 0) continue;
-                if (DataStore.NormalizeDomain(line) is null) { rejected.Add(line); continue; }
-                if (seen.Add(line)) target.Sites.Add(line);
+                if (DataStore.NormalizeDomain(line) is not { } d) { rejected.Add(line); continue; }
+                if (seen.Add(d)) target.Sites.Add(d);
             }
         }
         named.Add(other);
