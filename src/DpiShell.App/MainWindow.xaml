@@ -258,7 +258,7 @@
                                             <TextBox Text="{Binding DirectMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,6,0,0"
                                                      Visibility="{Binding HasDirectMessage, Converter={StaticResource Vis}}" />
                                             <!-- «Проверить снова» (аудит С-16): тот же сайт ещё раз — после добавления в список, в исключения или просто повторно. -->
-                                            <Button Content="{l:T home.sitecheck.again}" Style="{StaticResource LinkButton}" Command="{Binding SiteAgainCmd}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                            <Button Content="{l:T home.sitecheck.again}" Style="{StaticResource LinkButton}" Command="{Binding SiteAgainCmd}" HorizontalAlignment="Left" Margin="-4,4,0,0"
                                                     Visibility="{Binding ShowSiteAgain, Converter={StaticResource Vis}}" />
                                         </StackPanel>
                                     </Border>
@@ -381,7 +381,8 @@
                                     <ItemsControl ItemsSource="{Binding AutoRows}" Focusable="False">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Grid Margin="0,3">
+                                                <Border Style="{StaticResource KvItem}" Padding="0,5">
+                                                <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="190" />
                                                         <ColumnDefinition Width="*" />
@@ -389,6 +390,7 @@
                                                     <TextBlock Text="{Binding Key}" FontSize="13" Margin="0,0,16,0" TextWrapping="Wrap" />
                                                     <TextBlock Grid.Column="1" Text="{Binding Value}" Style="{StaticResource Hint}" FontSize="13" TextWrapping="Wrap" />
                                                 </Grid>
+                                                </Border>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
@@ -513,7 +515,7 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
                                     <!-- Блокировка по адресу: следующий шаг — кнопкой, а не только словами (аудит С-5). -->
-                                    <Button Content="{l:T select.addr.go}" Style="{StaticResource LinkButton}" Command="{Binding GoIpListsCmd}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                    <Button Content="{l:T select.addr.go}" Style="{StaticResource LinkButton}" Command="{Binding GoIpListsCmd}" HorizontalAlignment="Left" Margin="-4,4,0,0"
                                             Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
                                     <!-- Глубокий поиск — только когда готовые не помогли со всем (UX-аудит, п. 30); фраза — цифрой, что не открылось (UX-аудит 6, п. 9). -->
                                     <TextBlock Text="{Binding DeepText}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="{Binding OfferDeep, Converter={StaticResource Vis}}" />
@@ -647,7 +649,7 @@
                                     <StackPanel>
                                         <TextBox Text="{Binding ResultText, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="16" FontWeight="SemiBold" />
                                         <TextBox Text="{Binding ResultHint, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" /><TextBox Text="{Binding AddressNote, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
-                                        <Button Content="{l:T select.addr.go}" Style="{StaticResource LinkButton}" Command="{Binding DataContext.GoIpListsCmd, RelativeSource={RelativeSource AncestorType=Window}}" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                        <Button Content="{l:T select.addr.go}" Style="{StaticResource LinkButton}" Command="{Binding DataContext.GoIpListsCmd, RelativeSource={RelativeSource AncestorType=Window}}" HorizontalAlignment="Left" Margin="-4,4,0,0"
                                                 Visibility="{Binding HasAddressNote, Converter={StaticResource Vis}}" />
                                         <Button Content="{l:T select.deep}" Command="{Binding StartDeepCmd}" HorizontalAlignment="Left" Margin="0,10,0,0"
                                                 Visibility="{Binding OfferDeep, Converter={StaticResource Vis}}" ToolTip="{l:T select.router.deep.tip}" />
@@ -810,7 +812,7 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <Button Content="{l:T sites.group.add}" Style="{StaticResource LinkButton}" FontSize="13" HorizontalAlignment="Left" Margin="0,0,0,0" Command="{Binding AddGroupCmd}" />
+                            <Button Content="{l:T sites.group.add}" Style="{StaticResource LinkButton}" FontSize="13" HorizontalAlignment="Left" Margin="-4,0,0,0" Command="{Binding AddGroupCmd}" />
                             <!-- Простой список исключений ПК (UX-аудит 7, п. 5): сюда же сайт попадает с Главной по «Сайт не открывается?». Строки «Напрямую» продвинутого режима — отдельно. -->
                             <TextBlock Text="{l:T sites.exclude.title}" Style="{StaticResource H2}" Margin="0,14,0,0" />
                             <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,2" Text="{l:T sites.exclude.caption}" />
@@ -872,7 +874,7 @@
                                         <!-- «Только из списков», сайта в списках роутера нет и он не открывается — в свой список user-general (как страница роутера), затем проверка заново. -->
                                         <Button Content="{l:T home.sitecheck.add_list}" Style="{StaticResource Primary}" Command="{Binding AddListCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
                                                 Visibility="{Binding SiteSuggestList, Converter={StaticResource Vis}}" />
-                                        <Button Content="{l:T home.sitecheck.again}" Style="{StaticResource LinkButton}" Command="{Binding SiteAgainCmd}" HorizontalAlignment="Left" Margin="0,6,0,0"
+                                        <Button Content="{l:T home.sitecheck.again}" Style="{StaticResource LinkButton}" Command="{Binding SiteAgainCmd}" HorizontalAlignment="Left" Margin="-4,6,0,0"
                                                 Visibility="{Binding ShowSiteAgain, Converter={StaticResource Vis}}" />
                                         <Expander Header="{l:T common.more}" Visibility="{Binding HasSiteDetail, Converter={StaticResource Vis}}">
                                             <TextBox Text="{Binding SiteDetail, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" />
@@ -1015,7 +1017,7 @@
                                             <Button Content="{l:T apps.check.yes}" Style="{StaticResource Primary}" Command="{Binding YesCmd}" Visibility="{Binding IsCheck, Converter={StaticResource Vis}}" />
                                             <Button Content="{l:T apps.check.no}" Command="{Binding NoCmd}" Visibility="{Binding IsCheck, Converter={StaticResource Vis}}" />
                                             <Button Content="{l:T apps.check.worse}" Command="{Binding NoCmd}" Visibility="{Binding IsCheck, Converter={StaticResource Vis}}" />
-                                            <Button Content="{l:T apps.more}" Style="{StaticResource LinkButton}" Command="{Binding MoreCmd}" VerticalAlignment="Center"
+                                            <Button Content="{l:T apps.more}" Style="{StaticResource RowLink}" Command="{Binding MoreCmd}"
                                                     Visibility="{Binding ShowMore, Converter={StaticResource Vis}}" />
                                         </WrapPanel>
                                         <Border Style="{StaticResource Warn}" Margin="0,10,0,0" Visibility="{Binding ShowOffHint, Converter={StaticResource Vis}}">
@@ -1029,7 +1031,7 @@
 
                                 <!-- Предупреждение про античиты — под карточкой «Настроить под игру», а не над ней: человек пришёл не из-за античита (UX-аудит 7, п. 15). -->
                                 <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="6"
-                                        Padding="10,6" Margin="0,0,0,12" HorizontalAlignment="Left">
+                                        Padding="10,6" Margin="0,0,0,12">
                                     <TextBlock Text="{Binding Anti}" FontSize="13" TextWrapping="Wrap" />
                                 </Border>
 
@@ -1081,7 +1083,7 @@
                                             <WrapPanel Margin="0,10,0,0">
                                                 <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.import.add}" Style="{StaticResource Primary}" Command="{Binding ImportCmd}" />
                                                 <Button Content="{l:T apps.import.paste}" Command="{Binding PasteAllCmd}" ToolTip="{l:T apps.import.paste_tip}" />
-                                                <Button Content="{l:T apps.game.more}" Style="{StaticResource LinkButton}" Command="{Binding OpenGamesCmd}" VerticalAlignment="Center" />
+                                                <Button Content="{l:T apps.game.more}" Style="{StaticResource RowLink}" Command="{Binding OpenGamesCmd}" />
                                             </WrapPanel>
                                             <TextBox Text="{Binding ImportMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,6,0,0"
                                                      Visibility="{Binding HasImportMessage, Converter={StaticResource Vis}}" />
@@ -1345,18 +1347,21 @@
                                                     <ItemsControl ItemsSource="{Binding DnsRows}">
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
-                                                                <Grid Margin="0,2">
+                                                                <!-- Строки — через линию (KvItem); у ячеек поле справа: обрезанные «…» не слипаются со следующей колонкой. -->
+                                                                <Border Style="{StaticResource KvItem}" BorderThickness="0,1,0,0" Padding="0,4">
+                                                                <Grid>
                                                                     <Grid.ColumnDefinitions>
                                                                         <ColumnDefinition Width="2*" />
                                                                         <ColumnDefinition Width="2*" />
                                                                         <ColumnDefinition Width="2*" />
                                                                         <ColumnDefinition Width="120" />
                                                                     </Grid.ColumnDefinitions>
-                                                                    <TextBlock Text="{Binding Host}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Host}" />
-                                                                    <TextBlock Grid.Column="1" Text="{Binding System}" local:Demo.Sensitive="True" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding System}" />
-                                                                    <TextBlock Grid.Column="2" Text="{Binding Doh}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Doh}" />
+                                                                    <TextBlock Text="{Binding Host}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Host}" Margin="0,0,12,0" />
+                                                                    <TextBlock Grid.Column="1" Text="{Binding System}" local:Demo.Sensitive="True" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding System}" Margin="0,0,12,0" />
+                                                                    <TextBlock Grid.Column="2" Text="{Binding Doh}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Doh}" Margin="0,0,12,0" />
                                                                     <TextBlock Grid.Column="3" Text="{Binding Mark}" Foreground="{DynamicResource Danger}" FontWeight="SemiBold" />
                                                                 </Grid>
+                                                                </Border>
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
@@ -1419,12 +1424,14 @@
                                                     <RowDefinition Height="Auto" />
                                                     <RowDefinition Height="Auto" />
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Text="{l:T proxy.for_user}" Style="{StaticResource Hint}" Margin="0,2" />
-                                                <TextBox Grid.Column="1" Text="{Binding UserLine, Mode=OneWay}" Style="{StaticResource SelectableText}" local:Demo.Sensitive="True" Margin="0,2" />
-                                                <TextBlock Grid.Row="1" Text="{l:T proxy.for_machine}" Style="{StaticResource Hint}" Margin="0,2" />
-                                                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding MachineLine, Mode=OneWay}" Style="{StaticResource SelectableText}" local:Demo.Sensitive="True" Margin="0,2" />
-                                                <TextBlock Grid.Row="2" Text="{l:T proxy.for_services}" Style="{StaticResource Hint}" Margin="0,2" ToolTip="{l:T proxy.for_services.tip}" />
-                                                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding WinHttpLine, Mode=OneWay}" Style="{StaticResource SelectableText}" local:Demo.Sensitive="True" Margin="0,2" />
+                                                <TextBlock Text="{l:T proxy.for_user}" Style="{StaticResource KvLabel}" />
+                                                <TextBox Grid.Column="1" Text="{Binding UserLine, Mode=OneWay}" Style="{StaticResource KvValue}" local:Demo.Sensitive="True" />
+                                                <Border Grid.Row="1" Style="{StaticResource KvLine}" />
+                                                <TextBlock Grid.Row="1" Text="{l:T proxy.for_machine}" Style="{StaticResource KvLabel}" />
+                                                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding MachineLine, Mode=OneWay}" Style="{StaticResource KvValue}" local:Demo.Sensitive="True" />
+                                                <Border Grid.Row="2" Style="{StaticResource KvLine}" />
+                                                <TextBlock Grid.Row="2" Text="{l:T proxy.for_services}" Style="{StaticResource KvLabel}" ToolTip="{l:T proxy.for_services.tip}" />
+                                                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding WinHttpLine, Mode=OneWay}" Style="{StaticResource KvValue}" local:Demo.Sensitive="True" />
                                             </Grid>
                                             <ItemsControl ItemsSource="{Binding Notes}" Margin="0,6,0,0">
                                                 <ItemsControl.ItemTemplate>
@@ -1997,7 +2004,8 @@
                                     <ItemsControl ItemsSource="{Binding Findings}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Grid Margin="0,3">
+                                                <Border Style="{StaticResource KvItem}">
+                                                <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="22" />
                                                         <ColumnDefinition Width="150" />
@@ -2005,13 +2013,14 @@
                                                         <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock x:Name="M" Text="{Binding Mark}" FontWeight="Bold" Foreground="{DynamicResource Ok}" />
-                                                    <TextBlock Grid.Column="1" Text="{Binding Title}" Style="{StaticResource Hint}" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Title}" Style="{StaticResource Hint}" Margin="0,0,12,0" />
                                                     <TextBox Grid.Column="2" Text="{Binding Text, Mode=OneWay}" Style="{StaticResource SelectableText}" local:Demo.Sensitive="True" />
                                                     <!-- «Системный прокси включён» → вкладка «Прокси». -->
-                                                    <Button Grid.Column="3" Content="{l:T diag.open_proxy}" Style="{StaticResource LinkButton}" Margin="10,0,0,0" VerticalAlignment="Top"
+                                                    <Button Grid.Column="3" Content="{l:T diag.open_proxy}" Style="{StaticResource LinkButton}" Margin="10,-4,0,-4" VerticalAlignment="Top"
                                                             Command="{Binding DataContext.GoProxyCmd, RelativeSource={RelativeSource AncestorType=TabControl}}"
                                                             Visibility="{Binding HasGo, Converter={StaticResource Vis}}" />
                                                 </Grid>
+                                                </Border>
                                                 <DataTemplate.Triggers>
                                                     <DataTrigger Binding="{Binding Ok}" Value="False">
                                                         <Setter TargetName="M" Property="Foreground" Value="{DynamicResource Danger}" />
@@ -2054,7 +2063,7 @@
                                 <Button Content="{l:T diag.open_logs}" Command="{Binding OpenLogsCmd}" />
                                 <Button Content="{l:T diag.open_results}" Command="{Binding OpenResultsCmd}" />
                                 <Button Content="{l:T diag.report.save}" Command="{Binding SaveReportCmd}" ToolTip="{l:T diag.report.tip}" />
-                                <Button Content="{l:T diag.report.issue}" Style="{StaticResource LinkButton}" Command="{Binding OpenIssuesCmd}" VerticalAlignment="Center" />
+                                <Button Content="{l:T diag.report.issue}" Style="{StaticResource RowLink}" Command="{Binding OpenIssuesCmd}" />
                             </WrapPanel>
                         </StackPanel>
                     </ScrollViewer>
@@ -2087,7 +2096,7 @@
                                 <StackPanel>
                                     <DockPanel>
                                         <Button DockPanel.Dock="Right" Content="{Binding UpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}" VerticalAlignment="Center"
-                                                Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
+                                                Margin="12,0,0,0" Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
                                         <TextBox Text="{Binding UpdateTitle, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
                                     </DockPanel>
                                     <!-- Шаги (status.update.job.step): «Скачиваю → Устанавливаю → Перезапуск службы → Готово», текущий выделен. -->
@@ -2300,7 +2309,7 @@
                                     </DockPanel>
                                     <TextBlock Text="{Binding DiagHint}" Style="{StaticResource Hint}" Visibility="{Binding ShowDiagHint, Converter={StaticResource Vis}}" />
                                     <StackPanel Visibility="{Binding DiagLoaded, Converter={StaticResource Vis}}">
-                                        <Grid Margin="0,2,0,0">
+                                        <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="150" />
                                                 <ColumnDefinition Width="*" />
@@ -2311,19 +2320,18 @@
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
-                                            <TextBlock Text="{l:T router.diag.flow}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
-                                            <!-- «Исправить» — один раз, в плашке выше: одна проблема показывается один раз (UX-аудит 6, п. 13). -->
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,6">
-                                                <TextBox Text="{Binding FlowOffloadText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
-                                            </StackPanel>
-                                            <TextBlock Grid.Row="1" Text="{l:T router.diag.ipv6}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
-                                            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,6">
-                                                <TextBox Text="{Binding Ipv6Text, Mode=OneWay}" Style="{StaticResource SelectableText}" />
-                                            </StackPanel>
-                                            <TextBlock Grid.Row="2" Text="{l:T common.nav.dns}" Style="{StaticResource Hint}" Margin="0,0,0,6" />
-                                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding DnsText, Mode=OneWay}" Style="{StaticResource SelectableText}" local:Demo.Sensitive="True" Margin="0,0,0,6" />
-                                            <TextBlock Grid.Row="3" Text="{l:T router.diag.space}" Style="{StaticResource Hint}" />
-                                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SpaceText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
+                                            <!-- Таблица «подпись — значение» (стили Kv*). «Исправить» — один раз, в плашке выше: одна проблема показывается один раз (UX-аудит 6, п. 13). -->
+                                            <TextBlock Text="{l:T router.diag.flow}" Style="{StaticResource KvLabel}" />
+                                            <TextBox Grid.Column="1" Text="{Binding FlowOffloadText, Mode=OneWay}" Style="{StaticResource KvValue}" />
+                                            <Border Grid.Row="1" Style="{StaticResource KvLine}" />
+                                            <TextBlock Grid.Row="1" Text="{l:T router.diag.ipv6}" Style="{StaticResource KvLabel}" />
+                                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Ipv6Text, Mode=OneWay}" Style="{StaticResource KvValue}" />
+                                            <Border Grid.Row="2" Style="{StaticResource KvLine}" />
+                                            <TextBlock Grid.Row="2" Text="{l:T common.nav.dns}" Style="{StaticResource KvLabel}" />
+                                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding DnsText, Mode=OneWay}" Style="{StaticResource KvValue}" local:Demo.Sensitive="True" />
+                                            <Border Grid.Row="3" Style="{StaticResource KvLine}" />
+                                            <TextBlock Grid.Row="3" Text="{l:T router.diag.space}" Style="{StaticResource KvLabel}" />
+                                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SpaceText, Mode=OneWay}" Style="{StaticResource KvValue}" />
                                         </Grid>
                                         <TextBlock Text="{l:T router.diag.conflicts}" Style="{StaticResource Hint}" Margin="0,12,0,4" />
                                         <TextBlock Text="{l:T router.diag.none}" Visibility="{Binding Conflicts.Count, Converter={StaticResource Zero}}" />
@@ -2405,26 +2413,28 @@
                                 <StackPanel>
                                     <DockPanel>
                                         <Button DockPanel.Dock="Right" Content="{l:T settings.changes.undo_all}" Command="{Binding RouterUndoAllCmd}" VerticalAlignment="Center"
-                                                Visibility="{Binding RouterCanUndoAll, Converter={StaticResource Vis}}" />
-                                        <TextBlock Text="{l:T router.changes.title}" Style="{StaticResource H2}" VerticalAlignment="Center" />
+                                                Margin="12,0,0,0" Visibility="{Binding RouterCanUndoAll, Converter={StaticResource Vis}}" />
+                                        <TextBlock Text="{l:T router.changes.title}" Style="{StaticResource H2}" VerticalAlignment="Center" Margin="0" />
                                     </DockPanel>
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{l:T router.changes.intro}" />
                                     <TextBlock Text="{l:T settings.changes.empty}" Style="{StaticResource Hint}" Margin="0,8,0,0" Visibility="{Binding RouterChangesEmpty, Converter={StaticResource Vis}}" />
                                     <ItemsControl ItemsSource="{Binding RouterChanges}" Margin="0,6,0,0" Focusable="False">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <DockPanel Margin="0,3">
-                                                    <Border DockPanel.Dock="Right" Width="128" Margin="12,0,0,0">
-                                                        <Button Content="{Binding Action}" Style="{StaticResource LinkButton}" Command="{Binding UndoCmd}" HorizontalAlignment="Right"
-                                                                VerticalAlignment="Top" Visibility="{Binding HasAction, Converter={StaticResource Vis}}" />
-                                                    </Border>
-                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding When}" Style="{StaticResource Hint}" Margin="12,0,0,0" VerticalAlignment="Top" />
-                                                    <StackPanel>
-                                                        <TextBlock Text="{Binding Title}" TextWrapping="Wrap" local:Demo.Sensitive="True" />
-                                                        <TextBlock Text="{Binding Note}" Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap"
-                                                                   Visibility="{Binding HasNote, Converter={StaticResource Vis}}" />
-                                                    </StackPanel>
-                                                </DockPanel>
+                                                <Border Style="{StaticResource KvItem}" Padding="0,5">
+                                                    <DockPanel>
+                                                        <Border DockPanel.Dock="Right" Width="128" Margin="12,0,0,0">
+                                                            <Button Content="{Binding Action}" Style="{StaticResource LinkButton}" Command="{Binding UndoCmd}" HorizontalAlignment="Right" Margin="0,-4,-4,-4"
+                                                                    VerticalAlignment="Top" Visibility="{Binding HasAction, Converter={StaticResource Vis}}" />
+                                                        </Border>
+                                                        <TextBlock DockPanel.Dock="Right" Text="{Binding When}" Style="{StaticResource Hint}" Margin="12,0,0,0" VerticalAlignment="Top" />
+                                                        <StackPanel>
+                                                            <TextBlock Text="{Binding Title}" TextWrapping="Wrap" local:Demo.Sensitive="True" />
+                                                            <TextBlock Text="{Binding Note}" Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap"
+                                                                       Visibility="{Binding HasNote, Converter={StaticResource Vis}}" />
+                                                        </StackPanel>
+                                                    </DockPanel>
+                                                </Border>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
@@ -2576,7 +2586,7 @@
                                         </StackPanel>
                                     </Expander>
                                     <Button Content="{l:T router.update.check}" Style="{StaticResource LinkButton}" Command="{Binding UpdateCheckCmd}" HorizontalAlignment="Left"
-                                            Margin="0,10,0,0" Visibility="{Binding Connected, Converter={StaticResource Vis}}" />
+                                            Margin="-4,10,0,0" Visibility="{Binding Connected, Converter={StaticResource Vis}}" />
                                     <!-- Итог проверки — у ссылки и держится (аудит С-23): «Проверка…», «Доступна X» + «Обновить до X», «Последняя версия · проверено в …», ошибка. -->
                                     <WrapPanel Margin="0,2,0,0" Visibility="{Binding HasUpdateCheckLine, Converter={StaticResource Vis}}" AutomationProperties.LiveSetting="Polite">
                                         <TextBox Text="{Binding UpdateCheckLine, Mode=OneWay}" VerticalAlignment="Center" Margin="0,0,10,0" TextWrapping="Wrap">
@@ -2595,10 +2605,10 @@
                                     </WrapPanel>
                                     <!-- «Вернуть версию» (status.rollback, роутер с 0.2.0-r16): только по кнопке, с вопросом; старый роутер — ссылки нет. -->
                                     <Button Content="{Binding RollbackText}" Style="{StaticResource LinkButton}" Command="{Binding RollbackCmd}" HorizontalAlignment="Left"
-                                            Margin="0,10,0,0" Visibility="{Binding RollbackShown, Converter={StaticResource Vis}}" />
+                                            Margin="-4,10,0,0" Visibility="{Binding RollbackShown, Converter={StaticResource Vis}}" />
                                     <!-- Удаление — спокойно и не на виду: ссылкой внизу карточки, подтверждение — в диалоге (RouterUninstallDialog). -->
                                     <Button Content="{l:T router.uninstall}" Style="{StaticResource LinkButton}" Command="{Binding UninstallCmd}" HorizontalAlignment="Left"
-                                            Margin="0,10,0,0" Visibility="{Binding Found, Converter={StaticResource Vis}}" />
+                                            Margin="-4,10,0,0" Visibility="{Binding Found, Converter={StaticResource Vis}}" />
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -2733,7 +2743,7 @@
                                     <DockPanel>
                                         <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="{l:T settings.changes.undo_all}" Command="{Binding UndoAllCmd}"
                                                 VerticalAlignment="Center" Margin="12,0,0,0" />
-                                        <TextBlock Text="{l:T settings.changes.title}" Style="{StaticResource H2}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{l:T settings.changes.title}" Style="{StaticResource H2}" VerticalAlignment="Center" Margin="0" />
                                     </DockPanel>
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" Text="{l:T settings.changes.promise}" />
                                     <TextBlock Text="{Binding EmptyText}" Style="{StaticResource Hint}" Margin="0,8,0,0" Visibility="{Binding ShowEmpty, Converter={StaticResource Vis}}" />
@@ -2743,19 +2753,21 @@
                                             <ItemsControl.ItemTemplate>
                                                 <!-- Пункт: «Отменить» — где отмена по одному безопасна (ChangeUndoPolicy); иначе — честная подпись почему. -->
                                                 <DataTemplate>
-                                                    <DockPanel Margin="0,3">
-                                                        <!-- Колонка действия одной ширины у всех строк — даты стоят ровно. -->
-                                                        <Border DockPanel.Dock="Right" Width="128" Margin="12,0,0,0">
-                                                            <Button Content="{Binding Action}" Style="{StaticResource LinkButton}" Command="{Binding UndoCmd}" HorizontalAlignment="Right"
-                                                                    VerticalAlignment="Top" Visibility="{Binding HasAction, Converter={StaticResource Vis}}" />
-                                                        </Border>
-                                                        <TextBlock DockPanel.Dock="Right" Text="{Binding When}" Style="{StaticResource Hint}" Margin="12,0,0,0" VerticalAlignment="Top" />
-                                                        <StackPanel>
-                                                            <TextBlock Text="{Binding Title}" TextWrapping="Wrap" local:Demo.Sensitive="True" />
-                                                            <TextBlock Text="{Binding Note}" Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap"
-                                                                       Visibility="{Binding HasNote, Converter={StaticResource Vis}}" />
-                                                        </StackPanel>
-                                                    </DockPanel>
+                                                    <Border Style="{StaticResource KvItem}" Padding="0,5">
+                                                        <DockPanel>
+                                                            <!-- Колонка действия одной ширины у всех строк — даты стоят ровно. -->
+                                                            <Border DockPanel.Dock="Right" Width="128" Margin="12,0,0,0">
+                                                                <Button Content="{Binding Action}" Style="{StaticResource LinkButton}" Command="{Binding UndoCmd}" HorizontalAlignment="Right" Margin="0,-4,-4,-4"
+                                                                        VerticalAlignment="Top" Visibility="{Binding HasAction, Converter={StaticResource Vis}}" />
+                                                            </Border>
+                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding When}" Style="{StaticResource Hint}" Margin="12,0,0,0" VerticalAlignment="Top" />
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding Title}" TextWrapping="Wrap" local:Demo.Sensitive="True" />
+                                                                <TextBlock Text="{Binding Note}" Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap"
+                                                                           Visibility="{Binding HasNote, Converter={StaticResource Vis}}" />
+                                                            </StackPanel>
+                                                        </DockPanel>
+                                                    </Border>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
@@ -2877,7 +2889,7 @@
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <TextBlock Text="{l:T about.version.title}" Style="{StaticResource H2}" />
-                                    <Grid Margin="0,4,0,0">
+                                    <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
@@ -2890,36 +2902,43 @@
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
-                                        <TextBlock Grid.Row="0" Text="{l:T about.row.app}" Style="{StaticResource Hint}" Margin="0,2,16,2" />
-                                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding AppVersionText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,2,0,2" />
-                                        <TextBlock Grid.Row="1" Text="{l:T about.row.helper}" Style="{StaticResource Hint}" Margin="0,2,16,2" />
-                                        <StackPanel Grid.Row="1" Grid.Column="1">
-                                            <TextBox Text="{Binding HelperText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,2,0,0" />
-                                            <TextBlock Text="{l:T about.helper.hint}" Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,2" />
+                                        <!-- Таблица «подпись — значение» (стили Kv* в Theme.xaml): строки разделены тонкой линией сверху, кроме первой. -->
+                                        <TextBlock Grid.Row="0" Text="{l:T about.row.app}" Style="{StaticResource KvLabel}" />
+                                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding AppVersionText, Mode=OneWay}" Style="{StaticResource KvValue}" />
+                                        <Border Grid.Row="1" Style="{StaticResource KvLine}" />
+                                        <TextBlock Grid.Row="1" Text="{l:T about.row.helper}" Style="{StaticResource KvLabel}" />
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Style="{StaticResource KvCell}">
+                                            <TextBox Text="{Binding HelperText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
+                                            <TextBlock Text="{l:T about.helper.hint}" Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
                                         </StackPanel>
-                                        <TextBlock Grid.Row="2" Text="{l:T about.row.data}" Style="{StaticResource Hint}" Margin="0,2,16,2" />
-                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Updates.StatusText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,2,0,2" />
-                                        <TextBlock Grid.Row="3" Text="{l:T about.row.core}" Style="{StaticResource Hint}" Margin="0,2,16,2" />
-                                        <StackPanel Grid.Row="3" Grid.Column="1">
-                                            <TextBox Text="{Binding CoreRowText, Mode=OneWay}" Style="{StaticResource SelectableText}" Margin="0,2,0,2" />
+                                        <Border Grid.Row="2" Style="{StaticResource KvLine}" />
+                                        <TextBlock Grid.Row="2" Text="{l:T about.row.data}" Style="{StaticResource KvLabel}" />
+                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Updates.StatusText, Mode=OneWay}" Style="{StaticResource KvValue}" />
+                                        <Border Grid.Row="3" Style="{StaticResource KvLine}" />
+                                        <TextBlock Grid.Row="3" Text="{l:T about.row.core}" Style="{StaticResource KvLabel}" />
+                                        <StackPanel Grid.Row="3" Grid.Column="1" Style="{StaticResource KvCell}">
+                                            <TextBox Text="{Binding CoreRowText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{l:T about.core.repair}" Command="{Binding RepairCoreCmd}" HorizontalAlignment="Left"
-                                                    Visibility="{Binding CoreBroken, Converter={StaticResource Vis}}" />
+                                                    Margin="0,6,0,0" Visibility="{Binding CoreBroken, Converter={StaticResource Vis}}" />
                                         </StackPanel>
-                                        <TextBlock Grid.Row="4" Text="{l:T about.row.router}" Style="{StaticResource Hint}" Margin="0,2,16,2" />
-                                        <StackPanel Grid.Row="4" Grid.Column="1" DataContext="{Binding Router}">
-                                            <TextBox Text="{Binding PackageVersionText, Mode=OneWay}" Style="{StaticResource SelectableText}" TextWrapping="Wrap" Margin="0,2,0,2" />
-                                            <TextBox Text="{Binding PackageUpdateText, Mode=OneWay}" Style="{StaticResource SelectableText}" FontWeight="SemiBold" Margin="0,2,0,2"
+                                        <Border Grid.Row="4" Style="{StaticResource KvLine}" />
+                                        <TextBlock Grid.Row="4" Text="{l:T about.row.router}" Style="{StaticResource KvLabel}" />
+                                        <StackPanel Grid.Row="4" Grid.Column="1" DataContext="{Binding Router}" Style="{StaticResource KvCell}">
+                                            <TextBox Text="{Binding PackageVersionText, Mode=OneWay}" Style="{StaticResource SelectableText}" TextWrapping="Wrap" />
+                                            <TextBox Text="{Binding PackageUpdateText, Mode=OneWay}" Style="{StaticResource SelectableText}" FontWeight="SemiBold" Margin="0,4,0,0"
                                                        Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
                                             <WrapPanel>
-                                                <Button Content="{Binding UpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}"
+                                                <Button Content="{Binding UpdateButtonText}" Style="{StaticResource Primary}" Command="{Binding UpdateCmd}" Margin="0,6,8,0"
                                                         Visibility="{Binding UpdateAvailable, Converter={StaticResource Vis}}" />
-                                                <Button Content="{l:T about.router.install}" Style="{StaticResource LinkButton}" Command="{Binding InstallCmd}"
+                                                <!-- Ссылка без сдвига: текст ровно под значением (у LinkButton поле 4). -->
+                                                <Button Content="{l:T about.router.install}" Style="{StaticResource LinkButton}" Command="{Binding InstallCmd}" Margin="-4,2,0,0"
                                                         Visibility="{Binding ShowPackageInstall, Converter={StaticResource Vis}}" />
                                             </WrapPanel>
                                         </StackPanel>
                                         <!-- Ядро, установленное на роутере (status.core.installed_version, роутер 0.2.0-r8); нет входа или старый роутер — строки нет. -->
-                                        <TextBlock Grid.Row="5" Text="{l:T about.row.router_core}" Style="{StaticResource Hint}" Margin="0,2,16,2" Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
-                                        <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Router.RouterCoreText, Mode=OneWay}" Style="{StaticResource SelectableText}" TextWrapping="Wrap" Margin="0,2,0,2"
+                                        <Border Grid.Row="5" Style="{StaticResource KvLine}" Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
+                                        <TextBlock Grid.Row="5" Text="{l:T about.row.router_core}" Style="{StaticResource KvLabel}" Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
+                                        <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Router.RouterCoreText, Mode=OneWay}" Style="{StaticResource KvValue}"
                                                    Visibility="{Binding Router.HasRouterCore, Converter={StaticResource Vis}}" />
                                     </Grid>
                                     <Button Content="{Binding FixHelperText}" Command="{Binding FixHelperCmd}" HorizontalAlignment="Left" Margin="0,8,0,0"
@@ -2967,7 +2986,7 @@
                                             </Expander>
                                             <WrapPanel Margin="0,6,0,0">
                                                 <Button Content="{l:T common.retry}" Command="{Binding RetryCmd}" />
-                                                <Button Content="{l:T about.app.manual_link}" Style="{StaticResource LinkButton}" Command="{Binding OpenReleaseCmd}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                                <Button Content="{l:T about.app.manual_link}" Style="{StaticResource RowLink}" Command="{Binding OpenReleaseCmd}" />
                                             </WrapPanel>
                                         </StackPanel>
                                         <!-- Ручное скачивание — не рядом с главной кнопкой, а под «Подробнее». -->
@@ -2980,10 +2999,10 @@
                                             <Button Content="{l:T about.app.check_button}" Command="{Binding CheckCmd}"
                                                     Visibility="{Binding ShowCheckButton, Converter={StaticResource Vis}}" />
                                             <!-- Итог проверки — рядом с кнопкой и держится: «Проверка…», «Последняя версия · проверено в …», «Не проверено: причина». -->
-                                            <TextBox Text="{Binding AppCheckLine, Mode=OneWay}" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"
+                                            <TextBox Text="{Binding AppCheckLine, Mode=OneWay}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"
                                                      Visibility="{Binding HasAppCheckLine, Converter={StaticResource Vis}}">
                                                 <TextBox.Style>
-                                                    <Style TargetType="TextBox" BasedOn="{StaticResource SelectableHint}">
+                                                    <Style TargetType="TextBox" BasedOn="{StaticResource RowNote}">
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding AppCheckFailed}" Value="True">
                                                                 <Setter Property="Foreground" Value="{DynamicResource Danger}" />

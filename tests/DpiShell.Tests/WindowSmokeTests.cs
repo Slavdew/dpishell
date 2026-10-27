@@ -2030,7 +2030,7 @@ public sealed partial class WindowSmokeTests
     /// <summary>
     /// «Информация и обновления» → обновление программы: есть обновление с «Что нового», идёт обновление, ошибка (подменённый архив),
     /// после обновления (итог, «Вернуть прежнюю версию», версии пакетов и ядро роутера). Без ошибок привязок в обеих темах.
-    /// Снимки: &lt;тема&gt;-about-update-ready|running|download|error|done.png.
+    /// Снимки: &lt;тема&gt;-about-update-ready|running|download|error|done|checked.png.
     /// </summary>
     [Fact]
     public void About_AppUpdate_States_BindAndSnap()
@@ -2143,6 +2143,19 @@ public sealed partial class WindowSmokeTests
                     if (!Has(w3, t)) throw new Exception($"Нет «{t}» после обновления");
                 Shot(w3, "done");
                 Close(w3);
+
+                // 5. Проверка без нового выпуска: итог («Последняя версия · проверено …» или «Не проверено: …») у кнопки — по центру кнопки по вертикали, не ниже.
+                var (vm4, w4, _) = NewWindow(AppUpdateTests.Serve(new MapHandler(), AppUpdateTests.A, "1.2.0"), "1.2.0", _ => Task.CompletedTask);
+                vm4.Updates.CheckCmd.Execute(null);
+                Until(() => vm4.Updates.HasAppCheckLine && !vm4.Updates.AppCheckLine.Contains('…'), "итог проверки");
+                var check = Find<Button>(w4, b => b.Content as string == L.T("about.app.check_button") && b.IsVisible)
+                    ?? throw new Exception("Нет «Проверить обновления» после проверки");
+                var line = Find<TextBox>(w4, t => t.Text == vm4.Updates.AppCheckLine && t.IsVisible) ?? throw new Exception("Итог проверки не виден");
+                double Mid(FrameworkElement e) => e.TranslatePoint(new Point(0, e.ActualHeight / 2), w4).Y;
+                if (Math.Abs(Mid(line) - Mid(check)) > 1.5)
+                    throw new Exception($"Итог проверки не по центру кнопки: {Mid(line):0.#} против {Mid(check):0.#}");
+                Shot(w4, "checked");
+                Close(w4);
             }
         });
         Assert.True(errors.Count == 0, "Ошибки привязок:\n" + string.Join("\n", errors));

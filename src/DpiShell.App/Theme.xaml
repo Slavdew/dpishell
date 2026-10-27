@@ -60,6 +60,40 @@
             <Setter Property="Foreground" Value="{DynamicResource Muted}" />
         </Style>
 
+        <!-- Таблица «подпись — значение» (Grid: Auto | *): подпись KvLabel, значение KvValue (или панель KvCell, если в ячейке
+             несколько строк). Строки со второй — с линией KvLine в той же строке Grid: она стоит у верхнего края и тянется на обе колонки. -->
+        <Style x:Key="KvLabel" TargetType="TextBlock" BasedOn="{StaticResource Hint}">
+            <Setter Property="Margin" Value="0,7,20,7" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+        <Style x:Key="KvValue" TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
+            <Setter Property="Margin" Value="0,7" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+        <Style x:Key="KvCell" TargetType="StackPanel">
+            <Setter Property="Margin" Value="0,7" />
+        </Style>
+        <Style x:Key="KvLine" TargetType="Border">
+            <Setter Property="Grid.ColumnSpan" Value="2" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+            <Setter Property="BorderThickness" Value="0,1,0,0" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+        <!-- То же для строк из ItemsControl: обёртка строки в шаблоне; у первой строки линии нет. -->
+        <Style x:Key="KvItem" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+            <Setter Property="BorderThickness" Value="0,1,0,0" />
+            <Setter Property="Padding" Value="0,6" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding RelativeSource={RelativeSource PreviousData}}" Value="{x:Null}">
+                    <Setter Property="BorderThickness" Value="0" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- Ячейка таблицы с личным (процессы, адреса записи): в демо-режиме размывается, см. Demo.cs. -->
         <Style x:Key="SensitiveCell" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
             <Setter Property="local:Demo.Sensitive" Value="True" />
@@ -180,6 +214,17 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!-- Ссылка и подпись в одном ряду с обычными кнопками. У кнопки снизу поле 8 (для переноса ряда), и ряд выше кнопки на 8:
+             соседу с VerticalAlignment=Center нужен тот же нижний отступ, иначе он стоит на 4 ниже центра кнопки. -->
+        <Style x:Key="RowLink" TargetType="Button" BasedOn="{StaticResource LinkButton}">
+            <Setter Property="Margin" Value="0,0,8,8" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="RowNote" TargetType="TextBox" BasedOn="{StaticResource SelectableHint}">
+            <Setter Property="Margin" Value="4,0,8,8" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
         <!-- «(i)» у заголовка раздела: маленький кружок; карточку с текстом показывает сам InfoButton. -->
