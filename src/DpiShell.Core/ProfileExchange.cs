@@ -119,6 +119,12 @@ public static partial class ProfileExchange
             string ports = g.Ports.Length > 0 ? g.Ports : sig?.Ports ?? "";
             if (sig is { Ports.Length: > 0 } && g.Ports.Length > 0 && g.Ports != sig.Ports) throw Bad("core.xchg.ports_differ", new { proto, filter = sig.Ports, parameters = g.Ports });
             if (ports.Length == 0) throw Bad("core.xchg.no_ports", new { proto });
+            // Без сигнатуры профиль получает все пакеты своих портов: any-protocol без cutoff шлёт фейки на каждый (winws: «TRASH FLOOD»).
+            if (sig is null && CutoffMissing(g.Desync))
+            {
+                g = g with { Desync = g.Desync + " --dpi-desync-cutoff=n2" };
+                notes.Add(L.T("core.xchg.cutoff_added", new { proto }));
+            }
             if (tcp) { tcpPorts = ports; tcpDesync = g.Desync; tcpLen = sig?.Length ?? 0; tcpHex = sig?.Hex ?? ""; tcpFilter = sig?.Custom ?? ""; }
             else { udpPorts = ports; udpDesync = g.Desync; udpLen = sig?.Length ?? 0; udpHex = sig?.Hex ?? ""; udpFilter = sig?.Custom ?? ""; }
         }
@@ -143,6 +149,12 @@ public static partial class ProfileExchange
         };
         if (AppProfiles.Problem(probe) is { } problem) throw new ImportProblem(problem);
         return new(imp, null);
+    }
+
+    static bool CutoffMissing(string desync)
+    {
+        var args = desync.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return args.Any(a => a is "--dpi-desync-any-protocol" or "--dpi-desync-any-protocol=1") && !args.Any(a => a.StartsWith("--dpi-desync-cutoff="));
     }
 
     // ---------- фильтр WinDivert ----------

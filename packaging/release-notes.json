@@ -1,6 +1,30 @@
 {
   "_comment": "Что нового в программе для Windows — для окна «Доступно обновление» и страницы релиза. Ключ — версия X.Y.Z (= Version в Directory.Build.props); значение — {\"ru\": [...], \"en\": [...]}: коротко, словами пользователя, до 15 строк; строки en — перевод строк ru один к одному (нет en — окно показывает русский; прежний вид, просто список, читается как ru). Нет записи для версии — тег windows-vX.Y.Z не выпускается (packaging/release-json.py). min_os — минимальная Windows (10.0.17763 = Windows 10 1809); на более старой окно обновление не предлагает.",
   "min_os": "10.0.17763",
+  "0.12.0": {
+    "ru": [
+      "Игровой режим: «Выкл», «Свои профили» или «Общий»; у каждого — раскрываемые «Подводные камни»",
+      "Свои профили игр: точное правило по порту, длине и началу пакета — через программу идёт один пакет, а не весь трафик игры",
+      "Импорт и экспорт профиля в формате сборок Flowseal и форков; справка — где в них искать параметры",
+      "Главная: стратегия ПК выбирается меню «▾», как у роутера; «Итоги подбора» — последний отчёт хранится до нового подбора",
+      "Свои сайты подбираются на ПК, не выключая роутер",
+      "Настройки не пропадают при косвенных переключениях; значок «выключено» понятнее",
+      "Свои сайты хранятся и проверяются только именем сайта; адреса домашней сети не проверяются",
+      "Обрыв загрузки обновления — «архив не скачался», а не «контрольная сумма не совпала»",
+      "Окна подтверждения не теряются за свёрнутым окном; «Роутер не найден» — только после двух неудачных опросов"
+    ],
+    "en": [
+      "Game mode: “Off”, “Custom profiles” or “General”; each has expandable “Pitfalls”",
+      "Custom game profiles: a precise rule by port, length and start of the packet — one packet goes through the program, not all game traffic",
+      "Import and export of a profile in the format of Flowseal builds and forks; help on where to find the parameters in them",
+      "Home: the PC strategy is chosen with a “▾” menu, like the router's; “Selection results” — the last report is kept until the next selection",
+      "Your own sites are selected on the PC without turning the router off",
+      "Settings no longer disappear on indirect switches; the “off” icon is clearer",
+      "Your own sites are stored and checked by site name only; home network addresses are not checked",
+      "An interrupted update download says “the archive did not download”, not “checksum mismatch”",
+      "Confirmation windows are no longer lost behind a minimized window; “Router not found” only after two failed polls"
+    ]
+  },
   "0.11.2": {
     "ru": [
       "Windows 10: подбор и проверки идут по TLS 1.2 — стратегии больше не бракуются все подряд",

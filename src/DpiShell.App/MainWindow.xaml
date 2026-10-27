@@ -2934,7 +2934,6 @@
                                             <Button ContentTemplate="{StaticResource Shield}" Content="{l:T about.lists.update}" Style="{StaticResource Primary}" Command="{Binding InstallCmd}"
                                                     HorizontalAlignment="Left" Margin="0,8,0,0" />
                                         </StackPanel>
-                                        <TextBlock Text="{l:T about.row.app}" Style="{StaticResource Hint}" Margin="0,14,0,0" />
                                         <!-- Программа: подписанное описание выпуска получено — «Что нового» и «Обновить до X» (права не нужны);
                                              не получено — подсказка и ссылка на страницу релизов. -->
                                         <StackPanel Margin="0,12,0,0" Visibility="{Binding AppReleaseReady, Converter={StaticResource Vis}}">

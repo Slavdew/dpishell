@@ -307,6 +307,18 @@ public sealed class GameProfilesTests
         return r.Problem!;
     }
 
+    /// <summary>winws на any-protocol без cutoff предупреждает «TRASH FLOOD»: без сигнатуры профиль ловит все пакеты своих портов.</summary>
+    [Fact]
+    public void Import_NoSignature_AnyProtocol_GetsCutoff()
+    {
+        var p = Import("", "--filter-udp=20001-21000 --dpi-desync=fake --dpi-desync-any-protocol=1 --dpi-desync-repeats=12", "3.120.1.0/24");
+        Assert.EndsWith("--dpi-desync-cutoff=n2", p.UdpDesync);
+        Assert.Contains(p.Notes, n => n.Contains("cutoff"));
+        // Свой cutoff не трогается; с сигнатурой — не добавляется.
+        Assert.Contains("--dpi-desync-cutoff=n4", Import("", "--filter-udp=20001-21000 --dpi-desync=fake --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n4", "3.120.1.0/24").UdpDesync);
+        Assert.DoesNotContain("cutoff", Import(Mistfall, "--filter-tcp=12001 --dpi-desync=fake --dpi-desync-any-protocol=1").TcpDesync);
+    }
+
     [Fact]
     public void Import_Mistfall_Whole()
     {

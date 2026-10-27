@@ -737,5 +737,6 @@
   "core.filter.need_compare": "Filter: a comparison is needed after \"{part}\" (position {at}).",
   "core.filter.need_value": "Filter: a number or address is needed after the comparison at \"{part}\" (position {at}).",
   "core.filter.no_proto_any": "Filter: no protocol (tcp or udp) found.",
+  "core.xchg.cutoff_added": "{proto}: --dpi-desync-cutoff=n2 added — without a signature, fakes would otherwise be sent on every packet.",
   "core.xchg.filter.custom_note": "Filter accepted as custom: at your own risk, one that is too wide slows the whole internet on the PC."
 }
