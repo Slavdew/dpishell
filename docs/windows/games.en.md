@@ -1,18 +1,25 @@
-# Games: game mode and custom profiles
+# Games: app profiles and general game mode
 
 [Русский](games.md)
 
-Site optimization works by site name: at the start of a connection the browser openly states where it is going (`www.youtube.com`), and the program confuses the provider's filter only on those connections. Games have no name in their packets — their own protocol, their own ports, often UDP. That is why games have separate settings on the **"Games and apps"** tab.
+Site optimization works by site name: at the start of a connection the browser openly states where it is going (`www.youtube.com`), and the program confuses the provider's filter only on those connections. Games have no name in their packets — their own protocol, their own ports, often UDP. That is why games have separate settings on the **"Games & apps"** tab.
 
-## Three options
+## What the tab has
 
-| | What it does | When to choose |
+| | What it does | When to turn on |
 |---|---|---|
-| **Off** | game traffic goes as is | the game works anyway — the default |
-| **Custom profiles** | only the profiles you added: precise rules for a specific game | the game does not work and there is a profile for it (recorded by the program or taken from another build) |
-| **General** | all ports 1024–65535 to addresses from the IP list — like Flowseal's "Game Filter" | there is no profile, but you need to try; as a temporary measure |
+| **App profiles** | precise rules for a specific game: its ports, addresses, and better a packet signature. Each profile has its own switch; several can be on at once | the game does not work and there is a profile for it (recorded by the program, added from a Flowseal build, or received as a line from someone else) |
+| **General game mode** | all ports 1024–65535 to addresses from the IP list — like Flowseal's "Game Filter" | there is no profile, but you need to try; as a temporary measure |
 
-Profiles for specific games are not built into the program: you add them — by recording the game's connections (“Record a game…”) or from another build with “Add profile…” (below).
+Profiles and "General" are independent: with "General" on, profiles keep working and match first (they come earlier in the winws command line).
+
+Profiles for specific games are not built into the program: you add them — by recording the game's connections (“Record a game…”), from another build (“Add profile…”, below) or from a profile line (“Import…”).
+
+### Profile strategy
+
+By default a profile uses **the game part of the PC strategy** — the same as general game mode: the strategy's `game_tcp`/`game_udp` role, or one derived from its main role if there is none. Change the PC strategy and it changes too.
+
+The **"Different strategies"** box above the list gives each profile its own choice: "Default", the game part of any strategy in the list, or **"Own"** — the parameters the profile came with from a Flowseal build or in a profile line. A profile with own parameters gets "Own" right away when added, and the box turns on by itself. Clear the box and all profiles use "Default"; the choices are kept, so you can go back to "Own".
 
 ## Pitfalls
 
@@ -24,16 +31,16 @@ Profiles for specific games are not built into the program: you add them — by 
 - **It does not work without the IP list:** the mode turns on only with the list loaded.
 - If things got worse with the mode on — turn it off. The Flowseal author keeps Game Filter off by default for the same reasons.
 
-### Custom profiles
+### App profiles
 
 - **A profile from someone else's build may not fit.** It was made for a different provider and a different game version; after a game update the rule may stop matching.
 - **A profile without a signature catches everything on its ports.** If a profile has only ports and addresses, all game traffic on those ports goes through the program — milder than general mode, but not free. With a signature (packet length and its first bytes) one packet is intercepted, the rest bypasses the program.
-- **Several profiles can be on at once**, but if two profiles catch the same ports, the first one wins.
+- **Several profiles can be on at once**, but if two profiles catch the same ports, the first in the list wins.
 - **Selection does not test games.** Whether a profile works can only be seen in the game itself.
 
 ## A profile from another build (“Add profile…”)
 
-There is no common format for game profiles. Flowseal builds (`zapret-discord-youtube`) and their forks keep settings in three places — the “Add profile…” window takes the same three pieces of text (empty fields show a format hint). At least one of the first two is required.
+There is no common format for game profiles. Flowseal builds (`zapret-discord-youtube`) and their forks keep settings in three places — the “Add profile…” window takes the same three pieces of text (empty fields show a format hint). At least one of the first two is required. “Paste from clipboard” recognizes a `dpishell-game:1:…` profile line itself and opens it in “Import profile”.
 
 ### 1. Interception filter
 
@@ -57,7 +64,7 @@ Where to look: the `.bat` file that starts the build (`general.bat`, `general (A
 
 The program takes the ports and `--dpi-desync…` parameters from the same allow list as strategies. File paths, `--ipset`, `--hostlist`, `--wf-…` and launching other programs are not accepted. Fake packets (`.bin`) — only from the program's own set: foreign files are not loaded.
 
-Signs of a game piece: ports in `--filter-tcp`/`--filter-udp` other than 80/443, no `--hostlist`, often `--dpi-desync-any-protocol=1`. Variables like `%GameFilter…%` in Flowseal `.bat` files are the general game mode, not a game profile: no need to carry them over — here that is the "General" option.
+Signs of a game piece: ports in `--filter-tcp`/`--filter-udp` other than 80/443, no `--hostlist`, often `--dpi-desync-any-protocol=1`. Variables like `%GameFilter…%` in Flowseal `.bat` files are the general game mode, not a game profile: no need to carry them over — here that is "General game mode".
 
 ### 3. Subnet list (optional)
 
@@ -65,11 +72,13 @@ Where to look: the build's `lists\` folder, the file `--ipset=` points to in the
 
 ### Sharing a profile
 
-"Copy" on a profile gives the same three pieces. You can send them to a friend with DpiShell or paste them into a Flowseal build: the filter — into a `windivert.filter\*.txt` file referenced by `--wf-raw-part=@…`, the parameters — as a separate piece after `--new`, the subnets — into `lists\`.
+"⋯" → **"Export"** on a profile copies it as one `dpishell-game:1:…` line: title, ports, signature or own filter, subnets and own parameters. Whether the profile is on and which strategy it has are settings of your PC and are not included. The recipient presses **"Import…"** on the tab (or "Paste from clipboard" in the "New profile" window), sees what is inside, and only then adds it. The line is checked as strictly as input from a build: an extra field, a disallowed parameter, a foreign `.bin` file, a service or too wide subnet — refused with the reason.
+
+"⋯" → "Copy for Flowseal" gives three pieces of text for a Flowseal build: the filter — into a `windivert.filter\*.txt` file referenced by `--wf-raw-part=@…`, the parameters — as a separate piece after `--new`, the subnets — into `lists\`.
 
 ## If the game still does not work
 
-1. Turn game mode off and check that the game starts and sites open without it.
-2. Try "Custom profiles" with a profile for the game; if needed — another parameter variant of the profile.
-3. "General" — last, and watch ping and region in the game itself.
+1. Turn the game's profile and "General" off and check that the game starts and sites open without them.
+2. Turn on a profile for the game; if needed — "Different strategies" and another strategy for the profile.
+3. "General game mode" — last, and watch ping and region in the game itself.
 4. Two optimization programs do not work at the same time: turn DpiShell off before starting another build (and vice versa).
