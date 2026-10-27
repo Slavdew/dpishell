@@ -58,6 +58,20 @@ public static class Icons
     public static BitmapSource ImageFor(StatusKind k, int size = 32)
     {
         using var bmp = Render(k, size);
+        return ToSource(bmp);
+    }
+
+    /// <summary>Знак без метки состояния, синий (заголовок меню): 44 px — чётко и при 200 %.</summary>
+    public static BitmapSource Plain => _plain ??= PlainImage();
+    static BitmapSource? _plain;
+    static BitmapSource PlainImage()
+    {
+        using var bmp = Render(StatusKind.On, 44, withBadge: false);
+        return ToSource(bmp);
+    }
+
+    static BitmapSource ToSource(Drawing.Bitmap bmp)
+    {
         var h = bmp.GetHbitmap(Drawing.Color.Transparent);
         try
         {
