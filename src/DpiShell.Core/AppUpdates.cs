@@ -188,11 +188,13 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
     /// <summary>
     /// Скачать файл выпуска в <paramref name="target"/> и сверить sha256: сначала с источника описания, затем с остальных.
     /// Не совпал — файл удаляется, пробуется следующий; ни один — <see cref="SecurityException"/> со всеми причинами.
+    /// Ни с одного не скачался (обрыв связи), а несовпадений не было — <see cref="HttpRequestException"/>: это не подмена файла.
     /// </summary>
     public async Task DownloadAsync(FetchedRelease release, AppReleaseAsset asset, string target, IProgress<long>? progress = null, CancellationToken ct = default)
     {
         List<string> order = [release.Source, .. sources.Where(s => s != release.Source)];
         var errors = new List<string>();
+        var badHash = false;
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         foreach (var src in order)
         {
@@ -206,9 +208,11 @@ public sealed class AppUpdateClient(HttpClient http, IReadOnlyList<string> sourc
             }
             if (hash == asset.Sha256) return;
             TryDelete(target);
+            badHash = true;
             errors.Add(L.T("core.upd.bad_archive_hash", new { host = Host(src) }));
         }
-        throw new SecurityException(L.T("core.upd.archive_missing", new { name = asset.Name, errors = string.Join("; ", errors) }));
+        var missing = L.T("core.upd.archive_missing", new { name = asset.Name, errors = string.Join("; ", errors) });
+        throw badHash ? new SecurityException(missing) : new HttpRequestException(missing);
     }
 
     async Task<HttpResponseMessage> HeadAsync(string url, CancellationToken ct)
@@ -527,9 +531,10 @@ public sealed class AppUpdater(AppUpdateClient client, AppVersionStore store)
         {
             return new(false, L.T("core.upd.bad_archive"), Details: e.Message);
         }
+        // Архив не скачался ни с одного источника — связь обрывается (у друга — github.com посреди загрузки), не подмена.
         catch (HttpRequestException e)
         {
-            return new(false, L.T("core.upd.offline"), Details: e.Message);
+            return new(false, L.T("core.upd.download_broken"), Details: e.Message);
         }
         // Архив или распакованный файл пропал во время распаковки (дополнение 2 ТЗ av-exclusion) — антивирус, сказать прямо; повтор — кнопкой.
         catch (Exception e) when (AvBlock.IsVirusError(e) || e is FileNotFoundException)

@@ -174,6 +174,22 @@ public sealed class AppUpdateTests
         Assert.Equal(before, h.Requests.Count);
     }
 
+    /// <summary>Отзыв друга 26.10: github.com рвал связь посреди загрузки, а окно писало «контрольная сумма не совпала».</summary>
+    [Fact]
+    public async Task Prepare_ArchiveNotDownloaded_SaysConnection_NotHashMismatch()
+    {
+        using var t = new TempDir();
+        var store = new AppVersionStore(t.Sub("versions"));
+        var h = Serve(new MapHandler(), A, "1.2.0").Fail(A + AppRelease.PortableName("1.2.0"));
+        var up = new AppUpdater(Client(h, A), store) { CurrentVersion = "1.0.0" };
+        var p = await up.PrepareAsync(await up.CheckAsync());
+        Assert.False(p.Ok);
+        Assert.Equal(L.T("core.upd.download_broken"), p.Message);
+        Assert.DoesNotContain("контрольная сумма", p.Message);
+        Assert.Contains(AppRelease.PortableName("1.2.0"), p.Details);
+        Assert.False(store.IsInstalled("1.2.0"));
+    }
+
     [Fact]
     public async Task Prepare_HashMismatch_TriesNext_ThenFails()
     {

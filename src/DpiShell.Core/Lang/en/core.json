@@ -59,7 +59,7 @@
   "core.upd.ready": "Version {version} is ready — restart the app.",
   "core.upd.hash_mismatch": "The downloaded file failed verification: its checksum does not match the signed release description. The update is cancelled, the app is unchanged.",
   "core.upd.bad_archive": "The archive is damaged or not what the app expects. The update is cancelled, the app is unchanged.",
-  "core.upd.offline": "No connection to the update source. Try again later — the app is unchanged.",
+  "core.upd.download_broken": "The archive did not download: the connection keeps dropping. Try again later — the app is unchanged.",
   "core.upd.write_failed": "Could not write files to {path}: no access or the file is in use. The app is unchanged.",
   "core.upd.av_blocked": "The update archive was deleted while unpacking, possibly by an antivirus ({path}). The app is unchanged; retry or download the archive from the release page.",
   "core.upd.no_space": "Not enough space on disk {disk} - about {need} MB needed, {free} MB free. Free up space and retry - the app is unchanged.",
