@@ -45,6 +45,8 @@ outbound and tcp.DstPort = 12001 and tcp.PayloadLength = 79 and tcp.Payload32[0]
 
 This is the signature: "TCP to port 12001, 79 bytes long, starts with `00 00 04 4D`". The program accepts such lines only when built from understood parts — direction, port, length, packet start; anything else is rejected with a note of what did not fit.
 
+A complex filter that does not break down into these parts can be pasted whole into the "Custom filter" field — it is visible when "Show tools for advanced users" is on in "Settings". Required: direction `outbound`, protocol and destination port (`tcp.DstPort`/`udp.DstPort`): without them the filter would route all of the PC's traffic through the program. A custom filter is at your own risk: one that is too broad slows down all internet on the computer.
+
 ### 2. Processing parameters
 
 Where to look: the `.bat` file that starts the build (`general.bat`, `general (ALT).bat`, etc.). Open it in Notepad (right click → "Edit", **do not** run it). You need the piece from `--new` to the next `--new` that starts with the game's port:
