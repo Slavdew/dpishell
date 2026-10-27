@@ -84,9 +84,7 @@ public sealed class LangWindowTests : IDisposable
             radios[0].IsChecked = true;
             WindowSmokeTests.Pump();
             if (L.Current != "ru" || Tab(0).Header as string != "Главная") throw new Exception("Выбор в «Настройках» не вернул русский");
-            vm.ShowAdvancedSetting = true;
-            WindowSmokeTests.Pump();
-            if (Find<Button>(tabs, b => b.Content as string == "Выгрузить шаблон перевода" && b.IsVisible) is null) throw new Exception("Нет «Выгрузить шаблон перевода» у инструментов для опытных");
+            if (Find<Button>(tabs, b => b.Content as string == "Выгрузить шаблон перевода" && b.IsVisible) is null) throw new Exception("Нет «Выгрузить шаблон перевода» рядом с языками");
             Shot(w, "lang-settings-ru");
 
             // Шаблон — файл рядом с window.json, папка «открывается» (в тесте — подменено).

@@ -87,8 +87,12 @@ public sealed class AppsViewModel : Observable
     public Func<Task> AfterChange { get; set; }
     /// <summary>Процессы с окнами для выбора (в тестах подменяется).</summary>
     public Func<IReadOnlyList<ProcessChoice>> ListProcesses { get; set; } = ProcessesWithWindows;
-    /// <summary>Расширенный раздел открыли по «Подробнее» (даже если в «Настройках» он не включён).</summary>
-    public event Action? DetailRequested;
+    bool _debugOpen;
+    /// <summary>
+    /// Раздел «Отладка подключений (для опытных)» внизу вкладки раскрыт. Раздел виден всегда (UX-аудит 8, §3 №9), свёрнут по умолчанию;
+    /// «Отладка подключений →» у «Настроить под игру» раскрывает его. До перезапуска окна.
+    /// </summary>
+    public bool DebugOpen { get => _debugOpen; set => Set(ref _debugOpen, value); }
 
     public AppsViewModel(HelperLink helper)
     {
@@ -388,7 +392,7 @@ public sealed class AppsViewModel : Observable
     void OpenDetail()
     {
         if (_last is not null) LoadRows(_last);
-        DetailRequested?.Invoke();
+        DebugOpen = true;
     }
 
     /// <summary>Раз в секунду из окна: время записи и счётчик подключений.</summary>

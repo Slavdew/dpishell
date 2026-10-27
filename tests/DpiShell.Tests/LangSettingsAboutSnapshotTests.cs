@@ -54,7 +54,7 @@ public sealed class LangSettingsAboutSnapshotTests : IDisposable
                 SetProp(vm, "IsLoading", false);
                 Pump();
 
-                vm.ShowAdvancedSetting = true;
+                vm.Apps.DebugOpen = true;
                 var at = DateTime.UtcNow;
                 vm.Changes.Show([
                     new("1", "A", at, UndoStatus.Restored, ""),

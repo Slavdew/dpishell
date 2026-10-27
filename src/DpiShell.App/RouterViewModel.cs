@@ -401,7 +401,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
             SetConnection(() => RouterTexts.NotFoundText, notFound: true);
         }
         else _ = RefreshAsync();
-        Raise(nameof(Enabled)); Raise(nameof(Found));
+        Raise(nameof(Enabled)); Raise(nameof(Found)); RaiseTargetSwitch();
     }
 
     bool _searched, _autoFindTried;
@@ -472,7 +472,8 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         {
             if (!Set(ref _connected, value)) return;
             Raise(nameof(NeedLogin)); Raise(nameof(CanAct)); Raise(nameof(ScheduleEditable)); RaiseCompat(); Raise(nameof(SelectOnRouterVisible)); Raise(nameof(SelectOnPcVisible));
-            Raise(nameof(TargetsOnRouterVisible)); Raise(nameof(TargetsOnPcVisible)); Raise(nameof(JointAvailable)); Raise(nameof(JointCardVisible));
+            Raise(nameof(TargetsOnRouterVisible)); Raise(nameof(TargetsOnPcVisible)); Raise(nameof(JointAvailable)); Raise(nameof(JointOffReason)); Raise(nameof(HasJointOffReason));
+            RaiseTargetSwitch();
             if (!value) { Selecting = false; DiagLoaded = false; DnsPresetsAvailable = false; _security = null; RaiseSecurity(); }
             Raise(nameof(DiagHint));
             Requery();
@@ -622,8 +623,12 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     {
         _detection = d;
         if (d is null || d.Found == RouterFound.NotFound) { Status = null; Connected = false; }
-        else ClearRemoved();
-        Raise(nameof(Detection)); Raise(nameof(Found)); Raise(nameof(NeedLogin)); Raise(nameof(InstallText)); RaiseAbout();
+        else
+        {
+            ClearRemoved();
+            if (!_settings.RouterSeen) { _settings.RouterSeen = true; TrySave(); }
+        }
+        Raise(nameof(Detection)); Raise(nameof(Found)); Raise(nameof(NeedLogin)); Raise(nameof(InstallText)); RaiseAbout(); RaiseTargetSwitch();
         UpdateHome();
     }
 
@@ -1165,7 +1170,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public bool Busy
     {
         get => _busy;
-        private set { if (Set(ref _busy, value)) { Raise(nameof(CanAct)); Raise(nameof(CanConnect)); Raise(nameof(ScheduleEditable)); Requery(); } }
+        private set { if (Set(ref _busy, value)) { Raise(nameof(CanAct)); Raise(nameof(CanConnect)); Raise(nameof(CanPickRouter)); Raise(nameof(ScheduleEditable)); Requery(); } }
     }
 
     /// <summary>Одно действие за раз; ошибки роутера — коротким текстом в строку состояния.</summary>
@@ -1353,12 +1358,40 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         {
             if (_selectOnRouter == value) return;
             _selectOnRouter = value;
-            Raise(); Raise(nameof(SelectOnPc)); Raise(nameof(SelectOnRouterVisible)); Raise(nameof(SelectOnPcVisible));
+            Raise(); Raise(nameof(SelectOnPc)); Raise(nameof(SelectOnRouterVisible)); Raise(nameof(SelectOnPcVisible)); Raise(nameof(SelectOnRouterShown)); Raise(nameof(SelectOnPcShown));
         }
     }
     public bool SelectOnPc { get => !SelectOnRouter; set => SelectOnRouter = !value; }
     public bool SelectOnRouterVisible => Connected && SelectOnRouter;
     public bool SelectOnPcVisible => !SelectOnRouterVisible;
+    /// <summary>Радио «Где подбирать» — как <see cref="TargetsOnRouterShown"/>: без роутера отмечено «На этом ПК», выбор «На роутере» не стирается.</summary>
+    public bool SelectOnRouterShown { get => SelectOnRouterVisible; set { if (Connected) SelectOnRouter = value; } }
+    public bool SelectOnPcShown { get => SelectOnPcVisible; set { if (Connected) SelectOnRouter = !value; } }
+
+    // ---------- переключатели «ПК / роутер» без роутера (UX-аудит 8, §3 №7–8) ----------
+
+    /// <summary>
+    /// Переключатели «На этом ПК / На роутере» («Сайты», «Подбор») на месте, если роутер хоть раз находился: пропал — «На роутере» серый с причиной,
+    /// а не исчезает весь переключатель. Ни разу не находился или «Показывать роутер» снята — переключателей нет: выбирать не из чего.
+    /// </summary>
+    public bool TargetSwitchVisible => Enabled && (Found || _settings.RouterSeen || _settings.RouterPassword is not null || _settings.RouterBypass is not null);   // пароль и метка — следы роутера до этой версии
+
+    /// <summary>«Роутер не подключён · Найти →» под переключателем: роутер был, но сейчас управлять им нельзя.</summary>
+    public bool TargetRouterOff => TargetSwitchVisible && !Connected;
+
+    /// <summary>«На роутере» можно выбрать: роутер подключён и не идёт подключение.</summary>
+    public bool CanPickRouter => Connected && !Busy;
+
+    /// <summary>«Найти →»: вкладка «Роутер» — там поиск, вход и причина.</summary>
+    public ICommand GoRouterPageCmd => _goRouterPageCmd ??= new RelayCommand(() => Navigate(Pages.Router));
+    ICommand? _goRouterPageCmd;
+
+    void RaiseTargetSwitch()
+    {
+        foreach (var n in new[] { nameof(TargetSwitchVisible), nameof(TargetRouterOff), nameof(CanPickRouter), nameof(TargetsOnRouterShown), nameof(TargetsOnPcShown),
+                     nameof(SelectOnRouterShown), nameof(SelectOnPcShown) })
+            Raise(n);
+    }
 
     bool _selecting;
     public bool Selecting
@@ -1737,7 +1770,7 @@ public sealed partial class RouterViewModel : Observable, IDisposable
         set
         {
             if (!Set(ref _targetsOnRouter, value)) return;
-            Raise(nameof(TargetsOnPc)); Raise(nameof(TargetsOnRouterVisible)); Raise(nameof(TargetsOnPcVisible));
+            Raise(nameof(TargetsOnPc)); Raise(nameof(TargetsOnRouterVisible)); Raise(nameof(TargetsOnPcVisible)); Raise(nameof(TargetsOnRouterShown)); Raise(nameof(TargetsOnPcShown));
             if (value && !_targetsLoaded) _ = LoadTargetsAsync();
             if (value) _ = Advanced.RefreshAsync();
         }
@@ -1745,6 +1778,12 @@ public sealed partial class RouterViewModel : Observable, IDisposable
     public bool TargetsOnPc { get => !TargetsOnRouter; set => TargetsOnRouter = !value; }
     public bool TargetsOnRouterVisible => Connected && TargetsOnRouter;
     public bool TargetsOnPcVisible => !TargetsOnRouterVisible;
+    /// <summary>
+    /// Радио «На этом ПК / На роутере» показывают то, что видно: без роутера отмечено «На этом ПК». Выбор «На роутере» при этом не стирается
+    /// (WPF снимает соседнее радио и пишет false — без роутера это не выбор пользователя), роутер вернётся — вернётся и он.
+    /// </summary>
+    public bool TargetsOnRouterShown { get => TargetsOnRouterVisible; set { if (Connected) TargetsOnRouter = value; } }
+    public bool TargetsOnPcShown { get => TargetsOnPcVisible; set { if (Connected) TargetsOnRouter = !value; } }
 
     public ObservableCollection<RouterTargetRow> Targets { get; } = [];
     public const int MaxTargets = 50;

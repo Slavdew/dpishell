@@ -61,8 +61,8 @@ public sealed class LangSitesAppsTests : IDisposable
             var f = new HelperFixture(backend: PcHelper.Over(shell, flows, procs));
             var link = Task.Run(f.LinkAsync).GetAwaiter().GetResult();
             var settings = TestWindow.Settings(shell);
-            settings.ShowAdvanced = true;
             var vm = TestWindow.Model(shell, link, settings);
+            vm.Apps.DebugOpen = true;
             vm.Apps.ListProcesses = () => [new(900, "chrome.exe", "Chrome"), new(2000, "game.exe", "Game")];
             vm.ApplyHelperData();
 

@@ -11,6 +11,7 @@
   "hosts.remove_entries": "Remove entries",
   "hosts.enable": "Turn on",
   "hosts.check": "Check addresses",
+  "hosts.check_needs_on": "Turn on first.",
   "hosts.stop": "Stop",
   "hosts.col.site": "Site and address",
   "hosts.col.owner": "Owner",

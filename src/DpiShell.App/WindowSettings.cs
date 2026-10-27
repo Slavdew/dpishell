@@ -35,8 +35,11 @@ public sealed class WindowSettings
     public bool ShowRouter { get; set; } = true;
     /// <summary>Меню слева свёрнуто до значков (по умолчанию раскрыто).</summary>
     public bool NavCollapsed { get; set; }
-    /// <summary>Показывать инструменты для опытных (пока — «Отладка подключений» на вкладке «Игры и программы»).</summary>
-    public bool ShowAdvanced { get; set; }
+    /// <summary>
+    /// DpiShell на роутере хоть раз находился: переключатели «На этом ПК / На роутере» («Сайты», «Подбор») остаются на месте и без роутера —
+    /// «На роутере» серый с причиной (UX-аудит 8, §3 №7–8). Без роутера ни разу — переключателей нет: выбирать не из чего.
+    /// </summary>
+    public bool RouterSeen { get; set; }
     /// <summary>Подсказку «свернулась в трей» уже показывали.</summary>
     public bool TrayHintShown { get; set; }
     /// <summary>Окно при входе в Windows (в трее). Null — не выбирали: по режиму работы (architecture.md «Автозапуск»).</summary>
