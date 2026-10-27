@@ -617,8 +617,8 @@
     "On failure a backup strategy is turned on. If backups do not help either — a quick search: 2–3 min, at most once every 6 h; sites on all devices are interrupted meanwhile. That is why it is off by default."
   ],
   "web.main.report_none": [
-    "Подбора на роутере ещё не было",
-    "No selection on the router yet"
+    "Итогов подбора нет",
+    "No selection results"
   ],
   "web.main.report_tip": [
     "Последний подбор: {time}",

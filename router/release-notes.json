@@ -1,6 +1,7 @@
 {
   "_comment": "Что нового — для плашки «Доступно обновление» и страницы релиза. Ключ — версия X.Y.Z; коротко, словами пользователя, самое важное сверху, не больше 15 строк (роутер показывает первые 15). Нет записи — release-json.py возьмёт заголовки коммитов. Русские строки — в записи версии (список). Английский перевод — в разделе \"en\" под тем же ключом версии: строки один к одному с русскими (release-json.py сверяет число строк), в release.json — changes_en.",
   "0.2.3": [
+    "r2: на главной — «Итоги подбора»; таблица подбора читается на телефоне; перевод страницы обновляется сразу после обновления",
     "Предупреждение «Стратегия не проходит проверку» с кнопкой «Подобрать»",
     "Подбор, проверка и запасные стратегии одинаково меряют стратегии с временными метками TCP",
     "Счётчик провалов сбрасывается при смене стратегии",
@@ -45,6 +46,7 @@
   ],
   "en": {
     "0.2.3": [
+      "r2: “Selection results” on the main page; the selection table reads well on a phone; page translation updates right after an update",
       "Warning “Strategy fails the check” with a “Select” button",
       "Selection, check and fallback strategies measure TCP-timestamp strategies the same way",
       "The failure counter is reset when the strategy changes",

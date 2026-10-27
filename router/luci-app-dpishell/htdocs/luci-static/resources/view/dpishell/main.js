@@ -61,7 +61,7 @@ return view.extend({
 			toggle: api.btn(api.t('router.enable'), function() { return self.toggle(); }, 'cbi-button-positive dps-big'),
 			select: api.btn(api.t('router.select'), function() { return self.openSelect(); }, 'cbi-button-neutral'),
 			check: api.btn(api.t('home.check_now'), function() { return self.checkNow(); }, 'cbi-button-neutral'),
-			// «Итоги подбора» — последний отчёт (роутер хранит его до нового подбора), то же место, что на главной окна ПК.
+			// «Итоги подбора» — последний отчёт (роутер хранит его до нового подбора или перезагрузки), то же место, что на главной окна ПК.
 			report: api.btn(api.t('home.report'), function() { api.go('select'); }, 'cbi-button-neutral'),
 			err: E('div', { 'class': 'dps-error' }),
 			// Стратегия — не сразу: оптимизация для всей сети перезапускается (UX-аудит п. 50).
@@ -160,17 +160,22 @@ return view.extend({
 				return;
 			}
 			var wasSelecting = self.status.jobs && self.status.jobs.select;
+			// Роутер, умеющий since (rows_total в ответе), строк не шлёт; старый пакет dpishell на since отвечает ошибкой.
+			var canSince = !!(self.progress && self.progress.rows_total != null);
 			self.status = s;
-			if (s.jobs.select)
-				// Здесь нужны только index/total/depth: роутер, умеющий since (rows_total в ответе), строк не шлёт.
-				return api.safe('select_progress', self.progress && self.progress.rows_total != null ? { since: 1000000 } : null).then(function(p) {
+			if (s.jobs.select) {
+				// Подбор мог начаться не отсюда (таймер, окно ПК): прошлые итоги уже не те.
+				self.setReport({ running: true });
+				// Здесь нужны только index/total/depth.
+				return api.safe('select_progress', canSince ? { since: 1000000 } : null).then(function(p) {
 					self.progress = p.__error ? null : p;
 					self.update();
 				});
+			}
 			self.progress = null;
 			self.update();
 			if (wasSelecting)
-				return Promise.all([api.safe('strategies'), api.safe('select_progress', { since: 1000000 })]).then(function(d) {
+				return Promise.all([api.safe('strategies'), api.safe('select_progress', canSince ? { since: 1000000 } : null)]).then(function(d) {
 					if (!d[0].__error) {
 						self.strategies = d[0];
 						self.fillStrategies();
@@ -180,11 +185,13 @@ return view.extend({
 		});
 	},
 
-	// «Итоги подбора»: отчёта нет (подбора не было или идёт новый) — кнопка серая, в подсказке почему (не скрыта).
+	// «Итоги подбора»: отчёта нет (подбора не было, роутер перезагружался или идёт новый) — кнопка серая, в подсказке почему (не скрыта).
+	// Прерванный подбор (finished_at нет, строки есть) — итоги есть, как на вкладке «Подбор».
 	setReport: function(p) {
-		var has = !!(p && !p.__error && !p.running && p.finished_at);
+		var has = !!(p && !p.__error && !p.running && (p.finished_at || p.rows_total > 0 || (p.rows && p.rows.length)));
 		this.el.report.disabled = !has;
-		this.el.report.title = has ? api.t('web.main.report_tip', { time: api.time(p.finished_at) }) : api.t('web.main.report_none');
+		this.el.report.title = !has ? api.t('web.main.report_none')
+			: p.finished_at ? api.t('web.main.report_tip', { time: api.time(p.finished_at) }) : api.t('home.report');
 	},
 
 	// Состояние для панели — как на главной окна ПК: kind — ok | off | err | busy (цвет точки).

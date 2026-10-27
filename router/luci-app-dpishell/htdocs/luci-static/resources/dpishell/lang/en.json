@@ -466,7 +466,7 @@
  "web.main.opt_stats": "{name} — opened everything in {passed} of {runs} searches",
  "web.main.opt_stats_none": "{name} — has not opened everything in a search yet",
  "web.main.remove_pkg": "Remove package {name} (apk del {name}).",
- "web.main.report_none": "No selection on the router yet",
+ "web.main.report_none": "No selection results",
  "web.main.report_tip": "Last selection: {time}",
  "web.main.reselect_info": "On failure a backup strategy is turned on. If backups do not help either — a quick search: 2–3 min, at most once every 6 h; sites on all devices are interrupted meanwhile. That is why it is off by default.",
  "web.main.reset_note": "Without this page: on most OpenWrt routers pressing reset for 2 s turns optimization off without a reboot; on some it works differently. Do not hold it for 5 s or longer: that is usually a factory reset.",
