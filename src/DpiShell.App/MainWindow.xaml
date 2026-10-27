@@ -474,12 +474,18 @@
                         </Grid.RowDefinitions>
 
                         <DockPanel>
-                            <!-- Где подбирать — только когда роутер подключён (router-api §6). -->
-                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,4,0,0" DataContext="{Binding Router}"
-                                        Visibility="{Binding Connected, Converter={StaticResource Vis}}">
-                                <TextBlock Text="{l:T select.where.label}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,12,0" />
-                                <RadioButton Content="{l:T select.where.pc}" IsChecked="{Binding SelectOnPc}" Margin="0,0,16,0" IsEnabled="{Binding CanConnect}" />
-                                <RadioButton Content="{l:T select.where.router}" IsChecked="{Binding SelectOnRouter}" IsEnabled="{Binding CanConnect}" />
+                            <!-- Где подбирать (router-api §6): на месте, если роутер хоть раз находился; не подключён — «На роутере» серый с причиной (UX-аудит 8, §3 №8). -->
+                            <StackPanel x:Name="SelectWhereSwitch" DockPanel.Dock="Right" VerticalAlignment="Top" Margin="0,4,0,0" DataContext="{Binding Router}"
+                                        Visibility="{Binding TargetSwitchVisible, Converter={StaticResource Vis}}">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <TextBlock Text="{l:T select.where.label}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <RadioButton Content="{l:T select.where.pc}" IsChecked="{Binding SelectOnPcShown}" Margin="0,0,16,0" IsEnabled="{Binding CanConnect}" />
+                                    <RadioButton x:Name="SelectWhereRouter" Content="{l:T select.where.router}" IsChecked="{Binding SelectOnRouterShown}" IsEnabled="{Binding CanPickRouter}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,2,0,0" Visibility="{Binding TargetRouterOff, Converter={StaticResource Vis}}">
+                                    <TextBlock x:Name="SelectWhereOff" Text="{l:T router.target.off}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                    <Button Content="{l:T router.target.find}" Style="{StaticResource LinkButton}" Command="{Binding GoRouterPageCmd}" VerticalAlignment="Center" Margin="4,0,0,0" />
+                                </StackPanel>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
                                 <TextBlock Text="{l:T select.title}" Style="{StaticResource H1}" />
@@ -792,11 +798,17 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <DockPanel>
-                            <!-- Вкладки «На этом ПК» / «На роутере» — только когда роутер подключён. -->
-                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,4,0,0" DataContext="{Binding Router}"
-                                        Visibility="{Binding Connected, Converter={StaticResource Vis}}">
-                                <RadioButton Content="{l:T sites.target.pc}" IsChecked="{Binding TargetsOnPc}" Margin="0,0,16,0" />
-                                <RadioButton Content="{l:T sites.target.router}" IsChecked="{Binding TargetsOnRouter}" />
+                            <!-- «На этом ПК» / «На роутере»: на месте, если роутер хоть раз находился; не подключён — «На роутере» серый с причиной (UX-аудит 8, §3 №7). -->
+                            <StackPanel x:Name="SitesTargetSwitch" DockPanel.Dock="Right" VerticalAlignment="Top" Margin="0,4,0,0" DataContext="{Binding Router}"
+                                        Visibility="{Binding TargetSwitchVisible, Converter={StaticResource Vis}}">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <RadioButton Content="{l:T sites.target.pc}" IsChecked="{Binding TargetsOnPcShown}" Margin="0,0,16,0" />
+                                    <RadioButton x:Name="SitesTargetRouter" Content="{l:T sites.target.router}" IsChecked="{Binding TargetsOnRouterShown}" IsEnabled="{Binding Connected}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,2,0,0" Visibility="{Binding TargetRouterOff, Converter={StaticResource Vis}}">
+                                    <TextBlock x:Name="SitesTargetOff" Text="{l:T router.target.off}" Style="{StaticResource Hint}" VerticalAlignment="Center" />
+                                    <Button Content="{l:T router.target.find}" Style="{StaticResource LinkButton}" Command="{Binding GoRouterPageCmd}" VerticalAlignment="Center" Margin="4,0,0,0" />
+                                </StackPanel>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
                                 <TextBlock Text="{l:T sites.title}" Style="{StaticResource H1}" />
@@ -1092,8 +1104,8 @@
                                                 <DataTemplate>
                                                     <DockPanel Margin="0,6,0,0">
                                                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                                                            <Button Content="{l:T apps.profile.other_variant}" Command="{Binding NextCmd}" Margin="0,0,8,0"
-                                                                    Visibility="{Binding DataContext.ShowAdvanced, RelativeSource={RelativeSource AncestorType=TabControl}, Converter={StaticResource Vis}}" />
+                                                            <!-- «Другой вариант» — всегда, без галки «для опытных» в «Настройках» (UX-аудит 8, §3 №9). -->
+                                                            <Button Content="{l:T apps.profile.other_variant}" Command="{Binding NextCmd}" Margin="0,0,8,0" />
                                                             <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.profile.revert}" Command="{Binding RemoveCmd}" />
                                                         </StackPanel>
                                                         <StackPanel>
@@ -1108,12 +1120,15 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Отладка подключений: только если в «Настройках» включено «Показывать инструменты для опытных» (или по «Подробнее»). -->
-                                <StackPanel Visibility="{Binding DataContext.ShowAdvanced, RelativeSource={RelativeSource AncestorType=TabControl}, Converter={StaticResource Vis}}">
-                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                        <TextBlock Text="{l:T apps.debug.title}" Style="{StaticResource H1}" FontSize="19" />
-                                        <local:InfoButton Topic="{x:Static local:InfoTexts.Debug}" Margin="10,0,0,12" />
-                                    </StackPanel>
+                                <!-- Отладка подключений: всегда на месте, свёрнута; «Отладка подключений →» раскрывает (UX-аудит 8, §3 №9 — без галки в «Настройках»). -->
+                                <Expander x:Name="DebugSection" IsExpanded="{Binding DebugOpen, Mode=TwoWay}" Margin="0,6,0,12">
+                                    <Expander.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{l:T apps.debug.section}" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <local:InfoButton Topic="{x:Static local:InfoTexts.Debug}" Margin="10,0,0,0" />
+                                        </StackPanel>
+                                    </Expander.Header>
+                                <StackPanel Margin="0,8,0,0">
                                     <Border Style="{StaticResource Card}">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,6"
@@ -1191,9 +1206,7 @@
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
-                                <!-- Карточка «Отладка подключений» скрыта: намёк, где её включить (UX-аудит 5, п. 21). -->
-                                <TextBlock Text="{l:T apps.debug.hidden_hint}" Style="{StaticResource Hint}" Margin="0,0,0,12"
-                                           Visibility="{Binding DataContext.ShowAdvanced, RelativeSource={RelativeSource AncestorType=TabControl}, Converter={StaticResource InvVis}}" />
+                                </Expander>
                             </StackPanel>
 
                             <StackPanel DataContext="{Binding Net}">
@@ -1668,16 +1681,21 @@
                                                 </ItemsControl>
                                             </StackPanel>
 
-                                            <StackPanel Margin="0,10,0,0" Visibility="{Binding Enabled, Converter={StaticResource Vis}}">
+                                            <!-- «Проверить» на месте и при выключенном: серая с причиной, таблица адресов ниже не остаётся без кнопки (UX-аудит 8, §3 №13). -->
+                                            <StackPanel Margin="0,10,0,0">
                                                 <WrapPanel>
-                                                    <Button ContentTemplate="{StaticResource Shield}" Content="{l:T hosts.check}" Style="{StaticResource Primary}" Command="{Binding CheckCmd}" />
+                                                    <Button x:Name="HostsCheckButton" ContentTemplate="{StaticResource Shield}" Content="{l:T hosts.check}" Style="{StaticResource Primary}" Command="{Binding CheckCmd}" />
                                                     <Button Content="{l:T hosts.stop}" Command="{Binding StopCmd}" Visibility="{Binding Checking, Converter={StaticResource Vis}}" />
+                                                    <TextBlock x:Name="HostsCheckOff" Text="{l:T hosts.check_needs_on}" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8"
+                                                               Visibility="{Binding Disabled, Converter={StaticResource Vis}}" />
                                                 </WrapPanel>
+                                                <StackPanel Visibility="{Binding Enabled, Converter={StaticResource Vis}}">
                                                 <StackPanel Visibility="{Binding Checking, Converter={StaticResource Vis}}">
                                                     <ProgressBar Height="8" Maximum="{Binding Total}" Value="{Binding Done, Mode=OneWay}" Margin="0,2,0,4" />
                                                     <TextBlock Text="{Binding ProgressText}" Style="{StaticResource Hint}" Margin="0,0,0,8" />
                                                 </StackPanel>
                                                 <TextBox Text="{Binding Summary, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="15" FontWeight="SemiBold" Margin="0,2,0,8" Visibility="{Binding HasSummary, Converter={StaticResource Vis}}" />
+                                                </StackPanel>
                                             </StackPanel>
 
                                             <DataGrid ItemsSource="{Binding Rows}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
@@ -2261,7 +2279,7 @@
 
                             <!-- Совместная работа с роутером (mixed-strategies.md §7, договор pc_link_*): выключена по умолчанию; включена — роутер ведёт YouTube и Discord
                                  для всей сети, этот ПК — свои сайты. Короткий статус, под ним — что ведёт роутер. Работает только при обоих приложениях. -->
-                            <Border Style="{StaticResource Card}" Visibility="{Binding JointCardVisible, Converter={StaticResource Vis}}">
+                            <Border x:Name="JointCard" Style="{StaticResource Card}" Visibility="{Binding JointCardVisible, Converter={StaticResource Vis}}">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{l:T router.joint.title}" Style="{StaticResource H2}" />
@@ -2272,6 +2290,9 @@
                                               AutomationProperties.Name="{l:T router.joint.title}">
                                         <TextBlock Text="{Binding JointToggleText}" FontSize="15" FontWeight="SemiBold" />
                                     </CheckBox>
+                                    <!-- Роутер не подключён: карточка на месте, переключатель серый с причиной (UX-аудит 8, §3 №12). -->
+                                    <TextBlock x:Name="JointOffReasonText" Text="{Binding JointOffReason}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="50,4,0,0"
+                                               Visibility="{Binding HasJointOffReason, Converter={StaticResource Vis}}" />
                                     <TextBox Text="{Binding JointStatus, Mode=OneWay}" Style="{StaticResource SelectableText}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="50,4,0,0"
                                                Visibility="{Binding HasJointStatus, Converter={StaticResource Vis}}" />
                                     <TextBox Text="{Binding JointNotes, Mode=OneWay}" Style="{StaticResource SelectableHint}" TextWrapping="Wrap" Margin="50,2,0,0" local:Demo.Sensitive="True"
@@ -2627,19 +2648,6 @@
 
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="{l:T settings.advanced.title}" Style="{StaticResource H2}" />
-                                    <CheckBox Content="{l:T settings.advanced.check}" IsChecked="{Binding ShowAdvancedSetting}" HorizontalAlignment="Left" Margin="0,4,0,0" />
-                                    <TextBlock Text="{l:T settings.advanced.hint}" Style="{StaticResource Hint}" Margin="26,2,0,0" TextWrapping="Wrap" />
-                                    <!-- Шаблон перевода (docs/localization.md): все ключи, английский текст и русский рядом. -->
-                                    <DockPanel Margin="0,12,0,0" Visibility="{Binding ShowAdvancedSetting, Converter={StaticResource Vis}}">
-                                        <Button DockPanel.Dock="Right" Content="{l:T settings.lang.template}" Command="{Binding ExportLangTemplateCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
-                                        <TextBlock Text="{l:T settings.lang.template.hint}" Style="{StaticResource Hint}" TextWrapping="Wrap" VerticalAlignment="Center" />
-                                    </DockPanel>
-                                </StackPanel>
-                            </Border>
-
-                            <Border Style="{StaticResource Card}">
-                                <StackPanel>
                                     <TextBlock Text="{l:T settings.appearance.title}" Style="{StaticResource H2}" />
                                     <WrapPanel>
                                         <RadioButton Content="{l:T settings.theme.auto}" IsChecked="{Binding ThemeAuto}" Margin="0,3,24,3" />
@@ -2670,6 +2678,11 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
                                     <TextBlock Text="{l:T settings.lang.hint}" Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                    <!-- Шаблон перевода (docs/localization.md): все ключи, английский текст и русский рядом. Рядом с языками, без галки «для опытных» (UX-аудит 8, §3 №10). -->
+                                    <DockPanel x:Name="LangTemplateRow" Margin="0,12,0,0">
+                                        <Button DockPanel.Dock="Right" Content="{l:T settings.lang.template}" Command="{Binding DataContext.ExportLangTemplateCmd, RelativeSource={RelativeSource AncestorType=TabControl}}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                        <TextBlock Text="{l:T settings.lang.template.hint}" Style="{StaticResource Hint}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    </DockPanel>
                                 </StackPanel>
                             </Border>
 

@@ -90,10 +90,9 @@ public sealed class AppsViewModelTests
         // «Подробнее» ведёт к уже собранной записи: список с галочками готов.
         Assert.True(vm.HasRows);
         Assert.True(Can(vm.MoreCmd));
-        bool opened = false;
-        vm.DetailRequested += () => opened = true;
+        Assert.False(vm.DebugOpen);
         await Run(vm.MoreCmd);
-        Assert.True(opened);
+        Assert.True(vm.DebugOpen);   // «Отладка подключений →» раскрывает раздел внизу вкладки
     }
 
     [Fact]
@@ -295,31 +294,15 @@ public sealed class AppsViewModelTests
     // ---------- настройка показа ----------
 
     [Fact]
-    public void ShowAdvanced_Setting_IsSaved_And_MoreOpensItForTheSession()
+    public async Task Detail_Request_OpensDebugSection()
     {
         using var t = new TempDir();
         var shell = new Shell(Make.Paths(t));
         var vm = TestWindow.Model(shell);
-        Assert.False(vm.ShowAdvanced);                  // по умолчанию спрятано
-        vm.ShowAdvancedSetting = true;
-        Assert.True(vm.ShowAdvanced);
-        Assert.True(WindowSettings.Load(vm.Settings.File).ShowAdvanced);   // запомнено в window.json
-        vm.ShowAdvancedSetting = false;
-        Assert.False(vm.ShowAdvanced);
-        Assert.False(WindowSettings.Load(vm.Settings.File).ShowAdvanced);
-    }
-
-    [Fact]
-    public async Task Detail_Request_ShowsAdvancedWithoutSetting()
-    {
-        using var t = new TempDir();
-        var shell = new Shell(Make.Paths(t));
-        var vm = TestWindow.Model(shell);
-        Assert.False(vm.ShowAdvanced);
+        Assert.False(vm.Apps.DebugOpen);                // раздел на месте, но свёрнут (UX-аудит 8, §3 №9)
         vm.Apps.LoadRows(FakeHelperBackend.SampleRecording());
         await Run(vm.Apps.MoreCmd);
-        Assert.True(vm.ShowAdvanced);
-        Assert.False(vm.Settings.ShowAdvanced);         // только до перезапуска, настройка не тронута
+        Assert.True(vm.Apps.DebugOpen);
     }
 
     [Fact]

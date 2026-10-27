@@ -27,8 +27,8 @@ public sealed class AdvancedChoiceTests : IDisposable
             var shell = new Shell(new AppPaths(tmp.Sub("root"), Repo.Data));
             shell.Data.Seed();
             var settings = TestWindow.Settings(shell);
-            settings.ShowAdvanced = true;
             var vm = TestWindow.Model(shell, null, settings);
+            vm.Apps.DebugOpen = true;
             var a = vm.AdvancedPc;
             var ids = shell.Catalog.Strategies.Take(2).Select(s => s.Id).ToList();
             a.Strategies = () => [.. shell.Catalog.Strategies.Select(s => new AdvancedChoice(s.Id, s.Title))];

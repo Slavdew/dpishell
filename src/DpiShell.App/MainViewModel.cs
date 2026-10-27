@@ -215,7 +215,6 @@ public sealed partial class MainViewModel : Observable
             Confirm = s => Confirm(s),
             AfterChange = RefreshStatusAsync,
         };
-        Apps.DetailRequested += () => { _detailOpened = true; Raise(nameof(ShowAdvanced)); };
         Hosts = new HostsViewModel(helper)
         {
             Settings = settings,
@@ -2169,24 +2168,6 @@ public sealed partial class MainViewModel : Observable
             Raise(nameof(ThemeDark));
         }
     }
-
-    bool _detailOpened;
-    /// <summary>
-    /// «Показывать инструменты для опытных» (Настройки): раздел «Отладка подключений» на вкладке «Игры и программы».
-    /// «Подробнее» в простом режиме открывает его и без галочки — до перезапуска окна.
-    /// </summary>
-    public bool ShowAdvancedSetting
-    {
-        get => Settings.ShowAdvanced;
-        set
-        {
-            if (Settings.ShowAdvanced == value) return;
-            Settings.ShowAdvanced = value;
-            SaveSettings();
-            Raise(); Raise(nameof(ShowAdvanced));
-        }
-    }
-    public bool ShowAdvanced => Settings.ShowAdvanced || _detailOpened;
 
     // Переключатели: снятие отметки (её снимает соседний) ничего не меняет.
     public bool ThemeAuto { get => Theme == ThemeManager.Auto; set { if (value) Theme = ThemeManager.Auto; } }

@@ -1544,7 +1544,7 @@ public sealed partial class WindowSmokeTests
             vm.Router.CustomAddress = fake.Address;
             vm.Router.PcTimestamps = () => true;
             Task.Run(() => vm.Router.ConnectAsync("secret")).GetAwaiter().GetResult();
-            vm.ShowAdvancedSetting = true;   // «Отладка подключений» видна только для опытных
+            vm.Apps.DebugOpen = true;   // «Отладка подключений» свёрнута по умолчанию
             vm.Net.ListsOpen = true;         // IP-списки — в свёрнутом «Дополнительно»
             var w = Open(vm);
             WaitUi(AvExclusionFlowTests.Probe(vm));
@@ -1860,8 +1860,8 @@ public sealed partial class WindowSmokeTests
                 var f = new HelperFixture(backend: PcHelper.Over(shell, flows, procs));
                 var link = Task.Run(f.LinkAsync).GetAwaiter().GetResult();
                 var settings = TestWindow.Settings(shell);
-                settings.ShowAdvanced = dark;
                 var vm = TestWindow.Model(shell, link, settings);
+                vm.Apps.DebugOpen = dark;
                 vm.Apps.ListProcesses = () => [new(900, "chrome.exe", "Новая вкладка"), new(2000, "game.exe", "Моя игра")];
                 vm.ApplyHelperData();
                 var w = Open(vm);
@@ -1892,9 +1892,10 @@ public sealed partial class WindowSmokeTests
                         throw new Exception("Детали про UDP не под «Подробнее»");
                     if (Btn("Включить оптимизацию") is not null) throw new Exception("«Включить оптимизацию» видна до настройки профиля");
                 }
-                // «Отладка подключений» — только для опытных.
-                bool advVisible = Visible(t => t.Text == "Отладка подключений");
-                if (advVisible != dark) throw new Exception($"«Отладка подключений» видна = {advVisible}, ждали {dark}");
+                // «Отладка подключений (для опытных)» — всегда на месте, раскрыта только по выбору (UX-аудит 8, §3 №9).
+                if (!Visible(t => t.Text == L.T("apps.debug.section"))) throw new Exception("Нет заголовка «Отладка подключений (для опытных)»");
+                bool advVisible = Btn(L.T("apps.debug.record")) is not null;
+                if (advVisible != dark) throw new Exception($"Содержимое «Отладки подключений» видно = {advVisible}, ждали {dark}");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-apps-idle.png"));
 
                 if (!dark)

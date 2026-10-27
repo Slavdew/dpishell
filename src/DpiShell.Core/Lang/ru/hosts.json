@@ -11,6 +11,7 @@
   "hosts.remove_entries": "Убрать записи",
   "hosts.enable": "Включить",
   "hosts.check": "Проверить адреса",
+  "hosts.check_needs_on": "Сначала включите.",
   "hosts.stop": "Стоп",
   "hosts.col.site": "Сайт и адрес",
   "hosts.col.owner": "Владелец",

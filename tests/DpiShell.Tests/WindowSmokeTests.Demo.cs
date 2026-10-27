@@ -105,7 +105,7 @@ public sealed partial class WindowSmokeTests
                     Snap(w, Path.Combine(dir, $"{theme}-apps-simple.png"));
                     Btn("Да, заработало")!.Command.Execute(null);
                     Pump();
-                    vm.ShowAdvancedSetting = true;
+                    vm.Apps.DebugOpen = true;
                     Pump();
                     vm.Apps.RefreshProcesses();
                     Btn("Записать")!.Command.Execute(null);

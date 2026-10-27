@@ -37,14 +37,18 @@ public sealed partial class RouterViewModel
         set { if (value != JointWanted && !_jointBusy) _ = SetJointAsync(value); }
     }
 
-    /// <summary>Совместную работу можно включить: роутер подключён (карточка видна только тогда) и ПК-сторона подключена.</summary>
+    /// <summary>Совместную работу можно включить: роутер подключён и ПК-сторона подключена; включённую — выключить и без роутера.</summary>
     public bool JointAvailable => _joint is not null && (Connected || JointWanted) && !_jointBusy;
 
     /// <summary>
-    /// Карточка видна, когда роутер подключён, и пока совместная работа включена — даже если роутер пропал (ноутбук вне дома): её нужно уметь выключить,
-    /// а статус «Роутер недоступен — этот ПК работает сам» должен быть виден там же.
+    /// Карточка на вкладке «Роутер» видна всегда (UX-аудит 8, §3 №12): роутер не подключён — переключатель серый с причиной (<see cref="JointOffReason"/>),
+    /// а не пропадает. Включённую без роутера (ноутбук вне дома) можно выключить, статус «Роутер недоступен — этот ПК работает сам» — там же.
     /// </summary>
-    public bool JointCardVisible => _joint is not null && (Connected || JointWanted);
+    public bool JointCardVisible => _joint is not null;
+
+    /// <summary>Почему переключатель серый: выключен, а роутер не подключён. Пусто — включить можно (или уже включён).</summary>
+    public string JointOffReason => _joint is not null && !JointWanted && !Connected ? L.T("router.joint.needs_router") : "";
+    public bool HasJointOffReason => JointOffReason.Length > 0;
 
     /// <summary>Короткий статус: «Роутер ведёт YouTube и Discord, этот ПК — свои сайты (3)» / «Роутер недоступен — этот ПК работает сам». Пусто, пока выключено.</summary>
     public string JointStatus => _joint?.Status ?? "";
@@ -99,7 +103,7 @@ public sealed partial class RouterViewModel
     {
         foreach (var n in new[] { nameof(JointWanted), nameof(JointAvailable), nameof(JointCardVisible), nameof(JointStatus), nameof(HasJointStatus), nameof(JointIsFallback), nameof(JointNotes),
                      nameof(HasJointNotes), nameof(JointHint), nameof(HasJointHint), nameof(JointRouterOwned), nameof(JointOn), nameof(BothOn),
-                     nameof(JointShown), nameof(JointToggleText), nameof(JointWaiting) })
+                     nameof(JointShown), nameof(JointToggleText), nameof(JointWaiting), nameof(JointOffReason), nameof(HasJointOffReason) })
             Raise(n);
         JointChanged?.Invoke();
     }
