@@ -35,6 +35,8 @@
   "core.profile.no_ports": "The profile has no ports.",
   "core.profile.bad_tcp": "TCP ports are written incorrectly.",
   "core.profile.bad_udp": "UDP ports are written incorrectly.",
+  "core.profile.wf_overlap": "Port {port} ({proto}) is intercepted for websites — it needs addresses (subnets).",
+  "core.profile.filter_ports": "{proto} ports {ports} go beyond the custom filter DstPort.",
   "core.profile.addr_count": "A profile must have 1 to {max} addresses.",
   "core.profile.bad_addr": "Address “{addr}” is written incorrectly.",
   "core.profile.service_addr": "Address “{addr}” is reserved.",

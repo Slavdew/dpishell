@@ -400,7 +400,7 @@ public sealed class GameProfilesTests
 
     /// <summary>Не раскладывается на простые поля, но проходит проверку своего фильтра — принимается как свой, с пометкой.</summary>
     [Theory]
-    [InlineData("outbound and tcp.DstPort = 1 and ip.Length > 4")]
+    [InlineData("outbound and tcp.DstPort = 12001 and ip.Length > 4")]
     [InlineData("outbound and tcp.DstPort = 12001 and tcp.Payload[0] = 1 and tcp.Payload[2] = 3")]
     [InlineData("outbound and tcp.DstPort = 12001 and tcp.Payload32[4] = 1")]
     [InlineData("outbound and tcp.DstPort = 12001 and tcp.PayloadLength = 5000")]
@@ -591,7 +591,9 @@ public sealed class GameProfilesTests
         await Assert.ThrowsAsync<HelperException>(() => c.AppProfileSetAsync(null, "x", "443", null, [], 0, new ProfileSignature(TcpDesync: "--debug --dpi-desync=fake", TcpHex: "00")));
         await Assert.ThrowsAsync<HelperException>(() => c.AppProfileSetAsync(null, "x", "443", null, [], 0, new ProfileSignature(TcpDesync: "--dpi-desync=fake --dpi-desync-fake-tls=C:/x.bin", TcpHex: "00")));
         Assert.Empty(shell.State.AppProfiles);
-        var ok = await c.AppProfileSetAsync(null, "x", "443", null, [], 0, new ProfileSignature(TcpFilter: "outbound and tcp.DstPort = 443 and tcp.PayloadLength = 100"));
-        Assert.Equal("outbound and tcp.DstPort = 443 and tcp.PayloadLength = 100", ok.TcpFilter);
+        var ok = await c.AppProfileSetAsync(null, "x", "12001", null, [], 0, new ProfileSignature(TcpFilter: "outbound and tcp.DstPort = 12001 and tcp.PayloadLength = 100"));
+        Assert.Equal("outbound and tcp.DstPort = 12001 and tcp.PayloadLength = 100", ok.TcpFilter);
+        // Без адресов на порту сайтов (443) — отказ: профиль ловил бы весь HTTPS.
+        await Assert.ThrowsAsync<HelperException>(() => c.AppProfileSetAsync(null, "y", "443", null, [], 0, new ProfileSignature(TcpFilter: "outbound and tcp.DstPort = 443 and tcp.PayloadLength = 100")));
     }
 }

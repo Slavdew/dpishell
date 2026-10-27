@@ -55,9 +55,16 @@ public sealed record BuildOptions(IpsetMode Ipset = IpsetMode.Off, GameMode Game
         // Работают только в режимах «Свои профили» и «Общий»; при «Выкл» профили хранятся, но в командную строку не идут.
         var game = ParseGame(s.GameMode);
         var profiles = new List<AppProfile>();
+        int filtersSize = 0;
         if (game != GameMode.Off)
             foreach (var p in s.AppProfiles.Where(p => AppProfiles.Problem(p) is null).Take(AppProfiles.MaxProfiles))
-                if (AppProfiles.FiltersSize([.. profiles, p]) <= AppProfiles.MaxFilterBytes) profiles.Add(p);   // предел фильтра WinDivert: лишний профиль не подаётся
+            {
+                // Предел фильтра WinDivert: лишний профиль не подаётся. Размер — накопительно, по одному профилю.
+                int size = AppProfiles.FiltersSize([p]);
+                if (filtersSize + size > AppProfiles.MaxFilterBytes) continue;
+                filtersSize += size;
+                profiles.Add(p);
+            }
         var advanced = find is null ? null : AdvancedSites.Plan(s.Advanced, find, currentId);
         // Связка действует, пока её продлевают: срок вышел (окно закрыто, роутер недоступен) — ПК сразу по полной настройке, как с «Все адреса».
         var joint = s.Joint is { Active: true, Until: { } leaseEnd } && leaseEnd > utcNow

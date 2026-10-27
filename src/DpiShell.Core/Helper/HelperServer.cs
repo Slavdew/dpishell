@@ -410,8 +410,10 @@ public sealed class HelperServer : IAsyncDisposable
             case "rec_stop": return await Task.Run(b.RecStop, ct);
             case "app_profiles": return await Task.Run(b.AppProfilesInfo, ct);
             case "app_profile_set":
+                // Ни одного поля 1.22 — запрос старого окна: сигнатуру существующего профиля не стирать (signature = null).
                 return await Task.Run(() => b.AppProfileSet(c.Str("id"), c.Str("title")!, c.Str("tcp"), c.Str("udp"), c.List("addresses") ?? [], c.Int("variant"),
-                    new ProfileSignature(c.Int("tcpLen"), c.Str("tcpHex") ?? "", c.Int("udpLen"), c.Str("udpHex") ?? "", c.Str("tcpDesync"), c.Str("udpDesync"), c.Str("tcpFilter") ?? "", c.Str("udpFilter") ?? "")), ct);
+                    !ProfileFields.Any(c.Args.ContainsKey) ? null
+                    : new ProfileSignature(c.Int("tcpLen"), c.Str("tcpHex") ?? "", c.Int("udpLen"), c.Str("udpHex") ?? "", c.Str("tcpDesync"), c.Str("udpDesync"), c.Str("tcpFilter") ?? "", c.Str("udpFilter") ?? "")), ct);
             case "changes_list": return await Task.Run(b.ChangesList, ct);
             case "changes_undo_all": return await Task.Run(() => b.ChangesUndoAllAsync(ct), ct);
             case "changes_undo": return await Task.Run(() => b.ChangesUndoAsync(c.Str("id")!, ct), ct);
@@ -435,6 +437,9 @@ public sealed class HelperServer : IAsyncDisposable
         // Белый список и диспетчер должны совпадать — тест проверяет, что сюда не попасть.
         throw new HelperRequestException(c.Id, $"Команда «{c.Cmd}» не поддерживается.");
     }
+
+    /// <summary>Поля <c>app_profile_set</c> с API 1.22 (сигнатура, свой фильтр, свои параметры).</summary>
+    static readonly string[] ProfileFields = ["tcpLen", "tcpHex", "udpLen", "udpHex", "tcpDesync", "udpDesync", "tcpFilter", "udpFilter"];
 
     /// <summary>Пары «адрес имя», уже приведённые проверкой запроса к каноническому виду.</summary>
     static IReadOnlyList<HostsEntry> Entries(HelperCall c, string name) =>

@@ -28,13 +28,13 @@ public sealed class FeatureViewModelTests
         await using var _ = f;
         var said = new List<string>();
         var net = new NetViewModel(link) { Say = said.Add };
-        Assert.False(net.GameOn);
+        Assert.False(net.GameGeneral);
         Assert.True(net.IpsetOff);
         Assert.Equal("Выключен", net.GameStatus);
 
-        await net.SetGameAsync(true);
+        await net.SetGameModeAsync(GameMode.TcpUdp);
 
-        Assert.True(net.GameOn);
+        Assert.True(net.GameGeneral);
         Assert.True(net.IpsetList);
         Assert.Contains(said, s => s.Contains("Включён IP-список"));
         Assert.StartsWith("Включится вместе с оптимизацией", net.GameStatus);   // оптимизация выключена
@@ -44,7 +44,7 @@ public sealed class FeatureViewModelTests
 
         // «Выкл» у IP-списка выключает и игры: без списка им нечего ловить.
         await net.SetModeAsync(IpsetMode.Off);
-        Assert.False(net.GameOn);
+        Assert.False(net.GameGeneral);
         Assert.Contains(said, s => s.Contains("Игровой режим выключен"));
     }
 
@@ -136,8 +136,8 @@ public sealed class FeatureViewModelTests
         var net = new NetViewModel(link) { Need = Need };
         var hosts = new HostsViewModel(link) { Need = Need, Confirm = _ => true };
 
-        await net.SetGameAsync(true);
-        Assert.False(net.GameOn);
+        await net.SetGameModeAsync(GameMode.TcpUdp);
+        Assert.False(net.GameGeneral);
         hosts.Enabled = true;   // включить можно и без помощника: это черновик окна
         await hosts.CheckAsync();
         Assert.Empty(hosts.Rows);

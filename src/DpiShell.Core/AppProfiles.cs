@@ -119,6 +119,17 @@ public static partial class AppProfiles
         // Адреса нужны, если у какого-то протокола профиля нет сигнатуры: иначе профиль ловил бы всё на своих портах.
         bool needAddresses = tcp && !HasSignature(p, true) || udp && !HasSignature(p, false);
         if (p.Addresses.Count > MaxAddresses || p.Addresses.Count == 0 && needAddresses) return L.T("core.profile.addr_count", new { max = MaxAddresses });
+        foreach (var (ports, custom, isTcp) in new[] { (p.TcpPorts, p.TcpCustomFilter, true), (p.UdpPorts, p.UdpCustomFilter, false) })
+        {
+            if (ports.Length == 0) continue;
+            string proto = isTcp ? "TCP" : "UDP";
+            // Профиль winws выбирается по портам: порты сверх DstPort своего фильтра ловили бы всё подряд (их перехватывают общие роли).
+            if (custom.Length > 0 && CustomFilter.DstPorts(custom, isTcp) is { } allowed && !CustomFilter.Covers(allowed, ports))
+                return L.T("core.profile.filter_ports", new { proto, ports });
+            // Без адресов профиль ловит в winws все пакеты своих портов. Порты, которые WinDivert перехватывает для сайтов, ушли бы в игровой десинк.
+            if (p.Addresses.Count == 0 && FirstCommonPort(ports, isTcp ? WinwsArgs.WfTcp : WinwsArgs.WfUdp) is { } port)
+                return L.T("core.profile.wf_overlap", new { port, proto });
+        }
         if (Filter(p, true) is { } ft && ft.Length > MaxFilterBytes || Filter(p, false) is { } fu && fu.Length > MaxFilterBytes)
             return L.T("core.profile.filter_limit", new { kb = MaxFilterBytes / 1024 });
         foreach (var a in p.Addresses)
@@ -133,6 +144,17 @@ public static partial class AppProfiles
         if (udp && Desync("game_udp", p.UdpDesync) is { } u) return L.T("core.profile.udp_params", new { problem = u });
         return null;
     }
+
+    static List<(int Lo, int Hi)> PortRanges(string ports) => ports.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(part =>
+    {
+        var e = part.Split('-');
+        int lo = int.Parse(e[0]);
+        return (lo, e.Length == 2 ? int.Parse(e[1]) : lo);
+    }).ToList();
+
+    /// <summary>Наименьший общий порт двух строк портов или null.</summary>
+    public static int? FirstCommonPort(string a, string b) =>
+        (from x in PortRanges(a) from y in PortRanges(b) where Math.Max(x.Lo, y.Lo) <= Math.Min(x.Hi, y.Hi) select (int?)Math.Max(x.Lo, y.Lo)).Min();
 
     static string? Desync(string role, string args) => args.Length == 0 ? L.T("core.profile.not_set") : WinwsArgs.Problem(role, args);
 

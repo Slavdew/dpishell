@@ -90,6 +90,8 @@ public sealed partial class WindowSmokeTests
                 SetProp(vm, "IsLoading", false);
                 Pump();
                 var tabs = Find<TabControl>(w)!;
+                // Строка состояния без сообщения — «Готово.», а не пустая.
+                if (Find<TextBlock>(w, t => t.IsVisible && t.Text == MainViewModel.ReadyText) is null) throw new Exception("Пустая строка состояния на «Сети»: «" + vm.Message + "»");
                 var blocks = new[] { "NetDnsBlock", "NetProxyBlock", "NetHostsBlock" }.Select(n => (Expander)w.FindName(n)).ToList();
                 if (blocks.Any(b => b.IsExpanded)) throw new Exception("Блоки «Сети» должны быть свёрнуты по умолчанию");
                 var ys = blocks.Select(b => b.TranslatePoint(new Point(0, 0), tabs).Y).ToList();

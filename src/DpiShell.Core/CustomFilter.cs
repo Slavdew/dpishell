@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using DpiShell.Core.Localization;
 
@@ -32,12 +33,27 @@ public static partial class CustomFilter
     public static string? Problem(string? filter, bool tcp)
     {
         if (string.IsNullOrEmpty(filter)) return L.T("core.filter.empty");
+        if (Accepted.ContainsKey((filter, tcp))) return null;
         if (filter.Length > MaxLength) return L.T("core.filter.too_long", new { kb = MaxLength / 1024 });
         for (int i = 0; i < filter.Length; i++)
             if (char.IsControl(filter[i])) return L.T("core.filter.control", new { at = i + 1 });
-        try { Check(filter, tcp); return null; }
+        try
+        {
+            var ports = Check(filter, tcp);
+            if (Accepted.Count >= MaxCached) Accepted.Clear();
+            Accepted[(filter, tcp)] = ports;
+            return null;
+        }
         catch (Bad e) { return e.Message; }
     }
+
+    /// <summary>Порты назначения, которые пропускает фильтр (диапазоны по возрастанию, без пересечений); null — фильтр не проходит <see cref="Problem"/>.</summary>
+    public static IReadOnlyList<(int Lo, int Hi)>? DstPorts(string? filter, bool tcp) =>
+        Problem(filter, tcp) is null && Accepted.TryGetValue((filter!, tcp), out var ports) ? ports : null;
+
+    // Принятые фильтры и их порты: Problem зовётся на каждый status и на каждый профиль, разбор не повторяем. Отказы не кэшируются (текст зависит от языка).
+    const int MaxCached = 256;
+    static readonly ConcurrentDictionary<(string, bool), (int Lo, int Hi)[]> Accepted = new();
 
     /// <summary>Протокол фильтра по полям: true — tcp, false — udp, null — не определить или смешан.</summary>
     public static bool? ProtocolOf(string filter)
@@ -49,7 +65,7 @@ public static partial class CustomFilter
 
     [GeneratedRegex(@"\b(tcp|udp)\.", RegexOptions.IgnoreCase)] private static partial Regex ProtoRx();
 
-    static void Check(string text, bool tcp)
+    static (int Lo, int Hi)[] Check(string text, bool tcp)
     {
         var tokens = Lex(text);
         int i = 0;
@@ -68,9 +84,11 @@ public static partial class CustomFilter
         string field = proto + ".dstport";
         var ports = top.Where(n => n is not Flag && PortOnly(n, field)).ToList();
         if (ports.Count == 0) throw new Bad(L.T("core.filter.no_port", new { proto = proto.ToUpperInvariant() }));
-        int hits = 0;
-        for (int p = 0; p <= 65535; p++) if (ports.All(n => Eval(n, p))) hits++;
+        var set = Full;
+        foreach (var n in ports) set = Intersect(set, Ranges(n));
+        long hits = set.Sum(r => (long)r.Hi - r.Lo + 1);
         if (hits == 0 || hits == 65536) throw new Bad(L.T("core.filter.port_all"));
+        return set;
     }
 
     static Bad Place(Token t, string text) => new(L.T("core.filter.bad_token", new { at = t.Pos + 1, part = text.Substring(t.Pos, Math.Min(t.Len, 20)) }));
@@ -165,16 +183,51 @@ public static partial class CustomFilter
         _ => false,
     };
 
-    static bool Eval(Node n, int port)
+    static readonly (int Lo, int Hi)[] Full = [(0, 65535)];
+
+    /// <summary>Порты 0–65535, под которые подходит условие из сравнений DstPort, — диапазонами (без перебора всех портов).</summary>
+    static (int Lo, int Hi)[] Ranges(Node n)
     {
         switch (n)
         {
             case Atom a:
                 var bar = a.Op.IndexOf('|');
                 var op = a.Op[..bar]; long v = long.Parse(a.Op[(bar + 1)..]);
-                return op switch { "=" => port == v, "<" => port < v, "<=" => port <= v, ">" => port > v, ">=" => port >= v, _ => false };
-            case Bin b: return b.IsAnd ? b.Items.All(c => Eval(c, port)) : b.Items.Any(c => Eval(c, port));
-            default: return false;
+                (long lo, long hi) = op switch { "=" => (v, v), "<" => (0, v - 1), "<=" => (0, v), ">" => (v + 1, 65535), ">=" => (v, 65535), _ => (1, 0) };
+                lo = Math.Max(lo, 0); hi = Math.Min(hi, 65535);
+                return lo > hi ? [] : [((int)lo, (int)hi)];
+            case Bin b:
+                var acc = b.IsAnd ? Full : [];
+                foreach (var c in b.Items) acc = b.IsAnd ? Intersect(acc, Ranges(c)) : Union(acc, Ranges(c));
+                return acc;
+            default: return [];
         }
     }
+
+    static (int Lo, int Hi)[] Intersect((int Lo, int Hi)[] x, (int Lo, int Hi)[] y)
+    {
+        var r = new List<(int, int)>();
+        foreach (var a in x)
+            foreach (var b in y)
+                if (Math.Max(a.Lo, b.Lo) <= Math.Min(a.Hi, b.Hi)) r.Add((Math.Max(a.Lo, b.Lo), Math.Min(a.Hi, b.Hi)));
+        return Union([], [.. r]);
+    }
+
+    static (int Lo, int Hi)[] Union((int Lo, int Hi)[] x, (int Lo, int Hi)[] y)
+    {
+        var merged = new List<(int Lo, int Hi)>();
+        foreach (var r in x.Concat(y).OrderBy(r => r.Lo))
+            if (merged.Count > 0 && r.Lo <= merged[^1].Hi + 1) merged[^1] = (merged[^1].Lo, Math.Max(merged[^1].Hi, r.Hi));
+            else merged.Add(r);
+        return [.. merged];
+    }
+
+    /// <summary>Входят ли все порты строки профиля («443,27015-27030») в диапазоны.</summary>
+    public static bool Covers(IReadOnlyList<(int Lo, int Hi)> ranges, string ports) =>
+        ports.Split(',', StringSplitOptions.RemoveEmptyEntries).All(part =>
+        {
+            var e = part.Split('-');
+            int lo = int.Parse(e[0]), hi = e.Length == 2 ? int.Parse(e[1]) : lo;
+            return ranges.Any(r => r.Lo <= lo && hi <= r.Hi);
+        });
 }

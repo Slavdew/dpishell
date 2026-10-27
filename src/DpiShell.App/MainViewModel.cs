@@ -216,6 +216,8 @@ public sealed partial class MainViewModel : Observable
             Confirm = s => Confirm(s),
             AfterChange = RefreshStatusAsync,
         };
+        Net.HasProfiles = Apps.HasProfiles;
+        Apps.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(AppsViewModel.HasProfiles)) Net.HasProfiles = Apps.HasProfiles; };
         Hosts = new HostsViewModel(helper)
         {
             Settings = settings,
@@ -448,9 +450,16 @@ public sealed partial class MainViewModel : Observable
         set
         {
             if (!Set(ref _message, value)) return;
+            Raise(nameof(StatusLine));
             if (value.Length > 0 && value != ReadyText) ScheduleReady(value);
         }
     }
+
+    /// <summary>
+    /// Что видно в строке состояния: сообщение, а без него — «Готово.» (пустое сообщение — после успешного действия или до первого, например на «Сети»
+    /// со свёрнутыми разделами, — не повод для пустой строки). Пока идёт загрузка — пусто: готовым окно ещё не стало.
+    /// </summary>
+    public string StatusLine => _message.Length > 0 ? _message : IsLoading ? "" : ReadyText;
 
     public static string ReadyText => L.T("common.ready");
     /// <summary>Сколько сообщение висит в строке состояния, прежде чем вернётся «Готово.».</summary>
@@ -512,7 +521,7 @@ public sealed partial class MainViewModel : Observable
     // ---------- загрузка ----------
 
     bool _isLoading = true;
-    public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(PcStrategyTip)); Raise(nameof(StopConflictsTip)); CommandManager.InvalidateRequerySuggested(); } } }
+    public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { Raise(nameof(StatusLine)); Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(PcStrategyTip)); Raise(nameof(StopConflictsTip)); CommandManager.InvalidateRequerySuggested(); } } }
 
     bool _loadFailed;
     public bool LoadFailed { get => _loadFailed; private set { if (Set(ref _loadFailed, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); CommandManager.InvalidateRequerySuggested(); } } }

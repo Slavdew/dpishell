@@ -845,7 +845,8 @@ public sealed partial class WindowSmokeTests
                         foreach (var text in new[] { "Сайт не открывается", "Для каких сайтов оптимизация", L.T("sites.router.lists.exclude"), L.T("router.diag.title") })
                             if (Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == text && t.IsVisible) is not null) throw new Exception($"«{text}» на «Сайтах» без роутера");
                         if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Исключения" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет списка «Открывать без оптимизации»");
-                        if (Find<TextBox>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Свои сайты" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет поля своих сайтов ПК");
+                        // Свои сайты ПК — группы (ItemsControl), а не одно поле.
+                        if (Find<ItemsControl>(Find<TabControl>(w)!, t => System.Windows.Automation.AutomationProperties.GetName(t) == "Свои сайты" && t.IsVisible) is null) throw new Exception("На «Сайтах» нет групп своих сайтов ПК");
                     }
                     if (page == NetPages.Dns)
                     {
@@ -892,6 +893,12 @@ public sealed partial class WindowSmokeTests
                         stv.ScrollToEnd();
                         Pump();
                         Snap(w, Path.Combine(snapDir, $"{theme}-settings-end.png"));
+                        // Середина: «Свои настройки» — строка описания не должна сжиматься в узкую колонку.
+                        var row = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == L.T("settings.transfer.row") && t.IsVisible)!;
+                        stv.ScrollToVerticalOffset(row.TranslatePoint(new Point(0, 0), (UIElement)stv.Content).Y - 120);
+                        Pump();
+                        Snap(w, Path.Combine(snapDir, $"{theme}-settings-transfer.png"));
+                        if (row.ActualHeight > row.FontSize * 2) throw new Exception("«Свои настройки»: строка описания переносится");
                         stv.ScrollToHome();
                     }
                     if (page == Pages.Apps && Find<ScrollViewer>(Find<TabControl>(w)!, s => s.ScrollableHeight > 0) is { } nv)

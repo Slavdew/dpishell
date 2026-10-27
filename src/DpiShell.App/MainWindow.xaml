@@ -21,8 +21,8 @@
         <DockPanel>
             <!-- Строка состояния -->
             <Border DockPanel.Dock="Bottom" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="16,6">
-                <TextBlock Text="{Binding Message}" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
-                           ToolTip="{Binding Message}" />
+                <TextBlock Text="{Binding StatusLine}" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                           ToolTip="{Binding StatusLine}" />
             </Border>
 
             <TabControl Style="{StaticResource Nav}" SelectedIndex="{Binding Page}" local:Nav.Collapsed="{Binding NavCollapsed}">
@@ -225,7 +225,7 @@
                                                 <Button Content="{Binding RetrySelectText}" Style="{StaticResource LinkButton}" Command="{Binding GoSelectCmd}" Margin="0,0,10,0" VerticalAlignment="Center"
                                                         ToolTip="{l:T home.retry_select.tip}" />
                                                 <!-- «Итоги подбора» — последний отчёт ПК (хранится до нового подбора); отчёта нет — серая с подсказкой. Роутер: то же место, main.js. -->
-                                                <Button Content="{l:T home.report}" Style="{StaticResource LinkButton}" Command="{Binding ShowLastReportCmd}" Margin="0,0,10,0" VerticalAlignment="Center"
+                                                <Button Content="{l:T home.report}" Style="{StaticResource Small}" Command="{Binding ShowLastReportCmd}" Margin="0,0,12,0" VerticalAlignment="Center"
                                                         ToolTip="{Binding LastReportTip}" ToolTipService.ShowOnDisabled="True" />
                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                     <Button Content="{l:T home.site_fix}" Style="{StaticResource LinkButton}" Command="{Binding ToggleDirectCmd}" Margin="0,0,4,0"
@@ -1190,7 +1190,7 @@
                                         <WrapPanel Margin="0,6,0,0" IsEnabled="{Binding GameCanChoose}">
                                             <RadioButton GroupName="GameMode" Content="{l:T apps.game.mode.off}" IsChecked="{Binding GameOff}" Margin="0,3,24,3" />
                                             <RadioButton GroupName="GameMode" Content="{l:T apps.game.mode.profiles}" IsChecked="{Binding GameProfiles}" Margin="0,3,24,3"
-                                                         ToolTip="{l:T apps.game.mode.profiles_tip}" />
+                                                         IsEnabled="{Binding HasProfiles}" ToolTip="{Binding GameProfilesTip}" ToolTipService.ShowOnDisabled="True" />
                                             <RadioButton GroupName="GameMode" Content="{l:T apps.game.mode.general}" IsChecked="{Binding GameGeneral}" IsEnabled="{Binding GameCanToggle}" Margin="0,3,24,3"
                                                          ToolTip="{l:T apps.game.mode.general_tip}" />
                                         </WrapPanel>
@@ -2696,26 +2696,23 @@
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <TextBlock Text="{l:T settings.transfer.title}" Style="{StaticResource H2}" />
-                                    <DockPanel Margin="0,4,0,0">
-                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                                            <Button Command="{Binding ExportSettingsCmd}" Margin="0,0,8,0" Padding="12,7" AutomationProperties.Name="{l:T settings.transfer.export_btn}">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Path Data="{StaticResource Ic.arrow_upload}" Fill="{DynamicResource Text}" Width="16" Height="16" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center" />
-                                                    <TextBlock Text="{l:T settings.transfer.export_btn}" VerticalAlignment="Center" TextWrapping="NoWrap" />
-                                                </StackPanel>
-                                            </Button>
-                                            <Button Command="{Binding ImportSettingsCmd}" Margin="0" Padding="12,7" AutomationProperties.Name="{l:T settings.transfer.import_btn}">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Path Data="{StaticResource Ic.arrow_download}" Fill="{DynamicResource Text}" Width="16" Height="16" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center" />
-                                                    <TextBlock Text="{l:T settings.transfer.import_btn}" VerticalAlignment="Center" TextWrapping="NoWrap" />
-                                                </StackPanel>
-                                            </Button>
-                                        </StackPanel>
-                                        <StackPanel>
-                                            <TextBlock Text="{l:T settings.transfer.row}" />
-                                            <TextBlock Text="{l:T settings.transfer.hint}" Style="{StaticResource Hint}" FontSize="13" Margin="0,2,0,0" />
-                                        </StackPanel>
-                                    </DockPanel>
+                                    <!-- Текст — во всю ширину карточки, кнопки — под ним: справа от текста две широкие кнопки сжимали его в узкую колонку. -->
+                                    <TextBlock Text="{l:T settings.transfer.row}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                    <TextBlock Text="{l:T settings.transfer.hint}" Style="{StaticResource Hint}" FontSize="13" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                    <WrapPanel Margin="0,10,0,0">
+                                        <Button Command="{Binding ExportSettingsCmd}" Margin="0,0,8,0" Padding="12,7" AutomationProperties.Name="{l:T settings.transfer.export_btn}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Path Data="{StaticResource Ic.arrow_upload}" Fill="{DynamicResource Text}" Width="16" Height="16" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                                <TextBlock Text="{l:T settings.transfer.export_btn}" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Command="{Binding ImportSettingsCmd}" Margin="0" Padding="12,7" AutomationProperties.Name="{l:T settings.transfer.import_btn}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Path Data="{StaticResource Ic.arrow_download}" Fill="{DynamicResource Text}" Width="16" Height="16" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                                <TextBlock Text="{l:T settings.transfer.import_btn}" VerticalAlignment="Center" TextWrapping="NoWrap" />
+                                            </StackPanel>
+                                        </Button>
+                                    </WrapPanel>
                                 </StackPanel>
                             </Border>
 
@@ -2731,7 +2728,7 @@
                             </Border>
 
                             <!-- Откат всего: список из журналов (помощника и окна), «Отменить всё», отчёт по пунктам. Над «Очисткой и удалением». -->
-                            <Border Style="{StaticResource Card}" Margin="0,18,0,0" DataContext="{Binding Changes}" x:Name="ChangesCard">
+                            <Border Style="{StaticResource Card}" DataContext="{Binding Changes}" x:Name="ChangesCard">
                                 <StackPanel>
                                     <DockPanel>
                                         <Button DockPanel.Dock="Right" ContentTemplate="{StaticResource Shield}" Content="{l:T settings.changes.undo_all}" Command="{Binding UndoAllCmd}"
@@ -2802,7 +2799,7 @@
                             </Border>
 
                             <!-- Удаление — отдельно, спокойным стилем, с тем, как вернуть (UX-аудит, «Опасные действия», п. 18–19). -->
-                            <Border Style="{StaticResource Card}" Margin="0,18,0,14">
+                            <Border Style="{StaticResource Card}" Margin="0,4,0,14">
                                 <StackPanel>
                                     <TextBlock Text="{l:T settings.cleanup.title}" Style="{StaticResource H2}" />
                                     <DockPanel Margin="0,4,0,0">
