@@ -616,6 +616,14 @@
     "При неудаче включится запасная стратегия. Если и запасные не помогли — быстрый подбор: 2–3 мин, не чаще раза в 6 ч; в это время сайты на всех устройствах прерываются. Поэтому по умолчанию выключено.",
     "On failure a backup strategy is turned on. If backups do not help either — a quick search: 2–3 min, at most once every 6 h; sites on all devices are interrupted meanwhile. That is why it is off by default."
   ],
+  "web.main.report_none": [
+    "Подбора на роутере ещё не было",
+    "No selection on the router yet"
+  ],
+  "web.main.report_tip": [
+    "Последний подбор: {time}",
+    "Last selection: {time}"
+  ],
   "web.main.reset_note": [
     "Без страницы: на большинстве роутеров с OpenWrt нажатие reset на 2 с выключает оптимизацию без перезагрузки, на некоторых — иначе. Не держите 5 с и дольше: обычно это сброс к заводским настройкам.",
     "Without this page: on most OpenWrt routers pressing reset for 2 s turns optimization off without a reboot; on some it works differently. Do not hold it for 5 s or longer: that is usually a factory reset."

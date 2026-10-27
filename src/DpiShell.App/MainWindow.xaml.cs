@@ -107,7 +107,7 @@ public partial class MainWindow : Window
     /// <summary>Прокрутить страницу к месту; к выбору DNS — ещё и раскрыть список вариантов.</summary>
     public void ShowSpot(Spot spot)
     {
-        FrameworkElement target = spot switch { Spot.PcDns => PcDnsPicker, Spot.IpLists => IpListsBlock, _ => StrategiesBlock };
+        FrameworkElement target = spot switch { Spot.PcDns => PcDnsPicker, _ => IpListsBlock };
         if (!target.IsVisible) return;
         UpdateLayout();
         DependencyObject? up = target;
@@ -140,6 +140,35 @@ public partial class MainWindow : Window
         return null;
     }
 
+    /// <summary>«Стратегия ▾» ПК — то же меню, что у роутера (<see cref="MainViewModel.PcStrategyMenu"/>).</summary>
+    void PcStrategy_Click(object sender, RoutedEventArgs e) => ShowMenu((FrameworkElement)sender, _vm.PcStrategyMenu());
+
+    /// <summary>«⋯» у выбранной строки таблицы подбора (<see cref="MainViewModel.ScoreMenu"/>).</summary>
+    void ScoreMenu_Click(object sender, RoutedEventArgs e) => ShowMenu((FrameworkElement)sender, _vm.ScoreMenu());
+
+    /// <summary>Меню из пунктов модели под кнопкой: справа — подпись (итог прогона), в подсказке — параметры (моноширинно).</summary>
+    public static System.Windows.Controls.ContextMenu BuildMenu(FrameworkElement target, IEnumerable<MenuEntry> entries)
+    {
+        var menu = new System.Windows.Controls.ContextMenu { PlacementTarget = target, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        foreach (var x in entries)
+        {
+            if (x.IsLine) { menu.Items.Add(new System.Windows.Controls.Separator()); continue; }
+            var item = new System.Windows.Controls.MenuItem
+            {
+                Header = x.Header, InputGestureText = x.Gesture, IsEnabled = x.Enabled,
+                ToolTip = x.Tip is not { Length: > 0 } tip ? null
+                    : x.MonoTip ? new System.Windows.Controls.TextBlock { Text = tip, FontFamily = new System.Windows.Media.FontFamily("Consolas"), TextWrapping = TextWrapping.Wrap, MaxWidth = 640 }
+                    : tip,
+            };
+            System.Windows.Controls.ToolTipService.SetShowOnDisabled(item, true);
+            if (x.Run is { } run) item.Click += (_, _) => run();
+            menu.Items.Add(item);
+        }
+        return menu;
+    }
+
+    static void ShowMenu(FrameworkElement target, IEnumerable<MenuEntry> entries) => BuildMenu(target, entries).IsOpen = true;
+
     /// <summary>«Стратегия ▾» в блоке роутера: меню из strategies, текущая отмечена.</summary>
     void RouterStrategy_Click(object sender, RoutedEventArgs e)
     {
@@ -171,7 +200,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Список внутри прокручиваемой страницы (стратегии на главной): свой ScrollViewer списка съедает колесо, даже когда
+    /// Список внутри прокручиваемой страницы: свой ScrollViewer списка съедает колесо, даже когда
     /// прокручивать ему нечего, — отдаём колесо странице.
     /// </summary>
     void PassWheelToPage(object sender, System.Windows.Input.MouseWheelEventArgs e)
@@ -180,9 +209,6 @@ public partial class MainWindow : Window
         e.Handled = true;
         parent.RaiseEvent(new System.Windows.Input.MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta) { RoutedEvent = MouseWheelEvent, Source = sender });
     }
-
-    /// <summary>Щелчок по подробностям в списке стратегий не выбирает стратегию (выбор там же включает её).</summary>
-    void KeepSelection(object sender, System.Windows.Input.MouseButtonEventArgs e) => e.Handled = true;
 
     readonly DispatcherTimer _netSettle;
 

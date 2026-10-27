@@ -468,20 +468,20 @@ public sealed partial class WindowSmokeTests
                     if (Find<Button>(tabs, b => b.Content as string == L.T("select.edit_copy") && b.IsVisible) is null) throw new Exception("У готовой нет «Изменить копию»");
                     vm.SelectedScore = vm.Scores.First(r => r.Id == id);
 
-                    // Главная: список стратегий, у вставленной — метка и в «Параметрах» «Изменить» / «Удалить».
-                    SetProp(vm, "ShowStrategies", true);
+                    // «⋯» у выбранной вставленной: «Скопировать параметры» и «Удалить» (были в списке на главной); на главной она — в меню «Стратегия ▾».
+                    var more = vm.ScoreMenu();
+                    if (!more.Any(m => m.Header == "Удалить" && m.Enabled)) throw new Exception("Нет «Удалить» в «⋯» у вставленной");
+                    if (!more.Any(m => m.Header == "Скопировать параметры")) throw new Exception("Нет «Скопировать параметры» в «⋯»");
+                    if (Find<Button>(tabs, b => b.Content as string == "⋯" && b.IsVisible) is null) throw new Exception("Нет «⋯» у выбранной строки");
+                    var own = vm.StrategyChoices.First(c => c.Id == id);
+                    if (!vm.PcStrategyMenu().Any(m => m.Header.Trim() == own.Title && m.Gesture == own.Stats)) throw new Exception("Вставленной нет в меню стратегии ПК");
                     vm.GoTo(Pages.Home);
                     Pump();
-                    var own = vm.StrategyChoices.First(c => c.Id == id);
-                    vm.StrategyChoices.Move(vm.StrategyChoices.IndexOf(own), 0);
-                    own.ShowParams = true;
-                    Pump();
                     var home = Find<TabControl>(w)!;
-                    if (Find<Button>(home, b => b.Content as string == "Скопировать стратегию" && b.IsVisible) is null) throw new Exception("Нет «Скопировать стратегию» на главной");
-                    if (Find<Button>(home, b => b.Content as string == "Удалить" && b.IsVisible) is null) throw new Exception("Нет «Удалить» у вставленной");
-                    if (Find<TextBlock>(home, t => t.Text == "вставлена" && t.IsVisible) is null) throw new Exception("Нет метки «вставлена» на главной");
+                    if (Find<Button>(home, b => b.Command == vm.CopyPcStrategyCmd && b.IsVisible) is null) throw new Exception("Нет «Скопировать стратегию» на главной");
                     if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-home-own-strategy.png"));
-                    own.ShowParams = false;
+                    vm.GoTo(Pages.Select);
+                    Pump();
 
                     // Окно правки: исходное состояние и с ошибкой.
                     var editor = new StrategyEditor("Стратегия от друга", "Моя правка", roles, catalog: false, n => File.Exists(Path.Combine(Repo.Data, "fake", n))).Start();
@@ -572,20 +572,16 @@ public sealed partial class WindowSmokeTests
                 if (Visible(t => t.Text is "Группы" or "Открылось") || Find<DataGridColumnHeader>(tabs, h => h.IsVisible && h.Content as string == "Сервисы") is null) throw new Exception("Колонка «Группы» не переименована в «Сервисы»");
                 if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"{theme}-select-mix.png")); }
 
-                SetProp(vm, "ShowStrategies", true);
-                vm.GoTo(Pages.Home);
-                Pump();
-                var home = Find<TabControl>(w)!;
                 var row = vm.StrategyChoices.First(c => c.Id == mix.Id);
                 if (!row.Removable || row.Personal) throw new Exception("Смешанная должна удаляться и не быть «своей»");
                 if (row.EditText != L.T("home.edit_copy")) throw new Exception("Смешанная правится копией: " + row.EditText);
-                vm.StrategyChoices.Move(vm.StrategyChoices.IndexOf(row), 0);
-                row.ShowParams = true;
+                // Смешанная — в меню «Стратегия ▾» на главной (состав — в подсказке), «Удалить» — в «⋯» строки таблицы.
+                if (vm.PcStrategyMenu().FirstOrDefault(m => m.Header.Trim().StartsWith("Смешанная · YouTube — ")) is not { Tip: { } mixTip } || !mixTip.Contains("Состав: "))
+                    throw new Exception("Нет смешанной с составом в меню стратегии ПК");
+                if (!vm.ScoreMenu().Any(m => m.Header == "Удалить")) throw new Exception("Нет «Удалить» у смешанной в «⋯»");
+                vm.GoTo(Pages.Home);
                 Pump();
-                if (Find<TextBlock>(home, t => t.IsVisible && t.Text.StartsWith("Смешанная · YouTube — ")) is null) throw new Exception("Нет смешанной в списке на главной");
-                if (Find<Button>(home, b => b.Content as string == "Удалить" && b.IsVisible) is null) throw new Exception("Нет «Удалить» у смешанной");
                 if (snapDir is not null) Snap(w, Path.Combine(snapDir, $"{theme}-home-mix.png"));
-                row.ShowParams = false;
                 Close(w);
             }
         });
@@ -801,54 +797,27 @@ public sealed partial class WindowSmokeTests
                         Snap(w, Path.Combine(snapDir, $"{theme}-home-pc-panel.png"));
                         vm.ClosePanelCmd.Execute(null);
                         Pump();
-                        vm.ShowStrategies = true;
                         var detailed = vm.StrategyChoices.First(c => c.HasWarning);
                         // Только последний прогон (17.10): прошлые подборы о сегодняшней сети не говорят.
                         if (detailed.Stats != "YouTube ✓ · Discord ✓ · свои 7 из 9 · проверено 17.10 в 10:00" || detailed.Warning != "ломает обычные сайты" || !detailed.HasDetails)
                             throw new Exception("Подпись стратегии не по последнему прогону: " + detailed.Stats);
-                        detailed.Expanded = true;
-                        Pump();
-                        // Щелчок по раскрытым адресам не выбирает стратегию (выбор её включает).
-                        var chosen = vm.ChosenStrategyId;
-                        var addr = Find<TextBlock>(Find<TabControl>(w)!, t => t.Text == "свой адрес №1" && t.IsVisible) ?? throw new Exception("Раскрытая стратегия без адресов");
-                        addr.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
-                            { RoutedEvent = UIElement.MouseLeftButtonDownEvent });
-                        Pump();
-                        if (vm.ChosenStrategyId != chosen || detailed.Id == chosen) throw new Exception("Щелчок по подробностям сменил выбор стратегии");
-                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } top
-                            && Find<ListBox>(Find<TabControl>(w)!) is { } lb)
-                        {
-                            top.ScrollToVerticalOffset(lb.TranslatePoint(new Point(0, 0), (UIElement)top.Content).Y - 40);
-                            Pump();
-                        }
-                        Snap(w, Path.Combine(snapDir, $"{theme}-home-open.png"));
-                        // «Параметры»: роли и командная строка winws; «Скопировать параметры» — в буфер (подмена).
-                        detailed.Expanded = false;
-                        detailed.ShowParams = true;
-                        Pump();
-                        if (Find<TextBox>(Find<TabControl>(w)!, t => t.Text.Contains("general: --dpi-desync=") && t.Text.Contains("winws.exe --wf-tcp=") && t.IsVisible) is null)
-                            throw new Exception("В «Параметры» нет ролей или командной строки");
+                        // Меню «Стратегия ▾»: подпись справа — та же; в подсказке — предупреждение, роли и командная строка winws.
+                        var entry = vm.PcStrategyMenu().FirstOrDefault(m => m.Header.Trim().TrimStart('✓').Trim() == detailed.Title) ?? throw new Exception("Стратегии нет в меню ПК");
+                        if (entry.Gesture != detailed.Stats || entry.Tip is not { } entryTip || !entryTip.StartsWith("ломает обычные сайты")
+                            || !entryTip.Contains("general: --dpi-desync=") || !entryTip.Contains("winws.exe --wf-tcp="))
+                            throw new Exception("В пункте меню нет подписи, предупреждения или параметров: " + entry.Gesture);
+                        // «Скопировать параметры» — в буфер (подмена).
                         string? copied = null;
                         vm.CopyText = t => copied = t;
                         vm.CopyParamsCmd.Execute(detailed);
-                        if (copied is null || !copied.StartsWith(detailed.Title + "\n") || !copied.Contains("{fake}/")) throw new Exception("«Скопировать параметры» скопировал не то: " + copied);
-                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } pv
-                            && Find<ListBox>(Find<TabControl>(w)!)?.ItemContainerGenerator.ContainerFromItem(detailed) is FrameworkElement item)
-                        {
-                            pv.ScrollToVerticalOffset(item.TranslatePoint(new Point(0, 0), (UIElement)pv.Content).Y - 20);
-                            Pump();
-                        }
-                        Snap(w, Path.Combine(snapDir, $"{theme}-home-params.png"));
-                        detailed.ShowParams = false;
-                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } top2) top2.ScrollToHome();
-                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.TemplatedParent is not ListBox && s.ScrollableHeight > 0) is { } hv)
+                        if (copied is null || !copied.StartsWith(detailed.Title + "\n") ||!copied.Contains("{fake}/")) throw new Exception("«Скопировать параметры» скопировал не то: " + copied);
+                        if (Find<ScrollViewer>(Find<TabControl>(w)!, s => s.IsVisible && s.ScrollableHeight > 0) is { } hv)
                         {
                             hv.ScrollToEnd();
                             Pump();
                             Snap(w, Path.Combine(snapDir, $"{theme}-home-end.png"));
                             hv.ScrollToHome();
                         }
-                        vm.ShowStrategies = false;
                         Pump();
                         // Идёт «Проверить сейчас» (сама после «Включить», UX-аудит 2, п. 1): плитки «Проверка…», прежних отметок нет.
                         var rows = vm.CheckRows.ToList();
@@ -1072,9 +1041,15 @@ public sealed partial class WindowSmokeTests
                         if (Find<Button>(tabs, b => b.Content as string == L.T("home.toggle.on_pc") && b.IsVisible && b.Style != (Style)w.FindResource("Primary")) is null)
                             throw new Exception("При оптимизации на роутере кнопка ПК должна быть второстепенной «Включить и на этом ПК»");
                         if (Find<ComboBox>(tabs) is not null) throw new Exception("На главной появился выпадающий список");
-                        vm.ShowStrategies = true;
-                        Pump();
-                        if (Find<Button>(tabs, b => b.Content as string == "Отправить на роутер" && b.IsVisible) is null) throw new Exception("У найденной стратегии нет «Отправить на роутер»");
+                        // Найденная на ПК — «Отправить на роутер» в «⋯» строки таблицы «Подбора» (роутер подключён).
+                        var found = vm.StrategyChoices.First(c => c.Id == "found-1");
+                        var foundRow = new ScoreRow(new StrategyScore(new Strategy(found.Id, found.Title, "search", []), [], 0, 0), vm.Names);
+                        vm.Scores.Add(foundRow);
+                        var keep = vm.SelectedScore;
+                        vm.SelectedScore = foundRow;
+                        if (!vm.ScoreMenu().Any(m => m.Header == "Отправить на роутер")) throw new Exception("У найденной стратегии нет «Отправить на роутер»");
+                        vm.SelectedScore = keep;
+                        vm.Scores.Remove(foundRow);
                     }
                     // Роутер сам включил лучшую (редакция §9) — итог «Включена на роутере», другую можно выбрать в таблице.
                     // Итог свёрнут в строку «✓ Включена на роутере …»; «Подробнее» возвращает карточку.
@@ -1578,7 +1553,7 @@ public sealed partial class WindowSmokeTests
     }
 
     /// <summary>
-    /// Главная (UX-аудит): одна главная кнопка, стратегии свёрнуты под «Сменить стратегию» (раскрываются — список с выбранной),
+    /// Главная (UX-аудит): одна главная кнопка, стратегия ПК — кнопкой «▾» с меню (текущая отмечена),
     /// помехи — строкой «Нашлось N помех», раскрыта одна самая важная, остальные — по «Ещё N».
     /// </summary>
     static void AssertHome(Window w, MainViewModel vm)
@@ -1589,33 +1564,20 @@ public sealed partial class WindowSmokeTests
         Collect(tabs, primary);
         // Цветом — только когда нужно действие (выключено, роутер не ведёт); и тогда одна.
         if (primary.Count(b => b.IsVisible && b.Style == (Style)w.FindResource("Primary")) != (vm.PcAccent ? 1 : 0)) throw new Exception("Главная кнопка выделена не по правилу «только когда нужно действие»");
-        var list = Find<ListBox>(tabs) ?? throw new Exception("На главной нет списка стратегий");
-        if (list.IsVisible) throw new Exception("Список стратегий должен быть свёрнут до «Показать стратегии»");
-        vm.ShowStrategies = true;
-        Pump();
-        if (!list.IsVisible) throw new Exception("«Показать стратегии» не раскрыл список");
-        if (list.Items.Count != vm.StrategyChoices.Count || list.Items.Count == 0) throw new Exception($"В списке {list.Items.Count} строк, ждали {vm.StrategyChoices.Count}");
-        if ((list.SelectedItem as StrategyChoice)?.Id != vm.ChosenStrategyId) throw new Exception("В списке не выделена выбранная стратегия");
-        // Порядок списка: «по результату» выбран; «по имени» — числа как числа (ALT2 … ALT10), без номера — первым; выбор виден в окне.
-        var rByResult = Find<RadioButton>(tabs, r => r.Content as string == "по результату" && r.IsVisible);
-        var rByName = Find<RadioButton>(tabs, r => r.Content as string == "по имени" && r.IsVisible);
-        if (rByResult is null || rByName is null) throw new Exception("На главной нет переключателя порядка «по результату» / «по имени»");
-        if (rByResult.IsChecked != true) throw new Exception("По умолчанию порядок должен быть «по результату»");
-        rByName.IsChecked = true;
-        Pump();
-        if (!vm.SortByName) throw new Exception("«по имени» не дошёл до настроек");
-        var named = vm.StrategyChoices.Select(c => c.Title).ToList();
-        for (int i = 1; i < named.Count; i++)
-            if (StrategyOrder.NaturalCompare(named[i - 1], named[i]) > 0) throw new Exception($"«по имени»: «{named[i - 1]}» стоит раньше «{named[i]}»");
-        rByResult.IsChecked = true;
-        Pump();
-        if (vm.SortByName) throw new Exception("«по результату» не вернулся");
-        vm.ShowStrategies = false;
+        // Списка стратегий на главной нет (UX-аудит 8): выбор — меню «Стратегия ▾», как у роутера; порядок «по результату / по имени» — только на «Подборе».
+        if (Find<ListBox>(tabs, l => l.IsVisible) is not null) throw new Exception("На главной остался список стратегий");
+        if (Find<RadioButton>(tabs, r => r.Content as string == "по имени" && r.IsVisible) is not null) throw new Exception("На главной остался переключатель порядка");
+        var pick = Find<Button>(tabs, b => b.Name == "PcStrategyButton" && b.IsVisible) ?? throw new Exception("Нет кнопки «Стратегия ▾» у ПК");
+        if (Find<TextBlock>(pick, t => t.Text == vm.PcStrategyText) is null) throw new Exception("На кнопке стратегии ПК не её название");
+        var menu = vm.PcStrategyMenu();
+        var strategies = menu.TakeWhile(m => !m.IsLine).ToList();
+        if (strategies.Count != vm.StrategyChoices.Count || strategies.Count == 0) throw new Exception($"В меню {strategies.Count} стратегий, ждали {vm.StrategyChoices.Count}");
+        if (vm.CurrentStrategyId is { } cur && strategies.Count(m => m.Header.StartsWith("✓ ")) != 1) throw new Exception("В меню не отмечена текущая стратегия " + cur);
+        if (!menu.Any(m => m.Header == L.T("home.menu.all"))) throw new Exception("В меню нет «Все стратегии…»");
 
         // Вариант A: строка «Этот ПК» со стратегией (выделяемой) и копированием; без роутера строки роутера нет.
         Button? Visible(string text) => Find<Button>(tabs, b => b.Content as string == text && b.IsVisible);
         if (Find<TextBlock>(tabs, t => t.Text == L.T("home.pc.label") && t.IsVisible) is null) throw new Exception("Нет строки «Этот ПК»");
-        if (Find<TextBox>(tabs, t => t.Text == vm.PcStrategyText && t.IsVisible && t.IsReadOnly) is null) throw new Exception("Стратегия ПК не выделяемым текстом");
         if (Find<Button>(tabs, b => b.Command == vm.CopyPcStrategyCmd && b.IsVisible) is null) throw new Exception("Нет кнопки «Скопировать стратегию» у ПК");
         if (Visible(L.T("home.router.label")) is not null) throw new Exception("Строка роутера без роутера");
         // Отдельной карточки помех нет: VPN и DNS — пункты панели «Этот ПК», значок — «!» с подсказкой.

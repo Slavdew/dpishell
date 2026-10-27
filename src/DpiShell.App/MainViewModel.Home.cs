@@ -13,7 +13,14 @@ public sealed record CheckGroupMark(string Title, bool Ok, bool Browser = false)
 }
 
 /// <summary>Место в окне, куда прокрутить по ссылке (<see cref="MainViewModel.ShowRequested"/>).</summary>
-public enum Spot { Strategies, PcDns, IpLists }
+public enum Spot { PcDns, IpLists }
+
+/// <summary>Пункт меню, собранного моделью (окно строит из них ContextMenu; тесты проверяют пункты и вызывают Run). Пустой заголовок — черта.</summary>
+public sealed record MenuEntry(string Header, Action? Run = null, string Gesture = "", string? Tip = null, bool Enabled = true, bool MonoTip = false)
+{
+    public static MenuEntry Line { get; } = new("");
+    public bool IsLine => Header.Length == 0;
+}
 
 /// <summary>
 /// Главная по варианту A макета (prototypes/combined, снимки A-*, A2-*): карточка статуса с круглым значком, одна большая кнопка ПК,
@@ -91,8 +98,56 @@ public sealed partial class MainViewModel
         : PcSecondary ? L.T("home.pc.state.off_router")
         : L.T("home.pc.state.off");
 
-    /// <summary>Стратегия ПК — выделяемым текстом; копируется строкой dpishell:1:… (как «Скопировать стратегию» в списке).</summary>
+    /// <summary>Стратегия ПК — на кнопке «▾» с меню выбора (как у роутера); копируется строкой dpishell:1:… («Скопировать стратегию»).</summary>
     public string PcStrategyText => CurrentStrategyId is { } id ? StrategyTitle(id) : L.T("home.strategy.none_short");
+
+    /// <summary>Подсказка кнопки стратегии ПК: серая — почему (идёт подбор, загрузка, другая операция).</summary>
+    public string PcStrategyTip => CanChoose ? L.T("home.strategy.pc_tip") : ChooseBlockedText;
+
+    /// <summary>
+    /// Меню «Стратегия ▾» ПК (UX-аудит 8, §4 «Главная»): «✓ название» слева, итог последнего прогона справа, параметры — в подсказке.
+    /// Выбор — тот же путь, что у прежнего списка (<see cref="ChosenStrategyId"/>: подтверждение для непроверенной, перезапуск, если работает).
+    /// После черты — «Скопировать параметры» текущей, «Итоги подбора…» и «Все стратегии…» (→ «Подбор», где действия со стратегией).
+    /// </summary>
+    public IReadOnlyList<MenuEntry> PcStrategyMenu()
+    {
+        var items = new List<MenuEntry>();
+        var current = CurrentStrategyId;
+        foreach (var c in StrategyChoices)
+        {
+            var id = c.Id;
+            var tip = c.HasWarning ? c.Warning + (c.HasParams ? "\n\n" + c.Params : "") : c.HasParams ? c.Params : null;
+            items.Add(new((id == current ? "✓ " : "    ") + c.Title, () => ChosenStrategyId = id, c.Stats, tip, CanChoose, MonoTip: true));
+        }
+        if (items.Count == 0) items.Add(new(L.T("home.menu.empty"), Enabled: false));
+        items.Add(MenuEntry.Line);
+        if (StrategyChoices.FirstOrDefault(c => c.Id == current) is { HasParams: true } cur)
+            items.Add(new(L.T("shell.router_menu.copy", new { title = cur.Title }), () => CopyParamsCmd.Execute(cur)));
+        items.Add(new(L.T("home.menu.report"), ShowLastReport, Tip: HasLastReport ? null : LastReportTip, Enabled: HasLastReport));
+        items.Add(new(L.T("home.menu.all"), () => Page = Pages.Select));
+        return items;
+    }
+
+    /// <summary>
+    /// «⋯» у выбранной строки таблицы «Подбора»: то, что раньше было ссылками в списке на главной, — «Скопировать параметры»,
+    /// «Отправить на роутер» (найденная, своя, вставленная, смешанная; роутер подключён), «Удалить» (те же, кроме текущей).
+    /// </summary>
+    public IReadOnlyList<MenuEntry> ScoreMenu()
+    {
+        var items = new List<MenuEntry>();
+        if (SelectedScore is not { } row) return items;
+        var id = row.Id;
+        var choice = StrategyChoices.FirstOrDefault(c => c.Id == id);
+        if (choice is { HasParams: true }) items.Add(new(L.T("home.params.copy"), () => CopyParamsCmd.Execute(choice)));
+        bool removable = choice?.Removable ?? row.Score.Strategy.Source is "search" or "mix" or "user" or "pasted";
+        if (removable && Router.Connected)
+            items.Add(new(L.T("home.send_to_router"), () => Router.SendStrategyCmd.Execute(id), Tip: L.T("home.send_to_router.tip"), Enabled: Router.SendStrategyCmd.CanExecute(id)));
+        if (removable)
+            items.Add(new(L.T("home.delete"), () => DeleteStrategyCmd.Execute(id), Tip: id == CurrentStrategyId ? L.T("select.delete.current") : null,
+                Enabled: id != CurrentStrategyId && DeleteStrategyCmd.CanExecute(id)));
+        if (items.Count == 0) items.Add(new(L.T("select.more.none"), Enabled: false));
+        return items;
+    }
     public ICommand CopyPcStrategyCmd => _copyPcStrategyCmd ??= new RelayCommand(() => { if (CurrentStrategyId is { } id) CopyStrategyCmd.Execute(id); }, () => CurrentStrategyId is not null);
     ICommand? _copyPcStrategyCmd;
 
@@ -355,23 +410,8 @@ public sealed partial class MainViewModel
 
     // ---------- стратегии ----------
 
-    bool _showStrategies;
-    /// <summary>Список стратегий на главной раскрыт («Сменить стратегию»). По умолчанию свёрнут: менять руками нужно редко.</summary>
-    public bool ShowStrategies
-    {
-        get => _showStrategies;
-        set
-        {
-            if (!Set(ref _showStrategies, value)) return;
-            Raise(nameof(StrategiesLinkText));
-            if (value) ShowRequested?.Invoke(Spot.Strategies);
-        }
-    }
-    public string StrategiesLinkText => L.T(ShowStrategies ? "home.strategies.hide" : "home.strategies.show");
     /// <summary>«Подобрать» — пока оптимизация выключена; «Не помогло? → Подобрать» — когда включена и сайты не открылись.</summary>
     public string RetrySelectText => L.T(IsRunning ? "home.retry_select" : "home.select_link");
-    public ICommand ToggleStrategiesCmd => _toggleStrategiesCmd ??= new RelayCommand(() => ShowStrategies = !ShowStrategies);
-    ICommand? _toggleStrategiesCmd;
 
     // ---------- итог «Проверить сейчас» ----------
 

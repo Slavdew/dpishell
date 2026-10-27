@@ -28,6 +28,7 @@ home.order.by_name.tip
 home.order.by_result
 home.order.by_result.tip
 home.order.label
+home.report
 home.status.deep
 home.status.off
 home.status.partial

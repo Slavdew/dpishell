@@ -8,7 +8,7 @@ using static DpiShell.Tests.WindowSmokeTests;
 namespace DpiShell.Tests;
 
 /// <summary>
-/// «Кириллица в английском окне» с заполненными данными: список стратегий на главной с историей проверок (автоимена найденных, смешанная,
+/// «Кириллица в английском окне» с заполненными данными: меню стратегий на главной с историей проверок (автоимена найденных, смешанная,
 /// «ломает обычные сайты», адреса с русскими причинами от помощника), мешающие программы от помощника по-русски, DNS ПК. Окно
 /// открывается сразу на английском и, отдельно, на русском с переключением на лету. Снимки: populated-home-*.png (DPISHELL_SNAPSHOTS).
 /// </summary>
@@ -60,10 +60,7 @@ public sealed class LangPopulatedTests : IDisposable
             SetProp(vm, "IsLoading", false);
             vm.ReloadChoices();
             WaitUi(vm.RefreshStatusAsync());
-            SetProp(vm, "ShowStrategies", true);
             vm.GoTo(Pages.Home);
-            Pump();
-            foreach (var c in vm.StrategyChoices) c.Expanded = true;
             Pump();
             if (snapDir is not null) { Directory.CreateDirectory(snapDir); Snap(w, Path.Combine(snapDir, $"populated-home-{lang}.png")); }
             CyrillicScan.CheckIfEn(w, "populated-home");

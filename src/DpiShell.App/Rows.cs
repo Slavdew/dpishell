@@ -14,20 +14,15 @@ public sealed class GroupOption(string id, string title, bool isChecked) : Obser
 }
 
 /// <summary>
-/// Строка списка стратегий на главной: название, итог последнего прогона по группам, найдена ли поиском.
-/// Warning — «ломает обычные сайты» (в последнем прогоне); Details — адреса последнего прогона (раскрываются).
+/// Стратегия в меню «Стратегия ▾» на главной: название, итог последнего прогона по группам (справа), найдена ли поиском.
+/// Warning — «ломает обычные сайты» (в последнем прогоне); Details — адреса последнего прогона.
 /// </summary>
 public sealed class StrategyChoice(string id, string title, string stats, bool found, string warning = "", IReadOnlyList<CheckRow>? details = null,
     string parameters = "") : Observable
 {
-    bool _expanded, _showParams;
     /// <summary>Точные параметры по ролям и командная строка winws для этого ПК (<see cref="StrategyParams"/>); пусто — стратегии нет у окна.</summary>
     public string Params { get; } = parameters;
     public bool HasParams => Params.Length > 0;
-    public bool ShowParams { get => _showParams; set { if (Set(ref _showParams, value)) { Raise(nameof(ParamsLinkText)); Raise(nameof(ParamsVisible)); } } }
-    /// <summary>Блок параметров показывается, только когда есть что показать: пустая рамка выглядит как сбой.</summary>
-    public bool ParamsVisible => _showParams && HasParams;
-    public string ParamsLinkText => L.T(ShowParams ? "home.params.hide" : "home.params.show");
     public string Id { get; } = id;
     public string Title { get; } = title;
     public string Stats { get; } = stats;
@@ -53,7 +48,6 @@ public sealed class StrategyChoice(string id, string title, string stats, bool f
     public bool HasWarning => Warning.Length > 0;
     public IReadOnlyList<CheckRow> Details { get; } = details ?? [];
     public bool HasDetails => Details.Count > 0;
-    public bool Expanded { get => _expanded; set => Set(ref _expanded, value); }
 
     /// <summary>
     /// Подпись — только последний прогон: «YouTube ✓ · Discord ✗ · свои 7 из 9 · проверено 18.10 в 14:30». История прошлых подборов

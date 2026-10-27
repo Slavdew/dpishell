@@ -146,7 +146,7 @@ public sealed class VerdictDetailTests
         Assert.Equal("TLS 1.3: загрузка обрывается, 200, получено 16384 из 90000", details[1].Detail);
 
         var row = new StrategyChoice("a", "A", stats, false, warning, details);
-        Assert.True(!row.HasWarning && row.HasDetails && !row.Expanded);
+        Assert.True(!row.HasWarning && row.HasDetails);
 
         // Самый свежий прогон — старого формата (без адресов): только итог, без адресов прошлого.
         var oldNewest = st with { Newest = new("2026-10-18_09-05-00.json", 1, 2, false) };
@@ -181,12 +181,9 @@ public sealed class VerdictDetailTests
         Assert.DoesNotContain(p.Root, lines[6]);
         Assert.Contains("IP-список: только из списков, игровой режим: вкл", StrategyParams.Full(s, p, new(IpsetMode.List, GameMode.TcpUdp)));
 
-        // Строка списка: «Параметры» раскрываются отдельно от адресов.
+        // Пункт меню стратегии: параметры есть — в подсказке и «Скопировать параметры».
         var row = new StrategyChoice("alt", "general (ALT)", "ещё не проверялась", false, parameters: text);
-        Assert.True(row.HasParams && !row.ShowParams);
-        Assert.Equal("Параметры", row.ParamsLinkText);
-        row.ShowParams = true;
-        Assert.Equal("Скрыть параметры", row.ParamsLinkText);
+        Assert.True(row.HasParams);
         Assert.False(new StrategyChoice("x", "X", "", false).HasParams);
     }
 

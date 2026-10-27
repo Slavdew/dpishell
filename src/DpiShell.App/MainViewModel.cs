@@ -232,6 +232,7 @@ public sealed partial class MainViewModel : Observable
         foreach (var g in _shell.DefaultTargets.Groups.Where(g => !g.Control)) Groups.Add(new(g.Id, g.Title, chosen.Contains(g.Id)));
         Groups.Add(new("user", L.T("select.group.user"), chosen.Contains("user")));
         InitHome();       // главная: помехи, итог проверки — MainViewModel.Home.cs
+        RestoreLastReport();   // последний подбор ПК — с диска, до запуска нового (MainViewModel.LastSelect.cs)
         UpdateStatus();
     }
 
@@ -434,7 +435,7 @@ public sealed partial class MainViewModel : Observable
     }
 
     bool _busy;
-    public bool Busy { get => _busy; private set { if (Set(ref _busy, value)) { Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(StopConflictsTip)); CommandManager.InvalidateRequerySuggested(); } } }
+    public bool Busy { get => _busy; private set { if (Set(ref _busy, value)) { Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(PcStrategyTip)); Raise(nameof(StopConflictsTip)); CommandManager.InvalidateRequerySuggested(); } } }
 
     string _busyText = "";
     public string BusyText { get => _busyText; private set => Set(ref _busyText, value); }
@@ -511,7 +512,7 @@ public sealed partial class MainViewModel : Observable
     // ---------- загрузка ----------
 
     bool _isLoading = true;
-    public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(StopConflictsTip)); CommandManager.InvalidateRequerySuggested(); } } }
+    public bool IsLoading { get => _isLoading; private set { if (Set(ref _isLoading, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(PcStrategyTip)); Raise(nameof(StopConflictsTip)); CommandManager.InvalidateRequerySuggested(); } } }
 
     bool _loadFailed;
     public bool LoadFailed { get => _loadFailed; private set { if (Set(ref _loadFailed, value)) { Raise(nameof(ShowOverlay)); Raise(nameof(ShowLoadActions)); CommandManager.InvalidateRequerySuggested(); } } }
@@ -714,9 +715,8 @@ public sealed partial class MainViewModel : Observable
         Raise(nameof(ShowSiteFix));
         Raise(nameof(IsRunning)); Raise(nameof(ResultApplied));
         Raise(nameof(ToggleText)); Raise(nameof(PcSecondary)); Raise(nameof(PcPrimary));
-        Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(StopConflictsTip)); RaiseSitesDirty();
+        Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(PcStrategyTip)); Raise(nameof(StopConflictsTip)); RaiseSitesDirty();
         Router.PcChanged();
-        Raise(nameof(StrategyHeader));
         RaiseRunMode();
         // Автозапуск по умолчанию следует за режимом — когда режим известен (помощник ответил).
         if (Live is not null) Autostart.OnRunMode(ServiceMode);
@@ -882,9 +882,6 @@ public sealed partial class MainViewModel : Observable
     /// <summary>Положить текст в буфер обмена (в тестах — подмена).</summary>
     public Action<string> CopyText { get; set; } = text => Clipboard.SetText(text);
 
-    public ICommand ToggleParamsCmd => _toggleParamsCmd ??= new RelayCommand(p => { if (p is StrategyChoice c) c.ShowParams = !c.ShowParams; });
-    ICommand? _toggleParamsCmd;
-
     public ICommand CopyParamsCmd => _copyParamsCmd ??= new RelayCommand(p =>
     {
         if (p is not StrategyChoice { HasParams: true } c) return;
@@ -930,8 +927,6 @@ public sealed partial class MainViewModel : Observable
         catch (Exception e) when (e is HelperException or HelperUnavailableException) { Fail(Texts.Friendly(e), e); }
         UpdateStatus();
     }
-
-    public string StrategyHeader => CurrentStrategyId is { } id ? L.T("home.strategy", new { name = StrategyTitle(id) }) : L.T("home.strategy.none");
 
     // ---------- режим работы ----------
 
@@ -1395,7 +1390,7 @@ public sealed partial class MainViewModel : Observable
     public bool Full { get => !_quick; set => Quick = !value; }
 
     bool _selecting;
-    public bool Selecting { get => _selecting; private set { if (Set(ref _selecting, value)) { Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(StopConflictsTip)); CommandManager.InvalidateRequerySuggested(); } } }
+    public bool Selecting { get => _selecting; private set { if (Set(ref _selecting, value)) { Raise(nameof(CanChoose)); Raise(nameof(ChooseBlockedText)); Raise(nameof(PcStrategyTip)); Raise(nameof(StopConflictsTip)); CommandManager.InvalidateRequerySuggested(); } } }
 
     int _progress, _progressMax = 1;
     public int SelectProgress { get => _progress; private set => Set(ref _progress, value); }
@@ -1497,6 +1492,7 @@ public sealed partial class MainViewModel : Observable
         Scores.Clear(); SelectedScore = null; _reportTested = [];
         ResultText = ""; ResultHint = ""; SetBest(null); _resultId = null; OfferDeep = false;
         ResultSummary = ""; ResultExpanded = false;
+        ForgetLastReport();   // прежний отчёт живёт до запуска нового подбора (UX-аудит 8, §4 «Подбор»)
         SelectProgress = 0; SelectIndeterminate = false;
         SelectProgressText = L.T("select.preparing");
     }
@@ -1726,8 +1722,13 @@ public sealed partial class MainViewModel : Observable
         !perfect && total > 0 ? L.T("select.best.of_checked_partial", new { name = strategy, ok, total })
         : L.T(perfect && !addressNote ? "select.best.fits" : "select.best.of_checked", new { name = strategy });
 
-    void ShowReport(SelectionReport r)
+    void ShowReport(SelectionReport r) => ShowReportCore(r, null);
+
+    /// <param name="restoredAt">Отчёт прочитан с диска при запуске окна (<see cref="RestoreLastReport"/>): без автоприменения,
+    /// без сравнения со статистикой и без перечитывания списка; итог — строкой «Последний подбор: …».</param>
+    void ShowReportCore(SelectionReport r, DateTime? restoredAt)
     {
+        bool restored = restoredAt is not null;
         _reportTested = r.TestedGroups;
         foreach (var s in r.Scores) _titles[s.Strategy.Id] = (s.Strategy.Title, s.Strategy.Roles);
         // Итоговая таблица — в порядке оценки, лучшая отмечена.
@@ -1740,9 +1741,10 @@ public sealed partial class MainViewModel : Observable
         RaiseResultGroupLines();
         SelectProgress = SelectProgressMax;
         // Статистика до этого подбора — для подсказки «работала N раз подряд, сейчас нет»; перечитывается ниже.
-        var regression = StrategyChoice.Regression(Helper.Results?.Stats, r, CurrentStrategyId, Names);
+        var regression = restored ? "" : StrategyChoice.Regression(Helper.Results?.Stats, r, CurrentStrategyId, Names);
         // Новая статистика и найденные стратегии — в список на главной; запасные помощник запомнил сам.
-        _ = ReloadChoicesAsync();
+        if (!restored) _ = ReloadChoicesAsync();
+        SaveLastOrSummarize(r, restoredAt);
 
         // Готовые не помогли (или помогли не со всем), подбор дошёл до конца — предложить глубокий поиск; после него — уже нет.
         OfferDeep = !r.Cancelled && !r.NothingBlocked && !_searching && best is not { Perfect: true };
@@ -1774,7 +1776,7 @@ public sealed partial class MainViewModel : Observable
         // «Подходит» — только когда открылось всё и рядом нет «подбор, скорее всего, не поможет»; иначе заголовок не обещает успех (UX-аудит 7, п. 7).
         ResultText = BestTitle(best.Perfect, HasAddressNote, best.Strategy.Title, best.GroupsPassed, best.GroupsTotal);
         // Подбор дошёл до конца — лучшая сразу ставится в работу (после выхода из Guard, см. AutoApplyAsync).
-        if (!r.Cancelled) _autoApplyId = best.Strategy.Id;
+        if (!r.Cancelled && !restored) _autoApplyId = best.Strategy.Id;
         // Подсказка собирается из данных подбора при показе — на языке окна.
         ResultHintIs(() =>
         {
@@ -1925,13 +1927,8 @@ public sealed partial class MainViewModel : Observable
         PcDns.RefreshForLanguage();
         if (_pcDnsStatus is { } dnsStatus) ShowPcDns(dnsStatus);
         for (int i = 0; i < Findings.Count; i++) if (Findings[i].Source is not null) Findings[i] = Findings[i].Refreshed();
-        // Список стратегий на главной: подписи («открыла всё · проверено …»), предупреждения, названия — из статистики; раскрытое остаётся.
-        var open = StrategyChoices.Where(c => c.Expanded || c.ShowParams).ToDictionary(c => c.Id, c => (c.Expanded, c.ShowParams));
-        if (StrategyChoices.Count > 0)
-        {
-            ReloadChoices();
-            foreach (var c in StrategyChoices) if (open.TryGetValue(c.Id, out var f)) (c.Expanded, c.ShowParams) = f;
-        }
+        // Меню стратегии на главной: подписи («YouTube ✓ · проверено …»), предупреждения, названия — из статистики.
+        if (StrategyChoices.Count > 0) ReloadChoices();
     }
     public ObservableCollection<string> VpnList { get; } = [];
 
@@ -2242,6 +2239,7 @@ public sealed partial class MainViewModel : Observable
         if (!Confirm(L.T("settings.history.confirm"))) return;
         int n = 0;
         if (!await WithHelper(L.T("settings.history.busy"), async c => n = await c.ClearHistoryAsync())) return;
+        ForgetLastReport();   // в файле отчёта — адреса своих сайтов: история очищена — и он тоже
         await ReloadChoicesAsync();
         Message = L.T("settings.history.done", new { count = n });
     }
