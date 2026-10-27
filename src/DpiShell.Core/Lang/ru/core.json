@@ -35,6 +35,8 @@
   "core.profile.no_ports": "У профиля нет портов.",
   "core.profile.bad_tcp": "Порты TCP записаны неверно.",
   "core.profile.bad_udp": "Порты UDP записаны неверно.",
+  "core.profile.wf_overlap": "Порт {port} ({proto}) перехватывается для сайтов — для него нужны адреса (подсети).",
+  "core.profile.filter_ports": "Порты {proto} {ports} шире DstPort своего фильтра.",
   "core.profile.addr_count": "В профиле должно быть от 1 до {max} адресов.",
   "core.profile.bad_addr": "Адрес «{addr}» записан неверно.",
   "core.profile.service_addr": "Адрес «{addr}» служебный.",

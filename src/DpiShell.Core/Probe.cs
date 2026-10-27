@@ -252,18 +252,11 @@ public class HttpProbe
     /// <summary>То, что делает SocketsHttpHandler сам: имя → адреса → TCP (порядок и «happy eyeballs» — как у системы).</summary>
     static async ValueTask<Stream> ConnectDefaultAsync(DnsEndPoint ep, bool publicOnly, CancellationToken ct)
     {
+        // Имя разрешаем сами и соединяемся по адресу: иначе система разрешит имя заново и может вернуть другой (частный) адрес.
+        if (publicOnly) return await ConnectAnyAsync(PublicOnly(await Dns.GetHostAddressesAsync(ep.Host, ct)), ep.Port, ct);
         var s = new System.Net.Sockets.Socket(System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp) { NoDelay = true };
         try
         {
-            if (publicOnly)
-            {
-                // Имя разрешаем сами и соединяемся по адресу: иначе система разрешит имя заново и может вернуть другой (частный) адрес.
-                var addrs = PublicOnly(await Dns.GetHostAddressesAsync(ep.Host, ct));
-                s.Dispose();
-                s = new System.Net.Sockets.Socket(addrs[0].AddressFamily, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp) { NoDelay = true };
-                await s.ConnectAsync(new IPEndPoint(addrs[0], ep.Port), ct);
-                return new System.Net.Sockets.NetworkStream(s, ownsSocket: true);
-            }
             await s.ConnectAsync(ep, ct);
             return new System.Net.Sockets.NetworkStream(s, ownsSocket: true);
         }
@@ -297,14 +290,22 @@ public class HttpProbe
         if (addrs.Length == 0)
             addrs = await Dns.GetHostAddressesAsync(ep.Host, System.Net.Sockets.AddressFamily.InterNetwork, ct);
         if (publicOnly) addrs = PublicOnly(addrs);
+        return await ConnectAnyAsync(addrs, ep.Port, ct);
+    }
 
+    /// <summary>
+    /// TCP к первому ответившему из первых трёх адресов (IPv6 без связи не должен давать «не открывается»).
+    /// Адресов нет — <see cref="System.Net.Sockets.SocketException"/> HostNotFound.
+    /// </summary>
+    public static async ValueTask<Stream> ConnectAnyAsync(IReadOnlyList<IPAddress> addrs, int port, CancellationToken ct)
+    {
         Exception? last = null;
         foreach (var ip in addrs.Take(3))
         {
             var s = new System.Net.Sockets.Socket(ip.AddressFamily, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp) { NoDelay = true };
             try
             {
-                await s.ConnectAsync(new IPEndPoint(ip, ep.Port), ct);
+                await s.ConnectAsync(new IPEndPoint(ip, port), ct);
                 return new System.Net.Sockets.NetworkStream(s, ownsSocket: true);
             }
             catch (Exception e) when (e is System.Net.Sockets.SocketException && !ct.IsCancellationRequested) { s.Dispose(); last = e; }

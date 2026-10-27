@@ -260,6 +260,8 @@ public sealed class AppsViewModel : Observable
         var row = Profiles.FirstOrDefault(p => p.Id == id);
         if (row is null || Variants.Count < 2 || await Need() is not { } c) return;
         int next = (row.Info.Variant + 1) % Variants.Count;
+        // Параметры из импорта (Variant = -1) нигде больше не хранятся: замена безвозвратна — сначала спросить.
+        if (row.Info.Variant < 0 && !Confirm(L.T("apps.profile.variant_replace_import", new { n = next + 1 }))) return;
         if (!await Guard(L.T("apps.busy.apply"), () => c.AppProfileSetAsync(id, row.Info.Title, row.Info.TcpPorts, row.Info.UdpPorts, row.Info.Addresses, next, SignatureOf(row.Info)))) return;
         await AfterChange();
         await RefreshAsync();

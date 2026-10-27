@@ -306,7 +306,7 @@ public static partial class ProfileExchange
         return new(isTcpFinal, ports, length, hex);
     }
 
-    /// <summary>Фильтр не разобрался в простые поля: при включённых инструментах для опытных он идёт как есть, но после проверки по белому списку.</summary>
+    /// <summary>Фильтр не разобрался в простые поля: идёт как есть, как свой фильтр, но после проверки по белому списку.</summary>
     static Sig CustomSig(string line)
     {
         bool tcp = CustomFilter.ProtocolOf(line) ?? throw Bad("core.filter.no_proto_any");

@@ -876,10 +876,10 @@ public sealed class Shell
     /// Создать профиль (id пуст) или заменить (id есть). Порты и адреса приводятся к каноническому виду, параметры берутся из варианта —
     /// из числа готовых, окно своих параметров не передаёт. Работающая оптимизация перезапускается на той же стратегии.
     /// </summary>
+    /// <param name="signature">null — полей 1.22 в запросе нет (окно до 1.22, «Другой вариант»): у существующего профиля сигнатура и свой фильтр сохраняются.</param>
     public AppProfile SetAppProfile(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant,
         ProfileSignature? signature = null)
     {
-        signature ??= ProfileSignature.None;
         var variants = ProfileVariants();
         if (variant < 0 || variant >= variants.Count) throw new InvalidOperationException(L.T("core.shell.no_variant"));
         var v = variants[variant];
@@ -888,6 +888,9 @@ public sealed class Shell
         var verdict = IpsetValidator.Validate(string.Join('\n', addresses), IpsetKind.User);
         var existing = id is null ? null : State.AppProfiles.FirstOrDefault(p => p.Id == id);
         if (id is not null && existing is null) throw new InvalidOperationException(L.T("core.shell.no_profile"));
+        signature ??= existing is null ? ProfileSignature.None
+            : new(existing.TcpPayloadLength, existing.TcpPayloadHex, existing.UdpPayloadLength, existing.UdpPayloadHex,
+                TcpFilter: existing.TcpCustomFilter, UdpFilter: existing.UdpCustomFilter);
         var profile = new AppProfile
         {
             Id = id ?? AppProfiles.NewId(), Title = title.Trim(), TcpPorts = tcp, UdpPorts = udp, Addresses = [.. verdict.Entries],
@@ -1226,7 +1229,25 @@ public sealed record AdvancedInfo(bool Enabled, string Others, IReadOnlyList<Adv
 /// <param name="GameActive">Игровые профили реально в командной строке.</param>
 /// <param name="GameBlocked">Игровой режим выбран, но не действует из-за «Все адреса» (переключатель серый).</param>
 /// <param name="List">Установленный общий список: подсети, доля IPv4, дата; null — не установлен.</param>
-public sealed record NetFeatures(IpsetMode Ipset, DateTime? AnyUntilUtc, IpsetMode ReturnTo, GameMode Game, bool GameActive, bool GameBlocked, IpsetMeta? List);
+public sealed record NetFeatures(IpsetMode Ipset, DateTime? AnyUntilUtc, IpsetMode ReturnTo,
+    [property: System.Text.Json.Serialization.JsonConverter(typeof(LegacyGameConverter))] GameMode Game, bool GameActive, bool GameBlocked, IpsetMeta? List)
+{
+    /// <summary>
+    /// API 1.22: выбран режим «Свои профили». В поле <c>game</c> он уходит как <c>off</c>: окно до 1.22 значения <c>profiles</c> не знает и не разобрало бы status.
+    /// Окно 1.22 читает это поле и восстанавливает <see cref="GameMode.Profiles"/>.
+    /// </summary>
+    public bool GameProfiles { get => Game == GameMode.Profiles; init { if (value) Game = GameMode.Profiles; } }
+}
+
+/// <summary>Игровой режим в status только старыми значениями (off/tcpUdp/tcp/udp): «Свои профили» — отдельным полем <see cref="NetFeatures.GameProfiles"/>.</summary>
+public sealed class LegacyGameConverter : System.Text.Json.Serialization.JsonConverter<GameMode>
+{
+    public override GameMode Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options) =>
+        Enum.TryParse<GameMode>(reader.GetString(), ignoreCase: true, out var m) && m != GameMode.Profiles ? m : GameMode.Off;
+
+    public override void Write(System.Text.Json.Utf8JsonWriter writer, GameMode value, System.Text.Json.JsonSerializerOptions options) =>
+        writer.WriteStringValue(value switch { GameMode.TcpUdp => "tcpUdp", GameMode.Tcp => "tcp", GameMode.Udp => "udp", _ => "off" });
+}
 
 /// <param name="IpsetSwitched">IP-список включён автоматически — показать <paramref name="Note"/> одной строкой.</param>
 public sealed record GameModeChange(bool IpsetSwitched, string? Note);

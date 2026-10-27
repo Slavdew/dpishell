@@ -68,6 +68,11 @@ public sealed class GameProfilesWindowTests : IDisposable
 
             vm.GoTo(Pages.Apps);
             PumpUntil(() => vm.Apps.Variants.Count > 0, "варианты параметров от помощника");
+            // Профилей нет — «Свои профили» серая, с подсказкой почему.
+            RadioButton ProfilesRadio() => Find<RadioButton>(tabs, r => r.IsVisible && r.Content as string == L.T("apps.game.mode.profiles"))!;
+            Assert.False(ProfilesRadio().IsEnabled);
+            Assert.Equal(L.T("apps.game.mode.profiles_none"), ProfilesRadio().ToolTip as string);
+            Assert.True(ToolTipService.GetShowOnDisabled(ProfilesRadio()));
 
             // Профиль из импорта (образец форка: TCP 12001, 79 байт, 00 00 04 4D): сохраняется и становится «Свои профили».
             vm.Apps.ImportTitle = "Mistfall Hunter";
@@ -84,6 +89,9 @@ public sealed class GameProfilesWindowTests : IDisposable
             WaitUi(link.FetchAsync(full: false));
             vm.Net.Refresh();
             Assert.True(vm.Net.GameProfiles);
+            Pump();
+            Assert.True(ProfilesRadio().IsEnabled);
+            Assert.Equal(L.T("apps.game.mode.profiles_tip"), ProfilesRadio().ToolTip as string);
 
             // Отказ по лишнему: сообщение с причиной, ничего не записано.
             vm.Apps.ImportFilter = "outbound and tcp.DstPort = 1 and tcp.Syn = 1";
