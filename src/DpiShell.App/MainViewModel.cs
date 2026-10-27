@@ -121,7 +121,7 @@ public sealed partial class MainViewModel : Observable
         StartSearchCmd = RelayCommand.Async(StartSearchAsync, () => !Busy && !IsLoading);
         CheckDnsCmd = RelayCommand.Async(CheckDnsAsync, () => !IsLoading && !DnsChecking);
         StopSelectCmd = new RelayCommand(() => _selectCts?.Cancel(), () => Selecting);
-        ApplyBestCmd = RelayCommand.Async(() => ApplyAsync(_bestId!), () => !Busy && _bestId is not null);
+        ApplyBestCmd = RelayCommand.Async(() => ApplyNearRouterAsync(_bestId!), () => !Busy && _bestId is not null);
         ApplySelectedCmd = RelayCommand.Async(ApplySelectedAsync, () => !Busy && SelectedScore is { Usable: true } or { Unchecked: true });
         InitStrategies();   // свои стратегии: копирование, вставка, правка, удаление — MainViewModel.Strategies.cs
 
@@ -1515,8 +1515,10 @@ public sealed partial class MainViewModel : Observable
         if (!await SaveDraftBeforeSelectAsync()) return;
         if (TakeGroups() is not { } ids) return;
         if (!ConfirmPauseIfRunning()) return;
-        // Обход на роутере: подбор на ПК при нём неверен (router-api §6) — подобрать там или выключить там на время подбора.
-        if (!await RouterGateAsync(select: true)) return;
+        // Обход на роутере: подбор на ПК рядом с ним неверен (router-api §6), кроме подбора своих сайтов, которых роутер не ведёт, —
+        // иначе подобрать там или выключить там на время подбора.
+        if (!await RouterGateAsync(select: true, ids)) return;
+        var ownOnly = SelectOwnOnly;
 
         _addressBlock.Clear();   // новый подбор — счёт проверок адресов заново (глубокий поиск продолжает прежний)
         ResetResults();
@@ -1539,7 +1541,7 @@ public sealed partial class MainViewModel : Observable
         {
             selectOk = await Guard(L.T("select.busy.select"), async () =>
             {
-                try { ShowReport(await c.SelectAsync(quick, ids, progress, cts.Token, CheckDnsMode)); }
+                try { ShowReport(await c.SelectAsync(quick, ids, progress, cts.Token, CheckDnsMode, ownOnly)); }
                 catch (OperationCanceledException) { ResultText = L.T("select.stopped"); }
             });
         }
@@ -1573,8 +1575,10 @@ public sealed partial class MainViewModel : Observable
         if (!await SaveDraftBeforeSelectAsync()) return;
         if (TakeGroups() is not { } ids) return;
         if (!ConfirmPauseIfRunning()) return;
-        // Обход на роутере: подбор на ПК при нём неверен (router-api §6) — подобрать там или выключить там на время подбора.
-        if (!await RouterGateAsync(select: true)) return;
+        // Обход на роутере: подбор на ПК рядом с ним неверен (router-api §6), кроме подбора своих сайтов, которых роутер не ведёт, —
+        // иначе подобрать там или выключить там на время подбора.
+        if (!await RouterGateAsync(select: true, ids)) return;
+        var ownOnly = SelectOwnOnly;
         var baseId = _bestId ?? CurrentStrategyId;
 
         ResetResults();
@@ -1608,7 +1612,7 @@ public sealed partial class MainViewModel : Observable
         {
             await Guard(L.T("select.busy.deep"), async () =>
             {
-                try { ShowSearch(await c.SearchAsync(baseId, ids, progress, cts.Token, CheckDnsMode)); }
+                try { ShowSearch(await c.SearchAsync(baseId, ids, progress, cts.Token, CheckDnsMode, ownOnly)); }
                 catch (OperationCanceledException) { ResultText = L.T("select.search.stopped"); }
             });
         }
@@ -1703,7 +1707,7 @@ public sealed partial class MainViewModel : Observable
         if (_autoApplyId is not { } id) return;
         _autoApplyId = null;
         var title = StrategyTitle(id);
-        if (await ApplyAsync(id))
+        if (await ApplyNearRouterAsync(id))
         {
             SetBest(null);   // уже в работе — «Применить» не нужна
             ResultText = L.T("select.applied", new { name = title });

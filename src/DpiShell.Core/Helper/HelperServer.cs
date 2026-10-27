@@ -347,15 +347,15 @@ public sealed class HelperServer : IAsyncDisposable
             case "disable": await Task.Run(b.Disable, ct); return null;
             case "set_run_mode": await Task.Run(() => b.SetRunMode(c.Bool("service")), ct); return null;
             case "select":
-                b.SetCheckDns(c.Str("dns") ?? CheckDns.Secure);
+                b.SetCheckDns(c.Str("dns") ?? CheckDns.Secure); b.SetSelectOwnOnly(c.Bool("ownOnly"));
                 return await Task.Run(() => b.SelectAsync(c.Bool("quick", true), c.List("groups"), new SyncProgress<SelectorProgress>(p => progress(p)), ct), ct);
             case "strategy_add": return await Task.Run(() => b.AddStrategy(c.Str("title")!, c.Map("roles")!, c.Str("source")!), ct);
             case "strategy_delete": await Task.Run(() => b.DeleteStrategy(c.Str("strategy")!), ct); return null;
             case "strategy_check":
-                b.SetCheckDns(c.Str("dns") ?? CheckDns.Secure);
+                b.SetCheckDns(c.Str("dns") ?? CheckDns.Secure); b.SetSelectOwnOnly(c.Bool("ownOnly"));
                 return await Task.Run(() => b.CheckStrategyAsync(c.Str("strategy")!, c.List("groups"), new SyncProgress<SelectorProgress>(p => progress(p)), ct), ct);
             case "search":
-                b.SetCheckDns(c.Str("dns") ?? CheckDns.Secure);
+                b.SetCheckDns(c.Str("dns") ?? CheckDns.Secure); b.SetSelectOwnOnly(c.Bool("ownOnly"));
                 return await Task.Run(() => b.SearchAsync(c.Str("base"), c.List("groups"), new SyncProgress<SelectorProgress>(p => progress(p)), ct), ct);
             case "ipset_mode":
                 await Task.Run(() => b.SetIpsetMode(c.Str("mode") == "list" ? IpsetMode.List : IpsetMode.Off), ct); return null;

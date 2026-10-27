@@ -16,6 +16,8 @@ public interface IHelperBackend : IHelperCatalog
     void SetRunMode(bool service);
     /// <summary>Откуда подбор и проверки берут адреса сайтов (API 1.12, <see cref="CheckDns"/>): ставится перед командой подбора, если окно её прислало.</summary>
     void SetCheckDns(string mode);
+    /// <summary>Подбор только своих сайтов рядом с роутером (API 1.21, <see cref="Shell.SelectOwnOnly"/>): ставится перед каждой командой подбора.</summary>
+    void SetSelectOwnOnly(bool on);
     Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct);
     Task<SearchReport> SearchAsync(string? baseId, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct);
     void SetIpsetMode(IpsetMode mode);
@@ -328,6 +330,8 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
     }
 
     public void SetCheckDns(string mode) => shell.CheckDnsMode = CheckDns.Normalize(mode);
+
+    public void SetSelectOwnOnly(bool on) => shell.SelectOwnOnly = on;
 
     public async Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<string>? groups, IProgress<SelectorProgress> progress, CancellationToken ct)
     {

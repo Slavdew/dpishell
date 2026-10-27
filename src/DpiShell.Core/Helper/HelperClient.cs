@@ -341,8 +341,12 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public Task SetRunModeAsync(bool service, CancellationToken ct = default) => CallAsync("set_run_mode", new { service }, null, ct);
 
     /// <summary>Подбор. Отмена — частичный отчёт с Cancelled = true (как у Shell.SelectAsync).</summary>
-    public Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<string>? groups = null, IProgress<SelectorProgress>? progress = null, CancellationToken ct = default, string? dns = null) =>
-        CallAsync<SelectionReport>("select", new { quick, groups, dns }, Map(progress), ct);
+    /// <param name="ownOnly">Только свои сайты рядом с роутером (API 1.21; старому помощнику не слать — он отвергает лишние поля).</param>
+    public Task<SelectionReport> SelectAsync(bool quick, IReadOnlyList<string>? groups = null, IProgress<SelectorProgress>? progress = null, CancellationToken ct = default, string? dns = null, bool ownOnly = false) =>
+        CallAsync<SelectionReport>("select", new { quick, groups, dns, ownOnly = OwnOnly(ownOnly) }, Map(progress), ct);
+
+    /// <summary>Поле <c>ownOnly</c> уходит, только когда оно true: иначе запрос тот же, что у окна до 1.21.</summary>
+    static bool? OwnOnly(bool on) => on ? true : null;
 
     /// <summary>Сохранить свою стратегию у помощника (он проверит роли ещё раз и назначит id). source: user — своя, pasted — вставленная.</summary>
     public Task<Strategy> StrategyAddAsync(string title, IReadOnlyDictionary<string, string> roles, string source, CancellationToken ct = default) =>
@@ -352,11 +356,11 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
         CallAsync("strategy_delete", new { strategy = strategyId }, null, ct);
 
     /// <summary>Проверка сайтов для одной стратегии; итог — отчёт подбора из одной строки.</summary>
-    public Task<SelectionReport> StrategyCheckAsync(string strategyId, IReadOnlyList<string>? groups = null, IProgress<SelectorProgress>? progress = null, CancellationToken ct = default, string? dns = null) =>
-        CallAsync<SelectionReport>("strategy_check", new { strategy = strategyId, groups, dns }, Map(progress), ct);
+    public Task<SelectionReport> StrategyCheckAsync(string strategyId, IReadOnlyList<string>? groups = null, IProgress<SelectorProgress>? progress = null, CancellationToken ct = default, string? dns = null, bool ownOnly = false) =>
+        CallAsync<SelectionReport>("strategy_check", new { strategy = strategyId, groups, dns, ownOnly = OwnOnly(ownOnly) }, Map(progress), ct);
 
-    public Task<SearchReport> SearchAsync(string? baseId = null, IReadOnlyList<string>? groups = null, IProgress<SelectorProgress>? progress = null, CancellationToken ct = default, string? dns = null) =>
-        CallAsync<SearchReport>("search", new { @base = baseId, groups, dns }, Map(progress), ct);
+    public Task<SearchReport> SearchAsync(string? baseId = null, IReadOnlyList<string>? groups = null, IProgress<SelectorProgress>? progress = null, CancellationToken ct = default, string? dns = null, bool ownOnly = false) =>
+        CallAsync<SearchReport>("search", new { @base = baseId, groups, dns, ownOnly = OwnOnly(ownOnly) }, Map(progress), ct);
 
     /// <summary>Off или List; «Все адреса» — <see cref="StartAllAddressesAsync"/>.</summary>
     public Task SetIpsetModeAsync(IpsetMode mode, CancellationToken ct = default) =>

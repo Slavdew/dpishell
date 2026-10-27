@@ -474,7 +474,7 @@ public sealed class Shell
             using var _ = doh as IDisposable;
             // Строки «auto» продвинутого режима — свои группы целей (по адресу первого сайта): вне оценки стратегии, по ним выбирается лучшая для строки.
             var withRows = (groups ?? SelectedGroups()).Concat(AdvancedSites.Groups(State.Advanced)).ToList();
-            var report = await new Selector(Paths, NewProbe(doh)).RunAsync(
+            var report = await new Selector(Paths, NewProbe(doh)) { Options = SelectBuild }.RunAsync(
                 StrategyStats.Order(AllStrategies, StrategyStats.LoadDetailed(Paths)), WithControl(withRows, DefaultTargets), quick, progress, ct, mix: true);
             report = report with { AddressSource = AddressSourceOf(doh) };
             // Смешанная, которая оказалась лучше одиночных, — в файл своих стратегий (окно применяет её по id, как любую лучшую).
@@ -506,7 +506,7 @@ public sealed class Shell
             var strategy = FindStrategy(strategyId) ?? throw new InvalidOperationException(L.T("core.shell.no_such_strategy"));
             var doh = NewCheckResolver();
             using var _ = doh as IDisposable;
-            var report = await new Selector(Paths, NewProbe(doh)).RunAsync([strategy], WithControl(groups ?? SelectedGroups(), DefaultTargets), quick: false, progress, ct);
+            var report = await new Selector(Paths, NewProbe(doh)) { Options = SelectBuild }.RunAsync([strategy], WithControl(groups ?? SelectedGroups(), DefaultTargets), quick: false, progress, ct);
             report = report with { AddressSource = AddressSourceOf(doh) };
             ResultStore.Save(Paths, report);
             return report;
@@ -520,7 +520,7 @@ public sealed class Shell
             var baseStrategy = FindStrategy(baseId ?? State.StrategyId ?? "alt9") ?? Catalog.Strategies[0];
             var doh = NewCheckResolver();
             using var _ = doh as IDisposable;
-            var report = await new StrategySearch(Paths, () => NewProbe(doh)).RunAsync(baseStrategy, WithControl(groups ?? SelectedGroups(), DefaultTargets), progress, ct);
+            var report = await new StrategySearch(Paths, () => NewProbe(doh)) { Options = SelectBuild }.RunAsync(baseStrategy, WithControl(groups ?? SelectedGroups(), DefaultTargets), progress, ct);
             if (report.Final is { } f0) report = report with { Final = f0 with { AddressSource = AddressSourceOf(doh) } };
             if (report.Final is { } f)
             {
@@ -583,6 +583,16 @@ public sealed class Shell
     /// Окно ставит из своих настроек, помощник — из аргумента команды подбора.
     /// </summary>
     public string CheckDnsMode { get; set; } = CheckDns.Secure;
+
+    /// <summary>
+    /// Подбор только своих сайтов рядом с роутером (API 1.21, аргумент <c>ownOnly</c>): роутер уже ведёт YouTube и Discord, цели подбора с ним не пересекаются.
+    /// winws подбора собирается как при совместной работе — только общие роли по своим сайтам (<see cref="WinwsArgs.ActiveRoles"/>), трафик YouTube и Discord
+    /// этого ПК остаётся роутеру и дважды не обрабатывается. Помощник ставит из аргумента команды подбора, поиска и проверки одной стратегии.
+    /// </summary>
+    public bool SelectOwnOnly { get; set; }
+
+    /// <summary>Сборка командной строки для кандидатов подбора: null — как обычно (все роли стратегии).</summary>
+    BuildOptions? SelectBuild => SelectOwnOnly ? new BuildOptions(Joint: new JointBuild([])) : null;
 
     /// <summary>Откуда взяла адреса последняя проверка «Проверить сейчас» (<see cref="IResolverSource.AddressSource"/>); null — проверок ещё не было.</summary>
     public string? LastAddressSource { get; private set; }

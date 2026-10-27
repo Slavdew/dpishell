@@ -87,6 +87,9 @@ public sealed class FakeHelperBackend : IHelperBackend
     /// <summary>Откуда подбор берёт адреса (API 1.12): последнее присланное окном значение.</summary>
     public string CheckDnsMode { get; private set; } = DpiShell.Core.CheckDns.Secure;
     public void SetCheckDns(string mode) => CheckDnsMode = mode;
+    /// <summary>Что окно прислало в ownOnly последней командой подбора (API 1.21).</summary>
+    public bool SelectOwnOnly { get; set; }
+    public void SetSelectOwnOnly(bool on) => SelectOwnOnly = on;
 
     async Task<bool> HangAsync(Action report, CancellationToken ct)
     {
