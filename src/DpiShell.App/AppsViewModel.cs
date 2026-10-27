@@ -66,6 +66,10 @@ public sealed class ProfileRow(AppProfileInfo info) : Observable
     public string VariantLabel => L.T("apps.profile.variant", new { variant = Variant });
     public ICommand? RemoveCmd { get; set; }
     public ICommand? NextCmd { get; set; }
+    public ICommand? CopyCmd { get; set; }
+    /// <summary>Свой фильтр профиля (если задан) — строки TCP и UDP; для «опытных».</summary>
+    public string CustomFilterText => string.Join(Environment.NewLine, new[] { Info.TcpFilter, Info.UdpFilter }.Where(f => f.Length > 0));
+    public bool HasCustomFilter => CustomFilterText.Length > 0;
 }
 
 /// <summary>
@@ -183,15 +187,17 @@ public sealed class AppsViewModel : Observable
     public ICommand EnableCmd => _enableCmd ??= RelayCommand.Async(async () => { if (EnableOptimization is { } e) await e(); }, () => ShowEnable);
     ICommand? _enableCmd;
 
-    public static string Summarize(AppProfileInfo p) => Summarize(p.TcpPorts, p.UdpPorts, p.Addresses.Count);
+    public static string Summarize(AppProfileInfo p) =>
+        Summarize(p.TcpPorts, p.UdpPorts, p.Addresses.Count, p.TcpPayloadLength > 0 || p.TcpPayloadHex.Length > 0 || p.TcpFilter.Length > 0, p.UdpPayloadLength > 0 || p.UdpPayloadHex.Length > 0 || p.UdpFilter.Length > 0);
 
-    /// <summary>«TCP … · UDP … · адресов: N».</summary>
-    static string Summarize(string tcp, string udp, int addresses)
+    /// <summary>«TCP … · UDP … · адресов: N»; у протокола с сигнатурой — пометка, без адресов — без «адресов: 0».</summary>
+    static string Summarize(string tcp, string udp, int addresses, bool tcpSig = false, bool udpSig = false)
     {
         var parts = new List<string>();
-        if (tcp.Length > 0) parts.Add("TCP " + tcp);
-        if (udp.Length > 0) parts.Add("UDP " + udp);
-        parts.Add(L.T("apps.profile.addresses", new { n = addresses }));
+        var sig = " (" + L.T("apps.profile.sig_mark") + ")";
+        if (tcp.Length > 0) parts.Add("TCP " + tcp + (tcpSig ? sig : ""));
+        if (udp.Length > 0) parts.Add("UDP " + udp + (udpSig ? sig : ""));
+        if (addresses > 0 || !(tcpSig || udpSig)) parts.Add(L.T("apps.profile.addresses", new { n = addresses }));
         return string.Join(" · ", parts);
     }
 
@@ -229,6 +235,7 @@ public sealed class AppsViewModel : Observable
             {
                 RemoveCmd = RelayCommand.Async(() => RemoveAsync(id)),
                 NextCmd = RelayCommand.Async(() => OtherVariantAsync(id)),
+                CopyCmd = new RelayCommand(() => CopyProfile(id)),
             });
         }
         Raise(nameof(HasProfiles));
@@ -253,10 +260,119 @@ public sealed class AppsViewModel : Observable
         var row = Profiles.FirstOrDefault(p => p.Id == id);
         if (row is null || Variants.Count < 2 || await Need() is not { } c) return;
         int next = (row.Info.Variant + 1) % Variants.Count;
-        if (!await Guard(L.T("apps.busy.apply"), () => c.AppProfileSetAsync(id, row.Info.Title, row.Info.TcpPorts, row.Info.UdpPorts, row.Info.Addresses, next))) return;
+        if (!await Guard(L.T("apps.busy.apply"), () => c.AppProfileSetAsync(id, row.Info.Title, row.Info.TcpPorts, row.Info.UdpPorts, row.Info.Addresses, next, SignatureOf(row.Info)))) return;
         await AfterChange();
         await RefreshAsync();
         Say(L.T("apps.profile.variant_changed", new { title = row.Title, variant = L.Relocalize(Variants[next].Title) }));
+    }
+
+    /// <summary>Сигнатура профиля как записана у помощника: «Другой вариант» и правка не должны её терять.</summary>
+    static ProfileSignature SignatureOf(AppProfileInfo p) =>
+        new(p.TcpPayloadLength, p.TcpPayloadHex, p.UdpPayloadLength, p.UdpPayloadHex, TcpFilter: p.TcpFilter, UdpFilter: p.UdpFilter);
+
+    // ---------- импорт и экспорт (формат Flowseal: фильтр, параметры, подсети) ----------
+
+    /// <summary>Имена файлов фейков из каталога стратегий (задаёт окно); профиль из импорта других файлов не принимает.</summary>
+    bool _expert;
+    /// <summary>«Показывать инструменты для опытных» (Настройки): свой фильтр WinDivert в профилях и импорте.</summary>
+    public bool ExpertTools { get => _expert; set => Set(ref _expert, value); }
+    public Func<IReadOnlySet<string>> KnownFakes { get; set; } = () => new HashSet<string>();
+    public Action<string> CopyText { get; set; } = text => System.Windows.Clipboard.SetText(text);
+    public Func<string?> ReadText { get; set; } = () => System.Windows.Clipboard.ContainsText() ? System.Windows.Clipboard.GetText() : null;
+    public Action<string> OpenUrl { get; set; } = url => { UiGuard.CheckOpen(url); Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); };
+
+    string _impTitle = "", _impFilter = "", _impParams = "", _impSubnets = "";
+    readonly LiveText _impMsg = new();
+    bool _impOpen, _impFailed;
+    public string ImportTitle { get => _impTitle; set => Set(ref _impTitle, value); }
+    public string ImportFilter { get => _impFilter; set { if (Set(ref _impFilter, value)) Raise(nameof(CanImport)); } }
+    public string ImportParams { get => _impParams; set { if (Set(ref _impParams, value)) Raise(nameof(CanImport)); } }
+    public string ImportSubnets { get => _impSubnets; set => Set(ref _impSubnets, value); }
+    /// <summary>Итог или отказ последнего импорта; хранится правилом сборки — после смены языка читается заново.</summary>
+    public string ImportMessage => _impMsg.Value;
+    public bool HasImportMessage => ImportMessage.Length > 0;
+    void ImportMessageIs(Func<string> build, bool failed)
+    {
+        ImportFailed = failed;
+        _impMsg.Set(build);
+        Raise(nameof(ImportMessage));
+        Raise(nameof(HasImportMessage));
+    }
+    /// <summary>Последнее сообщение — отказ, а не итог.</summary>
+    public bool ImportFailed { get => _impFailed; private set => Set(ref _impFailed, value); }
+    public bool ImportOpen { get => _impOpen; set => Set(ref _impOpen, value); }
+    public bool CanImport => ImportParams.Trim().Length > 0 || ImportFilter.Trim().Length > 0;
+
+    public ICommand ImportCmd => _importCmd ??= RelayCommand.Async(ImportAsync, () => CanImport);
+    ICommand? _importCmd;
+    public ICommand PasteAllCmd => _pasteCmd ??= new RelayCommand(PasteAll);
+    ICommand? _pasteCmd;
+    public ICommand OpenGamesCmd => _gamesCmd ??= new RelayCommand(() =>
+    {
+        try { OpenUrl(NetViewModel.GamesUrl); }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Say(e.Message); }
+    });
+    ICommand? _gamesCmd;
+
+    void Refuse(string text) => ImportMessageIs(() => text, true);
+    void Refuse(Func<string> build) => ImportMessageIs(build, true);
+
+    /// <summary>Вставить сразу все три куска из буфера (с заголовками, как их отдаёт «Скопировать»).</summary>
+    void PasteAll()
+    {
+        var text = ReadText();
+        if (string.IsNullOrWhiteSpace(text)) { Refuse(() => L.T("apps.import.clipboard_empty")); return; }
+        if (ProfileExchange.SplitCombined(text) is not { } t) { Refuse(() => L.T("apps.import.no_marks")); return; }
+        ImportFilter = t.Filter; ImportParams = t.Params; ImportSubnets = t.Subnets;
+        ImportMessageIs(() => "", false);
+    }
+
+    /// <summary>Разобрать три поля и сохранить профиль. Любое «не подошло» — отказ с причиной, ничего не записывается.</summary>
+    public async Task ImportAsync()
+    {
+        string filter = ImportFilter, pars = ImportParams, subnets = ImportSubnets, rawTitle = ImportTitle.Trim();
+        var fakes = KnownFakes();
+        bool expert = ExpertTools;
+        string Title() => rawTitle.Length > 0 ? rawTitle : L.T("apps.import.default_title");
+        // Текст отказа строится заново на языке окна: разбор — чистая функция.
+        var r = ProfileExchange.Import(Title(), filter, pars, subnets, fakes, expert);
+        if (r.Profile is not { } p) { Refuse(() => ProfileExchange.Import(Title(), filter, pars, subnets, fakes, expert).Problem ?? ""); return; }
+        if (await Need() is not { } c) return;
+        if (Variants.Count == 0) await RefreshAsync();
+        if (Variants.Count == 0) { Refuse(() => L.T("apps.err.no_variants")); return; }
+        AppProfileInfo? info = null;
+        try
+        {
+            if (!await Guard(L.T("apps.busy.save_profile"), async () =>
+                    info = await c.AppProfileSetAsync(null, p.Title, p.TcpPorts, p.UdpPorts, p.Addresses, 0, p.ToSignature()))) return;
+        }
+        catch (HelperException e) { Refuse(e.Message); return; }
+        await AfterChange();
+        await RefreshAsync();
+        ImportMessageIs(() =>
+        {
+            var notes = ProfileExchange.Import(Title(), filter, pars, subnets, fakes, expert).Profile?.Notes ?? [];
+            return L.T("apps.profile.saved_summary", new { title = info?.Title, summary = info is null ? "" : Summarize(info) })
+                + (notes.Count > 0 ? " " + string.Join(" ", notes) : "");
+        }, false);
+        ImportFilter = ImportParams = ImportSubnets = ImportTitle = "";
+    }
+
+    /// <summary>«Скопировать»: три куска профиля текстом — вставить другу или в сборку Flowseal.</summary>
+    void CopyProfile(string id)
+    {
+        var row = Profiles.FirstOrDefault(p => p.Id == id);
+        if (row is null) return;
+        var i = row.Info;
+        if ((i.TcpPorts.Length > 0 && i.TcpDesync.Length == 0) || (i.UdpPorts.Length > 0 && i.UdpDesync.Length == 0)) { Say(L.T("apps.import.copy_old_helper")); return; }
+        var profile = new AppProfile
+        {
+            Id = i.Id, Title = i.Title, TcpPorts = i.TcpPorts, UdpPorts = i.UdpPorts, Addresses = [.. i.Addresses], TcpDesync = i.TcpDesync, UdpDesync = i.UdpDesync,
+            TcpPayloadLength = i.TcpPayloadLength, TcpPayloadHex = i.TcpPayloadHex, UdpPayloadLength = i.UdpPayloadLength, UdpPayloadHex = i.UdpPayloadHex,
+            TcpCustomFilter = i.TcpFilter, UdpCustomFilter = i.UdpFilter,
+        };
+        try { CopyText(ProfileExchange.Combine(ProfileExchange.Export(profile))); Say(L.T("apps.import.copied", new { title = i.Title })); }
+        catch (System.Runtime.InteropServices.ExternalException) { Say(L.T("apps.import.copy_failed")); }
     }
 
     // ---------- простой режим ----------

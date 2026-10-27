@@ -52,20 +52,26 @@ public sealed record BuildOptions(IpsetMode Ipset = IpsetMode.Off, GameMode Game
         if (mode == IpsetMode.Any && (s.IpsetAnyUntil is not { } until || until <= utcNow))
             mode = ParseIpset(s.IpsetModeBeforeAny) is var back && back != IpsetMode.Any ? back : IpsetMode.Off;
         // Профили программ (ТЗ 13): в state.json их мог тронуть кто угодно — в командную строку идут только прошедшие проверку.
-        var profiles = s.AppProfiles.Where(p => AppProfiles.Problem(p) is null).Take(AppProfiles.MaxProfiles).ToList();
+        // Работают только в режимах «Свои профили» и «Общий»; при «Выкл» профили хранятся, но в командную строку не идут.
+        var game = ParseGame(s.GameMode);
+        var profiles = new List<AppProfile>();
+        if (game != GameMode.Off)
+            foreach (var p in s.AppProfiles.Where(p => AppProfiles.Problem(p) is null).Take(AppProfiles.MaxProfiles))
+                if (AppProfiles.FiltersSize([.. profiles, p]) <= AppProfiles.MaxFilterBytes) profiles.Add(p);   // предел фильтра WinDivert: лишний профиль не подаётся
         var advanced = find is null ? null : AdvancedSites.Plan(s.Advanced, find, currentId);
         // Связка действует, пока её продлевают: срок вышел (окно закрыто, роутер недоступен) — ПК сразу по полной настройке, как с «Все адреса».
         var joint = s.Joint is { Active: true, Until: { } leaseEnd } && leaseEnd > utcNow
             ? new JointBuild([.. s.Joint.Owned.Where(AdvancedSites.IsDomain).Take(JointRules.MaxDomains)])
             : null;
         var exclude = s.UserExclude.Where(AdvancedSites.IsDomain).Take(AdvancedSites.MaxExclude).ToList();
-        return new(mode, ParseGame(s.GameMode), profiles.Count > 0 ? profiles : null, advanced, joint, exclude.Count > 0 ? exclude : null);
+        return new(mode, game, profiles.Count > 0 ? profiles : null, advanced, joint, exclude.Count > 0 ? exclude : null);
     }
 
     public static IpsetMode ParseIpset(string? s) => s switch { "list" => IpsetMode.List, "any" => IpsetMode.Any, _ => IpsetMode.Off };
     public static string Format(IpsetMode m) => m switch { IpsetMode.List => "list", IpsetMode.Any => "any", _ => "off" };
-    public static GameMode ParseGame(string? s) => s switch { "all" => GameMode.TcpUdp, "tcp" => GameMode.Tcp, "udp" => GameMode.Udp, _ => GameMode.Off };
-    public static string Format(GameMode m) => m switch { GameMode.TcpUdp => "all", GameMode.Tcp => "tcp", GameMode.Udp => "udp", _ => "off" };
+    /// <summary>"all", "tcp", "udp" — «Общий» (прежние значения читаются так же); "profiles" — «Свои профили»; остальное — «Выкл».</summary>
+    public static GameMode ParseGame(string? s) => s switch { "all" => GameMode.TcpUdp, "tcp" => GameMode.Tcp, "udp" => GameMode.Udp, "profiles" => GameMode.Profiles, _ => GameMode.Off };
+    public static string Format(GameMode m) => m switch { GameMode.TcpUdp => "all", GameMode.Tcp => "tcp", GameMode.Udp => "udp", GameMode.Profiles => "profiles", _ => "off" };
 }
 
 /// <summary>Сборка командной строки winws. Повторяет устройство general.bat Flowseal, включая game filter.</summary>
@@ -249,9 +255,13 @@ public static class WinwsArgs
         // WinDivert отдаёт winws верхние порты только при включённом игровом режиме — иначе это лишняя нагрузка на CPU.
         var args = new List<string>
         {
-            $"--wf-tcp={Wf(WfTcp, roles.ContainsKey("game_tcp"), profiles.Select(pr => pr.TcpPorts))}",
-            $"--wf-udp={Wf(WfUdp, roles.ContainsKey("game_udp"), profiles.Select(pr => pr.UdpPorts))}",
+            $"--wf-tcp={Wf(WfTcp, roles.ContainsKey("game_tcp"), profiles.Where(pr => !AppProfiles.HasSignature(pr, true)).Select(pr => pr.TcpPorts))}",
+            $"--wf-udp={Wf(WfUdp, roles.ContainsKey("game_udp"), profiles.Where(pr => !AppProfiles.HasSignature(pr, false)).Select(pr => pr.UdpPorts))}",
         };
+        // Протокол профиля с сигнатурой ловится узким фильтром WinDivert из файла, а не по портам: остального трафика на этих портах winws не видит.
+        foreach (var pr in profiles)
+            foreach (var isTcp in new[] { true, false })
+                if (AppProfiles.Filter(pr, isTcp) is not null) args.Add("--wf-raw-part=@" + L(AppProfiles.FilterFileName(pr.Id, isTcp)));
         bool first = true;
         // Строки продвинутого режима — самые первые профили (первое совпадение): сайты строки → десинк общей роли её стратегии (и QUIC, если он есть).
         // Домены — только прошедшие строгий шаблон, параметры — только из белого списка; своих параметров строка не несёт.
@@ -287,7 +297,7 @@ public static class WinwsArgs
                 if (!first) args.Add("--new");
                 first = false;
                 args.Add($"--filter-{(isTcp ? "tcp" : "udp")}={ports}");
-                args.Add($"--ipset={L(AppProfiles.FileName(pr.Id))}");
+                if (pr.Addresses.Count > 0) args.Add($"--ipset={L(AppProfiles.FileName(pr.Id))}");   // без адресов — только сигнатура
                 args.AddRange(ipsetExclude);
                 args.AddRange(desync.Split(' ', StringSplitOptions.RemoveEmptyEntries)
                     .Select(t => t.Replace("{fake}/", p.Fake + Path.DirectorySeparatorChar)));

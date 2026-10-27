@@ -99,8 +99,17 @@ public sealed record DataManifest(string Version, Dictionary<string, DataFile> F
 /// <summary>Режим IP-списка: «Выкл» (заглушка), «По списку», «Все адреса» (временно).</summary>
 public enum IpsetMode { Off, List, Any }
 
-/// <summary>Игровой режим. В окне — только Off/TcpUdp (решение 1), Tcp/Udp — для отладочной консоли.</summary>
-public enum GameMode { Off, TcpUdp, Tcp, Udp }
+/// <summary>
+/// Игровой режим. В окне три выбора: «Выкл» (Off), «Свои профили» (Profiles — работают только профили программ) и «Общий» (TcpUdp — широкий режим по IP-списку,
+/// профили тоже действуют). Tcp/Udp — части «Общего» для отладочной консоли.
+/// </summary>
+public enum GameMode { Off, TcpUdp, Tcp, Udp, Profiles }
+
+public static class GameModes
+{
+    /// <summary>«Общий»: широкий фильтр по IP-списку (в том числе прежние значения tcp/udp).</summary>
+    public static bool IsGeneral(this GameMode m) => m is GameMode.TcpUdp or GameMode.Tcp or GameMode.Udp;
+}
 
 /// <summary>Что установлено как общий IP-список (ipset-all.meta.json).</summary>
 public sealed record IpsetMeta(string Sha256, int Lines, int Ipv4, int Ipv6, double Ipv4Share, string? Version, DateTime? Updated, DateTime InstalledAt, string Source);

@@ -271,7 +271,9 @@ public static class SettingsExport
         }
         d.Advanced = rows.Count > 0 ? new() { Enabled = s.Advanced.Enabled, Others = s.Advanced.Others, Rows = rows } : null;
         var appNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        d.Apps = [.. s.Apps.Select(a => new ImportApp
+        // Профили с сигнатурой или своим фильтром в пакет настроек не входят (формат пакета их не несёт; без сигнатуры профиль ловил бы всё на своих портах) —
+        // их передают кнопкой «Скопировать» у профиля (формат Flowseal).
+        d.Apps = [.. s.Apps.Where(a => !AppProfiles.HasSignature(a, true) && !AppProfiles.HasSignature(a, false)).Select(a => new ImportApp
         {
             Name = SettingsClean.Unique(SettingsClean.Slug(a.Title, "app"), appNames), Title = a.Title, Tcp = a.TcpPorts, Udp = a.UdpPorts,
             Addresses = [.. a.Addresses], TcpDesync = a.TcpDesync, UdpDesync = a.UdpDesync,

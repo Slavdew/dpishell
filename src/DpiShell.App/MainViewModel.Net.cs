@@ -98,6 +98,22 @@ public sealed partial class MainViewModel
     /// <summary>Подсказка и имя кнопки «Свернуть меню» / «Развернуть меню».</summary>
     public string NavToggleTip => L.T(NavCollapsed ? "common.nav.expand" : "common.nav.collapse");
 
+    // ---------- «Показывать инструменты для опытных» ----------
+
+    /// <summary>Свой фильтр WinDivert в профилях («Игры и программы»). Выключено по умолчанию; значение держит и окно профилей.</summary>
+    public bool ExpertTools
+    {
+        get => Settings.ExpertTools;
+        set
+        {
+            if (Settings.ExpertTools == value) return;
+            Settings.ExpertTools = value;
+            Apps.ExpertTools = value;
+            SaveSettings();
+            Raise();
+        }
+    }
+
     // ---------- «Показывать роутер» ----------
 
     /// <summary>

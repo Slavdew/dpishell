@@ -93,7 +93,7 @@ public interface IHelperBackend : IHelperCatalog
     RecordingResult RecStop();
     AppProfilesInfo AppProfilesInfo();
     /// <summary>Создать (id = null) или заменить профиль; параметры берутся из варианта готовых стратегий.</summary>
-    AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant);
+    AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant, ProfileSignature? signature = null);
     bool AppProfileRemove(string id);
 
     // ---------- продвинутый режим «сайты → стратегия» (API 1.8) ----------
@@ -174,7 +174,10 @@ public sealed record HelperStatus(
 }
 
 /// <summary>Профиль программы для окна. Addresses — как записаны в профиле (до 500).</summary>
-public sealed record AppProfileInfo(string Id, string Title, string TcpPorts, string UdpPorts, IReadOnlyList<string> Addresses, int Variant, string VariantTitle, DateTime CreatedAt);
+/// <remarks>С API 1.22: сигнатура пакета (длина и начало, по протоколам) и параметры десинхронизации — для экспорта и «Другой вариант» без потери сигнатуры. У помощника старее — по умолчанию.</remarks>
+public sealed record AppProfileInfo(string Id, string Title, string TcpPorts, string UdpPorts, IReadOnlyList<string> Addresses, int Variant, string VariantTitle, DateTime CreatedAt,
+    int TcpPayloadLength = 0, string TcpPayloadHex = "", int UdpPayloadLength = 0, string UdpPayloadHex = "", string TcpDesync = "", string UdpDesync = "",
+    string TcpFilter = "", string UdpFilter = "");
 
 /// <summary>Ответ app_profiles: профили, варианты параметров (как у текущей стратегии первым) и запись, если она идёт.</summary>
 public sealed record AppProfilesInfo(IReadOnlyList<AppProfileInfo> Profiles, IReadOnlyList<ProfileVariant> Variants, RecordingStatus Recording);
@@ -655,7 +658,8 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
 
     static AppProfileInfo Info(AppProfile p, IReadOnlyList<ProfileVariant> variants) =>
         new(p.Id, p.Title, p.TcpPorts, p.UdpPorts, p.Addresses, p.Variant,
-            variants.FirstOrDefault(v => v.Index == p.Variant)?.Title ?? L.T("core.helper.variant_n", new { n = p.Variant + 1 }), p.CreatedAt);
+            p.Variant < 0 ? L.T("core.helper.variant_custom") : variants.FirstOrDefault(v => v.Index == p.Variant)?.Title ?? L.T("core.helper.variant_n", new { n = p.Variant + 1 }), p.CreatedAt,
+            p.TcpPayloadLength, p.TcpPayloadHex, p.UdpPayloadLength, p.UdpPayloadHex, p.TcpDesync, p.UdpDesync, p.TcpCustomFilter, p.UdpCustomFilter);
 
     public AppProfilesInfo AppProfilesInfo()
     {
@@ -663,8 +667,8 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
         return new([.. shell.State.AppProfiles.Select(p => Info(p, variants))], variants, RecStatus());
     }
 
-    public AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant) =>
-        Info(shell.SetAppProfile(id, title, tcpPorts, udpPorts, addresses, variant), shell.ProfileVariants());
+    public AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant, ProfileSignature? signature = null) =>
+        Info(shell.SetAppProfile(id, title, tcpPorts, udpPorts, addresses, variant, signature), shell.ProfileVariants());
 
     public bool AppProfileRemove(string id) => shell.RemoveAppProfile(id);
 

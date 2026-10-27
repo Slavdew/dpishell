@@ -371,9 +371,13 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public async Task<bool> StopAllAddressesAsync(CancellationToken ct = default) =>
         (await CallAsync("all_addresses_stop", null, null, ct)).GetProperty("stopped").GetBoolean();
 
-    /// <summary>Окно передаёт только Off и TcpUdp (как и раньше).</summary>
-    public Task<GameModeChange> SetGameModeAsync(GameMode mode, IProgress<string>? log = null, CancellationToken ct = default) =>
-        CallAsync<GameModeChange>("game_mode", new { mode = mode == GameMode.Off ? "off" : "all" }, MapLog(log), ct);
+    /// <summary>Окно передаёт Off, Profiles («Свои профили») и TcpUdp («Общий»). Режим профилей — с API 1.22: старый помощник его не знает.</summary>
+    public Task<GameModeChange> SetGameModeAsync(GameMode mode, IProgress<string>? log = null, CancellationToken ct = default)
+    {
+        if (mode == GameMode.Profiles && !HelperCompat.AtLeast(HelperApi, HelperProtocol.ProfilesApi))
+            throw new HelperException("outdated", L.T("core.helper.needs_update"));
+        return CallAsync<GameModeChange>("game_mode", new { mode = mode switch { GameMode.Off => "off", GameMode.Profiles => "profiles", _ => "all" } }, MapLog(log), ct);
+    }
 
     public Task<IpsetUpdateSummary> UpdateIpsetFromManifestAsync(bool confirmed = false, IProgress<string>? log = null, CancellationToken ct = default) =>
         CallAsync<IpsetUpdateSummary>("ipset_update", new { from = "manifest", confirmed }, MapLog(log), ct);
@@ -497,8 +501,21 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public Task<AppProfilesInfo> AppProfilesAsync(CancellationToken ct = default) => CallAsync<AppProfilesInfo>("app_profiles", null, null, ct);
 
     /// <summary>Создать профиль (id = null) или заменить. Параметры оптимизации — номер варианта из <see cref="AppProfilesInfo.Variants"/>.</summary>
-    public Task<AppProfileInfo> AppProfileSetAsync(string? id, string title, string? tcp, string? udp, IReadOnlyList<string> addresses, int variant, CancellationToken ct = default) =>
-        CallAsync<AppProfileInfo>("app_profile_set", new { id, title, tcp = string.IsNullOrEmpty(tcp) ? null : tcp, udp = string.IsNullOrEmpty(udp) ? null : udp, addresses, variant }, null, ct);
+    public Task<AppProfileInfo> AppProfileSetAsync(string? id, string title, string? tcp, string? udp, IReadOnlyList<string> addresses, int variant, ProfileSignature? signature = null, CancellationToken ct = default)
+    {
+        signature ??= ProfileSignature.None;
+        // Сигнатура и свои параметры — с API 1.22; старый помощник лишних полей не принимает, молча потерять сигнатуру нельзя.
+        if (!signature.IsEmpty && !HelperCompat.AtLeast(HelperApi, HelperProtocol.ProfilesApi))
+            throw new HelperException("outdated", L.T("core.helper.needs_update"));
+        static string? S(string v) => v.Length > 0 ? v : null;
+        static int? N(int v) => v > 0 ? v : null;
+        return CallAsync<AppProfileInfo>("app_profile_set", new
+        {
+            id, title, tcp = string.IsNullOrEmpty(tcp) ? null : tcp, udp = string.IsNullOrEmpty(udp) ? null : udp, addresses, variant,
+            tcpLen = N(signature.TcpLength), tcpHex = S(signature.TcpHex), udpLen = N(signature.UdpLength), udpHex = S(signature.UdpHex),
+            tcpDesync = signature.TcpDesync, udpDesync = signature.UdpDesync, tcpFilter = S(signature.TcpFilter), udpFilter = S(signature.UdpFilter),
+        }, null, ct);
+    }
 
     public async Task<bool> AppProfileRemoveAsync(string id, CancellationToken ct = default) =>
         (await CallAsync("app_profile_remove", new { id }, null, ct)).GetProperty("removed").GetBoolean();

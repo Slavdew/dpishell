@@ -627,7 +627,7 @@ public sealed class Shell
             var game = BuildOptions.ParseGame(State.GameMode);
             return new(o.Ipset, o.Ipset == IpsetMode.Any ? State.IpsetAnyUntil : null,
                 o.Ipset == IpsetMode.Any ? BuildOptions.ParseIpset(State.IpsetModeBeforeAny) : o.Ipset,
-                game, o.GameTcp || o.GameUdp, game != GameMode.Off && o.Ipset == IpsetMode.Any, IpLists.Meta);
+                game, o.GameTcp || o.GameUdp, game.IsGeneral() && o.Ipset == IpsetMode.Any, IpLists.Meta);
         }
     }
 
@@ -644,7 +644,9 @@ public sealed class Shell
         State.IpsetMode = BuildOptions.Format(mode);
         State.IpsetAnyUntil = null;
         State.IpsetByGame = false;   // режим списка выбран рукой — игровой режим его больше не вернёт
-        if (mode == IpsetMode.Off) State.GameMode = BuildOptions.Format(GameMode.Off);
+        // Без списка «Общему» нечего ловить: он выключается, а свои профили (они от списка не зависят) остаются.
+        if (mode == IpsetMode.Off && BuildOptions.ParseGame(State.GameMode).IsGeneral())
+            State.GameMode = BuildOptions.Format(State.AppProfiles.Count > 0 ? GameMode.Profiles : GameMode.Off);
         State.Save(Paths);
         ReapplyIfActive();
     }
@@ -678,14 +680,16 @@ public sealed class Shell
         && StopAllAddresses();
 
     /// <summary>
-    /// Игровой режим. Окно передаёт только Off/TcpUdp. При включении без загруженного списка IP-список включается сам
+    /// Игровой режим. Окно передаёт Off, Profiles или TcpUdp («Общий»). При включении «Общего» без загруженного списка IP-список включается сам
     /// (если файла нет — ставится из поставки или скачивается по манифесту); при «Все адреса» — запрещено.
     /// </summary>
     public async Task<GameModeChange> SetGameModeAsync(GameMode mode, IProgress<string>? log = null, CancellationToken ct = default)
     {
-        if (BuildOptions.ParseGame(State.GameMode) == mode) return new(false, null);
+        var was = BuildOptions.ParseGame(State.GameMode);
+        if (was == mode) return new(false, null);
         string? note = null;
-        if (mode != GameMode.Off)
+        // «Выкл» и «Свои профили» списка не требуют; список, который включил сам «Общий», при уходе из него выключается (как было до него).
+        if (mode.IsGeneral())
         {
             var ipset = CurrentOptions.Ipset;
             if (ipset == IpsetMode.Any)
@@ -809,6 +813,7 @@ public sealed class Shell
             if (State.AppProfiles.Count >= AppProfiles.MaxProfiles) throw new InvalidOperationException(L.T("core.shell.profiles_max", new { max = AppProfiles.MaxProfiles }));
             State.AppProfiles.RemoveAll(x => x.Id == p.Id);
             State.AppProfiles.Add(p);
+            if (AppProfiles.TotalProblem(State.AppProfiles.Where(x => AppProfiles.Problem(x) is null)) is { } total) throw new InvalidOperationException(total);
         }
         State.Save(Paths);
         SyncAppProfileFiles();
@@ -871,8 +876,10 @@ public sealed class Shell
     /// Создать профиль (id пуст) или заменить (id есть). Порты и адреса приводятся к каноническому виду, параметры берутся из варианта —
     /// из числа готовых, окно своих параметров не передаёт. Работающая оптимизация перезапускается на той же стратегии.
     /// </summary>
-    public AppProfile SetAppProfile(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant)
+    public AppProfile SetAppProfile(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant,
+        ProfileSignature? signature = null)
     {
+        signature ??= ProfileSignature.None;
         var variants = ProfileVariants();
         if (variant < 0 || variant >= variants.Count) throw new InvalidOperationException(L.T("core.shell.no_variant"));
         var v = variants[variant];
@@ -884,10 +891,16 @@ public sealed class Shell
         var profile = new AppProfile
         {
             Id = id ?? AppProfiles.NewId(), Title = title.Trim(), TcpPorts = tcp, UdpPorts = udp, Addresses = [.. verdict.Entries],
-            TcpDesync = tcp.Length > 0 ? v.Tcp : "", UdpDesync = udp.Length > 0 ? v.Udp : "", Variant = v.Index,
+            TcpDesync = tcp.Length == 0 ? "" : signature.TcpDesync ?? v.Tcp, UdpDesync = udp.Length == 0 ? "" : signature.UdpDesync ?? v.Udp,
+            Variant = signature.TcpDesync is not null || signature.UdpDesync is not null ? -1 : v.Index,
+            TcpPayloadLength = tcp.Length > 0 ? signature.TcpLength : 0, TcpPayloadHex = tcp.Length > 0 ? signature.TcpHex : "",
+            UdpPayloadLength = udp.Length > 0 ? signature.UdpLength : 0, UdpPayloadHex = udp.Length > 0 ? signature.UdpHex : "",
+            TcpCustomFilter = tcp.Length > 0 ? signature.TcpFilter.Trim() : "", UdpCustomFilter = udp.Length > 0 ? signature.UdpFilter.Trim() : "",
             CreatedAt = existing?.CreatedAt ?? DateTime.Now,
         };
         if (AppProfiles.Problem(profile) is { } problem) throw new InvalidOperationException(problem);
+        if (AppProfiles.TotalProblem(State.AppProfiles.Where(x => x.Id != profile.Id && AppProfiles.Problem(x) is null).Append(profile)) is { } total)
+            throw new InvalidOperationException(total);
         if (existing is null && State.AppProfiles.Count >= AppProfiles.MaxProfiles)
             throw new InvalidOperationException(L.T("core.shell.too_many_profiles", new { max = AppProfiles.MaxProfiles }));
         // Журнал отката: новый профиль — запись «было: нет профиля» до сохранения; правка своего же профиля обновляет «что поставили».
@@ -897,6 +910,8 @@ public sealed class Shell
             var rec = Journal.Begin(ChangeKinds.AppProfile, L.T("core.shell.journal_profile", new { title = profile.Title, ports = (profile.TcpPorts + " " + profile.UdpPorts).Trim() }),
                 new System.Text.Json.Nodes.JsonObject { ["exists"] = false }, snapshot);
             State.AppProfiles.Add(profile);
+            // Профиль создают, чтобы он работал: при «Выкл» режим становится «Свои профили» (при «Общем» профили и так действуют).
+            if (BuildOptions.ParseGame(State.GameMode) == GameMode.Off) State.GameMode = BuildOptions.Format(GameMode.Profiles);
             State.Save(Paths);
             Journal.Done(rec);
         }
@@ -918,6 +933,7 @@ public sealed class Shell
         var p = State.AppProfiles.FirstOrDefault(x => x.Id == id);
         if (p is null) return false;
         State.AppProfiles.Remove(p);
+        DropProfilesMode();
         State.Save(Paths);
         SyncAppProfileFiles();
         Journal.Close(ChangeKinds.AppProfile, L.T("core.shell.closed_profile"), en => en.After?["id"]?.GetValue<string>() == id);
@@ -925,10 +941,17 @@ public sealed class Shell
         return true;
     }
 
+    /// <summary>Профилей не осталось — режим «Свои профили» теряет смысл: «Выкл» (как до первого профиля).</summary>
+    void DropProfilesMode()
+    {
+        if (State.AppProfiles.Count == 0 && BuildOptions.ParseGame(State.GameMode) == GameMode.Profiles) State.GameMode = BuildOptions.Format(GameMode.Off);
+    }
+
     /// <summary>«Удалить полностью»: все профили и файлы.</summary>
     public void ClearAppProfiles()
     {
         State.AppProfiles.Clear();
+        DropProfilesMode();
         State.Save(Paths);
         SyncAppProfileFiles();
         Journal.Close(ChangeKinds.AppProfile, L.T("core.shell.closed_profiles"));
@@ -946,6 +969,16 @@ public sealed class Shell
             var path = Path.Combine(Paths.Lists, name);
             var text = AppProfiles.FileText(p);
             if (!File.Exists(path) || File.ReadAllText(path) != text) File.WriteAllText(path, text);
+            // Фильтр WinDivert протокола с сигнатурой: собран из полей профиля, пишется заново при каждом включении.
+            foreach (var isTcp in new[] { true, false })
+            {
+                if (AppProfiles.Filter(p, isTcp) is not { } filter) continue;
+                var fname = AppProfiles.FilterFileName(p.Id, isTcp);
+                want.Add(fname);
+                var fpath = Path.Combine(Paths.Lists, fname);
+                var ftext = AppProfiles.FilterFileText(filter);
+                if (!File.Exists(fpath) || File.ReadAllText(fpath) != ftext) File.WriteAllText(fpath, ftext);
+            }
         }
         foreach (var f in Directory.GetFiles(Paths.Lists, "app-*.txt"))
             if (!want.Contains(Path.GetFileName(f))) { try { File.Delete(f); } catch (IOException) { } }
@@ -987,7 +1020,7 @@ public sealed class Shell
                 : State.Advanced.Rows.FirstOrDefault(r => r.Strategy == AdvancedSites.Auto && r.Domains.SequenceEqual(domains!));
             next.Rows.Add(new() { Domains = domains!, Strategy = strategy, Resolved = old?.Resolved });
         }
-        if (AdvancedSites.IsEmpty(next) && State.AppProfiles.Count == 0) throw new InvalidOperationException(AdvancedSites.NothingToDo);
+        if (AdvancedSites.IsEmpty(next) && CurrentOptions.Profiles is null) throw new InvalidOperationException(AdvancedSites.NothingToDo);
         ApplyAdvanced(next);
         return next;
     }
@@ -1099,7 +1132,7 @@ public sealed class Shell
         var own = Data.ReadUserDomains();
         var work = own.Concat(State.Advanced.Enabled ? State.Advanced.Rows.Where(r => r.Strategy != AdvancedSites.Direct).SelectMany(r => r.Domains) : []).Distinct().ToList();
         return new(j.PcId!, CurrentOptions.Joint is not null, [.. j.Owned], own, [.. rows], decoys.Names, decoys.Reliable, decoys.Notes,
-            State.StrategyId, State.Enabled, work, State.AppProfiles.Count);
+            State.StrategyId, State.Enabled, work, CurrentOptions.Profiles?.Count ?? 0);
     }
 
     byte[]? ReadFake(string name)

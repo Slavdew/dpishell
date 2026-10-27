@@ -21,7 +21,20 @@ public sealed class AppProfile
     /// <summary>Параметры игровой роли game_tcp / game_udp (проходят тот же белый список, что и каталог).</summary>
     public string TcpDesync { get; set; } = "";
     public string UdpDesync { get; set; } = "";
-    /// <summary>Номер варианта параметров (для «Вариант N»).</summary>
+    /// <summary>
+    /// Сигнатура пакета (необязательна, для TCP и UDP отдельно): длина полезной нагрузки (0 — не задана) и её начало, hex до 16 байт.
+    /// Задана — помощник сам собирает фильтр WinDivert (<see cref="AppProfiles.Filter"/>), порты этого протокола в общий фильтр не попадают.
+    /// </summary>
+    public int TcpPayloadLength { get; set; }
+    public string TcpPayloadHex { get; set; } = "";
+    public int UdpPayloadLength { get; set; }
+    public string UdpPayloadHex { get; set; } = "";
+    /// <summary>
+    /// «Свой фильтр WinDivert» (для опытных), по протоколам: заполнен — заменяет фильтр, собранный из сигнатуры. Проверка — <see cref="CustomFilter.Problem"/>.
+    /// </summary>
+    public string TcpCustomFilter { get; set; } = "";
+    public string UdpCustomFilter { get; set; } = "";
+    /// <summary>Номер варианта параметров (для «Вариант N»); -1 — свои параметры (из импорта), не из готовых стратегий.</summary>
     public int Variant { get; set; }
     public DateTime CreatedAt { get; set; }
 }
@@ -98,7 +111,16 @@ public static partial class AppProfiles
         if (!tcp && !udp) return L.T("core.profile.no_ports");
         if (tcp && NormalizePorts(p.TcpPorts) != p.TcpPorts) return L.T("core.profile.bad_tcp");
         if (udp && NormalizePorts(p.UdpPorts) != p.UdpPorts) return L.T("core.profile.bad_udp");
-        if (p.Addresses.Count is 0 or > MaxAddresses) return L.T("core.profile.addr_count", new { max = MaxAddresses });
+        if (tcp && p.TcpCustomFilter.Length > 0 && CustomFilter.Problem(p.TcpCustomFilter, true) is { } ct) return L.T("core.profile.tcp_filter", new { problem = ct });
+        if (udp && p.UdpCustomFilter.Length > 0 && CustomFilter.Problem(p.UdpCustomFilter, false) is { } cu) return L.T("core.profile.udp_filter", new { problem = cu });
+        if (!tcp && p.TcpCustomFilter.Length > 0 || !udp && p.UdpCustomFilter.Length > 0) return L.T("core.profile.sig_no_ports");
+        if (SignatureProblem(p.TcpPayloadLength, p.TcpPayloadHex, tcp) is { } st) return L.T("core.profile.tcp_sig", new { problem = st });
+        if (SignatureProblem(p.UdpPayloadLength, p.UdpPayloadHex, udp) is { } su) return L.T("core.profile.udp_sig", new { problem = su });
+        // Адреса нужны, если у какого-то протокола профиля нет сигнатуры: иначе профиль ловил бы всё на своих портах.
+        bool needAddresses = tcp && !HasSignature(p, true) || udp && !HasSignature(p, false);
+        if (p.Addresses.Count > MaxAddresses || p.Addresses.Count == 0 && needAddresses) return L.T("core.profile.addr_count", new { max = MaxAddresses });
+        if (Filter(p, true) is { } ft && ft.Length > MaxFilterBytes || Filter(p, false) is { } fu && fu.Length > MaxFilterBytes)
+            return L.T("core.profile.filter_limit", new { kb = MaxFilterBytes / 1024 });
         foreach (var a in p.Addresses)
         {
             if (!Cidr.TryParse(a, requireLen: false, out var c, out var fixedHost, out _) || fixedHost || c.ToString() != Canonical(a))
