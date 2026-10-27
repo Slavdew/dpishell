@@ -491,6 +491,7 @@
  "router.login_choice.text": "Optimization is already running on the router — usually for all devices at home, including this PC. Together with the router, optimization on the PC breaks sites.\n\nTo manage it, sign in to the router.",
  "router.login_choice.button": "Sign in to the router",
  "router.select_choice.text": "Optimization is running on the router, so a strategy search on this PC will give a wrong result: strategies will work only “paired” with the router.",
+ "router.select_choice.overlap": "The router already optimizes {what}, so a strategy search for them on this PC will give a wrong result: strategies will work only “paired” with the router.",
  "router.both_choice.text": "Usually for all devices at home, including this PC. Turning it on here too works only together with the router — otherwise traffic is processed twice.",
  "router.choice.select_router": "Find strategy on the router",
  "router.choice.pause_router": "Turn off on router during the search",

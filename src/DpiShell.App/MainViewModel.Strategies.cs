@@ -120,7 +120,8 @@ public sealed partial class MainViewModel
         if (!await SaveDraftBeforeSelectAsync()) return;
         if (TakeGroups() is not { } ids) return;
         if (IsRunning && !Confirm(L.T("select.confirm.pause_check"))) return;
-        if (!await RouterGateAsync(select: true)) return;
+        if (!await RouterGateAsync(select: true, ids)) return;
+        var ownOnly = SelectOwnOnly;
 
         var title = StrategyTitle(id) is { Length: > 0 } t ? t : id;
         ResultText = L.T("select.checking_one", new { name = title });
@@ -136,7 +137,7 @@ public sealed partial class MainViewModel
         {
             await Guard(L.T("select.busy.check"), async () =>
             {
-                try { ShowOneReport(id, await c.StrategyCheckAsync(id, ids, progress, cts.Token, CheckDnsMode)); }
+                try { ShowOneReport(id, await c.StrategyCheckAsync(id, ids, progress, cts.Token, CheckDnsMode, ownOnly)); }
                 catch (OperationCanceledException) { ResultText = L.T("select.check.stopped"); PendingCheckId = id; }
             });
         }
@@ -186,7 +187,7 @@ public sealed partial class MainViewModel
     {
         if (SelectedScore is not { } row) return;
         if (row.Unchecked && !Confirm(L.T("select.confirm.unchecked"))) return;
-        await ApplyAsync(row.Id);
+        await ApplyNearRouterAsync(row.Id);
     }
 
     /// <summary>Выбор в списке на главной: своя или вставленная стратегия без единой проверки — только с подтверждением.</summary>

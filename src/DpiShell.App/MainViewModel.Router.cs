@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net.Http;
+using DpiShell.Core;
 using DpiShell.Core.Helper;
 
 namespace DpiShell.App;
@@ -52,9 +53,12 @@ public sealed partial class MainViewModel
     /// «Работать вместе» (совместная работа: роутер — YouTube и Discord, ПК — свои сайты и игры), «Подобрать на роутере»
     /// или выключить роутер (на время подбора — с вопросом после него). true — можно продолжать на ПК.
     /// «Работать вместе» запоминается переключателем «Совместная работа» — дальше включение идёт без вопроса (<see cref="JointBeforeEnableAsync"/>).
+    /// Подбор (<paramref name="groups"/> — его группы): цели не пересекаются с тем, что ведёт роутер, — подбор идёт на ПК без вопроса и без выключения роутера,
+    /// только по своим сайтам (<see cref="SelectOwnOnly"/>); пересекаются — тот же вопрос, но с тем, что именно пересекается; не узнать — вопрос как раньше.
     /// </summary>
-    public async Task<bool> RouterGateAsync(bool select)
+    public async Task<bool> RouterGateAsync(bool select, IReadOnlyList<string>? groups = null)
     {
+        SelectOwnOnly = false;
         if (!(Router.Found && Router.RouterEnabled)) return true;
         // Совместная работа с роутером (mixed-strategies.md §7): ПК включается вместе с роутером — он ведёт только свои сайты, двойной обработки нет.
         if (!select && await JointBeforeEnableAsync()) return true;
@@ -66,7 +70,13 @@ public sealed partial class MainViewModel
             return false;
         }
         if (!select) return await BothChoiceAsync();
-        var choice = Choose(L.T("router.select_choice.text"), [L.T("router.choice.select_router"), L.T("router.choice.pause_router")]);
+        var overlap = groups is null ? null : await SelectOverlapAsync(groups);
+        if (overlap is { None: true })
+        {
+            SelectOwnOnly = true;
+            return true;
+        }
+        var choice = Choose(SelectChoiceText(overlap), [L.T("router.choice.select_router"), L.T("router.choice.pause_router")]);
         if (choice == 0)
         {
             Router.SelectOnRouter = true;
@@ -77,6 +87,54 @@ public sealed partial class MainViewModel
         if (!await Router.DisableAsync()) return false;
         _routerPausedForSelect = select;
         return true;
+    }
+
+    /// <summary>
+    /// Подбор на ПК идёт рядом с работающим роутером только по своим сайтам (<see cref="RouterGateAsync"/>): помощнику уходит <c>ownOnly</c>,
+    /// winws кандидатов — без ролей YouTube и Discord (их ведёт роутер), а лучшая включается через тот же вопрос, что «Включить».
+    /// </summary>
+    public bool SelectOwnOnly { get; private set; }
+
+    /// <summary>
+    /// Что из целей подбора уже ведёт роутер. null — не узнать: помощник до 1.21 (не умеет подбирать только свои сайты) или без <c>joint_get</c>,
+    /// нет ответа помощника или роутера, старый роутер.
+    /// </summary>
+    async Task<SelectOverlap?> SelectOverlapAsync(IReadOnlyList<string> groups)
+    {
+        if (Helper.Client is not { } c || !HelperCompat.AtLeast(c.Compat.HelperApi, HelperProtocol.OwnOnlyApi) || !c.Compat.Supports("joint_get")) return null;
+        JointInfo info;
+        try { info = await c.JointGetAsync(); }
+        catch (Exception e) when (e is HelperException or HelperUnavailableException or IOException or TimeoutException) { return null; }
+        // Свои сайты и сайты строк — всегда: winws подбора обрабатывает их, даже если группа «Свои сайты» не отмечена.
+        var decoys = JointDecoys.SupplyNames(Path.Combine(_shell.Paths.Package, "fake"));
+        return await Router.SelectOverlapAsync(groups, [.. info.Own, .. info.Rows], decoys);
+    }
+
+    /// <summary>Текст вопроса при подборе рядом с роутером: что именно пересекается («Роутер уже оптимизирует YouTube и Discord…») или общий.</summary>
+    static string SelectChoiceText(SelectOverlap? o)
+    {
+        if (o is not { AllSites: false, Items.Count: > 0 }) return L.T("router.select_choice.text");
+        const int shown = 3;
+        var items = o.Items.Take(shown).ToList();
+        if (o.Items.Count > shown) items[^1] += "…";
+        var what = items.Count == 1 ? items[0]
+            : L.T("select.probe.and", new { a = string.Join(", ", items.Take(items.Count - 1)), b = items[^1] });
+        return L.T("router.select_choice.overlap", new { what });
+    }
+
+    /// <summary>
+    /// Итог подбора в работу («Применить», автоприменение). Роутер работает (подбор своих сайтов шёл рядом с ним) и на ПК оптимизация выключена —
+    /// включение через тот же вопрос, что «Включить»: иначе рядом с роутером окажется полная настройка ПК. Стратегия запоминается заранее —
+    /// «Работать вместе» включает ПК уже с ней. true — стратегия в работе на ПК.
+    /// </summary>
+    async Task<bool> ApplyNearRouterAsync(string id)
+    {
+        if (!IsRunning && Router.Found && Router.RouterEnabled)
+        {
+            await ChooseAsync(id);
+            if (!await RouterGateAsync(select: false)) return IsRunning && CurrentStrategyId == id;
+        }
+        return await ApplyAsync(id);
     }
 
     /// <summary>«Включить» на ПК, когда работает роутер (ответ владельца к п. 1): первой — «Работать вместе»; у ПК нечего вести — она серая с подсказкой.</summary>

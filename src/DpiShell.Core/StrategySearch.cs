@@ -124,6 +124,8 @@ public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
     };
 
     public int RefineBudget { get; init; } = 30;
+    /// <summary>Сборка командной строки кандидатов (<see cref="Selector.Options"/>).</summary>
+    public BuildOptions? Options { get; init; }
     public TimeSpan Pause { get; init; } = TimeSpan.FromMilliseconds(300);
 
     public async Task<SearchReport> RunAsync(Strategy baseStrategy, IReadOnlyList<TargetGroup> groups,
@@ -134,7 +136,7 @@ public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
         bool cancelled = false;
         // Быстрая оценка: обязательные цели, одна попытка, короткие таймауты. Обе версии TLS: живой прогон 2026-10-16 показал,
         // что «тихий» multidisorder проходит по TLS 1.3 и не проходит по 1.2 — проверка только 1.3 пропускала такие находки.
-        var quick = new Selector(paths, QuickProbe()) { Tls = HttpProbe.DefaultTls };
+        var quick = new Selector(paths, QuickProbe()) { Tls = HttpProbe.DefaultTls, Options = Options };
 
         foreach (var (role, groupIds) in RoleGroups)
         {
@@ -199,7 +201,7 @@ public sealed class StrategySearch(AppPaths paths, Func<HttpProbe> newProbe)
         SelectionReport? final = null;
         if (generated.Count > 0 && !ct.IsCancellationRequested)
         {
-            var full = new Selector(paths, newProbe());
+            var full = new Selector(paths, newProbe()) { Options = Options };
             try { final = await full.RunAsync([baseStrategy, .. generated], groups, quick: false, progress, ct); }
             catch (OperationCanceledException) { if (stopped is null) { stopped = L.T("core.search.cancelled"); cancelled = true; } }
         }

@@ -70,6 +70,8 @@ public class Selector(AppPaths paths, HttpProbe probe)
     public TimeSpan Settle { get; init; } = TimeSpan.FromSeconds(1);
     public int ProbeParallelism { get; init; } = 8;
     public IReadOnlyList<SslProtocols> Tls { get; init; } = HttpProbe.DefaultTls;
+    /// <summary>Как собирать командную строку кандидата: null — все роли стратегии; при подборе своих сайтов рядом с роутером — только общие роли (<see cref="Shell.SelectOwnOnly"/>).</summary>
+    public BuildOptions? Options { get; init; }
 
     public async Task<IReadOnlyList<TargetVerdict>> CheckGroupsAsync(IEnumerable<TargetGroup> groups, CancellationToken ct)
     {
@@ -154,7 +156,7 @@ public class Selector(AppPaths paths, HttpProbe probe)
 
     public virtual async Task<StrategyScore> RunOneAsync(Strategy s, IReadOnlyList<TargetGroup> groups, CancellationToken ct)
     {
-        var args = WinwsArgs.Build(s, paths);
+        var args = WinwsArgs.Build(s, paths, Options);
         using var w = WinwsProcess.Start(paths, args);
         if (!await w.WaitReadyAsync(Settle, ct))
             return new(s, [], 0, groups.Count(g => g.Goal), "winws завершился: " + Tail(w.Output), StrategyScore.ExitedCode, Tail(w.Output));
