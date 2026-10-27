@@ -10,7 +10,7 @@ namespace DpiShell.App;
 /// <summary>
 /// Значок DpiShell: изометрический короб-«пакет» (вариант P3, исходник — docs/img/icon.svg) и метка состояния в правом нижнем углу.
 /// Рисуется программно; тот же код делает Assets/app.ico (tools/make-icon.ps1), поэтому значки не расходятся.
-/// Выключено — серый знак без метки; работает, подбор, ошибка — метка с галочкой, часами, «!».
+/// Выключено — серый знак и метка «пауза»; работает, подбор, ошибка — метка с галочкой, часами, «!».
 /// Для ≤20 px глифы метки рисуются целыми пикселями, чтобы читались.
 /// </summary>
 public static class Icons
@@ -21,12 +21,16 @@ public static class Icons
     public static readonly Drawing.Color Gray = Drawing.Color.FromArgb(0x9C, 0xA3, 0xAF);
     public static readonly int[] IcoSizes = [16, 20, 24, 32, 40, 48, 64, 256];
 
-    /// <summary>Цвет метки состояния; у «выключено» метки нет (null).</summary>
+    /// <summary>
+    /// Цвет метки состояния. У «выключено» — средне-серый #6b7280: контраст к тёмной панели #202020 3.37:1, к светлой #f3f3f3 4.36:1,
+    /// белого глифа к метке 4.83:1 (более тёмный графит на тёмной панели тонет).
+    /// </summary>
     public static Drawing.Color? BadgeColor(StatusKind k) => k switch
     {
         StatusKind.On => Drawing.Color.FromArgb(0x16, 0xA3, 0x4A),
         StatusKind.Busy => Drawing.Color.FromArgb(0xD9, 0x77, 0x06),
         StatusKind.Error => Drawing.Color.FromArgb(0xDC, 0x26, 0x26),
+        StatusKind.Off => Drawing.Color.FromArgb(0x6B, 0x72, 0x80),
         _ => null,
     };
 
@@ -120,6 +124,8 @@ public static class Icons
                 pen.Width = 3 * b; g.DrawLines(pen, [P(7, 12.5f), P(10.5f, 16), P(17, 8.5f)]); break;
             case StatusKind.Busy:
                 pen.Width = 2.8f * b; g.DrawLines(pen, [P(12, 6.5f), P(12, 12), P(15.5f, 14)]); break;
+            case StatusKind.Off:
+                pen.Width = 3 * b; g.DrawLine(pen, P(9.5f, 8), P(9.5f, 16)); g.DrawLine(pen, P(14.5f, 8), P(14.5f, 16)); break;
             default:
                 pen.Width = 3.2f * b; g.DrawLine(pen, P(12, 6.5f), P(12, 13));
                 g.FillEllipse(white, x0 + (12 - 1.9f) * b, y0 + (17.2f - 1.9f) * b, 3.8f * b, 3.8f * b); break;
@@ -141,6 +147,7 @@ public static class Icons
         {
             StatusKind.On => [(1, 3), (2, 4), (3, 3), (4, 2), (5, 1)],
             StatusKind.Busy => [(3, 1), (3, 2), (3, 3), (4, 4), (5, 5)],
+            StatusKind.Off => [(2, 1), (2, 2), (2, 3), (2, 4), (2, 5), (4, 1), (4, 2), (4, 3), (4, 4), (4, 5)],
             _ => [(3, 1), (3, 2), (3, 3), (3, 5)],
         };
         using var white = new Drawing.SolidBrush(Drawing.Color.White);

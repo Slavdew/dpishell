@@ -37,26 +37,41 @@ public class IconTests
 
     [Theory]
     [InlineData(16)] [InlineData(20)] [InlineData(24)] [InlineData(32)] [InlineData(48)]
-    public void Badge_zone_has_state_color_and_off_has_none(int size)
+    public void Badge_zone_has_state_color_off_has_pause(int size)
     {
         var half = size / 2;
         foreach (var k in Kinds)
         {
             using var b = Icons.Render(k, size);
-            foreach (var other in Kinds.Where(o => Icons.BadgeColor(o) is not null))
+            foreach (var other in Kinds)
             {
                 var n = CountNear(b, Icons.BadgeColor(other)!.Value, half, half, size, size);
                 if (other == k) Assert.True(n >= size * size / 24, $"{k} {size}: метки нет ({n})");
                 else Assert.Equal(0, n);
             }
         }
-        // Выключено: знак серый, синего нет.
+        // Выключено: знак серый, синего нет, метка «пауза» серая (не синяя, не цвета других состояний).
         using var off = Icons.Render(StatusKind.Off, size);
         Assert.Equal(0, CountNear(off, Icons.Blue, 0, 0, size, size));
         Assert.True(CountNear(off, Icons.Gray, 0, 0, size, size) > 0);
         // Работает: знак синий.
         using var on = Icons.Render(StatusKind.On, size);
         Assert.True(CountNear(on, Icons.Blue, 0, 0, half, size) > 0);
+    }
+
+    [Fact]
+    public void Off_badge_contrast_on_both_panels()
+    {
+        static double Lum(Drawing.Color c)
+        {
+            static double F(int v) { var x = v / 255.0; return x <= .03928 ? x / 12.92 : Math.Pow((x + .055) / 1.055, 2.4); }
+            return .2126 * F(c.R) + .7152 * F(c.G) + .0722 * F(c.B);
+        }
+        static double Cr(Drawing.Color a, Drawing.Color b) { var (x, y) = (Lum(a), Lum(b)); return (Math.Max(x, y) + .05) / (Math.Min(x, y) + .05); }
+        var m = Icons.BadgeColor(StatusKind.Off)!.Value;
+        Assert.True(Cr(m, Drawing.Color.FromArgb(0x20, 0x20, 0x20)) >= 3);
+        Assert.True(Cr(m, Drawing.Color.FromArgb(0xf3, 0xf3, 0xf3)) >= 3);
+        Assert.True(Cr(m, Drawing.Color.White) >= 4.5);
     }
 
     [Fact]
@@ -102,10 +117,10 @@ public class IconTests
         var dir = Path.Combine(snap, "icon-p3-render");
         Directory.CreateDirectory(dir);
         int[] sizes = [16, 20, 24, 32];
-        const int zoom = 8, pad = 8;
+        const int zoom = 6, pad = 8;
         foreach (var dark in new[] { false, true })
         {
-            var bg = dark ? Drawing.Color.FromArgb(0x1f, 0x1f, 0x1f) : Drawing.Color.FromArgb(0xee, 0xf0, 0xf3);
+            var bg = dark ? Drawing.Color.FromArgb(0x20, 0x20, 0x20) : Drawing.Color.FromArgb(0xf3, 0xf3, 0xf3);
             var name = dark ? "dark" : "light";
             using var sheet = new Drawing.Bitmap(Kinds.Length * (32 * zoom + pad) + pad, sizes.Length * (32 * zoom + pad) + pad);
             using var g = Drawing.Graphics.FromImage(sheet);
