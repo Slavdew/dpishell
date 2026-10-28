@@ -171,7 +171,8 @@ public sealed class FeatureViewModelTests
         shell.Hosts = new HostsManager(paths, hosts, new Probe(ok), new Dns("185.199.108.133"), new NoRdap(), () => cands);
         var (f, link) = await Helper(shell);
         var questions = new List<string>();
-        var vm = new HostsViewModel(link) { Confirm = q => { questions.Add(q); return true; } };
+        // Подбор адресов вместо заглушек ходил бы в сеть — в тестах он ничего не находит.
+        var vm = new HostsViewModel(link) { Confirm = q => { questions.Add(q); return true; }, FindAddresses = (_, _) => Task.FromResult<IReadOnlyList<HostsEntry>>([]) };
         vm.RefreshNow();
         return (shell, vm, hosts, questions, f);
     }

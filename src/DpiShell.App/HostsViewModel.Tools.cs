@@ -132,7 +132,7 @@ public sealed partial class HostsViewModel
     ICommand? _tryCmd, _writeSelectedCmd, _clearTryCmd;
     public ICommand TryCmd => _tryCmd ??= RelayCommand.Async(TryAsync, () => !Busy && PasteText.Trim().Length > 0 && Can("hosts_try"));
     public ICommand WriteSelectedCmd => _writeSelectedCmd ??= RelayCommand.Async(WriteSelectedAsync, () => !Busy && SelectedTry > 0 && Can("hosts_user_set"));
-    public ICommand ClearTryCmd => _clearTryCmd ??= new RelayCommand(() => { PasteText = ""; TryRows.Clear(); TrySummary = ""; Raise(nameof(WriteSelectedText)); Raise(nameof(CanFind)); }, () => !Busy);
+    public ICommand ClearTryCmd => _clearTryCmd ??= new RelayCommand(() => { PasteText = ""; TryRows.Clear(); _found.Clear(); TrySummary = ""; Raise(nameof(WriteSelectedText)); Raise(nameof(CanFind)); }, () => !Busy);
 
     /// <summary>Вставка → пары «адрес имя» → проверка у помощника → таблица с вердиктами. Чинящие строки отмечены, остальные нет.</summary>
     public async Task TryAsync()
@@ -152,9 +152,12 @@ public sealed partial class HostsViewModel
         var progress = new Progress<HostsCheckProgress>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = L.T("hosts.progress.done", new { done = p.Done, total = p.Total }); });
         using var cts = new CancellationTokenSource();
         _cts = cts;
+        _found.Clear();
         try
         {
             ShowTry(await c.HostsTryAsync(paste.Entries, progress, cts.Token), paste);
+            // Заглушки (0.0.0.0, 127.*) — сразу подобрать рабочие адреса вместо них (владелец 28.10, п. 97).
+            if (StubHosts is { Count: > 0 } stubs) await FindCoreAsync(c, stubs, cts.Token, paste);
         }
         catch (OperationCanceledException) { TrySummary = L.T("hosts.stopped"); }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); TrySummary = e.Message; }
@@ -169,7 +172,9 @@ public sealed partial class HostsViewModel
         TryRows.Clear();
         foreach (var r in report.Rows.OrderBy(Rank).ThenBy(r => r.Host, StringComparer.Ordinal))
         {
-            var row = new TryRowVm(r, selectable: r.Writable, selected: r.Writable);
+            // Подобранный адрес записать можно и при «Не нужна»: он рабочий (сертификат сайта), им заменяют заглушку. Помощник проверит его ещё раз.
+            bool writable = r.Writable || _found.Contains(r.Entry) && r.Live?.Ok == true;
+            var row = new TryRowVm(r, selectable: writable, selected: writable);
             row.Changed += () => { Raise(nameof(WriteSelectedText)); CommandManager.InvalidateRequerySuggested(); };
             TryRows.Add(row);
         }
@@ -191,10 +196,22 @@ public sealed partial class HostsViewModel
         return [.. r.Domains.Where(d => d.Best is not null).Select(d => new HostsEntry(d.Host, d.Best!.Ip.ToString()))];
     };
 
-    /// <summary>Сайты, которым подбор может помочь: через DNS не открываются, а строка из гайда не чинит.</summary>
+    /// <summary>Адреса, подобранные через DNS в этой примерке: их можно записать, даже если сайт и так открывается.</summary>
+    readonly HashSet<HostsEntry> _found = [];
+
+    static bool IsStub(HostsTryRow r) => System.Net.IPAddress.TryParse(r.Ip, out var ip) && !HostsRules.IsPublicAddress(ip);
+
+    /// <summary>Есть ли у сайта уже подобранный или чинящий адрес — тогда искать снова незачем.</summary>
+    bool HasWorking(string host) => TryRows.Any(x => x.Host == host && x.CanSelect);
+
+    /// <summary>Сайты из вставки с заглушкой вместо адреса — для них подбор идёт сам.</summary>
+    IReadOnlyList<string> StubHosts => TryRows.Select(r => r.Source).Where(r => r.Line == 0 && IsStub(r))
+        .Select(r => r.Host).Where(h => !HasWorking(h)).Distinct().ToList();
+
+    /// <summary>Сайты, которым подбор может помочь: заглушка вместо адреса или через DNS не открываются, а строка из гайда не чинит.</summary>
     IReadOnlyList<string> FindHosts => TryRows.Select(r => r.Source)
-        .Where(r => r.Line == 0 && r.Verdict is not (HostsTryVerdict.Helps or HostsTryVerdict.NotNeeded) && r.Dns != DnsState.Works)
-        .Select(r => r.Host).Where(h => !TryRows.Any(x => x.Host == h && x.Source.Writable)).Distinct().ToList();
+        .Where(r => r.Line == 0 && (IsStub(r) || r.Verdict is not (HostsTryVerdict.Helps or HostsTryVerdict.NotNeeded) && r.Dns != DnsState.Works))
+        .Select(r => r.Host).Where(h => !HasWorking(h)).Distinct().ToList();
     public bool CanFind => FindHosts.Count > 0;
 
     ICommand? _findCmd;
@@ -206,30 +223,41 @@ public sealed partial class HostsViewModel
         if (Busy || hosts.Count == 0) return;
         if (await Need() is not { } c) return;
         Busy = true; Trying = true;
-        Done = 0; Total = 1; ProgressText = L.T("hosts.progress.find", new { n = hosts.Count });
         using var cts = new CancellationTokenSource();
         _cts = cts;
-        try
-        {
-            var have = TryRows.Select(r => r.Source.Entry).ToHashSet();
-            var found = (await FindAddresses(hosts, cts.Token)).Where(e => !have.Contains(e)).ToList();
-            var missing = hosts.Where(h => found.All(e => e.Host != h)).ToList();
-            var rows = TryRows.Select(r => r.Source).ToList();
-            if (found.Count > 0)
-            {
-                var progress = new Progress<HostsCheckProgress>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = L.T("hosts.progress.done", new { done = p.Done, total = p.Total }); });
-                rows.AddRange((await c.HostsTryAsync(found, progress, cts.Token)).Rows);
-            }
-            ShowTry(new HostsTryReport(rows, 0, false, rows.Count, DateTime.Now));
-            var foundN = found.Count;
-            TrySummaryIs(() => (foundN > 0 ? L.T("hosts.find.found", new { n = foundN }) : L.T("hosts.find.none"))
-                + (missing.Count > 0 && foundN > 0 ? " " + L.T("hosts.find.missing", new { list = string.Join(", ", missing) }) : ""));
-        }
+        try { await FindCoreAsync(c, hosts, cts.Token); }
         catch (OperationCanceledException) { TrySummary = L.T("hosts.stopped"); }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); TrySummary = e.Message; }
         catch (HelperException e) { TrySummary = e.Message; }
         catch (Exception e) { TrySummary = Texts.Friendly(e); }
         finally { _cts = null; Busy = false; Trying = false; ProgressText = ""; }
+    }
+
+    /// <summary>
+    /// Подобрать адреса для сайтов и примерить найденное у помощника. Рабочий адрес встаёт вместо заглушки (строка заглушки уходит из таблицы),
+    /// остальные строки остаются. Ошибки — наверх, вызывающему.
+    /// </summary>
+    async Task FindCoreAsync(HelperClient c, IReadOnlyList<string> hosts, CancellationToken ct, HostsPasteResult? paste = null)
+    {
+        Done = 0; Total = 1; ProgressText = L.T("hosts.progress.find", new { n = hosts.Count });
+        var have = TryRows.Select(r => r.Source.Entry).ToHashSet();
+        var found = (await FindAddresses(hosts, ct)).Where(e => !have.Contains(e)).ToList();
+        var rows = TryRows.Select(r => r.Source).ToList();
+        if (found.Count > 0)
+        {
+            var progress = new Progress<HostsCheckProgress>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = L.T("hosts.progress.done", new { done = p.Done, total = p.Total }); });
+            var tried = (await c.HostsTryAsync(found, progress, ct)).Rows;
+            foreach (var t in tried.Where(t => t.Live?.Ok == true)) _found.Add(t.Entry);
+            var replaced = tried.Where(t => t.Live?.Ok == true).Select(t => t.Host).ToHashSet();
+            rows.RemoveAll(r => r.Line == 0 && IsStub(r) && replaced.Contains(r.Host));
+            rows.AddRange(tried);
+        }
+        var report = new HostsTryReport(rows, 0, false, rows.Count, DateTime.Now);
+        ShowTry(report);
+        var foundN = found.Count;
+        var missing = hosts.Where(h => found.All(e => e.Host != h)).ToList();
+        TrySummaryIs(() => Summarize(report, entries: false, paste) + " " + (foundN > 0 ? L.T("hosts.find.found", new { n = foundN }) : L.T("hosts.find.none"))
+            + (missing.Count > 0 && foundN > 0 ? " " + L.T("hosts.find.missing", new { list = string.Join(", ", missing) }) : ""));
     }
 
     static int Rank(HostsTryRow r) => r.Verdict switch
@@ -264,7 +292,7 @@ public sealed partial class HostsViewModel
     /// </summary>
     public async Task WriteSelectedAsync()
     {
-        var chosen = TryRows.Where(r => r.Selected && r.Source.Writable).Select(r => r.Source.Entry).ToList();
+        var chosen = TryRows.Where(r => r.Selected && r.CanSelect).Select(r => r.Source.Entry).ToList();
         if (chosen.Count == 0) return;
         var all = UserRows.Select(r => r.Entry).Concat(chosen).Distinct().ToList();
         if (!Confirm(L.T("hosts.confirm.write_user", new { n = all.Count }))) return;
