@@ -303,7 +303,7 @@
                                                 Visibility="{Binding AvOffer, Converter={StaticResource Vis}}" />
                                         <Button ContentTemplate="{StaticResource Shield}" Content="{l:T diag.repair}" Command="{Binding RepairCoreCmd}" Margin="0,0,8,4" VerticalAlignment="Center"
                                                 Visibility="{Binding AvShowRestore, Converter={StaticResource Vis}}" />
-                                        <Button ContentTemplate="{StaticResource Shield}" Content="{l:T home.core.offline}" Style="{StaticResource LinkButton}" Command="{Binding CoreOfflineCmd}"
+                                        <Button ContentTemplate="{StaticResource Shield}" Content="{l:T home.core.offline}" Style="{StaticResource LinkButton}" Command="{Binding CoreOfflineCmd}" ToolTip="{l:T home.core.offline.tip}"
                                                 Margin="0,0,8,4" VerticalAlignment="Center" Visibility="{Binding AvShowOffline, Converter={StaticResource Vis}}" />
                                         <local:InfoButton Topic="{x:Static local:InfoTexts.AvExclusion}" Margin="0,0,0,4" VerticalAlignment="Center" />
                                         <Button Content="{l:T home.hide}" Style="{StaticResource LinkButton}" Command="{Binding AvHideCmd}" Margin="8,0,0,4" VerticalAlignment="Center"
@@ -1935,7 +1935,7 @@
                                     <TextBlock Text="{l:T diag.core_broken}" FontWeight="SemiBold" Margin="0,0,0,8" />
                                     <WrapPanel>
                                         <Button ContentTemplate="{StaticResource Shield}" Content="{l:T diag.repair}" Style="{StaticResource Primary}" Command="{Binding RepairCoreCmd}" Margin="0,0,10,0" />
-                                        <Button ContentTemplate="{StaticResource Shield}" Content="{l:T home.core.offline}" Style="{StaticResource LinkButton}" Command="{Binding CoreOfflineCmd}"
+                                        <Button ContentTemplate="{StaticResource Shield}" Content="{l:T home.core.offline}" Style="{StaticResource LinkButton}" Command="{Binding CoreOfflineCmd}" ToolTip="{l:T home.core.offline.tip}"
                                                 VerticalAlignment="Center" />
                                     </WrapPanel>
                                     <!-- Путь не переписывать руками: «Скопировать путь» и сразу «Безопасность Windows» (п. 16). -->
