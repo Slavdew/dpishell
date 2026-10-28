@@ -162,7 +162,7 @@ public sealed class AppsViewModelTests
         await Until(() => vm.IsCheck, "вопрос");
         await Run(vm.YesCmd);
         var row = vm.Profiles.Single();
-        await Run(row.RemoveCmd!);
+        await vm.RemoveAsync(row.Id);
         await Until(() => vm.Profiles.Count == 0, "профиль не снят");
         Assert.Empty(f.Backend.ProfilesValue);
         Assert.True(vm.IsIdle);
@@ -366,7 +366,7 @@ public sealed class AppsViewModelTests
         Assert.Equal(2, closes);
         Assert.Equal("Моя игра", Assert.Single(vm.Profiles).Title);
         Assert.True(vm.ShowImportResult);
-        Assert.StartsWith("Профиль «Моя игра» сохранён:", vm.ImportMessage);
+        Assert.StartsWith("Профиль «Моя игра» добавлен: свои параметры", vm.ImportMessage);
         Assert.Contains("Профиль «Моя игра» сохранён.", said);
         Assert.Equal("", vm.ImportParams);
     }

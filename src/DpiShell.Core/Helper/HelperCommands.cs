@@ -53,6 +53,8 @@ public enum ArgKind
     Desync,
     /// <summary>Номер профиля программы: p и 8 шестнадцатеричных цифр.</summary>
     ProfileId,
+    /// <summary>Выбор стратегии профиля (API 1.22): «default», «own» или id стратегии из каталога и своих.</summary>
+    ProfileStrategy,
     /// <summary>Номер записи журнала изменений: 12 шестнадцатеричных цифр.</summary>
     ChangeId,
     /// <summary>Адрес системного прокси: хост:порт или схема=хост:порт;… (<see cref="ProxyValues.ParseServer"/>); на выходе нормальная запись.</summary>
@@ -138,7 +140,7 @@ public static partial class HelperCommands
         new("ipset_mode", true, false, new ArgSpec("mode", ArgKind.Choice, Required: true, Choices: ["off", "list"])),
         new("all_addresses_start", true, false),
         new("all_addresses_stop", true, false),
-        new("game_mode", true, true, new ArgSpec("mode", ArgKind.Choice, Required: true, Choices: ["off", "all", "profiles"])),
+        new("game_mode", true, true, new ArgSpec("mode", ArgKind.Choice, Required: true, Choices: ["off", "all"])),
         new("ipset_update", true, true,
             new ArgSpec("from", ArgKind.Choice, Required: true, Choices: ["manifest", "content"]),
             new ArgSpec("content", ArgKind.Content), new ArgSpec("confirmed", ArgKind.Bool)),
@@ -216,6 +218,10 @@ public static partial class HelperCommands
             new ArgSpec("tcpDesync", ArgKind.Desync), new ArgSpec("udpDesync", ArgKind.Desync),
             new ArgSpec("tcpFilter", ArgKind.WdFilter), new ArgSpec("udpFilter", ArgKind.WdFilter)),
         new("app_profile_remove", true, false, new ArgSpec("id", ArgKind.ProfileId, Required: true)),
+        // API 1.22: профиль включается сам по себе; выбор стратегии — «default», «own» или id из каталога (есть ли у неё игровая часть и свои ли параметры — проверяет Shell).
+        new("app_profile_options", true, false, new ArgSpec("id", ArgKind.ProfileId, Required: true), new ArgSpec("enabled", ArgKind.Bool),
+            new ArgSpec("strategy", ArgKind.ProfileStrategy)),
+        new("app_profiles_separate", true, false, new ArgSpec("on", ArgKind.Bool, Required: true)),
         // Откат всего (API 1.6): журнал изменений программы. Помощник откатывает только то, что записал сам, и только если сейчас стоит то,
         // что ставили мы; окно передаёт лишь номер записи — ни значений, ни путей.
         new("changes_list", false, false),
@@ -401,6 +407,14 @@ public static partial class HelperCommands
             case ArgKind.Bool:
                 if (v is JsonValue bv && bv.GetValueKind() is JsonValueKind.True or JsonValueKind.False) return bv.GetValue<bool>();
                 throw new HelperRequestException(id, L.T("core.req.bool", new { where = Where() }));
+
+            case ArgKind.ProfileStrategy:
+            {
+                var str = String(id, Where(), v, 64);
+                if (str is not (AppProfiles.Default or AppProfiles.Own) && (!IdRx().IsMatch(str) || !catalog.StrategyIds.Contains(str)))
+                    throw new HelperRequestException(id, L.T("core.req.no_strategy", new { where = Where() }));
+                return str;
+            }
 
             case ArgKind.StrategyId:
             {

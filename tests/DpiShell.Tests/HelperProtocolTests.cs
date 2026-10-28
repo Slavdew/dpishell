@@ -181,7 +181,7 @@ public class HelperProtocolTests
             "details", "choose", "tcp_timestamps_on", "data_update", "dns_status", "dns_set", "dns_restore",
             "strategy_add", "strategy_delete", "strategy_check",
             "hosts_try", "hosts_audit", "hosts_user_set", "hosts_comment", "hosts_uncomment", "hosts_restore",
-            "rec_start", "rec_status", "rec_stop", "app_profiles", "app_profile_set", "app_profile_remove",
+            "rec_start", "rec_status", "rec_stop", "app_profiles", "app_profile_set", "app_profile_remove", "app_profile_options", "app_profiles_separate",
             "changes_list", "changes_undo_all", "changes_undo", "changes_undo_group",
             "proxy_status", "proxy_user_set", "proxy_machine_set", "proxy_machine_restore",
             "advanced_get", "advanced_set", "joint_get", "joint_set", "settings_export_read", "settings_import", "log_tail",

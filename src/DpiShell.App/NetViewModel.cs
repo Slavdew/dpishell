@@ -75,7 +75,7 @@ public sealed class NetViewModel : Observable
         }
         if (AnyActive) ListsOpen = true;
         foreach (var p in new[] { nameof(IpsetOff), nameof(IpsetList), nameof(IpsetAny), nameof(AnyActive), nameof(AnyText), nameof(ListText),
-                     nameof(HasList), nameof(GameOff), nameof(GameProfiles), nameof(GameGeneral), nameof(GameCanToggle), nameof(GameStatus), nameof(GameHint),
+                     nameof(HasList), nameof(GameGeneral), nameof(GameCanToggle), nameof(GameStatus), nameof(ShowProfilesFirst),
                      nameof(GamePitfalls), nameof(UserHint) })
             Raise(p);
         CommandManager.InvalidateRequerySuggested();
@@ -282,26 +282,30 @@ public sealed class NetViewModel : Observable
 
     // ---------- игровой режим ----------
 
-    /// <summary>Три выбора: «Выкл», «Свои профили» (работают только профили программ), «Общий» (широкий режим по IP-списку; профили тоже действуют).</summary>
-    public bool GameOff { get => !_f.Game.IsGeneral() && _f.Game != GameMode.Profiles; set { if (value && !GameOff) _ = SetGameModeAsync(GameMode.Off); } }
-    public bool GameProfiles { get => _f.Game == GameMode.Profiles; set { if (value && !GameProfiles) _ = SetGameModeAsync(GameMode.Profiles); } }
-    public bool GameGeneral { get => _f.Game.IsGeneral(); set { if (value && !GameGeneral) _ = SetGameModeAsync(GameMode.TcpUdp); } }
+    /// <summary>
+    /// «Общий игровой режим» — один переключатель рядом со списком профилей: порты 1024–65535 по IP-списку. Профили программ от него не зависят
+    /// и при нём остаются включёнными (в командной строке они стоят раньше — срабатывают первыми).
+    /// </summary>
+    public bool GameGeneral
+    {
+        get => _f.Game.IsGeneral();
+        set { if (value != GameGeneral) _ = SetGameModeAsync(value ? GameMode.TcpUdp : GameMode.Off); }
+    }
 
-    /// <summary>При «Все адреса» «Общий» включить нельзя (приманки во всё подряд); остальное — можно всегда.</summary>
+    /// <summary>При «Все адреса» «Общий» включить нельзя (приманки во всё подряд); выключить — можно всегда.</summary>
     public bool GameCanToggle => !_busy && (GameGeneral || !AnyActive);
-    public bool GameCanChoose => !_busy;
 
-    /// <summary>Есть ли профили программ (ведёт AppsViewModel): без них «Свои профили» выбрать нельзя — работать нечему.</summary>
-    public bool HasProfiles { get => _hasProfiles; set { if (Set(ref _hasProfiles, value)) Raise(nameof(GameProfilesTip)); } }
-    bool _hasProfiles;
-    public string GameProfilesTip => L.T(HasProfiles ? "apps.game.mode.profiles_tip" : "apps.game.mode.profiles_none");
+    /// <summary>Хоть один профиль программы включён (ведёт AppsViewModel): при «Общем» — строка «Свои профили срабатывают первыми».</summary>
+    public bool ProfilesOn { get => _profilesOn; set { if (Set(ref _profilesOn, value)) Raise(nameof(ShowProfilesFirst)); } }
+    bool _profilesOn;
+    public bool ShowProfilesFirst => GameGeneral && ProfilesOn;
 
+    /// <summary>Строка под переключателем: при выключенном — что он делает, при включённом — работает ли и по скольким подсетям.</summary>
     public string GameStatus
     {
         get
         {
             var running = _helper.Status?.Enabled == true;
-            if (_f.Game == GameMode.Profiles) return L.T(running ? "apps.game.status.profiles_running" : "apps.game.status.profiles_pending");
             if (!_f.Game.IsGeneral()) return L.T(AnyActive ? "apps.game.status.off_blocked" : "apps.game.status.off");
             if (_f.GameBlocked) return L.T("apps.game.status.paused");
             return _f.List is { } m
@@ -310,8 +314,8 @@ public sealed class NetViewModel : Observable
         }
     }
 
-    /// <summary>Подводные камни выбранного режима: у «Общего» четыре пункта, у «Своих профилей» два; при «Выкл» — оба списка.</summary>
-    public string GamePitfalls => _f.Game.IsGeneral() ? General() : _f.Game == GameMode.Profiles ? Own() : General() + "\n\n" + Own();
+    /// <summary>Подводные камни: «Общего» (четыре пункта) и своих профилей.</summary>
+    public string GamePitfalls => General() + "\n\n" + Own();
     static string General() => Lines(L.T("apps.game.pit.general_title"), L.T("apps.game.pit.general_1"), L.T("apps.game.pit.general_2"), L.T("apps.game.pit.general_3"), L.T("apps.game.pit.general_4"));
     static string Own() => Lines(L.T("apps.game.pit.own_title"), L.T("apps.game.pit.own_1"), L.T("apps.game.pit.own_2"), L.T("apps.game.pit.own_4"), L.T("apps.game.pit.own_3"));
     static string Lines(string title, params string[] items) => title + "\n" + string.Join("\n", items.Select(i => "• " + i));
@@ -326,9 +330,6 @@ public sealed class NetViewModel : Observable
     /// <summary>Предупреждение про античиты: общее для игрового режима и записи подключений.</summary>
     public static string AntiCheatNote => L.T("apps.anticheat");
 
-    // Предупреждение про античиты — одно на вкладку, под заголовком «Игры и программы» (AppsViewModel.Anti).
-    public string GameHint => L.T("apps.game.hint");
-
 
     public async Task SetGameModeAsync(GameMode mode)
     {
@@ -338,7 +339,7 @@ public sealed class NetViewModel : Observable
         bool ok;
         try
         {
-            var busy = L.T(mode == GameMode.Off ? "apps.busy.game_off" : mode == GameMode.Profiles ? "apps.busy.game_profiles" : "apps.busy.game_on");
+            var busy = L.T(mode == GameMode.Off ? "apps.busy.game_off" : "apps.busy.game_on");
             ok = await Guard(busy, async () => change = await c.SetGameModeAsync(mode, new Progress<string>(Say)));
         }
         finally { IsBusy = false; }

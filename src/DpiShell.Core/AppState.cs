@@ -45,13 +45,15 @@ public sealed class AppState
     public DateTime? IpsetAnyUntil { get; set; }
     /// <summary>Режим, в который «Все адреса» возвращается сам.</summary>
     public string IpsetModeBeforeAny { get; set; } = "off";
-    /// <summary>Игровой режим: "off" (по умолчанию), "profiles" (только свои профили), "all" (Общий: TCP+UDP по IP-списку), "tcp"/"udp" — части «Общего» для отладочной консоли.</summary>
+    /// <summary>«Общий игровой режим»: "off" (по умолчанию), "all" (TCP+UDP 1024–65535 по IP-списку), "tcp"/"udp" — его части для отладочной консоли. Профили программ включаются каждый сам (<see cref="AppProfile.Enabled"/>).</summary>
     public string GameMode { get; set; } = "off";
     /// <summary>
-    /// 0 — запись до режима «Свои профили»: тогда профили действовали всегда, и «off» с профилями при чтении превращается в "profiles"
-    /// (профили не пропадают). <see cref="Save"/> ставит 1.
+    /// Версия записи игровых настроек: 0 — до режима «Свои профили» (профили действовали всегда), 1 — режим «Выкл / Свои профили / Общий» (профили — только при
+    /// «Своих профилях» и «Общем»), 2 — профили включаются по отдельности. Чтение переводит старое в новое без потерь (<see cref="MigrateGameMode"/>); <see cref="Save"/> ставит 2.
     /// </summary>
     public int GameModeSchema { get; set; }
+    /// <summary>«Разные стратегии» у профилей программ: выключено — все профили идут игровой частью стратегии ПК, выбор у профилей хранится.</summary>
+    public bool ProfilesSeparate { get; set; }
     /// <summary>IP-список включил игровой режим (был «выкл»): при выключении игрового режима список выключается — как было до него. Выбор режима списка рукой сбрасывает.</summary>
     public bool IpsetByGame { get; set; }
     /// <summary>«Починить адреса» (hosts, architecture.md «Починить адреса») включено. По умолчанию выключено.</summary>
@@ -76,11 +78,21 @@ public sealed class AppState
         catch (JsonException) { return new(); }
     }
 
-    /// <summary>Запись до режима «Свои профили»: профили действовали всегда — выбор «Выкл» с профилями не должен их отключить.</summary>
+    public const int CurrentGameSchema = 2;
+
+    /// <summary>
+    /// Прежний режим → включённость профилей. Схема 0: профили действовали всегда — все включены. Схема 1: «Свои профили» — профили включены, «Общий» выкл;
+    /// «Общий» — «Общий» вкл и профили вкл (при нём они тоже действовали); «Выкл» — профили выключены (они не действовали). Значение "profiles" уходит.
+    /// </summary>
     AppState MigrateGameMode()
     {
-        if (GameModeSchema == 0 && GameMode == "off" && AppProfiles.Count > 0) GameMode = "profiles";
-        GameModeSchema = 1;
+        if (GameModeSchema < CurrentGameSchema)
+        {
+            bool on = GameModeSchema == 0 || GameMode != "off";
+            foreach (var p in AppProfiles) p.Enabled = on;
+            if (GameMode == "profiles") GameMode = "off";
+        }
+        GameModeSchema = CurrentGameSchema;
         return this;
     }
 
@@ -95,7 +107,7 @@ public sealed class AppState
     public void Save(AppPaths p)
     {
         p.EnsureDirectories();
-        GameModeSchema = 1;
+        GameModeSchema = CurrentGameSchema;
         var tmp = p.StateFile + ".tmp";
         File.WriteAllText(tmp, JsonSerializer.Serialize(this, Json));
         File.Move(tmp, p.StateFile, overwrite: true);

@@ -371,13 +371,9 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
     public async Task<bool> StopAllAddressesAsync(CancellationToken ct = default) =>
         (await CallAsync("all_addresses_stop", null, null, ct)).GetProperty("stopped").GetBoolean();
 
-    /// <summary>Окно передаёт Off, Profiles («Свои профили») и TcpUdp («Общий»). Режим профилей — с API 1.22: старый помощник его не знает.</summary>
-    public Task<GameModeChange> SetGameModeAsync(GameMode mode, IProgress<string>? log = null, CancellationToken ct = default)
-    {
-        if (mode == GameMode.Profiles && !HelperCompat.AtLeast(HelperApi, HelperProtocol.ProfilesApi))
-            throw new HelperException("outdated", L.T("core.helper.needs_update"));
-        return CallAsync<GameModeChange>("game_mode", new { mode = mode switch { GameMode.Off => "off", GameMode.Profiles => "profiles", _ => "all" } }, MapLog(log), ct);
-    }
+    /// <summary>«Общий игровой режим»: Off или TcpUdp.</summary>
+    public Task<GameModeChange> SetGameModeAsync(GameMode mode, IProgress<string>? log = null, CancellationToken ct = default) =>
+        CallAsync<GameModeChange>("game_mode", new { mode = mode == GameMode.Off ? "off" : "all" }, MapLog(log), ct);
 
     public Task<IpsetUpdateSummary> UpdateIpsetFromManifestAsync(bool confirmed = false, IProgress<string>? log = null, CancellationToken ct = default) =>
         CallAsync<IpsetUpdateSummary>("ipset_update", new { from = "manifest", confirmed }, MapLog(log), ct);
@@ -519,6 +515,20 @@ public sealed class HelperClient : IAsyncDisposable, IDisposable
 
     public async Task<bool> AppProfileRemoveAsync(string id, CancellationToken ct = default) =>
         (await CallAsync("app_profile_remove", new { id }, null, ct)).GetProperty("removed").GetBoolean();
+
+    /// <summary>API 1.22: включить/выключить профиль и (или) выбрать стратегию («default», «own» или id). Старый помощник профили по отдельности не включает.</summary>
+    public Task<AppProfileInfo> AppProfileOptionsAsync(string id, bool? enabled = null, string? strategy = null, CancellationToken ct = default)
+    {
+        if (!HelperCompat.AtLeast(HelperApi, HelperProtocol.ProfilesApi)) throw new HelperException("outdated", L.T("core.helper.needs_update"));
+        return CallAsync<AppProfileInfo>("app_profile_options", new { id, enabled, strategy }, null, ct);
+    }
+
+    /// <summary>API 1.22: «Разные стратегии» у профилей.</summary>
+    public Task<AppProfilesInfo> AppProfilesSeparateAsync(bool on, CancellationToken ct = default)
+    {
+        if (!HelperCompat.AtLeast(HelperApi, HelperProtocol.ProfilesApi)) throw new HelperException("outdated", L.T("core.helper.needs_update"));
+        return CallAsync<AppProfilesInfo>("app_profiles_separate", new { on }, null, ct);
+    }
 
     /// <summary>Продвинутый режим «сайты → стратегия» (API 1.8): настройки и чем идёт каждая строка.</summary>
     public Task<AdvancedInfo> AdvancedGetAsync(CancellationToken ct = default) => CallAsync<AdvancedInfo>("advanced_get", null, null, ct);

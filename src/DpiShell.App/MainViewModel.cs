@@ -216,8 +216,8 @@ public sealed partial class MainViewModel : Observable
             Confirm = s => Confirm(s),
             AfterChange = RefreshStatusAsync,
         };
-        Net.HasProfiles = Apps.HasProfiles;
-        Apps.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(AppsViewModel.HasProfiles)) Net.HasProfiles = Apps.HasProfiles; };
+        Net.ProfilesOn = Apps.AnyOn;
+        Apps.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(AppsViewModel.AnyOn)) Net.ProfilesOn = Apps.AnyOn; };
         Hosts = new HostsViewModel(helper)
         {
             Settings = settings,

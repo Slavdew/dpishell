@@ -36,13 +36,7 @@ public static class StrategyExchange
         var ordered = new JsonObject();
         foreach (var (role, args) in roles.OrderBy(r => Array.IndexOf(WinwsArgs.RoleOrder, r.Key)))
             ordered[role] = args;
-        var json = new JsonObject { ["title"] = CleanTitle(title), ["roles"] = ordered }.ToJsonString(new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
-        var raw = Encoding.UTF8.GetBytes(json);
-        using var ms = new MemoryStream();
-        using (var d = new DeflateStream(ms, CompressionLevel.SmallestSize, leaveOpen: true)) d.Write(raw);
-        var text = Prefix + Convert.ToBase64String(ms.ToArray()).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        if (text.Length > MaxText) throw new StrategyFormatException(L.T("core.xchg.too_long"));
-        return text;
+        return Pack(Prefix, new JsonObject { ["title"] = CleanTitle(title), ["roles"] = ordered }, MaxText, "core.xchg.too_long");
     }
 
     /// <summary>Строка <c>dpishell:1:…</c> или строка запуска winws из .bat. Отказ — <see cref="StrategyFormatException"/>.</summary>
@@ -50,19 +44,37 @@ public static class StrategyExchange
     {
         if (string.IsNullOrWhiteSpace(text)) throw new StrategyFormatException(L.T("core.xchg.clipboard_empty"));
         var t = text.Trim();
+        // Строка профиля игры — не стратегия: сказать, куда её вставлять, а не «строка повреждена».
+        if (t.StartsWith(ProfileCode.Family + ":", StringComparison.OrdinalIgnoreCase)) throw new StrategyFormatException(L.T("core.xchg.is_game"));
         return t.StartsWith("dpishell:", StringComparison.OrdinalIgnoreCase) ? Decode(t, fakeExists) : FlowsealBat.Parse(t, fakeExists);
     }
 
-    public static ParsedStrategy Decode(string text, Func<string, bool>? fakeExists = null)
+    /// <summary>JSON → <paramref name="prefix"/> + base64url(deflate). Длиннее <paramref name="maxText"/> — отказ с текстом <paramref name="tooLongKey"/>.</summary>
+    internal static string Pack(string prefix, JsonObject json, int maxText, string tooLongKey)
+    {
+        var raw = Encoding.UTF8.GetBytes(json.ToJsonString(new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+        using var ms = new MemoryStream();
+        using (var d = new DeflateStream(ms, CompressionLevel.SmallestSize, leaveOpen: true)) d.Write(raw);
+        var text = prefix + Convert.ToBase64String(ms.ToArray()).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        if (text.Length > maxText) throw new StrategyFormatException(L.T(tooLongKey));
+        return text;
+    }
+
+    /// <summary>
+    /// Обратное к <see cref="Pack"/>, строго: длина, префикс <paramref name="family"/>:1: (другая версия — «обновите DpiShell»), base64url, распаковка не больше
+    /// <paramref name="maxJson"/> байт, JSON-объект без повторов ключей и не глубже <paramref name="maxDepth"/>. Отказ — <see cref="StrategyFormatException"/>.
+    /// </summary>
+    internal static JsonObject Unpack(string text, string family, int maxText, int maxJson, int maxDepth)
     {
         var t = text.Trim();
-        if (t.Length > MaxText) throw new StrategyFormatException(L.T("core.xchg.line_too_long", new { kb = MaxText / 1024 }));
-        if (!t.StartsWith(Prefix, StringComparison.Ordinal))
+        var prefix = family + ":1:";
+        if (t.Length > maxText) throw new StrategyFormatException(L.T("core.xchg.line_too_long", new { kb = maxText / 1024 }));
+        if (!t.StartsWith(prefix, StringComparison.Ordinal))
         {
-            var m = Regex.Match(t, @"^dpishell:(\d{1,4}):", RegexOptions.IgnoreCase);
+            var m = Regex.Match(t, "^" + Regex.Escape(family) + @":(\d{1,4}):", RegexOptions.IgnoreCase);
             throw new StrategyFormatException(m.Success ? L.T("core.xchg.version", new { version = m.Groups[1].Value }) : L.T("core.xchg.damaged"));
         }
-        var body = t[Prefix.Length..];
+        var body = t[prefix.Length..];
         if (body.Length == 0 || !Regex.IsMatch(body, @"^[A-Za-z0-9_-]+\z")) throw new StrategyFormatException(L.T("core.xchg.damaged"));
         byte[] packed;
         try
@@ -82,7 +94,7 @@ public static class StrategyExchange
             while ((n = inflate.Read(buf, 0, buf.Length)) > 0)
             {
                 ms.Write(buf, 0, n);
-                if (ms.Length > MaxJson) throw new StrategyFormatException(L.T("core.xchg.too_big_unpacked"));
+                if (ms.Length > maxJson) throw new StrategyFormatException(L.T("core.xchg.too_big_unpacked"));
             }
             raw = ms.ToArray();
         }
@@ -91,11 +103,16 @@ public static class StrategyExchange
         JsonNode? node;
         try
         {
-            node = JsonNode.Parse(raw, documentOptions: new JsonDocumentOptions { MaxDepth = 4, AllowDuplicateProperties = false });
+            node = JsonNode.Parse(raw, documentOptions: new JsonDocumentOptions { MaxDepth = maxDepth, AllowDuplicateProperties = false });
             if (node is JsonObject probe) _ = probe.Count;   // повтор ключа всплывает лениво
         }
         catch (Exception e) when (e is JsonException or ArgumentException or InvalidOperationException) { throw new StrategyFormatException(L.T("core.xchg.damaged")); }
-        if (node is not JsonObject o) throw new StrategyFormatException(L.T("core.xchg.damaged"));
+        return node as JsonObject ?? throw new StrategyFormatException(L.T("core.xchg.damaged"));
+    }
+
+    public static ParsedStrategy Decode(string text, Func<string, bool>? fakeExists = null)
+    {
+        var o = Unpack(text, "dpishell", MaxText, MaxJson, 4);
         foreach (var (k, _) in o)
             if (k is not ("title" or "roles")) throw new StrategyFormatException(L.T("core.xchg.extra_field", new { name = Cut(k) }));
         if (o["title"] is not JsonValue tv || !tv.TryGetValue<string>(out var title)) throw new StrategyFormatException(L.T("core.xchg.no_title"));
@@ -144,7 +161,7 @@ public static class StrategyExchange
         return s.Length == 0 ? L.T("core.xchg.untitled") : s;
     }
 
-    static string Cut(string s) => s.Length > 30 ? s[..30] + "…" : s;
+    internal static string Cut(string s) => s.Length > 30 ? s[..30] + "…" : s;
 }
 
 /// <summary>

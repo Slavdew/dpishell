@@ -82,6 +82,8 @@ public class HelperChannelTests
             ["rec_start"] = new { mode = "new" },
             ["app_profile_set"] = new { title = "Игра", tcp = "443", addresses = new[] { "203.0.113.50" }, variant = 0 },
             ["app_profile_remove"] = new { id = "p0a1b2c3d" },
+            ["app_profile_options"] = new { id = "p0a1b2c3d", enabled = false },
+            ["app_profiles_separate"] = new { on = true },
             ["changes_undo"] = new { id = "0123456789ab" },
             ["changes_undo_group"] = new { id = "0123456789ab" },
             ["proxy_user_set"] = new { enabled = false },

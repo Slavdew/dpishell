@@ -365,9 +365,9 @@ public sealed class FakeHelperBackend : IHelperBackend
     public bool RecActive { get; private set; }
     public IReadOnlyList<ProfileVariant> VariantsValue { get; set; } =
     [
-        new(0, "как у «Alt 9» (сейчас выбрана)", "--dpi-desync=fake --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n3", WinwsArgs.GameUdpDefault),
-        new(1, "как у «Alt 10»", "--dpi-desync=multisplit --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n3", WinwsArgs.GameUdpDefault),
-        new(2, "как у «Alt 11»", "--dpi-desync=syndata --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n4", WinwsArgs.GameUdpDefault),
+        new(0, "как у «Alt 9» (сейчас выбрана)", "--dpi-desync=fake --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n3", WinwsArgs.GameUdpDefault, "alt9"),
+        new(1, "как у «Alt 10»", "--dpi-desync=multisplit --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n3", WinwsArgs.GameUdpDefault, "alt10"),
+        new(2, "как у «Alt 11»", "--dpi-desync=syndata --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n4", WinwsArgs.GameUdpDefault, "alt11"),
     ];
     public List<AppProfileInfo> ProfilesValue { get; } = [];
 
@@ -406,7 +406,7 @@ public sealed class FakeHelperBackend : IHelperBackend
     public AppProfilesInfo AppProfilesInfo()
     {
         Call("app_profiles");
-        return new([.. ProfilesValue], VariantsValue, new(RecActive, RecActive, 0, 0, 0, true, []));
+        return new([.. ProfilesValue], VariantsValue, new(RecActive, RecActive, 0, 0, 0, true, []), SeparateValue);
     }
 
     public AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant, ProfileSignature? signature = null)
@@ -425,6 +425,25 @@ public sealed class FakeHelperBackend : IHelperBackend
     {
         Call("app_profile_remove " + id);
         return ProfilesValue.RemoveAll(p => p.Id == id) > 0;
+    }
+
+    public bool SeparateValue { get; set; }
+
+    public AppProfileInfo AppProfileOptions(string id, bool? enabled, string? strategy)
+    {
+        Call($"app_profile_options {id} {enabled} {strategy}");
+        var i = ProfilesValue.FindIndex(p => p.Id == id);
+        if (i < 0) return new AppProfileInfo(id, "", "", "", [], 0, "", DateTime.Now, Enabled: enabled ?? true, Strategy: strategy ?? AppProfiles.Default);
+        var p = ProfilesValue[i] with { Enabled = enabled ?? ProfilesValue[i].Enabled, Strategy = strategy ?? ProfilesValue[i].Strategy };
+        ProfilesValue[i] = p;
+        return p;
+    }
+
+    public AppProfilesInfo AppProfilesSeparate(bool on)
+    {
+        Call($"app_profiles_separate {on}");
+        SeparateValue = on;
+        return new([.. ProfilesValue], VariantsValue, new(RecActive, RecActive, 0, 0, 0, true, []), SeparateValue);
     }
 
     /// <summary>Что отвечает advanced_get; advanced_set меняет и пишет сюда принятое.</summary>

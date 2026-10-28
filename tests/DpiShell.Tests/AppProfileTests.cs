@@ -146,12 +146,17 @@ public sealed class AppProfileTests
     }
 
     [Fact]
-    public void EmptyDesync_ForUsedProto_Rejected()
+    public void EmptyDesync_MeansPcStrategy_ButParamsWithoutPorts_Rejected()
     {
-        Assert.NotNull(AppProfiles.Problem(Profile(p => p.TcpDesync = "")));
-        Assert.NotNull(AppProfiles.Problem(Profile(p => p.UdpDesync = "")));
-        // Не используемый протокол может быть пустым целиком.
+        // Без своих параметров профиль идёт игровой частью стратегии ПК («По умолчанию»).
+        Assert.Null(AppProfiles.Problem(Profile(p => p.TcpDesync = "")));
+        Assert.Null(AppProfiles.Problem(Profile(p => p.UdpDesync = "")));
         Assert.Null(AppProfiles.Problem(Profile(p => { p.UdpPorts = ""; p.UdpDesync = ""; })));
+        // Параметры у протокола без портов — ошибка записи.
+        Assert.NotNull(AppProfiles.Problem(Profile(p => p.UdpPorts = "")));
+        // Выбор стратегии — только по форме id.
+        Assert.NotNull(AppProfiles.Problem(Profile(p => p.Strategy = "../x")));
+        Assert.Null(AppProfiles.Problem(Profile(p => p.Strategy = "general-alt9")));
     }
 
     // ---------- сборка командной строки ----------

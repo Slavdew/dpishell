@@ -362,7 +362,7 @@ public sealed class HelperServer : IAsyncDisposable
             case "all_addresses_start": await Task.Run(b.StartAllAddresses, ct); return null;
             case "all_addresses_stop": return new { stopped = await Task.Run(b.StopAllAddresses, ct) };
             case "game_mode":
-                return await Task.Run(() => b.SetGameModeAsync(c.Str("mode") switch { "all" => GameMode.TcpUdp, "profiles" => GameMode.Profiles, _ => GameMode.Off }, log, ct), ct);
+                return await Task.Run(() => b.SetGameModeAsync(c.Str("mode") == "all" ? GameMode.TcpUdp : GameMode.Off, log, ct), ct);
             case "ipset_update":
                 return c.Str("from") == "manifest"
                     ? await Task.Run(() => b.UpdateIpsetFromManifestAsync(c.Bool("confirmed"), log, ct), ct)
@@ -425,6 +425,9 @@ public sealed class HelperServer : IAsyncDisposable
                 return await Task.Run(() => b.ProxyMachineSet(c.Bool("enabled"), c.Str("server"), c.Str("bypass"), c.Str("pac"), c.Bool("winhttp")), ct);
             case "proxy_machine_restore": return await Task.Run(b.ProxyMachineRestore, ct);
             case "app_profile_remove": return new { removed = await Task.Run(() => b.AppProfileRemove(c.Str("id")!), ct) };
+            case "app_profile_options":
+                return await Task.Run(() => b.AppProfileOptions(c.Str("id")!, c.Args.ContainsKey("enabled") ? c.Bool("enabled") : null, c.Str("strategy")), ct);
+            case "app_profiles_separate": return await Task.Run(() => b.AppProfilesSeparate(c.Bool("on")), ct);
             case "advanced_get": return await Task.Run(b.AdvancedGet, ct);
             case "advanced_set": return await Task.Run(() => b.AdvancedSet(c.Bool("enabled"), c.Str("others")!, c.Rows("rows")!), ct);
             case "joint_get": return await Task.Run(b.JointGet, ct);

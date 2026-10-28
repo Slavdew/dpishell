@@ -978,87 +978,71 @@
                 <TabItem Header="{l:T common.nav.apps}" AutomationProperties.Name="{l:T common.nav.apps}" local:Nav.Icon="{StaticResource Ic.games}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
-                            <!-- «Игры и программы» (ТЗ 13): игровой режим, список профилей («Добавить профиль…» — окно «Новый профиль», «Записать игру…» — карточка записи),
-                                 для опытных — «Отладка подключений», ниже — IP-списки и свои подсети. -->
+                            <!-- «Игры и программы» (ТЗ 13): список профилей («Добавить профиль…» — окно «Новый профиль», «Импорт…» — строка профиля, «Записать игру…» — карточка записи),
+                                 «Общий игровой режим», для опытных — «Отладка подключений», ниже — IP-списки и свои подсети. -->
                             <StackPanel Orientation="Horizontal" DataContext="{Binding Apps}">
                                 <TextBlock Text="{l:T apps.title}" Style="{StaticResource H1}" />
                                 <local:InfoButton Topic="{x:Static local:InfoTexts.Apps}" Margin="10,0,0,12" />
                             </StackPanel>
 
-                            <!-- Игровой режим — первым: Выкл / Свои профили / Общий. «Общий» при проверке по всем адресам недоступен (приманки во всё подряд). -->
-                            <Border Style="{StaticResource Card}" DataContext="{Binding Net}">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{l:T apps.game.title}" Style="{StaticResource H2}" />
-                                        <local:InfoButton Topic="{x:Static local:InfoTexts.Game}" Margin="10,0,0,8" />
-                                    </StackPanel>
-                                    <WrapPanel IsEnabled="{Binding GameCanChoose}">
-                                        <RadioButton GroupName="GameMode" Content="{l:T apps.game.mode.off}" IsChecked="{Binding GameOff}" Margin="0,3,24,3" />
-                                        <RadioButton GroupName="GameMode" Content="{l:T apps.game.mode.profiles}" IsChecked="{Binding GameProfiles}" Margin="0,3,24,3"
-                                                     IsEnabled="{Binding HasProfiles}" ToolTip="{Binding GameProfilesTip}" ToolTipService.ShowOnDisabled="True" />
-                                        <RadioButton GroupName="GameMode" Content="{l:T apps.game.mode.general}" IsChecked="{Binding GameGeneral}" IsEnabled="{Binding GameCanToggle}" Margin="0,3,24,3"
-                                                     ToolTip="{l:T apps.game.mode.general_tip}" />
-                                    </WrapPanel>
-                                    <TextBlock Text="{Binding GameStatus}" Margin="0,6,0,0" TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding GameHint}" Style="{StaticResource Hint}" Margin="0,2,0,0" />
-                                    <Border Background="{DynamicResource WarnBack}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="6"
-                                            Padding="10,6" Margin="0,10,0,0" HorizontalAlignment="Left" Visibility="{Binding GameGeneral, Converter={StaticResource Vis}}">
-                                        <TextBlock Text="{l:T apps.game.warn}" FontSize="13" TextWrapping="Wrap" />
-                                    </Border>
-                                    <!-- Подводные камни выбранного режима: раскрываемый блок и «Подробнее» (docs/windows/games.md). -->
-                                    <Expander Header="{l:T apps.game.pit.header}" Margin="0,8,0,0">
-                                        <StackPanel Margin="0,4,0,0">
-                                            <TextBox Text="{Binding GamePitfalls, Mode=OneWay}" Style="{StaticResource SelectableHint}" />
-                                            <Button Content="{l:T apps.game.more}" Style="{StaticResource LinkButton}" Command="{Binding OpenGamesCmd}"
-                                                    HorizontalAlignment="Left" Margin="-4,4,0,0" />
-                                        </StackPanel>
-                                    </Expander>
-                                </StackPanel>
-                            </Border>
-
                             <StackPanel DataContext="{Binding Apps}">
-                                <!-- Профили — главный блок: строка на профиль, действия справа одной высоты; пусто — короткое пустое состояние. -->
+                                <!-- Профили — главный блок: строка на профиль — название и краткое описание, справа выбор стратегии (при «Разных стратегиях»), тумблер «вкл» и «⋯».
+                                     Одна главная кнопка — «Добавить профиль…»; «Импорт…» и «Записать игру…» — обычные. Пояснения — в «(i)» и подсказках, не абзацами. -->
                                 <Border x:Name="ProfilesCard" Style="{StaticResource Card}">
                                     <StackPanel>
-                                        <TextBlock Text="{l:T apps.profiles.title}" Style="{StaticResource H2}" Margin="0,0,0,4" />
-                                        <TextBlock Text="{l:T apps.profiles.empty}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,2,0,4"
+                                        <DockPanel Margin="0,0,0,2">
+                                            <CheckBox x:Name="SeparateBox" DockPanel.Dock="Right" Content="{l:T apps.profiles.separate}" IsChecked="{Binding Separate}" VerticalAlignment="Center"
+                                                      ToolTip="{l:T apps.profiles.separate_tip}" Visibility="{Binding HasProfiles, Converter={StaticResource Vis}}" />
+                                            <TextBlock Text="{l:T apps.profiles.title}" Style="{StaticResource H2}" Margin="0" VerticalAlignment="Center" />
+                                        </DockPanel>
+                                        <TextBlock Text="{l:T apps.profiles.empty}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0"
                                                    Visibility="{Binding HasProfiles, Converter={StaticResource InvVis}}" />
-                                        <ItemsControl ItemsSource="{Binding Profiles}">
+                                        <ItemsControl x:Name="ProfileList" ItemsSource="{Binding Profiles}" Margin="0,6,0,0">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="0,10,0,10">
+                                                    <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="0,8,0,8" MinHeight="54">
                                                         <Grid>
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="*" />
                                                                 <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="Auto" />
                                                             </Grid.ColumnDefinitions>
+                                                            <!-- Выключенный профиль — бледнее: видно сразу, без слова «выключен». -->
                                                             <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                                                                <StackPanel.Style>
+                                                                    <Style TargetType="StackPanel">
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsOn}" Value="False">
+                                                                                <Setter Property="Opacity" Value="0.55" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </StackPanel.Style>
                                                                 <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" local:Demo.Sensitive="True" />
-                                                                <TextBox Text="{Binding Summary, Mode=OneWay}" Style="{StaticResource SelectableHint}" local:Demo.Sensitive="True" />
-                                                                <TextBox Text="{Binding VariantLabel, Mode=OneWay}" Style="{StaticResource SelectableHint}" />
-                                                                <TextBox Text="{Binding CustomFilterText, Mode=OneWay}" Style="{StaticResource SelectableHint}" FontFamily="Consolas" FontSize="12" local:Demo.Sensitive="True"
-                                                                         Visibility="{Binding HasCustomFilter, Converter={StaticResource Vis}}" />
+                                                                <TextBlock Text="{Binding Summary}" Style="{StaticResource Hint}" TextTrimming="CharacterEllipsis" ToolTip="{Binding FilterTip}" local:Demo.Sensitive="True" />
                                                             </StackPanel>
-                                                            <!-- «Другие параметры» — всегда, без галки «для опытных» (UX-аудит 8, §3 №9). Кнопки в одном ряду — одной высоты. -->
-                                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                                <Button Content="{l:T apps.profile.copy}" Command="{Binding CopyCmd}" Padding="12,6" Margin="0,0,6,0" ToolTip="{l:T apps.profile.copy_tip}" />
-                                                                <Button Content="{l:T apps.profile.other_variant}" Command="{Binding NextCmd}" Padding="12,6" Margin="0,0,6,0" />
-                                                                <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.profile.remove}" Command="{Binding RemoveCmd}" Padding="12,6" Margin="0"
-                                                                        Style="{StaticResource DangerButton}" />
-                                                            </StackPanel>
+                                                            <ComboBox Grid.Column="1" ItemsSource="{Binding Choices}" SelectedItem="{Binding Selected}" DisplayMemberPath="Title" Width="210"
+                                                                      VerticalAlignment="Center" Margin="0,0,14,0" Visibility="{Binding ShowChoice, Converter={StaticResource Vis}}"
+                                                                      AutomationProperties.Name="{l:T apps.profile.choice}" ToolTip="{l:T apps.profile.choice}" />
+                                                            <CheckBox Grid.Column="2" Style="{StaticResource Switch}" IsChecked="{Binding IsOn}" VerticalAlignment="Center"
+                                                                      AutomationProperties.Name="{l:T apps.profile.on}" ToolTip="{l:T apps.profile.on}" />
+                                                            <Button Grid.Column="3" Content="⋯" Style="{StaticResource LinkButton}" FontSize="16" Margin="6,0,0,0" Padding="8,0" VerticalAlignment="Center"
+                                                                    Click="ProfileMenu_Click" ToolTip="{l:T apps.profile.more}" AutomationProperties.Name="{l:T apps.profile.more}" />
                                                         </Grid>
                                                     </Border>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
-                                        <TextBox Text="{Binding ImportMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,8,0,0"
+                                        <TextBox Text="{Binding ImportMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0"
                                                  Visibility="{Binding ShowImportResult, Converter={StaticResource Vis}}" local:Demo.Sensitive="True" />
-                                        <!-- Профили есть, а оптимизация выключена: профили не работают — сказать у списка. -->
-                                        <Border Style="{StaticResource Warn}" Margin="0,10,0,0" Visibility="{Binding ShowOffHint, Converter={StaticResource Vis}}">
-                                            <TextBlock Text="{Binding OffHint}" FontSize="13" TextWrapping="Wrap" />
+                                        <!-- Профили есть, а оптимизация выключена: одной строкой у списка. -->
+                                        <Border Style="{StaticResource Warn}" Margin="0,8,0,0" Padding="10,4" HorizontalAlignment="Left" Visibility="{Binding ShowOffHint, Converter={StaticResource Vis}}">
+                                            <TextBlock Text="{Binding OffHint}" FontSize="13" TextTrimming="CharacterEllipsis" />
                                         </Border>
                                         <WrapPanel Margin="0,12,0,0">
                                             <Button Content="{l:T apps.profiles.add}" Style="{StaticResource Primary}" Command="{Binding AddProfileCmd}" />
+                                            <Button Content="{l:T apps.profiles.import}" Command="{Binding ImportCodeCmd}" ToolTip="{l:T apps.profiles.import_tip}" />
                                             <Button Content="{l:T apps.profiles.record}" Command="{Binding RecordCmd}" />
                                         </WrapPanel>
                                     </StackPanel>
@@ -1108,6 +1092,34 @@
                                                 HorizontalAlignment="Left" Margin="0,10,0,0" Visibility="{Binding ShowEnablePlain, Converter={StaticResource Vis}}" />
                                     </StackPanel>
                                 </Border>
+                                <!-- «Общий игровой режим» — отдельный переключатель рядом со списком (не строка списка): порты 1024–65535 по IP-списку; профили при нём
+                                     остаются включёнными и срабатывают первыми. При проверке по всем адресам включить нельзя (приманки во всё подряд). -->
+                                <Border x:Name="GeneralCard" Style="{StaticResource Card}" DataContext="{Binding DataContext.Net, RelativeSource={RelativeSource AncestorType=TabItem}}">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <CheckBox x:Name="GeneralSwitch" Style="{StaticResource Switch}" IsChecked="{Binding GameGeneral}" IsEnabled="{Binding GameCanToggle}" VerticalAlignment="Center"
+                                                      ToolTip="{l:T apps.game.mode.general_tip}" ToolTipService.ShowOnDisabled="True">
+                                                <TextBlock Text="{l:T apps.game.title}" FontSize="15" FontWeight="SemiBold" />
+                                            </CheckBox>
+                                            <local:InfoButton Topic="{x:Static local:InfoTexts.Game}" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding GameStatus}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="50,2,0,0" />
+                                        <TextBlock Text="{l:T apps.game.profiles_first}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="50,2,0,0"
+                                                   Visibility="{Binding ShowProfilesFirst, Converter={StaticResource Vis}}" />
+                                        <Border Style="{StaticResource Warn}" Padding="10,4" Margin="50,8,0,0" HorizontalAlignment="Left" Visibility="{Binding GameGeneral, Converter={StaticResource Vis}}">
+                                            <TextBlock Text="{l:T apps.game.warn}" FontSize="13" TextWrapping="Wrap" />
+                                        </Border>
+                                        <!-- Подводные камни «Общего» и своих профилей: свёрнуто, «Подробнее» — docs/windows/games.md. -->
+                                        <Expander Header="{l:T apps.game.pit.header}" Margin="46,6,0,0">
+                                            <StackPanel Margin="0,4,0,0">
+                                                <TextBox Text="{Binding GamePitfalls, Mode=OneWay}" Style="{StaticResource SelectableHint}" />
+                                                <Button Content="{l:T apps.game.more}" Style="{StaticResource LinkButton}" Command="{Binding OpenGamesCmd}"
+                                                        HorizontalAlignment="Left" Margin="-4,4,0,0" />
+                                            </StackPanel>
+                                        </Expander>
+                                    </StackPanel>
+                                </Border>
+
                                 <!-- Отладка подключений: всегда на месте, свёрнута; «Отладка подключений →» раскрывает (UX-аудит 8, §3 №9 — без галки в «Настройках»). -->
                                 <Expander x:Name="DebugSection" IsExpanded="{Binding DebugOpen, Mode=TwoWay}" Margin="0,6,0,12">
                                     <Expander.Header>

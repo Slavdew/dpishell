@@ -1,0 +1,31 @@
+<UserControl x:Class="DpiShell.App.ProfileImportView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="clr-namespace:DpiShell.App">
+    <!-- «Импорт профиля» (AppsViewModel: CodeText, CodePreview, CodeError, AddCodeCmd). Строка разбирается при вводе: ниже — что внутри или почему не подходит.
+         «Добавить» — только после разбора; отказ помощника — тоже здесь, окно остаётся; успех — окно закрывается (CodeClosed). -->
+    <DockPanel Margin="20,16,20,16" Width="600">
+        <TextBlock DockPanel.Dock="Top" Text="{l:T apps.code.title}" Style="{StaticResource H2}" Margin="0,0,0,2" />
+        <TextBlock DockPanel.Dock="Top" Text="{l:T apps.code.intro}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
+            <Button DockPanel.Dock="Left" Content="{l:T apps.import.paste}" Command="{Binding PasteCodeCmd}" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="{l:T apps.import.add}" Style="{StaticResource Primary}" Command="{Binding AddCodeCmd}" />
+                <Button Content="{l:T common.cancel}" Command="{Binding CancelCodeCmd}" Margin="0,0,0,8" />
+            </StackPanel>
+        </DockPanel>
+
+        <StackPanel>
+            <TextBox x:Name="CodeBox" Text="{Binding CodeText, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" Padding="6" TextWrapping="Wrap"
+                     MinHeight="52" MaxHeight="96" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{l:T apps.code.title}" />
+            <!-- Что внутри — выделяемым текстом: название, протоколы и порты, сигнатура или фильтр, параметры, подсети. -->
+            <StackPanel Margin="0,12,0,0" Visibility="{Binding HasCodePreview, Converter={StaticResource Vis}}">
+                <TextBlock Text="{l:T apps.code.inside}" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <TextBox x:Name="Preview" Text="{Binding CodePreview, Mode=OneWay}" Style="{StaticResource SelectableHint}" l:Demo.Sensitive="True" />
+            </StackPanel>
+            <TextBox x:Name="Error" Text="{Binding CodeError, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Danger}" Margin="0,12,0,0"
+                     Visibility="{Binding HasCodeError, Converter={StaticResource Vis}}" AutomationProperties.Name="{l:T apps.add.error}" />
+        </StackPanel>
+    </DockPanel>
+</UserControl>

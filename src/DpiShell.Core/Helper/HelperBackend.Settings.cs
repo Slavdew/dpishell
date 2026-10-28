@@ -18,7 +18,8 @@ public sealed partial class ShellHelperBackend
             Exclude = [.. st.UserExclude],
             Strategies = [.. all],
             Advanced = st.Advanced.Clone(),
-            Apps = [.. st.AppProfiles],
+            // Профиль — с параметрами, которыми он идёт сейчас (у «По умолчанию» своих нет): пакет настроек несёт сами параметры.
+            Apps = [.. st.AppProfiles.Select(shell.EffectiveProfile)],
             Subnets = [.. shell.IpLists.Read(IpLists.UserFile)],
             SubnetsExclude = [.. shell.IpLists.Read(IpLists.UserExcludeFile)],
             Variants = [.. shell.ProfileVariants()],

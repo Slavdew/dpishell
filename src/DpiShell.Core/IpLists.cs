@@ -100,10 +100,10 @@ public sealed record DataManifest(string Version, Dictionary<string, DataFile> F
 public enum IpsetMode { Off, List, Any }
 
 /// <summary>
-/// Игровой режим. В окне три выбора: «Выкл» (Off), «Свои профили» (Profiles — работают только профили программ) и «Общий» (TcpUdp — широкий режим по IP-списку,
-/// профили тоже действуют). Tcp/Udp — части «Общего» для отладочной консоли.
+/// «Общий игровой режим»: Off или TcpUdp (порты 1024–65535 по IP-списку); Tcp/Udp — его части для отладочной консоли. Профили программ от него не зависят:
+/// включаются каждый сам и стоят в командной строке раньше.
 /// </summary>
-public enum GameMode { Off, TcpUdp, Tcp, Udp, Profiles }
+public enum GameMode { Off, TcpUdp, Tcp, Udp }
 
 public static class GameModes
 {

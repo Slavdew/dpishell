@@ -85,7 +85,7 @@ public sealed class GameProfilesTests
         var paths = Make.Paths(t);
         var s = Make.Strategy(("general", "--dpi-desync=fake"));
         var udp = Sig(p => { p.Id = "p0a1b2c3e"; p.TcpPorts = ""; p.TcpPayloadLength = 0; p.TcpPayloadHex = ""; p.TcpDesync = ""; p.UdpPorts = "20001-21000"; p.UdpDesync = "--dpi-desync=fake --dpi-desync-any-protocol=1"; p.Addresses = ["198.51.100.0/24"]; });
-        var args = WinwsArgs.Build(s, paths, new BuildOptions(IpsetMode.Off, GameMode.Profiles, [Sig(), udp])).ToList();
+        var args = WinwsArgs.Build(s, paths, new BuildOptions(IpsetMode.Off, GameMode.Off, [Sig(), udp])).ToList();
 
         Assert.Equal($"--wf-tcp={WinwsArgs.WfTcp}", args[0]);   // порт 12001 в общий фильтр не попал
         Assert.Equal($"--wf-udp={WinwsArgs.WfUdp},20001-21000", args[1]);   // у UDP-профиля без сигнатуры порты на месте
@@ -108,12 +108,13 @@ public sealed class GameProfilesTests
         var info = shell.SetAppProfile(null, "Mistfall", "12001", null, [], 0, new ProfileSignature(79, "0000044d"));
         var file = Path.Combine(shell.Paths.Lists, AppProfiles.FilterFileName(info.Id, true));
         Assert.Equal(Mistfall + "\n", File.ReadAllText(file));
-        Assert.Equal(GameMode.Profiles, BuildOptions.ParseGame(shell.State.GameMode));
+        Assert.Equal(GameMode.Off, BuildOptions.ParseGame(shell.State.GameMode));   // «Общий» не включается: профиль действует сам
+        Assert.True(shell.State.AppProfiles.Single().Enabled);
         var args = WinwsArgs.Build(shell.Catalog.Strategies[0], shell.Paths, shell.CurrentOptions);
         Assert.Contains($"--wf-raw-part=@{file}", args);
         Assert.True(shell.RemoveAppProfile(info.Id));
         Assert.False(File.Exists(file));
-        Assert.Equal("off", shell.State.GameMode);   // профилей не осталось — режим вернулся
+        Assert.Equal("off", shell.State.GameMode);
     }
 
     [Fact]
@@ -143,7 +144,7 @@ public sealed class GameProfilesTests
         Assert.Null(AppProfiles.TotalProblem(list.Take(2)));
 
         // Из state.json в командную строку идут только те, что помещаются.
-        var st = new AppState { GameMode = "profiles", AppProfiles = list };
+        var st = new AppState { AppProfiles = list };
         var o = BuildOptions.From(st, DateTime.UtcNow);
         Assert.InRange(o.Profiles!.Count, 1, AppProfiles.MaxProfiles - 1);
         Assert.True(AppProfiles.FiltersSize(o.Profiles) <= AppProfiles.MaxFilterBytes);
@@ -158,11 +159,11 @@ public sealed class GameProfilesTests
         Assert.Contains("16 КБ", e.Message);
     }
 
-    // ---------- переключатель режима ----------
+    // ---------- «Общий игровой режим» ----------
 
     [Theory]
     [InlineData("off", GameMode.Off)]
-    [InlineData("profiles", GameMode.Profiles)]
+    [InlineData("profiles", GameMode.Off)]   // значение до 1.22 — читается как «Общий» выключен (профили переводит миграция)
     [InlineData("all", GameMode.TcpUdp)]
     [InlineData("tcp", GameMode.Tcp)]    // прежние значения — части «Общего»
     [InlineData("udp", GameMode.Udp)]
@@ -172,73 +173,52 @@ public sealed class GameProfilesTests
     {
         Assert.Equal(expected, BuildOptions.ParseGame(text));
         Assert.Equal(expected is GameMode.Tcp or GameMode.Udp or GameMode.TcpUdp, expected.IsGeneral());
-        if (text is "off" or "profiles" or "all" or "tcp" or "udp") Assert.Equal(text, BuildOptions.Format(expected));
+        if (text is "off" or "all" or "tcp" or "udp") Assert.Equal(text, BuildOptions.Format(expected));
     }
 
     [Fact]
-    public void Profiles_WorkInProfilesAndGeneral_NotWhenOff_AndGeneralIsNotInProfiles()
+    public void Profiles_WorkWhenEnabled_WithOrWithoutGeneral_AndGeneralIsNotInProfiles()
     {
         var st = new AppState { IpsetMode = "list" };
         st.AppProfiles.Add(Sig());
-        Assert.Null(BuildOptions.From(st, DateTime.UtcNow).Profiles);   // «Выкл»: профили хранятся, но не подаются
-        st.GameMode = "profiles";
         var o = BuildOptions.From(st, DateTime.UtcNow);
-        Assert.Single(o.Profiles!);
-        Assert.False(o.GameTcp);   // широкий фильтр выключен
+        Assert.Single(o.Profiles!);   // включённый профиль действует и без «Общего»
+        Assert.False(o.GameTcp);      // широкий фильтр выключен
         Assert.False(o.GameUdp);
         st.GameMode = "all";
         o = BuildOptions.From(st, DateTime.UtcNow);
         Assert.Single(o.Profiles!);
         Assert.True(o.GameTcp && o.GameUdp);
+        st.AppProfiles[0].Enabled = false;
+        Assert.Null(BuildOptions.From(st, DateTime.UtcNow).Profiles);   // выключенный хранится, но не подаётся
 
         using var t = new TempDir();
         var s = Make.Strategy(("general", "--dpi-desync=fake"));
-        var args = WinwsArgs.Build(s, Make.Paths(t), BuildOptions.From(new AppState { IpsetMode = "list", GameMode = "profiles", AppProfiles = [Sig()] }, DateTime.UtcNow));
+        var args = WinwsArgs.Build(s, Make.Paths(t), BuildOptions.From(new AppState { IpsetMode = "list", AppProfiles = [Sig()] }, DateTime.UtcNow));
         Assert.DoesNotContain(args, a => a.StartsWith("--filter-tcp=" + WinwsArgs.GamePorts));
         Assert.DoesNotContain(WinwsArgs.GamePorts, args[0]);
     }
 
     [Fact]
-    public void OldState_WithProfilesAndOff_BecomesProfiles_ProfilesNotLost()
-    {
-        using var t = new TempDir();
-        var paths = Make.Paths(t);
-        paths.EnsureDirectories();
-        var old = new AppState { GameMode = "off", AppProfiles = [Sig()] };
-        File.WriteAllText(paths.StateFile, System.Text.Json.JsonSerializer.Serialize(old, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower }));
-        var loaded = AppState.Load(paths);
-        Assert.Equal("profiles", loaded.GameMode);
-        Assert.Single(loaded.AppProfiles);
-        loaded.GameMode = "off";   // выбрали «Выкл» уже после — больше не трогается
-        loaded.Save(paths);
-        Assert.Equal("off", AppState.Load(paths).GameMode);
-        Assert.Single(AppState.Load(paths).AppProfiles);
-        // Без профилей «off» остаётся «off»; старое «all» — «Общий».
-        File.WriteAllText(paths.StateFile, """{"game_mode":"all"}""");
-        Assert.Equal(GameMode.TcpUdp, BuildOptions.ParseGame(AppState.Load(paths).GameMode));
-    }
-
-    [Fact]
-    public async Task Shell_ModeSwitch_ProfilesNeedNoList_GeneralDoes_AndBackIsAsBefore()
+    public async Task Shell_General_NeedsList_AndBackIsAsBefore_ProfilesUntouched()
     {
         using var t = new TempDir();
         var shell = new Shell(Make.Paths(t));
         shell.Data.Seed();
-        await shell.SetGameModeAsync(GameMode.Profiles);
-        Assert.Equal("profiles", shell.State.GameMode);
-        Assert.Equal("off", shell.State.IpsetMode);   // список не включался
+        var info = shell.SetAppProfile(null, "Mistfall", "12001", null, [], 0, new ProfileSignature(79, "0000044d"));
         await shell.SetGameModeAsync(GameMode.TcpUdp);
         Assert.Equal("all", shell.State.GameMode);
         Assert.Equal("list", shell.State.IpsetMode);   // «Общему» нужен список
         Assert.True(shell.State.IpsetByGame);
-        await shell.SetGameModeAsync(GameMode.Profiles);   // ушли из «Общего» — список, который включил он, выключился
+        Assert.True(shell.State.AppProfiles.Single(p => p.Id == info.Id).Enabled);   // профиль при «Общем» остаётся включённым
+        await shell.SetGameModeAsync(GameMode.Off);   // выключили «Общий» — список, который включил он, выключился
         Assert.Equal("off", shell.State.IpsetMode);
-        await shell.SetGameModeAsync(GameMode.Off);
         Assert.Equal("off", shell.State.GameMode);
+        Assert.True(shell.State.AppProfiles.Single().Enabled);
     }
 
     [Fact]
-    public async Task NetViewModel_ThreeWayChoice_ThroughHelper()
+    public async Task NetViewModel_GeneralSwitch_ThroughHelper()
     {
         using var t = new TempDir();
         var shell = new Shell(Make.Paths(t));
@@ -247,30 +227,22 @@ public sealed class GameProfilesTests
         await using var _ = f;
         var link = await f.LinkAsync();
         var net = new NetViewModel(link) { Say = _ => { } };
-        Assert.True(net.GameOff);
-        Assert.False(net.GameProfiles);
         Assert.False(net.GameGeneral);
-
-        await net.SetGameModeAsync(GameMode.Profiles);
-        Assert.True(net.GameProfiles);
-        Assert.False(net.GameOff);
-        Assert.False(net.GameGeneral);
-        Assert.True(net.IpsetOff);   // список не тронут
-        Assert.StartsWith("Свои профили включатся", net.GameStatus);
-        Assert.Contains("профиль", net.GamePitfalls);
+        Assert.StartsWith("Порты 1024–65535", net.GameStatus);
+        Assert.Contains("торрент", net.GamePitfalls);   // подводные камни «Общего» и своих профилей — вместе
         Assert.Contains("свой фильтр", net.GamePitfalls, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("торрент", net.GamePitfalls);
 
         await net.SetGameModeAsync(GameMode.TcpUdp);
         Assert.True(net.GameGeneral);
         Assert.True(net.IpsetList);
-        Assert.Contains("торрент", net.GamePitfalls);
         Assert.Contains("500+", net.GamePitfalls);
+        Assert.False(net.ShowProfilesFirst);   // профилей нет — строки «срабатывают первыми» нет
+        net.ProfilesOn = true;
+        Assert.True(net.ShowProfilesFirst);
 
         await net.SetGameModeAsync(GameMode.Off);
-        Assert.True(net.GameOff);
-        Assert.Contains("торрент", net.GamePitfalls);   // при «Выкл» видны оба списка
-        Assert.Contains("свой фильтр", net.GamePitfalls, StringComparison.OrdinalIgnoreCase);
+        Assert.False(net.GameGeneral);
+        Assert.False(net.ShowProfilesFirst);
     }
 
     [Fact]
@@ -518,7 +490,7 @@ public sealed class GameProfilesTests
         Assert.NotNull(AppProfiles.Problem(Sig(x => x.UdpCustomFilter = Mistfall)));   // у профиля нет UDP
         Assert.NotNull(AppProfiles.Problem(Sig(x => x.TcpCustomFilter = Mistfall.Replace("tcp.", "udp."))));
         using var t = new TempDir();
-        var args = WinwsArgs.Build(Make.Strategy(("general", "--dpi-desync=fake")), Make.Paths(t), new BuildOptions(IpsetMode.Off, GameMode.Profiles, [p]));
+        var args = WinwsArgs.Build(Make.Strategy(("general", "--dpi-desync=fake")), Make.Paths(t), new BuildOptions(IpsetMode.Off, GameMode.Off, [p]));
         Assert.Equal($"--wf-tcp={WinwsArgs.WfTcp}", args[0]);
         Assert.Contains(args, a => a.StartsWith("--wf-raw-part=@") && a.EndsWith("app-p0a1b2c3d-tcp.filter.txt"));
         // Экспорт отдаёт свой фильтр как есть.
@@ -555,7 +527,13 @@ public sealed class GameProfilesTests
         Assert.Equal(79, ok.Int("tcpLen"));
         Assert.Equal("0000044d", ok.Str("tcpHex"));
         Assert.Null(ok.List("addresses"));   // адреса необязательны (для протокола с сигнатурой)
-        Assert.Equal("profiles", HelperCommands.Parse("""{"id":2,"cmd":"game_mode","args":{"mode":"profiles"}}""", Catalog).Str("mode"));
+        Assert.NotEmpty(Rejected("""{"id":2,"cmd":"game_mode","args":{"mode":"profiles"}}"""));   // режима «Свои профили» больше нет
+        Assert.Equal("default", HelperCommands.Parse("""{"id":3,"cmd":"app_profile_options","args":{"id":"p0a1b2c3d","strategy":"default"}}""", Catalog).Str("strategy"));
+        Assert.Equal("own", HelperCommands.Parse("""{"id":3,"cmd":"app_profile_options","args":{"id":"p0a1b2c3d","strategy":"own","enabled":true}}""", Catalog).Str("strategy"));
+        Assert.NotEmpty(Rejected("""{"id":3,"cmd":"app_profile_options","args":{"id":"p0a1b2c3d","strategy":"../evil"}}"""));
+        Assert.NotEmpty(Rejected("""{"id":3,"cmd":"app_profile_options","args":{"id":"p0a1b2c3d","strategy":"no-such"}}"""));
+        Assert.NotEmpty(Rejected("""{"id":3,"cmd":"app_profile_options","args":{"strategy":"default"}}"""));   // id обязателен
+        Assert.NotEmpty(Rejected("""{"id":3,"cmd":"app_profiles_separate","args":{"on":"yes"}}"""));
         Assert.Contains("hex", Rejected("""{"id":1,"cmd":"app_profile_set","args":{"title":"M","tcp":"1","variant":0,"tcpHex":"0000044D"}}"""), StringComparison.OrdinalIgnoreCase);
         Assert.Contains("hex", Rejected("""{"id":1,"cmd":"app_profile_set","args":{"title":"M","tcp":"1","variant":0,"udpHex":"000000000000000000000000000000000000"}}"""), StringComparison.OrdinalIgnoreCase);
         Assert.Contains("целое число", Rejected("""{"id":1,"cmd":"app_profile_set","args":{"title":"M","tcp":"1","variant":0,"tcpLen":1501}}"""));
@@ -582,7 +560,9 @@ public sealed class GameProfilesTests
         Assert.Equal("0000044d", info.TcpPayloadHex);
         Assert.Equal(MistfallDesync, info.TcpDesync);
         Assert.Equal(-1, info.Variant);   // свои параметры, не вариант каталога
-        Assert.Equal("profiles", shell.State.GameMode);
+        Assert.Equal("off", shell.State.GameMode);   // «Общий» не трогается: профиль включён сам
+        Assert.True(info.Enabled);
+        Assert.Equal(AppProfiles.Own, info.Strategy);
         Assert.Equal(Mistfall + "\n", File.ReadAllText(Path.Combine(shell.Paths.Lists, AppProfiles.FilterFileName(info.Id, true))));
         var listed = Assert.Single((await c.AppProfilesAsync()).Profiles);
         Assert.Equal("0000044d", listed.TcpPayloadHex);

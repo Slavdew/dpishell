@@ -95,6 +95,10 @@ public interface IHelperBackend : IHelperCatalog
     /// <summary>Создать (id = null) или заменить профиль; параметры берутся из варианта готовых стратегий.</summary>
     AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant, ProfileSignature? signature = null);
     bool AppProfileRemove(string id);
+    /// <summary>API 1.22: включить/выключить профиль и (или) выбрать ему стратегию («default», «own» или id).</summary>
+    AppProfileInfo AppProfileOptions(string id, bool? enabled, string? strategy);
+    /// <summary>API 1.22: «Разные стратегии» у профилей.</summary>
+    AppProfilesInfo AppProfilesSeparate(bool on);
 
     // ---------- продвинутый режим «сайты → стратегия» (API 1.8) ----------
     /// <summary>Настройки продвинутого режима и чем идёт каждая строка. Только чтение.</summary>
@@ -174,13 +178,17 @@ public sealed record HelperStatus(
 }
 
 /// <summary>Профиль программы для окна. Addresses — как записаны в профиле (до 500).</summary>
-/// <remarks>С API 1.22: сигнатура пакета (длина и начало, по протоколам) и параметры десинхронизации — для экспорта и «Другой вариант» без потери сигнатуры. У помощника старее — по умолчанию.</remarks>
+/// <remarks>
+/// С API 1.22: сигнатура пакета (длина и начало, по протоколам), свой фильтр; TcpDesync/UdpDesync — параметры, которыми профиль идёт сейчас (для «Скопировать для Flowseal»
+/// и окна до 1.22); TcpOwn/UdpOwn — свои параметры профиля («Свои», входят в строку обмена); Enabled — профиль включён; Strategy — выбор: «default», «own» или id стратегии.
+/// Variant/VariantTitle — для окна до 1.22: номер действующего варианта (-1 — свои). У помощника старее — значения по умолчанию.
+/// </remarks>
 public sealed record AppProfileInfo(string Id, string Title, string TcpPorts, string UdpPorts, IReadOnlyList<string> Addresses, int Variant, string VariantTitle, DateTime CreatedAt,
     int TcpPayloadLength = 0, string TcpPayloadHex = "", int UdpPayloadLength = 0, string UdpPayloadHex = "", string TcpDesync = "", string UdpDesync = "",
-    string TcpFilter = "", string UdpFilter = "");
+    string TcpFilter = "", string UdpFilter = "", bool Enabled = true, string Strategy = AppProfiles.Default, string TcpOwn = "", string UdpOwn = "");
 
-/// <summary>Ответ app_profiles: профили, варианты параметров (как у текущей стратегии первым) и запись, если она идёт.</summary>
-public sealed record AppProfilesInfo(IReadOnlyList<AppProfileInfo> Profiles, IReadOnlyList<ProfileVariant> Variants, RecordingStatus Recording);
+/// <summary>Ответ app_profiles: профили, варианты параметров (как у текущей стратегии первым), запись, если она идёт, и «Разные стратегии» (API 1.22).</summary>
+public sealed record AppProfilesInfo(IReadOnlyList<AppProfileInfo> Profiles, IReadOnlyList<ProfileVariant> Variants, RecordingStatus Recording, bool Separate = false);
 
 public sealed record StrategyInfo(string Id, string Title, string Source);
 public sealed record GroupInfo(string Id, string Title, int Targets);
@@ -656,21 +664,37 @@ public sealed partial class ShellHelperBackend(Shell shell) : IHelperBackend
         }
     }
 
-    static AppProfileInfo Info(AppProfile p, IReadOnlyList<ProfileVariant> variants) =>
-        new(p.Id, p.Title, p.TcpPorts, p.UdpPorts, p.Addresses, p.Variant,
-            p.Variant < 0 ? L.T("core.helper.variant_custom") : variants.FirstOrDefault(v => v.Index == p.Variant)?.Title ?? L.T("core.helper.variant_n", new { n = p.Variant + 1 }), p.CreatedAt,
-            p.TcpPayloadLength, p.TcpPayloadHex, p.UdpPayloadLength, p.UdpPayloadHex, p.TcpDesync, p.UdpDesync, p.TcpCustomFilter, p.UdpCustomFilter);
+    AppProfileInfo Info(AppProfile p, IReadOnlyList<ProfileVariant> variants)
+    {
+        var choice = AppProfiles.Choice(p, shell.State.ProfilesSeparate);
+        var eff = shell.EffectiveProfile(p);
+        // Окну до 1.22 — номер действующего варианта: «По умолчанию» — 0 (как у стратегии ПК), стратегия — её номер, свои — -1.
+        int variant = choice == AppProfiles.Own ? -1 : choice == AppProfiles.Default ? 0 : variants.FirstOrDefault(v => v.StrategyId == choice)?.Index ?? 0;
+        string title = variant < 0 ? L.T("core.helper.variant_custom") : variants.FirstOrDefault(v => v.Index == variant)?.Title ?? L.T("core.helper.variant_n", new { n = variant + 1 });
+        return new(p.Id, p.Title, p.TcpPorts, p.UdpPorts, p.Addresses, variant, title, p.CreatedAt,
+            p.TcpPayloadLength, p.TcpPayloadHex, p.UdpPayloadLength, p.UdpPayloadHex, eff.TcpDesync, eff.UdpDesync, p.TcpCustomFilter, p.UdpCustomFilter,
+            p.Enabled, p.Strategy ?? AppProfiles.Default, p.TcpPorts.Length > 0 ? p.TcpDesync : "", p.UdpPorts.Length > 0 ? p.UdpDesync : "");
+    }
 
     public AppProfilesInfo AppProfilesInfo()
     {
         var variants = shell.ProfileVariants();
-        return new([.. shell.State.AppProfiles.Select(p => Info(p, variants))], variants, RecStatus());
+        return new([.. shell.State.AppProfiles.Select(p => Info(p, variants))], variants, RecStatus(), shell.State.ProfilesSeparate);
     }
 
     public AppProfileInfo AppProfileSet(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant, ProfileSignature? signature = null) =>
         Info(shell.SetAppProfile(id, title, tcpPorts, udpPorts, addresses, variant, signature), shell.ProfileVariants());
 
     public bool AppProfileRemove(string id) => shell.RemoveAppProfile(id);
+
+    public AppProfileInfo AppProfileOptions(string id, bool? enabled, string? strategy) =>
+        Info(shell.SetAppProfileOptions(id, enabled, strategy), shell.ProfileVariants());
+
+    public AppProfilesInfo AppProfilesSeparate(bool on)
+    {
+        shell.SetProfilesSeparate(on);
+        return AppProfilesInfo();
+    }
 
     public AdvancedInfo AdvancedGet() => shell.AdvancedInfo();
 
