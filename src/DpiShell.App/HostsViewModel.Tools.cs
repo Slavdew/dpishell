@@ -155,8 +155,10 @@ public sealed partial class HostsViewModel
         try
         {
             ShowTry(await TryBatchedAsync(c, paste.Entries, cts.Token), paste);
-            // Заглушки (0.0.0.0, 127.*) — сразу подобрать рабочие адреса вместо них (владелец 28.10, п. 97).
-            if (StubHosts is { Count: > 0 } stubs) await FindCoreAsync(c, stubs, cts.Token, paste);
+            // Заглушки (0.0.0.0, 127.*) — сразу подобрать рабочие адреса вместо них (владелец 28.10, п. 97). Список блокировки — нет:
+            // там заглушки нарочно, подбор разблокировал бы рекламу и мошеннические сайты (StevenBlack/hosts, 152 тыс. строк, 29.10).
+            if (LooksLikeBlocklist(paste)) TrySummaryIs(() => Summarize(new HostsTryReport([.. TryRows.Select(r => r.Source)], 0, false, TryRows.Count, DateTime.Now), false, paste) + " " + L.T("hosts.find.blocklist"));
+            else if (StubHosts is { Count: > 0 } stubs) await FindCoreAsync(c, stubs, cts.Token, paste);
         }
         catch (OperationCanceledException) { TrySummary = L.T("hosts.stopped"); }
         catch (HelperUnavailableException e) { _helper.MarkLost(e); TrySummary = e.Message; }
@@ -220,6 +222,14 @@ public sealed partial class HostsViewModel
 
     /// <summary>Адреса, подобранные через DNS в этой примерке: их можно записать, даже если сайт и так открывается.</summary>
     readonly HashSet<HostsEntry> _found = [];
+
+    /// <summary>Похоже на список блокировки: больше <see cref="HostsPaste.MaxBatch"/> строк (или вставка обрезана) и почти все — заглушки.</summary>
+    public static bool LooksLikeBlocklist(HostsPasteResult paste)
+    {
+        if (paste.Entries.Count <= HostsPaste.MaxBatch && !paste.Truncated) return false;
+        int stubs = paste.Entries.Count(e => System.Net.IPAddress.TryParse(e.Ip, out var ip) && !HostsRules.IsPublicAddress(ip));
+        return stubs >= paste.Entries.Count * 0.9;
+    }
 
     static bool IsStub(HostsTryRow r) => System.Net.IPAddress.TryParse(r.Ip, out var ip) && !HostsRules.IsPublicAddress(ip);
 

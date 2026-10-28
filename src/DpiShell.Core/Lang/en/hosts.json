@@ -124,6 +124,7 @@
   "hosts.find.found": "Working addresses found: {n} — they replace the stubs in the table and are selected for writing.",
   "hosts.find.none": "No working address found through DNS.",
   "hosts.find.missing": "Not found for: {list}.",
+  "hosts.find.blocklist": "This looks like a blocklist (for example, StevenBlack/hosts): these lines close sites on purpose — ads, scams, malware. No addresses are looked up for them: that would open such sites.",
   "hosts.progress.audit": "Checking hosts…",
   "hosts.summary.lines": "Lines checked: {n}.",
   "hosts.summary.lines_parts": "Lines checked: {n}. {parts}.",

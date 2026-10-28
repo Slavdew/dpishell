@@ -97,6 +97,24 @@ public sealed class HostsFindWindowTests
     }
 
     [Fact]
+    public async Task Blocklist_NoAutoFind_SaysWhy()
+    {
+        var f = new HelperFixture();
+        await using var _ = f;
+        var link = await f.LinkAsync();
+        var asked = 0;
+        var vm = new HostsViewModel(link) { FindAddresses = (_, _) => { asked++; return Task.FromResult<IReadOnlyList<HostsEntry>>([]); } };
+        f.Backend.TryRowsFor = e => [.. e.Select(x => Row(x.Host, x.Ip, HostsTryVerdict.Blocks, DnsState.Fails))];
+        vm.PasteText = string.Join("\n", Enumerable.Range(1, 800).Select(i => $"0.0.0.0 ad{i}.example.com"));
+        await vm.TryAsync();
+        Assert.Equal(0, asked);
+        Assert.EndsWith(L.T("hosts.find.blocklist"), vm.TrySummary);
+        Assert.Equal(800, vm.TryRows.Count);
+        // Короткий гайд с заглушками — подбор идёт, как раньше.
+        Assert.False(HostsViewModel.LooksLikeBlocklist(HostsPaste.Parse("0.0.0.0 web.telegram.org\n0.0.0.0 cdn.discordapp.com")));
+    }
+
+    [Fact]
     public async Task Find_NothingFound_SaysSo_NoTry()
     {
         var f = new HelperFixture();
