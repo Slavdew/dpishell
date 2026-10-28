@@ -171,9 +171,9 @@ public sealed class GameProfilesWindowTests : IDisposable
             });
             Assert.True(vm.Apps.HasProfiles, "msg=" + vm.Apps.ImportMessage + " main=" + vm.Message + " busy=" + vm.Busy);
             Assert.False(vm.Apps.ImportFailed);
-            // Свои параметры: «Свои» выбрано, «Разные стратегии» включились сами, итог — одной строкой об этом.
-            Assert.True(vm.Apps.Separate);
-            Assert.True(shell.State.ProfilesSeparate);
+            // Свои параметры: профиль идёт ими, «Разные стратегии» не нужны и не включаются, итог — одной строкой об этом.
+            Assert.False(vm.Apps.Separate);
+            Assert.False(shell.State.ProfilesSeparate);
             Assert.Equal(AppProfiles.Own, shell.State.AppProfiles.Single().Strategy);
             Assert.StartsWith(L.T("apps.profile.added_own", new { title = "Mistfall Hunter" }), vm.Apps.ImportMessage);
             Assert.DoesNotContain("\n", vm.Apps.ImportMessage);
@@ -245,6 +245,10 @@ public sealed class GameProfilesWindowTests : IDisposable
                 Assert.Contains(L.T("apps.code.params_pc"), preview.Text);
                 Assert.Contains(L.T("apps.code.subnets", new { n = 4, first = "203.0.113.0/24, 198.51.100.0/24, 198.51.101.0/24, …" }), preview.Text);
                 Assert.DoesNotContain("203.0.114.0/24", preview.Text);
+                // Длинная строка — одной строкой: поле не растёт и не переносит по дефису base64url (пункт 94).
+                var box = (TextBox)view.FindName("CodeBox");
+                Assert.Equal(TextWrapping.NoWrap, box.TextWrapping);
+                Assert.True(box.LineCount <= 1, "строка профиля перенесена: " + box.LineCount);
                 PumpUntil(() => addBtn.IsEnabled, "«Добавить» после разбора");
                 Shot(host, "games-import-preview");
                 WaitUi(vm.Apps.AddCodeAsync());
@@ -307,7 +311,7 @@ public sealed class GameProfilesWindowTests : IDisposable
             menu[1].Run!();
             Assert.StartsWith(ProfileExchange.FilterMark, clipboard);
 
-            // 8. «Разные стратегии» выкл — выбора у строк нет; вкл — у каждой строки выпадающий список, у Mistfall — «Свои».
+            // 8. «Разные стратегии» выкл — выбора у строк нет; вкл — выпадающий список у строк без своих параметров, у Mistfall — «Из профиля».
             WaitUi(SetSeparate(vm, false));
             PumpUntil(() => !vm.Apps.Separate, "«Разные стратегии» выключены");
             Pump();
@@ -318,9 +322,12 @@ public sealed class GameProfilesWindowTests : IDisposable
             WaitUi(SetSeparate(vm, true));
             PumpUntil(() => vm.Apps.Separate, "«Разные стратегии» включены");
             Pump();
+            // Выбор — только у профилей без своих параметров; у остальных на его месте «Из профиля» (вопрос 93).
             var combos = FindAll<ComboBox>(profilesCard, c => c.IsVisible).ToList();
-            Assert.Equal(3, combos.Count);
-            Assert.Contains(combos, c => (c.SelectedItem as ChoiceItem)?.Key == AppProfiles.Own);
+            Assert.Equal(vm.Apps.Profiles.Count(p => !p.HasOwn), combos.Count);
+            Assert.All(combos, c => Assert.False(((ProfileRow)c.DataContext).HasOwn));
+            var mistRow = FindAll<ContentPresenter>(Named<ItemsControl>(w, "ProfileList"), c => c.DataContext is ProfileRow { Title: "Mistfall Hunter" } && VisualTreeHelper.GetParent(c) is Panel).Single();
+            Assert.NotNull(Find<TextBlock>(mistRow, t => t.IsVisible && t.Text == L.T("apps.profile.choice.own")));
             Assert.Equal(L.T("apps.profile.choice.default"), ((ChoiceItem)combos.First(c => ((ProfileRow)c.DataContext).Title == "Arena Clash").SelectedItem).Title);
             Show(title);
             Shot(w, "games-profiles-separate");

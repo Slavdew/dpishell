@@ -136,7 +136,7 @@ public sealed class GameProfilesAuditTests
     // ---------- 6. профиль из импорта: другая стратегия и обратно к «Свои» без потерь ----------
 
     [Fact]
-    public async Task ImportedProfile_OtherStrategy_AndBackToOwn_NoQuestion_ParamsKept()
+    public async Task ImportedProfile_AlwaysOwn_OtherStrategyRefused_ParamsKept()
     {
         using var t = new TempDir();
         var shell = new Shell(Make.Paths(t));
@@ -149,17 +149,19 @@ public sealed class GameProfilesAuditTests
         var asked = new List<string>();
         var apps = new AppsViewModel(link) { Say = _ => { }, Confirm = q => { asked.Add(q); return false; } };
         await apps.RefreshAsync();
-        Assert.True(apps.Separate);   // свои параметры — «Разные стратегии» включились сами
+        Assert.False(apps.Separate);   // свои параметры идут и без «Разных стратегий» — галка не включается
+        Assert.False(apps.HasChoosable);   // один профиль, и тот со своими — галка не видна
         var row = Assert.Single(apps.Profiles);
-        Assert.Equal(AppProfiles.Own, row.Selected!.Key);
-        var other = row.Choices.First(c => c.Key is not (AppProfiles.Default or AppProfiles.Own));
+        Assert.True(row.HasOwn);
+        Assert.False(row.ShowChoice);
+        Assert.Equal(imp.TcpDesync, shell.EffectiveProfile(shell.State.AppProfiles[0]).TcpDesync);
 
-        await apps.SetStrategyAsync(row.Id, other.Key);
-        Assert.Equal(other.Key, shell.State.AppProfiles[0].Strategy);
-        Assert.Equal(imp.TcpDesync, shell.State.AppProfiles[0].TcpDesync);   // свои параметры хранятся — к ним можно вернуться
-        Assert.Equal(79, shell.State.AppProfiles[0].TcpPayloadLength);
-        await apps.SetStrategyAsync(row.Id, AppProfiles.Own);
+        // Другую стратегию помощник не принимает (окно её и не предлагает): параметры и сигнатура на месте, вопросов нет.
+        var other = shell.ProfileVariants().First(v => v.Index > 0).StrategyId;
+        await Assert.ThrowsAsync<HelperException>(() => link.Client!.AppProfileOptionsAsync(row.Id, strategy: other));
         Assert.Equal(AppProfiles.Own, shell.State.AppProfiles[0].Strategy);
-        Assert.Empty(asked);   // подтверждения о потере параметров больше нет
+        Assert.Equal(imp.TcpDesync, shell.State.AppProfiles[0].TcpDesync);
+        Assert.Equal(79, shell.State.AppProfiles[0].TcpPayloadLength);
+        Assert.Empty(asked);
     }
 }

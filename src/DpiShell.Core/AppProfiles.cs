@@ -28,7 +28,8 @@ public sealed class AppProfile
     public bool Enabled { get; set; } = true;
     /// <summary>
     /// Чем идёт профиль при «Разных стратегиях» (<see cref="AppState.ProfilesSeparate"/>): <see cref="AppProfiles.Default"/> — игровая часть стратегии ПК,
-    /// <see cref="AppProfiles.Own"/> — свои параметры, иначе id стратегии (её игровая часть). Без «Разных стратегий» — всегда «По умолчанию», выбор хранится.
+    /// иначе id стратегии (её игровая часть). Без «Разных стратегий» — «По умолчанию», выбор хранится. Профиль со своими параметрами идёт ими всегда
+    /// (<see cref="AppProfiles.Own"/>), выбора у него нет.
     /// null — запись до API 1.22 (выбор выводится из <see cref="Variant"/>, <see cref="AppProfiles.MigrateChoices"/>).
     /// </summary>
     public string? Strategy { get; set; }
@@ -221,9 +222,12 @@ public static partial class AppProfiles
     public static (string? Tcp, string Udp) GameParts(Strategy s) =>
         (s.Roles.GetValueOrDefault("game_tcp") ?? WinwsArgs.DeriveGameTcp(s.Roles.GetValueOrDefault("general")), s.Roles.GetValueOrDefault("game_udp") ?? WinwsArgs.GameUdpDefault);
 
-    /// <summary>Действующий выбор: без «Разных стратегий» — всегда «По умолчанию»; «Свои» без своих параметров — тоже.</summary>
+    /// <summary>
+    /// Действующий выбор: свои параметры есть — всегда «Свои» (подобраны под игру, стратегии каталога им не замена; владелец 28.10, вопрос 93);
+    /// иначе без «Разных стратегий» — «По умолчанию», с ними — выбранная стратегия.
+    /// </summary>
     public static string Choice(AppProfile p, bool separate) =>
-        !separate || p.Strategy is null ? Default : p.Strategy == Own && !p.HasOwn ? Default : p.Strategy;
+        p.HasOwn ? Own : !separate || p.Strategy is null or Own ? Default : p.Strategy;
 
     /// <summary>
     /// Профиль для сборки: копия, в которой <see cref="AppProfile.TcpDesync"/>/<see cref="AppProfile.UdpDesync"/> — то, чем он пойдёт сейчас,
@@ -261,7 +265,7 @@ public static partial class AppProfiles
     /// <summary>
     /// Профили до API 1.22 (<see cref="AppProfile.Strategy"/> = null): «вариант» → выбор. Свои параметры (Variant -1) — «Свои»; вариант 0 (как у текущей
     /// стратегии) — «По умолчанию», своих нет; другой вариант — та стратегия, чья игровая часть совпала с записанной; не нашлась — записанное остаётся «Своими»
-    /// (ничего не теряется). True — у кого-то выбор не «По умолчанию» (значит, нужны «Разные стратегии», чтобы всё шло как раньше).
+    /// (ничего не теряется). True — у профиля без своих параметров выбрана стратегия (значит, нужны «Разные стратегии», чтобы всё шло как раньше).
     /// </summary>
     public static bool MigrateChoices(IEnumerable<AppProfile> profiles, IEnumerable<Strategy> all, string? currentId)
     {
@@ -279,7 +283,7 @@ public static partial class AppProfiles
                 else p.Strategy = Own;
             }
             p.Variant = 0;
-            if (p.Strategy != Default) separate = true;
+            if (p.Strategy is not (Default or Own)) separate = true;
         }
         return separate;
     }

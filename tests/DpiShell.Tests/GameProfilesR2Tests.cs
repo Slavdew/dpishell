@@ -147,20 +147,22 @@ public sealed class GameProfilesR2Tests
     }
 
     [Fact]
-    public void Build_Own_UsesOwnParams_OnlyWithSeparate_StrategyChoice_UsesThatStrategy()
+    public void Build_Own_AlwaysOwnParams_StrategyChoice_OnlyWithSeparate()
     {
         using var t = new TempDir();
         var pc = Make.Strategy(("general", "--dpi-desync=multisplit"));
         var x = new Strategy("xstrat", "X", "catalog", new() { ["general"] = "--dpi-desync=fakedsplit", ["game_udp"] = "--dpi-desync=fake --dpi-desync-any-protocol=1 --dpi-desync-repeats=4" });
         Strategy? Find(string id) => id == "xstrat" ? x : null;
-        var st = new AppState { AppProfiles = [Mistfall(), Voice(p => p.Strategy = "xstrat")] };
-        // «Разные стратегии» выключены — все «По умолчанию», выбор хранится.
+        // У профиля со своими параметрами записанный выбор стратегии (из старой версии) не действует.
+        var st = new AppState { AppProfiles = [Mistfall(p => p.Strategy = "xstrat"), Voice(p => p.Strategy = "xstrat")] };
+        // «Разные стратегии» выключены — свои параметры всё равно идут (вопрос 93), профиль без них — «По умолчанию», выбор хранится.
         var args = Build(pc, st, t, Find);
         var mist = args.Skip(args.IndexOf("--filter-tcp=12001")).TakeWhile(a => a != "--new").ToList();
-        Assert.DoesNotContain("--dpi-desync-fooling=ts", mist);
-        Assert.Contains("--dpi-desync=multisplit", mist);
+        Assert.Contains("--dpi-desync-fooling=ts", mist);
+        Assert.Contains("--dpi-desync-repeats=8", mist);
+        Assert.DoesNotContain("--dpi-desync=multisplit", mist);
         Assert.DoesNotContain("--dpi-desync-repeats=4", args);
-        // Включены — «Свои» идут своими параметрами, выбранная стратегия — своей игровой частью.
+        // Включены — свои параметры по-прежнему свои, выбранная стратегия — своей игровой частью.
         st.ProfilesSeparate = true;
         args = Build(pc, st, t, Find);
         mist = args.Skip(args.IndexOf("--filter-tcp=12001")).TakeWhile(a => a != "--new").ToList();
@@ -299,13 +301,17 @@ public sealed class GameProfilesR2Tests
         Assert.Equal(variant.Index, info.Profiles.Single().Variant);   // окну до 1.22 — номер действующего варианта
         Assert.Equal(variant.Udp, info.Profiles.Single().UdpDesync);
 
-        // Профиль со своими параметрами включает «Разные стратегии» сам и выбирает «Свои».
+        // Профиль со своими параметрами идёт ими и без «Разных стратегий» (они не включаются), другой выбор у него — отказ (вопрос 93).
         await c.AppProfilesSeparateAsync(false);
         var own = await c.AppProfileSetAsync(null, "Mistfall", "12001", null, [], 0, new ProfileSignature(79, "0000044d", TcpDesync: Own));
         Assert.Equal(AppProfiles.Own, own.Strategy);
         Assert.Equal(Own, own.TcpOwn);
+        Assert.Equal(Own, own.TcpDesync);
         Assert.Equal(-1, own.Variant);
-        Assert.True(shell.State.ProfilesSeparate);
+        Assert.False(shell.State.ProfilesSeparate);
+        await Assert.ThrowsAsync<HelperException>(() => c.AppProfileOptionsAsync(own.Id, strategy: variant.StrategyId));
+        await Assert.ThrowsAsync<HelperException>(() => c.AppProfileOptionsAsync(own.Id, strategy: AppProfiles.Default));
+        Assert.Equal(AppProfiles.Own, (await c.AppProfileOptionsAsync(own.Id, strategy: AppProfiles.Own)).Strategy);
     }
 
     [Fact]
@@ -351,7 +357,16 @@ public sealed class GameProfilesR2Tests
     // ---------- окно: «Разные стратегии» и выбор у строк ----------
 
     [Fact]
-    public async Task Window_Choices_DefaultVariantsOwn()
+    public void CodeSummary_PacketStart_ByBytes()
+    {
+        Assert.Equal("00 00 04 4D", AppsViewModel.Bytes("0000044d"));
+        Assert.Equal("AB", AppsViewModel.Bytes("ab"));
+        Assert.Contains(L.T("apps.code.hex", new { hex = "00 00 04 4D" }), AppsViewModel.CodeSummary(Mistfall()));
+        Assert.DoesNotContain("0000044d", AppsViewModel.CodeSummary(Mistfall()));
+    }
+
+    [Fact]
+    public async Task Window_Choices_DefaultAndVariants_OwnHasNoChoice()
     {
         var f = new HelperFixture();
         await using var _ = f;
@@ -362,16 +377,22 @@ public sealed class GameProfilesR2Tests
         await apps.RefreshAsync();
         var a = apps.Profiles[0];
         var b = apps.Profiles[1];
-        Assert.Equal(AppProfiles.Own, a.Selected!.Key);
-        Assert.Contains(a.Choices, c => c.Key == AppProfiles.Own);
-        Assert.DoesNotContain(b.Choices, c => c.Key == AppProfiles.Own);   // своих параметров нет — «Свои» нет
+        // Свои параметры — выбора нет и при «Разных стратегиях»: на его месте «Из профиля» с параметрами в подсказке.
+        Assert.True(a.HasOwn);
+        Assert.Contains(Own, a.OwnTip);
+        Assert.DoesNotContain(a.Choices, c => c.Key == AppProfiles.Own);
+        Assert.DoesNotContain(b.Choices, c => c.Key == AppProfiles.Own);
+        Assert.False(b.HasOwn);
+        Assert.True(apps.HasChoosable);   // есть профиль без своих — галка «Разные стратегии» видна
         Assert.Equal(AppProfiles.Default, b.Choices[0].Key);
         Assert.Equal(f.Backend.VariantsValue.Count - 1, b.Choices.Count - 1);   // варианты, кроме совпадающего со стратегией ПК
         Assert.False(a.ShowChoice);
+        Assert.False(b.ShowChoice);
         apps.Separate = true;
         for (int i = 0; i < 200 && !apps.Separate; i++) await Task.Delay(15);
         Assert.Contains(f.Backend.Calls, x => x == "app_profiles_separate True");
-        Assert.True(apps.Profiles[0].ShowChoice);
+        Assert.False(apps.Profiles[0].ShowChoice);
+        Assert.True(apps.Profiles[1].ShowChoice);
         apps.Profiles[1].Selected = apps.Profiles[1].Choices[1];
         for (int i = 0; i < 200 && !f.Backend.Calls.Any(x => x.StartsWith("app_profile_options p00000002")); i++) await Task.Delay(15);
         Assert.Contains(f.Backend.Calls, x => x == "app_profile_options p00000002  " + f.Backend.VariantsValue[1].StrategyId);

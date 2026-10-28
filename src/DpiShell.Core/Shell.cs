@@ -40,7 +40,7 @@ public sealed class Shell
         DefaultTargets = TargetSet.Load(Path.Combine(Paths.Seed, "targets.json"));
         State = AppState.Load(Paths);
         // Профили до API 1.22 хранили «вариант» — переводим в выбор стратегии (в памяти; запишется с ближайшим сохранением). Сохранится и поведение:
-        // у кого-то выбор не «По умолчанию» — «Разные стратегии» включены, как если бы человек выбрал их сам.
+        // у профиля без своих параметров выбрана стратегия — «Разные стратегии» включены, как если бы человек выбрал их сам.
         if (AppProfiles.MigrateChoices(State.AppProfiles, AllStrategies, State.StrategyId)) State.ProfilesSeparate = true;
     }
 
@@ -878,7 +878,7 @@ public sealed class Shell
     /// <summary>
     /// Создать профиль (id пуст) или заменить (id есть). Порты и адреса приводятся к каноническому виду. Выбор стратегии — из варианта (0 — как у стратегии ПК,
     /// то есть «По умолчанию»; другой — та стратегия, и «Разные стратегии» включаются, иначе выбор не действовал бы); свои параметры (из сборки или строки обмена) —
-    /// выбор «Свои», новый профиль с ними тоже включает «Разные стратегии». Работающая оптимизация перезапускается на той же стратегии.
+    /// «Свои», идут всегда, «Разные стратегии» не нужны. Работающая оптимизация перезапускается на той же стратегии.
     /// </summary>
     /// <param name="signature">null — полей 1.22 в запросе нет (окно до 1.22, «Другой вариант», запись игры): у существующего профиля сигнатура, свой фильтр и свои параметры сохраняются.</param>
     public AppProfile SetAppProfile(string? id, string title, string? tcpPorts, string? udpPorts, IReadOnlyList<string> addresses, int variant,
@@ -923,15 +923,15 @@ public sealed class Shell
             var rec = Journal.Begin(ChangeKinds.AppProfile, L.T("core.shell.journal_profile", new { title = profile.Title, ports = (profile.TcpPorts + " " + profile.UdpPorts).Trim() }),
                 new System.Text.Json.Nodes.JsonObject { ["exists"] = false }, snapshot);
             State.AppProfiles.Add(profile);
-            // Выбор не «По умолчанию» (свои параметры, другой вариант записи игры) действует только при «Разных стратегиях» — включить их.
-            if (choice != AppProfiles.Default) State.ProfilesSeparate = true;
+            // Другая стратегия (вариант записи игры) действует только при «Разных стратегиях» — включить их. Свои параметры идут и без них.
+            if (choice is not (AppProfiles.Default or AppProfiles.Own)) State.ProfilesSeparate = true;
             State.Save(Paths);
             Journal.Done(rec);
         }
         else
         {
             State.AppProfiles[State.AppProfiles.IndexOf(existing)] = profile;
-            if (choice != AppProfiles.Default) State.ProfilesSeparate = true;
+            if (choice is not (AppProfiles.Default or AppProfiles.Own)) State.ProfilesSeparate = true;
             State.Save(Paths);
             foreach (var en in Journal.Active(ChangeKinds.AppProfile).Where(x => x.After?["id"]?.GetValue<string>() == profile.Id))
                 Journal.Update(en.Id, snapshot);
@@ -961,6 +961,8 @@ public sealed class Shell
     public AppProfile SetAppProfileOptions(string id, bool? enabled, string? strategy)
     {
         var p = State.AppProfiles.FirstOrDefault(x => x.Id == id) ?? throw new InvalidOperationException(L.T("core.shell.no_profile"));
+        // Свои параметры профиля идут всегда — выбора у него нет (окно его не показывает; «Свои» помощник принимает как «ничего не менять»).
+        if (strategy is not null && p.HasOwn && strategy != AppProfiles.Own) throw new InvalidOperationException(L.T("core.shell.has_own"));
         if (strategy is not null && strategy != AppProfiles.Default)
         {
             if (strategy == AppProfiles.Own) { if (!p.HasOwn) throw new InvalidOperationException(L.T("core.shell.no_own")); }

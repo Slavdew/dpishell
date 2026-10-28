@@ -95,7 +95,7 @@ public sealed class ProfileRow : Observable
         set { if (value != Info.Enabled) _ = _owner.SetEnabledAsync(Id, value); }
     }
 
-    /// <summary>«По умолчанию», игровые части стратегий каталога, «Свои» (если профиль пришёл со своими параметрами).</summary>
+    /// <summary>«По умолчанию» и игровые части стратегий каталога.</summary>
     public IReadOnlyList<ChoiceItem> Choices { get; }
     public ChoiceItem? Selected
     {
@@ -105,16 +105,16 @@ public sealed class ProfileRow : Observable
             if (value is null || value == _selected) return;   // список ставит null при пересборке — не выбор человека
             _selected = value;
             Raise();
-            Raise(nameof(ChoiceTip));
             _ = _owner.SetStrategyAsync(Id, value.Key);
         }
     }
-    /// <summary>Подсказка выбора: у «Из профиля» — сами параметры профиля, иначе — что это за выбор.</summary>
-    public string ChoiceTip => _selected?.Key == AppProfiles.Own
-        ? string.Join(Environment.NewLine, new[] { ("TCP", Info.TcpOwn), ("UDP", Info.UdpOwn) }.Where(x => x.Item2.Length > 0).Select(x => $"{x.Item1}: {x.Item2}"))
-        : L.T("apps.profile.choice");
-    /// <summary>Выбор виден только при «Разных стратегиях»; без них профиль идёт «По умолчанию», выбор хранится.</summary>
-    public bool ShowChoice => _owner.Separate;
+    public string ChoiceTip => L.T("apps.profile.choice");
+    /// <summary>Свои параметры (из сборки или строки профиля): профиль идёт ими всегда, выбора стратегии нет — на его месте «Из профиля» (вопрос 93).</summary>
+    public bool HasOwn => Info.TcpOwn.Length > 0 || Info.UdpOwn.Length > 0;
+    /// <summary>Подсказка к «Из профиля» — сами параметры.</summary>
+    public string OwnTip => string.Join(Environment.NewLine, new[] { ("TCP", Info.TcpOwn), ("UDP", Info.UdpOwn) }.Where(x => x.Item2.Length > 0).Select(x => $"{x.Item1}: {x.Item2}"));
+    /// <summary>Выбор виден только при «Разных стратегиях» и без своих параметров; без «Разных стратегий» профиль идёт «По умолчанию», выбор хранится.</summary>
+    public bool ShowChoice => _owner.Separate && !HasOwn;
     internal void SeparateChanged() => Raise(nameof(ShowChoice));
 
     /// <summary>Меню «⋯» строки.</summary>
@@ -263,6 +263,8 @@ public sealed class AppsViewModel : Observable
 
     public ObservableCollection<ProfileRow> Profiles { get; } = [];
     public bool HasProfiles => Profiles.Count > 0;
+    /// <summary>Есть профиль без своих параметров — только у таких есть выбор стратегии, и только тогда видна галка «Разные стратегии».</summary>
+    public bool HasChoosable => Profiles.Any(p => !p.HasOwn);
     /// <summary>Хоть один профиль включён (для строки «Свои профили срабатывают первыми» у «Общего»).</summary>
     public bool AnyOn => Profiles.Any(p => p.Info.Enabled);
 
@@ -282,12 +284,11 @@ public sealed class AppsViewModel : Observable
         foreach (var r in Profiles) r.SeparateChanged();
     }
 
-    /// <summary>Пункты выбора стратегии профиля: «По умолчанию», игровые части стратегий (кроме совпадающей со стратегией ПК), «Свои» — если параметры есть.</summary>
+    /// <summary>Пункты выбора стратегии профиля: «По умолчанию», игровые части стратегий (кроме совпадающей со стратегией ПК). У профиля со своими параметрами выбора нет.</summary>
     internal IReadOnlyList<ChoiceItem> ChoicesFor(AppProfileInfo p)
     {
         var list = new List<ChoiceItem> { new(AppProfiles.Default, () => L.T("apps.profile.choice.default")) };
         foreach (var v in _variantsRaw.Where(v => v.Index > 0 && v.StrategyId.Length > 0)) list.Add(new(v.StrategyId, () => L.Relocalize(v.Title)));
-        if (p.TcpOwn.Length > 0 || p.UdpOwn.Length > 0) list.Add(new(AppProfiles.Own, () => L.T("apps.profile.choice.own")));
         // Выбранная стратегия совпала параметрами со стратегией ПК (или её убрали из списка вариантов) — показать её всё равно, а не подменять выбор.
         var chosen = p.Strategy;
         if (list.All(c => c.Key != chosen) && AppProfiles.IsValidChoice(chosen) && chosen != AppProfiles.Own) list.Add(new(chosen, () => chosen));
@@ -399,6 +400,7 @@ public sealed class AppsViewModel : Observable
         Profiles.Clear();
         foreach (var p in list) Profiles.Add(new(p, this));
         Raise(nameof(HasProfiles));
+        Raise(nameof(HasChoosable));
         Raise(nameof(AnyOn));
         Raise(nameof(ShowOffHint));
     }
@@ -511,7 +513,7 @@ public sealed class AppsViewModel : Observable
         AddClosed?.Invoke();
     }
 
-    /// <summary>Итог добавления одной строкой; со своими параметрами — что выбрано «Свои» и включены «Разные стратегии».</summary>
+    /// <summary>Итог добавления одной строкой; со своими параметрами — что профиль идёт ими.</summary>
     static string Added(string? title, bool own) => L.T(own ? "apps.profile.added_own" : "apps.profile.added", new { title });
 
     // ---------- «Импорт…»: строка профиля dpishell-game:1:… с предпросмотром ----------
@@ -595,7 +597,7 @@ public sealed class AppsViewModel : Observable
             string proto = tcp ? "TCP" : "UDP", filter = tcp ? p.TcpCustomFilter : p.UdpCustomFilter, hex = tcp ? p.TcpPayloadHex : p.UdpPayloadHex, desync = tcp ? p.TcpDesync : p.UdpDesync;
             int len = tcp ? p.TcpPayloadLength : p.UdpPayloadLength;
             var match = filter.Length > 0 ? L.T("apps.code.filter", new { filter })
-                : len > 0 || hex.Length > 0 ? L.T("apps.code.sig", new { what = string.Join(", ", new[] { len > 0 ? L.T("apps.code.len", new { n = len }) : "", hex.Length > 0 ? L.T("apps.code.hex", new { hex }) : "" }.Where(x => x.Length > 0)) })
+                : len > 0 || hex.Length > 0 ? L.T("apps.code.sig", new { what = string.Join(", ", new[] { len > 0 ? L.T("apps.code.len", new { n = len }) : "", hex.Length > 0 ? L.T("apps.code.hex", new { hex = Bytes(hex) }) : "" }.Where(x => x.Length > 0)) })
                 : L.T("apps.code.by_addresses");
             lines.Add($"{proto} {ports} · {match}");
             pars.Add(proto + ": " + (desync.Length > 0 ? desync : L.T("apps.code.pc_strategy")));
@@ -605,6 +607,13 @@ public sealed class AppsViewModel : Observable
         lines.Add(p.Addresses.Count == 0 ? L.T("apps.code.no_subnets")
             : L.T("apps.code.subnets", new { n = p.Addresses.Count, first = string.Join(", ", p.Addresses.Take(3)) + (p.Addresses.Count > 3 ? ", …" : "") }));
         return string.Join(Environment.NewLine, lines);
+    }
+
+    /// <summary>Начало пакета по байтам, как в справке и сборках: «0000044d» → «00 00 04 4D».</summary>
+    public static string Bytes(string hex)
+    {
+        var h = hex.Replace(" ", "").ToUpperInvariant();
+        return string.Join(' ', Enumerable.Range(0, (h.Length + 1) / 2).Select(i => h.Substring(i * 2, Math.Min(2, h.Length - i * 2))));
     }
 
     /// <summary>«Добавить» в «Импорт профиля»: профиль уходит помощнику (он проверяет всё заново), окно закрывается; отказ — в окне.</summary>

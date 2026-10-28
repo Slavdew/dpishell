@@ -17,8 +17,9 @@
         </DockPanel>
 
         <StackPanel>
-            <TextBox x:Name="CodeBox" Text="{Binding CodeText, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" Padding="6" TextWrapping="Wrap"
-                     MinHeight="52" MaxHeight="96" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="{l:T apps.code.title}" />
+            <!-- Одной строкой без переноса: перенос по дефису base64url рвал строку посередине, и она читалась как две (вопрос 94). -->
+            <TextBox x:Name="CodeBox" Text="{Binding CodeText, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" Padding="6" TextWrapping="NoWrap"
+                     HorizontalScrollBarVisibility="Hidden" AutomationProperties.Name="{l:T apps.code.title}" />
             <!-- Что внутри — выделяемым текстом: название, протоколы и порты, сигнатура или фильтр, параметры, подсети. -->
             <StackPanel Margin="0,12,0,0" Visibility="{Binding HasCodePreview, Converter={StaticResource Vis}}">
                 <TextBlock Text="{l:T apps.code.inside}" FontWeight="SemiBold" Margin="0,0,0,4" />

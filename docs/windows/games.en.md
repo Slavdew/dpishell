@@ -19,7 +19,7 @@ Profiles for specific games are not built into the program: you add them — by 
 
 By default a profile uses **the game part of the PC strategy** — the same as general game mode: the strategy's `game_tcp`/`game_udp` role, or one derived from its main role if there is none. Change the PC strategy and it changes too.
 
-The **"Different strategies"** box above the list gives each profile its own choice: "Default", the game part of any strategy in the list, or **"Own"** — the parameters the profile came with from a Flowseal build or in a profile line. A profile with own parameters gets "Own" right away when added, and the box turns on by itself. Clear the box and all profiles use "Default"; the choices are kept, so you can go back to "Own".
+A profile with its own parameters — from a Flowseal build or a profile line — always uses them: they are tuned for the game, and catalog strategies are no substitute. Instead of a choice it shows **"From profile"**, with the parameters in the tooltip. Other profiles (for example, made with "Record a game…") have no own parameters: they use the game part of the PC strategy, and the **"Different strategies"** box above the list gives each of them its own choice — "Default" or the game part of any strategy in the list. Clear the box and such profiles use "Default"; the choices are kept.
 
 ## Pitfalls
 

@@ -740,6 +740,7 @@
   "core.xchg.filter.custom_note": "Filter accepted as custom: at your own risk, one that is too wide slows the whole internet on the PC.",
   "core.profile.bad_choice": "Unknown profile strategy choice",
   "core.shell.no_own": "The profile has no own parameters",
+  "core.shell.has_own": "The profile has its own parameters — no strategy to choose",
   "core.xchg.is_game": "This is a game profile line — paste it in “Games & apps” → “Import…”",
   "core.game_code.too_long": "The profile is too big to pass as a line",
   "core.game_code.is_strategy": "This is a strategy line — paste it on the “Strategy” tab",

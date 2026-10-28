@@ -1067,7 +1067,7 @@
                                     <StackPanel>
                                         <DockPanel Margin="0,0,0,2">
                                             <CheckBox x:Name="SeparateBox" DockPanel.Dock="Right" Content="{l:T apps.profiles.separate}" IsChecked="{Binding Separate}" VerticalAlignment="Center"
-                                                      ToolTip="{l:T apps.profiles.separate_tip}" Visibility="{Binding HasProfiles, Converter={StaticResource Vis}}" />
+                                                      ToolTip="{l:T apps.profiles.separate_tip}" Visibility="{Binding HasChoosable, Converter={StaticResource Vis}}" />
                                             <TextBlock Text="{l:T apps.profiles.title}" Style="{StaticResource H2}" Margin="0" VerticalAlignment="Center" />
                                         </DockPanel>
                                         <TextBlock Text="{l:T apps.profiles.empty}" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0"
@@ -1100,6 +1100,8 @@
                                                             <ComboBox Grid.Column="1" ItemsSource="{Binding Choices}" SelectedItem="{Binding Selected}" DisplayMemberPath="Title" Width="210"
                                                                       VerticalAlignment="Center" Margin="0,0,14,0" Visibility="{Binding ShowChoice, Converter={StaticResource Vis}}"
                                                                       AutomationProperties.Name="{l:T apps.profile.choice}" ToolTip="{Binding ChoiceTip}" />
+                                                            <TextBlock Grid.Column="1" Text="{l:T apps.profile.choice.own}" Style="{StaticResource Hint}" Width="210" VerticalAlignment="Center" Margin="0,0,14,0"
+                                                                       Visibility="{Binding HasOwn, Converter={StaticResource Vis}}" ToolTip="{Binding OwnTip}" local:Demo.Sensitive="True" />
                                                             <CheckBox Grid.Column="2" Style="{StaticResource Switch}" IsChecked="{Binding IsOn}" VerticalAlignment="Center"
                                                                       AutomationProperties.Name="{l:T apps.profile.on}" ToolTip="{l:T apps.profile.on}" />
                                                             <Button Grid.Column="3" Content="⋯" Style="{StaticResource LinkButton}" FontSize="16" Margin="6,0,0,0" Padding="8,0" VerticalAlignment="Center"
