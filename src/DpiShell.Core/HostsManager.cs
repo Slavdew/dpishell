@@ -241,12 +241,12 @@ public sealed class HostsManager
     // ---------- примерка строк, аудит, свои строки, комментирование (ТЗ 12) ----------
 
     /// <summary>
-    /// «Примерить»: вердикт для каждой строки из вставки. Файл hosts не меняется. Строк больше <see cref="HostsPaste.MaxEntries"/> не берём.
+    /// «Примерить»: вердикт для каждой строки из вставки. Файл hosts не меняется. Строк больше <see cref="HostsPaste.MaxBatch"/> за раз не берём (окно делит длинную вставку на партии).
     /// </summary>
     public async Task<HostsTryReport> TryAsync(IReadOnlyList<HostsEntry> entries, IProgress<(int Done, int Total)>? progress = null, CancellationToken ct = default)
     {
-        var items = entries.Take(HostsPaste.MaxEntries).Select(e => new HostsTryItem(e.Host, e.Ip)).ToList();
-        return await RunTryAsync(items, 0, entries.Count > HostsPaste.MaxEntries, entries.Count, progress, ct);
+        var items = entries.Take(HostsPaste.MaxBatch).Select(e => new HostsTryItem(e.Host, e.Ip)).ToList();
+        return await RunTryAsync(items, 0, entries.Count > HostsPaste.MaxBatch, entries.Count, progress, ct);
     }
 
     async Task<HostsTryReport> RunTryAsync(IReadOnlyList<HostsTryItem> items, int skipped, bool truncated, int total,
@@ -260,13 +260,13 @@ public sealed class HostsManager
 
     /// <summary>
     /// «Проверить мой hosts»: каждая запись чужих строк (вне наших блоков) — по тем же правилам, что и примерка. Первыми идут строки с настоящим
-    /// адресом (их проверка важнее), затем заглушки; больше <see cref="HostsPaste.MaxEntries"/> записей не проверяем — «проверено N из M».
+    /// адресом (их проверка важнее), затем заглушки; больше <see cref="HostsPaste.MaxBatch"/> записей не проверяем — «проверено N из M».
     /// </summary>
     public async Task<HostsTryReport> AuditAsync(IProgress<(int Done, int Total)>? progress = null, CancellationToken ct = default)
     {
         var all = File.Read().ForeignLines()
             .SelectMany(l => l.Entries.Select(e => new HostsTryItem(e.Host, e.Ip, l.Line, l.Id))).ToList();
-        var items = all.OrderBy(i => HostsRules.TryParsePublic(i.Ip, out _) ? 0 : 1).Take(HostsPaste.MaxEntries).OrderBy(i => i.Line).ToList();
+        var items = all.OrderBy(i => HostsRules.TryParsePublic(i.Ip, out _) ? 0 : 1).Take(HostsPaste.MaxBatch).OrderBy(i => i.Line).ToList();
         return await RunTryAsync(items, 0, all.Count > items.Count, all.Count, progress, ct);
     }
 

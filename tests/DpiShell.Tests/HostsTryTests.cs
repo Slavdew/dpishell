@@ -43,9 +43,9 @@ public sealed class HostsPasteTests
     }
 
     [Fact]
-    public void Parse_Limit500_ReportsTruncation()
+    public void Parse_Limit_ReportsTruncation()
     {
-        var text = string.Join("\n", Enumerable.Range(0, 520).Select(i => $"1.2.3.4 h{i}.example.com"));
+        var text = string.Join("\n", Enumerable.Range(0, HostsPaste.MaxEntries + 20).Select(i => $"1.2.3.4 h{i}.example.com"));
         var r = HostsPaste.Parse(text);
         Assert.Equal(HostsPaste.MaxEntries, r.Entries.Count);
         Assert.True(r.Truncated);

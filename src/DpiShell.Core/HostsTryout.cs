@@ -51,8 +51,13 @@ public sealed record HostsPasteResult(IReadOnlyList<HostsEntry> Entries, int Ski
 /// <summary>Строки в формате hosts из гайда → пары «имя — адрес». Адрес может быть и заглушкой (0.0.0.0): её тоже примеряют.</summary>
 public static class HostsPaste
 {
-    /// <summary>Столько строк за раз примеряем и записываем (как в команде помощника).</summary>
-    public const int MaxEntries = 500;
+    /// <summary>
+    /// Столько строк берём из вставки и столько своих строк можно записать. Списки для hosts бывают и длиннее 500 (владелец 29.10) —
+    /// окно примеряет их само партиями по <see cref="MaxBatch"/>.
+    /// </summary>
+    public const int MaxEntries = 5000;
+    /// <summary>Столько строк примеряет одна команда помощника (hosts_try, hosts_comment, проверка своего hosts).</summary>
+    public const int MaxBatch = 500;
 
     public static HostsPasteResult Parse(string text)
     {

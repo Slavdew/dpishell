@@ -335,7 +335,7 @@ public sealed class HostsManagerToolsTests : IDisposable
         sb.Append("3.3.3.3 late.example.com\r\n");
         File.WriteAllText(_hosts, sb.ToString(), Encoding.Latin1);
         var report = await Manager(new Probe(["late.example.com@3.3.3.3"])).AuditAsync();
-        Assert.Equal(HostsPaste.MaxEntries, report.Rows.Count);
+        Assert.Equal(HostsPaste.MaxBatch, report.Rows.Count);
         Assert.True(report.Truncated);
         Assert.Equal(701, report.Total);
         Assert.Contains(report.Rows, r => r.Host == "late.example.com");   // настоящий адрес проверен, хоть и в конце файла

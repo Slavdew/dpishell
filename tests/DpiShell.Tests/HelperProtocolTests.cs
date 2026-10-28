@@ -139,15 +139,20 @@ public class HelperProtocolTests
         Assert.Contains(why, Rejected(json), StringComparison.OrdinalIgnoreCase);
 
     [Fact]
-    public void Hosts_tools_limit_500_entries()
+    public void Hosts_tools_limits_try500_user5000()
     {
         string Many(int n, Func<int, string> f) => string.Join(",", Enumerable.Range(0, n).Select(i => $"\"{f(i)}\""));
+        // Примерка и комментирование — партиями по 500 (окно делит само); своих строк — до 5000 (длинные списки для hosts, 29.10).
         var ok500 = Many(500, i => $"1.2.3.4 h{i}.example.com");
         var bad501 = Many(501, i => $"1.2.3.4 h{i}.example.com");
         var ids501 = Many(501, i => $"{i + 1}:abcdef012345");
-        Assert.Equal(500, Parse($$$"""{"id":1,"cmd":"hosts_user_set","args":{"entries":[{{{ok500}}}]}}""").List("entries")!.Count);
-        Assert.Contains("больше", Rejected($$$"""{"id":1,"cmd":"hosts_user_set","args":{"entries":[{{{bad501}}}]}}"""));
+        var ok5000 = Many(5000, i => $"1.2.3.4 h{i}.example.com");
+        var bad5001 = Many(5001, i => $"1.2.3.4 h{i}.example.com");
+        Assert.Equal(500, Parse($$$"""{"id":1,"cmd":"hosts_try","args":{"entries":[{{{ok500}}}]}}""").List("entries")!.Count);
+        Assert.Contains("больше", Rejected($$$"""{"id":1,"cmd":"hosts_try","args":{"entries":[{{{bad501}}}]}}"""));
         Assert.Contains("больше", Rejected($$$"""{"id":1,"cmd":"hosts_comment","args":{"ids":[{{{ids501}}}]}}"""));
+        Assert.Equal(5000, Parse($$$"""{"id":1,"cmd":"hosts_user_set","args":{"entries":[{{{ok5000}}}]}}""").List("entries")!.Count);
+        Assert.Contains("больше", Rejected($$$"""{"id":1,"cmd":"hosts_user_set","args":{"entries":[{{{bad5001}}}]}}"""));
     }
 
     [Fact]

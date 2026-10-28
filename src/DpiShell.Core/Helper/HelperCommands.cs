@@ -160,10 +160,10 @@ public static partial class HelperCommands
         new("hosts_recheck", true, true),
         // Примерка строк, свои строки и комментирование чужих (ТЗ 12, API 1.4). Пути и произвольный текст не принимаются: пары «адрес имя»
         // и «номер:хеш» проходят строгий разбор; пишет помощник только то, что проверил сам (hosts_user_set — живой проверкой, hosts_comment — по последнему аудиту).
-        new("hosts_try", true, true, new ArgSpec("entries", ArgKind.HostEntries, Required: true, MaxItems: HostsPaste.MaxEntries)),
+        new("hosts_try", true, true, new ArgSpec("entries", ArgKind.HostEntries, Required: true, MaxItems: HostsPaste.MaxBatch)),
         new("hosts_audit", true, true),
         new("hosts_user_set", true, true, new ArgSpec("entries", ArgKind.PublicHostEntries, Required: true, MaxItems: HostsPaste.MaxEntries)),
-        new("hosts_comment", true, false, new ArgSpec("ids", ArgKind.HostLineIds, Required: true, MaxItems: HostsPaste.MaxEntries)),
+        new("hosts_comment", true, false, new ArgSpec("ids", ArgKind.HostLineIds, Required: true, MaxItems: HostsPaste.MaxBatch)),
         new("hosts_uncomment", true, false),
         new("hosts_restore", true, false),
         new("stop_foreign", true, false),

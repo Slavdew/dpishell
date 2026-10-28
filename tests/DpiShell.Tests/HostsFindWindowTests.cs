@@ -79,6 +79,24 @@ public sealed class HostsFindWindowTests
     }
 
     [Fact]
+    public async Task LongPaste_TriedInBatches_AllRowsInOneTable()
+    {
+        var f = new HelperFixture();
+        await using var _ = f;
+        var link = await f.LinkAsync();
+        var vm = new HostsViewModel(link) { FindAddresses = (_, _) => Task.FromResult<IReadOnlyList<HostsEntry>>([]) };
+        f.Backend.TryRowsFor = e => [.. e.Select(x => Row(x.Host, x.Ip, HostsTryVerdict.Useless, DnsState.Fails))];
+        // Больше одной команды помощника (500): окно делит само, человеку не нужно искать 501-ю строку.
+        vm.PasteText = string.Join("\n", Enumerable.Range(1, 1203).Select(i => $"203.0.113.{i % 250 + 1} s{i}.example.com"));
+        await vm.TryAsync();
+        var calls = f.Backend.Calls.Where(c => c.StartsWith("hosts_try ")).ToList();
+        Assert.Equal(3, calls.Count);
+        Assert.All(calls, c => Assert.True(c.Split(',').Length <= HostsPaste.MaxBatch));
+        Assert.Equal(1203, vm.TryRows.Count);
+        Assert.Contains("1203", vm.TrySummary);
+    }
+
+    [Fact]
     public async Task Find_NothingFound_SaysSo_NoTry()
     {
         var f = new HelperFixture();

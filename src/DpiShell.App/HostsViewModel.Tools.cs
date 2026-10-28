@@ -149,13 +149,12 @@ public sealed partial class HostsViewModel
         if (await Need() is not { } c) return;
         Busy = true; Trying = true;
         Done = 0; Total = 1; ProgressText = L.T("hosts.progress.try");
-        var progress = new Progress<HostsCheckProgress>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = L.T("hosts.progress.done", new { done = p.Done, total = p.Total }); });
         using var cts = new CancellationTokenSource();
         _cts = cts;
         _found.Clear();
         try
         {
-            ShowTry(await c.HostsTryAsync(paste.Entries, progress, cts.Token), paste);
+            ShowTry(await TryBatchedAsync(c, paste.Entries, cts.Token), paste);
             // Заглушки (0.0.0.0, 127.*) — сразу подобрать рабочие адреса вместо них (владелец 28.10, п. 97).
             if (StubHosts is { Count: > 0 } stubs) await FindCoreAsync(c, stubs, cts.Token, paste);
         }
@@ -164,6 +163,28 @@ public sealed partial class HostsViewModel
         catch (HelperException e) { TrySummary = e.Message; }
         catch (Exception e) { TrySummary = Texts.Friendly(e); }
         finally { _cts = null; Busy = false; Trying = false; ProgressText = ""; }
+    }
+
+    /// <summary>
+    /// Примерка у помощника партиями по <see cref="HostsPaste.MaxBatch"/> (столько принимает одна команда): длинный список идёт сам, раунд за раундом,
+    /// прогресс — общий «проверено N из M», отчёт — один на все партии.
+    /// </summary>
+    async Task<HostsTryReport> TryBatchedAsync(HelperClient c, IReadOnlyList<HostsEntry> entries, CancellationToken ct)
+    {
+        var rows = new List<HostsTryRow>();
+        int total = entries.Count;
+        Done = 0; Total = Math.Max(1, total);
+        for (int start = 0; start < total; start += HostsPaste.MaxBatch)
+        {
+            int offset = start;
+            var progress = new Progress<HostsCheckProgress>(p =>
+            {
+                Done = offset + p.Done;
+                ProgressText = L.T("hosts.progress.done", new { done = offset + p.Done, total });
+            });
+            rows.AddRange((await c.HostsTryAsync([.. entries.Skip(start).Take(HostsPaste.MaxBatch)], progress, ct)).Rows);
+        }
+        return new HostsTryReport(rows, 0, false, total, DateTime.Now);
     }
 
     /// <summary>Таблица примерки по готовому отчёту (и для тестов окна).</summary>
@@ -246,8 +267,7 @@ public sealed partial class HostsViewModel
         var rows = TryRows.Select(r => r.Source).ToList();
         if (found.Count > 0)
         {
-            var progress = new Progress<HostsCheckProgress>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = L.T("hosts.progress.done", new { done = p.Done, total = p.Total }); });
-            var tried = (await c.HostsTryAsync(found, progress, ct)).Rows;
+            var tried = (await TryBatchedAsync(c, found, ct)).Rows;
             foreach (var t in tried.Where(t => t.Live?.Ok == true)) _found.Add(t.Entry);
             var replaced = tried.Where(t => t.Live?.Ok == true).Select(t => t.Host).ToHashSet();
             rows.RemoveAll(r => r.Line == 0 && IsStub(r) && replaced.Contains(r.Host));
