@@ -190,11 +190,12 @@ public sealed partial class HostsViewModel
     /// Поиск рабочих адресов (в тестах — подмена): опрос нескольких DNS, каждый адрес — живая проверка TLS с сертификатом (<see cref="HostsFinder"/>),
     /// до первого рабочего. Ищет окно без прав: запись — только через помощника, и найденное он примеряет заново.
     /// </summary>
-    public Func<IReadOnlyList<string>, CancellationToken, Task<IReadOnlyList<HostsEntry>>> FindAddresses { get; set; } = async (hosts, ct) =>
+    public Func<IReadOnlyList<string>, CancellationToken, Task<IReadOnlyList<HostsEntry>>> FindAddresses { get; set; } = (hosts, ct) => Task.Run(async () =>
     {
+        // В фоне: сотни сайтов × несколько DNS — тысячи продолжений, на потоке окна они бы его тормозили (жалоба 29.10, 500 строк).
         var r = await new HostsFinder(DnsSources.Default(), new TlsEndpointProbe()).RunAsync(hosts, all: false, ct: ct);
-        return [.. r.Domains.Where(d => d.Best is not null).Select(d => new HostsEntry(d.Host, d.Best!.Ip.ToString()))];
-    };
+        return (IReadOnlyList<HostsEntry>)[.. r.Domains.Where(d => d.Best is not null).Select(d => new HostsEntry(d.Host, d.Best!.Ip.ToString()))];
+    }, ct);
 
     /// <summary>Адреса, подобранные через DNS в этой примерке: их можно записать, даже если сайт и так открывается.</summary>
     readonly HashSet<HostsEntry> _found = [];
@@ -295,6 +296,12 @@ public sealed partial class HostsViewModel
         var chosen = TryRows.Where(r => r.Selected && r.CanSelect).Select(r => r.Source.Entry).ToList();
         if (chosen.Count == 0) return;
         var all = UserRows.Select(r => r.Entry).Concat(chosen).Distinct().ToList();
+        // Своих строк помощник принимает не больше предела вставки — иначе он отказал бы всему списку целиком.
+        if (all.Count > HostsPaste.MaxEntries)
+        {
+            TrySummary = L.T("hosts.try.too_many", new { max = HostsPaste.MaxEntries, have = UserRows.Count, n = chosen.Count });
+            return;
+        }
         if (!Confirm(L.T("hosts.confirm.write_user", new { n = all.Count }))) return;
         if (await Need() is not { } c) return;
         Busy = true;
