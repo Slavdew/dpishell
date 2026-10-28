@@ -132,7 +132,7 @@ public sealed partial class HostsViewModel
     ICommand? _tryCmd, _writeSelectedCmd, _clearTryCmd;
     public ICommand TryCmd => _tryCmd ??= RelayCommand.Async(TryAsync, () => !Busy && PasteText.Trim().Length > 0 && Can("hosts_try"));
     public ICommand WriteSelectedCmd => _writeSelectedCmd ??= RelayCommand.Async(WriteSelectedAsync, () => !Busy && SelectedTry > 0 && Can("hosts_user_set"));
-    public ICommand ClearTryCmd => _clearTryCmd ??= new RelayCommand(() => { PasteText = ""; TryRows.Clear(); TrySummary = ""; Raise(nameof(WriteSelectedText)); }, () => !Busy);
+    public ICommand ClearTryCmd => _clearTryCmd ??= new RelayCommand(() => { PasteText = ""; TryRows.Clear(); TrySummary = ""; Raise(nameof(WriteSelectedText)); Raise(nameof(CanFind)); }, () => !Busy);
 
     /// <summary>Вставка → пары «адрес имя» → проверка у помощника → таблица с вердиктами. Чинящие строки отмечены, остальные нет.</summary>
     public async Task TryAsync()
@@ -173,10 +173,63 @@ public sealed partial class HostsViewModel
             row.Changed += () => { Raise(nameof(WriteSelectedText)); CommandManager.InvalidateRequerySuggested(); };
             TryRows.Add(row);
         }
-        Raise(nameof(WriteSelectedText));
+        Raise(nameof(WriteSelectedText)); Raise(nameof(CanFind));
         TrySummaryIs(() => Summarize(report, entries: false, paste));
         TryOpen = true;
         CommandManager.InvalidateRequerySuggested();
+    }
+
+    // ---------- «Подобрать адрес» (п. 97): адрес из гайда не помог — ищем рабочий через DNS ----------
+
+    /// <summary>
+    /// Поиск рабочих адресов (в тестах — подмена): опрос нескольких DNS, каждый адрес — живая проверка TLS с сертификатом (<see cref="HostsFinder"/>),
+    /// до первого рабочего. Ищет окно без прав: запись — только через помощника, и найденное он примеряет заново.
+    /// </summary>
+    public Func<IReadOnlyList<string>, CancellationToken, Task<IReadOnlyList<HostsEntry>>> FindAddresses { get; set; } = async (hosts, ct) =>
+    {
+        var r = await new HostsFinder(DnsSources.Default(), new TlsEndpointProbe()).RunAsync(hosts, all: false, ct: ct);
+        return [.. r.Domains.Where(d => d.Best is not null).Select(d => new HostsEntry(d.Host, d.Best!.Ip.ToString()))];
+    };
+
+    /// <summary>Сайты, которым подбор может помочь: через DNS не открываются, а строка из гайда не чинит.</summary>
+    IReadOnlyList<string> FindHosts => TryRows.Select(r => r.Source)
+        .Where(r => r.Line == 0 && r.Verdict is not (HostsTryVerdict.Helps or HostsTryVerdict.NotNeeded) && r.Dns != DnsState.Works)
+        .Select(r => r.Host).Where(h => !TryRows.Any(x => x.Host == h && x.Source.Writable)).Distinct().ToList();
+    public bool CanFind => FindHosts.Count > 0;
+
+    ICommand? _findCmd;
+    public ICommand FindCmd => _findCmd ??= RelayCommand.Async(FindAsync, () => !Busy && CanFind && Can("hosts_try"));
+
+    public async Task FindAsync()
+    {
+        var hosts = FindHosts;
+        if (Busy || hosts.Count == 0) return;
+        if (await Need() is not { } c) return;
+        Busy = true; Trying = true;
+        Done = 0; Total = 1; ProgressText = L.T("hosts.progress.find", new { n = hosts.Count });
+        using var cts = new CancellationTokenSource();
+        _cts = cts;
+        try
+        {
+            var have = TryRows.Select(r => r.Source.Entry).ToHashSet();
+            var found = (await FindAddresses(hosts, cts.Token)).Where(e => !have.Contains(e)).ToList();
+            var missing = hosts.Where(h => found.All(e => e.Host != h)).ToList();
+            var rows = TryRows.Select(r => r.Source).ToList();
+            if (found.Count > 0)
+            {
+                var progress = new Progress<HostsCheckProgress>(p => { Done = p.Done; Total = Math.Max(1, p.Total); ProgressText = L.T("hosts.progress.done", new { done = p.Done, total = p.Total }); });
+                rows.AddRange((await c.HostsTryAsync(found, progress, cts.Token)).Rows);
+            }
+            ShowTry(new HostsTryReport(rows, 0, false, rows.Count, DateTime.Now));
+            var foundN = found.Count;
+            TrySummaryIs(() => (foundN > 0 ? L.T("hosts.find.found", new { n = foundN }) : L.T("hosts.find.none"))
+                + (missing.Count > 0 && foundN > 0 ? " " + L.T("hosts.find.missing", new { list = string.Join(", ", missing) }) : ""));
+        }
+        catch (OperationCanceledException) { TrySummary = L.T("hosts.stopped"); }
+        catch (HelperUnavailableException e) { _helper.MarkLost(e); TrySummary = e.Message; }
+        catch (HelperException e) { TrySummary = e.Message; }
+        catch (Exception e) { TrySummary = Texts.Friendly(e); }
+        finally { _cts = null; Busy = false; Trying = false; ProgressText = ""; }
     }
 
     static int Rank(HostsTryRow r) => r.Verdict switch

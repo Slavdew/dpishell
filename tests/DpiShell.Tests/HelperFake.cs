@@ -220,8 +220,11 @@ public sealed class FakeHelperBackend : IHelperBackend
     {
         Call("hosts_try " + string.Join(",", entries));
         progress.Report(new(entries.Count, entries.Count));
-        return Task.FromResult(new HostsTryReport([], 0, false, 0, DateTime.Now));
+        var rows = TryRowsFor?.Invoke(entries) ?? [];
+        return Task.FromResult(new HostsTryReport(rows, 0, false, rows.Count, DateTime.Now));
     }
+    /// <summary>Вердикты примерки по строкам (по умолчанию — пустой отчёт).</summary>
+    public Func<IReadOnlyList<HostsEntry>, IReadOnlyList<HostsTryRow>>? TryRowsFor { get; set; }
 
     public Task<HostsTryReport> HostsAuditAsync(IProgress<HostsCheckProgress> progress, CancellationToken ct)
     {

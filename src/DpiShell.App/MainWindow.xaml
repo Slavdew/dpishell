@@ -1788,6 +1788,11 @@
                                             </StackPanel>
                                             <TextBox Text="{Binding TrySummary, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="14" FontWeight="SemiBold" Margin="0,8,0,6" Visibility="{Binding HasTrySummary, Converter={StaticResource Vis}}" />
                                             <ItemsControl ItemsSource="{Binding TryRows}" ItemTemplate="{StaticResource TryRowTemplate}" />
+                                            <!-- Адрес из гайда не помог, а через DNS сайт не открывается — «Подобрать адрес» ищет рабочий через другие DNS (п. 97). -->
+                                            <DockPanel Margin="0,10,0,0" Visibility="{Binding CanFind, Converter={StaticResource Vis}}">
+                                                <Button DockPanel.Dock="Left" Content="{l:T hosts.find.run}" Command="{Binding FindCmd}" VerticalAlignment="Top" ToolTip="{l:T hosts.find.tip}" />
+                                                <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="4,0,0,8" Text="{l:T hosts.find.note}" />
+                                            </DockPanel>
                                             <DockPanel Margin="0,10,0,0" Visibility="{Binding TryRows.Count, Converter={StaticResource NonZero}}">
                                                 <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="{Binding WriteSelectedText}" Style="{StaticResource Primary}" Command="{Binding WriteSelectedCmd}" VerticalAlignment="Top" />
                                                 <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="4,0,0,8"
