@@ -228,10 +228,10 @@ public sealed class FeatureViewModelTests
         await using var _f = f;
         File.WriteAllText(hosts, "127.0.0.1 localhost\r\n10.0.0.5 github.com\r\n");
         await vm.RefreshAsync();
-        Assert.DoesNotContain(vm.Warnings, w => w.Contains("чужая запись"));   // функция выключена — тревоги без действия нет
+        Assert.DoesNotContain(vm.Warnings, w => w.Contains("не через DpiShell"));   // функция выключена — тревоги без действия нет
         vm.Enabled = true;
         await vm.RefreshAsync();
-        Assert.Contains(vm.Warnings, w => w == "В hosts есть чужая запись для github.com — если сайт не откроется, дело может быть в ней.");
+        Assert.Contains(vm.Warnings, w => w == "В hosts есть запись для github.com, добавленная не через DpiShell, — если сайт не откроется, дело может быть в ней.");
     }
 
     [Fact]

@@ -35,6 +35,21 @@ public sealed partial class HostsText
     public const string EndMark = "# DpiShell end";
     public const int FormatVersion = 1;
     const string Note = "# Managed by DpiShell (Fix addresses). Lines inside this block are rewritten automatically.";
+    /// <summary>
+    /// Пометка на каждой строке блока: строка наша, где бы ни лежала (перенесли за рамку — всё равно не «чужая»). Решение владельца по п. 77:
+    /// в самом hosts помечаются только наши строки, «не от DpiShell» — только в окне.
+    /// </summary>
+    public const string BlockTag = "# dpishell";
+
+    /// <summary>Запись с пометкой блока (<see cref="BlockTag"/>), не путать с <c>dpishell-user</c> своих строк.</summary>
+    static bool IsBlockTagged(string line)
+    {
+        var hash = line.IndexOf('#');
+        return hash >= 0 && line[hash..].Trim().Equals(BlockTag, StringComparison.OrdinalIgnoreCase) && ParseLine(line).Any();
+    }
+
+    /// <summary>Запись блока: без комментария (до п. 77) или с пометкой блока.</summary>
+    static bool IsBlockEntry(string s) => ParseLine(s).Any() && (!s.Contains('#') || IsBlockTagged(s));
 
     readonly Encoding _enc;
     readonly byte[] _preamble;
@@ -132,13 +147,18 @@ public sealed partial class HostsText
                 var s = _lines[k].Text.Trim();
                 var entries = ParseLine(s).ToList();
                 bool ours = s.StartsWith("# Managed by DpiShell", StringComparison.OrdinalIgnoreCase)
-                    || entries.Count > 0 && entries.All(e => HostsRules.IsAllowedHost(e.Host)) && !s.Contains('#');
+                    || entries.Count > 0 && entries.All(e => HostsRules.IsAllowedHost(e.Host)) && IsBlockEntry(s);
                 if (!ours) break;
                 own.Add(k);
             }
             i = k - 1;
         }
         if (blocks > 1) damaged = true;
+        // Наша строка за рамкой (перенесли руками, другая программа переставила строки) — тоже наша; блок при записи соберётся заново.
+        var inBlock = own.ToHashSet();
+        for (int i = 0; i < _lines.Count; i++)
+            if (!inBlock.Contains(i) && IsBlockTagged(_lines[i].Text)) { own.Add(i); damaged = true; }
+        own.Sort();
         return own;
     }
 
@@ -167,7 +187,7 @@ public sealed partial class HostsText
     [
         $"{BeginMark} v{FormatVersion} {at:yyyy-MM-dd}",
         Note,
-        .. entries.Select(e => $"{e.Ip} {e.Host}"),
+        .. entries.Select(e => $"{e.Ip} {e.Host}  {BlockTag}"),
         EndMark,
     ];
 
@@ -215,7 +235,8 @@ public sealed partial class HostsText
     bool LooksIntact(List<int> own) => own.All(i =>
     {
         var s = _lines[i].Text.Trim();
-        return IsBegin(s) || IsEnd(s) || s == Note || ParseLine(s).Any() && !s.Contains('#');
+        // Блок до п. 77 (записи без пометки) тоже цел: hosts ради пометок не переписываем — она появится со следующей правкой блока.
+        return IsBegin(s) || IsEnd(s) || s == Note || IsBlockEntry(s);
     });
 }
 

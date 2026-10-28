@@ -167,7 +167,7 @@
   "home.pc.vpn.on": "включён ({names}) — с ним оптимизация обычно не нужна",
   "home.pc.vpn.known": "включён ({names})",
   "home.pc.vpn.off": "не найден — не мешает",
-  "home.pc.foreign.label": "Чужие записи в hosts",
+  "home.pc.foreign.label": "Записи hosts не от DpiShell",
   "home.pc.lists.label": "Списки сайтов",
   "home.pc.lists.go": "К обновлениям",
   "home.r.login.label": "Вход",

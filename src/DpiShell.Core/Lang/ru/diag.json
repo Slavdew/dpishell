@@ -85,7 +85,7 @@
   "diag.find.folder.onedrive": "лежит в OneDrive ({path}) — синхронизация может блокировать файлы ядра. Перенесите программу, например, в C:\\Program Files.",
   "diag.find.folder.non_ascii": "в пути есть русские или другие не латинские буквы ({path}) — ядро может не запуститься. Перенесите программу в папку с латинским именем.",
   "diag.find.hosts.ok": "лишних строк для YouTube нет",
-  "diag.find.hosts.bad": "есть строки для YouTube от другой программы: {lines}. Из-за них YouTube может не открываться — уберите их из файла hosts.",
+  "diag.find.hosts.bad": "есть строки для YouTube, добавленные не через DpiShell: {lines}. Из-за них YouTube может не открываться — уберите их из файла hosts.",
   "diag.say.path_copied": "Путь скопирован: {path}",
   "diag.err.copy_busy": "Не удалось скопировать — буфер обмена занят другой программой.",
   "diag.err.defender": "Не удалось открыть «Безопасность Windows»: {error}",

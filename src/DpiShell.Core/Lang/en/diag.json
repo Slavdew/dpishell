@@ -85,7 +85,7 @@
   "diag.find.folder.onedrive": "located in OneDrive ({path}) — synchronization may lock core files. Move the app, for example, to C:\\Program Files.",
   "diag.find.folder.non_ascii": "the path contains Cyrillic or other non-Latin letters ({path}) — the core may fail to start. Move the app to a folder with a Latin name.",
   "diag.find.hosts.ok": "no extra YouTube lines",
-  "diag.find.hosts.bad": "there are YouTube lines from another program: {lines}. They may keep YouTube from opening — remove them from the hosts file.",
+  "diag.find.hosts.bad": "there are YouTube lines not added by DpiShell: {lines}. They may keep YouTube from opening — remove them from the hosts file.",
   "diag.say.path_copied": "Path copied: {path}",
   "diag.err.copy_busy": "Could not copy — the clipboard is in use by another program.",
   "diag.err.defender": "Could not open “Windows Security”: {error}",

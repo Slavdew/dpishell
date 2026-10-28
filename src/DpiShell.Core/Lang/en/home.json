@@ -165,7 +165,7 @@
   "home.pc.vpn.on": "on ({names}) — optimization is usually not needed with it",
   "home.pc.vpn.known": "on ({names})",
   "home.pc.vpn.off": "not found — no interference",
-  "home.pc.foreign.label": "Other entries in hosts",
+  "home.pc.foreign.label": "hosts entries not from DpiShell",
   "home.pc.lists.label": "Site lists",
   "home.pc.lists.go": "To updates",
   "home.r.login.label": "Sign-in",

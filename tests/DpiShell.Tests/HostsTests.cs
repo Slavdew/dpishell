@@ -51,7 +51,7 @@ public sealed class HostsFileTests : IDisposable
         Assert.Equal(Foreign +
             "# DpiShell begin v1 2026-10-17\r\n" +
             "# Managed by DpiShell (Fix addresses). Lines inside this block are rewritten automatically.\r\n" +
-            "140.82.121.3 github.com\r\n146.75.22.132 raw.githubusercontent.com\r\n# DpiShell end\r\n", text);
+            "140.82.121.3 github.com  # dpishell\r\n146.75.22.132 raw.githubusercontent.com  # dpishell\r\n# DpiShell end\r\n", text);
         Assert.NotNull(r.Backup);
         Assert.Equal(Foreign, File.ReadAllText(r.Backup!));
         Assert.True(File.Exists(Path.Combine(_store.BackupDir, HostsFileStore.OriginalBackup)));
@@ -66,7 +66,7 @@ public sealed class HostsFileTests : IDisposable
         var text = Get();
         Assert.DoesNotContain("\r", text);
         Assert.StartsWith("127.0.0.1 localhost\n::1 localhost\n# DpiShell begin v1 2026-10-17\n", text);
-        Assert.EndsWith("140.82.121.3 github.com\n# DpiShell end\n", text);
+        Assert.EndsWith("140.82.121.3 github.com  # dpishell\n# DpiShell end\n", text);
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public sealed class HostsFileTests : IDisposable
         Assert.Equal(Foreign +
             "# DpiShell begin v1 2026-10-18\r\n" +
             "# Managed by DpiShell (Fix addresses). Lines inside this block are rewritten automatically.\r\n" +
-            "149.154.167.220 web.telegram.org\r\n# DpiShell end\r\n" +
+            "149.154.167.220 web.telegram.org  # dpishell\r\n# DpiShell end\r\n" +
             "10.0.0.5 nas.local\r\n", Get());
         Assert.Single(Regex(Get(), "# DpiShell begin"));
     }
@@ -141,8 +141,53 @@ public sealed class HostsFileTests : IDisposable
         Assert.Single(Regex(text, "# DpiShell begin"));
         Assert.Single(Regex(text, "# DpiShell end"));
         Assert.StartsWith("# DpiShell begin v1 2026-10-17\r\n", text);   // на месте первой нашей строки
-        Assert.EndsWith("146.75.22.132 raw.githubusercontent.com\r\n# DpiShell end\r\n1.1.1.1 a\r\n2.2.2.2 b\r\n", text);
-        Assert.DoesNotContain("github.com\r\n", text.Replace("raw.githubusercontent.com", ""));
+        Assert.EndsWith("146.75.22.132 raw.githubusercontent.com  # dpishell\r\n# DpiShell end\r\n1.1.1.1 a\r\n2.2.2.2 b\r\n", text);
+        Assert.DoesNotContain("github.com  # dpishell\r\n", text.Replace("raw.githubusercontent.com", ""));
+    }
+
+    // ---------- п. 77: наши строки помечены в самом hosts, «не от DpiShell» — только то, что без пометки ----------
+
+    [Fact]
+    public void TaggedLine_OutsideBlock_IsOurs_NotConflict_RemovedOnRestore()
+    {
+        Put(Foreign);
+        _store.Apply([Gh, Raw], At);
+        // Строку блока перенесли в начало файла (руками или другой программой) — она всё равно наша.
+        var text = Get().Replace("140.82.121.3 github.com  # dpishell\r\n", "");
+        Put("140.82.121.3 github.com  # dpishell\r\n" + text);
+        var h = _store.Read();
+        Assert.DoesNotContain(h.Conflicts(), c => c.Host == "github.com");
+        Assert.DoesNotContain(h.ForeignLines(), l => l.Text.Contains("github.com"));
+        Assert.Contains(Gh, h.Block().Entries);
+        Assert.True(h.Block().Damaged);   // блок соберётся заново при записи
+
+        _store.Apply([Gh, Raw], At);
+        Assert.Single(Get().Split('\n'), l => l.Contains(" github.com"));
+        _store.RemoveBlock();
+        Assert.Equal(Foreign, Get());
+    }
+
+    [Fact]
+    public void OwnLine_ByHand_WithoutTag_IsNotOurs()
+    {
+        Put(Foreign + "140.82.121.4 github.com\r\n");
+        _store.Apply([Raw], At);
+        var h = _store.Read();
+        Assert.Contains(h.Conflicts(), c => c.Host == "github.com" && c.Ip == "140.82.121.4");
+        Assert.DoesNotContain("140.82.121.4 github.com  # dpishell", Get());   // чужое в файле не помечаем
+    }
+
+    [Fact]
+    public void OldBlock_WithoutTags_IsIntact_NotRewritten()
+    {
+        var old = Foreign + "# DpiShell begin v1 2026-10-01\r\n# Managed by DpiShell (Fix addresses). Lines inside this block are rewritten automatically.\r\n" +
+            "140.82.121.3 github.com\r\n# DpiShell end\r\n";
+        Put(old);
+        Assert.False(_store.Read().Block().Damaged);
+        Assert.False(_store.Apply([Gh], At).Changed);   // ради пометок hosts не переписываем
+        Assert.Equal(old, Get());
+        _store.Apply([Gh, Raw], At);   // со следующей правкой — с пометками
+        Assert.Contains("140.82.121.3 github.com  # dpishell\r\n", Get());
     }
 
     [Fact]
