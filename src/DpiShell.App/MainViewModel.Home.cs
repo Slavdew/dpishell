@@ -167,8 +167,8 @@ public sealed partial class MainViewModel
     ICommand? _goRouterCmd;
     public ICommand GoHostsCmd => _goHostsCmd ??= new RelayCommand(() => OpenNet(NetBlock.Hosts));
     ICommand? _goHostsCmd;
-    /// <summary>Из итога подбора «похоже на блокировку по адресу» — к IP-спискам («Игры и программы», блок раскрыт), где «Все адреса» на 10 минут (аудит С-5).</summary>
-    public ICommand GoIpListsCmd => _goIpListsCmd ??= new RelayCommand(() => { Net.ListsOpen = true; Page = Pages.Apps; ShowRequested?.Invoke(Spot.IpLists); });
+    /// <summary>Из итога подбора «похоже на блокировку по адресу» — к IP-спискам («Сайты», блок раскрыт), где «Все адреса» на 10 минут (аудит С-5).</summary>
+    public ICommand GoIpListsCmd => _goIpListsCmd ??= new RelayCommand(() => { Net.ListsOpen = true; Page = Pages.Sites; ShowRequested?.Invoke(Spot.IpLists); });
     ICommand? _goIpListsCmd;
 
     // ---------- значки состояния и панели ----------

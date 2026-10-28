@@ -824,6 +824,81 @@
                             <TextBox Text="{Binding ExcludeMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" Margin="0,4,0,0" />
                             <!-- Продвинутый режим «сайты → стратегия» — после «Своих сайтов» и «Исключений» (аудит перед бетой, С-17): выключен по умолчанию (docs/research/mixed-strategies.md §6). -->
                             <local:AdvancedView DataContext="{Binding AdvancedPc}" Margin="0,14,0,0" />
+                            <!-- IP-списки и свои подсети — здесь, а не на «Играх»: они про сайты и сервисы, заблокированные по адресу; общий игровой режим работает по тому же списку. -->
+                            <StackPanel DataContext="{Binding Net}" Margin="0,14,0,0">
+                                <!-- IP-списки и свои подсети правят редко: профиль под программу заполняет их сам. Идут «Все адреса» — раскрыто, чтобы отсчёт был виден. -->
+                                <Expander x:Name="IpListsBlock" Header="{l:T apps.more_tools}" IsExpanded="{Binding ListsOpen, Mode=TwoWay}">
+                                    <StackPanel Margin="0,8,0,0">
+                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                            <TextBlock Text="{l:T apps.ipset.title}" Style="{StaticResource H1}" FontSize="19" />
+                                            <local:InfoButton Topic="{x:Static local:InfoTexts.IpLists}" Margin="10,0,0,12" />
+                                        </StackPanel>
+                                        <Border Style="{StaticResource Card}">
+                                            <StackPanel>
+                                                <!-- «Выкл» выключает и игровой режим (Shell.SetIpsetMode): без списка ему нечего ловить — так и сказано. -->
+                                                <TextBlock Text="{l:T apps.ipset.mode_caption}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                                <WrapPanel IsEnabled="{Binding CanEdit}">
+                                                    <RadioButton Content="{l:T apps.ipset.off}" IsChecked="{Binding IpsetOff}" Margin="0,3,24,3" />
+                                                    <RadioButton Content="{l:T apps.ipset.lists}" IsChecked="{Binding IpsetList}" Margin="0,3,24,3" />
+                                                </WrapPanel>
+                                                <!-- «Все адреса» — проверка с подтверждением, а не третий режим наравне с рабочими (UX-аудит, п. 34). -->
+                                                <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.ipset.try_any}" Command="{Binding TryAnyCmd}" HorizontalAlignment="Left"
+                                                        Margin="0,8,0,0" ToolTip="{l:T apps.ipset.try_any_tip}"
+                                                        Visibility="{Binding AnyActive, Converter={StaticResource InvVis}}" IsEnabled="{Binding CanEdit}" />
+                                                <Border Style="{StaticResource Warn}" Margin="0,10,0,0" Visibility="{Binding AnyActive, Converter={StaticResource Vis}}">
+                                                    <DockPanel>
+                                                        <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="{l:T apps.ipset.stop_any}" Command="{Binding StopAnyCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                                        <StackPanel>
+                                                            <TextBlock Text="{Binding AnyText}" FontWeight="SemiBold" />
+                                                            <TextBlock Text="{l:T apps.ipset.any_warn}" FontSize="13" Margin="0,2,0,0" />
+                                                        </StackPanel>
+                                                    </DockPanel>
+                                                </Border>
+                                                <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,12,0,0" Padding="0,12,0,0">
+                                                    <StackPanel>
+                                                        <TextBlock Text="{l:T apps.ipset.list_caption}" Style="{StaticResource Hint}" Margin="0,0,0,2" />
+                                                        <TextBox Text="{Binding ListText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
+                                                        <TextBox Text="{Binding UpdateNote, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,4,0,0"
+                                                                   Visibility="{Binding HasUpdateNote, Converter={StaticResource Vis}}" />
+                                                        <WrapPanel Margin="0,10,0,0">
+                                                            <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.ipset.update}" Command="{Binding UpdateListCmd}" />
+                                                            <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.ipset.load_file}" Command="{Binding LoadFileCmd}" />
+                                                        </WrapPanel>
+                                                    </StackPanel>
+                                                </Border>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Border Style="{StaticResource Card}">
+                                            <StackPanel>
+                                                <TextBlock Text="{l:T apps.subnets.title}" Style="{StaticResource H2}" />
+                                                <TextBlock Text="{Binding UserHint}" Style="{StaticResource Hint}" Margin="0,0,0,8" />
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="14" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel>
+                                                        <TextBlock Text="{l:T apps.subnets.add_label}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                                        <TextBox Text="{Binding UserText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110" local:Demo.Sensitive="True"
+                                                                 VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="{l:T apps.subnets.add_label}" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2">
+                                                        <TextBlock Text="{l:T apps.subnets.exclude_label}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
+                                                        <TextBox Text="{Binding ExcludeText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110" local:Demo.Sensitive="True"
+                                                                 VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="{l:T apps.subnets.exclude_label}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                                <DockPanel Margin="0,10,0,0">
+                                                    <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="{l:T apps.subnets.save}" Style="{StaticResource Primary}" Command="{Binding SaveUserCmd}" VerticalAlignment="Top" />
+                                                    <TextBox Text="{Binding UserMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" VerticalAlignment="Center" Margin="4,0,0,8" />
+                                                </DockPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </Expander>
+                            </StackPanel>
                             </StackPanel>
                             </ScrollViewer>
                             <!-- Одна кнопка и один статус на вкладку (UX-аудит 6, п. 2): сохраняет и свои сайты, и строки «Свои настройки для сайтов». -->
@@ -1024,7 +1099,7 @@
                                                             </StackPanel>
                                                             <ComboBox Grid.Column="1" ItemsSource="{Binding Choices}" SelectedItem="{Binding Selected}" DisplayMemberPath="Title" Width="210"
                                                                       VerticalAlignment="Center" Margin="0,0,14,0" Visibility="{Binding ShowChoice, Converter={StaticResource Vis}}"
-                                                                      AutomationProperties.Name="{l:T apps.profile.choice}" ToolTip="{l:T apps.profile.choice}" />
+                                                                      AutomationProperties.Name="{l:T apps.profile.choice}" ToolTip="{Binding ChoiceTip}" />
                                                             <CheckBox Grid.Column="2" Style="{StaticResource Switch}" IsChecked="{Binding IsOn}" VerticalAlignment="Center"
                                                                       AutomationProperties.Name="{l:T apps.profile.on}" ToolTip="{l:T apps.profile.on}" />
                                                             <Button Grid.Column="3" Content="⋯" Style="{StaticResource LinkButton}" FontSize="16" Margin="6,0,0,0" Padding="8,0" VerticalAlignment="Center"
@@ -1209,80 +1284,6 @@
                                 </Expander>
                             </StackPanel>
 
-                            <StackPanel DataContext="{Binding Net}">
-                                <!-- IP-списки и свои подсети правят редко: профиль под программу заполняет их сам. Идут «Все адреса» — раскрыто, чтобы отсчёт был виден. -->
-                                <Expander x:Name="IpListsBlock" Header="{l:T apps.more_tools}" IsExpanded="{Binding ListsOpen, Mode=TwoWay}">
-                                    <StackPanel Margin="0,8,0,0">
-                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                            <TextBlock Text="{l:T apps.ipset.title}" Style="{StaticResource H1}" FontSize="19" />
-                                            <local:InfoButton Topic="{x:Static local:InfoTexts.IpLists}" Margin="10,0,0,12" />
-                                        </StackPanel>
-                                        <Border Style="{StaticResource Card}">
-                                            <StackPanel>
-                                                <!-- «Выкл» выключает и игровой режим (Shell.SetIpsetMode): без списка ему нечего ловить — так и сказано. -->
-                                                <TextBlock Text="{l:T apps.ipset.mode_caption}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
-                                                <WrapPanel IsEnabled="{Binding CanEdit}">
-                                                    <RadioButton Content="{l:T apps.ipset.off}" IsChecked="{Binding IpsetOff}" Margin="0,3,24,3" />
-                                                    <RadioButton Content="{l:T apps.ipset.lists}" IsChecked="{Binding IpsetList}" Margin="0,3,24,3" />
-                                                </WrapPanel>
-                                                <!-- «Все адреса» — проверка с подтверждением, а не третий режим наравне с рабочими (UX-аудит, п. 34). -->
-                                                <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.ipset.try_any}" Command="{Binding TryAnyCmd}" HorizontalAlignment="Left"
-                                                        Margin="0,8,0,0" ToolTip="{l:T apps.ipset.try_any_tip}"
-                                                        Visibility="{Binding AnyActive, Converter={StaticResource InvVis}}" IsEnabled="{Binding CanEdit}" />
-                                                <Border Style="{StaticResource Warn}" Margin="0,10,0,0" Visibility="{Binding AnyActive, Converter={StaticResource Vis}}">
-                                                    <DockPanel>
-                                                        <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Right" Content="{l:T apps.ipset.stop_any}" Command="{Binding StopAnyCmd}" VerticalAlignment="Center" Margin="12,0,0,0" />
-                                                        <StackPanel>
-                                                            <TextBlock Text="{Binding AnyText}" FontWeight="SemiBold" />
-                                                            <TextBlock Text="{l:T apps.ipset.any_warn}" FontSize="13" Margin="0,2,0,0" />
-                                                        </StackPanel>
-                                                    </DockPanel>
-                                                </Border>
-                                                <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,12,0,0" Padding="0,12,0,0">
-                                                    <StackPanel>
-                                                        <TextBlock Text="{l:T apps.ipset.list_caption}" Style="{StaticResource Hint}" Margin="0,0,0,2" />
-                                                        <TextBox Text="{Binding ListText, Mode=OneWay}" Style="{StaticResource SelectableText}" />
-                                                        <TextBox Text="{Binding UpdateNote, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{DynamicResource Danger}" FontSize="13" Margin="0,4,0,0"
-                                                                   Visibility="{Binding HasUpdateNote, Converter={StaticResource Vis}}" />
-                                                        <WrapPanel Margin="0,10,0,0">
-                                                            <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.ipset.update}" Command="{Binding UpdateListCmd}" />
-                                                            <Button ContentTemplate="{StaticResource Shield}" Content="{l:T apps.ipset.load_file}" Command="{Binding LoadFileCmd}" />
-                                                        </WrapPanel>
-                                                    </StackPanel>
-                                                </Border>
-                                            </StackPanel>
-                                        </Border>
-
-                                        <Border Style="{StaticResource Card}">
-                                            <StackPanel>
-                                                <TextBlock Text="{l:T apps.subnets.title}" Style="{StaticResource H2}" />
-                                                <TextBlock Text="{Binding UserHint}" Style="{StaticResource Hint}" Margin="0,0,0,8" />
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="14" />
-                                                        <ColumnDefinition Width="*" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel>
-                                                        <TextBlock Text="{l:T apps.subnets.add_label}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
-                                                        <TextBox Text="{Binding UserText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110" local:Demo.Sensitive="True"
-                                                                 VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="{l:T apps.subnets.add_label}" />
-                                                    </StackPanel>
-                                                    <StackPanel Grid.Column="2">
-                                                        <TextBlock Text="{l:T apps.subnets.exclude_label}" Style="{StaticResource Hint}" Margin="0,0,0,4" />
-                                                        <TextBox Text="{Binding ExcludeText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="110" local:Demo.Sensitive="True"
-                                                                 VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Padding="6" TextWrapping="NoWrap" AutomationProperties.Name="{l:T apps.subnets.exclude_label}" />
-                                                    </StackPanel>
-                                                </Grid>
-                                                <DockPanel Margin="0,10,0,0">
-                                                    <Button ContentTemplate="{StaticResource Shield}" DockPanel.Dock="Left" Content="{l:T apps.subnets.save}" Style="{StaticResource Primary}" Command="{Binding SaveUserCmd}" VerticalAlignment="Top" />
-                                                    <TextBox Text="{Binding UserMessage, Mode=OneWay}" Style="{StaticResource SelectableHint}" VerticalAlignment="Center" Margin="4,0,0,8" />
-                                                </DockPanel>
-                                            </StackPanel>
-                                        </Border>
-                                    </StackPanel>
-                                </Expander>
-                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>

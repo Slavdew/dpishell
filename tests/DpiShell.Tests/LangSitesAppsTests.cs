@@ -123,6 +123,7 @@ public sealed class LangSitesAppsTests : IDisposable
             // Игры и программы: простой режим — запись, вопрос «Заработало?», итог.
             vm.GoTo(Pages.Apps);
             PumpUntil(() => vm.Apps.Variants.Count > 0, "варианты параметров от помощника");
+            Pump();   // варианты могли прийти ещё на «Сайтах» (там теперь IP-списки) — дать вкладке отрисоваться
             Button? Btn(string key) => Find<Button>(tabs, b => b.IsVisible && b.Content as string == L.T(key));
             NoRawKeys(tabs, "Игры (покой)");
             Shot("apps-idle");

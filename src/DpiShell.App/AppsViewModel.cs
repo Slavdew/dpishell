@@ -105,9 +105,14 @@ public sealed class ProfileRow : Observable
             if (value is null || value == _selected) return;   // список ставит null при пересборке — не выбор человека
             _selected = value;
             Raise();
+            Raise(nameof(ChoiceTip));
             _ = _owner.SetStrategyAsync(Id, value.Key);
         }
     }
+    /// <summary>Подсказка выбора: у «Из профиля» — сами параметры профиля, иначе — что это за выбор.</summary>
+    public string ChoiceTip => _selected?.Key == AppProfiles.Own
+        ? string.Join(Environment.NewLine, new[] { ("TCP", Info.TcpOwn), ("UDP", Info.UdpOwn) }.Where(x => x.Item2.Length > 0).Select(x => $"{x.Item1}: {x.Item2}"))
+        : L.T("apps.profile.choice");
     /// <summary>Выбор виден только при «Разных стратегиях»; без них профиль идёт «По умолчанию», выбор хранится.</summary>
     public bool ShowChoice => _owner.Separate;
     internal void SeparateChanged() => Raise(nameof(ShowChoice));

@@ -421,7 +421,7 @@ public sealed partial class MainViewModel : Observable
             if (!Busy && Message.Length > 0 && Message != ReadyText) Message = ReadyText;   // сообщение от давнего действия не едет по вкладкам
             if (IsLoading) return;
             if (was == Pages.Sites) _ = SaveDraftOnLeaveAsync();
-            if (value == Pages.Apps) _ = RefreshNetAsync();
+            if (value is Pages.Apps or Pages.Sites) _ = RefreshNetAsync();   // IP-списки — на «Сайтах», «Общий игровой режим» — на «Играх»
             if (value == Pages.Net) _ = RefreshNetTabAsync();
             if (value == Pages.Settings) _ = Changes.RefreshAsync();
             if (value == Pages.Router) _ = Router.RefreshRouterPageAsync();   // и «Роутер: что мешает» — внутри

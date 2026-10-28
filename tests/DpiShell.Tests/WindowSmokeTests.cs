@@ -398,10 +398,10 @@ public sealed partial class WindowSmokeTests
                 if (!Visible(t => t.Text.StartsWith("Подходит:")) || Visible(t => t.Text.StartsWith("✓ Включена")))
                     throw new Exception("Новый подбор не вернул полную карточку");
                 if (Find<Button>(tabs, b => b.Content as string == L.T("select.addr.go") && b.IsVisible) is not null) throw new Exception("Без строки про блокировку осталась кнопка «Открыть IP-списки»");
-                // «Открыть IP-списки» ведёт на «Игры и программы» с раскрытым блоком IP-списков.
+                // «Открыть IP-списки» ведёт на «Сайты» с раскрытым блоком IP-списков.
                 vm.GoIpListsCmd.Execute(null);
                 Pump();
-                if (vm.Page != Pages.Apps || !vm.Net.ListsOpen) throw new Exception("«Открыть IP-списки» не открыло блок IP-списков");
+                if (vm.Page != Pages.Sites || !vm.Net.ListsOpen) throw new Exception("«Открыть IP-списки» не открыло блок IP-списков");
                 if (!Visible(t => t.Text == L.T("apps.ipset.title"))) throw new Exception("После «Открыть IP-списки» заголовок блока не виден");
                 Close(w);
             }
@@ -1841,13 +1841,18 @@ public sealed partial class WindowSmokeTests
                 bool Visible(Func<TextBlock, bool> m) => VisibleText(tabs, m);
                 Button? Btn(string content) => Find<Button>(tabs, b => b.IsVisible && b.Content as string == content);
 
-                // Раскладка: «Игры и программы», игровой режим, профили с «Добавить профиль…» и «Записать игру…»; IP-списки — в свёрнутом «Дополнительно».
+                // Раскладка: «Игры и программы», игровой режим, профили с «Добавить профиль…» и «Записать игру…»; IP-списки — не здесь, а на «Сайтах» в свёрнутом «Дополнительно».
                 if (!Visible(t => t.Text == "Игры и программы") || !Visible(t => t.Text == "Профили программ")) throw new Exception("Нет заголовков вкладки");
                 if (!Visible(t => t.Text == "Общий игровой режим")) throw new Exception("Нет «Общего игрового режима»");
-                var more = Find<Expander>(tabs, e => e.Header as string == "Дополнительно: IP-списки и свои подсети")
-                    ?? throw new Exception("Нет «Дополнительно»");
+                Expander? More() => Find<Expander>(tabs, e => e.IsVisible && e.Header as string == "Дополнительно: IP-списки и свои подсети");
+                if (More() is not null) throw new Exception("IP-списки остались на «Играх»");
+                vm.GoTo(Pages.Sites);
+                Pump();
+                var more = More() ?? throw new Exception("Нет «Дополнительно» на «Сайтах»");
                 if (more.IsExpanded) throw new Exception("«Дополнительно» должно быть свёрнуто");
                 if (Visible(t => t.Text == "Свои подсети")) throw new Exception("Свои подсети видны в свёрнутом блоке");
+                vm.GoTo(Pages.Apps);
+                Pump();
                 // Плашка про античиты — у выбора драйвера в карточке записи, а не на вкладке; карточка — по «Записать игру…».
                 if (Visible(t => t.Text.Contains("Vanguard"))) throw new Exception("Предупреждение про античиты висит на вкладке");
                 if (Btn("Начать") is not null) throw new Exception("«Начать» видна до «Записать игру…»");
@@ -1950,7 +1955,9 @@ public sealed partial class WindowSmokeTests
                         }
                     }
                 }
-                // «Дополнительно» раскрывается и показывает IP-списки.
+                // «Дополнительно» на «Сайтах» раскрывается и показывает IP-списки.
+                vm.GoTo(Pages.Sites);
+                Pump();
                 more.IsExpanded = true;
                 Pump();
                 if (!Visible(t => t.Text == "Свои подсети")) throw new Exception("После раскрытия нет «Свои подсети»");
