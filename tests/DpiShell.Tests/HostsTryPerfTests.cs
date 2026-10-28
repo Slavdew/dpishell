@@ -34,6 +34,7 @@ public sealed class HostsTryPerfTests
             Close(w);
         });
         Console.WriteLine($"ShowTry 500: {ms} мс");
-        Assert.True(ms < 1500, $"показ 500 строк — {ms} мс");
+        // Без виртуализации 5000 строк — больше 10 с; запас — на полный прогон, где тесты идут параллельно.
+        Assert.True(ms < 5000, $"показ {HostsPaste.MaxEntries} строк — {ms} мс");
     }
 }

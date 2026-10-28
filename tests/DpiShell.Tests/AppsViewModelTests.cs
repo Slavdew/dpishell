@@ -366,7 +366,7 @@ public sealed class AppsViewModelTests
         Assert.Equal(2, closes);
         Assert.Equal("Моя игра", Assert.Single(vm.Profiles).Title);
         Assert.True(vm.ShowImportResult);
-        Assert.StartsWith("Профиль «Моя игра» добавлен: свои параметры", vm.ImportMessage);
+        Assert.StartsWith(L.T("apps.profile.added_own", new { title = "Моя игра" }), vm.ImportMessage);
         Assert.Contains("Профиль «Моя игра» сохранён.", said);
         Assert.Equal("", vm.ImportParams);
     }

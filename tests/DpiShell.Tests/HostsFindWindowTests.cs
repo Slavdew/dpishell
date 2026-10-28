@@ -44,7 +44,7 @@ public sealed class HostsFindWindowTests
         Assert.True(vm.CanFind);   // для github.com не нашлось — можно искать ещё; для web.telegram.org рабочая строка уже есть
     }
 
-    static EndpointCheck Ok => new(EndpointOutcome.Ok, 0.1, null);
+    static EndpointCheck Ok => new(EndpointOutcome.Ok, 0.1, "");
 
     [Fact]
     public async Task Stubs_ReplacedByFoundAddresses_RightAfterTry_EvenIfSiteOpens()
